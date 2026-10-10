@@ -3,6 +3,7 @@
 import click
 
 from ethscan import __version__
+from ethscan.passwords import audit_passwords
 from ethscan.scanner import get_common_ports, parse_port_range, scan_ports
 
 
@@ -39,6 +40,31 @@ def scan(target: str, ports: str, timeout: float, workers: int) -> None:
         click.echo(f"Open ports: {', '.join(map(str, open_ports))}")
     else:
         click.echo("No open ports found.")
+
+
+@cli.command()
+@click.option(
+    "--file",
+    help="Path to a file containing one password per line. If omitted, reads stdin.",
+)
+def audit(file: str) -> None:
+    """Audit passwords for strength and common weaknesses."""
+    if file:
+        with open(file, "r", encoding="utf-8") as handle:
+            passwords = [line.strip() for line in handle if line.strip()]
+    else:
+        passwords = [line.strip() for line in click.get_text_stream("stdin") if line.strip()]
+
+    if not passwords:
+        click.echo("No passwords provided.")
+        return
+
+    for password, evaluation in audit_passwords(passwords):
+        click.echo(
+            f"{password!r}: score={evaluation['score']} "
+            f"({evaluation['verdict']}) entropy={evaluation['entropy']} "
+            f"common={evaluation['common']} patterns={evaluation['patterns']}"
+        )
 
 
 if __name__ == "__main__":
