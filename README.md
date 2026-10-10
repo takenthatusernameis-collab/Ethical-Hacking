@@ -9,6 +9,9 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - Web application security checks (implemented)
 - HTTP fuzzing (implemented)
 - Subdomain enumeration (implemented)
+- DNS record enumeration (implemented)
+- WHOIS lookup (implemented)
+- SSL/TLS certificate inspection (implemented)
 - Report generation (JSON / Markdown) (implemented)
 
 ## Requirements

@@ -34,6 +34,11 @@ from ethscan.dns import (
     format_dns_report_markdown,
     run_dns,
 )
+from ethscan.ssl import (
+    format_ssl_report_json,
+    format_ssl_report_markdown,
+    run_ssl,
+)
 
 
 @click.group()
@@ -431,6 +436,40 @@ def dns(
         output = format_dns_report_json(results)
     else:
         output = format_dns_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option("--target", required=True, help="Target host or URL (e.g. example.com or https://example.com)")
+@click.option("--port", default=443, type=int, help="TLS port (default: 443)")
+@click.option("--timeout", default=5.0, type=float, help="Connection timeout in seconds")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def ssl(target: str, port: int, timeout: float, fmt: str, out_path: str) -> None:
+    """Inspect the SSL/TLS certificate for TARGET."""
+    results = run_ssl(target, port=port, timeout=timeout)
+
+    if fmt == "json":
+        output = format_ssl_report_json(results)
+    else:
+        output = format_ssl_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

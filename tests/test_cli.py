@@ -515,3 +515,172 @@ def test_dns_out_option(tmp_path, monkeypatch) -> None:
     assert out_file.exists()
     content = out_file.read_text()
     assert "example.com" in content
+
+
+def test_ssl_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ssl", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--port" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_ssl() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "ssl" in result.output
+
+
+def test_ssl_offline_target_json(monkeypatch) -> None:
+    def mock_run_ssl(target, port=443, timeout=5.0):
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": port,
+            "timeout": timeout,
+            "error": "connection refused",
+            "chain_length": 0,
+            "cert": None,
+            "valid": False,
+            "days_remaining": None,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_ssl", mock_run_ssl)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["ssl", "--target", "example.com", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "example.com" in result.output
+    assert "connection refused" in result.output
+
+
+def test_ssl_offline_target_markdown(monkeypatch) -> None:
+    def mock_run_ssl(target, port=443, timeout=5.0):
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": port,
+            "timeout": timeout,
+            "error": None,
+            "chain_length": 2,
+            "cert": {
+                "subject": "example.com",
+                "issuer": "Let's Encrypt",
+                "sans": ["example.com"],
+                "not_before": "Jan  1 00:00:00 2020 GMT",
+                "not_after": "Jan  1 00:00:00 2030 GMT",
+                "signature_algorithm": "sha256WithRSAEncryption",
+                "key_size": 2048,
+            },
+            "valid": True,
+            "days_remaining": 3650,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_ssl", mock_run_ssl)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "ssl",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "SSL/TLS Certificate Report" in result.output
+
+
+def test_ssl_port_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_ssl(target, port=443, timeout=5.0):
+        called_args["port"] = port
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": port,
+            "timeout": timeout,
+            "error": "connection refused",
+            "chain_length": 0,
+            "cert": None,
+            "valid": False,
+            "days_remaining": None,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_ssl", mock_run_ssl)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "ssl",
+            "--target",
+            "example.com",
+            "--port",
+            "8443",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["port"] == 8443
+
+
+def test_ssl_out_option(tmp_path, monkeypatch) -> None:
+    def mock_run_ssl(target, port=443, timeout=5.0):
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": port,
+            "timeout": timeout,
+            "error": None,
+            "chain_length": 1,
+            "cert": {
+                "subject": "example.com",
+                "issuer": "Test CA",
+                "sans": ["example.com"],
+                "not_before": "Jan  1 00:00:00 2020 GMT",
+                "not_after": "Jan  1 00:00:00 2030 GMT",
+                "signature_algorithm": "sha256WithRSAEncryption",
+                "key_size": 2048,
+            },
+            "valid": True,
+            "days_remaining": 3650,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_ssl", mock_run_ssl)
+
+    out_file = tmp_path / "ssl_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "ssl",
+            "--target",
+            "example.com",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "example.com" in content
+    assert "Test CA" in content
