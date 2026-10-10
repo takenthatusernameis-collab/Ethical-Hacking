@@ -5,6 +5,7 @@ import json
 from click.testing import CliRunner
 
 from ethscan.cli import cli
+from ethscan.web import SECURITY_HEADERS
 
 
 def test_cli_version() -> None:
@@ -340,6 +341,205 @@ def test_web_unknown_check() -> None:
     )
     assert result.exit_code == 0
     assert "Unknown checks" in result.output
+
+
+def test_headers_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["headers", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--timeout" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_headers() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "headers" in result.output
+
+
+def test_headers_offline_target_json(monkeypatch) -> None:
+    def mock_run_headers(target, timeout=5.0):
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": 443,
+            "secure": True,
+            "headers": {},
+            "security_headers": {
+                "present": [],
+                "missing": list(SECURITY_HEADERS.keys()),
+                "total": len(SECURITY_HEADERS),
+                "present_count": 0,
+                "missing_count": len(SECURITY_HEADERS),
+            },
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_headers", mock_run_headers)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["headers", "--target", "https://example.com", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "example.com" in result.output
+    assert "present_count" in result.output
+    assert "missing_count" in result.output
+
+
+def test_headers_offline_target_markdown(monkeypatch) -> None:
+    def mock_run_headers(target, timeout=5.0):
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": 443,
+            "secure": True,
+            "headers": {"content-security-policy": "default-src 'self'"},
+            "security_headers": {
+                "present": ["Content-Security-Policy"],
+                "missing": [h for h in SECURITY_HEADERS if h != "Content-Security-Policy"],
+                "total": len(SECURITY_HEADERS),
+                "present_count": 1,
+                "missing_count": len(SECURITY_HEADERS) - 1,
+            },
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_headers", mock_run_headers)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "headers",
+            "--target",
+            "https://example.com",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "ethscan Security Headers Report" in result.output
+    assert "Content-Security-Policy" in result.output
+
+
+def test_headers_out_option_json(tmp_path, monkeypatch) -> None:
+    def mock_run_headers(target, timeout=5.0):
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": 443,
+            "secure": True,
+            "headers": {},
+            "security_headers": {
+                "present": [],
+                "missing": list(SECURITY_HEADERS.keys()),
+                "total": len(SECURITY_HEADERS),
+                "present_count": 0,
+                "missing_count": len(SECURITY_HEADERS),
+            },
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_headers", mock_run_headers)
+
+    out_file = tmp_path / "headers_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "headers",
+            "--target",
+            "https://example.com",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "example.com" in content
+    assert "present_count" in content
+
+
+def test_headers_out_option_markdown(tmp_path, monkeypatch) -> None:
+    def mock_run_headers(target, timeout=5.0):
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": 443,
+            "secure": True,
+            "headers": {"x-frame-options": "DENY"},
+            "security_headers": {
+                "present": ["X-Frame-Options"],
+                "missing": [h for h in SECURITY_HEADERS if h != "X-Frame-Options"],
+                "total": len(SECURITY_HEADERS),
+                "present_count": 1,
+                "missing_count": len(SECURITY_HEADERS) - 1,
+            },
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_headers", mock_run_headers)
+
+    out_file = tmp_path / "headers_report.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "headers",
+            "--target",
+            "https://example.com",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "ethscan Security Headers Report" in content
+    assert "X-Frame-Options" in content
+
+
+def test_headers_http_target(monkeypatch) -> None:
+    def mock_run_headers(target, timeout=5.0):
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": 80,
+            "secure": False,
+            "headers": {"x-frame-options": "SAMEORIGIN"},
+            "security_headers": {
+                "present": ["X-Frame-Options"],
+                "missing": [h for h in SECURITY_HEADERS if h != "X-Frame-Options"],
+                "total": len(SECURITY_HEADERS),
+                "present_count": 1,
+                "missing_count": len(SECURITY_HEADERS) - 1,
+            },
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_headers", mock_run_headers)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["headers", "--target", "http://example.com", "--format", "markdown", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "example.com" in result.output
+    assert "**HTTPS:** No" in result.output
 
 
 def test_subdomains_help() -> None:

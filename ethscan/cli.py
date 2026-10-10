@@ -111,6 +111,11 @@ from ethscan.cve import (
     format_cve_report_markdown,
     run_cve,
 )
+from ethscan.headers import (
+    format_headers_report_json,
+    format_headers_report_markdown,
+    run_headers,
+)
 
 
 @click.group()
@@ -209,7 +214,7 @@ def audit(file: str, fmt: str, out_path: str) -> None:
 
 
 @cli.command()
-@click.option("--target", required=True, help="Target host or IP address for port scan")
+@click.option("--target", required=True, help="Target URL (e.g. https://example.com)")
 @click.option(
     "--ports",
     default="common",
@@ -473,7 +478,7 @@ def subdomains(
 
 
 @cli.command()
-@click.option("--target", required=True, help="Target domain or IP address")
+@click.option("--target", required=True, help="Target URL (e.g. https://example.com)")
 @click.option(
     "--server",
     default="whois.iana.org",
@@ -519,7 +524,40 @@ def whois(
 
 
 @cli.command()
-@click.option("--target", required=True, help="Target domain or URL (e.g. example.com or https://example.com)")
+@click.option("--target", required=True, help="Target URL (e.g. https://example.com)")
+@click.option("--timeout", default=5.0, type=float, help="Request timeout in seconds")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def headers(target: str, timeout: float, fmt: str, out_path: str) -> None:
+    """Run security headers check against TARGET."""
+    results = run_headers(target, timeout=timeout)
+
+    if fmt == "json":
+        output = format_headers_report_json(results)
+    else:
+        output = format_headers_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option("--target", required=True, help="Target URL (e.g. https://example.com)")
 @click.option(
     "--types",
     "record_types",
