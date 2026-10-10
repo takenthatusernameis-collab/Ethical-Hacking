@@ -46,6 +46,11 @@ from ethscan.ssl import (
     format_ssl_report_markdown,
     run_ssl,
 )
+from ethscan.service import (
+    format_service_report_json,
+    format_service_report_markdown,
+    run_service,
+)
 
 
 @click.group()
@@ -81,6 +86,49 @@ def scan(target: str, ports: str, timeout: float, workers: int) -> None:
         click.echo(f"Open ports: {', '.join(map(str, open_ports))}")
     else:
         click.echo("No open ports found.")
+
+
+@cli.command()
+@click.option("--target", required=True, help="Target host or URL (e.g. example.com or https://example.com)")
+@click.option(
+    "--ports",
+    help="Ports to scan: comma-separated list/ranges (e.g., '21,22,80,443,8000-9000'). Defaults to common ports.",
+)
+@click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
+@click.option("--workers", default=50, type=int, help="Maximum concurrent workers")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def service(target: str, ports: Optional[str], timeout: float, workers: int, fmt: str, out_path: Optional[str]) -> None:
+    """Detect services and grab banners on open ports (nmap-style)."""
+    port_list = None
+    if ports:
+        from ethscan.scanner import parse_port_range
+        port_list = parse_port_range(ports)
+
+    results = run_service(target, ports=port_list, timeout=timeout, max_workers=workers)
+
+    if fmt == "json":
+        output = format_service_report_json(results)
+    else:
+        output = format_service_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
 
 
 @cli.command()
@@ -477,6 +525,49 @@ def ssl(target: str, port: int, timeout: float, fmt: str, out_path: str) -> None
         output = format_ssl_report_json(results)
     else:
         output = format_ssl_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option("--target", required=True, help="Target host or URL (e.g. example.com or https://example.com)")
+@click.option(
+    "--ports",
+    help="Ports to scan: comma-separated list/ranges (e.g., '21,22,80,443,8000-9000'). Defaults to common ports.",
+)
+@click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
+@click.option("--workers", default=50, type=int, help="Maximum concurrent workers")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def service(target: str, ports: Optional[str], timeout: float, workers: int, fmt: str, out_path: Optional[str]) -> None:
+    """Detect services and grab banners on open ports (nmap-style)."""
+    port_list = None
+    if ports:
+        from ethscan.scanner import parse_port_range
+        port_list = parse_port_range(ports)
+
+    results = run_service(target, ports=port_list, timeout=timeout, max_workers=workers)
+
+    if fmt == "json":
+        output = format_service_report_json(results)
+    else:
+        output = format_service_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

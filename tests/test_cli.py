@@ -1018,3 +1018,251 @@ def test_brute_out_option(tmp_path, monkeypatch) -> None:
     content = out_file.read_text()
     assert "example.com" in content
     assert "connection refused" in content
+
+
+def test_service_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["service", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--ports" in result.output
+    assert "--timeout" in result.output
+    assert "--workers" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_service() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "service" in result.output
+
+
+def test_service_offline_target_json(monkeypatch) -> None:
+    def mock_run_service(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": 3,
+            "services_found": 2,
+            "results": [
+                {"port": 21, "banner": "220 FTP Server ready", "service": "FTP"},
+                {"port": 22, "banner": "SSH-2.0-OpenSSH_8.9", "service": "OpenSSH"},
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["service", "--target", "example.com", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "example.com" in result.output
+    assert "FTP" in result.output
+    assert "OpenSSH" in result.output
+
+
+def test_service_offline_target_markdown(monkeypatch) -> None:
+    def mock_run_service(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": 2,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "service",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Service Detection Report" in result.output
+    assert "*No services detected.*" in result.output
+
+
+def test_service_ports_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_service(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+    ):
+        called_args["ports"] = ports
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": len(ports) if ports else 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "service",
+            "--target",
+            "example.com",
+            "--ports",
+            "21,22,80,443",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["ports"] == [21, 22, 80, 443]
+
+
+def test_service_ports_range_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_service(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+    ):
+        called_args["ports"] = ports
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": len(ports) if ports else 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "service",
+            "--target",
+            "example.com",
+            "--ports",
+            "8000-8010",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["ports"] == list(range(8000, 8011))
+
+
+def test_service_workers_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_service(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+    ):
+        called_args["max_workers"] = max_workers
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "service",
+            "--target",
+            "example.com",
+            "--workers",
+            "100",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["max_workers"] == 100
+
+
+def test_service_out_option(tmp_path, monkeypatch) -> None:
+    def mock_run_service(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": 2,
+            "services_found": 1,
+            "results": [
+                {"port": 22, "banner": "SSH-2.0-OpenSSH_8.9", "service": "OpenSSH"},
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    out_file = tmp_path / "service_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "service",
+            "--target",
+            "example.com",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "example.com" in content
+    assert "OpenSSH" in content
