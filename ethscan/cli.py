@@ -18,6 +18,7 @@ from ethscan.fuzz import (
     format_fuzz_report_markdown,
     run_fuzz,
     load_wordlist,
+    load_wordlist as load_fuzz_wordlist,
 )
 from ethscan.brute import (
     format_brute_report_json,
@@ -65,6 +66,11 @@ from ethscan.vuln import (
     format_vuln_report_json,
     format_vuln_report_markdown,
     run_vuln,
+)
+from ethscan.urlcheck import (
+    format_urlcheck_report_json,
+    format_urlcheck_report_markdown,
+    run_urlcheck,
 )
 
 
@@ -796,6 +802,85 @@ def vuln(
         output = format_vuln_report_json(results)
     else:
         output = format_vuln_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option("--target", required=True, help="Target URL (e.g. https://example.com)")
+@click.option(
+    "--checks",
+    default="headers,info_disclosure,ssl",
+    help="Comma-separated list of web checks: headers, info_disclosure, ssl",
+)
+@click.option(
+    "--wordlist",
+    "wordlist_path",
+    type=click.Path(exists=True, readable=True),
+    help="Path to wordlist file for fuzzing (one path per line). Uses built-in default if omitted.",
+)
+@click.option(
+    "--fuzz-paths/--no-fuzz-paths",
+    default=True,
+    help="Enable/disable HTTP path fuzzing (default: enabled)",
+)
+@click.option("--port", default=443, type=int, help="TLS port for SSL certificate inspection (default: 443)")
+@click.option("--timeout", default=5.0, type=float, help="Request timeout in seconds")
+@click.option("--workers", default=10, type=int, help="Maximum concurrent workers for fuzzing")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def urlcheck(
+    target: str,
+    checks: str,
+    wordlist_path: Optional[str],
+    fuzz_paths: bool,
+    port: int,
+    timeout: float,
+    workers: int,
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Run consolidated web assessment (headers, info disclosure, SSL, fuzzing, cert inspection)."""
+    check_list = [c.strip() for c in checks.split(",") if c.strip()]
+    valid = {"headers", "info_disclosure", "ssl"}
+    unknown = [c for c in check_list if c not in valid]
+    if unknown:
+        click.echo(f"Unknown checks: {', '.join(unknown)}")
+        click.echo(f"Valid checks: {', '.join(sorted(valid))}")
+        return
+
+    wordlist = load_fuzz_wordlist(wordlist_path) if wordlist_path else None
+
+    results = run_urlcheck(
+        target,
+        check_list,
+        wordlist=wordlist,
+        fuzz_paths=fuzz_paths,
+        port=port,
+        timeout=timeout,
+        workers=workers,
+    )
+
+    if fmt == "json":
+        output = format_urlcheck_report_json(results)
+    else:
+        output = format_urlcheck_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

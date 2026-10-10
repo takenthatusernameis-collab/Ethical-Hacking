@@ -2590,3 +2590,677 @@ def test_dnsbrute_out_option_markdown(tmp_path, monkeypatch) -> None:
     assert out_file.exists()
     content = out_file.read_text()
     assert "DNS Brute Force Report" in content
+
+
+def test_urlcheck_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["urlcheck", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--checks" in result.output
+    assert "--wordlist" in result.output
+    assert "--fuzz-paths" in result.output
+    assert "--port" in result.output
+    assert "--timeout" in result.output
+    assert "--workers" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_urlcheck() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "urlcheck" in result.output
+
+
+def test_urlcheck_offline_target_json(monkeypatch) -> None:
+    def mock_run_urlcheck(
+        target,
+        checks=None,
+        wordlist=None,
+        fuzz_paths=True,
+        port=443,
+        timeout=5.0,
+        workers=10,
+    ):
+        return {
+            "target": target,
+            "normalized_target": "https://example.com",
+            "checks_requested": checks or ["headers", "info_disclosure", "ssl"],
+            "fuzz_enabled": fuzz_paths,
+            "port": port,
+            "timeout": timeout,
+            "workers": workers,
+            "web": {
+                "target": target,
+                "host": "example.com",
+                "port": port,
+                "secure": True,
+                "security_headers": {
+                    "present": ["Content-Security-Policy"],
+                    "missing": ["X-Frame-Options"],
+                    "total": 7,
+                    "present_count": 1,
+                    "missing_count": 6,
+                },
+                "information_disclosure": [],
+                "ssl": {"valid": True, "subject": "example.com", "issuer": "Let's Encrypt", "not_after": "Jan  1 00:00:00 2027 GMT", "days_remaining": 100},
+            },
+            "fuzz": {
+                "target": target,
+                "base_url": "https://example.com",
+                "paths_tested": 2,
+                "findings": [{"path": "/admin", "status_code": 200, "error": None}],
+                "all_results": [
+                    {"path": "/admin", "status_code": 200, "error": None},
+                    {"path": "/login", "status_code": 404, "error": None},
+                ],
+            },
+            "ssl": {
+                "target": "example.com",
+                "host": "example.com",
+                "port": port,
+                "timeout": timeout,
+                "error": None,
+                "chain_length": 2,
+                "cert": {
+                    "subject": "example.com",
+                    "issuer": "Let's Encrypt",
+                    "sans": ["example.com"],
+                    "not_before": "Jan  1 00:00:00 2020 GMT",
+                    "not_after": "Jan  1 00:00:00 2027 GMT",
+                    "signature_algorithm": "sha256WithRSAEncryption",
+                    "key_size": 2048,
+                },
+                "valid": True,
+                "days_remaining": 3650,
+            },
+            "summary": {
+                "total_findings": 7,
+                "web_checks_run": ["headers", "info_disclosure", "ssl"],
+                "fuzz_enabled": fuzz_paths,
+                "ssl_checked": True,
+            },
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_urlcheck", mock_run_urlcheck)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["urlcheck", "--target", "example.com", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "example.com" in result.output
+    assert "Content-Security-Policy" in result.output
+    assert "admin" in result.output
+
+
+def test_urlcheck_offline_target_markdown(monkeypatch) -> None:
+    def mock_run_urlcheck(
+        target,
+        checks=None,
+        wordlist=None,
+        fuzz_paths=True,
+        port=443,
+        timeout=5.0,
+        workers=10,
+    ):
+        return {
+            "target": target,
+            "normalized_target": "https://example.com",
+            "checks_requested": checks or ["headers", "info_disclosure", "ssl"],
+            "fuzz_enabled": fuzz_paths,
+            "port": port,
+            "timeout": timeout,
+            "workers": workers,
+            "web": {
+                "target": target,
+                "host": "example.com",
+                "port": port,
+                "secure": True,
+                "security_headers": {
+                    "present": [],
+                    "missing": ["Content-Security-Policy"],
+                    "total": 7,
+                    "present_count": 0,
+                    "missing_count": 7,
+                },
+                "information_disclosure": [],
+            },
+            "fuzz": {
+                "target": target,
+                "base_url": "https://example.com",
+                "paths_tested": 1,
+                "findings": [],
+                "all_results": [{"path": "/admin", "status_code": 404, "error": None}],
+            },
+            "ssl": {
+                "target": "example.com",
+                "host": "example.com",
+                "port": port,
+                "timeout": timeout,
+                "error": None,
+                "chain_length": 1,
+                "cert": {
+                    "subject": "example.com",
+                    "issuer": "Test CA",
+                    "sans": ["example.com"],
+                    "not_before": "Jan  1 00:00:00 2020 GMT",
+                    "not_after": "Jan  1 00:00:00 2027 GMT",
+                    "signature_algorithm": "sha256WithRSAEncryption",
+                    "key_size": 2048,
+                },
+                "valid": True,
+                "days_remaining": 3650,
+            },
+            "summary": {
+                "total_findings": 8,
+                "web_checks_run": ["headers", "info_disclosure", "ssl"],
+                "fuzz_enabled": fuzz_paths,
+                "ssl_checked": True,
+            },
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_urlcheck", mock_run_urlcheck)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "urlcheck",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Consolidated Web Assessment Report" in result.output
+    assert "example.com" in result.output
+
+
+def test_urlcheck_checks_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_urlcheck(
+        target,
+        checks=None,
+        wordlist=None,
+        fuzz_paths=True,
+        port=443,
+        timeout=5.0,
+        workers=10,
+    ):
+        called_args["checks"] = checks
+        called_args["target"] = target
+        called_args["fuzz_paths"] = fuzz_paths
+        return {
+            "target": target,
+            "normalized_target": "https://example.com",
+            "checks_requested": checks or ["headers"],
+            "fuzz_enabled": fuzz_paths,
+            "port": port,
+            "timeout": timeout,
+            "workers": workers,
+            "web": {
+                "target": target,
+                "host": "example.com",
+                "port": port,
+                "secure": True,
+                "security_headers": {
+                    "present": [],
+                    "missing": [],
+                    "total": 7,
+                    "present_count": 0,
+                    "missing_count": 7,
+                },
+                "information_disclosure": [],
+            },
+            "fuzz": None,
+            "ssl": None,
+            "summary": {
+                "total_findings": 0,
+                "web_checks_run": checks or ["headers"],
+                "fuzz_enabled": fuzz_paths,
+                "ssl_checked": False,
+            },
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_urlcheck", mock_run_urlcheck)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "urlcheck",
+            "--target",
+            "example.com",
+            "--checks",
+            "headers,ssl",
+            "--no-fuzz-paths",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["checks"] == ["headers", "ssl"]
+    assert called_args["fuzz_paths"] is False
+
+
+def test_urlcheck_unknown_check() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "urlcheck",
+            "--target",
+            "https://example.com",
+            "--checks",
+            "bogus",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Unknown checks" in result.output
+
+
+def test_urlcheck_wordlist_option(tmp_path, monkeypatch) -> None:
+    wordlist_file = tmp_path / "paths.txt"
+    wordlist_file.write_text("/admin\n/login\n")
+    called_args = {}
+
+    def mock_run_urlcheck(
+        target,
+        checks=None,
+        wordlist=None,
+        fuzz_paths=True,
+        port=443,
+        timeout=5.0,
+        workers=10,
+    ):
+        called_args["wordlist"] = wordlist
+        called_args["target"] = target
+        return {
+            "target": target,
+            "normalized_target": "https://example.com",
+            "checks_requested": checks or ["headers"],
+            "fuzz_enabled": fuzz_paths,
+            "port": port,
+            "timeout": timeout,
+            "workers": workers,
+            "web": {
+                "target": target,
+                "host": "example.com",
+                "port": port,
+                "secure": True,
+                "security_headers": {"present": [], "missing": [], "total": 7, "present_count": 0, "missing_count": 7},
+                "information_disclosure": [],
+            },
+            "fuzz": {
+                "target": target,
+                "base_url": "https://example.com",
+                "paths_tested": len(wordlist or []),
+                "findings": [],
+                "all_results": [],
+            },
+            "ssl": None,
+            "summary": {
+                "total_findings": 0,
+                "web_checks_run": checks or ["headers"],
+                "fuzz_enabled": fuzz_paths,
+                "ssl_checked": False,
+            },
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_urlcheck", mock_run_urlcheck)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "urlcheck",
+            "--target",
+            "example.com",
+            "--wordlist",
+            str(wordlist_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["wordlist"] == ["/admin", "/login"]
+
+
+def test_urlcheck_no_fuzz_paths_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_urlcheck(
+        target,
+        checks=None,
+        wordlist=None,
+        fuzz_paths=True,
+        port=443,
+        timeout=5.0,
+        workers=10,
+    ):
+        called_args["fuzz_paths"] = fuzz_paths
+        called_args["target"] = target
+        return {
+            "target": target,
+            "normalized_target": "https://example.com",
+            "checks_requested": checks or ["headers"],
+            "fuzz_enabled": fuzz_paths,
+            "port": port,
+            "timeout": timeout,
+            "workers": workers,
+            "web": {
+                "target": target,
+                "host": "example.com",
+                "port": port,
+                "secure": True,
+                "security_headers": {"present": [], "missing": [], "total": 7, "present_count": 0, "missing_count": 7},
+                "information_disclosure": [],
+            },
+            "fuzz": None,
+            "ssl": None,
+            "summary": {
+                "total_findings": 0,
+                "web_checks_run": checks or ["headers"],
+                "fuzz_enabled": fuzz_paths,
+                "ssl_checked": False,
+            },
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_urlcheck", mock_run_urlcheck)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "urlcheck",
+            "--target",
+            "example.com",
+            "--no-fuzz-paths",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["fuzz_paths"] is False
+
+
+def test_urlcheck_port_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_urlcheck(
+        target,
+        checks=None,
+        wordlist=None,
+        fuzz_paths=True,
+        port=443,
+        timeout=5.0,
+        workers=10,
+    ):
+        called_args["port"] = port
+        called_args["target"] = target
+        return {
+            "target": target,
+            "normalized_target": "https://example.com",
+            "checks_requested": checks or ["headers", "ssl"],
+            "fuzz_enabled": fuzz_paths,
+            "port": port,
+            "timeout": timeout,
+            "workers": workers,
+            "web": {
+                "target": target,
+                "host": "example.com",
+                "port": port,
+                "secure": True,
+                "security_headers": {"present": [], "missing": [], "total": 7, "present_count": 0, "missing_count": 7},
+                "information_disclosure": [],
+                "ssl": {"valid": False, "error": "connection refused"},
+            },
+            "fuzz": None,
+            "ssl": {
+                "target": "example.com",
+                "host": "example.com",
+                "port": port,
+                "timeout": timeout,
+                "error": "connection refused",
+                "chain_length": 0,
+                "cert": None,
+                "valid": False,
+                "days_remaining": None,
+            },
+            "summary": {
+                "total_findings": 1,
+                "web_checks_run": ["headers", "ssl"],
+                "fuzz_enabled": fuzz_paths,
+                "ssl_checked": True,
+            },
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_urlcheck", mock_run_urlcheck)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "urlcheck",
+            "--target",
+            "example.com",
+            "--port",
+            "8443",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["port"] == 8443
+
+
+def test_urlcheck_timeout_workers_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_urlcheck(
+        target,
+        checks=None,
+        wordlist=None,
+        fuzz_paths=True,
+        port=443,
+        timeout=5.0,
+        workers=10,
+    ):
+        called_args["timeout"] = timeout
+        called_args["workers"] = workers
+        called_args["target"] = target
+        return {
+            "target": target,
+            "normalized_target": "https://example.com",
+            "checks_requested": checks or ["headers"],
+            "fuzz_enabled": fuzz_paths,
+            "port": port,
+            "timeout": timeout,
+            "workers": workers,
+            "web": {
+                "target": target,
+                "host": "example.com",
+                "port": port,
+                "secure": True,
+                "security_headers": {"present": [], "missing": [], "total": 7, "present_count": 0, "missing_count": 7},
+                "information_disclosure": [],
+            },
+            "fuzz": None,
+            "ssl": None,
+            "summary": {
+                "total_findings": 0,
+                "web_checks_run": checks or ["headers"],
+                "fuzz_enabled": fuzz_paths,
+                "ssl_checked": False,
+            },
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_urlcheck", mock_run_urlcheck)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "urlcheck",
+            "--target",
+            "example.com",
+            "--timeout",
+            "3.5",
+            "--workers",
+            "25",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["timeout"] == 3.5
+    assert called_args["workers"] == 25
+
+
+def test_urlcheck_out_option_json(tmp_path, monkeypatch) -> None:
+    def mock_run_urlcheck(
+        target,
+        checks=None,
+        wordlist=None,
+        fuzz_paths=True,
+        port=443,
+        timeout=5.0,
+        workers=10,
+    ):
+        return {
+            "target": target,
+            "normalized_target": "https://example.com",
+            "checks_requested": checks or ["headers", "ssl"],
+            "fuzz_enabled": fuzz_paths,
+            "port": port,
+            "timeout": timeout,
+            "workers": workers,
+            "web": {
+                "target": target,
+                "host": "example.com",
+                "port": port,
+                "secure": True,
+                "security_headers": {"present": [], "missing": [], "total": 7, "present_count": 0, "missing_count": 7},
+                "information_disclosure": [],
+            },
+            "fuzz": None,
+            "ssl": {
+                "target": "example.com",
+                "host": "example.com",
+                "port": port,
+                "timeout": timeout,
+                "error": None,
+                "chain_length": 1,
+                "cert": {
+                    "subject": "example.com",
+                    "issuer": "Test CA",
+                    "sans": ["example.com"],
+                    "not_before": "Jan  1 00:00:00 2020 GMT",
+                    "not_after": "Jan  1 00:00:00 2027 GMT",
+                    "signature_algorithm": "sha256WithRSAEncryption",
+                    "key_size": 2048,
+                },
+                "valid": True,
+                "days_remaining": 3650,
+            },
+            "summary": {
+                "total_findings": 0,
+                "web_checks_run": ["headers", "ssl"],
+                "fuzz_enabled": fuzz_paths,
+                "ssl_checked": True,
+            },
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_urlcheck", mock_run_urlcheck)
+
+    out_file = tmp_path / "urlcheck_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "urlcheck",
+            "--target",
+            "example.com",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "example.com" in content
+    assert "Test CA" in content
+
+
+def test_urlcheck_out_option_markdown(tmp_path, monkeypatch) -> None:
+    def mock_run_urlcheck(
+        target,
+        checks=None,
+        wordlist=None,
+        fuzz_paths=True,
+        port=443,
+        timeout=5.0,
+        workers=10,
+    ):
+        return {
+            "target": target,
+            "normalized_target": "https://example.com",
+            "checks_requested": checks or ["headers"],
+            "fuzz_enabled": fuzz_paths,
+            "port": port,
+            "timeout": timeout,
+            "workers": workers,
+            "web": {
+                "target": target,
+                "host": "example.com",
+                "port": port,
+                "secure": True,
+                "security_headers": {"present": [], "missing": [], "total": 7, "present_count": 0, "missing_count": 7},
+                "information_disclosure": [],
+            },
+            "fuzz": None,
+            "ssl": None,
+            "summary": {
+                "total_findings": 0,
+                "web_checks_run": ["headers"],
+                "fuzz_enabled": fuzz_paths,
+                "ssl_checked": False,
+            },
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_urlcheck", mock_run_urlcheck)
+
+    out_file = tmp_path / "urlcheck_report.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "urlcheck",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "Consolidated Web Assessment Report" in content
