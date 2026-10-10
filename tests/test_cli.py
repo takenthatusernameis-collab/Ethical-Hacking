@@ -5922,3 +5922,385 @@ def test_recon_url_target(tmp_path, monkeypatch) -> None:
     result = runner.invoke(cli, ["recon", "--target", "https://example.com/path"])
     assert result.exit_code == 0
     assert called_args["target"] == "https://example.com/path"
+
+
+# ---------------------------------------------------------------------------
+# cert command tests
+# ---------------------------------------------------------------------------
+
+
+def test_cert_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cert", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--timeout" in result.output
+    assert "--no-cache" in result.output
+    assert "--no-offline-fallback" in result.output
+    assert "--api-url" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+
+
+def test_cli_help_lists_cert() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "cert" in result.output
+
+
+def test_cert_offline_target_json(monkeypatch) -> None:
+    def mock_run_cert(target, timeout=10.0, use_cache=True, offline_fallback=True, api_url=None):
+        return {
+            "target": target,
+            "domain": "nonexistent.invalid.domain.tld",
+            "ip": None,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "cert_data": None,
+            "subdomains": [],
+            "notes": ["Could not resolve host 'nonexistent.invalid.domain.tld'"],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cert", mock_run_cert)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "cert",
+            "--target",
+            "nonexistent.invalid.domain.tld",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Could not resolve" in result.output
+    assert "cert_data" in result.output
+
+
+def test_cert_offline_target_markdown(monkeypatch) -> None:
+    def mock_run_cert(target, timeout=10.0, use_cache=True, offline_fallback=True, api_url=None):
+        return {
+            "target": target,
+            "domain": "nonexistent.invalid.domain.tld",
+            "ip": None,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "cert_data": None,
+            "subdomains": [],
+            "notes": ["Could not resolve host 'nonexistent.invalid.domain.tld'"],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cert", mock_run_cert)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "cert",
+            "--target",
+            "nonexistent.invalid.domain.tld",
+            "--format",
+            "markdown",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Certificate Transparency Report" in result.output
+    assert "No subdomains discovered" in result.output
+
+
+def test_cert_success_json(monkeypatch) -> None:
+    def mock_run_cert(target, timeout=10.0, use_cache=True, offline_fallback=True, api_url=None):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "ip": "93.184.216.34",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "cert_data": {
+                "domain": "example.com",
+                "entries": [{"name_value": "www.example.com"}],
+                "count": 1,
+                "cached": False,
+            },
+            "subdomains": ["www.example.com"],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cert", mock_run_cert)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "cert",
+            "--target",
+            "example.com",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "example.com" in result.output
+    assert "www.example.com" in result.output
+    assert "cached" in result.output
+
+
+def test_cert_success_markdown(monkeypatch) -> None:
+    def mock_run_cert(target, timeout=10.0, use_cache=True, offline_fallback=True, api_url=None):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "ip": "93.184.216.34",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "cert_data": {
+                "domain": "example.com",
+                "entries": [{"name_value": "www.example.com"}],
+                "count": 1,
+                "cached": False,
+            },
+            "subdomains": ["www.example.com"],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cert", mock_run_cert)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "cert",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Certificate Transparency Report" in result.output
+    assert "www.example.com" in result.output
+    assert "1" in result.output
+
+
+def test_cert_no_cache_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cert(target, timeout=10.0, use_cache=True, offline_fallback=True, api_url=None):
+        called_args["use_cache"] = use_cache
+        return {
+            "target": target,
+            "domain": "example.com",
+            "ip": "93.184.216.34",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "cert_data": {
+                "domain": "example.com",
+                "entries": [],
+                "count": 0,
+                "cached": False,
+            },
+            "subdomains": [],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cert", mock_run_cert)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cert", "--target", "example.com", "--no-cache"])
+    assert result.exit_code == 0
+    assert called_args["use_cache"] is False
+
+
+def test_cert_no_offline_fallback_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cert(target, timeout=10.0, use_cache=True, offline_fallback=True, api_url=None):
+        called_args["offline_fallback"] = offline_fallback
+        return {
+            "target": target,
+            "domain": "example.com",
+            "ip": "93.184.216.34",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "cert_data": {
+                "domain": "example.com",
+                "entries": [],
+                "count": 0,
+                "cached": False,
+            },
+            "subdomains": [],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cert", mock_run_cert)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cert", "--target", "example.com", "--no-offline-fallback"])
+    assert result.exit_code == 0
+    assert called_args["offline_fallback"] is False
+
+
+def test_cert_api_url_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cert(target, timeout=10.0, use_cache=True, offline_fallback=True, api_url=None):
+        called_args["api_url"] = api_url
+        return {
+            "target": target,
+            "domain": "example.com",
+            "ip": "93.184.216.34",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "cert_data": {
+                "domain": "example.com",
+                "entries": [],
+                "count": 0,
+                "cached": False,
+            },
+            "subdomains": [],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cert", mock_run_cert)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cert", "--target", "example.com", "--api-url", "https://custom.example.com/"])
+    assert result.exit_code == 0
+    assert called_args["api_url"] == "https://custom.example.com/"
+
+
+def test_cert_timeout_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cert(target, timeout=10.0, use_cache=True, offline_fallback=True, api_url=None):
+        called_args["timeout"] = timeout
+        return {
+            "target": target,
+            "domain": "example.com",
+            "ip": "93.184.216.34",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "cert_data": {
+                "domain": "example.com",
+                "entries": [],
+                "count": 0,
+                "cached": False,
+            },
+            "subdomains": [],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cert", mock_run_cert)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cert", "--target", "example.com", "--timeout", "30.0"])
+    assert result.exit_code == 0
+    assert called_args["timeout"] == 30.0
+
+
+def test_cert_out_option_json(tmp_path, monkeypatch) -> None:
+    def mock_run_cert(target, timeout=10.0, use_cache=True, offline_fallback=True, api_url=None):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "ip": "93.184.216.34",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "cert_data": {
+                "domain": "example.com",
+                "entries": [{"name_value": "www.example.com"}],
+                "count": 1,
+                "cached": False,
+            },
+            "subdomains": ["www.example.com"],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cert", mock_run_cert)
+
+    out_file = tmp_path / "cert_report.json"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cert", "--target", "example.com", "--out", str(out_file)])
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "target" in content
+    assert "example.com" in content
+
+
+def test_cert_out_option_markdown(tmp_path, monkeypatch) -> None:
+    def mock_run_cert(target, timeout=10.0, use_cache=True, offline_fallback=True, api_url=None):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "ip": "93.184.216.34",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "cert_data": {
+                "domain": "example.com",
+                "entries": [{"name_value": "www.example.com"}],
+                "count": 1,
+                "cached": False,
+            },
+            "subdomains": ["www.example.com"],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cert", mock_run_cert)
+
+    out_file = tmp_path / "cert_report.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cert", "--target", "example.com", "--format", "markdown", "--out", str(out_file)],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "Certificate Transparency Report" in content
+    assert "example.com" in content
+
+
+def test_cert_url_target(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cert(target, timeout=10.0, use_cache=True, offline_fallback=True, api_url=None):
+        called_args["target"] = target
+        return {
+            "target": target,
+            "domain": "example.com",
+            "ip": "93.184.216.34",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "cert_data": {
+                "domain": "example.com",
+                "entries": [],
+                "count": 0,
+                "cached": False,
+            },
+            "subdomains": [],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cert", mock_run_cert)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cert", "--target", "https://example.com/path"])
+    assert result.exit_code == 0
+    assert called_args["target"] == "https://example.com/path"

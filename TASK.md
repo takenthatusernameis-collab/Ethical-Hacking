@@ -449,11 +449,39 @@ Added a `--recursive` option to the `subdomains` command for recursive subdomain
 - End-to-end: `python -m ethscan subdomains --target example.com --format json` includes `recursive`, `max_depth`, `per_depth` fields in output
 - Backward compatibility: non-recursive mode works unchanged, includes new fields with default values
 
+## Completed: `cert` command (Certificate Transparency log search)
+
+The `cert` command searches Certificate Transparency (CT) logs via public CT log APIs (crt.sh-compatible JSON output) for certificates issued to a target domain, extracting associated subdomains. Uses stdlib-only HTTP (`urllib`) with filesystem caching and offline fallback.
+
+### Added Files
+- `ethscan/cert.py` — CT log search module with:
+  - `_normalize_target()` — extracts a bare domain from URL/bare targets
+  - `_resolve_host()` — resolves hostname to IPv4 address
+  - `_load_cache()` / `_save_cache()` / `_is_cache_valid()` — filesystem cache management with TTL
+  - `_fetch_cert_data()` — fetches CT entries from ct.sh-compatible API (urllib, stdlib only)
+  - `_get_cached_or_fetch()` — orchestrates cache lookup, API fetch, and offline fallback
+  - `_extract_subdomains()` — extracts unique subdomain names from CT entries (name_value / common_name, multi-line dedup, sorted)
+  - `run_cert()` — public entry point: normalizes target, resolves IP, performs cached/offline-aware CT lookup, extracts subdomains
+  - `format_cert_report_json()` / `format_cert_report_markdown()` — output formatters (markdown includes summary, CT data section with error/entries/cached/offline-fallback, subdomains table, notes)
+- `tests/test_cert.py` — 51 unit tests: domain normalization, host resolution, cache operations (load/save/validity), `_fetch_cert_data` (success/empty/non-list/network-error/timeout/invalid-json/custom-api-url), `_get_cached_or_fetch` (cache-hit/cache-miss-fetch/failed-no-cache/failed-offline-fallback/no-cache-disabled), `_extract_subdomains` (basic/dedup/common-name-fallback/multiline/empty/no-entries/non-dict-skip/whitespace-strip), `run_cert` (offline-target/success/url-target/cached-result/custom-api-url/api-fails-offline-fallback/no-cache), both formatters (JSON, markdown success/fail/no-data/cached/offline-fallback/notes).
+- `tests/test_cli.py` — 13 CLI integration tests: `cert` help, top-level help listing, offline json/markdown output (monkeypatched `run_cert`), success json/markdown output, `--no-cache` option, `--no-offline-fallback` option, `--api-url` option, `--timeout` option, `--out` (json and markdown), URL target.
+
+### Modified Files
+- `ethscan/cli.py` — registered `cert` command with `--target` (required), `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out`; imports `run_cert` and both formatters from `ethscan.cert`; fixed duplicate import block.
+- `README.md` — added Certificate Transparency log search (`cert`) to the features list.
+
+### Verification
+- `python -m pytest -q` -> 727 passed, 1 skipped (673 baseline + 64 new: 51 unit + 13 CLI).
+- `python -m ethscan --help` -> lists `cert` among the 21 commands.
+- `python -m ethscan cert --help` -> shows all expected options (`--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out`).
+
 ## Suggested next task
 
-**Add a `cert` command** to search Certificate Transparency logs for subdomains associated with a target domain (using public CT log APIs like crt.sh, with caching and stdlib-only HTTP).
+**Add a `--output` option to the `report` command** to write the combined scan+audit report to a file (json and markdown), consistent with all other commands that support `--out`.
 
-Alternative: Add a `--recursive` option to `subdomains` for recursive subdomain enumeration with wordlist-based discovery (already completed).
+Alternative: Add a `headers` shorthand command that runs just the `web` check with `--checks headers` for quick security header checks.
+
+Alternative: Add a `cve` command that queries the NVD/CVE API for known vulnerabilities in detected service versions (using `service` output via `--services-file`).
 
 ## Requirements
 - Pick one of the suggested features and implement it following the existing module conventions.
@@ -463,11 +491,12 @@ Alternative: Add a `--recursive` option to `subdomains` for recursive subdomain 
 - Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
 
 ## Current state
-- All 20 commands implemented (including `recon`).
+- All 21 commands implemented (including `cert`).
 - `scan` and `service` now support `--profile fast|normal|full` option.
 - `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
 - `subdomains` now supports `--recursive` and `--max-depth` for recursive subdomain enumeration.
 - `dnsbrute` now supports `--recursive` and `--max-depth` for recursive zone transfers.
 - `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
 - `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
-- Tests: 673 passing (1 skipped).
+- `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out` for CT log subdomain discovery.
+- Tests: 727 passing (1 skipped).

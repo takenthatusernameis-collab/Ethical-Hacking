@@ -24,6 +24,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - Wi-Fi reconnaissance: `wifi` command for wireless interface scanning and access point discovery (Linux, implemented)
 - IP geolocation: `geo` command for IP-to-location lookup using a public API with caching and offline fallback (implemented)
 - Consolidated reconnaissance: `recon` command running multiple modules (subdomains, dns, whois, geo, trace) in sequence with a unified report (implemented)
+- Certificate Transparency log search: `cert` command to discover subdomains via CT logs (crt.sh-compatible APIs) with caching and offline fallback (implemented)
 
 ## Requirements
 

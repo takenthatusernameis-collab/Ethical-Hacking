@@ -106,11 +106,6 @@ from ethscan.cert import (
     format_cert_report_markdown,
     run_cert,
 )
-from ethscan.cert import (
-    format_cert_report_json,
-    format_cert_report_markdown,
-    run_cert,
-)
 
 
 @click.group()
