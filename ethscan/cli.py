@@ -106,6 +106,11 @@ from ethscan.cert import (
     format_cert_report_markdown,
     run_cert,
 )
+from ethscan.cve import (
+    format_cve_report_json,
+    format_cve_report_markdown,
+    run_cve,
+)
 
 
 @click.group()
@@ -1554,6 +1559,91 @@ def cert(
         output = format_cert_report_json(results)
     else:
         output = format_cert_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target host or URL (e.g. example.com or https://example.com)",
+)
+@click.option(
+    "--services-file",
+    "services_file",
+    type=click.Path(exists=True, readable=True),
+    help="JSON file with 'service' command output (skips live detection).",
+)
+@click.option("--timeout", default=10.0, type=float, help="API request timeout in seconds")
+@click.option(
+    "--no-cache",
+    is_flag=True,
+    help="Disable local filesystem cache",
+)
+@click.option(
+    "--no-offline-fallback",
+    is_flag=True,
+    help="Disable offline fallback to stale cache when API is unavailable",
+)
+@click.option(
+    "--api-url",
+    help="Custom CVE API base URL (NVD-compatible query format)",
+)
+@click.option(
+    "--severity",
+    type=click.Choice(["low", "medium", "high", "critical"]),
+    help="Only report findings with the given severity.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def cve(
+    target: str,
+    services_file: Optional[str],
+    timeout: float,
+    no_cache: bool,
+    no_offline_fallback: bool,
+    api_url: Optional[str],
+    severity: Optional[str],
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Query NVD/CVE API for known vulnerabilities in detected services."""
+    services = None
+    if services_file:
+        with open(services_file, "r", encoding="utf-8") as handle:
+            services = json.load(handle)
+
+    results = run_cve(
+        target,
+        services=services,
+        timeout=timeout,
+        use_cache=not no_cache,
+        offline_fallback=not no_offline_fallback,
+        api_url=api_url,
+        severity=severity,
+    )
+
+    if fmt == "json":
+        output = format_cve_report_json(results)
+    else:
+        output = format_cve_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
