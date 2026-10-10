@@ -358,3 +358,55 @@ The `recon` command runs multiple reconnaissance modules (`subdomains`, `dns`, `
 - `python -m ethscan recon --help` -> shows all expected options.
 - End-to-end: `python -m ethscan recon --target example.com --modules "subdomains,dns,whois" --format markdown --timeout 1.0` produces a Markdown report with subdomains, DNS records, and WHOIS sections.
 - End-to-end: `python -m ethscan recon --target nonexistent.invalid.domain.tld --format json --timeout 1.0` runs all modules, gracefully handles resolution failures, includes notes for failed modules.
+
+## Completed: `--recursive` option for `dnsbrute`
+
+Added a `--recursive` option to the `dnsbrute` command for recursive zone transfer attempts against nameservers discovered in successful AXFR transfers.
+
+### Added Functionality
+- `ethscan/dnsbrute.py`:
+  - Added `DEFAULT_RECURSIVE_DEPTH = 2` constant
+  - Added `_extract_ns_records()` helper to extract NS record targets from AXFR records
+  - Added `_is_subdomain_of()` helper to filter nameservers to only subdomains of the target zone
+  - Updated `run_dnsbrute()` to accept `recursive` (bool) and `max_depth` (int) parameters
+  - Added `_run_axfr_for_zone()` inner function that recursively attempts AXFR against discovered nameservers up to `max_depth`
+  - Updated return dictionary to include `recursive_axfr`, `recursive_axfr_total_records`, `recursive`, `max_depth` fields
+  - Updated `format_dnsbrute_report_markdown()` to display recursive AXFR summary and per-depth attempt details
+  - Updated `format_dnsbrute_report_json()` to include recursive AXFR data (handled automatically via default=str)
+
+### Modified Files
+- `ethscan/cli.py` — added `--recursive/--no-recursive` flag and `--max-depth` option to `dnsbrute` command; passes both to `run_dnsbrute()`
+- `tests/test_dnsbrute.py` — 6 new unit tests for recursive AXFR:
+  - `test_run_dnsbrute_recursive_disabled_by_default` — verifies recursive defaults to False
+  - `test_run_dnsbrute_recursive_enabled` — tests recursive AXFR with successful zone transfer and NS record discovery
+  - `test_run_dnsbrute_recursive_respects_max_depth` — verifies recursion stops at max_depth
+  - `test_run_dnsbrute_recursive_filters_non_subdomain_ns` — verifies only subdomain NS records are followed
+  - `test_format_dnsbrute_report_json_recursive` — tests JSON formatter with recursive data
+  - `test_format_dnsbrute_report_markdown_recursive` — tests Markdown formatter with recursive sections
+
+### Verification
+- `python -m pytest -q` -> 662 passed, 1 skipped (all tests pass including 6 new recursive tests)
+- `python -m ethscan dnsbrute --help` -> shows `--recursive/--no-recursive` and `--max-depth` options
+- End-to-end: `python -m ethscan dnsbrute --target example.com --ns ns1.example.com --recursive --max-depth 2 --format markdown` produces report with "## Recursive AXFR Attempts" section
+
+## Suggested next task
+
+**Add a `--recursive` option to `subdomains`** for recursive subdomain enumeration: when a subdomain resolves, optionally enumerate subdomains of that subdomain (e.g., find `www.example.com`, then enumerate `dev.www.example.com`, `staging.www.example.com`, etc.). Include `--max-depth` limit, deduplication, and per-depth reporting in JSON/Markdown output.
+
+Alternative: Add a `cert` command to search Certificate Transparency logs for subdomains associated with a target domain (using public CT log APIs like crt.sh, with caching and stdlib-only HTTP).
+
+## Requirements
+- Pick one of the suggested features and implement it following the existing module conventions.
+- Add a new module under `ethscan/` with `run_*`, `format_*_report_json`, `format_*_report_markdown` (for new commands) or extend existing module (for new options).
+- Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
+- Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
+- Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
+
+## Current state
+- All 20 commands implemented (including `recon`).
+- `scan` and `service` now support `--profile fast|normal|full` option.
+- `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
+- `dnsbrute` now supports `--recursive` and `--max-depth` for recursive zone transfers.
+- `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
+- `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
+- Tests: 662 passing (1 skipped).
