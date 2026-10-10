@@ -56,6 +56,11 @@ from ethscan.service import (
     format_service_report_markdown,
     run_service,
 )
+from ethscan.vuln import (
+    format_vuln_report_json,
+    format_vuln_report_markdown,
+    run_vuln,
+)
 
 
 @click.group()
@@ -602,6 +607,114 @@ def service(target: str, ports: Optional[str], timeout: float, workers: int, fmt
         output = format_service_report_json(results)
     else:
         output = format_service_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target host or URL (e.g. example.com or https://example.com)",
+)
+@click.option(
+    "--ports",
+    help="Ports to scan for service detection: comma-separated list/ranges "
+    "(e.g., '21,22,80'). Defaults to common ports.",
+)
+@click.option(
+    "--services-file",
+    "services_file",
+    type=click.Path(exists=True, readable=True),
+    help="JSON file with 'service' command output (skips live detection).",
+)
+@click.option(
+    "--tls-file",
+    "tls_file",
+    type=click.Path(exists=True, readable=True),
+    help="JSON file with 'tls' command output to check protocol/cipher "
+    "weaknesses.",
+)
+@click.option(
+    "--ssl-file",
+    "ssl_file",
+    type=click.Path(exists=True, readable=True),
+    help="JSON file with 'ssl' command output to check certificate "
+    "weaknesses.",
+)
+@click.option(
+    "--severity",
+    type=click.Choice(["low", "medium", "high", "critical"]),
+    help="Only report findings with the given severity.",
+)
+@click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
+@click.option("--workers", default=50, type=int, help="Maximum concurrent workers")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def vuln(
+    target: str,
+    ports: Optional[str],
+    services_file: Optional[str],
+    tls_file: Optional[str],
+    ssl_file: Optional[str],
+    severity: Optional[str],
+    timeout: float,
+    workers: int,
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Check TARGET for known service, protocol, and certificate vulnerabilities."""
+    services = None
+    if services_file:
+        with open(services_file, "r", encoding="utf-8") as handle:
+            services = json.load(handle)
+
+    tls_data = None
+    if tls_file:
+        with open(tls_file, "r", encoding="utf-8") as handle:
+            tls_data = json.load(handle)
+
+    certificate = None
+    if ssl_file:
+        with open(ssl_file, "r", encoding="utf-8") as handle:
+            certificate = json.load(handle)
+
+    port_list = None
+    if ports:
+        from ethscan.scanner import parse_port_range
+        port_list = parse_port_range(ports)
+
+    results = run_vuln(
+        target,
+        ports=port_list,
+        timeout=timeout,
+        max_workers=workers,
+        services=services,
+        tls=tls_data,
+        certificate=certificate,
+        severity=severity,
+    )
+
+    if fmt == "json":
+        output = format_vuln_report_json(results)
+    else:
+        output = format_vuln_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

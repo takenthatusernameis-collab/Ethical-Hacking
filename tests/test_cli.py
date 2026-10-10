@@ -1,5 +1,7 @@
 """Tests for the ethscan CLI."""
 
+import json
+
 from click.testing import CliRunner
 
 from ethscan.cli import cli
@@ -1706,3 +1708,484 @@ def test_tls_out_option(tmp_path, monkeypatch) -> None:
     assert "example.com" in content
     assert "TLSv1_2" in content
     assert "AES128-GCM-SHA256" in content
+
+
+def test_vuln_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["vuln", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--ports" in result.output
+    assert "--services-file" in result.output
+    assert "--tls-file" in result.output
+    assert "--ssl-file" in result.output
+    assert "--severity" in result.output
+    assert "--timeout" in result.output
+    assert "--workers" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_vuln() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "vuln" in result.output
+
+
+def test_vuln_offline_target_json(monkeypatch) -> None:
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports": ports,
+            "services_checked": 1,
+            "tls_checked": False,
+            "certificate_checked": False,
+            "severity_filter": severity,
+            "findings": [
+                {
+                    "id": "CVE-2018-15473",
+                    "kind": "service",
+                    "title": "OpenSSH user enumeration via malformed userauth request",
+                    "severity": "medium",
+                    "description": "OpenSSH before 7.7 allows user enumeration.",
+                    "product": "OpenSSH",
+                    "version": "7.2p2",
+                    "port": 22,
+                }
+            ],
+            "finding_count": 1,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 1, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["vuln", "--target", "example.com", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "example.com" in result.output
+    assert "CVE-2018-15473" in result.output
+    assert "finding_count" in result.output
+
+
+def test_vuln_offline_target_markdown(monkeypatch) -> None:
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports": ports,
+            "services_checked": 1,
+            "tls_checked": True,
+            "certificate_checked": False,
+            "severity_filter": severity,
+            "findings": [
+                {
+                    "id": "CVE-2014-3566",
+                    "kind": "protocol",
+                    "title": "SSLv3 is vulnerable to POODLE",
+                    "severity": "high",
+                    "description": "SSLv3 supports CBC-mode ciphers.",
+                    "protocol": "SSLv3",
+                }
+            ],
+            "finding_count": 1,
+            "severity_counts": {"critical": 0, "high": 1, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Vulnerability Report" in result.output
+    assert "CVE-2014-3566" in result.output
+    assert "SSLv3" in result.output
+
+
+def test_vuln_services_file_option(tmp_path) -> None:
+    services_file = tmp_path / "service_report.json"
+    services_file.write_text(
+        json.dumps(
+            {
+                "target": "example.com",
+                "host": "example.com",
+                "results": [
+                    {
+                        "port": 21,
+                        "banner": "220 ProFTPD 1.3.5 Server (Debian)",
+                        "service": "ProFTPD",
+                    },
+                ],
+            }
+        )
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--services-file",
+            str(services_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "CVE-2015-3306" in result.output
+    assert "ProFTPD" in result.output
+
+
+def test_vuln_tls_file_option(tmp_path) -> None:
+    tls_file = tmp_path / "tls_report.json"
+    tls_file.write_text(
+        json.dumps(
+            {
+                "target": "example.com",
+                "host": "example.com",
+                "supported_versions": ["SSLv3", "TLSv1_2"],
+                "supported_ciphers": ["RC4-SHA", "AES128-GCM-SHA256"],
+            }
+        )
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--tls-file",
+            str(tls_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "CVE-2014-3566" in result.output
+    assert "CVE-2013-2566" in result.output
+
+
+def test_vuln_ssl_file_option(tmp_path) -> None:
+    ssl_file = tmp_path / "ssl_report.json"
+    ssl_file.write_text(
+        json.dumps(
+            {
+                "target": "example.com",
+                "host": "example.com",
+                "cert": {
+                    "key_size": 1024,
+                    "signature_algorithm": "sha256WithRSAEncryption",
+                },
+            }
+        )
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--ssl-file",
+            str(ssl_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "WEAK-RSA-KEY" in result.output
+
+
+def test_vuln_severity_option(tmp_path) -> None:
+    services_file = tmp_path / "service_report.json"
+    services_file.write_text(
+        json.dumps(
+            {
+                "results": [
+                    {"port": 21, "banner": "220 (vsFTPd 2.3.4)"},
+                    {"port": 22, "banner": "SSH-2.0-OpenSSH_7.2p2"},
+                ],
+            }
+        )
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--services-file",
+            str(services_file),
+            "--severity",
+            "critical",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "VSFTPD-2.3.4-BACKDOOR" in result.output
+    assert "CVE-2018-15473" not in result.output
+
+
+def test_vuln_ports_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+    ):
+        called_args["ports"] = ports
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports": ports,
+            "services_checked": 0,
+            "tls_checked": False,
+            "certificate_checked": False,
+            "severity_filter": severity,
+            "findings": [],
+            "finding_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--ports",
+            "21,22,80",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["ports"] == [21, 22, 80]
+
+
+def test_vuln_workers_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+    ):
+        called_args["max_workers"] = max_workers
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports": ports,
+            "services_checked": 0,
+            "tls_checked": False,
+            "certificate_checked": False,
+            "severity_filter": severity,
+            "findings": [],
+            "finding_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--workers",
+            "25",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["max_workers"] == 25
+
+
+def test_vuln_out_option(tmp_path, monkeypatch) -> None:
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports": ports,
+            "services_checked": 1,
+            "tls_checked": False,
+            "certificate_checked": False,
+            "severity_filter": severity,
+            "findings": [
+                {
+                    "id": "CVE-2018-15473",
+                    "kind": "service",
+                    "title": "OpenSSH user enumeration via malformed userauth request",
+                    "severity": "medium",
+                    "description": "OpenSSH before 7.7 allows user enumeration.",
+                    "product": "OpenSSH",
+                    "version": "7.2p2",
+                    "port": 22,
+                }
+            ],
+            "finding_count": 1,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 1, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+    out_file = tmp_path / "vuln_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "example.com" in content
+    assert "CVE-2018-15473" in content
+
+
+def test_vuln_out_option_markdown(tmp_path, monkeypatch) -> None:
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports": ports,
+            "services_checked": 1,
+            "tls_checked": False,
+            "certificate_checked": False,
+            "severity_filter": severity,
+            "findings": [
+                {
+                    "id": "CVE-2018-15473",
+                    "kind": "service",
+                    "title": "OpenSSH user enumeration via malformed userauth request",
+                    "severity": "medium",
+                    "description": "OpenSSH before 7.7 allows user enumeration.",
+                    "product": "OpenSSH",
+                    "version": "7.2p2",
+                    "port": 22,
+                }
+            ],
+            "finding_count": 1,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 1, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+    out_file = tmp_path / "vuln_report.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "Vulnerability Report" in content
+    assert "CVE-2018-15473" in content

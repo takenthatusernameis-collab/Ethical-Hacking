@@ -14,6 +14,8 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - SSL/TLS certificate inspection (implemented)
 - TLS protocol/cipher enumeration (implemented)
 - Brute-force login testing (FTP/SSH) (implemented)
+- Service/banner detection (implemented)
+- Vulnerability checks against a built-in CVE/weakness database (implemented)
 - Report generation (JSON / Markdown) (implemented)
 
 ## Requirements
