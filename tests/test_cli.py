@@ -3631,3 +3631,367 @@ def test_urlcheck_out_option_markdown(tmp_path, monkeypatch) -> None:
     assert out_file.exists()
     content = out_file.read_text()
     assert "Consolidated Web Assessment Report" in content
+
+
+def test_osdetect_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["osdetect", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--ports" in result.output
+    assert "--banners-file" in result.output
+    assert "--timeout" in result.output
+    assert "--workers" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_osdetect() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "osdetect" in result.output
+
+
+def test_osdetect_offline_target_json(monkeypatch) -> None:
+    def mock_run_osdetect(
+        target,
+        ports=None,
+        timeout=5.0,
+        max_workers=10,
+        banners=None,
+    ):
+        port_list = ports or [22, 80, 443]
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_probed": len(port_list),
+            "probes": [
+                {
+                    "port": port,
+                    "probe_type": "SYN",
+                    "connected": False,
+                    "response": "NO-RESPONSE",
+                    "flags_observed": None,
+                    "error": None,
+                }
+                for port in port_list
+            ],
+            "inferred_os": [],
+            "inferred_os_count": 0,
+            "banners_provided": bool(banners),
+            "notes": ["No open ports responded to SYN probes"],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_osdetect", mock_run_osdetect)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["osdetect", "--target", "example.com", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "example.com" in result.output
+    assert "inferred_os" in result.output
+
+
+def test_osdetect_offline_target_markdown(monkeypatch) -> None:
+    def mock_run_osdetect(
+        target,
+        ports=None,
+        timeout=5.0,
+        max_workers=10,
+        banners=None,
+    ):
+        port_list = ports or [22, 80, 443]
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_probed": len(port_list),
+            "probes": [
+                {
+                    "port": port,
+                    "probe_type": "SYN",
+                    "connected": False,
+                    "response": "NO-RESPONSE",
+                    "flags_observed": None,
+                    "error": None,
+                }
+                for port in port_list
+            ],
+            "inferred_os": [],
+            "inferred_os_count": 0,
+            "banners_provided": bool(banners),
+            "notes": ["No open ports responded to SYN probes"],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_osdetect", mock_run_osdetect)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "osdetect",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "OS Detection Report" in result.output
+
+
+def test_osdetect_ports_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_osdetect(
+        target,
+        ports=None,
+        timeout=5.0,
+        max_workers=10,
+        banners=None,
+    ):
+        called_args["ports"] = ports
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_probed": len(ports or []),
+            "probes": [],
+            "inferred_os": [],
+            "inferred_os_count": 0,
+            "banners_provided": False,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_osdetect", mock_run_osdetect)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "osdetect",
+            "--target",
+            "example.com",
+            "--ports",
+            "22,80,443",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["ports"] == [22, 80, 443]
+
+
+def test_osdetect_banners_file_option(tmp_path, monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_osdetect(
+        target,
+        ports=None,
+        timeout=5.0,
+        max_workers=10,
+        banners=None,
+    ):
+        called_args["banners"] = banners
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_probed": len(ports or [22, 80, 443]),
+            "probes": [],
+            "inferred_os": ["Linux"],
+            "inferred_os_count": 1,
+            "banners_provided": bool(banners),
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_osdetect", mock_run_osdetect)
+
+    services_file = tmp_path / "service_report.json"
+    services_file.write_text(
+        json.dumps(
+            {
+                "results": [
+                    {"port": 22, "banner": "SSH-2.0-OpenSSH_8.9 Linux"},
+                ]
+            }
+        )
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "osdetect",
+            "--target",
+            "example.com",
+            "--banners-file",
+            str(services_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["banners"] == {22: "SSH-2.0-OpenSSH_8.9 Linux"}
+
+
+def test_osdetect_timeout_workers_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_osdetect(
+        target,
+        ports=None,
+        timeout=5.0,
+        max_workers=10,
+        banners=None,
+    ):
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_probed": len(ports or [22, 80, 443]),
+            "probes": [],
+            "inferred_os": [],
+            "inferred_os_count": 0,
+            "banners_provided": False,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_osdetect", mock_run_osdetect)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "osdetect",
+            "--target",
+            "example.com",
+            "--timeout",
+            "3.5",
+            "--workers",
+            "25",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["timeout"] == 3.5
+    assert called_args["max_workers"] == 25
+
+
+def test_osdetect_out_option_json(tmp_path, monkeypatch) -> None:
+    def mock_run_osdetect(
+        target,
+        ports=None,
+        timeout=5.0,
+        max_workers=10,
+        banners=None,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_probed": len(ports or [22, 80, 443]),
+            "probes": [
+                {
+                    "port": 22,
+                    "probe_type": "SYN",
+                    "connected": False,
+                    "response": "NO-RESPONSE",
+                    "flags_observed": None,
+                    "error": None,
+                }
+            ],
+            "inferred_os": [],
+            "inferred_os_count": 0,
+            "banners_provided": False,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_osdetect", mock_run_osdetect)
+
+    out_file = tmp_path / "osdetect_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "osdetect",
+            "--target",
+            "example.com",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "example.com" in content
+    assert "inferred_os" in content
+
+
+def test_osdetect_out_option_markdown(tmp_path, monkeypatch) -> None:
+    def mock_run_osdetect(
+        target,
+        ports=None,
+        timeout=5.0,
+        max_workers=10,
+        banners=None,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_probed": len(ports or [22, 80, 443]),
+            "probes": [
+                {
+                    "port": 22,
+                    "probe_type": "SYN",
+                    "connected": False,
+                    "response": "NO-RESPONSE",
+                    "flags_observed": None,
+                    "error": None,
+                }
+            ],
+            "inferred_os": [],
+            "inferred_os_count": 0,
+            "banners_provided": False,
+            "notes": ["No open ports responded to SYN probes"],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_osdetect", mock_run_osdetect)
+
+    out_file = tmp_path / "osdetect_report.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "osdetect",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "OS Detection Report" in content

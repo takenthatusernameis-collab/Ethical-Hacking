@@ -1,6 +1,7 @@
 """OS fingerprinting module for ethscan."""
 
 import json
+import os
 import re
 import socket
 import struct
@@ -29,6 +30,14 @@ def _truncate(message: str, limit: int = SYN_MAX_LENGTH) -> str:
     if len(message) <= limit:
         return message
     return message[: limit - 3] + "..."
+
+
+def _errno_message(err: int) -> str:
+    """Convert a socket error code to a human-readable message."""
+    try:
+        return os.strerror(err)
+    except (ValueError, OverflowError):
+        return str(err)
 
 
 # ---------------------------------------------------------------------------
@@ -137,6 +146,7 @@ def probe_syn(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> Dict[st
     """
     entry: Dict[str, object] = {
         "port": port,
+        "probe_type": "SYN",
         "connected": False,
         "response": None,
         "error": None,
@@ -161,6 +171,7 @@ def probe_rst(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> Dict[st
     """Probe a target with a TCP RST packet and observe the response."""
     entry: Dict[str, object] = {
         "port": port,
+        "probe_type": "RST",
         "connected": False,
         "response": None,
         "error": None,
@@ -181,7 +192,7 @@ def probe_rst(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> Dict[st
             entry["error"] = "connection refused"
         else:
             entry["response"] = "NO-RESPONSE"
-            entry["error"] = _truncate(socket.error.errno_to_string(err) if hasattr(socket, "error") else str(err))
+            entry["error"] = _truncate(_errno_message(err))
     except socket.timeout:
         entry["response"] = "NO-RESPONSE"
         entry["error"] = "connection timed out"
@@ -200,6 +211,7 @@ def probe_fin(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> Dict[st
     """Probe a target with a FIN packet and observe the response."""
     entry: Dict[str, object] = {
         "port": port,
+        "probe_type": "FIN",
         "connected": False,
         "response": None,
         "error": None,
@@ -220,7 +232,7 @@ def probe_fin(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> Dict[st
             entry["error"] = "connection refused"
         else:
             entry["response"] = "NO-RESPONSE"
-            entry["error"] = _truncate(socket.error.errno_to_string(err) if hasattr(socket, "error") else str(err))
+            entry["error"] = _truncate(_errno_message(err))
     except socket.timeout:
         entry["response"] = "NO-RESPONSE"
         entry["error"] = "connection timed out"
@@ -239,6 +251,7 @@ def probe_ack(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> Dict[st
     """Probe a target with an ACK packet and observe the response."""
     entry: Dict[str, object] = {
         "port": port,
+        "probe_type": "ACK",
         "connected": False,
         "response": None,
         "error": None,
@@ -258,7 +271,7 @@ def probe_ack(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> Dict[st
             entry["error"] = "connection refused"
         else:
             entry["response"] = "NO-RESPONSE"
-            entry["error"] = _truncate(socket.error.errno_to_string(err) if hasattr(socket, "error") else str(err))
+            entry["error"] = _truncate(_errno_message(err))
     except socket.timeout:
         entry["response"] = "NO-RESPONSE"
         entry["error"] = "connection timed out"
@@ -451,15 +464,16 @@ def format_osdetect_report_markdown(data: Dict[str, object]) -> str:
     lines.append("## TCP/IP Stack Probes")
     probes = data.get("probes") or []
     if probes:
-        lines.append("| Port | Connected | Response | Flags Observed | Error |")
-        lines.append("|------|-----------|----------|----------------|-------|")
+        lines.append("| Port | Probe | Connected | Response | Flags Observed | Error |")
+        lines.append("|------|-------|-----------|----------|----------------|-------|")
         for probe in probes:
             connected = "Yes" if probe["connected"] else "No"
+            probe_type = str(probe.get("probe_type") or "").replace("|", "\\|")
             response = str(probe.get("response") or "").replace("|", "\\|")
             flags = str(probe.get("flags_observed") or "").replace("|", "\\|")
             error = _truncate(str(probe.get("error") or ""), 60).replace("|", "\\|")
             lines.append(
-                f"| {probe['port']} | {connected} | {response} | {flags} | {error} |"
+                f"| {probe['port']} | {probe_type} | {connected} | {response} | {flags} | {error} |"
             )
     else:
         lines.append("*No probes performed.*")

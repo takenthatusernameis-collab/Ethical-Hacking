@@ -147,9 +147,38 @@ Added a `--resolver` option to both `subdomains` and `dnsbrute` commands that al
 - End-to-end: `python -m ethscan dnsbrute --target example.com --resolver 8.8.8.8 --timeout 1.0` -> includes resolver in output
 - Both JSON and Markdown output formats display resolver information correctly
 
+## Completed: `osdetect` command (OS fingerprinting)
+
+The `osdetect` command fingerprints the target operating system using TCP/IP stack behavior analysis. It performs concurrent TCP probes against a configurable port set, records per-port connection behavior (connected/SYN-ACK, refused/RST, no-response), cross-references optional service banners (e.g. `service` command output via `--banners-file`) against a built-in OS signature database, and infers OS families (Linux, Windows, macOS, BSD, Solaris) with TTL-range and stack-behavior heuristics. Stdlib only; raw-packet FIN/RST/ACK probes are provided as public probe helpers for privileged environments while the default run path uses plain `connect()` behavior, which works without root.
+
+### Module
+- `ethscan/osdetect.py` — OS fingerprinting module with:
+  - `_normalize_host()` — extracts a bare hostname from URL/bare targets
+  - `_truncate()` / `_errno_message()` — bounded message formatting and safe errno-to-string conversion
+  - `_build_syn_packet()` / `_checksum()` — raw TCP header construction with Internet checksum (for privileged raw-socket use)
+  - `_connect_tcp()` — stdlib TCP connect with connected/refused/timeout classification
+  - `probe_syn()` / `probe_rst()` / `probe_fin()` / `probe_ack()` — per-flag stack probes returning `{port, probe_type, connected, response, error, flags_observed}`
+  - `OS_SIGNATURES` — built-in signature database (banner regexes, TTL ranges)
+  - `_match_os_from_banner()` / `_match_os_from_ttl()` / `_match_os_from_behavior()` — inference helpers
+  - `run_osdetect()` — public entry point: normalizes host, concurrently probes ports (ThreadPoolExecutor, default 22/80/443), cross-references banners, dedupes inferred OS families, collects notes
+  - `format_osdetect_report_json()` / `format_osdetect_report_markdown()` — output formatters (markdown includes summary, per-probe table with Probe column, notes)
+
+### Modified Files
+- `ethscan/cli.py` — registered `osdetect` command with `--target`, `--ports` (comma-separated list/ranges via `parse_port_range`), `--banners-file` (JSON `service` report parsed into port->banner map), `--timeout`, `--workers`, `--format`, `--out`; imports `run_osdetect` and both formatters from `ethscan.osdetect`.
+- `ethscan/osdetect.py` — fixed latent crash in `probe_rst`/`probe_fin`/`probe_ack`: `socket.error.errno_to_string` does not exist (would raise AttributeError on unroutable hosts); replaced with `_errno_message()` using `os.strerror`. Added `probe_type` field to all probe results and a Probe column to the markdown report table.
+- `tests/test_cli.py` — 9 CLI integration tests: `osdetect` help, top-level help listing, offline json/markdown output (monkeypatched `run_osdetect`), `--ports` option, `--banners-file` option, `--timeout`/`--workers` pass-through, `--out` (json and markdown).
+- `README.md` — added OS fingerprinting (`osdetect`) to the features list.
+
+### Verification
+- `python -m pytest -q` -> 438 passed, 1 skipped (429 baseline + 9 new CLI tests).
+- `python -m ethscan --help` -> lists `osdetect` among the 16 commands.
+- `python -m ethscan osdetect --help` -> shows all expected options.
+- Live test: probes against unroutable `192.0.2.1` return graceful NO-RESPONSE results (previously crashed with AttributeError); probes against a local listener report connected/SYN-ACK.
+- End-to-end: `python -m ethscan osdetect --target 127.0.0.1 --ports 22,80,443 --timeout 1.0` produces JSON and Markdown reports with per-port probe results.
+
 ## Suggested next task
 
-**Add OS fingerprinting (`osdetect`) command** that uses TCP/IP stack behavior analysis to identify target operating systems.
+**Add TCP traceroute (`trace`) command** that discovers the network path to a target using TTL-incremented probes (stdlib-only, `IP_TTL` socket option, per-hop IP/RTT reporting, max-hops limit).
 
 Alternative: Add a `--recursive` option to `dnsbrute` for recursive zone transfer attempts against discovered nameservers.
 
@@ -161,7 +190,8 @@ Alternative: Add a `--recursive` option to `dnsbrute` for recursive zone transfe
 - Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
 
 ## Current state
-- All 15 commands implemented (including `urlcheck`).
+- All 16 commands implemented (including `osdetect`).
 - `scan` and `service` now support `--profile fast|normal|full` option.
 - `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
-- Tests: 394 passing.
+- `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
+- Tests: 438 passing (1 skipped).
