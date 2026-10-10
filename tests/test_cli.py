@@ -1266,3 +1266,443 @@ def test_service_out_option(tmp_path, monkeypatch) -> None:
     content = out_file.read_text()
     assert "example.com" in content
     assert "OpenSSH" in content
+
+
+def test_tls_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["tls", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--port" in result.output
+    assert "--versions" in result.output
+    assert "--ciphers" in result.output
+    assert "--timeout" in result.output
+    assert "--workers" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_tls() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "tls" in result.output
+
+
+def test_tls_offline_target_json(monkeypatch) -> None:
+    def mock_run_tls(
+        target,
+        port=443,
+        timeout=5.0,
+        versions=None,
+        ciphers=None,
+        max_workers=10,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": port,
+            "timeout": timeout,
+            "versions_tested": 2,
+            "ciphers_tested": 2,
+            "versions": [
+                {
+                    "version": "TLSv1_2",
+                    "supported": True,
+                    "error": None,
+                    "negotiated_cipher": "AES128-GCM-SHA256",
+                    "negotiated_protocol": "TLSv1.2",
+                },
+                {
+                    "version": "TLSv1",
+                    "supported": False,
+                    "error": "handshake failure",
+                    "negotiated_cipher": None,
+                    "negotiated_protocol": None,
+                },
+            ],
+            "ciphers": [
+                {
+                    "cipher": "AES128-GCM-SHA256",
+                    "supported": True,
+                    "error": None,
+                    "negotiated_version": "TLSv1.2",
+                },
+                {
+                    "cipher": "AES128-SHA",
+                    "supported": False,
+                    "error": "handshake failure",
+                    "negotiated_version": None,
+                },
+            ],
+            "supported_versions": ["TLSv1_2"],
+            "supported_ciphers": ["AES128-GCM-SHA256"],
+            "supported_version_count": 1,
+            "supported_cipher_count": 1,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_tls", mock_run_tls)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["tls", "--target", "example.com", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "example.com" in result.output
+    assert "TLSv1_2" in result.output
+    assert "AES128-GCM-SHA256" in result.output
+    assert "supported_version_count" in result.output
+
+
+def test_tls_offline_target_markdown(monkeypatch) -> None:
+    def mock_run_tls(
+        target,
+        port=443,
+        timeout=5.0,
+        versions=None,
+        ciphers=None,
+        max_workers=10,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": port,
+            "timeout": timeout,
+            "versions_tested": 2,
+            "ciphers_tested": 2,
+            "versions": [
+                {
+                    "version": "TLSv1_2",
+                    "supported": True,
+                    "error": None,
+                    "negotiated_cipher": "AES128-GCM-SHA256",
+                    "negotiated_protocol": "TLSv1.2",
+                },
+                {
+                    "version": "TLSv1",
+                    "supported": False,
+                    "error": "handshake failure",
+                    "negotiated_cipher": None,
+                    "negotiated_protocol": None,
+                },
+            ],
+            "ciphers": [
+                {
+                    "cipher": "AES128-GCM-SHA256",
+                    "supported": True,
+                    "error": None,
+                    "negotiated_version": "TLSv1.2",
+                },
+                {
+                    "cipher": "AES128-SHA",
+                    "supported": False,
+                    "error": "handshake failure",
+                    "negotiated_version": None,
+                },
+            ],
+            "supported_versions": ["TLSv1_2"],
+            "supported_ciphers": ["AES128-GCM-SHA256"],
+            "supported_version_count": 1,
+            "supported_cipher_count": 1,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_tls", mock_run_tls)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "tls",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "TLS Enumeration Report" in result.output
+    assert "TLSv1_2" in result.output
+    assert "AES128-GCM-SHA256" in result.output
+
+
+def test_tls_port_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_tls(
+        target,
+        port=443,
+        timeout=5.0,
+        versions=None,
+        ciphers=None,
+        max_workers=10,
+    ):
+        called_args["port"] = port
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": port,
+            "timeout": timeout,
+            "versions_tested": 0,
+            "ciphers_tested": 0,
+            "versions": [],
+            "ciphers": [],
+            "supported_versions": [],
+            "supported_ciphers": [],
+            "supported_version_count": 0,
+            "supported_cipher_count": 0,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_tls", mock_run_tls)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "tls",
+            "--target",
+            "example.com",
+            "--port",
+            "8443",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["port"] == 8443
+
+
+def test_tls_versions_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_tls(
+        target,
+        port=443,
+        timeout=5.0,
+        versions=None,
+        ciphers=None,
+        max_workers=10,
+    ):
+        called_args["versions"] = versions
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": port,
+            "timeout": timeout,
+            "versions_tested": len(versions or []),
+            "ciphers_tested": 0,
+            "versions": [],
+            "ciphers": [],
+            "supported_versions": [],
+            "supported_ciphers": [],
+            "supported_version_count": 0,
+            "supported_cipher_count": 0,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_tls", mock_run_tls)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "tls",
+            "--target",
+            "example.com",
+            "--versions",
+            "TLSv1_2,TLSv1_3",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["versions"] == ["TLSv1_2", "TLSv1_3"]
+
+
+def test_tls_ciphers_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_tls(
+        target,
+        port=443,
+        timeout=5.0,
+        versions=None,
+        ciphers=None,
+        max_workers=10,
+    ):
+        called_args["ciphers"] = ciphers
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": port,
+            "timeout": timeout,
+            "versions_tested": 0,
+            "ciphers_tested": len(ciphers or []),
+            "versions": [],
+            "ciphers": [],
+            "supported_versions": [],
+            "supported_ciphers": [],
+            "supported_version_count": 0,
+            "supported_cipher_count": 0,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_tls", mock_run_tls)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "tls",
+            "--target",
+            "example.com",
+            "--ciphers",
+            "AES128-GCM-SHA256,AES256-GCM-SHA384",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["ciphers"] == ["AES128-GCM-SHA256", "AES256-GCM-SHA384"]
+
+
+def test_tls_workers_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_tls(
+        target,
+        port=443,
+        timeout=5.0,
+        versions=None,
+        ciphers=None,
+        max_workers=10,
+    ):
+        called_args["max_workers"] = max_workers
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": port,
+            "timeout": timeout,
+            "versions_tested": 0,
+            "ciphers_tested": 0,
+            "versions": [],
+            "ciphers": [],
+            "supported_versions": [],
+            "supported_ciphers": [],
+            "supported_version_count": 0,
+            "supported_cipher_count": 0,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_tls", mock_run_tls)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "tls",
+            "--target",
+            "example.com",
+            "--workers",
+            "25",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["max_workers"] == 25
+
+
+def test_tls_unknown_version() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "tls",
+            "--target",
+            "example.com",
+            "--versions",
+            "BOGUS",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Unknown TLS versions" in result.output
+    assert "BOGUS" in result.output
+
+
+def test_tls_out_option(tmp_path, monkeypatch) -> None:
+    def mock_run_tls(
+        target,
+        port=443,
+        timeout=5.0,
+        versions=None,
+        ciphers=None,
+        max_workers=10,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": port,
+            "timeout": timeout,
+            "versions_tested": 1,
+            "ciphers_tested": 1,
+            "versions": [
+                {
+                    "version": "TLSv1_2",
+                    "supported": True,
+                    "error": None,
+                    "negotiated_cipher": "AES128-GCM-SHA256",
+                    "negotiated_protocol": "TLSv1.2",
+                },
+            ],
+            "ciphers": [
+                {
+                    "cipher": "AES128-GCM-SHA256",
+                    "supported": True,
+                    "error": None,
+                    "negotiated_version": "TLSv1.2",
+                },
+            ],
+            "supported_versions": ["TLSv1_2"],
+            "supported_ciphers": ["AES128-GCM-SHA256"],
+            "supported_version_count": 1,
+            "supported_cipher_count": 1,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_tls", mock_run_tls)
+
+    out_file = tmp_path / "tls_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "tls",
+            "--target",
+            "example.com",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "example.com" in content
+    assert "TLSv1_2" in content
+    assert "AES128-GCM-SHA256" in content

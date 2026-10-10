@@ -46,6 +46,11 @@ from ethscan.ssl import (
     format_ssl_report_markdown,
     run_ssl,
 )
+from ethscan.tls import (
+    format_tls_report_json,
+    format_tls_report_markdown,
+    run_tls,
+)
 from ethscan.service import (
     format_service_report_json,
     format_service_report_markdown,
@@ -482,6 +487,78 @@ def ssl(target: str, port: int, timeout: float, fmt: str, out_path: str) -> None
         output = format_ssl_report_json(results)
     else:
         output = format_ssl_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option("--target", required=True, help="Target host or URL (e.g. example.com or https://example.com)")
+@click.option("--port", default=443, type=int, help="TLS port (default: 443)")
+@click.option(
+    "--versions",
+    default="TLSv1,TLSv1_1,TLSv1_2,TLSv1_3",
+    help="Comma-separated list of TLS versions to test (e.g. 'TLSv1_2,TLSv1_3')",
+)
+@click.option(
+    "--ciphers",
+    "cipher_option",
+    help="Comma-separated list of cipher suites to test. Defaults to a built-in common list.",
+)
+@click.option("--timeout", default=5.0, type=float, help="Connection timeout in seconds")
+@click.option("--workers", default=10, type=int, help="Maximum concurrent probe workers")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def tls(
+    target: str,
+    port: int,
+    versions: str,
+    cipher_option: Optional[str],
+    timeout: float,
+    workers: int,
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Enumerate supported TLS protocol versions and cipher suites for TARGET."""
+    version_list = [v.strip() for v in versions.split(",") if v.strip()]
+    cipher_list = (
+        [c.strip() for c in cipher_option.split(",") if c.strip()]
+        if cipher_option
+        else None
+    )
+
+    try:
+        results = run_tls(
+            target,
+            port=port,
+            timeout=timeout,
+            versions=version_list,
+            ciphers=cipher_list,
+            max_workers=workers,
+        )
+    except ValueError as exc:
+        click.echo(str(exc))
+        return
+
+    if fmt == "json":
+        output = format_tls_report_json(results)
+    else:
+        output = format_tls_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

@@ -1,6 +1,6 @@
 # Next task for the next agent
 
-The `brute` command has been implemented. All previously listed features are now complete:
+The `tls` command has been implemented. All previously listed features are now complete:
 - `scan` — port scanning
 - `audit` — password strength auditing
 - `web` — web application security checks (security headers, SSL/TLS, information disclosure)
@@ -12,34 +12,39 @@ The `brute` command has been implemented. All previously listed features are now
 - `ssl` — SSL/TLS certificate inspection (subject, issuer, validity dates, SANs, signature algorithm, key size, chain length)
 - `brute` — FTP/SSH login brute force with username/password wordlists (concurrent attempts, per-attempt results, successful-login summary)
 - `service` — nmap-style service/banner detection (connect to open ports, grab banners, match against known service signatures)
+- `tls` — TLS protocol/cipher enumeration (per-version handshake probes with pinned min/max TLS version, per-cipher probes with pinned OpenSSL cipher string, negotiated cipher/protocol reporting, obsolete-version findings)
 
 ## Implementation Summary
 
 ### Added Files
-- `ethscan/service.py` — service/banner detection module with:
-  - `SERVICE_SIGNATURES` — regex-based signature database per protocol (ftp, ssh, telnet, smtp, pop3, imap, http, https, mysql, rdp, vnc, redis, mongodb, postgresql)
-  - `COMMON_SERVICE_PORTS` — conventional port-to-service mapping
-  - `grab_banner()` — connects to a port, optionally sends an HTTP HEAD for web services, returns (port, banner, detected_service)
-  - `run_service()` — public entry point: normalizes host, scans ports concurrently with `ThreadPoolExecutor`, returns sorted results with banners and matched services
-  - `format_service_report_json()` / `format_service_report_markdown()` — output formatters
-- `tests/test_service.py` — 17 unit tests for defaults, signatures, banner grab offline (connection refused/timeout), `run_service` offline runs (custom ports, target normalization, results), and both formatters
+- `ethscan/tls.py` — TLS enumeration module with:
+  - `TLS_VERSIONS` — default probe order (TLSv1, TLSv1_1, TLSv1_2, TLSv1_3)
+  - `VERSION_ALIASES` — case-insensitive string aliases (e.g. "tls1.2", "TLSv1_2") mapped to `ssl.TLSVersion` members
+  - `COMMON_CIPHERS` — 16 common TLS<=1.2 OpenSSL cipher names (TLS 1.3 suite names cannot be pinned via stdlib `set_ciphers()`, so they are reported as per-cipher errors when explicitly requested)
+  - `OBSOLETE_VERSIONS` — versions flagged in findings when supported (SSLv3, TLSv1, TLSv1_1)
+  - `probe_version()` — pins `SSLContext` min/max to one TLS version, handshakes, reports negotiated cipher/protocol
+  - `probe_cipher()` — pins `SSLContext` to one cipher via `set_ciphers()`, handshakes, reports negotiated protocol version
+  - `enumerate_tls()` — concurrent probing via `ThreadPoolExecutor`, sorted results, supported-version/cipher summaries, notes
+  - `run_tls()` — public entry point: normalizes host (URL/bare), delegates to `enumerate_tls`
+  - `format_tls_report_json()` / `format_tls_report_markdown()` — output formatters (markdown includes summary, findings, and full per-probe tables with error truncation/escaping)
+- `tests/test_tls.py` — 25 unit tests: defaults, host normalization, version alias resolution, per-probe offline behavior (connection refused, non-selectable ciphers, invalid specs), `run_tls` structure/ordering/defaults/custom lists/invalid versions/notes, both formatters, error truncation/escaping
 
 ### Modified Files
-- `ethscan/cli.py` — registered `service` command with `--target`, `--ports`, `--timeout`, `--workers`, `--format`, `--out`. Removed a duplicate `service` command definition.
-- `tests/test_cli.py` — CLI integration tests for `service` help, top-level help listing, offline json/markdown output, `--ports`, `--ports` range, `--workers`, and `--out`
-- `README.md` — added service/banner detection to the features list
+- `ethscan/cli.py` — registered `tls` command with `--target`, `--port`, `--versions`, `--ciphers`, `--timeout`, `--workers`, `--format`, `--out`. Invalid version names print "Unknown TLS versions: ... Valid versions: ..." (mirrors the `dns` unknown-types pattern).
+- `tests/test_cli.py` — 10 CLI integration tests: `tls` help, top-level help listing, offline json/markdown output, `--port`, `--versions`, `--ciphers`, `--workers`, `--out`, and unknown-version handling.
+- `README.md` — added TLS protocol/cipher enumeration to the features list.
 
 ### Verification
-- `python -m pytest -q` -> 182 passed (162 baseline + 20 new).
-- `python -m ethscan --help` -> shows `scan`, `audit`, `report`, `web`, `fuzz`, `subdomains`, `whois`, `dns`, `ssl`, `service`, `brute`.
-- `python -m ethscan service --help` -> shows all expected options.
-- Offline run against closed port returns valid empty JSON report.
+- `python -m pytest -q` -> 217 passed (182 baseline + 35 new).
+- `python -m ethscan --help` -> lists `tls` among the 12 commands.
+- `python -m ethscan tls --help` -> shows all expected options.
+- Live checks against local `openssl s_server` instances: a TLS 1.2-only server reports only TLSv1_2 supported (14/16 ciphers; ECDHE-ECDSA correctly rejected with an RSA cert) and a TLS 1.3-only server reports only TLSv1_3 supported with negotiated cipher TLS_AES_256_GCM_SHA384.
 
 ## Suggested next task
 
-**Add a `tls` protocol/cipher enumeration command** — connect with different SSL/TLS versions and cipher suites and report which ones are supported by the target.
+**Add a `--vuln` vulnerability check command** — cross-reference detected services/versions (from `service` and `ssl` banners) with a small built-in CVE/weakness database (e.g. old OpenSSH/ProFTPD/vsftpd versions, SSLv3/TLSv1 enabled, weak ciphers) and report matches.
 
-Alternative: add a `--speed`/ports-range option for `scan`, or a `--vuln` vulnerability check command that cross-references detected services with known CVEs.
+Alternative: add a `--speed`/ports-range preset option for `scan`, or a `dnsbrute`/axfr-style DNS zone transfer attempt.
 
 ## Requirements
 - Pick one of the suggested features and implement it following the existing module conventions.
@@ -49,7 +54,7 @@ Alternative: add a `--speed`/ports-range option for `scan`, or a `--vuln` vulner
 - Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`brute.py`).
 
 ## Current state
-- All 11 commands implemented.
-- Tests: 182 passing.
+- All 12 commands implemented.
+- Tests: 217 passing.
 
 (End of file - total 61 lines)
