@@ -103,11 +103,55 @@ Added a `--profile` option to both `scan` and `service` commands that maps to pr
 - Live test: `python -m ethscan scan --target 127.0.0.1 --profile fast` -> scans 18 ports
 - Live test: `python -m ethscan service --target 127.0.0.1 --profile fast` -> scans 18 ports with service detection
 
+## Completed: `--resolver` option for `subdomains` and `dnsbrute`
+
+Added a `--resolver` option to both `subdomains` and `dnsbrute` commands that allows specifying a custom DNS resolver IP address (requires dnspython, graceful fallback when unavailable).
+
+### Modified Files
+- `ethscan/subdomains.py`:
+  - Added `DNS_AVAILABLE` flag for dnspython availability
+  - Updated `resolve_subdomain()` to accept optional `resolver` parameter; uses dnspython when resolver provided and available, falls back to stdlib `socket.gethostbyname()` otherwise
+  - Updated `run_subdomains()` to accept `resolver` parameter and pass it to resolution function
+  - Updated return dictionary to include `resolver` and `dnspython_available` fields
+  - Updated `format_subdomains_report_markdown()` to display resolver information
+- `ethscan/dnsbrute.py`:
+  - Added `dns.resolver` import for dnspython
+  - Updated `_resolve_label()` to accept optional `resolver` parameter; uses dnspython with custom nameservers when provided, falls back to `ethscan.dns.resolve_a_records`/`resolve_aaaa_records` otherwise
+  - Updated `run_dnsbrute()` to accept `resolver` parameter and pass it to resolution function
+  - Updated return dictionary to include `resolver` field
+  - Updated `format_dnsbrute_report_markdown()` to display resolver information
+- `ethscan/cli.py`:
+  - Added `--resolver` option to `subdomains` command
+  - Added `--resolver` option to `dnsbrute` command
+- `tests/test_subdomains.py` — 4 new unit tests:
+  - `test_resolve_subdomain_with_resolver_unavailable` — tests resolver parameter when dnspython unavailable
+  - `test_run_subdomains_with_resolver` — tests run_subdomains with resolver parameter
+  - `test_format_subdomains_report_json_with_resolver` — tests JSON formatter with resolver
+  - `test_format_subdomains_report_markdown_with_resolver` — tests markdown formatter with resolver
+- `tests/test_dnsbrute.py` — 3 new unit tests:
+  - `test_run_dnsbrute_with_resolver` — tests run_dnsbrute with resolver parameter
+  - `test_run_dnsbrute_resolver_used_for_resolution` — tests resolver used for resolution (skipped when dnspython unavailable)
+  - `test_format_dnsbrute_report_json_with_resolver` — tests JSON formatter with resolver
+  - `test_format_dnsbrute_report_markdown_with_resolver` — tests markdown formatter with resolver
+- `tests/test_cli.py` — 4 new CLI integration tests:
+  - `test_subdomains_resolver_option` — tests CLI resolver option for subdomains
+  - `test_subdomains_help_shows_resolver` — verifies help shows --resolver option
+  - `test_dnsbrute_resolver_option` — tests CLI resolver option for dnsbrute
+  - `test_dnsbrute_help_shows_resolver` — verifies help shows --resolver option
+
+### Verification
+- `python -m pytest -q` -> 394 passed (383 baseline + 11 new: 7 unit + 4 CLI, 1 skipped for dnspython)
+- `python -m ethscan subdomains --help` -> shows `--resolver` option
+- `python -m ethscan dnsbrute --help` -> shows `--resolver` option
+- End-to-end: `python -m ethscan subdomains --target example.com --resolver 8.8.8.8 --timeout 1.0` -> includes resolver in output
+- End-to-end: `python -m ethscan dnsbrute --target example.com --resolver 8.8.8.8 --timeout 1.0` -> includes resolver in output
+- Both JSON and Markdown output formats display resolver information correctly
+
 ## Suggested next task
 
-**Add a `--resolver`/`--nameserver` option to `dnsbrute`/`subdomains`** for custom resolver selection (requires dnspython, graceful fallback when unavailable). This would allow users to specify a custom DNS resolver IP address instead of using the system default resolver.
+**Add OS fingerprinting (`osdetect`) command** that uses TCP/IP stack behavior analysis to identify target operating systems.
 
-Alternative: Add OS fingerprinting (`osdetect`) command that uses TCP/IP stack behavior analysis to identify target operating systems.
+Alternative: Add a `--recursive` option to `dnsbrute` for recursive zone transfer attempts against discovered nameservers.
 
 ## Requirements
 - Pick one of the suggested features and implement it following the existing module conventions.
@@ -119,4 +163,5 @@ Alternative: Add OS fingerprinting (`osdetect`) command that uses TCP/IP stack b
 ## Current state
 - All 15 commands implemented (including `urlcheck`).
 - `scan` and `service` now support `--profile fast|normal|full` option.
-- Tests: 383 passing.
+- `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
+- Tests: 394 passing.

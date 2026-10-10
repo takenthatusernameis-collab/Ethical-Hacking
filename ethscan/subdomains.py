@@ -5,6 +5,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
+try:
+    import dns.resolver
+    import dns.exception
+    DNS_AVAILABLE = True
+except ImportError:
+    DNS_AVAILABLE = False
+
 
 DEFAULT_SUBDOMAINS = [
     "www",
@@ -70,7 +77,7 @@ def _normalize_domain(target: str) -> str:
 
 
 def resolve_subdomain(
-    subdomain: str, domain: str, timeout: float = 2.0
+    subdomain: str, domain: str, timeout: float = 2.0, resolver: Optional[str] = None
 ) -> Tuple[str, Optional[str]]:
     """Resolve a single subdomain to an IP address.
 
@@ -78,11 +85,22 @@ def resolve_subdomain(
         subdomain: Subdomain label (e.g. www).
         domain: Base domain (e.g. example.com).
         timeout: DNS resolution timeout in seconds.
+        resolver: Custom DNS resolver IP address (requires dnspython).
 
     Returns:
         Tuple of (subdomain, ip_or_None).
     """
     hostname = f"{subdomain}.{domain}"
+    if resolver and DNS_AVAILABLE:
+        try:
+            dns_resolver = dns.resolver.Resolver()
+            dns_resolver.timeout = timeout
+            dns_resolver.lifetime = timeout
+            dns_resolver.nameservers = [resolver]
+            answers = dns_resolver.resolve(hostname, "A")
+            return subdomain, str(answers[0])
+        except (dns.exception.DNSException, OSError, ValueError):
+            return subdomain, None
     try:
         socket.setdefaulttimeout(timeout)
         ip = socket.gethostbyname(hostname)
@@ -96,6 +114,7 @@ def run_subdomains(
     subdomains: Optional[List[str]] = None,
     timeout: float = 2.0,
     max_workers: int = 50,
+    resolver: Optional[str] = None,
 ) -> Dict[str, object]:
     """Enumerate subdomains for a target domain.
 
@@ -104,6 +123,7 @@ def run_subdomains(
         subdomains: List of subdomain labels to test. If None, uses DEFAULT_SUBDOMAINS.
         timeout: DNS resolution timeout in seconds.
         max_workers: Maximum number of concurrent resolution workers.
+        resolver: Custom DNS resolver IP address (requires dnspython).
 
     Returns:
         Structured results with target, domain, resolved subdomains, and all results.
@@ -114,7 +134,7 @@ def run_subdomains(
     results: List[Dict[str, object]] = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_label = {
-            executor.submit(resolve_subdomain, label, domain, timeout): label
+            executor.submit(resolve_subdomain, label, domain, timeout, resolver): label
             for label in labels
         }
         for future in as_completed(future_to_label):
@@ -130,6 +150,8 @@ def run_subdomains(
         "resolved_count": len(resolved),
         "resolved": resolved,
         "all_results": sorted(results, key=lambda r: r["subdomain"]),
+        "resolver": resolver,
+        "dnspython_available": DNS_AVAILABLE,
     }
 
 
@@ -145,6 +167,9 @@ def format_subdomains_report_markdown(data: Dict[str, object]) -> str:
     lines = ["# ethscan Subdomain Enumeration Report", ""]
     lines.append(f"- **Target:** {data['target']}")
     lines.append(f"- **Domain:** {data['domain']}")
+    resolver = data.get("resolver")
+    if resolver:
+        lines.append(f"- **Resolver:** {resolver} (dnspython: {'Yes' if data.get('dnspython_available') else 'No'})")
     lines.append(f"- **Subdomains Tested:** {data['subdomains_tested']}")
     lines.append(f"- **Resolved:** {data['resolved_count']}")
     lines.append("")

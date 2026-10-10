@@ -4,6 +4,7 @@ import pytest
 
 from ethscan.subdomains import (
     DEFAULT_SUBDOMAINS,
+    DNS_AVAILABLE,
     _normalize_domain,
     format_subdomains_report_json,
     format_subdomains_report_markdown,
@@ -61,6 +62,15 @@ def test_resolve_subdomain_invalid() -> None:
     assert ip is None
 
 
+def test_resolve_subdomain_with_resolver_unavailable(monkeypatch) -> None:
+    monkeypatch.setattr("ethscan.subdomains.DNS_AVAILABLE", False)
+    subdomain, ip = resolve_subdomain(
+        "nonexistent", "invalid.domain.tld", timeout=1.0, resolver="8.8.8.8"
+    )
+    assert subdomain == "nonexistent"
+    assert ip is None
+
+
 def test_run_subdomains_offline_target() -> None:
     results = run_subdomains(
         "nonexistent.invalid.domain.tld",
@@ -76,6 +86,22 @@ def test_run_subdomains_offline_target() -> None:
     assert len(results["all_results"]) == 2
     for entry in results["all_results"]:
         assert entry["ip"] is None
+
+
+def test_run_subdomains_with_resolver(monkeypatch) -> None:
+    monkeypatch.setattr("ethscan.subdomains.DNS_AVAILABLE", False)
+    results = run_subdomains(
+        "nonexistent.invalid.domain.tld",
+        subdomains=["www", "mail"],
+        timeout=1.0,
+        resolver="8.8.8.8",
+    )
+    assert results["target"] == "nonexistent.invalid.domain.tld"
+    assert results["domain"] == "nonexistent.invalid.domain.tld"
+    assert results["subdomains_tested"] == 2
+    assert results["resolved_count"] == 0
+    assert results["resolver"] == "8.8.8.8"
+    assert results["dnspython_available"] is False
 
 
 def test_run_subdomains_uses_default_list() -> None:
@@ -109,6 +135,25 @@ def test_format_subdomains_report_json() -> None:
     assert "1.2.3.4" in output
 
 
+def test_format_subdomains_report_json_with_resolver() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "subdomains_tested": 2,
+        "resolved_count": 1,
+        "resolved": [{"subdomain": "www", "hostname": "www.example.com", "ip": "1.2.3.4"}],
+        "all_results": [
+            {"subdomain": "www", "hostname": "www.example.com", "ip": "1.2.3.4"},
+            {"subdomain": "mail", "hostname": "mail.example.com", "ip": None},
+        ],
+        "resolver": "8.8.8.8",
+        "dnspython_available": True,
+    }
+    output = format_subdomains_report_json(data)
+    assert "example.com" in output
+    assert "8.8.8.8" in output
+
+
 def test_format_subdomains_report_markdown() -> None:
     data = {
         "target": "example.com",
@@ -128,6 +173,25 @@ def test_format_subdomains_report_markdown() -> None:
     assert "## All Results" in output
     assert "1.2.3.4" in output
     assert "N/A" in output
+
+
+def test_format_subdomains_report_markdown_with_resolver() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "subdomains_tested": 2,
+        "resolved_count": 1,
+        "resolved": [{"subdomain": "www", "hostname": "www.example.com", "ip": "1.2.3.4"}],
+        "all_results": [
+            {"subdomain": "www", "hostname": "www.example.com", "ip": "1.2.3.4"},
+            {"subdomain": "mail", "hostname": "mail.example.com", "ip": None},
+        ],
+        "resolver": "8.8.8.8",
+        "dnspython_available": True,
+    }
+    output = format_subdomains_report_markdown(data)
+    assert "# ethscan Subdomain Enumeration Report" in output
+    assert "**Resolver:** 8.8.8.8 (dnspython: Yes)" in output
 
 
 def test_format_subdomains_report_markdown_no_resolved() -> None:

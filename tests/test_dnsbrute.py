@@ -704,3 +704,169 @@ def test_axfr_result_helper() -> None:
         "records": ["www.example.com"],
         "error": None,
     }
+
+
+def test_run_dnsbrute_with_resolver(monkeypatch) -> None:
+    monkeypatch.setattr("ethscan.dnsbrute.DNS_AVAILABLE", False)
+    monkeypatch.setattr(
+        "ethscan.dnsbrute.attempt_axfr",
+        lambda ns, zone, timeout=2.0: _axfr_result(ns, False, [], "refused"),
+    )
+    results = run_dnsbrute(
+        "nonexistent.invalid.domain.tld",
+        nameservers=["ns1.example.com"],
+        subdomains=["www", "mail"],
+        timeout=1.0,
+        resolver="8.8.8.8",
+    )
+    assert results["target"] == "nonexistent.invalid.domain.tld"
+    assert results["domain"] == "nonexistent.invalid.domain.tld"
+    assert results["zone"] == "nonexistent.invalid.domain.tld"
+    assert results["nameserver_source"] == "option"
+    assert results["subdomains_tested"] == 2
+    assert results["resolved_count"] == 0
+    assert results["resolver"] == "8.8.8.8"
+    assert results["dnspython_available"] is False
+
+
+def test_run_dnsbrute_resolver_used_for_resolution(monkeypatch) -> None:
+    try:
+        import dns.resolver
+    except ImportError:
+        pytest.skip("dnspython not installed")
+
+    original_resolve = dns.resolver.Resolver.resolve
+
+    def mock_resolve(self, hostname, rdtype):
+        if self.nameservers == ["8.8.8.8"]:
+            if rdtype == "A" and hostname.startswith("www."):
+                from dns.rrset import RRset
+                from dns.rdata import from_text
+                rrset = RRset(dns.name.from_text(hostname), 300, 1, 1)
+                rrset.add(from_text("IN", "A", "1.2.3.4"))
+                return rrset
+            if rdtype == "AAAA" and hostname.startswith("www."):
+                from dns.rrset import RRset
+                from dns.rdata import from_text
+                rrset = RRset(dns.name.from_text(hostname), 300, 1, 1)
+                rrset.add(from_text("IN", "AAAA", "::1"))
+                return rrset
+        raise dns.resolver.NXDOMAIN()
+
+    monkeypatch.setattr(dns.resolver.Resolver, "resolve", mock_resolve)
+    monkeypatch.setattr(
+        "ethscan.dnsbrute.attempt_axfr",
+        lambda ns, zone, timeout=2.0: _axfr_result(ns, False, [], "refused"),
+    )
+
+    results = run_dnsbrute(
+        "example.com",
+        nameservers=["ns1.example.com"],
+        subdomains=["www", "mail"],
+        timeout=1.0,
+        resolver="8.8.8.8",
+    )
+
+    assert results["resolved_count"] == 1
+    assert results["resolver"] == "8.8.8.8"
+    assert results["dnspython_available"] is True
+
+
+def test_format_dnsbrute_report_json_with_resolver() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "zone": "example.com",
+        "nameservers": ["ns1.example.com"],
+        "nameserver_source": "option",
+        "dnspython_available": True,
+        "axfr": [
+            {
+                "nameserver": "ns1.example.com",
+                "success": False,
+                "records_count": 0,
+                "records": [],
+                "error": "transfer refused (REFUSED)",
+            }
+        ],
+        "axfr_success": False,
+        "axfr_total_records": 0,
+        "subdomains_tested": 2,
+        "resolved_count": 1,
+        "resolved": [
+            {
+                "subdomain": "www",
+                "hostname": "www.example.com",
+                "a": ["1.2.3.4"],
+                "aaaa": [],
+            }
+        ],
+        "all_results": [
+            {
+                "subdomain": "www",
+                "hostname": "www.example.com",
+                "a": ["1.2.3.4"],
+                "aaaa": [],
+            },
+            {
+                "subdomain": "mail",
+                "hostname": "mail.example.com",
+                "a": [],
+                "aaaa": [],
+            },
+        ],
+        "resolver": "8.8.8.8",
+    }
+    output = format_dnsbrute_report_json(data)
+    assert "example.com" in output
+    assert "8.8.8.8" in output
+
+
+def test_format_dnsbrute_report_markdown_with_resolver() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "zone": "example.com",
+        "nameservers": ["ns1.example.com"],
+        "nameserver_source": "option",
+        "dnspython_available": True,
+        "axfr": [
+            {
+                "nameserver": "ns1.example.com",
+                "success": False,
+                "records_count": 0,
+                "records": [],
+                "error": "transfer refused (REFUSED)",
+            }
+        ],
+        "axfr_success": False,
+        "axfr_total_records": 0,
+        "subdomains_tested": 2,
+        "resolved_count": 1,
+        "resolved": [
+            {
+                "subdomain": "www",
+                "hostname": "www.example.com",
+                "a": ["1.2.3.4"],
+                "aaaa": [],
+            }
+        ],
+        "all_results": [
+            {
+                "subdomain": "www",
+                "hostname": "www.example.com",
+                "a": ["1.2.3.4"],
+                "aaaa": [],
+            },
+            {
+                "subdomain": "mail",
+                "hostname": "mail.example.com",
+                "a": [],
+                "aaaa": [],
+            },
+        ],
+        "resolver": "8.8.8.8",
+    }
+    output = format_dnsbrute_report_markdown(data)
+    assert "# ethscan DNS Brute Force Report" in output
+    assert "**Resolver:** 8.8.8.8 (dnspython: Yes)" in output

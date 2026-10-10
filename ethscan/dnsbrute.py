@@ -11,6 +11,7 @@ from ethscan.subdomains import DEFAULT_SUBDOMAINS, load_subdomain_wordlist  # no
 
 try:
     import dns.exception
+    import dns.resolver
     DNS_AVAILABLE = True
 except ImportError:
     DNS_AVAILABLE = False
@@ -334,14 +335,38 @@ def discover_nameservers(domain: str, timeout: float = DEFAULT_TIMEOUT) -> List[
     return sorted({value.rstrip(".") for value in values if value.strip()})
 
 
-def _resolve_label(label: str, domain: str, timeout: float) -> Dict[str, object]:
+def _resolve_label(label: str, domain: str, timeout: float, resolver: Optional[str] = None) -> Dict[str, object]:
     """Resolve a single subdomain label to its A and AAAA records."""
     hostname = f"{label}.{domain}"
+    a_records: List[str] = []
+    aaaa_records: List[str] = []
+    if resolver and DNS_AVAILABLE:
+        try:
+            dns_resolver = dns.resolver.Resolver()
+            dns_resolver.timeout = timeout
+            dns_resolver.lifetime = timeout
+            dns_resolver.nameservers = [resolver]
+            answers = dns_resolver.resolve(hostname, "A")
+            a_records = sorted(set(str(rdata) for rdata in answers))
+        except (dns.exception.DNSException, OSError, ValueError):
+            pass
+        try:
+            dns_resolver = dns.resolver.Resolver()
+            dns_resolver.timeout = timeout
+            dns_resolver.lifetime = timeout
+            dns_resolver.nameservers = [resolver]
+            answers = dns_resolver.resolve(hostname, "AAAA")
+            aaaa_records = sorted(set(str(rdata) for rdata in answers))
+        except (dns.exception.DNSException, OSError, ValueError):
+            pass
+    else:
+        a_records = resolve_a_records(hostname, timeout=timeout)
+        aaaa_records = resolve_aaaa_records(hostname, timeout=timeout)
     return {
         "subdomain": label,
         "hostname": hostname,
-        "a": resolve_a_records(hostname, timeout=timeout),
-        "aaaa": resolve_aaaa_records(hostname, timeout=timeout),
+        "a": a_records,
+        "aaaa": aaaa_records,
     }
 
 
@@ -351,6 +376,7 @@ def run_dnsbrute(
     subdomains: Optional[List[str]] = None,
     timeout: float = DEFAULT_TIMEOUT,
     max_workers: int = 50,
+    resolver: Optional[str] = None,
 ) -> Dict[str, object]:
     """Attempt AXFR zone transfers and brute-force subdomains for a target.
 
@@ -362,6 +388,7 @@ def run_dnsbrute(
                     the built-in DEFAULT_SUBDOMAINS list.
         timeout: DNS timeout in seconds.
         max_workers: Maximum number of concurrent resolution workers.
+        resolver: Custom DNS resolver IP address (requires dnspython).
 
     Returns:
         Structured results with nameservers, AXFR attempts, and resolved
@@ -387,7 +414,7 @@ def run_dnsbrute(
     results: List[Dict[str, object]] = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_label = {
-            executor.submit(_resolve_label, label, domain, timeout): label
+            executor.submit(_resolve_label, label, domain, timeout, resolver): label
             for label in labels
         }
         for future in as_completed(future_to_label):
@@ -409,6 +436,7 @@ def run_dnsbrute(
         "resolved_count": len(resolved),
         "resolved": sorted(resolved, key=lambda entry: entry["subdomain"]),
         "all_results": sorted(results, key=lambda entry: entry["subdomain"]),
+        "resolver": resolver,
     }
 
 
@@ -449,6 +477,11 @@ def format_dnsbrute_report_markdown(data: Dict[str, object]) -> str:
     lines.append(
         f"- **Nameservers:** {nameservers} (source: {data['nameserver_source']})"
     )
+    resolver = data.get("resolver")
+    if resolver:
+        lines.append(
+            f"- **Resolver:** {resolver} (dnspython: {'Yes' if data['dnspython_available'] else 'No'})"
+        )
     lines.append(
         f"- **dnspython Available:** "
         f"{'Yes' if data['dnspython_available'] else 'No (stdlib only)'}"

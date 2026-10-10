@@ -339,6 +339,10 @@ def fuzz(target: str, wordlist_path: str, timeout: float, fmt: str, out_path: st
     type=click.Path(exists=True, readable=True),
     help="Path to wordlist file (one subdomain per line). Uses built-in default if omitted.",
 )
+@click.option(
+    "--resolver",
+    help="Custom DNS resolver IP address (requires dnspython)",
+)
 @click.option("--timeout", default=2.0, type=float, help="DNS resolution timeout in seconds")
 @click.option(
     "--workers",
@@ -362,6 +366,7 @@ def fuzz(target: str, wordlist_path: str, timeout: float, fmt: str, out_path: st
 def subdomains(
     target: str,
     wordlist_path: str,
+    resolver: Optional[str],
     timeout: float,
     workers: int,
     fmt: str,
@@ -373,7 +378,7 @@ def subdomains(
     )
 
     results = run_subdomains(
-        target, subdomains=subdomains_list, timeout=timeout, max_workers=workers
+        target, subdomains=subdomains_list, timeout=timeout, max_workers=workers, resolver=resolver
     )
 
     if fmt == "json":
@@ -511,6 +516,10 @@ def dns(
     type=click.Path(exists=True, readable=True),
     help="Path to wordlist file (one subdomain per line). Uses built-in default if omitted.",
 )
+@click.option(
+    "--resolver",
+    help="Custom DNS resolver IP address (requires dnspython)",
+)
 @click.option("--timeout", default=2.0, type=float, help="DNS timeout in seconds")
 @click.option(
     "--workers",
@@ -535,6 +544,7 @@ def dnsbrute(
     target: str,
     nameservers_option: Optional[str],
     wordlist_path: Optional[str],
+    resolver: Optional[str],
     timeout: float,
     workers: int,
     fmt: str,
@@ -554,6 +564,7 @@ def dnsbrute(
         subdomains=wordlist,
         timeout=timeout,
         max_workers=workers,
+        resolver=resolver,
     )
 
     if fmt == "json":

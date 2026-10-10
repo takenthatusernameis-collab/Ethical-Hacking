@@ -156,6 +156,54 @@ def test_subdomains_out_option(tmp_path) -> None:
     assert "nonexistent.invalid.domain.tld" in content
 
 
+def test_subdomains_resolver_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_subdomains(
+        target, subdomains=None, timeout=2.0, max_workers=50, resolver=None
+    ):
+        called_args["resolver"] = resolver
+        called_args["target"] = target
+        return {
+            "target": target,
+            "domain": "example.com",
+            "subdomains_tested": 2,
+            "resolved_count": 0,
+            "resolved": [],
+            "all_results": [
+                {"subdomain": "www", "hostname": "www.example.com", "ip": None},
+                {"subdomain": "mail", "hostname": "mail.example.com", "ip": None},
+            ],
+            "resolver": resolver,
+            "dnspython_available": False,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_subdomains", mock_run_subdomains)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "subdomains",
+            "--target",
+            "example.com",
+            "--resolver",
+            "8.8.8.8",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["resolver"] == "8.8.8.8"
+
+
+def test_subdomains_help_shows_resolver() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["subdomains", "--help"])
+    assert result.exit_code == 0
+    assert "--resolver" in result.output
+
+
 def test_whois_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["whois", "--help"])
@@ -2469,6 +2517,7 @@ def test_dnsbrute_offline_target_json(monkeypatch) -> None:
         subdomains=None,
         timeout=2.0,
         max_workers=50,
+        resolver=None,
     ):
         return {
             "target": target,
@@ -2527,6 +2576,7 @@ def test_dnsbrute_offline_target_markdown(monkeypatch) -> None:
         subdomains=None,
         timeout=2.0,
         max_workers=50,
+        resolver=None,
     ):
         return {
             "target": target,
@@ -2587,6 +2637,7 @@ def test_dnsbrute_ns_option(monkeypatch) -> None:
         subdomains=None,
         timeout=2.0,
         max_workers=50,
+        resolver=None,
     ):
         called_args["nameservers"] = nameservers
         called_args["target"] = target
@@ -2634,6 +2685,7 @@ def test_dnsbrute_wordlist_option(tmp_path, monkeypatch) -> None:
         subdomains=None,
         timeout=2.0,
         max_workers=50,
+        resolver=None,
     ):
         called_args["subdomains"] = subdomains
         called_args["target"] = target
@@ -2684,6 +2736,7 @@ def test_dnsbrute_timeout_workers_option(monkeypatch) -> None:
         subdomains=None,
         timeout=2.0,
         max_workers=50,
+        resolver=None,
     ):
         called_args["timeout"] = timeout
         called_args["max_workers"] = max_workers
@@ -2730,6 +2783,7 @@ def test_dnsbrute_out_option_json(tmp_path, monkeypatch) -> None:
         subdomains=None,
         timeout=2.0,
         max_workers=50,
+        resolver=None,
     ):
         return {
             "target": target,
@@ -2792,6 +2846,7 @@ def test_dnsbrute_out_option_markdown(tmp_path, monkeypatch) -> None:
         subdomains=None,
         timeout=2.0,
         max_workers=50,
+        resolver=None,
     ):
         return {
             "target": target,
@@ -2839,6 +2894,69 @@ def test_dnsbrute_out_option_markdown(tmp_path, monkeypatch) -> None:
     assert out_file.exists()
     content = out_file.read_text()
     assert "DNS Brute Force Report" in content
+
+
+def test_dnsbrute_resolver_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_dnsbrute(
+        target,
+        nameservers=None,
+        subdomains=None,
+        timeout=2.0,
+        max_workers=50,
+        resolver=None,
+    ):
+        called_args["resolver"] = resolver
+        called_args["target"] = target
+        return {
+            "target": target,
+            "domain": "example.com",
+            "zone": "example.com",
+            "nameservers": [],
+            "nameserver_source": "none",
+            "dnspython_available": False,
+            "axfr": [],
+            "axfr_success": False,
+            "axfr_total_records": 0,
+            "subdomains_tested": 1,
+            "resolved_count": 0,
+            "resolved": [],
+            "all_results": [
+                {
+                    "subdomain": "www",
+                    "hostname": "www.example.com",
+                    "a": [],
+                    "aaaa": [],
+                }
+            ],
+            "resolver": resolver,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_dnsbrute", mock_run_dnsbrute)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "dnsbrute",
+            "--target",
+            "example.com",
+            "--resolver",
+            "8.8.8.8",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["resolver"] == "8.8.8.8"
+
+
+def test_dnsbrute_help_shows_resolver() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["dnsbrute", "--help"])
+    assert result.exit_code == 0
+    assert "--resolver" in result.output
 
 
 def test_urlcheck_help() -> None:
