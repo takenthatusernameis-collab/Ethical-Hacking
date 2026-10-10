@@ -564,6 +564,17 @@ def dns(
     "--resolver",
     help="Custom DNS resolver IP address (requires dnspython)",
 )
+@click.option(
+    "--recursive/--no-recursive",
+    default=False,
+    help="Enable recursive AXFR attempts against nameservers discovered in zone transfers.",
+)
+@click.option(
+    "--max-depth",
+    default=2,
+    type=int,
+    help="Maximum recursion depth for recursive AXFR (default: 2).",
+)
 @click.option("--timeout", default=2.0, type=float, help="DNS timeout in seconds")
 @click.option(
     "--workers",
@@ -589,6 +600,8 @@ def dnsbrute(
     nameservers_option: Optional[str],
     wordlist_path: Optional[str],
     resolver: Optional[str],
+    recursive: bool,
+    max_depth: int,
     timeout: float,
     workers: int,
     fmt: str,
@@ -609,6 +622,8 @@ def dnsbrute(
         timeout=timeout,
         max_workers=workers,
         resolver=resolver,
+        recursive=recursive,
+        max_depth=max_depth,
     )
 
     if fmt == "json":

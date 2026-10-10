@@ -2655,6 +2655,8 @@ def test_dnsbrute_offline_target_json(monkeypatch) -> None:
         timeout=2.0,
         max_workers=50,
         resolver=None,
+        recursive=False,
+        max_depth=2,
     ):
         return {
             "target": target,
@@ -2674,6 +2676,8 @@ def test_dnsbrute_offline_target_json(monkeypatch) -> None:
             ],
             "axfr_success": False,
             "axfr_total_records": 0,
+            "recursive_axfr": [],
+            "recursive_axfr_total_records": 0,
             "subdomains_tested": 1,
             "resolved_count": 1,
             "resolved": [
@@ -2692,6 +2696,8 @@ def test_dnsbrute_offline_target_json(monkeypatch) -> None:
                     "aaaa": [],
                 }
             ],
+            "recursive": recursive,
+            "max_depth": max_depth if recursive else 0,
         }
 
     monkeypatch.setattr("ethscan.cli.run_dnsbrute", mock_run_dnsbrute)
@@ -2714,6 +2720,8 @@ def test_dnsbrute_offline_target_markdown(monkeypatch) -> None:
         timeout=2.0,
         max_workers=50,
         resolver=None,
+        recursive=False,
+        max_depth=2,
     ):
         return {
             "target": target,
@@ -2733,6 +2741,8 @@ def test_dnsbrute_offline_target_markdown(monkeypatch) -> None:
             ],
             "axfr_success": False,
             "axfr_total_records": 0,
+            "recursive_axfr": [],
+            "recursive_axfr_total_records": 0,
             "subdomains_tested": 1,
             "resolved_count": 0,
             "resolved": [],
@@ -2744,6 +2754,8 @@ def test_dnsbrute_offline_target_markdown(monkeypatch) -> None:
                     "aaaa": [],
                 }
             ],
+            "recursive": recursive,
+            "max_depth": max_depth if recursive else 0,
         }
 
     monkeypatch.setattr("ethscan.cli.run_dnsbrute", mock_run_dnsbrute)
@@ -2775,6 +2787,8 @@ def test_dnsbrute_ns_option(monkeypatch) -> None:
         timeout=2.0,
         max_workers=50,
         resolver=None,
+        recursive=False,
+        max_depth=2,
     ):
         called_args["nameservers"] = nameservers
         called_args["target"] = target
@@ -2788,10 +2802,14 @@ def test_dnsbrute_ns_option(monkeypatch) -> None:
             "axfr": [],
             "axfr_success": False,
             "axfr_total_records": 0,
+            "recursive_axfr": [],
+            "recursive_axfr_total_records": 0,
             "subdomains_tested": 0,
             "resolved_count": 0,
             "resolved": [],
             "all_results": [],
+            "recursive": recursive,
+            "max_depth": max_depth if recursive else 0,
         }
 
     monkeypatch.setattr("ethscan.cli.run_dnsbrute", mock_run_dnsbrute)
@@ -2823,6 +2841,8 @@ def test_dnsbrute_wordlist_option(tmp_path, monkeypatch) -> None:
         timeout=2.0,
         max_workers=50,
         resolver=None,
+        recursive=False,
+        max_depth=2,
     ):
         called_args["subdomains"] = subdomains
         called_args["target"] = target
@@ -2836,10 +2856,14 @@ def test_dnsbrute_wordlist_option(tmp_path, monkeypatch) -> None:
             "axfr": [],
             "axfr_success": False,
             "axfr_total_records": 0,
+            "recursive_axfr": [],
+            "recursive_axfr_total_records": 0,
             "subdomains_tested": len(subdomains or []),
             "resolved_count": 0,
             "resolved": [],
             "all_results": [],
+            "recursive": recursive,
+            "max_depth": max_depth if recursive else 0,
         }
 
     monkeypatch.setattr("ethscan.cli.run_dnsbrute", mock_run_dnsbrute)
@@ -2874,6 +2898,8 @@ def test_dnsbrute_timeout_workers_option(monkeypatch) -> None:
         timeout=2.0,
         max_workers=50,
         resolver=None,
+        recursive=False,
+        max_depth=2,
     ):
         called_args["timeout"] = timeout
         called_args["max_workers"] = max_workers
@@ -2887,10 +2913,14 @@ def test_dnsbrute_timeout_workers_option(monkeypatch) -> None:
             "axfr": [],
             "axfr_success": False,
             "axfr_total_records": 0,
+            "recursive_axfr": [],
+            "recursive_axfr_total_records": 0,
             "subdomains_tested": 0,
             "resolved_count": 0,
             "resolved": [],
             "all_results": [],
+            "recursive": recursive,
+            "max_depth": max_depth if recursive else 0,
         }
 
     monkeypatch.setattr("ethscan.cli.run_dnsbrute", mock_run_dnsbrute)
@@ -2921,6 +2951,8 @@ def test_dnsbrute_out_option_json(tmp_path, monkeypatch) -> None:
         timeout=2.0,
         max_workers=50,
         resolver=None,
+        recursive=False,
+        max_depth=2,
     ):
         return {
             "target": target,
@@ -2932,6 +2964,8 @@ def test_dnsbrute_out_option_json(tmp_path, monkeypatch) -> None:
             "axfr": [],
             "axfr_success": False,
             "axfr_total_records": 0,
+            "recursive_axfr": [],
+            "recursive_axfr_total_records": 0,
             "subdomains_tested": 1,
             "resolved_count": 1,
             "resolved": [
@@ -2950,6 +2984,8 @@ def test_dnsbrute_out_option_json(tmp_path, monkeypatch) -> None:
                     "aaaa": [],
                 }
             ],
+            "recursive": recursive,
+            "max_depth": max_depth if recursive else 0,
         }
 
     monkeypatch.setattr("ethscan.cli.run_dnsbrute", mock_run_dnsbrute)
@@ -2984,6 +3020,8 @@ def test_dnsbrute_out_option_markdown(tmp_path, monkeypatch) -> None:
         timeout=2.0,
         max_workers=50,
         resolver=None,
+        recursive=False,
+        max_depth=2,
     ):
         return {
             "target": target,
@@ -2995,6 +3033,8 @@ def test_dnsbrute_out_option_markdown(tmp_path, monkeypatch) -> None:
             "axfr": [],
             "axfr_success": False,
             "axfr_total_records": 0,
+            "recursive_axfr": [],
+            "recursive_axfr_total_records": 0,
             "subdomains_tested": 1,
             "resolved_count": 0,
             "resolved": [],
@@ -3006,6 +3046,8 @@ def test_dnsbrute_out_option_markdown(tmp_path, monkeypatch) -> None:
                     "aaaa": [],
                 }
             ],
+            "recursive": recursive,
+            "max_depth": max_depth if recursive else 0,
         }
 
     monkeypatch.setattr("ethscan.cli.run_dnsbrute", mock_run_dnsbrute)
@@ -3043,6 +3085,8 @@ def test_dnsbrute_resolver_option(monkeypatch) -> None:
         timeout=2.0,
         max_workers=50,
         resolver=None,
+        recursive=False,
+        max_depth=2,
     ):
         called_args["resolver"] = resolver
         called_args["target"] = target
@@ -3056,6 +3100,8 @@ def test_dnsbrute_resolver_option(monkeypatch) -> None:
             "axfr": [],
             "axfr_success": False,
             "axfr_total_records": 0,
+            "recursive_axfr": [],
+            "recursive_axfr_total_records": 0,
             "subdomains_tested": 1,
             "resolved_count": 0,
             "resolved": [],
@@ -3068,6 +3114,8 @@ def test_dnsbrute_resolver_option(monkeypatch) -> None:
                 }
             ],
             "resolver": resolver,
+            "recursive": recursive,
+            "max_depth": max_depth if recursive else 0,
         }
 
     monkeypatch.setattr("ethscan.cli.run_dnsbrute", mock_run_dnsbrute)
@@ -3094,6 +3142,139 @@ def test_dnsbrute_help_shows_resolver() -> None:
     result = runner.invoke(cli, ["dnsbrute", "--help"])
     assert result.exit_code == 0
     assert "--resolver" in result.output
+
+
+def test_dnsbrute_recursive_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_dnsbrute(
+        target,
+        nameservers=None,
+        subdomains=None,
+        timeout=2.0,
+        max_workers=50,
+        resolver=None,
+        recursive=False,
+        max_depth=2,
+    ):
+        called_args["recursive"] = recursive
+        called_args["max_depth"] = max_depth
+        called_args["target"] = target
+        return {
+            "target": target,
+            "domain": "example.com",
+            "zone": "example.com",
+            "nameservers": [],
+            "nameserver_source": "none",
+            "dnspython_available": False,
+            "axfr": [],
+            "axfr_success": False,
+            "axfr_total_records": 0,
+            "recursive_axfr": [],
+            "recursive_axfr_total_records": 0,
+            "subdomains_tested": 1,
+            "resolved_count": 0,
+            "resolved": [],
+            "all_results": [
+                {
+                    "subdomain": "www",
+                    "hostname": "www.example.com",
+                    "a": [],
+                    "aaaa": [],
+                }
+            ],
+            "recursive": recursive,
+            "max_depth": max_depth if recursive else 0,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_dnsbrute", mock_run_dnsbrute)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "dnsbrute",
+            "--target",
+            "example.com",
+            "--recursive",
+            "--max-depth",
+            "3",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["recursive"] is True
+    assert called_args["max_depth"] == 3
+
+
+def test_dnsbrute_no_recursive_by_default(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_dnsbrute(
+        target,
+        nameservers=None,
+        subdomains=None,
+        timeout=2.0,
+        max_workers=50,
+        resolver=None,
+        recursive=False,
+        max_depth=2,
+    ):
+        called_args["recursive"] = recursive
+        called_args["max_depth"] = max_depth
+        called_args["target"] = target
+        return {
+            "target": target,
+            "domain": "example.com",
+            "zone": "example.com",
+            "nameservers": [],
+            "nameserver_source": "none",
+            "dnspython_available": False,
+            "axfr": [],
+            "axfr_success": False,
+            "axfr_total_records": 0,
+            "recursive_axfr": [],
+            "recursive_axfr_total_records": 0,
+            "subdomains_tested": 1,
+            "resolved_count": 0,
+            "resolved": [],
+            "all_results": [
+                {
+                    "subdomain": "www",
+                    "hostname": "www.example.com",
+                    "a": [],
+                    "aaaa": [],
+                }
+            ],
+            "recursive": recursive,
+            "max_depth": max_depth if recursive else 0,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_dnsbrute", mock_run_dnsbrute)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "dnsbrute",
+            "--target",
+            "example.com",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["recursive"] is False
+    assert called_args["max_depth"] == 2  # Default value passed even when not recursive
+
+
+def test_dnsbrute_help_shows_recursive() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["dnsbrute", "--help"])
+    assert result.exit_code == 0
+    assert "--recursive" in result.output
+    assert "--max-depth" in result.output
 
 
 def test_urlcheck_help() -> None:

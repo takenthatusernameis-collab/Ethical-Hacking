@@ -9,9 +9,12 @@ import pytest
 
 from ethscan.dnsbrute import (
     DEFAULT_SUBDOMAINS,
+    DEFAULT_RECURSIVE_DEPTH,
     DNS_AVAILABLE,
     RCODE_NAMES,
     _axfr_result,
+    _extract_ns_records,
+    _is_subdomain_of,
     _normalize_domain,
     _parse_dns_name,
     attempt_axfr,
@@ -372,6 +375,58 @@ def test_discover_nameservers_empty_lookup(monkeypatch) -> None:
         "ethscan.dnsbrute.resolve_with_dnspython", lambda *a, **k: []
     )
     assert discover_nameservers("example.com") == []
+
+
+# ---------------------------------------------------------------------------
+# Helper functions for recursive AXFR
+# ---------------------------------------------------------------------------
+
+
+def test_extract_ns_records() -> None:
+    records = [
+        "example.com 300 IN NS ns1.example.com",
+        "example.com 300 IN NS ns2.example.com",
+        "www.example.com 300 IN A 1.2.3.4",
+        "example.com 300 IN MX 10 mail.example.com",
+    ]
+    ns_records = _extract_ns_records(records)
+    assert ns_records == ["ns1.example.com", "ns2.example.com"]
+
+
+def test_extract_ns_records_empty() -> None:
+    records = [
+        "www.example.com 300 IN A 1.2.3.4",
+        "mail.example.com 300 IN A 5.6.7.8",
+    ]
+    assert _extract_ns_records(records) == []
+
+
+def test_extract_ns_records_with_trailing_dot() -> None:
+    records = [
+        "example.com 300 IN NS ns1.example.com.",
+        "example.com 300 IN NS ns2.example.com",
+    ]
+    ns_records = _extract_ns_records(records)
+    assert ns_records == ["ns1.example.com", "ns2.example.com"]
+
+
+def test_is_subdomain_of_exact_match() -> None:
+    assert _is_subdomain_of("example.com", "example.com") is True
+
+
+def test_is_subdomain_of_subdomain() -> None:
+    assert _is_subdomain_of("www.example.com", "example.com") is True
+    assert _is_subdomain_of("mail.sub.example.com", "example.com") is True
+
+
+def test_is_subdomain_of_not_subdomain() -> None:
+    assert _is_subdomain_of("example.org", "example.com") is False
+    assert _is_subdomain_of("other.com", "example.com") is False
+
+
+def test_is_subdomain_of_with_trailing_dots() -> None:
+    assert _is_subdomain_of("www.example.com.", "example.com.") is True
+    assert _is_subdomain_of("example.com", "example.com.") is True
 
 
 # ---------------------------------------------------------------------------
@@ -870,3 +925,265 @@ def test_format_dnsbrute_report_markdown_with_resolver() -> None:
     output = format_dnsbrute_report_markdown(data)
     assert "# ethscan DNS Brute Force Report" in output
     assert "**Resolver:** 8.8.8.8 (dnspython: Yes)" in output
+
+
+# ---------------------------------------------------------------------------
+# Recursive AXFR tests
+# ---------------------------------------------------------------------------
+
+
+def test_run_dnsbrute_recursive_disabled_by_default(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "ethscan.dnsbrute.attempt_axfr",
+        lambda ns, zone, timeout=2.0: _axfr_result(ns, False, [], "refused"),
+    )
+    results = run_dnsbrute(
+        "example.com", nameservers=["ns1.example.com"], subdomains=["www"], timeout=1.0
+    )
+    assert results.get("recursive") is False
+    assert results.get("max_depth") == 0
+    assert "recursive_axfr" in results
+    assert results["recursive_axfr"] == []
+
+
+def test_run_dnsbrute_recursive_enabled(monkeypatch) -> None:
+    """Test recursive AXFR when enabled with successful zone transfer."""
+    axfr_calls = []
+
+    def fake_axfr(nameserver, zone, timeout=2.0):
+        axfr_calls.append((nameserver, zone))
+        if zone == "example.com" and nameserver == "ns1.example.com":
+            # Return NS records for subdomain nameservers
+            return _axfr_result(
+                nameserver,
+                True,
+                [
+                    "example.com 300 IN NS ns1.example.com",
+                    "example.com 300 IN NS ns2.example.com",
+                    "sub.example.com 300 IN NS ns1.sub.example.com",
+                ],
+                None,
+            )
+        if zone == "example.com" and nameserver == "ns1.sub.example.com":
+            return _axfr_result(
+                nameserver,
+                True,
+                ["sub.example.com 300 IN A 1.2.3.4"],
+                None,
+            )
+        return _axfr_result(nameserver, False, [], "refused")
+
+    monkeypatch.setattr("ethscan.dnsbrute.attempt_axfr", fake_axfr)
+
+    results = run_dnsbrute(
+        "example.com",
+        nameservers=["ns1.example.com"],
+        subdomains=["www"],
+        timeout=1.0,
+        recursive=True,
+        max_depth=2,
+    )
+
+    assert results["recursive"] is True
+    assert results["max_depth"] == 2
+    assert results["axfr_success"] is True
+    # Should have attempted AXFR against ns1.example.com (depth 1)
+    # and then against ns1.sub.example.com (depth 2, discovered from NS records)
+    assert len(axfr_calls) >= 2
+    # Check recursive AXFR results
+    recursive_axfr = results.get("recursive_axfr", [])
+    assert len(recursive_axfr) >= 1
+    assert any(entry["depth"] == 2 for entry in recursive_axfr)
+
+
+def test_run_dnsbrute_recursive_respects_max_depth(monkeypatch) -> None:
+    """Test that recursive AXFR respects max_depth limit."""
+    axfr_calls = []
+
+    def fake_axfr(nameserver, zone, timeout=2.0):
+        axfr_calls.append((nameserver, zone))
+        if zone == "example.com" and nameserver == "ns1.example.com":
+            return _axfr_result(
+                nameserver,
+                True,
+                [
+                    "example.com 300 IN NS ns1.example.com",
+                    "example.com 300 IN NS ns2.example.com",
+                    "sub.example.com 300 IN NS ns1.sub.example.com",
+                ],
+                None,
+            )
+        if zone == "example.com" and nameserver == "ns1.sub.example.com":
+            return _axfr_result(
+                nameserver,
+                True,
+                [
+                    "sub.example.com 300 IN NS ns1.deep.example.com",
+                ],
+                None,
+            )
+        if zone == "example.com" and nameserver == "ns1.deep.example.com":
+            return _axfr_result(
+                nameserver,
+                True,
+                ["deep.example.com 300 IN A 1.2.3.4"],
+                None,
+            )
+        return _axfr_result(nameserver, False, [], "refused")
+
+    monkeypatch.setattr("ethscan.dnsbrute.attempt_axfr", fake_axfr)
+
+    # max_depth=2 should only go to depth 2, not depth 3
+    results = run_dnsbrute(
+        "example.com",
+        nameservers=["ns1.example.com"],
+        subdomains=["www"],
+        timeout=1.0,
+        recursive=True,
+        max_depth=2,
+    )
+
+    # Should not have called AXFR for ns1.deep.example.com (depth 3)
+    ns_names = [call[0] for call in axfr_calls]
+    assert "ns1.deep.example.com" not in ns_names
+    # Should have recursive results up to depth 2
+    recursive_axfr = results.get("recursive_axfr", [])
+    depths = [entry["depth"] for entry in recursive_axfr]
+    assert max(depths) <= 2
+
+
+def test_run_dnsbrute_recursive_filters_non_subdomain_ns(monkeypatch) -> None:
+    """Test that recursive AXFR only follows NS records that are subdomains of the target."""
+    axfr_calls = []
+
+    def fake_axfr(nameserver, zone, timeout=2.0):
+        axfr_calls.append((nameserver, zone))
+        if zone == "example.com" and nameserver == "ns1.example.com":
+            # Return NS records including one that's NOT a subdomain
+            return _axfr_result(
+                nameserver,
+                True,
+                [
+                    "example.com 300 IN NS ns1.example.com",
+                    "example.com 300 IN NS ns1.otherdomain.com",  # Not a subdomain
+                    "sub.example.com 300 IN NS ns1.sub.example.com",  # Is a subdomain
+                ],
+                None,
+            )
+        if zone == "example.com" and nameserver == "ns1.sub.example.com":
+            return _axfr_result(nameserver, True, ["sub.example.com 300 IN A 1.2.3.4"], None)
+        return _axfr_result(nameserver, False, [], "refused")
+
+    monkeypatch.setattr("ethscan.dnsbrute.attempt_axfr", fake_axfr)
+
+    results = run_dnsbrute(
+        "example.com",
+        nameservers=["ns1.example.com"],
+        subdomains=["www"],
+        timeout=1.0,
+        recursive=True,
+        max_depth=2,
+    )
+
+    # Should only have recursed to ns1.sub.example.com, not ns1.otherdomain.com
+    ns_names = [call[0] for call in axfr_calls]
+    assert "ns1.otherdomain.com" not in ns_names
+    assert "ns1.sub.example.com" in ns_names
+
+
+def test_format_dnsbrute_report_json_recursive() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "zone": "example.com",
+        "nameservers": ["ns1.example.com"],
+        "nameserver_source": "option",
+        "dnspython_available": True,
+        "axfr": [
+            {
+                "nameserver": "ns1.example.com",
+                "zone": "example.com",
+                "depth": 1,
+                "success": True,
+                "records_count": 2,
+                "records": ["example.com 300 IN NS ns1.example.com"],
+                "error": None,
+            }
+        ],
+        "axfr_success": True,
+        "axfr_total_records": 2,
+        "recursive_axfr": [
+            {
+                "nameserver": "ns1.sub.example.com",
+                "zone": "example.com",
+                "depth": 2,
+                "success": True,
+                "records_count": 1,
+                "records": ["sub.example.com 300 IN A 1.2.3.4"],
+                "error": None,
+            }
+        ],
+        "recursive_axfr_total_records": 1,
+        "subdomains_tested": 1,
+        "resolved_count": 0,
+        "resolved": [],
+        "all_results": [],
+        "recursive": True,
+        "max_depth": 2,
+    }
+    output = format_dnsbrute_report_json(data)
+    assert "example.com" in output
+    assert "recursive_axfr" in output
+    assert "ns1.sub.example.com" in output
+    assert '"depth": 2' in output
+    assert "recursive_axfr_total_records" in output
+
+
+def test_format_dnsbrute_report_markdown_recursive() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "zone": "example.com",
+        "nameservers": ["ns1.example.com"],
+        "nameserver_source": "option",
+        "dnspython_available": True,
+        "axfr": [
+            {
+                "nameserver": "ns1.example.com",
+                "zone": "example.com",
+                "depth": 1,
+                "success": True,
+                "records_count": 2,
+                "records": ["example.com 300 IN NS ns1.example.com"],
+                "error": None,
+            }
+        ],
+        "axfr_success": True,
+        "axfr_total_records": 2,
+        "recursive_axfr": [
+            {
+                "nameserver": "ns1.sub.example.com",
+                "zone": "example.com",
+                "depth": 2,
+                "success": True,
+                "records_count": 1,
+                "records": ["sub.example.com 300 IN A 1.2.3.4"],
+                "error": None,
+            }
+        ],
+        "recursive_axfr_total_records": 1,
+        "subdomains_tested": 1,
+        "resolved_count": 0,
+        "resolved": [],
+        "all_results": [],
+        "recursive": True,
+        "max_depth": 2,
+    }
+    output = format_dnsbrute_report_markdown(data)
+    assert "# ethscan DNS Brute Force Report" in output
+    assert "**Recursive AXFR:** Yes (max depth: 2)" in output
+    assert "**Recursive AXFR Records:** 1" in output
+    assert "## Recursive AXFR Attempts" in output
+    assert "ns1.sub.example.com" in output
+    assert "depth: 2" in output
+    assert "sub.example.com 300 IN A 1.2.3.4" in output

@@ -21,6 +21,7 @@ DEFAULT_TIMEOUT = 2.0
 DNS_PORT = 53
 AXFR_QTYPE = 252
 DEFAULT_QUERY_ID = 0x2B00
+DEFAULT_RECURSIVE_DEPTH = 2
 
 RCODE_NAMES = {
     0: "NOERROR",
@@ -206,6 +207,33 @@ def _axfr_result(
     }
 
 
+def _extract_ns_records(records: List[str]) -> List[str]:
+    """Extract NS record target hostnames from AXFR records.
+
+    Args:
+        records: List of AXFR record strings in format "NAME TTL IN TYPE RDATA".
+
+    Returns:
+        Sorted list of unique nameserver hostnames found in NS records.
+    """
+    ns_names: set = set()
+    for record in records:
+        parts = record.split()
+        if len(parts) >= 4 and parts[3] == "NS":
+            # NS record format: name ttl IN NS target
+            target = parts[4] if len(parts) > 4 else ""
+            if target:
+                ns_names.add(target.rstrip("."))
+    return sorted(ns_names)
+
+
+def _is_subdomain_of(hostname: str, domain: str) -> bool:
+    """Check if hostname is a subdomain of domain (including exact match)."""
+    hostname = hostname.rstrip(".")
+    domain = domain.rstrip(".")
+    return hostname == domain or hostname.endswith("." + domain)
+
+
 def query_axfr_raw(
     nameserver: str,
     zone: str,
@@ -377,6 +405,8 @@ def run_dnsbrute(
     timeout: float = DEFAULT_TIMEOUT,
     max_workers: int = 50,
     resolver: Optional[str] = None,
+    recursive: bool = False,
+    max_depth: int = DEFAULT_RECURSIVE_DEPTH,
 ) -> Dict[str, object]:
     """Attempt AXFR zone transfers and brute-force subdomains for a target.
 
@@ -389,6 +419,9 @@ def run_dnsbrute(
         timeout: DNS timeout in seconds.
         max_workers: Maximum number of concurrent resolution workers.
         resolver: Custom DNS resolver IP address (requires dnspython).
+        recursive: If True, attempt recursive AXFR against nameservers
+                   discovered in successful zone transfers.
+        max_depth: Maximum recursion depth for recursive AXFR attempts.
 
     Returns:
         Structured results with nameservers, AXFR attempts, and resolved
@@ -405,11 +438,42 @@ def run_dnsbrute(
         ns_source = "lookup" if ns_list else "none"
 
     axfr_results: List[Dict[str, object]] = []
-    for ns in ns_list:
-        axfr_results.append(attempt_axfr(ns, domain, timeout=timeout))
+    recursive_axfr_results: List[Dict[str, object]] = []
+
+    def _run_axfr_for_zone(zone: str, ns_candidates: List[str], depth: int) -> None:
+        """Run AXFR attempts for a zone and optionally recurse."""
+        if depth > max_depth:
+            return
+        for ns in ns_candidates:
+            result = attempt_axfr(ns, zone, timeout=timeout)
+            axfr_entry = {
+                "nameserver": ns,
+                "zone": zone,
+                "depth": depth,
+                "success": result["success"],
+                "records_count": result["records_count"],
+                "records": result["records"],
+                "error": result["error"],
+            }
+            if depth == 1:
+                axfr_results.append(axfr_entry)
+            else:
+                recursive_axfr_results.append(axfr_entry)
+
+            # If successful and we can recurse deeper, extract NS records and continue
+            if result["success"] and depth < max_depth:
+                ns_records = _extract_ns_records(result["records"])
+                # Filter to only nameservers that are subdomains of the original domain
+                filtered_ns = [ns for ns in ns_records if _is_subdomain_of(ns, domain)]
+                if filtered_ns:
+                    _run_axfr_for_zone(zone, filtered_ns, depth + 1)
+
+    # Initial AXFR attempts
+    _run_axfr_for_zone(domain, ns_list, 1)
 
     axfr_success = any(entry["success"] for entry in axfr_results)
     axfr_total_records = sum(entry["records_count"] for entry in axfr_results)
+    recursive_total_records = sum(entry["records_count"] for entry in recursive_axfr_results)
 
     results: List[Dict[str, object]] = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -432,11 +496,15 @@ def run_dnsbrute(
         "axfr": axfr_results,
         "axfr_success": axfr_success,
         "axfr_total_records": axfr_total_records,
+        "recursive_axfr": recursive_axfr_results,
+        "recursive_axfr_total_records": recursive_total_records,
         "subdomains_tested": len(labels),
         "resolved_count": len(resolved),
         "resolved": sorted(resolved, key=lambda entry: entry["subdomain"]),
         "all_results": sorted(results, key=lambda entry: entry["subdomain"]),
         "resolver": resolver,
+        "recursive": recursive,
+        "max_depth": max_depth if recursive else 0,
     }
 
 
@@ -486,6 +554,9 @@ def format_dnsbrute_report_markdown(data: Dict[str, object]) -> str:
         f"- **dnspython Available:** "
         f"{'Yes' if data['dnspython_available'] else 'No (stdlib only)'}"
     )
+    if data.get("recursive"):
+        lines.append(f"- **Recursive AXFR:** Yes (max depth: {data.get('max_depth', 0)})")
+        lines.append(f"- **Recursive AXFR Records:** {data.get('recursive_axfr_total_records', 0)}")
     lines.append(f"- **AXFR Successful:** {'Yes' if data['axfr_success'] else 'No'}")
     lines.append(f"- **AXFR Records:** {data['axfr_total_records']}")
     lines.append(f"- **Subdomains Tested:** {data['subdomains_tested']}")
@@ -495,7 +566,7 @@ def format_dnsbrute_report_markdown(data: Dict[str, object]) -> str:
     lines.append("## AXFR Attempts")
     if data["axfr"]:
         for entry in data["axfr"]:
-            lines.append(f"### {entry['nameserver']}")
+            lines.append(f"### {entry['nameserver']} (zone: {entry.get('zone', data['zone'])}, depth: {entry.get('depth', 1)})")
             lines.append(f"- **Success:** {'Yes' if entry['success'] else 'No'}")
             lines.append(f"- **Records:** {entry['records_count']}")
             if entry["error"]:
@@ -509,6 +580,25 @@ def format_dnsbrute_report_markdown(data: Dict[str, object]) -> str:
             lines.append("")
     else:
         lines.append("*No nameservers available for AXFR attempts.*")
+        lines.append("")
+
+    # Recursive AXFR attempts
+    recursive_axfr = data.get("recursive_axfr", [])
+    if recursive_axfr:
+        lines.append("## Recursive AXFR Attempts")
+        for entry in recursive_axfr:
+            lines.append(f"### {entry['nameserver']} (zone: {entry.get('zone', data['zone'])}, depth: {entry.get('depth', 0)})")
+            lines.append(f"- **Success:** {'Yes' if entry['success'] else 'No'}")
+            lines.append(f"- **Records:** {entry['records_count']}")
+            if entry["error"]:
+                lines.append(f"- **Error:** {entry['error']}")
+            if entry["records"]:
+                lines.append("")
+                lines.append("```")
+                for record in entry["records"]:
+                    lines.append(str(record))
+                lines.append("```")
+            lines.append("")
         lines.append("")
 
     lines.append("## Resolved Subdomains")
