@@ -29,6 +29,11 @@ from ethscan.whois import (
     format_whois_report_markdown,
     run_whois,
 )
+from ethscan.dns import (
+    format_dns_report_json,
+    format_dns_report_markdown,
+    run_dns,
+)
 
 
 @click.group()
@@ -368,6 +373,64 @@ def whois(
         output = format_whois_report_json(results)
     else:
         output = format_whois_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option("--target", required=True, help="Target domain or URL (e.g. example.com or https://example.com)")
+@click.option(
+    "--types",
+    "record_types",
+    default="A,AAAA",
+    help="Comma-separated list of DNS record types: A, AAAA, MX, NS, TXT, CNAME, SOA",
+)
+@click.option(
+    "--server",
+    help="Custom DNS resolver IP address (requires dnspython)",
+)
+@click.option("--timeout", default=2.0, type=float, help="Resolution timeout in seconds")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def dns(
+    target: str,
+    record_types: str,
+    server: str,
+    timeout: float,
+    fmt: str,
+    out_path: str,
+) -> None:
+    """Enumerate DNS records for TARGET."""
+    types_list = [t.strip().upper() for t in record_types.split(",") if t.strip()]
+    valid_types = {"A", "AAAA", "MX", "NS", "TXT", "CNAME", "SOA"}
+    unknown = [t for t in types_list if t not in valid_types]
+    if unknown:
+        click.echo(f"Unknown record types: {', '.join(unknown)}")
+        click.echo(f"Valid types: {', '.join(sorted(valid_types))}")
+        return
+
+    results = run_dns(target, record_types=types_list, server=server, timeout=timeout)
+
+    if fmt == "json":
+        output = format_dns_report_json(results)
+    else:
+        output = format_dns_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
