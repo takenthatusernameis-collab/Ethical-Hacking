@@ -20,6 +20,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - Report generation (JSON / Markdown) (implemented)
 - Consolidated web assessment: `urlcheck` command combining web checks, HTTP fuzzing, and SSL certificate inspection (implemented)
 - OS fingerprinting: `osdetect` command using TCP/IP stack behavior analysis, banner cross-referencing, and TTL-based inference (implemented)
+- TCP traceroute: `trace` command using TTL-incremented TCP SYN probes with per-hop IP/RTT reporting (implemented)
 
 ## Requirements
 

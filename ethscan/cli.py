@@ -77,6 +77,11 @@ from ethscan.osdetect import (
     format_osdetect_report_markdown,
     run_osdetect,
 )
+from ethscan.trace import (
+    format_trace_report_json,
+    format_trace_report_markdown,
+    run_trace,
+)
 
 
 @click.group()
@@ -1089,6 +1094,72 @@ def osdetect(
         output = format_osdetect_report_json(results)
     else:
         output = format_osdetect_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target host or URL (e.g. example.com or https://example.com)",
+)
+@click.option("--port", default=80, type=int, help="Target TCP port for SYN probes (default: 80)")
+@click.option(
+    "--max-hops",
+    "max_hops",
+    default=30,
+    type=int,
+    help="Maximum TTL / hops to probe (default: 30, max: 128)",
+)
+@click.option(
+    "--probes-per-hop",
+    "probes_per_hop",
+    default=3,
+    type=int,
+    help="Number of probes per hop for RTT averaging (default: 3)",
+)
+@click.option("--timeout", default=3.0, type=float, help="Per-probe timeout in seconds")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def trace(
+    target: str,
+    port: int,
+    max_hops: int,
+    probes_per_hop: int,
+    timeout: float,
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Run TCP traceroute against TARGET using TTL-incremented SYN probes."""
+    results = run_trace(
+        target,
+        port=port,
+        max_hops=max_hops,
+        timeout=timeout,
+        probes_per_hop=probes_per_hop,
+    )
+
+    if fmt == "json":
+        output = format_trace_report_json(results)
+    else:
+        output = format_trace_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

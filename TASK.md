@@ -195,3 +195,42 @@ Alternative: Add a `--recursive` option to `dnsbrute` for recursive zone transfe
 - `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
 - `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
 - Tests: 438 passing (1 skipped).
+
+## Completed: `trace` command (TCP traceroute)
+
+The `trace` command discovers the network path to a target using TTL-incremented TCP SYN probes. It uses the `IP_TTL` socket option on the sending socket and a raw ICMP socket (`SOCK_RAW`, `IPPROTO_ICMP`) to receive and parse ICMP Time Exceeded and Port Unreachable responses from intermediate hops. When raw sockets are unavailable (non-root), the module gracefully falls back to a connect-based approach that can still detect whether the destination was reached.
+
+### Added Files
+- `ethscan/trace.py` — TCP traceroute module with:
+  - `_normalize_host()` — extracts a bare hostname from URL/bare targets (reuses pattern from `osdetect`)
+  - `_checksum()` — Internet checksum for raw packet construction
+  - `_build_ip_header()` — builds a minimal 20-byte IPv4 header for synthetic ICMP test packets
+  - `build_icmp_packet()` — constructs a full synthetic ICMP response (outer IP + ICMP + embedded original IP/TCP) for testing `parse_icmp_response`
+  - `parse_icmp_response()` — parses raw socket data (IP header + ICMP): extracts ICMP type/code, source IP (hop), destination IP, and original TCP ports from the embedded header; handles truncated/invalid packets gracefully
+  - `_icmp_response_label()` — maps parsed ICMP to human-readable labels (TIME_EXCEEDED, PORT_UNREACHABLE, etc.)
+  - `_try_create_raw_socket()` — attempts to create a raw ICMP socket, returns `None` when not permitted (non-root)
+  - `_resolve_host()` — resolves hostname to IPv4 address
+  - `probe_ttl()` — sends one TCP SYN at a specific TTL; uses raw ICMP socket when available, falls back to `connect_ex` otherwise; returns per-hop dict with ip, rtt_ms, response_type, reached_destination
+  - `_no_response_result()` — builds a standard "no response" result dict
+  - `run_trace()` — public entry point: iterates TTL 1..max_hops, sends probes_per_hop probes per hop, aggregates RTTs (rtt_avg_ms), stops early when destination reached, collects notes (resolution failures, fallback mode notice)
+  - `format_trace_report_json()` / `format_trace_report_markdown()` — output formatters (markdown includes summary, hop table with per-hop IP/RTT/response/reached columns, per-hop probe detail tables with pipe escaping, notes)
+- `tests/test_trace.py` — 53 unit tests: host normalization, checksum, IP header building, ICMP packet construction, ICMP response parsing (time exceeded, port unreachable, non-port code, truncated/invalid packets), response label mapping, host resolution, no-response helper, raw socket creation, probe_ttl in fallback mode (offline, loopback open, loopback closed), probe_ttl with mock raw socket (time exceeded, port unreachable, timeout, OSError), run_trace (offline target, default port, max-hops capping, destination-reached early stop, probes_per_hop aggregation, URL target, unresolvable host, raw socket availability, custom port), both formatters (JSON, markdown full/no-hops/pipe-escape/no-resolved-ip/rtt-avg/no-probes).
+
+### Modified Files
+- `ethscan/cli.py` — registered `trace` command with `--target` (required), `--port` (default 80), `--max-hops` (default 30, capped at 128), `--probes-per-hop` (default 3), `--timeout` (default 3.0), `--format` (json/markdown), `--out`; imports `run_trace`, `format_trace_report_json`, `format_trace_report_markdown` from `ethscan.trace`.
+- `tests/test_cli.py` — 10 CLI integration tests: `trace` help, top-level help listing, offline json/markdown output (monkeypatched `run_trace`), `--port` option, `--max-hops` option, `--probes-per-hop` option, `--timeout` option, `--out` (json and markdown).
+- `README.md` — added TCP traceroute (`trace`) to the features list.
+
+### Verification
+- `python -m pytest -q` -> 501 passed, 1 skipped (438 baseline + 63 new: 53 unit + 10 CLI).
+- `python -m ethscan --help` -> lists `trace` among the 17 commands.
+- `python -m ethscan trace --help` -> shows all expected options (`--target`, `--port`, `--max-hops`, `--probes-per-hop`, `--timeout`, `--format`, `--out`).
+- End-to-end: `python -m ethscan trace --target 127.0.0.1 --port 80 --max-hops 3 --probes-per-hop 1 --timeout 1.0 --format markdown` -> reports fallback mode, destination reached at hop 1 with RST response.
+
+## Suggested next task
+
+**Add a `wifi` command** for wireless interface reconnaissance: lists nearby Wi-Fi access points (SSID, BSSID, channel, encryption, signal strength) using a stdlib-only approach. On Linux, parse `/proc/net/wireless` and use `iwlist`/`iw` scan output (shell out with graceful fallback when tools unavailable); on other platforms, report platform not supported. Include `--interface` option, `--format`, `--out`, JSON/markdown formatters, and unit tests with mocked scan output.
+
+Alternative: Add a `--json` output mode to the `audit` command (currently only echoes human-readable lines) for machine-readable password audit results.
+
+Alternative: Add a `geo` command for IP geolocation lookup using a stdlib-only public IP-to-location API (with caching and offline fallback).

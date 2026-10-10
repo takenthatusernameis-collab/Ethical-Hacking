@@ -3995,3 +3995,422 @@ def test_osdetect_out_option_markdown(tmp_path, monkeypatch) -> None:
     assert out_file.exists()
     content = out_file.read_text()
     assert "OS Detection Report" in content
+
+
+# ---------------------------------------------------------------------------
+# trace (TCP traceroute) CLI tests
+# ---------------------------------------------------------------------------
+
+
+def test_trace_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["trace", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--port" in result.output
+    assert "--max-hops" in result.output
+    assert "--probes-per-hop" in result.output
+    assert "--timeout" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_trace() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "trace" in result.output
+
+
+def test_trace_offline_target_json(monkeypatch) -> None:
+    def mock_run_trace(
+        target,
+        port=80,
+        max_hops=30,
+        timeout=3.0,
+        probes_per_hop=3,
+        raw_socket=None,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "93.184.216.34",
+            "port": port,
+            "max_hops": max_hops,
+            "timeout": timeout,
+            "probes_per_hop": probes_per_hop,
+            "raw_socket_available": False,
+            "hops": [
+                {
+                    "hop": 1,
+                    "ttl": 1,
+                    "ip": None,
+                    "host": "*",
+                    "response_type": "NO-RESPONSE",
+                    "rtt_ms": 0.5,
+                    "rtt_avg_ms": 0.5,
+                    "probes": [
+                        {
+                            "hop": 1, "ttl": 1, "ip": None, "host": "*",
+                            "response_type": "NO-RESPONSE",
+                            "rtt_ms": 0.5, "reached_destination": False,
+                            "error_code": None,
+                        }
+                    ],
+                    "reached_destination": False,
+                    "error_code": None,
+                }
+            ],
+            "hop_count": 1,
+            "destination_reached": False,
+            "notes": ["Raw ICMP socket unavailable; connect-only fallback mode"],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_trace", mock_run_trace)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["trace", "--target", "example.com", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "example.com" in result.output
+    assert "hops" in result.output  # JSON contains hops field
+    parsed = json.loads(result.output)
+    assert parsed["target"] == "example.com"
+
+
+def test_trace_offline_target_markdown(monkeypatch) -> None:
+    def mock_run_trace(
+        target,
+        port=80,
+        max_hops=30,
+        timeout=3.0,
+        probes_per_hop=3,
+        raw_socket=None,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "93.184.216.34",
+            "port": port,
+            "max_hops": max_hops,
+            "timeout": timeout,
+            "probes_per_hop": probes_per_hop,
+            "raw_socket_available": False,
+            "hops": [
+                {
+                    "hop": 1,
+                    "ttl": 1,
+                    "ip": None,
+                    "host": "*",
+                    "response_type": "NO-RESPONSE",
+                    "rtt_ms": 0.5,
+                    "rtt_avg_ms": 0.5,
+                    "probes": [
+                        {
+                            "hop": 1, "ttl": 1, "ip": None, "host": "*",
+                            "response_type": "NO-RESPONSE",
+                            "rtt_ms": 0.5, "reached_destination": False,
+                            "error_code": None,
+                        }
+                    ],
+                    "reached_destination": False,
+                    "error_code": None,
+                }
+            ],
+            "hop_count": 1,
+            "destination_reached": False,
+            "notes": ["Raw ICMP socket unavailable; connect-only fallback mode"],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_trace", mock_run_trace)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "trace",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "TCP Traceroute Report" in result.output
+    assert "Hop Table" in result.output
+
+
+def test_trace_port_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_trace(
+        target,
+        port=80,
+        max_hops=30,
+        timeout=3.0,
+        probes_per_hop=3,
+        raw_socket=None,
+    ):
+        called_args["port"] = port
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "10.0.0.1",
+            "port": port,
+            "max_hops": max_hops,
+            "timeout": timeout,
+            "probes_per_hop": probes_per_hop,
+            "raw_socket_available": False,
+            "hops": [],
+            "hop_count": 0,
+            "destination_reached": False,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_trace", mock_run_trace)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["trace", "--target", "example.com", "--port", "443", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert called_args["port"] == 443
+
+
+def test_trace_max_hops_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_trace(
+        target,
+        port=80,
+        max_hops=30,
+        timeout=3.0,
+        probes_per_hop=3,
+        raw_socket=None,
+    ):
+        called_args["max_hops"] = max_hops
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "10.0.0.1",
+            "port": port,
+            "max_hops": max_hops,
+            "timeout": timeout,
+            "probes_per_hop": probes_per_hop,
+            "raw_socket_available": False,
+            "hops": [],
+            "hop_count": 0,
+            "destination_reached": False,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_trace", mock_run_trace)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "trace",
+            "--target",
+            "example.com",
+            "--max-hops",
+            "10",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["max_hops"] == 10
+
+
+def test_trace_probes_per_hop_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_trace(
+        target,
+        port=80,
+        max_hops=30,
+        timeout=3.0,
+        probes_per_hop=3,
+        raw_socket=None,
+    ):
+        called_args["probes_per_hop"] = probes_per_hop
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "10.0.0.1",
+            "port": port,
+            "max_hops": max_hops,
+            "timeout": timeout,
+            "probes_per_hop": probes_per_hop,
+            "raw_socket_available": False,
+            "hops": [],
+            "hop_count": 0,
+            "destination_reached": False,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_trace", mock_run_trace)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "trace",
+            "--target",
+            "example.com",
+            "--probes-per-hop",
+            "5",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["probes_per_hop"] == 5
+
+
+def test_trace_timeout_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_trace(
+        target,
+        port=80,
+        max_hops=30,
+        timeout=3.0,
+        probes_per_hop=3,
+        raw_socket=None,
+    ):
+        called_args["timeout"] = timeout
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "10.0.0.1",
+            "port": port,
+            "max_hops": max_hops,
+            "timeout": timeout,
+            "probes_per_hop": probes_per_hop,
+            "raw_socket_available": False,
+            "hops": [],
+            "hop_count": 0,
+            "destination_reached": False,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_trace", mock_run_trace)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["trace", "--target", "example.com", "--timeout", "5.0"],
+    )
+    assert result.exit_code == 0
+    assert called_args["timeout"] == 5.0
+
+
+def test_trace_out_option_json(tmp_path, monkeypatch) -> None:
+    def mock_run_trace(
+        target,
+        port=80,
+        max_hops=30,
+        timeout=3.0,
+        probes_per_hop=3,
+        raw_socket=None,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "10.0.0.1",
+            "port": port,
+            "max_hops": max_hops,
+            "timeout": timeout,
+            "probes_per_hop": probes_per_hop,
+            "raw_socket_available": False,
+            "hops": [],
+            "hop_count": 0,
+            "destination_reached": False,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_trace", mock_run_trace)
+
+    out_file = tmp_path / "trace_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "trace",
+            "--target",
+            "example.com",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "example.com" in content
+    assert "TCP Traceroute Report" not in content  # JSON, not markdown
+    parsed = json.loads(content)
+    assert parsed["target"] == "example.com"
+
+
+def test_trace_out_option_markdown(tmp_path, monkeypatch) -> None:
+    def mock_run_trace(
+        target,
+        port=80,
+        max_hops=30,
+        timeout=3.0,
+        probes_per_hop=3,
+        raw_socket=None,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "10.0.0.1",
+            "port": port,
+            "max_hops": max_hops,
+            "timeout": timeout,
+            "probes_per_hop": probes_per_hop,
+            "raw_socket_available": False,
+            "hops": [],
+            "hop_count": 0,
+            "destination_reached": False,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_trace", mock_run_trace)
+
+    out_file = tmp_path / "trace_report.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "trace",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "TCP Traceroute Report" in content
