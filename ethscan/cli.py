@@ -235,6 +235,7 @@ def audit(file: str, fmt: str, out_path: str) -> None:
     help="Output format (json or markdown)",
 )
 @click.option(
+    "--output",
     "--out",
     "out_path",
     type=click.Path(writable=True),

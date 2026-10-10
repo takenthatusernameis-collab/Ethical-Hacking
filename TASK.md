@@ -500,3 +500,48 @@ Alternative: Add a `cve` command that queries the NVD/CVE API for known vulnerab
 - `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
 - `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out` for CT log subdomain discovery.
 - Tests: 727 passing (1 skipped).
+
+## Completed: `--output` option for `report` command
+
+Added an `--output` option to the `report` command as an alias for `--out`, so the combined scan+audit report can be written to a file (json or markdown) with either flag, consistent with all other commands that support `--out`.
+
+### Modified Files
+- `ethscan/cli.py` — `report` command out option now declared as `@click.option("--output", "--out", "out_path", ...)`; help shows `--output, --out PATH`; both flags write the report (json or markdown) to the given path.
+- `tests/test_cli.py` — 3 new CLI integration tests:
+  - `test_report_help_shows_output_option` — verifies `--output` and `--out` appear in `report --help`
+  - `test_report_output_option_json` — writes JSON report via `--output`
+  - `test_report_output_option_markdown` — writes Markdown report via `--output`
+
+### Verification
+- `python -m pytest -q` -> 811 passed, 1 skipped (808 baseline + 3 new CLI tests).
+- `python -m ethscan report --help` -> shows `--output, --out PATH` option.
+- End-to-end: `python -m ethscan report --target 127.0.0.1 --audit-file passwords.txt --output report.json --timeout 0.5` writes the combined JSON report (scan + password audit).
+- End-to-end: `python -m ethscan report --target 127.0.0.1 --audit-file passwords.txt --format markdown --output report.md --timeout 0.5` writes the Markdown report.
+- Backward compatibility: `--out` continues to work identically; all existing report tests pass unchanged.
+
+## Suggested next task
+
+**Add a `ping` command** for host discovery: ICMP echo request probes with per-probe RTT and TTL reporting, plus a TCP-ping fallback (connect-based latency measurement on a configurable port) when raw ICMP sockets are unavailable (non-root). Stdlib-only, graceful `*_AVAILABLE`-style fallback as in `trace.py`, JSON/Markdown output with `--target`, `--count`, `--timeout`, `--ttl`, `--tcp-port`, `--format`, `--out` options, unit tests with mocked raw sockets, and CLI integration tests.
+
+Alternative: Add a `mac` command that resolves a MAC address to its vendor via OUI lookup (stdlib-only HTTP with caching and offline fallback).
+
+Alternative: Add a `resolve` command for forward/reverse DNS resolution (A, AAAA, PTR, CNAME records; dnspython optional with stdlib `socket` fallback).
+
+## Requirements
+- Pick one of the suggested features and implement it following the existing module conventions.
+- Add a new module under `ethscan/` with `run_*`, `format_*_report_json`, `format_*_report_markdown` (for new commands) or extend existing module (for new options).
+- Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
+- Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
+- Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
+
+## Current state
+- All 22 commands implemented (including `headers` and `cve`).
+- `scan` and `service` now support `--profile fast|normal|full` option.
+- `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
+- `subdomains` now supports `--recursive` and `--max-depth` for recursive subdomain enumeration.
+- `dnsbrute` now supports `--recursive` and `--max-depth` for recursive zone transfers.
+- `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
+- `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
+- `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out` for CT log subdomain discovery.
+- `report` now supports `--output` (alias for `--out`) for writing the combined scan+audit report to a file (json or markdown).
+- Tests: 811 passing (1 skipped).

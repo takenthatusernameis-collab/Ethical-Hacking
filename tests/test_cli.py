@@ -302,6 +302,72 @@ def test_report_no_audit_file(tmp_path) -> None:
     assert "0" in result.output
 
 
+def test_report_help_shows_output_option() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["report", "--help"])
+    assert result.exit_code == 0
+    assert "--output" in result.output
+    assert "--out" in result.output
+
+
+def test_report_output_option_json(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    out_file = tmp_path / "report_output.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--audit-file",
+            str(password_file),
+            "--output",
+            str(out_file),
+            "--timeout",
+            "0.5",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "scan" in content
+    assert "audit" in content
+    assert "passwords_audited" in content
+
+
+def test_report_output_option_markdown(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    out_file = tmp_path / "report_output.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--audit-file",
+            str(password_file),
+            "--format",
+            "markdown",
+            "--output",
+            str(out_file),
+            "--timeout",
+            "0.5",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "ethscan Report" in content
+    assert "Port Scan" in content
+    assert "Password Audit" in content
+
+
 def test_web_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["web", "--help"])
