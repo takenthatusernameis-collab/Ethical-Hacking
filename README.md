@@ -10,6 +10,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - HTTP fuzzing (implemented)
 - Subdomain enumeration (implemented)
 - DNS record enumeration (implemented)
+- DNS brute force: AXFR zone transfer attempts + subdomain brute forcing (implemented)
 - WHOIS lookup (implemented)
 - SSL/TLS certificate inspection (implemented)
 - TLS protocol/cipher enumeration (implemented)

@@ -2189,3 +2189,404 @@ def test_vuln_out_option_markdown(tmp_path, monkeypatch) -> None:
     content = out_file.read_text()
     assert "Vulnerability Report" in content
     assert "CVE-2018-15473" in content
+
+
+def test_dnsbrute_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["dnsbrute", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--ns" in result.output
+    assert "--wordlist" in result.output
+    assert "--timeout" in result.output
+    assert "--workers" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_dnsbrute() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "dnsbrute" in result.output
+
+
+def test_dnsbrute_offline_target_json(monkeypatch) -> None:
+    def mock_run_dnsbrute(
+        target,
+        nameservers=None,
+        subdomains=None,
+        timeout=2.0,
+        max_workers=50,
+    ):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "zone": "example.com",
+            "nameservers": ["ns1.example.com"],
+            "nameserver_source": "option",
+            "dnspython_available": False,
+            "axfr": [
+                {
+                    "nameserver": "ns1.example.com",
+                    "success": False,
+                    "records_count": 0,
+                    "records": [],
+                    "error": "transfer refused (REFUSED)",
+                }
+            ],
+            "axfr_success": False,
+            "axfr_total_records": 0,
+            "subdomains_tested": 1,
+            "resolved_count": 1,
+            "resolved": [
+                {
+                    "subdomain": "www",
+                    "hostname": "www.example.com",
+                    "a": ["93.184.216.34"],
+                    "aaaa": [],
+                }
+            ],
+            "all_results": [
+                {
+                    "subdomain": "www",
+                    "hostname": "www.example.com",
+                    "a": ["93.184.216.34"],
+                    "aaaa": [],
+                }
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_dnsbrute", mock_run_dnsbrute)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["dnsbrute", "--target", "example.com", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "example.com" in result.output
+    assert "93.184.216.34" in result.output
+
+
+def test_dnsbrute_offline_target_markdown(monkeypatch) -> None:
+    def mock_run_dnsbrute(
+        target,
+        nameservers=None,
+        subdomains=None,
+        timeout=2.0,
+        max_workers=50,
+    ):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "zone": "example.com",
+            "nameservers": ["ns1.example.com"],
+            "nameserver_source": "option",
+            "dnspython_available": False,
+            "axfr": [
+                {
+                    "nameserver": "ns1.example.com",
+                    "success": False,
+                    "records_count": 0,
+                    "records": [],
+                    "error": "transfer refused (REFUSED)",
+                }
+            ],
+            "axfr_success": False,
+            "axfr_total_records": 0,
+            "subdomains_tested": 1,
+            "resolved_count": 0,
+            "resolved": [],
+            "all_results": [
+                {
+                    "subdomain": "www",
+                    "hostname": "www.example.com",
+                    "a": [],
+                    "aaaa": [],
+                }
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_dnsbrute", mock_run_dnsbrute)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "dnsbrute",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "DNS Brute Force Report" in result.output
+
+
+def test_dnsbrute_ns_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_dnsbrute(
+        target,
+        nameservers=None,
+        subdomains=None,
+        timeout=2.0,
+        max_workers=50,
+    ):
+        called_args["nameservers"] = nameservers
+        called_args["target"] = target
+        return {
+            "target": target,
+            "domain": "example.com",
+            "zone": "example.com",
+            "nameservers": nameservers or [],
+            "nameserver_source": "option" if nameservers else "none",
+            "dnspython_available": False,
+            "axfr": [],
+            "axfr_success": False,
+            "axfr_total_records": 0,
+            "subdomains_tested": 0,
+            "resolved_count": 0,
+            "resolved": [],
+            "all_results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_dnsbrute", mock_run_dnsbrute)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "dnsbrute",
+            "--target",
+            "example.com",
+            "--ns",
+            "ns1.example.com,ns2.example.com",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["nameservers"] == ["ns1.example.com", "ns2.example.com"]
+
+
+def test_dnsbrute_wordlist_option(tmp_path, monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_dnsbrute(
+        target,
+        nameservers=None,
+        subdomains=None,
+        timeout=2.0,
+        max_workers=50,
+    ):
+        called_args["subdomains"] = subdomains
+        called_args["target"] = target
+        return {
+            "target": target,
+            "domain": "example.com",
+            "zone": "example.com",
+            "nameservers": [],
+            "nameserver_source": "none",
+            "dnspython_available": False,
+            "axfr": [],
+            "axfr_success": False,
+            "axfr_total_records": 0,
+            "subdomains_tested": len(subdomains or []),
+            "resolved_count": 0,
+            "resolved": [],
+            "all_results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_dnsbrute", mock_run_dnsbrute)
+
+    wordlist_file = tmp_path / "subs.txt"
+    wordlist_file.write_text("www\nmail\n")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "dnsbrute",
+            "--target",
+            "example.com",
+            "--wordlist",
+            str(wordlist_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["subdomains"] == ["www", "mail"]
+
+
+def test_dnsbrute_timeout_workers_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_dnsbrute(
+        target,
+        nameservers=None,
+        subdomains=None,
+        timeout=2.0,
+        max_workers=50,
+    ):
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return {
+            "target": target,
+            "domain": "example.com",
+            "zone": "example.com",
+            "nameservers": [],
+            "nameserver_source": "none",
+            "dnspython_available": False,
+            "axfr": [],
+            "axfr_success": False,
+            "axfr_total_records": 0,
+            "subdomains_tested": 0,
+            "resolved_count": 0,
+            "resolved": [],
+            "all_results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_dnsbrute", mock_run_dnsbrute)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "dnsbrute",
+            "--target",
+            "example.com",
+            "--timeout",
+            "3.5",
+            "--workers",
+            "10",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["timeout"] == 3.5
+    assert called_args["max_workers"] == 10
+
+
+def test_dnsbrute_out_option_json(tmp_path, monkeypatch) -> None:
+    def mock_run_dnsbrute(
+        target,
+        nameservers=None,
+        subdomains=None,
+        timeout=2.0,
+        max_workers=50,
+    ):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "zone": "example.com",
+            "nameservers": ["ns1.example.com"],
+            "nameserver_source": "option",
+            "dnspython_available": False,
+            "axfr": [],
+            "axfr_success": False,
+            "axfr_total_records": 0,
+            "subdomains_tested": 1,
+            "resolved_count": 1,
+            "resolved": [
+                {
+                    "subdomain": "www",
+                    "hostname": "www.example.com",
+                    "a": ["93.184.216.34"],
+                    "aaaa": [],
+                }
+            ],
+            "all_results": [
+                {
+                    "subdomain": "www",
+                    "hostname": "www.example.com",
+                    "a": ["93.184.216.34"],
+                    "aaaa": [],
+                }
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_dnsbrute", mock_run_dnsbrute)
+
+    out_file = tmp_path / "dnsbrute_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "dnsbrute",
+            "--target",
+            "example.com",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "example.com" in content
+    assert "93.184.216.34" in content
+
+
+def test_dnsbrute_out_option_markdown(tmp_path, monkeypatch) -> None:
+    def mock_run_dnsbrute(
+        target,
+        nameservers=None,
+        subdomains=None,
+        timeout=2.0,
+        max_workers=50,
+    ):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "zone": "example.com",
+            "nameservers": [],
+            "nameserver_source": "none",
+            "dnspython_available": False,
+            "axfr": [],
+            "axfr_success": False,
+            "axfr_total_records": 0,
+            "subdomains_tested": 1,
+            "resolved_count": 0,
+            "resolved": [],
+            "all_results": [
+                {
+                    "subdomain": "www",
+                    "hostname": "www.example.com",
+                    "a": [],
+                    "aaaa": [],
+                }
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_dnsbrute", mock_run_dnsbrute)
+
+    out_file = tmp_path / "dnsbrute_report.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "dnsbrute",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "DNS Brute Force Report" in content

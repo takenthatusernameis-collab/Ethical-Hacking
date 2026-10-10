@@ -1,0 +1,706 @@
+"""Tests for the ethscan dnsbrute module."""
+
+import socket
+import struct
+import threading
+from typing import List, Tuple
+
+import pytest
+
+from ethscan.dnsbrute import (
+    DEFAULT_SUBDOMAINS,
+    DNS_AVAILABLE,
+    RCODE_NAMES,
+    _axfr_result,
+    _normalize_domain,
+    _parse_dns_name,
+    attempt_axfr,
+    build_axfr_query,
+    discover_nameservers,
+    format_dnsbrute_report_json,
+    format_dnsbrute_report_markdown,
+    parse_dns_response,
+    query_axfr_raw,
+    run_dnsbrute,
+)
+
+
+def _encode_dns_name(name: str) -> bytes:
+    labels = name.split(".")
+    return b"".join(bytes([len(label)]) + label.encode() for label in labels) + b"\x00"
+
+
+def _build_dns_response(
+    query_id: int, rcode: int, answers: List[Tuple[str, int]]
+) -> bytes:
+    header = struct.pack(
+        ">HHHHHH", query_id, 0x8000 | rcode, 0, len(answers), 0, 0
+    )
+    body = b""
+    for name, rtype in answers:
+        body += _encode_dns_name(name)
+        body += struct.pack(">HHIH", rtype, 1, 300, 4)
+        body += b"\x01\x02\x03\x04"
+    return header + body
+
+
+class _FakeDNSServer:
+    """Single-shot TCP DNS server that replies with a canned response."""
+
+    def __init__(self, response: bytes):
+        self.response = response
+        self.received = b""
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.bind(("127.0.0.1", 0))
+        self.sock.listen(1)
+        self.port = self.sock.getsockname()[1]
+        self._thread = threading.Thread(target=self._serve, daemon=True)
+        self._thread.start()
+
+    def _serve(self) -> None:
+        try:
+            conn, _ = self.sock.accept()
+            self.received = conn.recv(4096)
+            conn.sendall(self.response)
+            conn.close()
+        except OSError:
+            pass
+        finally:
+            self.sock.close()
+
+
+def _free_port() -> int:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    return port
+
+
+# ---------------------------------------------------------------------------
+# Domain normalization
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_domain_bare() -> None:
+    assert _normalize_domain("example.com") == "example.com"
+
+
+def test_normalize_domain_uppercase() -> None:
+    assert _normalize_domain("Example.COM") == "example.com"
+
+
+def test_normalize_domain_https_url() -> None:
+    assert _normalize_domain("https://example.com/path") == "example.com"
+
+
+def test_normalize_domain_strips_whitespace() -> None:
+    assert _normalize_domain("  example.com  ") == "example.com"
+
+
+def test_normalize_domain_with_port() -> None:
+    assert _normalize_domain("http://example.com:8080") == "example.com:8080"
+
+
+# ---------------------------------------------------------------------------
+# AXFR query building
+# ---------------------------------------------------------------------------
+
+
+def test_build_axfr_query_length_prefix() -> None:
+    query = build_axfr_query("example.com")
+    prefix = struct.unpack(">H", query[:2])[0]
+    assert prefix == len(query) - 2
+
+
+def test_build_axfr_query_header() -> None:
+    query = build_axfr_query("example.com", query_id=0x1234)
+    message = query[2:]
+    query_id, flags, qdcount, _, _, _ = struct.unpack(">HHHHHH", message[:12])
+    assert query_id == 0x1234
+    assert flags == 0
+    assert qdcount == 1
+
+
+def test_build_axfr_query_question() -> None:
+    query = build_axfr_query("example.com")
+    message = query[2:]
+    assert _encode_dns_name("example.com") in message
+    qtype, qclass = struct.unpack(">HH", message[-4:])
+    assert qtype == 252
+    assert qclass == 1
+
+
+def test_build_axfr_query_strips_trailing_dot() -> None:
+    query = build_axfr_query("example.com.")
+    message = query[2:]
+    assert _encode_dns_name("example.com") in message
+
+
+def test_build_axfr_query_custom_id() -> None:
+    query = build_axfr_query("example.com", query_id=0xABCD)
+    assert struct.unpack(">H", query[2:4])[0] == 0xABCD
+
+
+# ---------------------------------------------------------------------------
+# DNS name parsing
+# ---------------------------------------------------------------------------
+
+
+def test_parse_dns_name_plain() -> None:
+    data = _encode_dns_name("www.example.com")
+    name, offset = _parse_dns_name(data, 0)
+    assert name == "www.example.com"
+    assert offset == len(data)
+
+
+def test_parse_dns_name_compression_pointer() -> None:
+    # Name at offset 0 is a pointer to offset 12 where "example.com" is stored.
+    name_data = _encode_dns_name("example.com")
+    data = b"\xc0\x0c" + b"\x00" * 10 + name_data
+    name, offset = _parse_dns_name(data, 0)
+    assert name == "example.com"
+    assert offset == 2
+
+
+def test_parse_dns_name_pointer_loop_protection() -> None:
+    data = b"\xc0\x00" + b"\x00" * 10
+    name, offset = _parse_dns_name(data, 0)
+    assert name == ""
+    assert offset == 2
+
+
+# ---------------------------------------------------------------------------
+# DNS response parsing
+# ---------------------------------------------------------------------------
+
+
+def test_parse_dns_response_too_short() -> None:
+    result = parse_dns_response(b"\x00" * 5)
+    assert result["valid"] is False
+
+
+def test_parse_dns_response_success() -> None:
+    data = _build_dns_response(0x1234, 0, [("www.example.com", 1), ("mail.example.com", 1)])
+    result = parse_dns_response(data)
+    assert result["valid"] is True
+    assert result["query_id"] == 0x1234
+    assert result["response_code"] == 0
+    assert result["response_code_name"] == "NOERROR"
+    assert result["answer_count"] == 2
+    assert [a["name"] for a in result["answers"]] == [
+        "www.example.com",
+        "mail.example.com",
+    ]
+    assert [a["type"] for a in result["answers"]] == [1, 1]
+
+
+def test_parse_dns_response_refused() -> None:
+    data = _build_dns_response(1, 5, [])
+    result = parse_dns_response(data)
+    assert result["valid"] is True
+    assert result["response_code"] == 5
+    assert result["response_code_name"] == "REFUSED"
+    assert result["answer_count"] == 0
+
+
+def test_parse_dns_response_unknown_rcode_name() -> None:
+    data = _build_dns_response(1, 15, [])
+    result = parse_dns_response(data)
+    assert result["response_code_name"] == "UNKNOWN"
+
+
+def test_rcode_names_cover_common_codes() -> None:
+    for code in (0, 1, 2, 3, 4, 5):
+        assert code in RCODE_NAMES
+
+
+# ---------------------------------------------------------------------------
+# Raw AXFR (stdlib TCP) against a local fake server
+# ---------------------------------------------------------------------------
+
+
+def test_query_axfr_raw_success() -> None:
+    response = _build_dns_response(
+        0x2B00, 0, [("www.example.com", 1), ("mail.example.com", 1)]
+    )
+    server = _FakeDNSServer(response)
+
+    result = query_axfr_raw("127.0.0.1", "example.com", timeout=2.0, port=server.port)
+
+    assert result["nameserver"] == "127.0.0.1"
+    assert result["success"] is True
+    assert result["records_count"] == 2
+    assert result["records"] == ["www.example.com", "mail.example.com"]
+    assert result["error"] is None
+
+
+def test_query_axfr_raw_sends_axfr_question() -> None:
+    response = _build_dns_response(0x2B00, 0, [("www.example.com", 1)])
+    server = _FakeDNSServer(response)
+
+    query_axfr_raw("127.0.0.1", "example.com", timeout=2.0, port=server.port)
+
+    received = server.received
+    prefix = struct.unpack(">H", received[:2])[0]
+    assert prefix == len(received) - 2
+    message = received[2:]
+    qtype, qclass = struct.unpack(">HH", message[-4:])
+    assert qtype == 252
+    assert qclass == 1
+    assert _encode_dns_name("example.com") in message
+
+
+def test_query_axfr_raw_refused() -> None:
+    response = _build_dns_response(0x2B00, 5, [])
+    server = _FakeDNSServer(response)
+
+    result = query_axfr_raw("127.0.0.1", "example.com", timeout=2.0, port=server.port)
+
+    assert result["success"] is False
+    assert result["records_count"] == 0
+    assert "REFUSED" in result["error"]
+
+
+def test_query_axfr_raw_empty_response() -> None:
+    response = _build_dns_response(0x2B00, 0, [])
+    server = _FakeDNSServer(response)
+
+    result = query_axfr_raw("127.0.0.1", "example.com", timeout=2.0, port=server.port)
+
+    assert result["success"] is False
+    assert "empty response" in result["error"]
+
+
+def test_query_axfr_raw_connection_refused() -> None:
+    port = _free_port()
+    result = query_axfr_raw("127.0.0.1", "example.com", timeout=1.0, port=port)
+    assert result["success"] is False
+    assert result["records_count"] == 0
+    assert result["error"]
+
+
+def test_query_axfr_raw_invalid_response() -> None:
+    server = _FakeDNSServer(b"garbage")
+    result = query_axfr_raw("127.0.0.1", "example.com", timeout=2.0, port=server.port)
+    assert result["success"] is False
+    assert result["error"] == "invalid response"
+
+
+# ---------------------------------------------------------------------------
+# attempt_axfr dispatch
+# ---------------------------------------------------------------------------
+
+
+def test_attempt_axfr_uses_raw_path_without_dnspython(monkeypatch) -> None:
+    response = _build_dns_response(0x2B00, 0, [("www.example.com", 1)])
+    server = _FakeDNSServer(response)
+
+    monkeypatch.setattr("ethscan.dnsbrute.DNS_AVAILABLE", False)
+    result = attempt_axfr("127.0.0.1", "example.com", timeout=2.0, port=server.port)
+
+    assert result["success"] is True
+    assert result["records"] == ["www.example.com"]
+
+
+def test_attempt_axfr_uses_dnspython_when_available(monkeypatch) -> None:
+    calls = {}
+
+    def fake_dnspython(nameserver, zone, timeout=2.0):
+        calls["nameserver"] = nameserver
+        calls["zone"] = zone
+        calls["timeout"] = timeout
+        return _axfr_result(nameserver, True, ["example.com 300 IN SOA ns1"], None)
+
+    monkeypatch.setattr("ethscan.dnsbrute.DNS_AVAILABLE", True)
+    monkeypatch.setattr("ethscan.dnsbrute._axfr_dnspython", fake_dnspython)
+
+    result = attempt_axfr("ns1.example.com", "example.com", timeout=3.0)
+
+    assert calls == {"nameserver": "ns1.example.com", "zone": "example.com", "timeout": 3.0}
+    assert result["success"] is True
+    assert result["records"] == ["example.com 300 IN SOA ns1"]
+
+
+def test_attempt_axfr_dnspython_not_installed(monkeypatch) -> None:
+    import builtins
+
+    import ethscan.dnsbrute as dnsbrute
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name.startswith("dns."):
+            raise ImportError(name)
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    result = dnsbrute._axfr_dnspython("ns1.example.com", "example.com")
+
+    assert result["success"] is False
+    assert result["error"] == "dnspython not installed"
+
+
+# ---------------------------------------------------------------------------
+# Nameserver discovery
+# ---------------------------------------------------------------------------
+
+
+def test_discover_nameservers_unavailable_without_dnspython(monkeypatch) -> None:
+    monkeypatch.setattr("ethscan.dnsbrute.DNS_AVAILABLE", False)
+    assert discover_nameservers("example.com") == []
+
+
+def test_discover_nameservers_lookup(monkeypatch) -> None:
+    def fake_resolve(domain, record_type, timeout=2.0):
+        assert domain == "example.com"
+        assert record_type == "NS"
+        return ["ns1.example.com.", "ns2.example.com.", "ns1.example.com."]
+
+    monkeypatch.setattr("ethscan.dnsbrute.DNS_AVAILABLE", True)
+    monkeypatch.setattr("ethscan.dnsbrute.resolve_with_dnspython", fake_resolve)
+
+    nameservers = discover_nameservers("example.com")
+
+    assert nameservers == ["ns1.example.com", "ns2.example.com"]
+
+
+def test_discover_nameservers_empty_lookup(monkeypatch) -> None:
+    monkeypatch.setattr("ethscan.dnsbrute.DNS_AVAILABLE", True)
+    monkeypatch.setattr(
+        "ethscan.dnsbrute.resolve_with_dnspython", lambda *a, **k: []
+    )
+    assert discover_nameservers("example.com") == []
+
+
+# ---------------------------------------------------------------------------
+# run_dnsbrute
+# ---------------------------------------------------------------------------
+
+
+def test_run_dnsbrute_offline_target() -> None:
+    results = run_dnsbrute(
+        "nonexistent.invalid.domain.tld",
+        subdomains=["www", "mail"],
+        timeout=1.0,
+    )
+    assert results["target"] == "nonexistent.invalid.domain.tld"
+    assert results["domain"] == "nonexistent.invalid.domain.tld"
+    assert results["zone"] == "nonexistent.invalid.domain.tld"
+    assert results["nameserver_source"] in ("lookup", "none")
+    assert results["subdomains_tested"] == 2
+    assert results["resolved_count"] == 0
+    assert len(results["all_results"]) == 2
+    for entry in results["all_results"]:
+        assert entry["a"] == []
+        assert entry["aaaa"] == []
+    assert results["resolved"] == []
+    assert "axfr" in results
+    assert results["axfr_success"] is False
+
+
+def test_run_dnsbrute_uses_default_wordlist(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "ethscan.dnsbrute.attempt_axfr",
+        lambda ns, zone, timeout=2.0: _axfr_result(ns, False, [], "refused"),
+    )
+    results = run_dnsbrute("nonexistent.invalid.domain.tld", timeout=1.0)
+    assert results["subdomains_tested"] == len(DEFAULT_SUBDOMAINS)
+
+
+def test_run_dnsbrute_url_target(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "ethscan.dnsbrute.attempt_axfr",
+        lambda ns, zone, timeout=2.0: _axfr_result(ns, False, [], "refused"),
+    )
+    results = run_dnsbrute("https://example.com/path", subdomains=["www"], timeout=1.0)
+    assert results["domain"] == "example.com"
+    assert results["all_results"][0]["hostname"] == "www.example.com"
+
+
+def test_run_dnsbrute_ns_option(monkeypatch) -> None:
+    axfr_calls = []
+
+    def fake_axfr(nameserver, zone, timeout=2.0):
+        axfr_calls.append((nameserver, zone))
+        return _axfr_result(nameserver, False, [], "refused")
+
+    monkeypatch.setattr("ethscan.dnsbrute.attempt_axfr", fake_axfr)
+
+    results = run_dnsbrute(
+        "example.com",
+        nameservers=["ns2.example.com", "ns1.example.com", "ns1.example.com"],
+        subdomains=["www"],
+        timeout=1.0,
+    )
+
+    assert results["nameserver_source"] == "option"
+    assert results["nameservers"] == ["ns1.example.com", "ns2.example.com"]
+    assert axfr_calls == [
+        ("ns1.example.com", "example.com"),
+        ("ns2.example.com", "example.com"),
+    ]
+    assert len(results["axfr"]) == 2
+    assert all(entry["error"] == "refused" for entry in results["axfr"])
+
+
+def test_run_dnsbrute_ns_lookup_source(monkeypatch) -> None:
+    monkeypatch.setattr("ethscan.dnsbrute.DNS_AVAILABLE", True)
+    monkeypatch.setattr(
+        "ethscan.dnsbrute.resolve_with_dnspython",
+        lambda domain, rtype, timeout=2.0: ["ns1.example.com."],
+    )
+    monkeypatch.setattr(
+        "ethscan.dnsbrute.attempt_axfr",
+        lambda ns, zone, timeout=2.0: _axfr_result(ns, False, [], "refused"),
+    )
+
+    results = run_dnsbrute("example.com", subdomains=["www"], timeout=1.0)
+
+    assert results["nameserver_source"] == "lookup"
+    assert results["nameservers"] == ["ns1.example.com"]
+
+
+def test_run_dnsbrute_no_nameservers_available(monkeypatch) -> None:
+    monkeypatch.setattr("ethscan.dnsbrute.DNS_AVAILABLE", False)
+    results = run_dnsbrute("example.com", subdomains=["www"], timeout=1.0)
+    assert results["nameserver_source"] == "none"
+    assert results["nameservers"] == []
+    assert results["axfr"] == []
+    assert results["axfr_success"] is False
+    assert results["axfr_total_records"] == 0
+
+
+def test_run_dnsbrute_resolves_a_and_aaaa(monkeypatch) -> None:
+    def fake_a(hostname, timeout=2.0):
+        return ["1.2.3.4"] if hostname.startswith("www.") else []
+
+    def fake_aaaa(hostname, timeout=2.0):
+        return ["::1"] if hostname.startswith("www.") else []
+
+    monkeypatch.setattr("ethscan.dnsbrute.resolve_a_records", fake_a)
+    monkeypatch.setattr("ethscan.dnsbrute.resolve_aaaa_records", fake_aaaa)
+    monkeypatch.setattr(
+        "ethscan.dnsbrute.attempt_axfr",
+        lambda ns, zone, timeout=2.0: _axfr_result(ns, False, [], "refused"),
+    )
+
+    results = run_dnsbrute(
+        "example.com",
+        nameservers=["ns1.example.com"],
+        subdomains=["www", "mail"],
+        timeout=1.0,
+    )
+
+    assert results["resolved_count"] == 1
+    resolved = results["resolved"][0]
+    assert resolved["subdomain"] == "www"
+    assert resolved["hostname"] == "www.example.com"
+    assert resolved["a"] == ["1.2.3.4"]
+    assert resolved["aaaa"] == ["::1"]
+
+
+def test_run_dnsbrute_axfr_success_aggregation(monkeypatch) -> None:
+    def fake_axfr(nameserver, zone, timeout=2.0):
+        if nameserver == "ns1.example.com":
+            return _axfr_result(nameserver, True, ["www.example.com", "mail.example.com"], None)
+        return _axfr_result(nameserver, False, [], "refused")
+
+    monkeypatch.setattr("ethscan.dnsbrute.attempt_axfr", fake_axfr)
+
+    results = run_dnsbrute(
+        "example.com",
+        nameservers=["ns1.example.com", "ns2.example.com"],
+        subdomains=["www"],
+        timeout=1.0,
+    )
+
+    assert results["axfr_success"] is True
+    assert results["axfr_total_records"] == 2
+
+
+def test_run_dnsbrute_axfr_failure_aggregation(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "ethscan.dnsbrute.attempt_axfr",
+        lambda ns, zone, timeout=2.0: _axfr_result(ns, False, [], "refused"),
+    )
+    results = run_dnsbrute(
+        "example.com", nameservers=["ns1.example.com"], subdomains=["www"], timeout=1.0
+    )
+    assert results["axfr_success"] is False
+    assert results["axfr_total_records"] == 0
+
+
+def test_run_dnsbrute_reports_dnspython_flag() -> None:
+    results = run_dnsbrute(
+        "nonexistent.invalid.domain.tld", subdomains=["www"], timeout=1.0
+    )
+    assert results["dnspython_available"] == DNS_AVAILABLE
+
+
+def test_run_dnsbrute_empty_nameservers_option(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "ethscan.dnsbrute.attempt_axfr",
+        lambda ns, zone, timeout=2.0: _axfr_result(ns, False, [], "refused"),
+    )
+    results = run_dnsbrute(
+        "example.com", nameservers=["", "  "], subdomains=["www"], timeout=1.0
+    )
+    assert results["nameservers"] == []
+    assert results["nameserver_source"] == "option"
+    assert results["axfr"] == []
+
+
+# ---------------------------------------------------------------------------
+# Formatters
+# ---------------------------------------------------------------------------
+
+
+def _sample_data() -> dict:
+    return {
+        "target": "example.com",
+        "domain": "example.com",
+        "zone": "example.com",
+        "nameservers": ["ns1.example.com"],
+        "nameserver_source": "option",
+        "dnspython_available": False,
+        "axfr": [
+            {
+                "nameserver": "ns1.example.com",
+                "success": False,
+                "records_count": 0,
+                "records": [],
+                "error": "transfer refused (REFUSED)",
+            }
+        ],
+        "axfr_success": False,
+        "axfr_total_records": 0,
+        "subdomains_tested": 2,
+        "resolved_count": 1,
+        "resolved": [
+            {
+                "subdomain": "www",
+                "hostname": "www.example.com",
+                "a": ["1.2.3.4"],
+                "aaaa": [],
+            }
+        ],
+        "all_results": [
+            {
+                "subdomain": "www",
+                "hostname": "www.example.com",
+                "a": ["1.2.3.4"],
+                "aaaa": [],
+            },
+            {
+                "subdomain": "mail",
+                "hostname": "mail.example.com",
+                "a": [],
+                "aaaa": [],
+            },
+        ],
+    }
+
+
+def test_format_dnsbrute_report_json() -> None:
+    output = format_dnsbrute_report_json(_sample_data())
+    assert "example.com" in output
+    assert "ns1.example.com" in output
+    assert "transfer refused (REFUSED)" in output
+    assert "1.2.3.4" in output
+    assert "axfr_success" in output
+
+
+def test_format_dnsbrute_report_json_axfr_success() -> None:
+    data = _sample_data()
+    data["axfr"][0]["success"] = True
+    data["axfr"][0]["records"] = ["www.example.com"]
+    data["axfr"][0]["records_count"] = 1
+    data["axfr"][0]["error"] = None
+    data["axfr_success"] = True
+    data["axfr_total_records"] = 1
+    output = format_dnsbrute_report_json(data)
+    assert '"success": true' in output
+    assert "www.example.com" in output
+
+
+def test_format_dnsbrute_report_markdown() -> None:
+    output = format_dnsbrute_report_markdown(_sample_data())
+    assert "# ethscan DNS Brute Force Report" in output
+    assert "**Target:** example.com" in output
+    assert "**Zone:** example.com" in output
+    assert "ns1.example.com" in output
+    assert "source: option" in output
+    assert "**AXFR Successful:** No" in output
+    assert "**Subdomains Tested:** 2" in output
+    assert "**Resolved:** 1" in output
+    assert "## AXFR Attempts" in output
+    assert "### ns1.example.com" in output
+    assert "transfer refused (REFUSED)" in output
+    assert "## Resolved Subdomains" in output
+    assert "## All Results" in output
+    assert "1.2.3.4" in output
+    assert "N/A" in output
+
+
+def test_format_dnsbrute_report_markdown_axfr_records() -> None:
+    data = _sample_data()
+    data["axfr"][0]["success"] = True
+    data["axfr"][0]["records"] = ["www.example.com", "mail.example.com"]
+    data["axfr"][0]["records_count"] = 2
+    data["axfr"][0]["error"] = None
+    data["axfr_success"] = True
+    data["axfr_total_records"] = 2
+    output = format_dnsbrute_report_markdown(data)
+    assert "**AXFR Successful:** Yes" in output
+    assert "**AXFR Records:** 2" in output
+    assert "```" in output
+    assert "mail.example.com" in output
+
+
+def test_format_dnsbrute_report_markdown_no_nameservers() -> None:
+    data = _sample_data()
+    data["nameservers"] = []
+    data["nameserver_source"] = "none"
+    data["axfr"] = []
+    output = format_dnsbrute_report_markdown(data)
+    assert "**Nameservers:** None (source: none)" in output
+    assert "No nameservers available for AXFR attempts." in output
+
+
+def test_format_dnsbrute_report_markdown_dnspython_available() -> None:
+    data = _sample_data()
+    data["dnspython_available"] = True
+    output = format_dnsbrute_report_markdown(data)
+    assert "**dnspython Available:** Yes" in output
+
+
+def test_format_dnsbrute_report_markdown_escapes_pipes() -> None:
+    data = _sample_data()
+    data["all_results"][0]["subdomain"] = "www|evil"
+    data["resolved"][0]["subdomain"] = "www|evil"
+    output = format_dnsbrute_report_markdown(data)
+    assert "www\\|evil" in output
+
+
+def test_format_dnsbrute_report_markdown_multiple_ips() -> None:
+    data = _sample_data()
+    data["resolved"][0]["a"] = ["1.2.3.4", "5.6.7.8"]
+    data["resolved"][0]["aaaa"] = ["::1"]
+    data["all_results"][0]["a"] = ["1.2.3.4", "5.6.7.8"]
+    data["all_results"][0]["aaaa"] = ["::1"]
+    output = format_dnsbrute_report_markdown(data)
+    assert "1.2.3.4, 5.6.7.8" in output
+    assert "::1" in output
+
+
+def test_axfr_result_helper() -> None:
+    result = _axfr_result("ns1.example.com", True, ["www.example.com"], None)
+    assert result == {
+        "nameserver": "ns1.example.com",
+        "success": True,
+        "records_count": 1,
+        "records": ["www.example.com"],
+        "error": None,
+    }

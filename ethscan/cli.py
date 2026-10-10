@@ -41,6 +41,11 @@ from ethscan.dns import (
     format_dns_report_markdown,
     run_dns,
 )
+from ethscan.dnsbrute import (
+    format_dnsbrute_report_json,
+    format_dnsbrute_report_markdown,
+    run_dnsbrute,
+)
 from ethscan.ssl import (
     format_ssl_report_json,
     format_ssl_report_markdown,
@@ -458,6 +463,82 @@ def dns(
         output = format_dns_report_json(results)
     else:
         output = format_dns_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target domain or URL (e.g. example.com or https://example.com)",
+)
+@click.option(
+    "--ns",
+    "nameservers_option",
+    help="Comma-separated authoritative nameservers for AXFR attempts "
+    "(discovered via NS lookup if omitted; requires dnspython).",
+)
+@click.option(
+    "--wordlist",
+    "wordlist_path",
+    type=click.Path(exists=True, readable=True),
+    help="Path to wordlist file (one subdomain per line). Uses built-in default if omitted.",
+)
+@click.option("--timeout", default=2.0, type=float, help="DNS timeout in seconds")
+@click.option(
+    "--workers",
+    default=50,
+    type=int,
+    help="Maximum concurrent DNS resolution workers",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def dnsbrute(
+    target: str,
+    nameservers_option: Optional[str],
+    wordlist_path: Optional[str],
+    timeout: float,
+    workers: int,
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Attempt AXFR zone transfer and brute-force subdomains for TARGET."""
+    nameservers = (
+        [ns.strip() for ns in nameservers_option.split(",") if ns.strip()]
+        if nameservers_option
+        else None
+    )
+    wordlist = load_subdomain_wordlist(wordlist_path) if wordlist_path else None
+
+    results = run_dnsbrute(
+        target,
+        nameservers=nameservers,
+        subdomains=wordlist,
+        timeout=timeout,
+        max_workers=workers,
+    )
+
+    if fmt == "json":
+        output = format_dnsbrute_report_json(results)
+    else:
+        output = format_dnsbrute_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
