@@ -64,11 +64,50 @@ The `urlcheck` command combines `web` (security headers, info disclosure, SSL ch
 - `python -m ethscan --help` -> lists `urlcheck` among the 15 commands.
 - `python -m ethscan urlcheck --help` -> shows all expected options.
 
+## Completed: `--profile fast|normal|full` option for `scan`/`service`
+
+Added a `--profile` option to both `scan` and `service` commands that maps to predefined port sets and worker/timeout presets.
+
+### Added Functionality
+- `ethscan/scanner.py` — added profile support:
+  - `FAST_PORTS` — top ~18 commonly targeted ports (21, 22, 23, 25, 53, 80, 110, 139, 143, 443, 445, 993, 995, 3306, 3389, 5432, 8080, 8443)
+  - `FULL_PORTS` — all ports 1-1024 plus common ports above 1024 (deduplicated, sorted)
+  - `PROFILE_DEFAULTS` — dictionary mapping profile names to port lists, timeout, and worker presets:
+    - `fast`: ~18 ports, timeout 0.5s, 200 workers
+    - `normal`: 24 common ports, timeout 1.0s, 100 workers
+    - `full`: 1024+ ports, timeout 2.0s, 50 workers
+  - `get_profile_ports(profile)` — returns port list for a given profile
+  - `get_profile_defaults(profile)` — returns timeout/workers defaults for a given profile
+
+### Modified Files
+- `ethscan/scanner.py` — added profile constants and helper functions
+- `ethscan/cli.py` — added `--profile` option to `scan` and `service` commands:
+  - Profile overrides `--ports`, `--timeout`, `--workers` unless explicitly set
+  - `--ports` can still be used to override the profile's port selection
+  - `--timeout` and `--workers` can still be used to override profile defaults
+- `tests/test_scanner.py` — 9 new unit tests for profile functions:
+  - `test_get_profile_ports_fast`, `test_get_profile_ports_normal`, `test_get_profile_ports_full`
+  - `test_get_profile_ports_case_insensitive`, `test_get_profile_ports_invalid`
+  - `test_get_profile_defaults_fast`, `test_get_profile_defaults_normal`, `test_get_profile_defaults_full`, `test_get_profile_defaults_invalid`
+- `tests/test_cli.py` — 14 new CLI integration tests:
+  - `test_scan_help` — verifies `--profile` option appears in help
+  - `test_scan_profile_fast`, `test_scan_profile_normal`, `test_scan_profile_full`
+  - `test_scan_profile_override_ports`, `test_scan_profile_override_timeout_workers`
+  - `test_service_profile_fast`, `test_service_profile_normal`, `test_service_profile_full`
+  - `test_service_profile_override_ports`, `test_service_profile_override_timeout_workers`
+
+### Verification
+- `python -m pytest -q` -> 383 passed (363 baseline + 20 new: 9 unit + 11 CLI)
+- `python -m ethscan scan --help` -> shows `--profile [fast|normal|full]` option
+- `python -m ethscan service --help` -> shows `--profile [fast|normal|full]` option
+- Live test: `python -m ethscan scan --target 127.0.0.1 --profile fast` -> scans 18 ports
+- Live test: `python -m ethscan service --target 127.0.0.1 --profile fast` -> scans 18 ports with service detection
+
 ## Suggested next task
 
-**Add a `--profile fast|normal|full` option for `scan`/`service`** mapping to port sets and worker/timeout presets. Reuse the existing `get_common_ports()` and port-range parsing; add a `--profile` flag that selects a preset (fast = top 50 common ports, normal = all common ports, full = 1-1024 + common) and tunes `--timeout`/`--workers` defaults accordingly. Keep `--ports` overrideable.
+**Add a `--resolver`/`--nameserver` option to `dnsbrute`/`subdomains`** for custom resolver selection (requires dnspython, graceful fallback when unavailable). This would allow users to specify a custom DNS resolver IP address instead of using the system default resolver.
 
-Alternative: add a `--resolver`/`--nameserver` option to `dnsbrute`/`subdomains` for custom resolver selection (requires dnspython, graceful fallback when unavailable).
+Alternative: Add OS fingerprinting (`osdetect`) command that uses TCP/IP stack behavior analysis to identify target operating systems.
 
 ## Requirements
 - Pick one of the suggested features and implement it following the existing module conventions.
@@ -79,6 +118,5 @@ Alternative: add a `--resolver`/`--nameserver` option to `dnsbrute`/`subdomains`
 
 ## Current state
 - All 15 commands implemented (including `urlcheck`).
-- Tests: 363 passing.
-
-(End of file - total 64 lines)
+- `scan` and `service` now support `--profile fast|normal|full` option.
+- Tests: 383 passing.

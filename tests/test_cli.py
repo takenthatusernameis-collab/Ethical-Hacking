@@ -1270,6 +1270,255 @@ def test_service_out_option(tmp_path, monkeypatch) -> None:
     assert "OpenSSH" in content
 
 
+def test_scan_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--ports" in result.output
+    assert "--profile" in result.output
+    assert "--timeout" in result.output
+    assert "--workers" in result.output
+    assert "fast" in result.output
+    assert "normal" in result.output
+    assert "full" in result.output
+
+
+def test_scan_profile_fast(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        called_args["host"] = host
+        called_args["ports"] = ports
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return [(p, False) for p in ports]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--profile", "fast"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == [21, 22, 23, 25, 53, 80, 110, 139, 143, 443, 445, 993, 995, 3306, 3389, 5432, 8080, 8443]
+    assert called_args["timeout"] == 0.5
+    assert called_args["max_workers"] == 200
+
+
+def test_scan_profile_normal(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        called_args["host"] = host
+        called_args["ports"] = ports
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return [(p, False) for p in ports]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--profile", "normal"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == [20, 21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445, 993, 995, 1723, 3306, 3389, 5432, 5900, 8080, 8443, 8888]
+    assert called_args["timeout"] == 1.0
+    assert called_args["max_workers"] == 100
+
+
+def test_scan_profile_full(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        called_args["host"] = host
+        called_args["ports"] = ports
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return [(p, False) for p in ports]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--profile", "full"])
+    assert result.exit_code == 0
+    assert len(called_args["ports"]) == 1024 + 24 - len(set(range(1, 1025)) & set([20, 21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445, 993, 995, 1723, 3306, 3389, 5432, 5900, 8080, 8443, 8888]))
+    assert called_args["timeout"] == 2.0
+    assert called_args["max_workers"] == 50
+
+
+def test_scan_profile_override_ports(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        called_args["host"] = host
+        called_args["ports"] = ports
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return [(p, False) for p in ports]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--profile", "fast", "--ports", "80,443"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == [80, 443]
+    assert called_args["timeout"] == 0.5
+    assert called_args["max_workers"] == 200
+
+
+def test_scan_profile_override_timeout_workers(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        called_args["host"] = host
+        called_args["ports"] = ports
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return [(p, False) for p in ports]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--profile", "fast", "--timeout", "5.0", "--workers", "10"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == [21, 22, 23, 25, 53, 80, 110, 139, 143, 443, 445, 993, 995, 3306, 3389, 5432, 8080, 8443]
+    assert called_args["timeout"] == 5.0
+    assert called_args["max_workers"] == 10
+
+
+def test_service_profile_fast(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_service(target, ports=None, timeout=3.0, max_workers=50):
+        called_args["target"] = target
+        called_args["ports"] = ports
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": len(ports) if ports else 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["service", "--target", "example.com", "--profile", "fast"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == [21, 22, 23, 25, 53, 80, 110, 139, 143, 443, 445, 993, 995, 3306, 3389, 5432, 8080, 8443]
+    assert called_args["timeout"] == 0.5
+    assert called_args["max_workers"] == 200
+
+
+def test_service_profile_normal(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_service(target, ports=None, timeout=3.0, max_workers=50):
+        called_args["target"] = target
+        called_args["ports"] = ports
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": len(ports) if ports else 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["service", "--target", "example.com", "--profile", "normal"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == [20, 21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445, 993, 995, 1723, 3306, 3389, 5432, 5900, 8080, 8443, 8888]
+    assert called_args["timeout"] == 1.0
+    assert called_args["max_workers"] == 100
+
+
+def test_service_profile_full(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_service(target, ports=None, timeout=3.0, max_workers=50):
+        called_args["target"] = target
+        called_args["ports"] = ports
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": len(ports) if ports else 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["service", "--target", "example.com", "--profile", "full"])
+    assert result.exit_code == 0
+    assert len(called_args["ports"]) == 1024 + 24 - len(set(range(1, 1025)) & set([20, 21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445, 993, 995, 1723, 3306, 3389, 5432, 5900, 8080, 8443, 8888]))
+    assert called_args["timeout"] == 2.0
+    assert called_args["max_workers"] == 50
+
+
+def test_service_profile_override_ports(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_service(target, ports=None, timeout=3.0, max_workers=50):
+        called_args["target"] = target
+        called_args["ports"] = ports
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": len(ports) if ports else 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["service", "--target", "example.com", "--profile", "fast", "--ports", "80,443"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == [80, 443]
+    assert called_args["timeout"] == 0.5
+    assert called_args["max_workers"] == 200
+
+
+def test_service_profile_override_timeout_workers(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_service(target, ports=None, timeout=3.0, max_workers=50):
+        called_args["target"] = target
+        called_args["ports"] = ports
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": len(ports) if ports else 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["service", "--target", "example.com", "--profile", "fast", "--timeout", "5.0", "--workers", "10"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == [21, 22, 23, 25, 53, 80, 110, 139, 143, 443, 445, 993, 995, 3306, 3389, 5432, 8080, 8443]
+    assert called_args["timeout"] == 5.0
+    assert called_args["max_workers"] == 10
+
+
 def test_tls_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["tls", "--help"])

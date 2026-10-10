@@ -7,7 +7,7 @@ import click
 
 from ethscan import __version__
 from ethscan.passwords import audit_passwords
-from ethscan.scanner import get_common_ports, parse_port_range, scan_ports
+from ethscan.scanner import get_common_ports, parse_port_range, scan_ports, get_profile_ports, get_profile_defaults
 from ethscan.web import (
     format_web_report_json,
     format_web_report_markdown,
@@ -87,11 +87,26 @@ def cli() -> None:
     default="common",
     help="Ports to scan: 'common', 'all', or comma-separated list/ranges (e.g., '80,443,8000-9000')",
 )
+@click.option(
+    "--profile",
+    type=click.Choice(["fast", "normal", "full"]),
+    help="Scan profile: fast (top ~18 ports), normal (common ports), full (1-1024 + common). Overrides --ports, --timeout, --workers unless explicitly set.",
+)
 @click.option("--timeout", default=1.0, type=float, help="Connection timeout in seconds")
 @click.option("--workers", default=100, type=int, help="Maximum concurrent workers")
-def scan(target: str, ports: str, timeout: float, workers: int) -> None:
+def scan(target: str, ports: str, profile: Optional[str], timeout: float, workers: int) -> None:
     """Run a port scan against TARGET."""
-    if ports.lower() == "common":
+    if profile:
+        defaults = get_profile_defaults(profile)
+        if ports == "common":
+            port_list = get_profile_ports(profile)
+        else:
+            port_list = parse_port_range(ports)
+        if timeout == 1.0:
+            timeout = defaults["timeout"]
+        if workers == 100:
+            workers = defaults["workers"]
+    elif ports.lower() == "common":
         port_list = get_common_ports()
     elif ports.lower() == "all":
         port_list = list(range(1, 65536))
@@ -666,6 +681,11 @@ def tls(
     "--ports",
     help="Ports to scan: comma-separated list/ranges (e.g., '21,22,80,443,8000-9000'). Defaults to common ports.",
 )
+@click.option(
+    "--profile",
+    type=click.Choice(["fast", "normal", "full"]),
+    help="Scan profile: fast (top ~18 ports), normal (common ports), full (1-1024 + common). Overrides --ports, --timeout, --workers unless explicitly set.",
+)
 @click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
 @click.option("--workers", default=50, type=int, help="Maximum concurrent workers")
 @click.option(
@@ -681,10 +701,21 @@ def tls(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def service(target: str, ports: Optional[str], timeout: float, workers: int, fmt: str, out_path: Optional[str]) -> None:
+def service(target: str, ports: Optional[str], profile: Optional[str], timeout: float, workers: int, fmt: str, out_path: Optional[str]) -> None:
     """Detect services and grab banners on open ports (nmap-style)."""
     port_list = None
-    if ports:
+    if profile:
+        defaults = get_profile_defaults(profile)
+        if ports:
+            from ethscan.scanner import parse_port_range
+            port_list = parse_port_range(ports)
+        else:
+            port_list = get_profile_ports(profile)
+        if timeout == 3.0:
+            timeout = defaults["timeout"]
+        if workers == 50:
+            workers = defaults["workers"]
+    elif ports:
         from ethscan.scanner import parse_port_range
         port_list = parse_port_range(ports)
 

@@ -4,7 +4,12 @@ import pytest
 
 from ethscan.scanner import (
     COMMON_PORTS,
+    FAST_PORTS,
+    FULL_PORTS,
+    PROFILE_DEFAULTS,
     get_common_ports,
+    get_profile_defaults,
+    get_profile_ports,
     parse_port_range,
     scan_port,
     scan_ports,
@@ -55,3 +60,58 @@ def test_scan_ports_localhost() -> None:
     for port, is_open in results:
         assert port in [1, 2, 3]
         assert isinstance(is_open, bool)
+
+
+def test_get_profile_ports_fast() -> None:
+    ports = get_profile_ports("fast")
+    assert isinstance(ports, list)
+    assert ports == FAST_PORTS
+
+
+def test_get_profile_ports_normal() -> None:
+    ports = get_profile_ports("normal")
+    assert isinstance(ports, list)
+    assert ports == COMMON_PORTS
+
+
+def test_get_profile_ports_full() -> None:
+    ports = get_profile_ports("full")
+    assert isinstance(ports, list)
+    assert ports == FULL_PORTS
+
+
+def test_get_profile_ports_case_insensitive() -> None:
+    assert get_profile_ports("FAST") == FAST_PORTS
+    assert get_profile_ports("Normal") == COMMON_PORTS
+    assert get_profile_ports("FULL") == FULL_PORTS
+
+
+def test_get_profile_ports_invalid() -> None:
+    with pytest.raises(ValueError, match="Unknown profile: invalid"):
+        get_profile_ports("invalid")
+
+
+def test_get_profile_defaults_fast() -> None:
+    defaults = get_profile_defaults("fast")
+    assert defaults == {"timeout": 0.5, "workers": 200}
+    assert defaults["timeout"] == 0.5
+    assert defaults["workers"] == 200
+
+
+def test_get_profile_defaults_normal() -> None:
+    defaults = get_profile_defaults("normal")
+    assert defaults == {"timeout": 1.0, "workers": 100}
+    assert defaults["timeout"] == 1.0
+    assert defaults["workers"] == 100
+
+
+def test_get_profile_defaults_full() -> None:
+    defaults = get_profile_defaults("full")
+    assert defaults == {"timeout": 2.0, "workers": 50}
+    assert defaults["timeout"] == 2.0
+    assert defaults["workers"] == 50
+
+
+def test_get_profile_defaults_invalid() -> None:
+    with pytest.raises(ValueError, match="Unknown profile: invalid"):
+        get_profile_defaults("invalid")

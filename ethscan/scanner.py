@@ -82,6 +82,61 @@ COMMON_PORTS = [
 ]
 
 
+FAST_PORTS = [
+    21, 22, 23, 25, 53, 80, 110, 139, 143, 443, 445, 993, 995,
+    3306, 3389, 5432, 8080, 8443,
+]
+
+
+FULL_PORTS = sorted(set(list(range(1, 1025)) + COMMON_PORTS))
+
+
+PROFILE_DEFAULTS = {
+    "fast": {"ports": FAST_PORTS, "timeout": 0.5, "workers": 200},
+    "normal": {"ports": COMMON_PORTS, "timeout": 1.0, "workers": 100},
+    "full": {"ports": FULL_PORTS, "timeout": 2.0, "workers": 50},
+}
+
+
 def get_common_ports() -> List[int]:
     """Return list of common ports to scan."""
     return COMMON_PORTS.copy()
+
+
+def get_profile_ports(profile: str) -> List[int]:
+    """Return list of ports for the given profile.
+
+    Args:
+        profile: Profile name ('fast', 'normal', 'full').
+
+    Returns:
+        Sorted list of unique port numbers for the profile.
+
+    Raises:
+        ValueError: If profile is not recognized.
+    """
+    profile = profile.lower()
+    if profile not in PROFILE_DEFAULTS:
+        raise ValueError(f"Unknown profile: {profile}. Valid profiles: {', '.join(sorted(PROFILE_DEFAULTS.keys()))}")
+    return PROFILE_DEFAULTS[profile]["ports"].copy()
+
+
+def get_profile_defaults(profile: str) -> dict:
+    """Return default timeout and workers for the given profile.
+
+    Args:
+        profile: Profile name ('fast', 'normal', 'full').
+
+    Returns:
+        Dictionary with 'timeout' and 'workers' keys.
+
+    Raises:
+        ValueError: If profile is not recognized.
+    """
+    profile = profile.lower()
+    if profile not in PROFILE_DEFAULTS:
+        raise ValueError(f"Unknown profile: {profile}. Valid profiles: {', '.join(sorted(PROFILE_DEFAULTS.keys()))}")
+    return {
+        "timeout": PROFILE_DEFAULTS[profile]["timeout"],
+        "workers": PROFILE_DEFAULTS[profile]["workers"],
+    }
