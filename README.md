@@ -22,6 +22,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - OS fingerprinting: `osdetect` command using TCP/IP stack behavior analysis, banner cross-referencing, and TTL-based inference (implemented)
 - TCP traceroute: `trace` command using TTL-incremented TCP SYN probes with per-hop IP/RTT reporting (implemented)
 - Wi-Fi reconnaissance: `wifi` command for wireless interface scanning and access point discovery (Linux, implemented)
+- IP geolocation: `geo` command for IP-to-location lookup using a public API with caching and offline fallback (implemented)
 
 ## Requirements
 

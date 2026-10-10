@@ -4683,3 +4683,389 @@ def test_wifi_out_option_markdown(tmp_path, monkeypatch) -> None:
     assert out_file.exists()
     content = out_file.read_text()
     assert "Wi-Fi Reconnaissance Report" in content
+
+
+def test_geo_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["geo", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--timeout" in result.output
+    assert "--no-cache" in result.output
+    assert "--no-offline-fallback" in result.output
+    assert "--api-url" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_geo() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "geo" in result.output
+
+
+def test_geo_offline_target_json(monkeypatch) -> None:
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+        return {
+            "target": target,
+            "host": "nonexistent.invalid.domain.tld",
+            "ip": None,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "geolocation": None,
+            "notes": ["Could not resolve host 'nonexistent.invalid.domain.tld'"],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_geo", mock_run_geo)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "geo",
+            "--target",
+            "nonexistent.invalid.domain.tld",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Could not resolve" in result.output
+    assert "geolocation" in result.output
+
+
+def test_geo_offline_target_markdown(monkeypatch) -> None:
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+        return {
+            "target": target,
+            "host": "nonexistent.invalid.domain.tld",
+            "ip": None,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "geolocation": None,
+            "notes": ["Could not resolve host 'nonexistent.invalid.domain.tld'"],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_geo", mock_run_geo)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "geo",
+            "--target",
+            "nonexistent.invalid.domain.tld",
+            "--format",
+            "markdown",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "IP Geolocation Report" in result.output
+    assert "No geolocation data available" in result.output
+
+
+def test_geo_success_json(monkeypatch) -> None:
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+        return {
+            "target": target,
+            "host": "8.8.8.8",
+            "ip": "8.8.8.8",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "geolocation": {
+                "status": "success",
+                "query": "8.8.8.8",
+                "country": "United States",
+                "countryCode": "US",
+                "region": "CA",
+                "regionName": "California",
+                "city": "Mountain View",
+                "zip": "94035",
+                "lat": 37.4056,
+                "lon": -122.0775,
+                "timezone": "America/Los_Angeles",
+                "isp": "Google LLC",
+                "org": "Google Public DNS",
+                "as": "AS15169 Google LLC",
+                "reverse": "dns.google",
+                "cached": False,
+            },
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_geo", mock_run_geo)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "geo",
+            "--target",
+            "8.8.8.8",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "United States" in result.output
+    assert "Mountain View" in result.output
+    assert "Google LLC" in result.output
+    assert "cached" in result.output
+
+
+def test_geo_success_markdown(monkeypatch) -> None:
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+        return {
+            "target": target,
+            "host": "8.8.8.8",
+            "ip": "8.8.8.8",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "geolocation": {
+                "status": "success",
+                "query": "8.8.8.8",
+                "country": "United States",
+                "countryCode": "US",
+                "region": "CA",
+                "regionName": "California",
+                "city": "Mountain View",
+                "zip": "94035",
+                "lat": 37.4056,
+                "lon": -122.0775,
+                "timezone": "America/Los_Angeles",
+                "isp": "Google LLC",
+                "org": "Google Public DNS",
+                "as": "AS15169 Google LLC",
+                "reverse": "dns.google",
+                "cached": False,
+            },
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_geo", mock_run_geo)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "geo",
+            "--target",
+            "8.8.8.8",
+            "--format",
+            "markdown",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "IP Geolocation Report" in result.output
+    assert "United States" in result.output
+    assert "Mountain View" in result.output
+
+
+def test_geo_out_option_json(tmp_path, monkeypatch) -> None:
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+        return {
+            "target": target,
+            "host": "8.8.8.8",
+            "ip": "8.8.8.8",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "geolocation": {
+                "status": "success",
+                "query": "8.8.8.8",
+                "country": "United States",
+                "cached": False,
+            },
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_geo", mock_run_geo)
+
+    out_file = tmp_path / "geo_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "geo",
+            "--target",
+            "8.8.8.8",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "United States" in content
+    parsed = json.loads(content)
+    assert parsed["geolocation"]["country"] == "United States"
+
+
+def test_geo_out_option_markdown(tmp_path, monkeypatch) -> None:
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+        return {
+            "target": target,
+            "host": "8.8.8.8",
+            "ip": "8.8.8.8",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "geolocation": {
+                "status": "success",
+                "query": "8.8.8.8",
+                "country": "United States",
+                "cached": False,
+            },
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_geo", mock_run_geo)
+
+    out_file = tmp_path / "geo_report.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "geo",
+            "--target",
+            "8.8.8.8",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "IP Geolocation Report" in content
+    assert "United States" in content
+
+
+def test_geo_no_cache_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+        called_args["use_cache"] = use_cache
+        return {
+            "target": target,
+            "host": "8.8.8.8",
+            "ip": "8.8.8.8",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "geolocation": {"status": "success", "country": "US", "cached": False},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_geo", mock_run_geo)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["geo", "--target", "8.8.8.8", "--no-cache"])
+    assert result.exit_code == 0
+    assert called_args["use_cache"] is False
+
+
+def test_geo_no_offline_fallback_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+        called_args["offline_fallback"] = offline_fallback
+        return {
+            "target": target,
+            "host": "8.8.8.8",
+            "ip": "8.8.8.8",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "geolocation": {"status": "success", "country": "US", "cached": False},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_geo", mock_run_geo)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["geo", "--target", "8.8.8.8", "--no-offline-fallback"])
+    assert result.exit_code == 0
+    assert called_args["offline_fallback"] is False
+
+
+def test_geo_api_url_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+        called_args["api_url"] = api_url
+        return {
+            "target": target,
+            "host": "8.8.8.8",
+            "ip": "8.8.8.8",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "geolocation": {"status": "success", "country": "US", "cached": False},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_geo", mock_run_geo)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["geo", "--target", "8.8.8.8", "--api-url", "https://custom.example.com/"])
+    assert result.exit_code == 0
+    assert called_args["api_url"] == "https://custom.example.com/"
+
+
+def test_geo_timeout_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+        called_args["timeout"] = timeout
+        return {
+            "target": target,
+            "host": "8.8.8.8",
+            "ip": "8.8.8.8",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "geolocation": {"status": "success", "country": "US", "cached": False},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_geo", mock_run_geo)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["geo", "--target", "8.8.8.8", "--timeout", "10.0"])
+    assert result.exit_code == 0
+    assert called_args["timeout"] == 10.0
+
+
+def test_geo_url_target(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "93.184.216.34",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "geolocation": {"status": "success", "country": "US", "cached": False},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_geo", mock_run_geo)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["geo", "--target", "https://example.com/path"])
+    assert result.exit_code == 0
+    assert called_args["target"] == "https://example.com/path"

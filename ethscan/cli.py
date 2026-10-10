@@ -91,6 +91,11 @@ from ethscan.wifi import (
     format_wifi_report_markdown,
     run_wifi,
 )
+from ethscan.geo import (
+    format_geo_report_json,
+    format_geo_report_markdown,
+    run_geo,
+)
 
 
 @click.group()
@@ -1224,6 +1229,71 @@ def wifi(interface: Optional[str], fmt: str, out_path: Optional[str]) -> None:
         output = format_wifi_report_json(results)
     else:
         output = format_wifi_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target IP address, hostname, or URL (e.g., 8.8.8.8, example.com, https://example.com)",
+)
+@click.option("--timeout", default=5.0, type=float, help="API request timeout in seconds")
+@click.option(
+    "--no-cache",
+    is_flag=True,
+    help="Disable local filesystem cache",
+)
+@click.option(
+    "--no-offline-fallback",
+    is_flag=True,
+    help="Disable offline fallback to stale cache when API is unavailable",
+)
+@click.option(
+    "--api-url",
+    help="Custom geolocation API base URL (must support ip-api.com query format)",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def geo(
+    target: str,
+    timeout: float,
+    no_cache: bool,
+    no_offline_fallback: bool,
+    api_url: Optional[str],
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Look up IP geolocation for TARGET using a public API with caching."""
+    results = run_geo(
+        target,
+        timeout=timeout,
+        use_cache=not no_cache,
+        offline_fallback=not no_offline_fallback,
+        api_url=api_url,
+    )
+
+    if fmt == "json":
+        output = format_geo_report_json(results)
+    else:
+        output = format_geo_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

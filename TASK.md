@@ -287,11 +287,40 @@ Added machine-readable JSON and Markdown output modes to the `audit` command (pr
 - End-to-end: `echo -e "password\ncorrect-Horse-battery-staple-9x!" | python -m ethscan audit --format json` produces valid JSON with per-password fields.
 - End-to-end: `echo -e "password\n123456" | python -m ethscan audit --format markdown` produces a Markdown report with a pipe-escaped table.
 
+## Completed: `geo` command (IP geolocation lookup)
+
+The `geo` command performs IP geolocation lookup using a public IP-to-location API (ip-api.com) with caching and offline fallback. It supports IP addresses, hostnames, and URLs as targets, and outputs structured JSON or Markdown reports with country, region, city, coordinates, ISP, organization, AS number, and reverse DNS information.
+
+### Added Files
+- `ethscan/geo.py` — IP geolocation module with:
+  - `_normalize_target()` — extracts a bare hostname from URL/bare targets
+  - `_resolve_host()` — resolves hostname to IPv4 address
+  - `_load_cache()` / `_save_cache()` / `_is_cache_valid()` — filesystem cache management with TTL
+  - `_fetch_geo_data()` — fetches geolocation data from public API (stdlib-only)
+  - `_get_cached_or_fetch()` — orchestrates cache lookup, API fetch, and offline fallback
+  - `run_geo()` — public entry point: normalizes target, resolves IP, performs cached/offline-aware lookup
+  - `format_geo_report_json()` / `format_geo_report_markdown()` — output formatters (markdown includes all geolocation fields, cache status, offline fallback indicator)
+- `tests/test_geo.py` — 38 unit tests: target normalization, host resolution, cache operations (load/save/validity), API fetch (success/fail/status/error/timeout), cache-or-fetch logic (hit/miss/fetch/offline-fallback/no-cache), run_geo (offline target, success, URL target, cached result, custom API URL), formatters (JSON, markdown success/fail/no-data/cached/offline-fallback/notes)
+
+### Modified Files
+- `ethscan/cli.py` — registered `geo` command with `--target` (required), `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out`; imports `run_geo`, `format_geo_report_json`, `format_geo_report_markdown` from `ethscan.geo`.
+- `tests/test_cli.py` — 13 CLI integration tests: `geo` help, top-level help listing, offline target json/markdown output (monkeypatched `run_geo`), success json/markdown output, `--out` (json and markdown), `--no-cache`, `--no-offline-fallback`, `--api-url`, `--timeout`, URL target.
+- `README.md` — added IP geolocation (`geo`) to the features list.
+
+### Verification
+- `python -m pytest -q` -> 602 passed, 1 skipped (551 baseline + 51 new: 38 unit + 13 CLI).
+- `python -m ethscan --help` -> lists `geo` among the 19 commands.
+- `python -m ethscan geo --help` -> shows all expected options (`--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out`).
+- End-to-end: `python -m ethscan geo --target 8.8.8.8 --format markdown` -> reports country (United States), city (Ashburn), ISP (Google LLC), coordinates, AS number, reverse DNS, cache status.
+- End-to-end: `python -m ethscan geo --target https://example.com --format json` -> normalizes URL, resolves IP (104.20.23.154), returns geolocation for Cloudflare edge node.
+- Cache verification: second run with same target shows `"cached": true` and "Result served from cache" note.
+- Offline fallback: with `--no-cache` disabled and API unavailable, stale cache data is returned with `"offline_fallback": true`.
+
 ## Suggested next task
 
-**Add a `geo` command** for IP geolocation lookup using a stdlib-only public IP-to-location API (with caching and offline fallback).
+**Add a `--recursive` option to `dnsbrute`** for recursive zone transfer attempts against discovered nameservers.
 
-Alternative: Add a `--recursive` option to `dnsbrute` for recursive zone transfer attempts against discovered nameservers.
+Alternative: Add a `recon` command that runs multiple reconnaissance modules (`subdomains`, `dns`, `whois`, `geo`, `trace`) in sequence and produces a consolidated report.
 
 ## Requirements
 - Pick one of the suggested features and implement it following the existing module conventions.
@@ -301,9 +330,9 @@ Alternative: Add a `--recursive` option to `dnsbrute` for recursive zone transfe
 - Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
 
 ## Current state
-- All 18 commands implemented (including `wifi`).
+- All 19 commands implemented (including `geo`).
 - `scan` and `service` now support `--profile fast|normal|full` option.
 - `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
 - `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
 - `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
-- Tests: 551 passing (1 skipped).
+- Tests: 602 passing (1 skipped).
