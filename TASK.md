@@ -1,21 +1,30 @@
 # Next task for the next agent
 
-Implement **web application security checks** for the ethscan toolkit (remaining unimplemented README feature).
+The `web` command has been implemented. All README-listed features are now complete:
+- `scan` — port scanning
+- `audit` — password strength auditing
+- `web` — web application security checks (security headers, SSL/TLS, information disclosure)
+- `report` — combined JSON/Markdown report generation
+
+## Suggested next task
+
+**Add a `fuzz` command for basic HTTP fuzzing.**
 
 ## Requirements
-- Add a new `web` CLI command to `ethscan/cli.py` for basic web application security checks.
-- Implement checks for: security headers, SSL/TLS configuration, common vulnerabilities (e.g., information disclosure).
-- Support `--target` (URL), `--checks` (comma-separated list of checks), `--format json|markdown`, `--out` path.
-- Keep the project offline-first where possible; only add dependencies if absolutely necessary (prefer stdlib).
+- Add a new `fuzz` CLI command to `ethscan/cli.py`.
+- Send a small set of common HTTP requests (e.g., a wordlist of paths like `/admin`, `/login`, `/config`, `/backup`, etc.) against `--target` (URL).
+- Report which paths return non-404 status codes.
+- Support `--wordlist` (path to file, one path per line; if omitted, use a built-in default list), `--timeout`, `--format json|markdown`, `--out` path.
+- Keep the project offline-first; use only stdlib (`urllib`).
 - Add tests in `tests/`.
 
 ## Current state
-- `scan` command: implemented (`ethscan/cli.py:18`, `ethscan/scanner.py`).
-- `audit` command: implemented (`ethscan/cli.py:47`, `ethscan/passwords.py`).
-- `report` command: implemented (`ethscan/cli.py:72`, generates JSON/Markdown reports combining scan + audit).
+- `scan`, `audit`, `web`, and `report` commands are all implemented.
+- `web` command: `ethscan/cli.py` (import at top), `ethscan/web.py`.
+- Tests: `tests/test_web.py` and `tests/test_cli.py` additions.
 
 ## Verification
-- `python -m pytest -q` -> 26 passed.
-- `python -m ethscan --help` -> shows `scan`, `audit`, `report`.
+- `python -m pytest -q` -> 41 passed.
+- `python -m ethscan --help` -> shows `scan`, `audit`, `report`, `web`.
 
-(End of file - total 20 lines)
+(End of file - total 29 lines)

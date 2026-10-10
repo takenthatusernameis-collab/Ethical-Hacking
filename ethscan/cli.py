@@ -7,6 +7,11 @@ import click
 from ethscan import __version__
 from ethscan.passwords import audit_passwords
 from ethscan.scanner import get_common_ports, parse_port_range, scan_ports
+from ethscan.web import (
+    format_web_report_json,
+    format_web_report_markdown,
+    run_web_checks,
+)
 
 
 @click.group()
@@ -151,6 +156,52 @@ def report(
         output = json.dumps(report_data, indent=2)
     else:
         output = _generate_markdown(report_data)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option("--target", required=True, help="Target URL (e.g. https://example.com)")
+@click.option(
+    "--checks",
+    default="headers,info_disclosure,ssl",
+    help="Comma-separated list of checks: headers, info_disclosure, ssl",
+)
+@click.option("--timeout", default=5.0, type=float, help="Request timeout in seconds")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def web(target: str, checks: str, timeout: float, fmt: str, out_path: str) -> None:
+    """Run web application security checks against TARGET."""
+    check_list = [c.strip() for c in checks.split(",") if c.strip()]
+    valid = {"headers", "info_disclosure", "ssl"}
+    unknown = [c for c in check_list if c not in valid]
+    if unknown:
+        click.echo(f"Unknown checks: {', '.join(unknown)}")
+        click.echo(f"Valid checks: {', '.join(sorted(valid))}")
+        return
+
+    results = run_web_checks(target, check_list, timeout=timeout)
+
+    if fmt == "json":
+        output = format_web_report_json(results)
+    else:
+        output = format_web_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

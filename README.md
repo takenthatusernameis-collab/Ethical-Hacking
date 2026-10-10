@@ -6,8 +6,8 @@ A modular, offline-first ethical hacking toolkit written in Python.
 
 - Network reconnaissance and scanning utilities (implemented)
 - Password strength auditing (implemented)
-- Web application security checks (planned)
-- Report generation (JSON / Markdown) (planned)
+- Web application security checks (implemented)
+- Report generation (JSON / Markdown) (implemented)
 
 ## Requirements
 
