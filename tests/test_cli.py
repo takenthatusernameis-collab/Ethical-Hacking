@@ -152,3 +152,172 @@ def test_subdomains_out_option(tmp_path) -> None:
     assert out_file.exists()
     content = out_file.read_text()
     assert "nonexistent.invalid.domain.tld" in content
+
+
+def test_whois_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["whois", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--server" in result.output
+    assert "--port" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_whois() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "whois" in result.output
+
+
+def test_whois_offline_target_json(monkeypatch) -> None:
+    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0):
+        return {
+            "target": target,
+            "server": server,
+            "port": port,
+            "raw": "Registrar: Test Registrar\n",
+            "parsed": {
+                "registrar": "Test Registrar",
+                "creation_date": "2020-01-01",
+                "expiration_date": "2025-01-01",
+                "nameservers": [],
+                "registrant_org": None,
+                "status_codes": [],
+                "raw": "Registrar: Test Registrar\n",
+            },
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_whois", mock_run_whois)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["whois", "--target", "example.com", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "example.com" in result.output
+    assert "Test Registrar" in result.output
+
+
+def test_whois_offline_target_markdown(monkeypatch) -> None:
+    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0):
+        return {
+            "target": target,
+            "server": server,
+            "port": port,
+            "raw": "Registrar: Test Registrar\n",
+            "parsed": {
+                "registrar": "Test Registrar",
+                "creation_date": "2020-01-01",
+                "expiration_date": "2025-01-01",
+                "nameservers": [],
+                "registrant_org": None,
+                "status_codes": [],
+                "raw": "Registrar: Test Registrar\n",
+            },
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_whois", mock_run_whois)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "whois",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "WHOIS Lookup Report" in result.output
+
+
+def test_whois_server_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0):
+        called_args["server"] = server
+        called_args["target"] = target
+        return {
+            "target": target,
+            "server": server,
+            "port": port,
+            "raw": "",
+            "parsed": {
+                "registrar": None,
+                "creation_date": None,
+                "expiration_date": None,
+                "nameservers": [],
+                "registrant_org": None,
+                "status_codes": [],
+                "raw": "",
+            },
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_whois", mock_run_whois)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "whois",
+            "--target",
+            "example.com",
+            "--server",
+            "whois.example.org",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["server"] == "whois.example.org"
+
+
+def test_whois_out_option(tmp_path, monkeypatch) -> None:
+    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0):
+        return {
+            "target": target,
+            "server": server,
+            "port": port,
+            "raw": "test",
+            "parsed": {
+                "registrar": None,
+                "creation_date": None,
+                "expiration_date": None,
+                "nameservers": [],
+                "registrant_org": None,
+                "status_codes": [],
+                "raw": "test",
+            },
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_whois", mock_run_whois)
+
+    out_file = tmp_path / "whois_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "whois",
+            "--target",
+            "example.com",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "example.com" in content

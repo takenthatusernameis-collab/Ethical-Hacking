@@ -24,6 +24,11 @@ from ethscan.subdomains import (
     run_subdomains,
     load_subdomain_wordlist,
 )
+from ethscan.whois import (
+    format_whois_report_json,
+    format_whois_report_markdown,
+    run_whois,
+)
 
 
 @click.group()
@@ -317,6 +322,52 @@ def subdomains(
         output = format_subdomains_report_json(results)
     else:
         output = format_subdomains_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option("--target", required=True, help="Target domain or IP address")
+@click.option(
+    "--server",
+    default="whois.iana.org",
+    help="WHOIS server to query (default: whois.iana.org)",
+)
+@click.option("--port", default=43, type=int, help="WHOIS server port (default: 43)")
+@click.option("--timeout", default=5.0, type=float, help="Connection timeout in seconds")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def whois(
+    target: str,
+    server: str,
+    port: int,
+    timeout: float,
+    fmt: str,
+    out_path: str,
+) -> None:
+    """Run a WHOIS lookup for TARGET."""
+    results = run_whois(target, server=server, port=port, timeout=timeout)
+
+    if fmt == "json":
+        output = format_whois_report_json(results)
+    else:
+        output = format_whois_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
