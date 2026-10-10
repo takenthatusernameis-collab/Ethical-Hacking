@@ -5318,6 +5318,399 @@ def test_trace_out_option_markdown(tmp_path, monkeypatch) -> None:
     assert "TCP Traceroute Report" in content
 
 
+# ---------------------------------------------------------------------------
+# ping CLI tests
+# ---------------------------------------------------------------------------
+
+
+def test_ping_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ping", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--count" in result.output
+    assert "--timeout" in result.output
+    assert "--ttl" in result.output
+    assert "--tcp-port" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_ping() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "ping" in result.output
+
+
+def test_ping_offline_target_json(monkeypatch) -> None:
+    def mock_run_ping(
+        target,
+        count=4,
+        timeout=2.0,
+        ttl=64,
+        port=80,
+        raw_socket=None,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "93.184.216.34",
+            "count": count,
+            "timeout": timeout,
+            "ttl": ttl,
+            "port": port,
+            "raw_socket_available": False,
+            "probes": [
+                {
+                    "ip": None,
+                    "rtt_ms": 2000.0,
+                    "ttl": ttl,
+                    "sequence": 1,
+                    "response_type": "TIMEOUT",
+                    "error": "timeout",
+                },
+                {
+                    "ip": None,
+                    "rtt_ms": 2000.0,
+                    "ttl": ttl,
+                    "sequence": 2,
+                    "response_type": "TIMEOUT",
+                    "error": "timeout",
+                },
+            ],
+            "successful": 0,
+            "failed": 2,
+            "rtt_min_ms": None,
+            "rtt_max_ms": None,
+            "rtt_avg_ms": None,
+            "notes": ["Raw ICMP socket unavailable; TCP connect fallback mode on port 80", "0/2 probes successful"],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_ping", mock_run_ping)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["ping", "--target", "example.com", "--count", "2", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "example.com" in result.output
+    assert "probes" in result.output
+    parsed = json.loads(result.output)
+    assert parsed["target"] == "example.com"
+    assert parsed["count"] == 2
+
+
+def test_ping_offline_target_markdown(monkeypatch) -> None:
+    def mock_run_ping(
+        target,
+        count=4,
+        timeout=2.0,
+        ttl=64,
+        port=80,
+        raw_socket=None,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "93.184.216.34",
+            "count": count,
+            "timeout": timeout,
+            "ttl": ttl,
+            "port": port,
+            "raw_socket_available": False,
+            "probes": [
+                {
+                    "ip": "93.184.216.34",
+                    "rtt_ms": 12.34,
+                    "ttl": ttl,
+                    "sequence": 1,
+                    "response_type": "CONNECTED",
+                    "error": None,
+                },
+            ],
+            "successful": 1,
+            "failed": 0,
+            "rtt_min_ms": 12.34,
+            "rtt_max_ms": 12.34,
+            "rtt_avg_ms": 12.34,
+            "notes": ["Raw ICMP socket unavailable; TCP connect fallback mode on port 80", "1/1 probes successful"],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_ping", mock_run_ping)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["ping", "--target", "example.com", "--format", "markdown", "--count", "1", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "Ping Report" in result.output
+    assert "example.com" in result.output
+    assert "CONNECTED" in result.output
+    assert "TCP connect fallback mode" in result.output
+
+
+def test_ping_count_option(monkeypatch) -> None:
+    called = {}
+
+    def mock_run_ping(
+        target,
+        count=4,
+        timeout=2.0,
+        ttl=64,
+        port=80,
+        raw_socket=None,
+    ):
+        called["count"] = count
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "10.0.0.1",
+            "count": count,
+            "timeout": timeout,
+            "ttl": ttl,
+            "port": port,
+            "raw_socket_available": False,
+            "probes": [],
+            "successful": 0,
+            "failed": count,
+            "rtt_min_ms": None,
+            "rtt_max_ms": None,
+            "rtt_avg_ms": None,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_ping", mock_run_ping)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ping", "--target", "example.com", "--count", "10"])
+    assert result.exit_code == 0
+    assert called["count"] == 10
+
+
+def test_ping_timeout_option(monkeypatch) -> None:
+    called = {}
+
+    def mock_run_ping(
+        target,
+        count=4,
+        timeout=2.0,
+        ttl=64,
+        port=80,
+        raw_socket=None,
+    ):
+        called["timeout"] = timeout
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "10.0.0.1",
+            "count": count,
+            "timeout": timeout,
+            "ttl": ttl,
+            "port": port,
+            "raw_socket_available": False,
+            "probes": [],
+            "successful": 0,
+            "failed": count,
+            "rtt_min_ms": None,
+            "rtt_max_ms": None,
+            "rtt_avg_ms": None,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_ping", mock_run_ping)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ping", "--target", "example.com", "--timeout", "5.5"])
+    assert result.exit_code == 0
+    assert called["timeout"] == 5.5
+
+
+def test_ping_ttl_option(monkeypatch) -> None:
+    called = {}
+
+    def mock_run_ping(
+        target,
+        count=4,
+        timeout=2.0,
+        ttl=64,
+        port=80,
+        raw_socket=None,
+    ):
+        called["ttl"] = ttl
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "10.0.0.1",
+            "count": count,
+            "timeout": timeout,
+            "ttl": ttl,
+            "port": port,
+            "raw_socket_available": False,
+            "probes": [],
+            "successful": 0,
+            "failed": count,
+            "rtt_min_ms": None,
+            "rtt_max_ms": None,
+            "rtt_avg_ms": None,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_ping", mock_run_ping)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ping", "--target", "example.com", "--ttl", "128"])
+    assert result.exit_code == 0
+    assert called["ttl"] == 128
+
+
+def test_ping_tcp_port_option(monkeypatch) -> None:
+    called = {}
+
+    def mock_run_ping(
+        target,
+        count=4,
+        timeout=2.0,
+        ttl=64,
+        port=80,
+        raw_socket=None,
+    ):
+        called["port"] = port
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "10.0.0.1",
+            "count": count,
+            "timeout": timeout,
+            "ttl": ttl,
+            "port": port,
+            "raw_socket_available": False,
+            "probes": [],
+            "successful": 0,
+            "failed": count,
+            "rtt_min_ms": None,
+            "rtt_max_ms": None,
+            "rtt_avg_ms": None,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_ping", mock_run_ping)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ping", "--target", "example.com", "--tcp-port", "443"])
+    assert result.exit_code == 0
+    assert called["port"] == 443
+
+
+def test_ping_out_option_json(tmp_path, monkeypatch) -> None:
+    def mock_run_ping(
+        target,
+        count=4,
+        timeout=2.0,
+        ttl=64,
+        port=80,
+        raw_socket=None,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "10.0.0.1",
+            "count": count,
+            "timeout": timeout,
+            "ttl": ttl,
+            "port": port,
+            "raw_socket_available": False,
+            "probes": [],
+            "successful": 0,
+            "failed": count,
+            "rtt_min_ms": None,
+            "rtt_max_ms": None,
+            "rtt_avg_ms": None,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_ping", mock_run_ping)
+
+    out_file = tmp_path / "ping_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "ping",
+            "--target",
+            "example.com",
+            "--format",
+            "json",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    parsed = json.loads(content)
+    assert parsed["target"] == "example.com"
+
+
+def test_ping_out_option_markdown(tmp_path, monkeypatch) -> None:
+    def mock_run_ping(
+        target,
+        count=4,
+        timeout=2.0,
+        ttl=64,
+        port=80,
+        raw_socket=None,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "10.0.0.1",
+            "count": count,
+            "timeout": timeout,
+            "ttl": ttl,
+            "port": port,
+            "raw_socket_available": False,
+            "probes": [],
+            "successful": 0,
+            "failed": count,
+            "rtt_min_ms": None,
+            "rtt_max_ms": None,
+            "rtt_avg_ms": None,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_ping", mock_run_ping)
+
+    out_file = tmp_path / "ping_report.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "ping",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "Ping Report" in content
+
+
 def test_wifi_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["wifi", "--help"])

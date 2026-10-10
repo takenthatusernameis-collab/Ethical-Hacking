@@ -116,6 +116,11 @@ from ethscan.headers import (
     format_headers_report_markdown,
     run_headers,
 )
+from ethscan.ping import (
+    format_ping_report_json,
+    format_ping_report_markdown,
+    run_ping,
+)
 
 
 @click.group()
@@ -1282,6 +1287,80 @@ def trace(
         output = format_trace_report_json(results)
     else:
         output = format_trace_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target host or URL (e.g. example.com or https://example.com)",
+)
+@click.option(
+    "--count",
+    default=4,
+    type=int,
+    help="Number of echo requests to send (default: 4)",
+)
+@click.option(
+    "--timeout",
+    default=2.0,
+    type=float,
+    help="Per-probe timeout in seconds (default: 2.0)",
+)
+@click.option(
+    "--ttl",
+    default=64,
+    type=int,
+    help="Time-to-live value for probes (default: 64)",
+)
+@click.option(
+    "--tcp-port",
+    default=80,
+    type=int,
+    help="Target TCP port for connect-based fallback when ICMP is unavailable (default: 80)",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def ping(
+    target: str,
+    count: int,
+    timeout: float,
+    ttl: int,
+    tcp_port: int,
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Run ICMP ping (or TCP connect fallback) against TARGET for host discovery."""
+    results = run_ping(
+        target,
+        count=count,
+        timeout=timeout,
+        ttl=ttl,
+        port=tcp_port,
+    )
+
+    if fmt == "json":
+        output = format_ping_report_json(results)
+    else:
+        output = format_ping_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

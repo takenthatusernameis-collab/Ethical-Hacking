@@ -519,11 +519,39 @@ Added an `--output` option to the `report` command as an alias for `--out`, so t
 - End-to-end: `python -m ethscan report --target 127.0.0.1 --audit-file passwords.txt --format markdown --output report.md --timeout 0.5` writes the Markdown report.
 - Backward compatibility: `--out` continues to work identically; all existing report tests pass unchanged.
 
+## Completed: `ping` command (host discovery)
+
+The `ping` command performs ICMP echo request probes with per-probe RTT and TTL reporting, plus a TCP-ping fallback (connect-based latency measurement on a configurable port) when raw ICMP sockets are unavailable (non-root).
+
+### Added Files
+- `ethscan/ping.py` — ICMP ping module with:
+  - `_normalize_host()` — extracts a bare hostname from URL/bare targets
+  - `_checksum()` — Internet checksum for ICMP packets
+  - `_build_icmp_echo_request()` — constructs ICMP Echo Request packets
+  - `_parse_icmp_reply()` — parses ICMP Echo Reply packets with identifier/sequence matching
+  - `_try_create_raw_socket()` — attempts to create raw ICMP socket, returns None when not permitted
+  - `_resolve_host()` — resolves hostname to IPv4 address
+  - `probe_icmp()` — sends single probe: raw ICMP echo request/reply when privileged, TCP connect fallback otherwise
+  - `run_ping()` — public entry point: iterates probes, aggregates RTT stats (min/max/avg), handles resolution failures
+  - `format_ping_report_json()` / `format_ping_report_markdown()` — output formatters (markdown includes summary, probe table, notes)
+- `tests/test_ping.py` — 39 unit tests: host normalization, checksum, ICMP packet construction/parsing, raw socket creation, probe_icmp in fallback mode (offline, loopback open, loopback closed), probe_icmp with mocked raw socket (echo reply, timeout, OSError, wrong ID), run_ping (offline target, defaults, custom params, RTT stats, mixed results, unresolvable host, raw socket available, URL target), both formatters (JSON, markdown full/no-IP/pipe-escape/raw-socket-available).
+
+### Modified Files
+- `ethscan/cli.py` — registered `ping` command with `--target`, `--count`, `--timeout`, `--ttl`, `--tcp-port`, `--format`, `--out`; imports `run_ping`, `format_ping_report_json`, `format_ping_report_markdown` from `ethscan.ping`.
+- `tests/test_cli.py` — 10 CLI integration tests: `ping` help, top-level help listing, offline json/markdown output (monkeypatched `run_ping`), `--count` option, `--timeout` option, `--ttl` option, `--tcp-port` option, `--out` (json and markdown).
+- `README.md` — added host discovery (`ping`) to the features list.
+
+### Verification
+- `python -m pytest -q` -> 860 passed, 1 skipped (811 baseline + 49 new: 39 unit + 10 CLI).
+- `python -m ethscan --help` -> lists `ping` among the 22 commands.
+- `python -m ethscan ping --help` -> shows all expected options (`--target`, `--count`, `--timeout`, `--ttl`, `--tcp-port`, `--format`, `--out`).
+- End-to-end: `python -m ethscan ping --target 127.0.0.1 --count 2 --timeout 1.0 --format markdown` -> reports fallback mode, 2/2 probes successful with RST responses.
+- End-to-end: `python -m ethscan ping --target example.com --count 1 --timeout 1.0 --format json` -> resolves IP, reports CONNECTED with RTT ~9ms.
+- Both JSON and Markdown output formats display correctly with probe tables and notes.
+
 ## Suggested next task
 
-**Add a `ping` command** for host discovery: ICMP echo request probes with per-probe RTT and TTL reporting, plus a TCP-ping fallback (connect-based latency measurement on a configurable port) when raw ICMP sockets are unavailable (non-root). Stdlib-only, graceful `*_AVAILABLE`-style fallback as in `trace.py`, JSON/Markdown output with `--target`, `--count`, `--timeout`, `--ttl`, `--tcp-port`, `--format`, `--out` options, unit tests with mocked raw sockets, and CLI integration tests.
-
-Alternative: Add a `mac` command that resolves a MAC address to its vendor via OUI lookup (stdlib-only HTTP with caching and offline fallback).
+**Add a `mac` command** that resolves a MAC address to its vendor via OUI lookup (stdlib-only HTTP with caching and offline fallback).
 
 Alternative: Add a `resolve` command for forward/reverse DNS resolution (A, AAAA, PTR, CNAME records; dnspython optional with stdlib `socket` fallback).
 
@@ -535,7 +563,7 @@ Alternative: Add a `resolve` command for forward/reverse DNS resolution (A, AAAA
 - Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
 
 ## Current state
-- All 22 commands implemented (including `headers` and `cve`).
+- All 22 commands implemented (including `ping`).
 - `scan` and `service` now support `--profile fast|normal|full` option.
 - `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
 - `subdomains` now supports `--recursive` and `--max-depth` for recursive subdomain enumeration.
@@ -544,4 +572,5 @@ Alternative: Add a `resolve` command for forward/reverse DNS resolution (A, AAAA
 - `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
 - `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out` for CT log subdomain discovery.
 - `report` now supports `--output` (alias for `--out`) for writing the combined scan+audit report to a file (json or markdown).
-- Tests: 811 passing (1 skipped).
+- `ping` now supports `--target`, `--count`, `--timeout`, `--ttl`, `--tcp-port`, `--format`, `--out` for host discovery with ICMP/TCP fallback.
+- Tests: 860 passing (1 skipped).
