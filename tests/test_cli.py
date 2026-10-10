@@ -4414,3 +4414,135 @@ def test_trace_out_option_markdown(tmp_path, monkeypatch) -> None:
     assert out_file.exists()
     content = out_file.read_text()
     assert "TCP Traceroute Report" in content
+
+
+def test_wifi_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["wifi", "--help"])
+    assert result.exit_code == 0
+    assert "--interface" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_wifi() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "wifi" in result.output
+
+
+def test_wifi_offline_json(monkeypatch) -> None:
+    def mock_run_wifi(interface=None):
+        return {
+            "platform": "Linux",
+            "platform_supported": True,
+            "interfaces": [
+                {"interface": "wlan0", "status": 0, "link_quality": 45.0, "signal_level": -45.0, "noise_level": -256.0}
+            ],
+            "access_points": [
+                {"interface": "wlan0", "bssid": "00:11:22:33:44:55", "ssid": "TestNetwork", "channel": 1, "frequency": 2.412, "encryption": "wpa2", "signal_dbm": -65, "quality": "45/70"}
+            ],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_wifi", mock_run_wifi)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["wifi"])
+    assert result.exit_code == 0
+    assert "TestNetwork" in result.output
+    assert "wlan0" in result.output
+
+
+def test_wifi_offline_markdown(monkeypatch) -> None:
+    def mock_run_wifi(interface=None):
+        return {
+            "platform": "Linux",
+            "platform_supported": True,
+            "interfaces": [
+                {"interface": "wlan0", "status": 0, "link_quality": 45.0, "signal_level": -45.0, "noise_level": -256.0}
+            ],
+            "access_points": [
+                {"interface": "wlan0", "bssid": "00:11:22:33:44:55", "ssid": "TestNetwork", "channel": 1, "frequency": 2.412, "encryption": "wpa2", "signal_dbm": -65, "quality": "45/70"}
+            ],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_wifi", mock_run_wifi)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["wifi", "--format", "markdown"])
+    assert result.exit_code == 0
+    assert "Wi-Fi Reconnaissance Report" in result.output
+    assert "TestNetwork" in result.output
+
+
+def test_wifi_interface_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_wifi(interface=None):
+        called_args["interface"] = interface
+        return {
+            "platform": "Linux",
+            "platform_supported": True,
+            "interfaces": [],
+            "access_points": [],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_wifi", mock_run_wifi)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["wifi", "--interface", "wlan1"])
+    assert result.exit_code == 0
+    assert called_args["interface"] == "wlan1"
+
+
+def test_wifi_out_option_json(tmp_path, monkeypatch) -> None:
+    def mock_run_wifi(interface=None):
+        return {
+            "platform": "Linux",
+            "platform_supported": True,
+            "interfaces": [],
+            "access_points": [],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_wifi", mock_run_wifi)
+
+    out_file = tmp_path / "wifi_report.json"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["wifi", "--out", str(out_file)])
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "platform" in content
+    assert "Linux" in content
+    parsed = json.loads(content)
+    assert parsed["platform"] == "Linux"
+
+
+def test_wifi_out_option_markdown(tmp_path, monkeypatch) -> None:
+    def mock_run_wifi(interface=None):
+        return {
+            "platform": "Linux",
+            "platform_supported": True,
+            "interfaces": [],
+            "access_points": [],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_wifi", mock_run_wifi)
+
+    out_file = tmp_path / "wifi_report.md"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["wifi", "--format", "markdown", "--out", str(out_file)])
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "Wi-Fi Reconnaissance Report" in content

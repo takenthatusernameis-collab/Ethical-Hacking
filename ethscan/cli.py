@@ -82,6 +82,11 @@ from ethscan.trace import (
     format_trace_report_markdown,
     run_trace,
 )
+from ethscan.wifi import (
+    format_wifi_report_json,
+    format_wifi_report_markdown,
+    run_wifi,
+)
 
 
 @click.group()
@@ -1160,6 +1165,41 @@ def trace(
         output = format_trace_report_json(results)
     else:
         output = format_trace_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--interface",
+    help="Specific wireless interface to scan (e.g., wlan0). If omitted, scans all available interfaces.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def wifi(interface: Optional[str], fmt: str, out_path: Optional[str]) -> None:
+    """Scan for nearby Wi-Fi access points (Linux only)."""
+    results = run_wifi(interface=interface)
+
+    if fmt == "json":
+        output = format_wifi_report_json(results)
+    else:
+        output = format_wifi_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

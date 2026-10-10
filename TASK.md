@@ -234,3 +234,50 @@ The `trace` command discovers the network path to a target using TTL-incremented
 Alternative: Add a `--json` output mode to the `audit` command (currently only echoes human-readable lines) for machine-readable password audit results.
 
 Alternative: Add a `geo` command for IP geolocation lookup using a stdlib-only public IP-to-location API (with caching and offline fallback).
+## Completed: `wifi` command (Wi-Fi reconnaissance)
+
+The `wifi` command scans for nearby Wi-Fi access points on Linux systems. It parses `/proc/net/wireless` for interface status and shells out to `iwlist` (legacy) or `iw` (modern) for scanning, with graceful fallback when tools are unavailable. On non-Linux platforms, it reports platform not supported. Outputs JSON or Markdown with interface details and access point information (SSID, BSSID, channel, frequency, encryption type, signal strength).
+
+### Added Files
+- `ethscan/wifi.py` — Wi-Fi reconnaissance module with:
+  - `_is_linux()` — platform detection
+  - `_parse_proc_net_wireless()` — parses `/proc/net/wireless` for interface status (link quality, signal, noise)
+  - `_run_iwlist_scan()` — legacy scan via `iwlist`, parses Cell entries, ESSID, frequency/channel, encryption, quality/signal
+  - `_run_iw_scan()` — modern scan via `iw dev <iface> scan`, parses BSS, freq, signal, SSID, channel, RSN/WPA capabilities
+  - `_scan_interface()` — dispatcher: tries `iw` first, falls back to `iwlist`
+  - `run_wifi()` — public entry point: detects platform, reads interfaces, scans specified or all interfaces, deduplicates APs by BSSID (keeps strongest signal), returns structured results
+  - `format_wifi_report_json()` / `format_wifi_report_markdown()` — output formatters (markdown includes platform, interface table, AP table with SSID/BSSID/channel/freq/encryption/signal/quality, notes)
+- `tests/test_wifi.py` — 30 unit tests: platform detection, `/proc/net/wireless` parsing (missing, empty, valid, malformed), `iwlist` parsing (valid, WPA/WPA2/WPA3, missing tool, error), `iw` parsing (valid, WPA/WPA2, missing tool, error), interface scanning (iw success, iw fail -> iwlist success, both fail), `run_wifi` (non-Linux, no interfaces, interfaces but no scans, with scans, specific interface, interface not found, deduplication), both formatters (JSON, markdown full/no-APs/no-interfaces/hidden-SSID/missing-fields).
+
+### Modified Files
+- `ethscan/cli.py` — registered `wifi` command with `--interface` (optional specific interface), `--format` (json/markdown), `--out`; imports `run_wifi`, `format_wifi_report_json`, `format_wifi_report_markdown` from `ethscan.wifi`.
+- `tests/test_cli.py` — 7 CLI integration tests: `wifi` help, top-level help listing, offline json/markdown output (monkeypatched `run_wifi`), `--interface` option, `--out` (json and markdown).
+- `README.md` — added Wi-Fi reconnaissance (`wifi`) to the features list.
+
+### Verification
+- `python -m pytest -q` -> 538 passed, 1 skipped (501 baseline + 37 new: 30 unit + 7 CLI).
+- `python -m ethscan --help` -> lists `wifi` among the 18 commands.
+- `python -m ethscan wifi --help` -> shows all expected options (`--interface`, `--format`, `--out`).
+- End-to-end: `python -m ethscan wifi --format markdown` -> reports platform, interfaces, access points, notes.
+
+## Suggested next task
+
+**Add a `--json` output mode to the `audit` command** (currently only echoes human-readable lines) for machine-readable password audit results.
+
+Alternative: Add a `geo` command for IP geolocation lookup using a stdlib-only public IP-to-location API (with caching and offline fallback).
+
+Alternative: Add a `--recursive` option to `dnsbrute` for recursive zone transfer attempts against discovered nameservers.
+
+## Requirements
+- Pick one of the suggested features and implement it following the existing module conventions.
+- Add a new module under `ethscan/` with `run_*`, `format_*_report_json`, `format_*_report_markdown`.
+- Register the command in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
+- Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
+- Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
+
+## Current state
+- All 18 commands implemented (including `wifi`).
+- `scan` and `service` now support `--profile fast|normal|full` option.
+- `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
+- `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
+- Tests: 538 passing (1 skipped).
