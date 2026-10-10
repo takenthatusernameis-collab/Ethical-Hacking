@@ -1,6 +1,7 @@
 """Command-line interface for ethscan."""
 
 import json
+from typing import Optional
 
 import click
 
@@ -18,6 +19,12 @@ from ethscan.fuzz import (
     run_fuzz,
     load_wordlist,
 )
+from ethscan.brute import (
+    format_brute_report_json,
+    format_brute_report_markdown,
+    run_brute,
+)
+from ethscan.brute import load_wordlist as load_cred_wordlist
 from ethscan.subdomains import (
     format_subdomains_report_json,
     format_subdomains_report_markdown,
@@ -470,6 +477,89 @@ def ssl(target: str, port: int, timeout: float, fmt: str, out_path: str) -> None
         output = format_ssl_report_json(results)
     else:
         output = format_ssl_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target host or URL (e.g. ftp.example.com or ssh.example.com)",
+)
+@click.option(
+    "--protocol",
+    type=click.Choice(["ftp", "ssh"]),
+    default="ftp",
+    help="Protocol to brute force (default: ftp)",
+)
+@click.option(
+    "--port",
+    default=None,
+    type=int,
+    help="Target port (default: 21 for ftp, 22 for ssh)",
+)
+@click.option(
+    "--user-file",
+    "user_file",
+    type=click.Path(exists=True, readable=True),
+    help="Path to usernames wordlist (one per line). Uses built-in default if omitted.",
+)
+@click.option(
+    "--pass-file",
+    "pass_file",
+    type=click.Path(exists=True, readable=True),
+    help="Path to passwords wordlist (one per line). Uses built-in default if omitted.",
+)
+@click.option("--timeout", default=5.0, type=float, help="Connection timeout in seconds")
+@click.option("--workers", default=10, type=int, help="Maximum concurrent workers")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def brute(
+    target: str,
+    protocol: str,
+    port: Optional[int],
+    user_file: Optional[str],
+    pass_file: Optional[str],
+    timeout: float,
+    workers: int,
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Brute-force FTP or SSH login credentials against TARGET."""
+    usernames = load_cred_wordlist(user_file) if user_file else None
+    passwords = load_cred_wordlist(pass_file) if pass_file else None
+
+    results = run_brute(
+        target,
+        protocol=protocol,
+        usernames=usernames,
+        passwords=passwords,
+        port=port,
+        timeout=timeout,
+        max_workers=workers,
+    )
+
+    if fmt == "json":
+        output = format_brute_report_json(results)
+    else:
+        output = format_brute_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

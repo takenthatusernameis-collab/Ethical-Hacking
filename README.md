@@ -12,6 +12,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - DNS record enumeration (implemented)
 - WHOIS lookup (implemented)
 - SSL/TLS certificate inspection (implemented)
+- Brute-force login testing (FTP/SSH) (implemented)
 - Report generation (JSON / Markdown) (implemented)
 
 ## Requirements
