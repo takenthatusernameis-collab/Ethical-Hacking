@@ -12,6 +12,12 @@ from ethscan.web import (
     format_web_report_markdown,
     run_web_checks,
 )
+from ethscan.fuzz import (
+    format_fuzz_report_json,
+    format_fuzz_report_markdown,
+    run_fuzz,
+    load_wordlist,
+)
 
 
 @click.group()
@@ -202,6 +208,47 @@ def web(target: str, checks: str, timeout: float, fmt: str, out_path: str) -> No
         output = format_web_report_json(results)
     else:
         output = format_web_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option("--target", required=True, help="Target URL (e.g. https://example.com)")
+@click.option(
+    "--wordlist",
+    "wordlist_path",
+    type=click.Path(exists=True, readable=True),
+    help="Path to wordlist file (one path per line). Uses built-in default if omitted.",
+)
+@click.option("--timeout", default=5.0, type=float, help="Request timeout in seconds")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def fuzz(target: str, wordlist_path: str, timeout: float, fmt: str, out_path: str) -> None:
+    """Run HTTP fuzzing against TARGET using a wordlist of paths."""
+    wordlist = load_wordlist(wordlist_path) if wordlist_path else None
+
+    results = run_fuzz(target, wordlist=wordlist, timeout=timeout)
+
+    if fmt == "json":
+        output = format_fuzz_report_json(results)
+    else:
+        output = format_fuzz_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

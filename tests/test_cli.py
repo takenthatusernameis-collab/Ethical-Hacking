@@ -34,6 +34,25 @@ def test_web_help() -> None:
     assert "markdown" in result.output
 
 
+def test_fuzz_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["fuzz", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--wordlist" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_fuzz() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "fuzz" in result.output
+
+
 def test_web_unknown_check() -> None:
     runner = CliRunner()
     result = runner.invoke(
