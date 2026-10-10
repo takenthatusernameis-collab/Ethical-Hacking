@@ -24,6 +24,143 @@ def test_cli_help_lists_commands() -> None:
     assert "web" in result.output
 
 
+def test_audit_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["audit", "--help"])
+    assert result.exit_code == 0
+    assert "--file" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_audit_offline_target_json(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\ncorrect-Horse-battery-staple-9x!\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "passwords_audited" in result.output
+    assert "password" in result.output
+    assert "correct-Horse-battery-staple-9x!" in result.output
+    assert "score" in result.output
+    assert "verdict" in result.output
+
+
+def test_audit_offline_target_markdown(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--format",
+            "markdown",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Password Audit Report" in result.output
+    assert "Passwords Audited" in result.output
+    assert "password" in result.output
+
+
+def test_audit_out_option_json(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    out_file = tmp_path / "audit_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "passwords_audited" in content
+    assert "password" in content
+
+
+def test_audit_out_option_markdown(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    out_file = tmp_path / "audit_report.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "Password Audit Report" in content
+    assert "password" in content
+
+
+def test_audit_no_passwords(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["audit", "--file", str(password_file)],
+    )
+    assert result.exit_code == 0
+    assert "No passwords provided" in result.output
+
+
+def test_audit_stdin_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["audit"],
+        input="password\ncorrect-Horse-battery-staple-9x!\n",
+    )
+    assert result.exit_code == 0
+    assert "passwords_audited" in result.output
+    assert "password" in result.output
+
+
+def test_audit_stdin_markdown() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["audit", "--format", "markdown"],
+        input="password\n",
+    )
+    assert result.exit_code == 0
+    assert "Password Audit Report" in result.output
+    assert "password" in result.output
+
+
 def test_web_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["web", "--help"])

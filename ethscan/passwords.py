@@ -1,5 +1,6 @@
 """Password strength auditing module for ethscan."""
 
+import json
 import math
 from typing import Dict, List, Tuple
 
@@ -121,3 +122,51 @@ def audit_passwords(passwords: List[str]) -> List[Tuple[str, Dict[str, object]]]
         A list of ``(password, evaluation)`` tuples in the original order.
     """
     return [(pwd, evaluate_password(pwd)) for pwd in passwords]
+
+
+def format_audit_report_json(
+    passwords: List[str], results: List[Tuple[str, Dict[str, object]]]
+) -> str:
+    """Render password audit results as a JSON string."""
+    report = {
+        "passwords_audited": len(passwords),
+        "results": [
+            {
+                "password": pwd,
+                "length": eval_data["length"],
+                "entropy": eval_data["entropy"],
+                "common": eval_data["common"],
+                "patterns": eval_data["patterns"],
+                "score": eval_data["score"],
+                "verdict": eval_data["verdict"],
+            }
+            for pwd, eval_data in results
+        ],
+    }
+    return json.dumps(report, indent=2)
+
+
+def format_audit_report_markdown(
+    passwords: List[str], results: List[Tuple[str, Dict[str, object]]]
+) -> str:
+    """Render password audit results as a Markdown string."""
+    lines = ["# Password Audit Report", ""]
+    lines.append(f"- **Passwords Audited:** {len(passwords)}")
+    lines.append("")
+
+    if results:
+        lines.append("| Password | Length | Entropy | Common | Patterns | Score | Verdict |")
+        lines.append("|----------|--------|---------|--------|----------|-------|---------|")
+        for pwd, eval_data in results:
+            escaped_pwd = pwd.replace("|", "\\|")
+            lines.append(
+                f"| {escaped_pwd} | {eval_data['length']} | {eval_data['entropy']} | "
+                f"{'Yes' if eval_data['common'] else 'No'} | "
+                f"{'Yes' if eval_data['patterns'] else 'No'} | "
+                f"{eval_data['score']} | {eval_data['verdict']} |"
+            )
+    else:
+        lines.append("*No passwords provided for audit.*")
+    lines.append("")
+
+    return "\n".join(lines)

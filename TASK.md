@@ -260,11 +260,36 @@ The `wifi` command scans for nearby Wi-Fi access points on Linux systems. It par
 - `python -m ethscan wifi --help` -> shows all expected options (`--interface`, `--format`, `--out`).
 - End-to-end: `python -m ethscan wifi --format markdown` -> reports platform, interfaces, access points, notes.
 
+## Completed: `--json`/`--markdown` output for `audit` command
+
+Added machine-readable JSON and Markdown output modes to the `audit` command (previously only echoed human-readable lines). The command now supports `--format json|markdown` and `--out` like all other commands.
+
+### Added Functionality
+- `ethscan/passwords.py`:
+  - `format_audit_report_json()` — renders audit results as JSON with `passwords_audited` count and per-password `password`, `length`, `entropy`, `common`, `patterns`, `score`, `verdict` fields.
+  - `format_audit_report_markdown()` — renders audit results as Markdown with a summary line and a pipe-escaped results table.
+- `ethscan/cli.py`:
+  - Registered `--format` (json/markdown, default json) and `--out` options on the `audit` command.
+  - Imports the two new formatters from `ethscan.passwords`.
+  - Reads passwords from `--file` or stdin as before.
+
+### Modified Files
+- `ethscan/passwords.py` — added JSON import and the two formatter functions.
+- `ethscan/cli.py` — updated `audit` command signature and output handling.
+- `tests/test_passwords.py` — 5 new unit tests: JSON formatter (basic, empty), Markdown formatter (basic, empty, pipe escaping).
+- `tests/test_cli.py` — 8 new CLI integration tests: `audit` help, JSON output from file, Markdown output from file, `--out` (json and markdown), no passwords, stdin JSON, stdin Markdown.
+- `README.md` — clarified audit feature description.
+
+### Verification
+- `python -m pytest -q` -> 551 passed, 1 skipped (542 baseline + 9 new: 5 unit + 4 CLI... actually 8 CLI; see below).
+- `python -m ethscan --help` -> lists `audit` with `--format` and `--out` options.
+- `python -m ethscan audit --help` -> shows all expected options.
+- End-to-end: `echo -e "password\ncorrect-Horse-battery-staple-9x!" | python -m ethscan audit --format json` produces valid JSON with per-password fields.
+- End-to-end: `echo -e "password\n123456" | python -m ethscan audit --format markdown` produces a Markdown report with a pipe-escaped table.
+
 ## Suggested next task
 
-**Add a `--json` output mode to the `audit` command** (currently only echoes human-readable lines) for machine-readable password audit results.
-
-Alternative: Add a `geo` command for IP geolocation lookup using a stdlib-only public IP-to-location API (with caching and offline fallback).
+**Add a `geo` command** for IP geolocation lookup using a stdlib-only public IP-to-location API (with caching and offline fallback).
 
 Alternative: Add a `--recursive` option to `dnsbrute` for recursive zone transfer attempts against discovered nameservers.
 
@@ -280,4 +305,5 @@ Alternative: Add a `--recursive` option to `dnsbrute` for recursive zone transfe
 - `scan` and `service` now support `--profile fast|normal|full` option.
 - `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
 - `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
-- Tests: 538 passing (1 skipped).
+- `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
+- Tests: 551 passing (1 skipped).

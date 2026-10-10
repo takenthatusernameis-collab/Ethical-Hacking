@@ -6,6 +6,8 @@ from ethscan.passwords import (
     audit_passwords,
     evaluate_password,
     estimate_entropy,
+    format_audit_report_json,
+    format_audit_report_markdown,
     has_repeated_patterns,
     is_common_password,
 )
@@ -64,3 +66,46 @@ def test_audit_passwords_returns_pairs() -> None:
         assert isinstance(password, str)
         assert "score" in evaluation
         assert "verdict" in evaluation
+
+
+def test_format_audit_report_json_basic() -> None:
+    passwords = ["password", "correct-Horse-battery-staple-9x!"]
+    results = audit_passwords(passwords)
+    output = format_audit_report_json(passwords, results)
+    assert "passwords_audited" in output
+    assert "password" in output
+    assert "correct-Horse-battery-staple-9x!" in output
+    assert "score" in output
+    assert "verdict" in output
+
+
+def test_format_audit_report_json_empty() -> None:
+    output = format_audit_report_json([], [])
+    assert "passwords_audited" in output
+    assert '"results": []' in output
+
+
+def test_format_audit_report_markdown_basic() -> None:
+    passwords = ["password", "correct-Horse-battery-staple-9x!"]
+    results = audit_passwords(passwords)
+    output = format_audit_report_markdown(passwords, results)
+    assert "Password Audit Report" in output
+    assert "Passwords Audited" in output
+    assert "password" in output
+    assert "correct-Horse-battery-staple-9x!" in output
+    assert "Score" in output
+    assert "Verdict" in output
+
+
+def test_format_audit_report_markdown_empty() -> None:
+    output = format_audit_report_markdown([], [])
+    assert "Password Audit Report" in output
+    assert "Passwords Audited" in output
+    assert "No passwords provided for audit" in output
+
+
+def test_format_audit_report_markdown_pipe_escape() -> None:
+    passwords = ["pass|word"]
+    results = audit_passwords(passwords)
+    output = format_audit_report_markdown(passwords, results)
+    assert "pass\\|word" in output

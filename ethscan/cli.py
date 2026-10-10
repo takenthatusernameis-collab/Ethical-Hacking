@@ -6,7 +6,11 @@ from typing import Optional
 import click
 
 from ethscan import __version__
-from ethscan.passwords import audit_passwords
+from ethscan.passwords import (
+    audit_passwords,
+    format_audit_report_json,
+    format_audit_report_markdown,
+)
 from ethscan.scanner import get_common_ports, parse_port_range, scan_ports, get_profile_ports, get_profile_defaults
 from ethscan.web import (
     format_web_report_json,
@@ -144,7 +148,20 @@ def scan(target: str, ports: str, profile: Optional[str], timeout: float, worker
     "--file",
     help="Path to a file containing one password per line. If omitted, reads stdin.",
 )
-def audit(file: str) -> None:
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def audit(file: str, fmt: str, out_path: str) -> None:
     """Audit passwords for strength and common weaknesses."""
     if file:
         with open(file, "r", encoding="utf-8") as handle:
@@ -156,12 +173,19 @@ def audit(file: str) -> None:
         click.echo("No passwords provided.")
         return
 
-    for password, evaluation in audit_passwords(passwords):
-        click.echo(
-            f"{password!r}: score={evaluation['score']} "
-            f"({evaluation['verdict']}) entropy={evaluation['entropy']} "
-            f"common={evaluation['common']} patterns={evaluation['patterns']}"
-        )
+    results = audit_passwords(passwords)
+
+    if fmt == "json":
+        output = format_audit_report_json(passwords, results)
+    else:
+        output = format_audit_report_markdown(passwords, results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
 
 
 @cli.command()
