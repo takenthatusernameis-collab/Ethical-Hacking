@@ -392,6 +392,17 @@ def fuzz(target: str, wordlist_path: str, timeout: float, fmt: str, out_path: st
     "--resolver",
     help="Custom DNS resolver IP address (requires dnspython)",
 )
+@click.option(
+    "--recursive/--no-recursive",
+    default=False,
+    help="Enable recursive subdomain enumeration (discover subdomains of resolved subdomains).",
+)
+@click.option(
+    "--max-depth",
+    default=2,
+    type=int,
+    help="Maximum recursion depth for recursive enumeration (default: 2).",
+)
 @click.option("--timeout", default=2.0, type=float, help="DNS resolution timeout in seconds")
 @click.option(
     "--workers",
@@ -416,6 +427,8 @@ def subdomains(
     target: str,
     wordlist_path: str,
     resolver: Optional[str],
+    recursive: bool,
+    max_depth: int,
     timeout: float,
     workers: int,
     fmt: str,
@@ -427,7 +440,13 @@ def subdomains(
     )
 
     results = run_subdomains(
-        target, subdomains=subdomains_list, timeout=timeout, max_workers=workers, resolver=resolver
+        target,
+        subdomains=subdomains_list,
+        timeout=timeout,
+        max_workers=workers,
+        resolver=resolver,
+        recursive=recursive,
+        max_depth=max_depth,
     )
 
     if fmt == "json":

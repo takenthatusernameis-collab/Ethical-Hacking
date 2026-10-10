@@ -410,3 +410,64 @@ Alternative: Add a `cert` command to search Certificate Transparency logs for su
 - `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
 - `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
 - Tests: 662 passing (1 skipped).
+
+## Completed: `--recursive` option for `subdomains`
+
+Added a `--recursive` option to the `subdomains` command for recursive subdomain enumeration: when a subdomain resolves, optionally enumerate subdomains of that subdomain (e.g., find `www.example.com`, then enumerate `dev.www.example.com`, `staging.www.example.com`, etc.). Includes `--max-depth` limit, deduplication across all depths, and per-depth reporting in JSON/Markdown output.
+
+### Added Functionality
+- `ethscan/subdomains.py`:
+  - Added `DEFAULT_RECURSIVE_DEPTH = 2` constant
+  - Updated `run_subdomains()` to accept `recursive` (bool) and `max_depth` (int) parameters
+  - Added `_enumerate_depth()` inner function for concurrent enumeration at a specific depth
+  - Recursive logic: for each depth > 0, uses resolved subdomains from previous depth as base domains for next round of enumeration
+  - Deduplication across all depths using a `seen_hostnames` set
+  - Updated return dictionary to include `per_depth` (list of per-depth results), `recursive`, `max_depth` fields
+  - Updated `format_subdomains_report_markdown()` to display recursive enumeration section with per-depth details
+  - JSON formatter automatically includes recursive data via `default=str`
+
+### Modified Files
+- `ethscan/cli.py` — added `--recursive/--no-recursive` flag and `--max-depth` option to `subdomains` command; passes both to `run_subdomains()`
+- `tests/test_subdomains.py` — 8 new unit tests for recursive enumeration:
+  - `test_run_subdomains_recursive_disabled_by_default` — verifies recursive defaults to False
+  - `test_run_subdomains_recursive_enabled` — tests recursive enumeration with successful subdomain resolution
+  - `test_run_subdomains_recursive_respects_max_depth` — verifies recursion stops at max_depth
+  - `test_run_subdomains_recursive_stops_early_when_no_resolved` — verifies early stop when no resolved subdomains at previous depth
+  - `test_format_subdomains_report_json_recursive` — tests JSON formatter with recursive data
+  - `test_format_subdomains_report_markdown_recursive` — tests Markdown formatter with recursive sections
+  - `test_format_subdomains_report_markdown_recursive_no_results_at_depth` — tests markdown when no results at a depth
+- `tests/test_cli.py` — 4 new CLI integration tests:
+  - `test_subdomains_help_shows_recursive` — verifies help shows --recursive/--no-recursive and --max-depth options
+  - `test_subdomains_recursive_option` — tests CLI recursive option passes parameters correctly
+  - `test_subdomains_recursive_disabled_by_default` — verifies recursive defaults to False via CLI
+  - `test_subdomains_max_depth_option` — tests --max-depth option
+
+### Verification
+- `python -m pytest -q` -> 673 passed, 1 skipped (662 baseline + 11 new: 8 unit + 3 CLI - note: 1 existing resolver test updated)
+- `python -m ethscan subdomains --help` -> shows `--recursive/--no-recursive` and `--max-depth` options
+- End-to-end: `python -m ethscan subdomains --target example.com --recursive --max-depth 2 --format markdown` produces report with "## Recursive Enumeration (Per Depth)" section
+- End-to-end: `python -m ethscan subdomains --target example.com --format json` includes `recursive`, `max_depth`, `per_depth` fields in output
+- Backward compatibility: non-recursive mode works unchanged, includes new fields with default values
+
+## Suggested next task
+
+**Add a `cert` command** to search Certificate Transparency logs for subdomains associated with a target domain (using public CT log APIs like crt.sh, with caching and stdlib-only HTTP).
+
+Alternative: Add a `--recursive` option to `subdomains` for recursive subdomain enumeration with wordlist-based discovery (already completed).
+
+## Requirements
+- Pick one of the suggested features and implement it following the existing module conventions.
+- Add a new module under `ethscan/` with `run_*`, `format_*_report_json`, `format_*_report_markdown` (for new commands) or extend existing module (for new options).
+- Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
+- Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
+- Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
+
+## Current state
+- All 20 commands implemented (including `recon`).
+- `scan` and `service` now support `--profile fast|normal|full` option.
+- `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
+- `subdomains` now supports `--recursive` and `--max-depth` for recursive subdomain enumeration.
+- `dnsbrute` now supports `--recursive` and `--max-depth` for recursive zone transfers.
+- `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
+- `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
+- Tests: 673 passing (1 skipped).

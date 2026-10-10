@@ -297,7 +297,13 @@ def test_subdomains_resolver_option(monkeypatch) -> None:
     called_args = {}
 
     def mock_run_subdomains(
-        target, subdomains=None, timeout=2.0, max_workers=50, resolver=None
+        target,
+        subdomains=None,
+        timeout=2.0,
+        max_workers=50,
+        resolver=None,
+        recursive=False,
+        max_depth=2,
     ):
         called_args["resolver"] = resolver
         called_args["target"] = target
@@ -311,6 +317,11 @@ def test_subdomains_resolver_option(monkeypatch) -> None:
                 {"subdomain": "www", "hostname": "www.example.com", "ip": None},
                 {"subdomain": "mail", "hostname": "mail.example.com", "ip": None},
             ],
+            "per_depth": [
+                {"depth": 0, "subdomains_tested": 2, "resolved_count": 0, "results": []},
+            ],
+            "recursive": recursive,
+            "max_depth": max_depth,
             "resolver": resolver,
             "dnspython_available": False,
         }
@@ -339,6 +350,173 @@ def test_subdomains_help_shows_resolver() -> None:
     result = runner.invoke(cli, ["subdomains", "--help"])
     assert result.exit_code == 0
     assert "--resolver" in result.output
+
+
+def test_subdomains_help_shows_recursive() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["subdomains", "--help"])
+    assert result.exit_code == 0
+    assert "--recursive" in result.output
+    assert "--no-recursive" in result.output
+    assert "--max-depth" in result.output
+
+
+def test_subdomains_recursive_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_subdomains(
+        target,
+        subdomains=None,
+        timeout=2.0,
+        max_workers=50,
+        resolver=None,
+        recursive=False,
+        max_depth=2,
+    ):
+        called_args["recursive"] = recursive
+        called_args["max_depth"] = max_depth
+        called_args["target"] = target
+        return {
+            "target": target,
+            "domain": "example.com",
+            "subdomains_tested": 2,
+            "resolved_count": 0,
+            "resolved": [],
+            "all_results": [
+                {"subdomain": "www", "hostname": "www.example.com", "ip": None},
+                {"subdomain": "mail", "hostname": "mail.example.com", "ip": None},
+            ],
+            "per_depth": [
+                {"depth": 0, "subdomains_tested": 2, "resolved_count": 0, "results": []},
+            ],
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "resolver": resolver,
+            "dnspython_available": False,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_subdomains", mock_run_subdomains)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "subdomains",
+            "--target",
+            "example.com",
+            "--recursive",
+            "--max-depth",
+            "3",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["recursive"] is True
+    assert called_args["max_depth"] == 3
+
+
+def test_subdomains_recursive_disabled_by_default(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_subdomains(
+        target,
+        subdomains=None,
+        timeout=2.0,
+        max_workers=50,
+        resolver=None,
+        recursive=False,
+        max_depth=2,
+    ):
+        called_args["recursive"] = recursive
+        called_args["max_depth"] = max_depth
+        return {
+            "target": target,
+            "domain": "example.com",
+            "subdomains_tested": 2,
+            "resolved_count": 0,
+            "resolved": [],
+            "all_results": [
+                {"subdomain": "www", "hostname": "www.example.com", "ip": None},
+                {"subdomain": "mail", "hostname": "mail.example.com", "ip": None},
+            ],
+            "per_depth": [
+                {"depth": 0, "subdomains_tested": 2, "resolved_count": 0, "results": []},
+            ],
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "resolver": resolver,
+            "dnspython_available": False,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_subdomains", mock_run_subdomains)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "subdomains",
+            "--target",
+            "example.com",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["recursive"] is False
+    assert called_args["max_depth"] == 2
+
+
+def test_subdomains_max_depth_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_subdomains(
+        target,
+        subdomains=None,
+        timeout=2.0,
+        max_workers=50,
+        resolver=None,
+        recursive=False,
+        max_depth=2,
+    ):
+        called_args["max_depth"] = max_depth
+        return {
+            "target": target,
+            "domain": "example.com",
+            "subdomains_tested": 2,
+            "resolved_count": 0,
+            "resolved": [],
+            "all_results": [
+                {"subdomain": "www", "hostname": "www.example.com", "ip": None},
+                {"subdomain": "mail", "hostname": "mail.example.com", "ip": None},
+            ],
+            "per_depth": [
+                {"depth": 0, "subdomains_tested": 2, "resolved_count": 0, "results": []},
+            ],
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "resolver": resolver,
+            "dnspython_available": False,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_subdomains", mock_run_subdomains)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "subdomains",
+            "--target",
+            "example.com",
+            "--recursive",
+            "--max-depth",
+            "5",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["max_depth"] == 5
 
 
 def test_whois_help() -> None:
