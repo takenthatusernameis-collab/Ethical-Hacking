@@ -18,6 +18,12 @@ from ethscan.fuzz import (
     run_fuzz,
     load_wordlist,
 )
+from ethscan.subdomains import (
+    format_subdomains_report_json,
+    format_subdomains_report_markdown,
+    run_subdomains,
+    load_subdomain_wordlist,
+)
 
 
 @click.group()
@@ -249,6 +255,68 @@ def fuzz(target: str, wordlist_path: str, timeout: float, fmt: str, out_path: st
         output = format_fuzz_report_json(results)
     else:
         output = format_fuzz_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target domain or URL (e.g. example.com or https://example.com)",
+)
+@click.option(
+    "--wordlist",
+    "wordlist_path",
+    type=click.Path(exists=True, readable=True),
+    help="Path to wordlist file (one subdomain per line). Uses built-in default if omitted.",
+)
+@click.option("--timeout", default=2.0, type=float, help="DNS resolution timeout in seconds")
+@click.option(
+    "--workers",
+    default=50,
+    type=int,
+    help="Maximum concurrent DNS resolution workers",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def subdomains(
+    target: str,
+    wordlist_path: str,
+    timeout: float,
+    workers: int,
+    fmt: str,
+    out_path: str,
+) -> None:
+    """Enumerate subdomains for TARGET."""
+    subdomains_list = (
+        load_subdomain_wordlist(wordlist_path) if wordlist_path else None
+    )
+
+    results = run_subdomains(
+        target, subdomains=subdomains_list, timeout=timeout, max_workers=workers
+    )
+
+    if fmt == "json":
+        output = format_subdomains_report_json(results)
+    else:
+        output = format_subdomains_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
