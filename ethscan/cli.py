@@ -72,6 +72,11 @@ from ethscan.urlcheck import (
     format_urlcheck_report_markdown,
     run_urlcheck,
 )
+from ethscan.osdetect import (
+    format_osdetect_report_json,
+    format_osdetect_report_markdown,
+    run_osdetect,
+)
 
 
 @click.group()
@@ -1006,6 +1011,84 @@ def brute(
         output = format_brute_report_json(results)
     else:
         output = format_brute_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target host or URL (e.g. example.com or https://example.com)",
+)
+@click.option(
+    "--ports",
+    help="Ports to probe: comma-separated list/ranges (e.g., '22,80,443'). Defaults to common ports.",
+)
+@click.option(
+    "--banners-file",
+    "banners_file",
+    type=click.Path(exists=True, readable=True),
+    help="JSON file with 'service' command output (port -> banner mapping) to cross-reference OS signatures.",
+)
+@click.option("--timeout", default=5.0, type=float, help="Connection timeout in seconds")
+@click.option("--workers", default=10, type=int, help="Maximum concurrent probe workers")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def osdetect(
+    target: str,
+    ports: Optional[str],
+    banners_file: Optional[str],
+    timeout: float,
+    workers: int,
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Fingerprint the target operating system using TCP/IP stack behavior."""
+    port_list = None
+    if ports:
+        from ethscan.scanner import parse_port_range
+        port_list = parse_port_range(ports)
+
+    banners = None
+    if banners_file:
+        with open(banners_file, "r", encoding="utf-8") as handle:
+            services = json.load(handle)
+        banners = {}
+        for entry in services.get("results") or []:
+            port = entry.get("port")
+            banner = entry.get("banner")
+            if port is not None and banner:
+                banners[port] = banner
+
+    results = run_osdetect(
+        target,
+        ports=port_list,
+        timeout=timeout,
+        max_workers=workers,
+        banners=banners,
+    )
+
+    if fmt == "json":
+        output = format_osdetect_report_json(results)
+    else:
+        output = format_osdetect_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
