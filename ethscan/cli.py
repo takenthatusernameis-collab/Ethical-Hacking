@@ -121,6 +121,11 @@ from ethscan.ping import (
     format_ping_report_markdown,
     run_ping,
 )
+from ethscan.mac import (
+    format_mac_report_json,
+    format_mac_report_markdown,
+    run_mac,
+)
 
 
 @click.group()
@@ -1762,6 +1767,71 @@ def cve(
         output = format_cve_report_json(results)
     else:
         output = format_cve_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target MAC address, hostname, or URL (e.g., 00:1A:2B:3C:4D:5E, 00-1A-2B-3C-4D-5E)",
+)
+@click.option("--timeout", default=5.0, type=float, help="API request timeout in seconds")
+@click.option(
+    "--no-cache",
+    is_flag=True,
+    help="Disable local filesystem cache",
+)
+@click.option(
+    "--no-offline-fallback",
+    is_flag=True,
+    help="Disable offline fallback to stale cache when API is unavailable",
+)
+@click.option(
+    "--api-url",
+    help="Custom MAC vendor API base URL (must support api.macvendors.com query format)",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def mac(
+    target: str,
+    timeout: float,
+    no_cache: bool,
+    no_offline_fallback: bool,
+    api_url: Optional[str],
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Look up the vendor for a MAC address using a public OUI API with caching."""
+    results = run_mac(
+        target,
+        timeout=timeout,
+        use_cache=not no_cache,
+        offline_fallback=not no_offline_fallback,
+        api_url=api_url,
+    )
+
+    if fmt == "json":
+        output = format_mac_report_json(results)
+    else:
+        output = format_mac_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
