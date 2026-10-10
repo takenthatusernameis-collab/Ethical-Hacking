@@ -101,6 +101,16 @@ from ethscan.recon import (
     format_recon_report_markdown,
     run_recon,
 )
+from ethscan.cert import (
+    format_cert_report_json,
+    format_cert_report_markdown,
+    run_cert,
+)
+from ethscan.cert import (
+    format_cert_report_json,
+    format_cert_report_markdown,
+    run_cert,
+)
 
 
 @click.group()
@@ -1484,6 +1494,71 @@ def recon(
         output = format_recon_report_json(results)
     else:
         output = format_recon_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target domain or URL (e.g. example.com or https://example.com)",
+)
+@click.option("--timeout", default=10.0, type=float, help="API request timeout in seconds")
+@click.option(
+    "--no-cache",
+    is_flag=True,
+    help="Disable local filesystem cache",
+)
+@click.option(
+    "--no-offline-fallback",
+    is_flag=True,
+    help="Disable offline fallback to stale cache when API is unavailable",
+)
+@click.option(
+    "--api-url",
+    help="Custom Certificate Transparency API base URL (crt.sh-compatible JSON output)",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def cert(
+    target: str,
+    timeout: float,
+    no_cache: bool,
+    no_offline_fallback: bool,
+    api_url: Optional[str],
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Search Certificate Transparency logs for certificates issued to TARGET."""
+    results = run_cert(
+        target,
+        timeout=timeout,
+        use_cache=not no_cache,
+        offline_fallback=not no_offline_fallback,
+        api_url=api_url,
+    )
+
+    if fmt == "json":
+        output = format_cert_report_json(results)
+    else:
+        output = format_cert_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
