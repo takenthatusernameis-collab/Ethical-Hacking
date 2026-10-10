@@ -161,6 +161,146 @@ def test_audit_stdin_markdown() -> None:
     assert "password" in result.output
 
 
+def test_report_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["report", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--ports" in result.output
+    assert "--audit-file" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_report_offline_json(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\ncorrect-Horse-battery-staple-9x!\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--audit-file",
+            str(password_file),
+            "--format",
+            "json",
+            "--timeout",
+            "0.5",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "scan" in result.output
+    assert "audit" in result.output
+    assert "passwords_audited" in result.output
+    assert "open_ports" in result.output
+
+
+def test_report_offline_markdown(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--audit-file",
+            str(password_file),
+            "--format",
+            "markdown",
+            "--timeout",
+            "0.5",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "ethscan Report" in result.output
+    assert "Port Scan" in result.output
+    assert "Password Audit" in result.output
+    assert "password" in result.output
+
+
+def test_report_out_option_json(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    out_file = tmp_path / "report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--audit-file",
+            str(password_file),
+            "--out",
+            str(out_file),
+            "--timeout",
+            "0.5",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "scan" in content
+    assert "audit" in content
+    assert "passwords_audited" in content
+
+
+def test_report_out_option_markdown(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    out_file = tmp_path / "report.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--audit-file",
+            str(password_file),
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "0.5",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "ethscan Report" in content
+    assert "Port Scan" in content
+    assert "Password Audit" in content
+
+
+def test_report_no_audit_file(tmp_path) -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--timeout",
+            "0.5",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "scan" in result.output
+    assert "audit" in result.output
+    assert "passwords_audited" in result.output
+    assert "0" in result.output
+
+
 def test_web_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["web", "--help"])
