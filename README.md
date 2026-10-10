@@ -23,6 +23,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - TCP traceroute: `trace` command using TTL-incremented TCP SYN probes with per-hop IP/RTT reporting (implemented)
 - Wi-Fi reconnaissance: `wifi` command for wireless interface scanning and access point discovery (Linux, implemented)
 - IP geolocation: `geo` command for IP-to-location lookup using a public API with caching and offline fallback (implemented)
+- Consolidated reconnaissance: `recon` command running multiple modules (subdomains, dns, whois, geo, trace) in sequence with a unified report (implemented)
 
 ## Requirements
 

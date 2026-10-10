@@ -5250,3 +5250,497 @@ def test_geo_url_target(monkeypatch) -> None:
     result = runner.invoke(cli, ["geo", "--target", "https://example.com/path"])
     assert result.exit_code == 0
     assert called_args["target"] == "https://example.com/path"
+
+
+# ---------------------------------------------------------------------------
+# recon command tests
+# ---------------------------------------------------------------------------
+
+
+def test_recon_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["recon", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--modules" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+
+
+def test_cli_help_lists_recon() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "recon" in result.output
+
+
+def test_recon_offline_target_json(tmp_path, monkeypatch) -> None:
+    def mock_run_recon(target, modules=None, subdomains_wordlist=None, dns_record_types=None,
+                       dns_server=None, whois_server="whois.iana.org", whois_port=43,
+                       geo_use_cache=True, geo_offline_fallback=True, geo_api_url=None,
+                       trace_port=80, trace_max_hops=30, trace_probes_per_hop=3,
+                       timeout=5.0, max_workers=50, resolver=None):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "modules_run": ["subdomains", "dns"],
+            "subdomains": {"resolved_count": 1},
+            "dns": {"records": {"A": ["1.2.3.4"]}},
+            "whois": None,
+            "geo": None,
+            "trace": None,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_recon", mock_run_recon)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["recon", "--target", "example.com", "--format", "json"])
+    assert result.exit_code == 0
+    assert "target" in result.output
+    assert "example.com" in result.output
+    assert "modules_run" in result.output
+
+
+def test_recon_offline_target_markdown(tmp_path, monkeypatch) -> None:
+    def mock_run_recon(target, modules=None, subdomains_wordlist=None, dns_record_types=None,
+                       dns_server=None, whois_server="whois.iana.org", whois_port=43,
+                       geo_use_cache=True, geo_offline_fallback=True, geo_api_url=None,
+                       trace_port=80, trace_max_hops=30, trace_probes_per_hop=3,
+                       timeout=5.0, max_workers=50, resolver=None):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "modules_run": ["subdomains", "dns"],
+            "subdomains": {"resolved_count": 1},
+            "dns": {"records": {"A": ["1.2.3.4"]}},
+            "whois": None,
+            "geo": None,
+            "trace": None,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_recon", mock_run_recon)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["recon", "--target", "example.com", "--format", "markdown"])
+    assert result.exit_code == 0
+    assert "Reconnaissance Report" in result.output
+    assert "example.com" in result.output
+
+
+def test_recon_modules_option(tmp_path, monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_recon(target, modules=None, subdomains_wordlist=None, dns_record_types=None,
+                       dns_server=None, whois_server="whois.iana.org", whois_port=43,
+                       geo_use_cache=True, geo_offline_fallback=True, geo_api_url=None,
+                       trace_port=80, trace_max_hops=30, trace_probes_per_hop=3,
+                       timeout=5.0, max_workers=50, resolver=None):
+        called_args["modules"] = modules
+        return {
+            "target": target,
+            "domain": "example.com",
+            "modules_run": modules or ["subdomains", "dns", "whois", "geo", "trace"],
+            "subdomains": {},
+            "dns": {},
+            "whois": {},
+            "geo": {},
+            "trace": {},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_recon", mock_run_recon)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["recon", "--target", "example.com", "--modules", "subdomains,dns"])
+    assert result.exit_code == 0
+    assert called_args["modules"] == ["subdomains", "dns"]
+
+
+def test_recon_subdomains_wordlist_option(tmp_path, monkeypatch) -> None:
+    wordlist_file = tmp_path / "subdomains.txt"
+    wordlist_file.write_text("www\nmail\napi\n")
+
+    called_args = {}
+
+    def mock_run_recon(target, modules=None, subdomains_wordlist=None, dns_record_types=None,
+                       dns_server=None, whois_server="whois.iana.org", whois_port=43,
+                       geo_use_cache=True, geo_offline_fallback=True, geo_api_url=None,
+                       trace_port=80, trace_max_hops=30, trace_probes_per_hop=3,
+                       timeout=5.0, max_workers=50, resolver=None):
+        called_args["subdomains_wordlist"] = subdomains_wordlist
+        return {
+            "target": target,
+            "domain": "example.com",
+            "modules_run": ["subdomains"],
+            "subdomains": {},
+            "dns": None,
+            "whois": None,
+            "geo": None,
+            "trace": None,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_recon", mock_run_recon)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["recon", "--target", "example.com", "--modules", "subdomains",
+                                 "--subdomains-wordlist", str(wordlist_file)])
+    assert result.exit_code == 0
+    assert called_args["subdomains_wordlist"] == ["www", "mail", "api"]
+
+
+def test_recon_dns_types_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_recon(target, modules=None, subdomains_wordlist=None, dns_record_types=None,
+                       dns_server=None, whois_server="whois.iana.org", whois_port=43,
+                       geo_use_cache=True, geo_offline_fallback=True, geo_api_url=None,
+                       trace_port=80, trace_max_hops=30, trace_probes_per_hop=3,
+                       timeout=5.0, max_workers=50, resolver=None):
+        called_args["dns_record_types"] = dns_record_types
+        return {
+            "target": target,
+            "domain": "example.com",
+            "modules_run": ["dns"],
+            "subdomains": None,
+            "dns": {},
+            "whois": None,
+            "geo": None,
+            "trace": None,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_recon", mock_run_recon)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["recon", "--target", "example.com", "--modules", "dns",
+                                 "--dns-types", "A,MX,TXT"])
+    assert result.exit_code == 0
+    assert called_args["dns_record_types"] == ["A", "MX", "TXT"]
+
+
+def test_recon_dns_server_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_recon(target, modules=None, subdomains_wordlist=None, dns_record_types=None,
+                       dns_server=None, whois_server="whois.iana.org", whois_port=43,
+                       geo_use_cache=True, geo_offline_fallback=True, geo_api_url=None,
+                       trace_port=80, trace_max_hops=30, trace_probes_per_hop=3,
+                       timeout=5.0, max_workers=50, resolver=None):
+        called_args["dns_server"] = dns_server
+        return {
+            "target": target,
+            "domain": "example.com",
+            "modules_run": ["dns"],
+            "subdomains": None,
+            "dns": {},
+            "whois": None,
+            "geo": None,
+            "trace": None,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_recon", mock_run_recon)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["recon", "--target", "example.com", "--modules", "dns",
+                                 "--dns-server", "1.1.1.1"])
+    assert result.exit_code == 0
+    assert called_args["dns_server"] == "1.1.1.1"
+
+
+def test_recon_whois_server_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_recon(target, modules=None, subdomains_wordlist=None, dns_record_types=None,
+                       dns_server=None, whois_server="whois.iana.org", whois_port=43,
+                       geo_use_cache=True, geo_offline_fallback=True, geo_api_url=None,
+                       trace_port=80, trace_max_hops=30, trace_probes_per_hop=3,
+                       timeout=5.0, max_workers=50, resolver=None):
+        called_args["whois_server"] = whois_server
+        called_args["whois_port"] = whois_port
+        return {
+            "target": target,
+            "domain": "example.com",
+            "modules_run": ["whois"],
+            "subdomains": None,
+            "dns": None,
+            "whois": {},
+            "geo": None,
+            "trace": None,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_recon", mock_run_recon)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["recon", "--target", "example.com", "--modules", "whois",
+                                 "--whois-server", "whois.example.com", "--whois-port", "443"])
+    assert result.exit_code == 0
+    assert called_args["whois_server"] == "whois.example.com"
+    assert called_args["whois_port"] == 443
+
+
+def test_recon_geo_cache_options(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_recon(target, modules=None, subdomains_wordlist=None, dns_record_types=None,
+                       dns_server=None, whois_server="whois.iana.org", whois_port=43,
+                       geo_use_cache=True, geo_offline_fallback=True, geo_api_url=None,
+                       trace_port=80, trace_max_hops=30, trace_probes_per_hop=3,
+                       timeout=5.0, max_workers=50, resolver=None):
+        called_args["geo_use_cache"] = geo_use_cache
+        called_args["geo_offline_fallback"] = geo_offline_fallback
+        called_args["geo_api_url"] = geo_api_url
+        return {
+            "target": target,
+            "domain": "example.com",
+            "modules_run": ["geo"],
+            "subdomains": None,
+            "dns": None,
+            "whois": None,
+            "geo": {},
+            "trace": None,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_recon", mock_run_recon)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["recon", "--target", "8.8.8.8", "--modules", "geo",
+                                 "--no-geo-cache", "--no-geo-offline-fallback"])
+    assert result.exit_code == 0
+    assert called_args["geo_use_cache"] is False
+    assert called_args["geo_offline_fallback"] is False
+
+
+def test_recon_geo_api_url_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_recon(target, modules=None, subdomains_wordlist=None, dns_record_types=None,
+                       dns_server=None, whois_server="whois.iana.org", whois_port=43,
+                       geo_use_cache=True, geo_offline_fallback=True, geo_api_url=None,
+                       trace_port=80, trace_max_hops=30, trace_probes_per_hop=3,
+                       timeout=5.0, max_workers=50, resolver=None):
+        called_args["geo_api_url"] = geo_api_url
+        return {
+            "target": target,
+            "domain": "example.com",
+            "modules_run": ["geo"],
+            "subdomains": None,
+            "dns": None,
+            "whois": None,
+            "geo": {},
+            "trace": None,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_recon", mock_run_recon)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["recon", "--target", "8.8.8.8", "--modules", "geo",
+                                 "--geo-api-url", "https://custom.api/"])
+    assert result.exit_code == 0
+    assert called_args["geo_api_url"] == "https://custom.api/"
+
+
+def test_recon_trace_options(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_recon(target, modules=None, subdomains_wordlist=None, dns_record_types=None,
+                       dns_server=None, whois_server="whois.iana.org", whois_port=43,
+                       geo_use_cache=True, geo_offline_fallback=True, geo_api_url=None,
+                       trace_port=80, trace_max_hops=30, trace_probes_per_hop=3,
+                       timeout=5.0, max_workers=50, resolver=None):
+        called_args["trace_port"] = trace_port
+        called_args["trace_max_hops"] = trace_max_hops
+        called_args["trace_probes_per_hop"] = trace_probes_per_hop
+        return {
+            "target": target,
+            "domain": "example.com",
+            "modules_run": ["trace"],
+            "subdomains": None,
+            "dns": None,
+            "whois": None,
+            "geo": None,
+            "trace": {},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_recon", mock_run_recon)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["recon", "--target", "example.com", "--modules", "trace",
+                                 "--trace-port", "443", "--trace-max-hops", "20",
+                                 "--trace-probes-per-hop", "5"])
+    assert result.exit_code == 0
+    assert called_args["trace_port"] == 443
+    assert called_args["trace_max_hops"] == 20
+    assert called_args["trace_probes_per_hop"] == 5
+
+
+def test_recon_timeout_workers_options(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_recon(target, modules=None, subdomains_wordlist=None, dns_record_types=None,
+                       dns_server=None, whois_server="whois.iana.org", whois_port=43,
+                       geo_use_cache=True, geo_offline_fallback=True, geo_api_url=None,
+                       trace_port=80, trace_max_hops=30, trace_probes_per_hop=3,
+                       timeout=5.0, max_workers=50, resolver=None):
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return {
+            "target": target,
+            "domain": "example.com",
+            "modules_run": ["subdomains"],
+            "subdomains": {},
+            "dns": None,
+            "whois": None,
+            "geo": None,
+            "trace": None,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_recon", mock_run_recon)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["recon", "--target", "example.com", "--modules", "subdomains",
+                                 "--timeout", "10.0", "--workers", "20"])
+    assert result.exit_code == 0
+    assert called_args["timeout"] == 10.0
+    assert called_args["max_workers"] == 20
+
+
+def test_recon_resolver_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_recon(target, modules=None, subdomains_wordlist=None, dns_record_types=None,
+                       dns_server=None, whois_server="whois.iana.org", whois_port=43,
+                       geo_use_cache=True, geo_offline_fallback=True, geo_api_url=None,
+                       trace_port=80, trace_max_hops=30, trace_probes_per_hop=3,
+                       timeout=5.0, max_workers=50, resolver=None):
+        called_args["resolver"] = resolver
+        return {
+            "target": target,
+            "domain": "example.com",
+            "modules_run": ["subdomains"],
+            "subdomains": {},
+            "dns": None,
+            "whois": None,
+            "geo": None,
+            "trace": None,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_recon", mock_run_recon)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["recon", "--target", "example.com", "--modules", "subdomains",
+                                 "--resolver", "8.8.8.8"])
+    assert result.exit_code == 0
+    assert called_args["resolver"] == "8.8.8.8"
+
+
+def test_recon_out_option_json(tmp_path, monkeypatch) -> None:
+    def mock_run_recon(target, modules=None, subdomains_wordlist=None, dns_record_types=None,
+                       dns_server=None, whois_server="whois.iana.org", whois_port=43,
+                       geo_use_cache=True, geo_offline_fallback=True, geo_api_url=None,
+                       trace_port=80, trace_max_hops=30, trace_probes_per_hop=3,
+                       timeout=5.0, max_workers=50, resolver=None):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "modules_run": ["subdomains"],
+            "subdomains": {"resolved_count": 1},
+            "dns": None,
+            "whois": None,
+            "geo": None,
+            "trace": None,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_recon", mock_run_recon)
+
+    out_file = tmp_path / "recon_report.json"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["recon", "--target", "example.com", "--out", str(out_file)])
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "target" in content
+    assert "example.com" in content
+
+
+def test_recon_out_option_markdown(tmp_path, monkeypatch) -> None:
+    def mock_run_recon(target, modules=None, subdomains_wordlist=None, dns_record_types=None,
+                       dns_server=None, whois_server="whois.iana.org", whois_port=43,
+                       geo_use_cache=True, geo_offline_fallback=True, geo_api_url=None,
+                       trace_port=80, trace_max_hops=30, trace_probes_per_hop=3,
+                       timeout=5.0, max_workers=50, resolver=None):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "modules_run": ["subdomains"],
+            "subdomains": {"resolved_count": 1},
+            "dns": None,
+            "whois": None,
+            "geo": None,
+            "trace": None,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_recon", mock_run_recon)
+
+    out_file = tmp_path / "recon_report.md"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["recon", "--target", "example.com", "--format", "markdown",
+                                 "--out", str(out_file)])
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "Reconnaissance Report" in content
+    assert "example.com" in content
+
+
+def test_recon_help_shows_modules() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["recon", "--help"])
+    assert result.exit_code == 0
+    assert "subdomains" in result.output
+    assert "dns" in result.output
+    assert "whois" in result.output
+    assert "geo" in result.output
+    assert "trace" in result.output
+
+
+def test_recon_url_target(tmp_path, monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_recon(target, modules=None, subdomains_wordlist=None, dns_record_types=None,
+                       dns_server=None, whois_server="whois.iana.org", whois_port=43,
+                       geo_use_cache=True, geo_offline_fallback=True, geo_api_url=None,
+                       trace_port=80, trace_max_hops=30, trace_probes_per_hop=3,
+                       timeout=5.0, max_workers=50, resolver=None):
+        called_args["target"] = target
+        return {
+            "target": target,
+            "domain": "example.com",
+            "modules_run": ["subdomains"],
+            "subdomains": {},
+            "dns": None,
+            "whois": None,
+            "geo": None,
+            "trace": None,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_recon", mock_run_recon)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["recon", "--target", "https://example.com/path"])
+    assert result.exit_code == 0
+    assert called_args["target"] == "https://example.com/path"

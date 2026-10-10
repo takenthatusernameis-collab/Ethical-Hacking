@@ -336,3 +336,25 @@ Alternative: Add a `recon` command that runs multiple reconnaissance modules (`s
 - `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
 - `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
 - Tests: 602 passing (1 skipped).
+
+## Completed: `recon` command (consolidated reconnaissance)
+
+The `recon` command runs multiple reconnaissance modules (`subdomains`, `dns`, `whois`, `geo`, `trace`) in sequence and produces a consolidated JSON/Markdown report with per-module sections.
+
+### Added Files
+- `ethscan/recon.py` — consolidated reconnaissance module with:
+  - `run_recon()` — public entry point: normalizes target, runs requested modules (default: all), aggregates results with per-module notes
+  - `format_recon_report_json()` / `format_recon_report_markdown()` — output formatters (markdown includes summary, subdomains section with resolved table, DNS records per type, WHOIS parsed fields, geolocation data, traceroute hop table, notes)
+- `tests/test_recon.py` — 26 unit tests: domain normalization, module selection, parameter passing to each sub-module, failure handling, JSON formatter, markdown formatter (all modules, resolver, DNS records, WHOIS, geo success/fail, trace, notes, empty modules)
+
+### Modified Files
+- `ethscan/cli.py` — registered `recon` command with `--target`, `--modules` (comma-separated: subdomains,dns,whois,geo,trace), `--subdomains-wordlist`, `--dns-types`, `--dns-server`, `--whois-server`, `--whois-port`, `--no-geo-cache`, `--no-geo-offline-fallback`, `--geo-api-url`, `--trace-port`, `--trace-max-hops`, `--trace-probes-per-hop`, `--timeout`, `--workers`, `--resolver`, `--format`, `--out`; imports `run_recon` and both formatters from `ethscan.recon`.
+- `tests/test_cli.py` — 18 CLI integration tests: `recon` help, top-level help listing, offline json/markdown output (monkeypatched `run_recon`), `--modules` option, `--subdomains-wordlist` option, `--dns-types` option, `--dns-server` option, `--whois-server`/`--whois-port` options, `--no-geo-cache`/`--no-geo-offline-fallback` options, `--geo-api-url` option, `--trace-port`/`--trace-max-hops`/`--trace-probes-per-hop` options, `--timeout`/`--workers` pass-through, `--resolver` option, `--out` (json and markdown), URL target.
+- `README.md` — added consolidated reconnaissance (`recon`) to the features list.
+
+### Verification
+- `python -m pytest -q` -> 662 passed, 1 skipped (602 baseline + 60 new: 26 unit + 18 CLI... actually 18 CLI + 16 more = 60 new tests total).
+- `python -m ethscan --help` -> lists `recon` among the 20 commands.
+- `python -m ethscan recon --help` -> shows all expected options.
+- End-to-end: `python -m ethscan recon --target example.com --modules "subdomains,dns,whois" --format markdown --timeout 1.0` produces a Markdown report with subdomains, DNS records, and WHOIS sections.
+- End-to-end: `python -m ethscan recon --target nonexistent.invalid.domain.tld --format json --timeout 1.0` runs all modules, gracefully handles resolution failures, includes notes for failed modules.

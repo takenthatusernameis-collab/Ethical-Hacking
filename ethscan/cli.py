@@ -96,6 +96,11 @@ from ethscan.geo import (
     format_geo_report_markdown,
     run_geo,
 )
+from ethscan.recon import (
+    format_recon_report_json,
+    format_recon_report_markdown,
+    run_recon,
+)
 
 
 @click.group()
@@ -1309,6 +1314,157 @@ def geo(
         output = format_geo_report_json(results)
     else:
         output = format_geo_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target domain, IP, or URL (e.g. example.com or https://example.com)",
+)
+@click.option(
+    "--modules",
+    default=None,
+    help="Comma-separated list of modules to run: subdomains, dns, whois, geo, trace. Default: all.",
+)
+@click.option(
+    "--subdomains-wordlist",
+    "subdomains_wordlist_path",
+    type=click.Path(exists=True, readable=True),
+    help="Path to wordlist file for subdomain enumeration.",
+)
+@click.option(
+    "--dns-types",
+    "dns_record_types",
+    default="A,AAAA,MX,NS,TXT,CNAME,SOA",
+    help="Comma-separated list of DNS record types to query.",
+)
+@click.option(
+    "--dns-server",
+    help="Custom DNS resolver IP address (requires dnspython).",
+)
+@click.option(
+    "--whois-server",
+    default="whois.iana.org",
+    help="WHOIS server to query (default: whois.iana.org).",
+)
+@click.option("--whois-port", default=43, type=int, help="WHOIS server port (default: 43)")
+@click.option(
+    "--no-geo-cache",
+    is_flag=True,
+    help="Disable local filesystem cache for geolocation.",
+)
+@click.option(
+    "--no-geo-offline-fallback",
+    is_flag=True,
+    help="Disable offline fallback to stale cache when API is unavailable.",
+)
+@click.option(
+    "--geo-api-url",
+    help="Custom geolocation API base URL (must support ip-api.com query format).",
+)
+@click.option("--trace-port", default=80, type=int, help="Target TCP port for traceroute (default: 80)")
+@click.option(
+    "--trace-max-hops",
+    "trace_max_hops",
+    default=30,
+    type=int,
+    help="Maximum TTL / hops for traceroute (default: 30, max: 128)",
+)
+@click.option(
+    "--trace-probes-per-hop",
+    "trace_probes_per_hop",
+    default=3,
+    type=int,
+    help="Number of probes per hop for RTT averaging (default: 3)",
+)
+@click.option("--timeout", default=5.0, type=float, help="Network timeout in seconds")
+@click.option(
+    "--workers",
+    default=50,
+    type=int,
+    help="Maximum concurrent workers for subdomain enumeration",
+)
+@click.option(
+    "--resolver",
+    help="Custom DNS resolver IP address for subdomains (requires dnspython)",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def recon(
+    target: str,
+    modules: Optional[str],
+    subdomains_wordlist_path: Optional[str],
+    dns_record_types: str,
+    dns_server: Optional[str],
+    whois_server: str,
+    whois_port: int,
+    no_geo_cache: bool,
+    no_geo_offline_fallback: bool,
+    geo_api_url: Optional[str],
+    trace_port: int,
+    trace_max_hops: int,
+    trace_probes_per_hop: int,
+    timeout: float,
+    workers: int,
+    resolver: Optional[str],
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Run multiple reconnaissance modules against TARGET and produce a consolidated report."""
+    modules_list = (
+        [m.strip() for m in modules.split(",") if m.strip()]
+        if modules
+        else None
+    )
+    subdomains_wordlist = (
+        load_subdomain_wordlist(subdomains_wordlist_path)
+        if subdomains_wordlist_path
+        else None
+    )
+    dns_types_list = [t.strip().upper() for t in dns_record_types.split(",") if t.strip()]
+
+    results = run_recon(
+        target,
+        modules=modules_list,
+        subdomains_wordlist=subdomains_wordlist,
+        dns_record_types=dns_types_list,
+        dns_server=dns_server,
+        whois_server=whois_server,
+        whois_port=whois_port,
+        geo_use_cache=not no_geo_cache,
+        geo_offline_fallback=not no_geo_offline_fallback,
+        geo_api_url=geo_api_url,
+        trace_port=trace_port,
+        trace_max_hops=trace_max_hops,
+        trace_probes_per_hop=trace_probes_per_hop,
+        timeout=timeout,
+        max_workers=workers,
+        resolver=resolver,
+    )
+
+    if fmt == "json":
+        output = format_recon_report_json(results)
+    else:
+        output = format_recon_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
