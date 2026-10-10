@@ -18,6 +18,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - Service/banner detection (implemented)
 - Vulnerability checks against a built-in CVE/weakness database (implemented)
 - Report generation (JSON / Markdown) (implemented)
+- Consolidated web assessment: `urlcheck` command combining web checks, HTTP fuzzing, and SSL certificate inspection (implemented)
 
 ## Requirements
 

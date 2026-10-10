@@ -44,11 +44,31 @@ The `dnsbrute` command has been implemented. All previously listed features are 
 - End-to-end: live DNS resolution in this sandbox resolved `www.example.com` to real A/AAAA records through `run_dnsbrute`; a nonexistent domain gracefully reports zero resolutions with the default 26-label wordlist.
 - Raw AXFR path exercised against a local fake TCP DNS server returning success (rcode 0, 3 answers) and refused (rcode 5) responses; stdlib-only fallback works without dnspython (dnspython is not installed here, `DNS_AVAILABLE=False`).
 
+## Completed: `urlcheck` command (consolidated web assessment)
+
+The `urlcheck` command combines `web` (security headers, info disclosure, SSL checks), `fuzz` (wordlist-based path discovery), and `ssl` (certificate inspection) into a single consolidated JSON/Markdown report with per-check sections and a summary finding count. It reuses `run_web_checks`, `run_fuzz`, and `run_ssl` from the existing modules.
+
+### Added Files
+- `ethscan/urlcheck.py` — consolidated web assessment module with:
+  - `run_urlcheck()` — public entry point: normalizes host (URL/bare), runs requested web checks, optionally runs fuzzing, optionally inspects SSL cert, aggregates findings into a summary.
+  - `format_urlcheck_report_json()` / `format_urlcheck_report_markdown()` — output formatters (markdown includes summary, web section, fuzz section, SSL cert section).
+- `tests/test_urlcheck.py` — 14 unit tests: URL normalization, offline target, fuzz disabled, SSL not requested, JSON formatter, markdown formatter (full/no-fuzz/ssl-error/ssl-verification-error-with-cert).
+
+### Modified Files
+- `ethscan/cli.py` — registered `urlcheck` command with `--target`, `--checks`, `--wordlist`, `--fuzz-paths/--no-fuzz-paths`, `--port`, `--timeout`, `--workers`, `--format`, `--out`; imports `run_urlcheck` and both formatters from `ethscan.urlcheck`.
+- `tests/test_cli.py` — 12 CLI integration tests: `urlcheck` help, top-level help listing, offline json/markdown output (monkeypatched `run_urlcheck`), `--checks` option, unknown check rejection, `--wordlist` option, `--no-fuzz-paths` option, `--port` option, `--timeout`/`--workers` pass-through, `--out` (json and markdown).
+- `README.md` — added consolidated web assessment (`urlcheck`) to the features list.
+
+### Verification
+- `python -m pytest -q` -> 363 passed (339 baseline + 24 new: 14 unit + 12 CLI).
+- `python -m ethscan --help` -> lists `urlcheck` among the 15 commands.
+- `python -m ethscan urlcheck --help` -> shows all expected options.
+
 ## Suggested next task
 
-**Add a `urlcheck` command (consolidated web assessment)** — combine `web` (security headers, info disclosure, SSL checks), `fuzz` (wordlist-based path discovery), and `ssl` (certificate inspection) into a single consolidated JSON/Markdown report with per-check sections and a summary finding count. Reuse `run_web_checks`, `run_fuzz`, and `run_ssl` from the existing modules; add options like `--checks`, `--wordlist`, `--fuzz-paths` (enable/disable fuzzing), `--port`, `--timeout`, `--workers`, `--format`, `--out`.
+**Add a `--profile fast|normal|full` option for `scan`/`service`** mapping to port sets and worker/timeout presets. Reuse the existing `get_common_ports()` and port-range parsing; add a `--profile` flag that selects a preset (fast = top 50 common ports, normal = all common ports, full = 1-1024 + common) and tunes `--timeout`/`--workers` defaults accordingly. Keep `--ports` overrideable.
 
-Alternative: add a `--profile fast|normal|full` option for `scan`/`service` mapping to port sets and worker/timeout presets, or add a `--resolver`/`--nameserver` option to `dnsbrute`/`subdomains` for custom resolver selection.
+Alternative: add a `--resolver`/`--nameserver` option to `dnsbrute`/`subdomains` for custom resolver selection (requires dnspython, graceful fallback when unavailable).
 
 ## Requirements
 - Pick one of the suggested features and implement it following the existing module conventions.
@@ -58,7 +78,7 @@ Alternative: add a `--profile fast|normal|full` option for `scan`/`service` mapp
 - Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
 
 ## Current state
-- All 14 commands implemented.
-- Tests: 339 passing.
+- All 15 commands implemented (including `urlcheck`).
+- Tests: 363 passing.
 
 (End of file - total 64 lines)
