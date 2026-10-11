@@ -1285,11 +1285,29 @@ Added a `--output-format [json|markdown|csv]` option to the `report` command for
 - End-to-end with `--audit-file`: CSV includes `audit` rows with all per-password fields; passwords containing commas are properly CSV-quoted.
 - Backward compatibility: `--format json` (default) and `--format markdown` behave exactly as before; markdown output is identical to the previous inline `_generate_markdown` output.
 
+## Completed: `--output-format csv` option for `audit` command
+
+The `audit` command already supported a `format_audit_report_csv()` formatter in `ethscan/passwords.py` and the `--output-format [json|markdown|csv]` option was wired up in `ethscan/cli.py` (with `--format` as a deprecated alias). The feature was verified end-to-end: `echo -e "password\n123456\nshort" | python -m ethscan audit --output-format csv` produces `password,length,entropy,common,patterns,too_short,score,verdict` with one row per password.
+
+### Fixed: pre-existing bug in `format_report_csv` (ethscan/report.py)
+
+The combined `report` CSV formatter wrote scan rows with only 10 fields while `CSV_COLUMNS` (and the audit rows) had 11 columns including `too_short`. This caused a column misalignment for any CSV reader parsing the combined document. Fixed by adding the missing trailing empty `""` field so every row has 11 columns.
+
+### Modified Files
+- `ethscan/report.py` — added the missing `too_short` field to scan rows in `format_report_csv`
+- `tests/test_cli.py` — updated 3 report CSV tests to expect the correct 11-column header (`section,port,open,password,length,entropy,common,patterns,too_short,score,verdict`)
+- `README.md` — clarified audit feature description to mention CSV output
+
+### Verification
+- `python -m pytest -q` -> 1507 passed, 1 skipped (all previously-failing report CSV tests now pass)
+- `python -m ethscan audit --help` -> shows `--output-format [json|markdown|csv]`
+- End-to-end: `echo -e "password\n123456\nshort" | python -m ethscan audit --output-format csv` -> 3-row CSV with `password,length,entropy,common,patterns,too_short,score,verdict` header
+- End-to-end with `--min-length`: `echo -e "short\nlongenoughpassword" | python -m ethscan audit --output-format csv --min-length 10` -> flags `too_short=true` for "short"
+- Backward compatibility: deprecated `--format csv` still works
+
 ## Suggested next task
 
-**Add a `--output-format csv` option to the `audit` command** for spreadsheet-compatible password audit dumps (`password,length,entropy,common,patterns,score,verdict,too_short`), mirroring the CSV modes of `scan`/`service`/`brute`/`report`.
-
-Alternative: Add a `--min-length` pass-through to the `report` command so the embedded password audit can flag short passwords (the standalone `audit` command already supports `--min-length`).
+**Add a `--min-length` pass-through to the `report` command** so the embedded password audit can flag short passwords (the standalone `audit` command already supports `--min-length`).
 
 Alternative: Add `--profile fast|normal|full` support to the `report` command to reuse the scan profile presets (port set, timeout, workers) when generating combined reports.
 
@@ -1301,12 +1319,12 @@ Alternative: Add `--profile fast|normal|full` support to the `report` command to
 - Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
 
 ## Current state
-- All 28 commands implemented and wired up (including `hash` with `--file`, `--check`, `--salt`, `--pepper`, `--iterations`).
+- All 28 commands implemented and wired up (including `hash` with `--file`, `--check`, salt, and pepper).
 - `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv`.
 - `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, `--max-depth`.
 - `whois` now supports `--recursive/--no-recursive` and `--max-depth`.
-- `audit` now supports `--format json|markdown`, `--out`, and `--min-length` for custom minimum password length threshold.
+- `audit` now supports `--format json|markdown`, `--out`, `--min-length`, and `--output-format csv` for spreadsheet-compatible password audit dumps.
 - `report` now supports `--output-format [json|markdown|csv]` (with `--format` as deprecated alias) and `--out`; report logic lives in `ethscan/report.py` (`run_report`, `format_report_json`, `format_report_markdown`, `format_report_csv`).
 - `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `vuln` (with `--min-severity`), `dnssec`, `geo`, `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon` all implemented with JSON/Markdown output.
 - Configuration file (`ethscan.yaml`) persists default options across commands.
-- Tests: 1496 passing (1 skipped).
+- Tests: 1507 passing (1 skipped).

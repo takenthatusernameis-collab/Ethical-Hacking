@@ -362,9 +362,116 @@ def test_report_markdown_writes_to_file() -> None:
             ],
         )
 
-        assert result.exit_code == 0
-        assert out_file.exists()
-        content = out_file.read_text()
-        assert "# ethscan Report" in content
-        assert "## Port Scan" in content
-        assert "## Password Audit" in content
+    assert result.exit_code == 0
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "# ethscan Report" in content
+    assert "## Port Scan" in content
+    assert "## Password Audit" in content
+
+
+def test_resolve_ports_and_defaults_no_profile() -> None:
+    from ethscan.report import _resolve_ports_and_defaults
+
+    port_list, timeout, workers = _resolve_ports_and_defaults(
+        "80,443", 1.0, 100, None
+    )
+    assert port_list == [80, 443]
+    assert timeout == 1.0
+    assert workers == 100
+
+
+def test_resolve_ports_and_defaults_profile_fast() -> None:
+    from ethscan.report import _resolve_ports_and_defaults
+
+    port_list, timeout, workers = _resolve_ports_and_defaults(
+        "common", 1.0, 100, "fast"
+    )
+    assert len(port_list) == 18
+    assert timeout == 0.5
+    assert workers == 200
+
+
+def test_resolve_ports_and_defaults_profile_normal() -> None:
+    from ethscan.report import _resolve_ports_and_defaults
+
+    port_list, timeout, workers = _resolve_ports_and_defaults(
+        "common", 1.0, 100, "normal"
+    )
+    assert len(port_list) == 24
+    assert timeout == 1.0
+    assert workers == 100
+
+
+def test_resolve_ports_and_defaults_profile_full() -> None:
+    from ethscan.report import _resolve_ports_and_defaults
+
+    port_list, timeout, workers = _resolve_ports_and_defaults(
+        "common", 1.0, 100, "full"
+    )
+    assert len(port_list) > 1000
+    assert timeout == 2.0
+    assert workers == 50
+
+
+def test_resolve_ports_and_defaults_profile_overrides_ports() -> None:
+    from ethscan.report import _resolve_ports_and_defaults
+
+    port_list, timeout, workers = _resolve_ports_and_defaults(
+        "80,443", 1.0, 100, "fast"
+    )
+    assert port_list == [80, 443]
+    assert timeout == 0.5
+    assert workers == 200
+
+
+def test_resolve_ports_and_defaults_profile_explicit_timeout_workers() -> None:
+    from ethscan.report import _resolve_ports_and_defaults
+
+    port_list, timeout, workers = _resolve_ports_and_defaults(
+        "common", 5.0, 50, "fast"
+    )
+    assert port_list == [80, 443]
+    assert timeout == 5.0
+    assert workers == 50
+
+
+def test_run_report_profile_fast() -> None:
+    data = run_report("127.0.0.1", "common", timeout=0.1, workers=10, profile="fast")
+    assert data["scan"]["profile"] == "fast"
+    assert data["scan"]["ports_scanned"] == 18
+
+
+def test_run_report_profile_normal() -> None:
+    data = run_report("127.0.0.1", "common", timeout=0.1, workers=10, profile="normal")
+    assert data["scan"]["profile"] == "normal"
+    assert data["scan"]["ports_scanned"] == 24
+
+
+def test_run_report_profile_full() -> None:
+    data = run_report("127.0.0.1", "common", timeout=0.1, workers=10, profile="full")
+    assert data["scan"]["profile"] == "full"
+    assert data["scan"]["ports_scanned"] > 1000
+
+
+def test_run_report_profile_overrides_ports() -> None:
+    data = run_report(
+        "127.0.0.1", "80,443", timeout=0.1, workers=10, profile="fast"
+    )
+    assert data["scan"]["profile"] == "fast"
+    assert data["scan"]["ports_scanned"] == 2
+
+
+def test_run_report_profile_with_audit_file(tmp_path) -> None:
+    audit_file = tmp_path / "passwords.txt"
+    audit_file.write_text("password\n")
+    data = run_report(
+        "127.0.0.1",
+        "common",
+        timeout=0.1,
+        workers=10,
+        audit_file=str(audit_file),
+        profile="fast",
+    )
+    assert data["scan"]["profile"] == "fast"
+    assert data["audit"]["passwords_audited"] == 1

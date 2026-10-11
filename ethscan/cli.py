@@ -411,6 +411,11 @@ def hash(file: str, algorithms: tuple, fmt: str, out_path: str) -> None:
     default="common",
     help="Ports to scan: 'common', 'all', or comma-separated list/ranges (e.g., '80,443,8000-9000')",
 )
+@click.option(
+    "--profile",
+    type=click.Choice(["fast", "normal", "full"]),
+    help="Scan profile: fast (top ~18 ports), normal (common ports), full (1-1024 + common). Overrides --ports, --timeout, --workers unless explicitly set.",
+)
 @click.option("--timeout", default=1.0, type=float, help="Connection timeout in seconds")
 @click.option("--workers", default=100, type=int, help="Maximum concurrent workers")
 @click.option(
@@ -449,6 +454,7 @@ def hash(file: str, algorithms: tuple, fmt: str, out_path: str) -> None:
 def report(
     target: str,
     ports: str,
+    profile: Optional[str],
     timeout: float,
     workers: int,
     audit_file: str,
@@ -465,6 +471,7 @@ def report(
         workers=workers,
         audit_file=audit_file,
         min_length=min_length,
+        profile=profile,
     )
 
     # --output-format takes precedence over the deprecated --format alias

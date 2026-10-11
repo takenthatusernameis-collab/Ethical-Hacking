@@ -6,7 +6,13 @@ import json
 from typing import Any, Dict, List, Optional
 
 from ethscan.passwords import audit_passwords
-from ethscan.scanner import get_common_ports, parse_port_range, scan_ports
+from ethscan.scanner import (
+    get_common_ports,
+    get_profile_defaults,
+    get_profile_ports,
+    parse_port_range,
+    scan_ports,
+)
 
 CSV_COLUMNS = [
     "section",
@@ -31,6 +37,35 @@ def _parse_ports(ports: str) -> List[int]:
     return parse_port_range(ports)
 
 
+def _resolve_ports_and_defaults(
+    ports: str,
+    timeout: float,
+    workers: int,
+    profile: Optional[str],
+) -> tuple:
+    """Resolve the effective port list, timeout, and workers.
+
+    Mirrors the profile logic in ``scan``/``service``: a profile overrides
+    ``--ports``/``--timeout``/``--workers`` unless the corresponding CLI
+    option was explicitly set. ``--ports`` can still override the profile's
+    port selection; ``--timeout``/``--workers`` can still override the
+    profile defaults.
+    """
+    if profile:
+        defaults = get_profile_defaults(profile)
+        if ports == "common":
+            port_list = get_profile_ports(profile)
+        else:
+            port_list = parse_port_range(ports)
+        if timeout == 1.0:
+            timeout = defaults["timeout"]
+        if workers == 100:
+            workers = defaults["workers"]
+    else:
+        port_list = _parse_ports(ports)
+    return port_list, timeout, workers
+
+
 def _load_passwords(audit_file: Optional[str]) -> List[str]:
     if not audit_file:
         return []
@@ -45,6 +80,7 @@ def run_report(
     workers: int = 100,
     audit_file: Optional[str] = None,
     min_length: Optional[int] = None,
+    profile: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run a port scan and an optional password audit, returning combined report data.
 
@@ -55,11 +91,15 @@ def run_report(
         workers: Maximum concurrent workers.
         audit_file: Optional path to a file with one password per line.
         min_length: Optional minimum length threshold passed to the password audit.
+        profile: Optional scan profile ('fast', 'normal', 'full') that overrides
+            ports/timeout/workers unless explicitly set.
 
     Returns:
         Combined report dict with ``scan`` and ``audit`` sections.
     """
-    port_list = _parse_ports(ports)
+    port_list, timeout, workers = _resolve_ports_and_defaults(
+        ports, timeout, workers, profile
+    )
 
     scan_results = scan_ports(target, port_list, timeout=timeout, max_workers=workers)
     open_ports = [port for port, is_open in scan_results if is_open]
@@ -72,6 +112,7 @@ def run_report(
     return {
         "scan": {
             "target": target,
+            "profile": profile,
             "ports_scanned": len(port_list),
             "open_ports": open_ports,
             "details": [{"port": port, "open": is_open} for port, is_open in scan_results],
@@ -162,6 +203,7 @@ def format_report_csv(data: Dict[str, Any]) -> str:
                 "scan",
                 detail["port"],
                 "true" if detail["open"] else "false",
+                "",
                 "",
                 "",
                 "",

@@ -664,7 +664,7 @@ def test_report_output_format_csv(tmp_path) -> None:
     )
     assert result.exit_code == 0
     rows = [line for line in result.output.splitlines() if line.strip()]
-    assert rows[0] == "section,port,open,password,length,entropy,common,patterns,score,verdict"
+    assert rows[0] == "section,port,open,password,length,entropy,common,patterns,too_short,score,verdict"
     assert any(line.startswith("scan,") for line in rows)
     assert any(line.startswith("audit,") for line in rows)
     assert any("password" in line for line in rows)
@@ -697,7 +697,7 @@ def test_report_output_format_csv_with_out(tmp_path) -> None:
     assert "Report written" in result.output
     assert out_file.exists()
     content = out_file.read_text()
-    assert "section,port,open,password,length,entropy,common,patterns,score,verdict" in content
+    assert "section,port,open,password,length,entropy,common,patterns,too_short,score,verdict" in content
     assert "scan," in content
     assert "audit," in content
 
@@ -776,8 +776,176 @@ def test_report_deprecated_format_csv(tmp_path) -> None:
         ],
     )
     assert result.exit_code == 0
-    assert "section,port,open,password,length,entropy,common,patterns,score,verdict" in result.output
+    assert "section,port,open,password,length,entropy,common,patterns,too_short,score,verdict" in result.output
     assert "audit," in result.output
+
+
+def test_report_help_shows_profile() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["report", "--help"])
+    assert result.exit_code == 0
+    assert "--profile" in result.output
+    assert "fast" in result.output
+    assert "normal" in result.output
+    assert "full" in result.output
+
+
+def test_report_profile_fast(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--profile",
+            "fast",
+            "--audit-file",
+            str(password_file),
+            "--timeout",
+            "0.5",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["scan"]["profile"] == "fast"
+    assert data["scan"]["ports_scanned"] == 18
+
+
+def test_report_profile_normal(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--profile",
+            "normal",
+            "--audit-file",
+            str(password_file),
+            "--timeout",
+            "0.5",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["scan"]["profile"] == "normal"
+    assert data["scan"]["ports_scanned"] == 24
+
+
+def test_report_profile_full(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--profile",
+            "full",
+            "--audit-file",
+            str(password_file),
+            "--timeout",
+            "0.5",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["scan"]["profile"] == "full"
+    assert data["scan"]["ports_scanned"] > 1000
+
+
+def test_report_profile_override_ports(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--profile",
+            "fast",
+            "--ports",
+            "80,443",
+            "--audit-file",
+            str(password_file),
+            "--timeout",
+            "0.5",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["scan"]["profile"] == "fast"
+    assert data["scan"]["ports_scanned"] == 2
+
+
+def test_report_profile_override_timeout_workers(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--profile",
+            "fast",
+            "--timeout",
+            "5.0",
+            "--workers",
+            "50",
+            "--audit-file",
+            str(password_file),
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["scan"]["profile"] == "fast"
+
+
+def test_report_profile_disabled_by_default(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--ports",
+            "80",
+            "--audit-file",
+            str(password_file),
+            "--timeout",
+            "0.5",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["scan"]["profile"] is None
 
 
 def test_web_help() -> None:
