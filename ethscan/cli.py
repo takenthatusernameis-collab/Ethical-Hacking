@@ -116,6 +116,21 @@ from ethscan.cve import (
     format_cve_report_markdown,
     run_cve,
 )
+from ethscan.cidr import (
+    format_cidr_report_json,
+    format_cidr_report_markdown,
+    run_cidr,
+)
+from ethscan.headers import (
+    format_headers_report_json,
+    format_headers_report_markdown,
+    run_headers,
+)
+from ethscan.ping import (
+    format_ping_report_json,
+    format_ping_report_markdown,
+    run_ping,
+)
 
 
 @click.group()
@@ -1821,6 +1836,46 @@ def cve(
         output = format_cve_report_json(results)
     else:
         output = format_cve_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--cidr",
+    required=True,
+    help="CIDR notation (e.g. 192.168.1.0/24) or bare IP address.",
+)
+@click.option(
+    "--contains",
+    help="Optional IP address to test for network membership.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def cidr(cidr: str, contains: Optional[str], fmt: str, out_path: Optional[str]) -> None:
+    """Compute network calculations for a CIDR (offline)."""
+    results = run_cidr(cidr, contains=contains)
+
+    if fmt == "json":
+        output = format_cidr_report_json(results)
+    else:
+        output = format_cidr_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

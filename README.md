@@ -8,6 +8,8 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - Password strength auditing with JSON/Markdown output (`audit`) (implemented)
 - Web application security checks (implemented)
 - **Security headers check: `headers` command for quick security header analysis** (implemented)
+- **ICMP ping: `ping` command for host discovery with ICMP echo requests and TCP connect fallback** (implemented)
+- **CIDR network calculator: `cidr` command for offline network calculations (network address, netmask, broadcast, host range, membership test)** (implemented)
 - HTTP fuzzing (implemented)
 - Subdomain enumeration (implemented)
 - DNS record enumeration (implemented)

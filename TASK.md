@@ -475,11 +475,51 @@ The `cert` command searches Certificate Transparency (CT) logs via public CT log
 - `python -m ethscan --help` -> lists `cert` among the 21 commands.
 - `python -m ethscan cert --help` -> shows all expected options (`--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out`).
 
+## Completed: `headers` and `ping` commands (wire up to CLI)
+
+The `headers` and `ping` commands were already implemented in their respective modules (`ethscan/headers.py`, `ethscan/ping.py`) with full unit test coverage, but their imports were missing from `ethscan/cli.py`, causing the CLI commands to fail at runtime with `AttributeError`.
+
+### Fixed
+- `ethscan/cli.py` — added imports for `run_headers`, `format_headers_report_json`, `format_headers_report_markdown` from `ethscan.headers`, and `run_ping`, `format_ping_report_json`, `format_ping_report_markdown` from `ethscan.ping`.
+- `tests/test_cidr.py` — replaced broken placeholder (`test` on line 1) with a valid placeholder test module so collection succeeds.
+- `README.md` — added `ping` (ICMP ping with TCP connect fallback) to the features list.
+
+### Verification
+- `python -m pytest -q` -> 956 passed, 1 skipped (781 baseline + 175 new: existing tests now run).
+- `python -m ethscan --help` -> lists both `headers` and `ping` among the 24 commands.
+- `python -m ethscan headers --help` -> shows `--target`, `--timeout`, `--format`, `--out`.
+- `python -m ethscan ping --help` -> shows `--target`, `--count`, `--timeout`, `--ttl`, `--tcp-port`, `--format`, `--out`.
+- End-to-end: `python -m ethscan headers --target https://nonexistent.invalid.domain.tld --format json --timeout 1.0` produces valid JSON with all 7 security headers marked missing.
+- End-to-end: `python -m ethscan ping --target 127.0.0.1 --count 2 --timeout 1.0 --format json` reports 2 successful probes with RTT and RST response type.
+
+## Completed: `cidr` command (CIDR network calculator)
+
+The `cidr` command computes network calculations for a CIDR (offline, stdlib-only `ipaddress` module): network address, netmask, broadcast address, wildcard mask, first/last host, usable host count, total addresses, prefix length, and optional IP membership test (`--contains`). Outputs JSON or Markdown.
+
+### Added Files
+- `ethscan/cidr.py` — CIDR network calculation module with:
+  - `_normalize_cidr()` — normalizes CIDR notation or bare IP (bare IP → /32 or /128)
+  - `_is_ipv4()` — IPv4/IPv6 detection
+  - `_format_network_info()` — builds structured network info dict with correct first/last host (excludes network and broadcast for /24+; handles /32 and /31 edge cases)
+  - `_contains_ip()` — membership test for an optional `--contains` IP
+  - `run_cidr()` — public entry point
+  - `format_cidr_report_json()` / `format_cidr_report_markdown()` — output formatters (markdown includes pipe-escaped table and optional membership section)
+- `tests/test_cidr.py` — 20 unit tests: normalization (IPv4/IPv6/bare/empty), IPv4 detection, run_cidr (IPv4/IPv6/single-host/contains inside/outside/invalid), formatters (JSON, markdown, no-contains, pipe escape, IPv6)
+
+### Modified Files
+- `ethscan/cli.py` — registered `cidr` command with `--cidr` (required), `--contains` (optional), `--format`, `--out`; imports `run_cidr` and both formatters from `ethscan.cid`.
+- `README.md` — added CIDR network calculator (`cidr`) to the features list.
+
+### Verification
+- `python -m pytest -q` -> 982 passed, 1 skipped (956 baseline + 26 new: 20 unit + 6 CLI).
+- `python -m ethscan --help` -> lists `cidr` among the 25 commands.
+- `python -m ethscan cidr --help` -> shows all expected options.
+- End-to-end: `python -m ethscan cidr --cidr 192.168.1.0/24 --contains 192.168.1.50 --format json` returns network info with usable_host_count=254 and contains.in_network=true.
+- Edge case: `python -m ethscan cidr --cidr 192.168.1.5/32 --format json` returns total_addresses=1, usable_host_count=0.
+
 ## Suggested next task
 
-**Add a `headers` shorthand command** that runs just the `web` check with `--checks headers` for quick security header checks, consistent with the existing command structure.
-
-Alternative: Add a `--ports` option to the `cve` command to run live service detection on a custom port set before querying the NVD/CVE API.
+**Add a `--ports` option to the `cve` command** to run live service detection on a custom port set before querying the NVD/CVE API.
 
 Alternative: Add a `--min-severity` option to the `cve` command to filter findings below a given severity threshold.
 
@@ -491,7 +531,7 @@ Alternative: Add a `--min-severity` option to the `cve` command to filter findin
 - Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
 
 ## Current state
-- All 22 commands implemented (including `cert` and `cve`).
+- All 25 commands implemented and wired up (`headers`, `ping`, `cidr` now functional via CLI).
 - `scan` and `service` now support `--profile fast|normal|full` option.
 - `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
 - `subdomains` now supports `--recursive` and `--max-depth` for recursive subdomain enumeration.
@@ -501,4 +541,4 @@ Alternative: Add a `--min-severity` option to the `cve` command to filter findin
 - `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out` for CT log subdomain discovery.
 - `report` now supports `--format json|markdown` and `--out` for combined scan+audit reports (json and markdown).
 - `cve` now supports `--target`, `--services-file`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--severity`, `--format`, `--out` for NVD/CVE API vulnerability lookups.
-- Tests: 781 passing (1 skipped).
+- Tests: 982 passing (1 skipped).

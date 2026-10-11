@@ -45,23 +45,29 @@ def _format_network_info(network: ipaddress._BaseNetwork) -> Dict[str, object]:
         netmask = str(network.netmask)
         broadcast = str(network.broadcast_address) if network.broadcast_address else None
         wildcard = str(network.hostmask)
-        first_host = str(network[1]) if network.num_addresses > 1 else (
-            str(network.network_address) if network.num_addresses == 1 else None
-        )
-        last_host = str(network[-1]) if network.num_addresses > 1 else (
-            str(network.network_address) if network.num_addresses == 1 else None
-        )
+        if network.num_addresses > 2:
+            first_host = str(network[1])
+            last_host = str(network[-2])
+        elif network.num_addresses == 2:
+            first_host = str(network[1])
+            last_host = str(network[1])
+        else:
+            first_host = str(network.network_address)
+            last_host = str(network.network_address)
         usable_hosts = max(0, network.num_addresses - 2)
     else:
         netmask = str(network.netmask)
         broadcast = None
         wildcard = str(network.hostmask)
-        first_host = str(network[1]) if network.num_addresses > 1 else (
-            str(network.network_address) if network.num_addresses == 1 else None
-        )
-        last_host = str(network[-1]) if network.num_addresses > 1 else (
-            str(network.network_address) if network.num_addresses == 1 else None
-        )
+        if network.num_addresses > 2:
+            first_host = str(network[1])
+            last_host = str(network[-2])
+        elif network.num_addresses == 2:
+            first_host = str(network[1])
+            last_host = str(network[1])
+        else:
+            first_host = str(network.network_address)
+            last_host = str(network.network_address)
         usable_hosts = max(0, network.num_addresses - 2)
 
     return {

@@ -7432,3 +7432,114 @@ def test_cve_out_option_markdown(tmp_path, monkeypatch) -> None:
     assert out_file.exists()
     content = out_file.read_text()
     assert "ethscan CVE Report" in content
+
+
+def test_cidr_help() -> None:
+    """Test cidr command help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cidr", "--help"])
+    assert result.exit_code == 0
+    assert "--cidr" in result.output
+    assert "--contains" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+
+
+def test_cidr_top_level_help_lists() -> None:
+    """Test that cidr appears in top-level help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "cidr" in result.output.lower()
+
+
+def test_cidr_offline_target_json() -> None:
+    """Test cidr command with JSON output."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cidr", "--cidr", "192.168.1.0/24", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["cidr"] == "192.168.1.0/24"
+    assert parsed["network"]["usable_host_count"] == 254
+
+
+def test_cidr_offline_target_markdown() -> None:
+    """Test cidr command with Markdown output."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cidr", "--cidr", "10.0.0.0/8", "--format", "markdown"],
+    )
+    assert result.exit_code == 0
+    assert "ethscan CIDR Network Calculator Report" in result.output
+    assert "10.0.0.0/8" in result.output
+
+
+def test_cidr_contains_option() -> None:
+    """Test cidr command with --contains option."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "cidr",
+            "--cidr",
+            "192.168.1.0/24",
+            "--contains",
+            "192.168.1.50",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["contains"]["in_network"] is True
+
+
+def test_cidr_out_option_json(tmp_path) -> None:
+    """Test cidr command with --out (json)."""
+    out_file = tmp_path / "cidr_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "cidr",
+            "--cidr",
+            "192.168.1.0/24",
+            "--format",
+            "json",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    parsed = json.loads(content)
+    assert parsed["cidr"] == "192.168.1.0/24"
+
+
+def test_cidr_out_option_markdown(tmp_path) -> None:
+    """Test cidr command with --out (markdown)."""
+    out_file = tmp_path / "cidr_report.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "cidr",
+            "--cidr",
+            "10.0.0.0/8",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "ethscan CIDR Network Calculator Report" in content
