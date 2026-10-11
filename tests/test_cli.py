@@ -10460,3 +10460,218 @@ def test_hash_help_shows_salt_pepper() -> None:
     assert result.exit_code == 0
     assert "--salt" in result.output
     assert "--pepper" in result.output
+
+
+def test_hash_help_shows_iterations() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["hash", "--help"])
+    assert result.exit_code == 0
+    assert "--iterations" in result.output
+
+
+def test_hash_iterations_option() -> None:
+    import hashlib
+
+    runner = CliRunner()
+    expected = hashlib.pbkdf2_hmac(
+        "sha256",
+        b"password",
+        b"saltvalue",
+        1000,
+    ).hex()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--password",
+            "password",
+            "--salt",
+            "saltvalue",
+            "--iterations",
+            "1000",
+            "--algorithm",
+            "sha256",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["iterations"] == 1000
+    assert parsed["salt_value"] == "saltvalue"
+    assert parsed["results"][0]["hash"] == expected
+
+
+def test_hash_iterations_requires_salt() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--password",
+            "password",
+            "--iterations",
+            "1000",
+            "--algorithm",
+            "sha256",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "requires --salt" in result.output
+
+
+def test_hash_iterations_non_positive() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--password",
+            "password",
+            "--salt",
+            "s",
+            "--iterations",
+            "0",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "positive integer" in result.output
+
+
+def test_hash_iterations_with_pepper() -> None:
+    import hashlib
+    import hmac
+
+    runner = CliRunner()
+    pbkdf2_digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        b"password",
+        b"saltvalue",
+        1000,
+    ).hex()
+    expected = hmac.new(
+        b"secretpepper",
+        pbkdf2_digest.encode("utf-8"),
+        "sha256",
+    ).hexdigest()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--password",
+            "password",
+            "--salt",
+            "saltvalue",
+            "--pepper",
+            "secretpepper",
+            "--iterations",
+            "1000",
+            "--algorithm",
+            "sha256",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["results"][0]["hash"] == expected
+    assert parsed["results"][0]["pepper"] is True
+    assert parsed["results"][0]["iterations"] == 1000
+
+
+def test_hash_iterations_markdown() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--password",
+            "password",
+            "--salt",
+            "saltvalue",
+            "--iterations",
+            "1000",
+            "--algorithm",
+            "sha256",
+            "--format",
+            "markdown",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Iterations" in result.output
+    assert "1000" in result.output
+    assert "Salt Value" in result.output
+
+
+def test_hash_iterations_with_out_option(tmp_path) -> None:
+    import hashlib
+
+    runner = CliRunner()
+    expected = hashlib.pbkdf2_hmac(
+        "sha256",
+        b"password",
+        b"saltvalue",
+        1000,
+    ).hex()
+    out_file = tmp_path / "hashes.json"
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--password",
+            "password",
+            "--salt",
+            "saltvalue",
+            "--iterations",
+            "1000",
+            "--algorithm",
+            "sha256",
+            "--format",
+            "json",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(out_file.read_text())
+    assert parsed["iterations"] == 1000
+    assert parsed["results"][0]["hash"] == expected
+
+
+def test_hash_check_with_iterations() -> None:
+    import hashlib
+
+    runner = CliRunner()
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        b"password",
+        b"saltvalue",
+        1000,
+    ).hex()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--password",
+            "password",
+            "--salt",
+            "saltvalue",
+            "--iterations",
+            "1000",
+            "--algorithm",
+            "sha256",
+            "--check",
+            digest,
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["match"] is True
+    assert parsed["iterations"] == 1000
+    assert parsed["salt_value"] == "saltvalue"

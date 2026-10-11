@@ -10,6 +10,7 @@ from ethscan.hash import (
     _compute_ntlm,
     _compute_password_hash,
     _compute_peppered_hash,
+    _compute_pbkdf2_hash,
     _compute_sha1,
     _compute_sha256,
     _compute_sha512,
@@ -563,6 +564,100 @@ def test_compute_password_hash_pepper_unsupported_raises() -> None:
         pass
 
 
+# ---------------------------------------------------------------------------
+# PBKDF2 iterations
+# ---------------------------------------------------------------------------
+
+
+def test_compute_pbkdf2_hash_known_value() -> None:
+    import hashlib
+
+    expected = hashlib.pbkdf2_hmac(
+        "sha256",
+        b"password",
+        b"saltvalue",
+        1000,
+    ).hex()
+    assert _compute_pbkdf2_hash("password", "sha256", "saltvalue", 1000) == expected
+
+
+def test_compute_pbkdf2_hash_unsupported_algorithm() -> None:
+    try:
+        _compute_pbkdf2_hash("password", "ntlm", "saltvalue", 1000)
+        assert False, "Expected ValueError"
+    except ValueError:
+        pass
+
+
+def test_compute_pbkdf2_hash_non_positive_iterations() -> None:
+    try:
+        _compute_pbkdf2_hash("password", "sha256", "saltvalue", 0)
+        assert False, "Expected ValueError"
+    except ValueError:
+        pass
+    try:
+        _compute_pbkdf2_hash("password", "sha256", "saltvalue", -5)
+        assert False, "Expected ValueError"
+    except ValueError:
+        pass
+
+
+def test_compute_password_hash_iterations() -> None:
+    import hashlib
+
+    expected = hashlib.pbkdf2_hmac(
+        "sha256",
+        b"password",
+        b"saltvalue",
+        1000,
+    ).hex()
+    assert _compute_password_hash(
+        "password", "sha256", salt="saltvalue", iterations=1000
+    ) == expected
+
+
+def test_compute_password_hash_iterations_requires_salt() -> None:
+    try:
+        _compute_password_hash("password", "sha256", iterations=1000)
+        assert False, "Expected ValueError"
+    except ValueError:
+        pass
+
+
+def test_compute_password_hash_iterations_with_pepper() -> None:
+    import hashlib
+    import hmac
+
+    pbkdf2_digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        b"password",
+        b"saltvalue",
+        1000,
+    ).hex()
+    expected = hmac.new(
+        b"secretpepper",
+        pbkdf2_digest.encode("utf-8"),
+        "sha256",
+    ).hexdigest()
+    assert _compute_password_hash(
+        "password",
+        "sha256",
+        salt="saltvalue",
+        pepper="secretpepper",
+        iterations=1000,
+    ) == expected
+
+
+def test_compute_password_hash_iterations_ntlm_error() -> None:
+    try:
+        _compute_password_hash(
+            "password", "ntlm", salt="saltvalue", iterations=1000
+        )
+        assert False, "Expected ValueError"
+    except ValueError:
+        pass
+
+
 def test_run_hash_with_salt() -> None:
     result = run_hash(["password"], "md5", salt="saltvalue")
     assert result["salt"] is True
@@ -727,3 +822,202 @@ def test_format_check_report_markdown_no_salt_no_pepper_lines() -> None:
     output = format_check_report_markdown(result)
     assert "**Salt:**" not in output
     assert "**Pepper:**" not in output
+
+
+# ---------------------------------------------------------------------------
+# PBKDF2 iterations (run_hash / run_check / formatters)
+# ---------------------------------------------------------------------------
+
+
+def test_run_hash_iterations() -> None:
+    import hashlib
+
+    expected = hashlib.pbkdf2_hmac(
+        "sha256",
+        b"password",
+        b"saltvalue",
+        1000,
+    ).hex()
+    result = run_hash(["password"], "sha256", salt="saltvalue", iterations=1000)
+    assert result["iterations"] == 1000
+    assert result["salt"] is True
+    assert result["salt_value"] == "saltvalue"
+    assert result["results"][0]["iterations"] == 1000
+    assert result["results"][0]["salt_value"] == "saltvalue"
+    assert result["results"][0]["hash"] == expected
+    assert any("PBKDF2" in n for n in result["notes"])
+
+
+def test_run_hash_iterations_requires_salt() -> None:
+    result = run_hash(["password"], "sha256", iterations=1000)
+    assert result["results"][0]["error"] is not None
+    assert "PBKDF2" in result["results"][0]["error"]
+    assert result["results"][0]["hash"] is None
+
+
+def test_run_hash_iterations_ntlm_error() -> None:
+    result = run_hash(["password"], "ntlm", salt="saltvalue", iterations=1000)
+    assert result["results"][0]["error"] is not None
+    assert result["results"][0]["hash"] is None
+
+
+def test_run_hash_iterations_with_pepper() -> None:
+    import hashlib
+    import hmac
+
+    pbkdf2_digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        b"password",
+        b"saltvalue",
+        1000,
+    ).hex()
+    expected = hmac.new(
+        b"secretpepper",
+        pbkdf2_digest.encode("utf-8"),
+        "sha256",
+    ).hexdigest()
+    result = run_hash(
+        ["password"],
+        "sha256",
+        salt="saltvalue",
+        pepper="secretpepper",
+        iterations=1000,
+    )
+    assert result["results"][0]["hash"] == expected
+    assert result["results"][0]["pepper"] is True
+    assert result["results"][0]["iterations"] == 1000
+
+
+def test_run_hash_iterations_zero_or_negative() -> None:
+    for bad in (0, -1):
+        result = run_hash(["password"], "sha256", salt="s", iterations=bad)
+        assert result["results"][0]["error"] is not None
+        assert result["results"][0]["hash"] is None
+
+
+def test_run_check_iterations_match() -> None:
+    import hashlib
+
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        b"password",
+        b"saltvalue",
+        1000,
+    ).hex()
+    result = run_check(
+        "password",
+        digest,
+        algorithm="sha256",
+        salt="saltvalue",
+        iterations=1000,
+    )
+    assert result["match"] is True
+    assert result["iterations"] == 1000
+    assert result["salt_value"] == "saltvalue"
+
+
+def test_run_check_iterations_mismatch() -> None:
+    import hashlib
+
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        b"password",
+        b"saltvalue",
+        1000,
+    ).hex()
+    result = run_check(
+        "wrongpass",
+        digest,
+        algorithm="sha256",
+        salt="saltvalue",
+        iterations=1000,
+    )
+    assert result["match"] is False
+    assert result["iterations"] == 1000
+
+
+def test_run_check_iterations_requires_salt() -> None:
+    result = run_check(
+        "password",
+        "5f4dcc3b5aa765d61d8327deb882cf99",
+        algorithm="md5",
+        iterations=1000,
+    )
+    assert result["match"] is None
+    assert result["error"] is not None
+    assert "PBKDF2" in result["error"]
+
+
+def test_format_hash_report_json_includes_iterations() -> None:
+    data = run_hash(["password"], "sha256", salt="saltvalue", iterations=1000)
+    parsed = json.loads(format_hash_report_json(data))
+    assert parsed["iterations"] == 1000
+    assert parsed["salt_value"] == "saltvalue"
+    assert parsed["results"][0]["iterations"] == 1000
+    assert parsed["results"][0]["salt_value"] == "saltvalue"
+
+
+def test_format_hash_report_markdown_shows_iterations() -> None:
+    data = run_hash(["password"], "sha256", salt="saltvalue", iterations=1000)
+    output = format_hash_report_markdown(data)
+    assert "Iterations" in output
+    assert "1000" in output
+    assert "Salt Value" in output
+
+
+def test_format_hash_report_markdown_no_iterations_lines() -> None:
+    data = run_hash(["password"], "md5")
+    output = format_hash_report_markdown(data)
+    assert "**Iterations:**" not in output
+    assert "**Salt Value:**" not in output
+
+
+def test_format_check_report_json_includes_iterations() -> None:
+    import hashlib
+
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        b"password",
+        b"saltvalue",
+        1000,
+    ).hex()
+    result = run_check(
+        "password",
+        digest,
+        algorithm="sha256",
+        salt="saltvalue",
+        iterations=1000,
+    )
+    parsed = json.loads(format_check_report_json(result))
+    assert parsed["iterations"] == 1000
+    assert parsed["salt_value"] == "saltvalue"
+
+
+def test_format_check_report_markdown_shows_iterations() -> None:
+    import hashlib
+
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        b"password",
+        b"saltvalue",
+        1000,
+    ).hex()
+    result = run_check(
+        "password",
+        digest,
+        algorithm="sha256",
+        salt="saltvalue",
+        iterations=1000,
+    )
+    output = format_check_report_markdown(result)
+    assert "Iterations" in output
+    assert "1000" in output
+    assert "Salt Value" in output
+    assert "MATCH" in output
+
+
+def test_format_check_report_markdown_no_iterations_lines() -> None:
+    result = run_check("password", "5f4dcc3b5aa765d61d8327deb882cf99")
+    output = format_check_report_markdown(result)
+    assert "**Iterations:**" not in output
+    assert "**Salt Value:**" not in output

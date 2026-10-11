@@ -137,13 +137,50 @@ def _compute_peppered_hash(password: str, algorithm: str, pepper: str) -> str:
     ).hexdigest()
 
 
+def _compute_pbkdf2_hash(
+    password: str,
+    algorithm: str,
+    salt: str,
+    iterations: int,
+) -> str:
+    """Compute a PBKDF2-HMAC iterated hash of a password.
+
+    Args:
+        password: Plaintext password.
+        algorithm: Canonical algorithm key (must be hashlib-backed).
+        salt: Salt bytes (encoded as UTF-8).
+        iterations: Number of PBKDF2 iterations (must be positive).
+
+    Returns:
+        Hex digest of ``PBKDF2-HMAC(algorithm, password, salt, iterations)``.
+
+    Raises:
+        ValueError: If the algorithm is not hashlib-backed (e.g. NTLM) or
+            iterations is not positive.
+    """
+    if iterations <= 0:
+        raise ValueError("iterations must be a positive integer.")
+    name = _hashlib_name(algorithm)
+    if name is None:
+        raise ValueError(
+            f"Algorithm '{algorithm}' does not support PBKDF2 (no hashlib name)."
+        )
+    return hashlib.pbkdf2_hmac(
+        name,
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        iterations,
+    ).hex()
+
+
 def _compute_password_hash(
     password: str,
     algorithm: str,
     salt: Optional[str] = None,
     pepper: Optional[str] = None,
+    iterations: Optional[int] = None,
 ) -> str:
-    """Compute a (optionally salted/peppered) hash for a single password.
+    """Compute a (optionally salted/peppered/iterated) hash for a password.
 
     - ``salt`` is prepended to the password before hashing (a classic salted
       hash), e.g. ``hash(salt + password)``.
@@ -151,21 +188,48 @@ def _compute_password_hash(
       password`` when both are supplied) as the message.
     - When both are supplied the salt is folded into the HMAC message and the
       pepper is the HMAC key: ``HMAC(pepper, salt + password, algorithm)``.
-    - When neither is supplied this behaves identically to ``_compute_hash``.
+    - When ``iterations`` is supplied, PBKDF2-HMAC is used instead of the
+      single-pass hash (requires ``salt``). When ``pepper`` is also supplied,
+      the pepper is applied as an HMAC layer over the PBKDF2 digest:
+      ``HMAC(pepper, PBKDF2(algorithm, password, salt, iterations), algorithm)``.
+    - When neither ``salt`` nor ``pepper`` nor ``iterations`` is supplied this
+      behaves identically to ``_compute_hash``.
 
     Args:
         password: Plaintext password.
         algorithm: Canonical algorithm key.
         salt: Optional salt string prepended to the password.
         pepper: Optional pepper string used as the HMAC key.
+        iterations: Optional positive iteration count for PBKDF2 (requires
+            ``salt``).
 
     Returns:
         Hex digest string.
 
     Raises:
-        ValueError: If the algorithm is unsupported or does not support HMAC
-            when a pepper is supplied.
+        ValueError: If the algorithm is unsupported, does not support HMAC
+            when a pepper is supplied, or PBKDF2 is requested without a salt.
     """
+    if iterations is not None:
+        if not salt:
+            raise ValueError(
+                "PBKDF2 iterations require a --salt to be supplied."
+            )
+        pbkdf2_digest = _compute_pbkdf2_hash(
+            password, algorithm, salt, iterations
+        )
+        if pepper:
+            name = _hashlib_name(algorithm)
+            if name is None:
+                raise ValueError(
+                    f"Algorithm '{algorithm}' does not support HMAC (peppered hashing)."
+                )
+            return hmac.new(
+                pepper.encode("utf-8"),
+                pbkdf2_digest.encode("utf-8"),
+                name,
+            ).hexdigest()
+        return pbkdf2_digest
     if salt and pepper:
         name = _hashlib_name(algorithm)
         if name is None:
@@ -260,6 +324,7 @@ def run_check(
     algorithm: Optional[str] = None,
     salt: Optional[str] = None,
     pepper: Optional[str] = None,
+    iterations: Optional[int] = None,
 ) -> Dict[str, object]:
     """Compare a plaintext password against a known hash digest.
 
@@ -272,10 +337,13 @@ def run_check(
             verify a salted digest).
         pepper: Optional pepper used as the HMAC key (needed to verify a
             peppered digest).
+        iterations: Optional positive iteration count for PBKDF2 (requires
+            ``salt``; needed to verify an iterated digest).
 
     Returns:
         Structured result with ``password``, ``digest``, ``algorithm``,
-        ``salt``, ``pepper``, ``computed``, ``match``, ``error`` fields.
+        ``salt``, ``pepper``, ``iterations``, ``salt_value``, ``computed``,
+        ``match``, ``error`` fields.
     """
     error: Optional[str] = None
     chosen_algorithm: Optional[str] = None
@@ -295,7 +363,11 @@ def run_check(
             )
         else:
             computed = _compute_password_hash(
-                password, chosen_algorithm, salt=salt, pepper=pepper
+                password,
+                chosen_algorithm,
+                salt=salt,
+                pepper=pepper,
+                iterations=iterations,
             )
             match = computed.lower() == digest.strip().lower()
     except ValueError as exc:
@@ -307,6 +379,8 @@ def run_check(
         "algorithm": chosen_algorithm,
         "salt": bool(salt),
         "pepper": bool(pepper),
+        "iterations": iterations,
+        "salt_value": salt,
         "computed": computed,
         "match": match,
         "error": error,
@@ -318,6 +392,7 @@ def run_hash(
     algorithm: str = "md5",
     salt: Optional[str] = None,
     pepper: Optional[str] = None,
+    iterations: Optional[int] = None,
 ) -> Dict[str, object]:
     """Generate hashes for a list of passwords.
 
@@ -327,10 +402,12 @@ def run_hash(
         salt: Optional salt prepended to each password before hashing.
         pepper: Optional pepper used as the HMAC key (with ``salt +
             password`` as the message when salt is also supplied).
+        iterations: Optional positive iteration count for PBKDF2 (requires
+            ``salt``).
 
     Returns:
-        Structured results with the algorithm, salt/pepper indicators,
-        per-password hashes, and notes.
+        Structured results with the algorithm, salt/pepper/iterations
+        indicators, per-password hashes, and notes.
     """
     # Allow md4/ntlm even when MD4 is unavailable so callers get graceful
     # per-password errors instead of an exception from run_hash itself.
@@ -352,7 +429,11 @@ def run_hash(
     for pwd in password_list:
         try:
             digest = _compute_password_hash(
-                pwd, normalized, salt=salt, pepper=pepper
+                pwd,
+                normalized,
+                salt=salt,
+                pepper=pepper,
+                iterations=iterations,
             )
             error = None
         except ValueError as exc:
@@ -364,6 +445,8 @@ def run_hash(
                 "algorithm": normalized,
                 "salt": bool(salt),
                 "pepper": bool(pepper),
+                "iterations": iterations,
+                "salt_value": salt,
                 "hash": digest,
                 "error": error,
             }
@@ -377,6 +460,10 @@ def run_hash(
             "Pepper applied: used as the HMAC key over the password (or "
             "salt+password when salt is also supplied)."
         )
+    if iterations:
+        notes.append(
+            f"PBKDF2 iterations: {iterations} applied with the salt."
+        )
     if normalized == "md4" and not MD4_AVAILABLE:
         notes.append("MD4 is unavailable on this OpenSSL build; use another algorithm.")
     if normalized == "ntlm" and not MD4_AVAILABLE:
@@ -386,6 +473,8 @@ def run_hash(
         "algorithm": normalized,
         "salt": bool(salt),
         "pepper": bool(pepper),
+        "iterations": iterations,
+        "salt_value": salt,
         "passwords_hashed": len(password_list),
         "results": results,
         "notes": notes,
@@ -420,6 +509,10 @@ def format_hash_report_markdown(data: Dict[str, object]) -> str:
         lines.append("- **Salt:** applied (prepended to password)")
     if data.get("pepper"):
         lines.append("- **Pepper:** applied (HMAC key)")
+    if data.get("iterations"):
+        lines.append(f"- **Iterations:** {data['iterations']}")
+    if data.get("salt_value"):
+        lines.append(f"- **Salt Value:** `{_escape(str(data['salt_value']))}`")
     lines.append("")
 
     results = data.get("results") or []
@@ -458,6 +551,10 @@ def format_check_report_markdown(data: Dict[str, object]) -> str:
         lines.append("- **Salt:** applied (prepended to password)")
     if data.get("pepper"):
         lines.append("- **Pepper:** applied (HMAC key)")
+    if data.get("iterations"):
+        lines.append(f"- **Iterations:** {data['iterations']}")
+    if data.get("salt_value"):
+        lines.append(f"- **Salt Value:** `{_escape(str(data['salt_value']))}`")
     computed = data.get("computed")
     if computed is not None:
         lines.append(f"- **Computed:** `{_escape(str(computed))}`")

@@ -2275,6 +2275,15 @@ def cidr(cidr: str, contains: Optional[str], diff: Optional[str], fmt: str, out_
     "algorithms (md5, sha1, sha256, sha512, md4).",
 )
 @click.option(
+    "--iterations",
+    "iterations",
+    default=None,
+    type=int,
+    help="Optional PBKDF2 iteration count (requires --salt). When supplied, "
+    "uses PBKDF2-HMAC(algorithm, password, salt, iterations) instead of a "
+    "single-pass hash. Must be a positive integer.",
+)
+@click.option(
     "--check",
     "check_digest",
     help="Compare the plaintext password against this hex digest instead of hashing. "
@@ -2293,8 +2302,15 @@ def cidr(cidr: str, contains: Optional[str], diff: Optional[str], fmt: str, out_
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def hash_cmd(passwords, password_file, algorithm, salt, pepper, check_digest, fmt, out_path) -> None:
+def hash_cmd(passwords, password_file, algorithm, salt, pepper, iterations, check_digest, fmt, out_path) -> None:
     """Generate cryptographic hashes for passwords (MD5, SHA-1, SHA-256, SHA-512, NTLM, MD4)."""
+    if iterations is not None and iterations <= 0:
+        click.echo("Error: --iterations must be a positive integer.")
+        raise click.exceptions.Exit(1)
+    if iterations is not None and not salt:
+        click.echo("Error: --iterations requires --salt to be supplied.")
+        raise click.exceptions.Exit(1)
+
     password_list = list(passwords)
     if not password_list and password_file:
         password_list = load_passwords_from_file(password_file)
@@ -2309,7 +2325,12 @@ def hash_cmd(passwords, password_file, algorithm, salt, pepper, check_digest, fm
         # Check mode: compare the first password against the supplied digest.
         password = password_list[0]
         result = run_check(
-            password, check_digest, algorithm=algorithm, salt=salt, pepper=pepper
+            password,
+            check_digest,
+            algorithm=algorithm,
+            salt=salt,
+            pepper=pepper,
+            iterations=iterations,
         )
         if fmt == "json":
             output = format_check_report_json(result)
@@ -2317,7 +2338,11 @@ def hash_cmd(passwords, password_file, algorithm, salt, pepper, check_digest, fm
             output = format_check_report_markdown(result)
     else:
         results = run_hash(
-            password_list, algorithm=algorithm or "md5", salt=salt, pepper=pepper
+            password_list,
+            algorithm=algorithm or "md5",
+            salt=salt,
+            pepper=pepper,
+            iterations=iterations,
         )
         if fmt == "json":
             output = format_hash_report_json(results)
