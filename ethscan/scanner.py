@@ -1,5 +1,7 @@
 """Port scanner module for ethscan."""
 
+import csv
+import io
 import json
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -168,3 +170,23 @@ def format_scan_report_markdown(data: Dict[str, object]) -> str:
         lines.append("*No ports scanned.*")
 
     return "\n".join(lines)
+
+
+def format_scan_report_csv(data: Dict[str, object]) -> str:
+    """Format scan results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["port", "open"])
+    for detail in data.get("details", []):
+        writer.writerow([detail["port"], "true" if detail["open"] else "false"])
+    return output.getvalue()
+
+
+def format_service_report_csv(data: Dict[str, object]) -> str:
+    """Format service detection results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["port", "service", "banner"])
+    for result in data.get("results", []):
+        writer.writerow([result["port"], result.get("service", ""), result.get("banner", "")])
+    return output.getvalue()

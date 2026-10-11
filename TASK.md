@@ -895,3 +895,59 @@ The `dnssec` command validates DNSSEC for a target domain by querying DNSKEY rec
 Alternative: Add a `--ports` option to the `report` command to control which ports are scanned when generating combined scan+audit reports.
 
 Alternative: Add a `--recursive` option to the `geo` command for recursive geolocation lookups across resolved hop IPs.
+
+## Completed: `--output-format csv` option for `scan` and `service` commands
+
+Added a `--output-format` option to both `scan` and `service` commands that adds CSV output mode (in addition to the existing JSON and Markdown modes). The deprecated `--format` alias continues to work for backward compatibility.
+
+### Added Functionality
+- `ethscan/scanner.py`:
+  - Added `format_scan_report_csv()` — renders scan results as CSV with columns `port,open`, one row per scanned port. Uses stdlib `csv.writer` for proper quoting/escaping.
+  - Added `format_service_report_csv()` — renders service detection results as CSV with columns `port,service,banner`, one row per detected service.
+- `ethscan/cli.py`:
+  - Added `--output-format [json|markdown|csv]` option to `scan` and `service` commands.
+  - Kept `--format [json|markdown|csv]` as a deprecated alias (still functional).
+  - `--output-format` takes precedence when both are specified.
+
+### Modified Files
+- `ethscan/scanner.py` — added CSV formatters and `csv`/`io` imports.
+- `ethscan/cli.py` — added `--output-format` option and dispatch logic for `scan` and `service`.
+- `tests/test_scanner.py` — 4 new unit tests: CSV formatters (basic, empty for both scan and service).
+- `tests/test_cli.py` — 8 new CLI integration tests: help shows `--output-format`, CSV output, CSV with `--out`, output-format precedence over deprecated `--format`, help shows csv option.
+
+### Verification
+- `python -m pytest -q` -> 1155 passed, 1 skipped (1143 baseline + 12 new: 4 unit + 8 CLI).
+- `python -m ethscan scan --help` -> shows `--output-format [json|markdown|csv]` option.
+- `python -m ethscan service --help` -> shows `--output-format [json|markdown|csv]` option.
+- End-to-end: `python -m ethscan scan --target 127.0.0.1 --profile fast --output-format csv` produces CSV with `port,open` header and one row per port.
+- End-to-end: `python -m ethscan service --target 127.0.0.1 --profile fast --output-format csv` produces CSV with `port,service,banner` header and one row per service.
+- End-to-end: `python -m ethscan scan --target 127.0.0.1 --profile fast --output-format markdown` produces Markdown report.
+- End-to-end: `python -m ethscan scan --target 127.0.0.1 --profile fast` (no format flag) produces JSON by default.
+- Backward compatibility: deprecated `--format csv` still works.
+
+## Current state
+- All 27 commands implemented (including `dnssec`, `mac`, `cert`, `subtake`, etc.).
+- `scan` and `service` now support `--profile fast|normal|full` option.
+- `scan` and `service` now support `--output-format csv` for spreadsheet-compatible output.
+- `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
+- `subdomains` now supports `--recursive` and `--max-depth` for recursive subdomain enumeration.
+- `dnsbrute` now supports `--recursive` and `--max-depth` for recursive zone transfers.
+- `whois` now supports `--recursive/--no-recursive` and `--max-depth` for recursive WHOIS queries.
+- `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
+- `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
+- `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out` for CT log subdomain discovery.
+- `report` now supports `--format json|markdown` and `--out` for combined scan+audit reports (json and markdown).
+- `cve` now supports `--target`, `--services-file`, `--ports`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--severity`, `--min-severity`, `--format`, `--out` for NVD/CVE API vulnerability lookups.
+- `vuln` now supports `--target`, `--ports`, `--services-file`, `--tls-file`, `--ssl-file`, `--severity`, `--min-severity`, `--format`, `--out` for built-in vulnerability checks.
+- `dnssec` now supports `--target`, `--server`, `--timeout`, `--format`, `--out` for DNSSEC validation (DNSKEY + DS chain of trust).
+- `geo` now supports `--recursive` and `--max-depth` for recursive hop geolocation.
+- Configuration file (`ethscan.yaml`) persists default options across commands via a `--config` group option and a `config` subcommand.
+- Tests: 1155 passing (1 skipped).
+
+## Suggested next task
+
+**Add a `--json` output mode to the `report` command** for explicit machine-readable output (the `report` command uses inline JSON serialization but some users may want an explicit `--format json` flag for clarity in scripts, similar to other commands).
+
+Alternative: Add a `--rate-limit` option to network commands (`scan`, `service`, `fuzz`, `web`, etc.) to control requests per second and avoid triggering rate limits or IDS alerts.
+
+Alternative: Add shell completion support (`ethscan completion bash|zsh|fish`) to generate shell completion scripts for interactive use.

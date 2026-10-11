@@ -7,8 +7,10 @@ from ethscan.scanner import (
     FAST_PORTS,
     FULL_PORTS,
     PROFILE_DEFAULTS,
+    format_scan_report_csv,
     format_scan_report_json,
     format_scan_report_markdown,
+    format_service_report_csv,
     get_common_ports,
     get_profile_defaults,
     get_profile_ports,
@@ -204,3 +206,71 @@ def test_format_scan_report_markdown_no_ports_scanned() -> None:
     }
     output = format_scan_report_markdown(data)
     assert "*No ports scanned.*" in output
+
+
+def test_format_scan_report_csv() -> None:
+    data = {
+        "target": "127.0.0.1",
+        "host": "127.0.0.1",
+        "timeout": 1.0,
+        "ports_scanned": 3,
+        "open_ports": [22, 80],
+        "details": [
+            {"port": 22, "open": True},
+            {"port": 80, "open": True},
+            {"port": 443, "open": False},
+        ],
+    }
+    output = format_scan_report_csv(data)
+    lines = [line.rstrip("\r") for line in output.strip().split("\n")]
+    assert lines[0] == "port,open"
+    assert "22,true" in lines
+    assert "80,true" in lines
+    assert "443,false" in lines
+
+
+def test_format_scan_report_csv_empty() -> None:
+    data = {
+        "target": "127.0.0.1",
+        "host": "127.0.0.1",
+        "timeout": 1.0,
+        "ports_scanned": 0,
+        "open_ports": [],
+        "details": [],
+    }
+    output = format_scan_report_csv(data)
+    assert output.strip() == "port,open"
+
+
+def test_format_service_report_csv() -> None:
+    data = {
+        "target": "127.0.0.1",
+        "host": "127.0.0.1",
+        "timeout": 3.0,
+        "ports_scanned": 3,
+        "services_found": 2,
+        "results": [
+            {"port": 22, "service": "OpenSSH", "banner": "SSH-2.0-OpenSSH_9.6p1"},
+            {"port": 80, "service": "nginx", "banner": "nginx/1.18.0"},
+            {"port": 443, "service": "", "banner": ""},
+        ],
+    }
+    output = format_service_report_csv(data)
+    lines = [line.rstrip("\r") for line in output.strip().split("\n")]
+    assert lines[0] == "port,service,banner"
+    assert "22,OpenSSH,SSH-2.0-OpenSSH_9.6p1" in lines
+    assert "80,nginx,nginx/1.18.0" in lines
+    assert "443,," in lines
+
+
+def test_format_service_report_csv_empty() -> None:
+    data = {
+        "target": "127.0.0.1",
+        "host": "127.0.0.1",
+        "timeout": 3.0,
+        "ports_scanned": 0,
+        "services_found": 0,
+        "results": [],
+    }
+    output = format_service_report_csv(data)
+    assert output.strip() == "port,service,banner"

@@ -2778,6 +2778,150 @@ def test_scan_out_markdown(monkeypatch, tmp_path) -> None:
     assert "**Open Ports:** 22" in content
 
 
+def test_scan_csv_output(monkeypatch) -> None:
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        return [(22, True), (80, True), (443, False)]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "22,80,443", "--output-format", "csv"])
+    assert result.exit_code == 0
+    lines = result.output.strip().split("\n")
+    assert lines[0] == "port,open"
+    assert "22,true" in lines
+    assert "80,true" in lines
+    assert "443,false" in lines
+
+
+def test_scan_csv_out(monkeypatch, tmp_path) -> None:
+    out_file = tmp_path / "scan_report.csv"
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        return [(22, True), (80, False)]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "22,80", "--output-format", "csv", "--out", str(out_file)])
+    assert result.exit_code == 0
+    assert "Report written to" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    lines = content.strip().split("\n")
+    assert lines[0] == "port,open"
+    assert "22,true" in lines
+    assert "80,false" in lines
+
+
+def test_scan_output_format_precedence(monkeypatch) -> None:
+    """--output-format should take precedence over deprecated --format."""
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        return [(22, True)]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--output-format", "json", "--format", "csv"])
+    assert result.exit_code == 0
+    assert '"target": "example.com"' in result.output
+    assert "port,open" not in result.output
+
+
+def test_scan_help_shows_output_format() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--help"])
+    assert result.exit_code == 0
+    assert "--output-format" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+    assert "csv" in result.output
+
+
+def test_service_csv_output(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_service(target, ports=None, timeout=3.0, max_workers=50):
+        called_args["target"] = target
+        called_args["ports"] = ports
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": len(ports) if ports else 0,
+            "services_found": 1,
+            "results": [{"port": 22, "service": "OpenSSH", "banner": "SSH-2.0-OpenSSH_9.6"}],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["service", "--target", "example.com", "--ports", "22", "--output-format", "csv"])
+    assert result.exit_code == 0
+    lines = result.output.strip().split("\n")
+    assert lines[0] == "port,service,banner"
+    assert "22,OpenSSH,SSH-2.0-OpenSSH_9.6" in lines
+
+
+def test_service_csv_out(monkeypatch, tmp_path) -> None:
+    out_file = tmp_path / "service_report.csv"
+
+    def mock_run_service(target, ports=None, timeout=3.0, max_workers=50):
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": len(ports) if ports else 0,
+            "services_found": 1,
+            "results": [{"port": 22, "service": "OpenSSH", "banner": "SSH-2.0-OpenSSH_9.6"}],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["service", "--target", "example.com", "--ports", "22", "--output-format", "csv", "--out", str(out_file)])
+    assert result.exit_code == 0
+    assert "Report written to" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    lines = content.strip().split("\n")
+    assert lines[0] == "port,service,banner"
+    assert "22,OpenSSH,SSH-2.0-OpenSSH_9.6" in lines
+
+
+def test_service_output_format_precedence(monkeypatch) -> None:
+    """--output-format should take precedence over deprecated --format."""
+    def mock_run_service(target, ports=None, timeout=3.0, max_workers=50):
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": len(ports) if ports else 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["service", "--target", "example.com", "--output-format", "json", "--format", "csv"])
+    assert result.exit_code == 0
+    assert '"target": "example.com"' in result.output
+    assert "port,service,banner" not in result.output
+
+
+def test_service_help_shows_output_format() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["service", "--help"])
+    assert result.exit_code == 0
+    assert "--output-format" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+    assert "csv" in result.output
+
+
 def test_service_profile_fast(monkeypatch) -> None:
     called_args = {}
 
