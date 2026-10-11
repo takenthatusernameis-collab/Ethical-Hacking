@@ -10,7 +10,7 @@ The `dnsbrute` command has been implemented. All previously listed features are 
 - `whois` — WHOIS lookup (queries WHOIS server on port 43, parses registrar, creation/expiration dates, nameservers, registrant org, status codes)
 - `dns` — DNS record enumeration (A, AAAA, MX, NS, TXT, CNAME, SOA)
 - `ssl` — SSL/TLS certificate inspection (subject, issuer, validity dates, SANs, signature algorithm, key size, chain length)
-- `brute` — FTP/SSH login brute force with username/password wordlists (concurrent attempts, per-attempt results, successful-login summary)
+- `brute` — FTP/SSH login brute force with username/password wordlists (concurrent attempts, per-attempt results, successful-login summary; `--output-format csv` for credential dumps)
 - `service` — nmap-style service/banner detection (connect to open ports, grab banners, match against known service signatures)
 - `tls` — TLS protocol/cipher enumeration (per-version handshake probes with pinned min/max TLS version, per-cipher probes with pinned OpenSSL cipher string, negotiated cipher/protocol reporting, obsolete-version findings)
 - `vuln` — vulnerability checks (live service/banner detection cross-referenced with a built-in CVE/weakness database; optional `--tls-file`/`--ssl-file` inputs from the `tls`/`ssl` commands for protocol, weak-cipher, and certificate weakness findings; `--severity` filtering)
@@ -825,10 +825,37 @@ The `mac` command looks up MAC address vendor information using the IEEE OUI dat
 - `cve` now supports `--target`, `--services-file`, `--ports`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--severity`, `--min-severity`, `--format`, `--out` for NVD/CVE API vulnerability lookups.
 - `vuln` now supports `--target`, `--ports`, `--services-file`, `--tls-file`, `--ssl-file`, `--severity`, `--min-severity`, `--format`, `--out` for built-in vulnerability checks.
 - Configuration file (`ethscan.yaml`) persists default options across commands via a `--config` group option and a `config` subcommand.
-- Tests: 1107 passing (1 skipped).
+- Tests: 1115 passing (1 skipped).
+
+## Completed: `--output-format csv` option for `brute` command
+
+Added a `--output-format` option to the `brute` command that adds CSV output mode for credential dumps (in addition to the existing JSON and Markdown modes). The deprecated `--format` alias continues to work for backward compatibility.
+
+### Added Functionality
+- `ethscan/brute.py`:
+  - Added `format_brute_report_csv()` — renders brute-force results as CSV with columns `username,password,success,error`, one row per attempt. Uses stdlib `csv.writer` for proper quoting/escaping of fields containing commas or double-quotes.
+- `ethscan/cli.py`:
+  - Added `--output-format [json|markdown|csv]` option to the `brute` command
+  - Kept `--format [json|markdown|csv]` as a deprecated alias (still functional)
+  - `--output-format` takes precedence when both are specified
+
+### Modified Files
+- `ethscan/brute.py` — added CSV formatter
+- `ethscan/cli.py` — added `--output-format` option and dispatch logic
+- `tests/test_brute.py` — 3 new unit tests: CSV formatter (basic, empty, pipe escaping)
+- `tests/test_cli.py` — 7 new CLI integration tests: help shows `--output-format`, CSV output, Markdown output, default-is-JSON, CSV with `--out`, deprecated `--format markdown` still works
+- `README.md` — clarified brute feature description
+
+### Verification
+- `python -m pytest -q` -> 1115 passed, 1 skipped (1107 baseline + 8 new: 3 unit + 5 CLI)
+- `python -m ethscan --help` -> lists `brute` among the 26 commands
+- `python -m ethscan brute --help` -> shows `--output-format [json|markdown|csv]` option
+- End-to-end: `python -m ethscan brute --target example.com --output-format csv --timeout 1.0` produces CSV with `username,password,success,error` header and one row per attempt
+- End-to-end: `python -m ethscan brute --target example.com --output-format markdown --timeout 1.0` produces Markdown report
+- End-to-end: `python -m ethscan brute --target example.com --timeout 1.0` (no format flag) produces JSON by default
 
 ## Suggested next task
 
-**Add a `--output-format` option to the `brute` command** for structured output of brute-force results (currently only JSON/Markdown via formatters, but could add CSV for credential dumps).
+**Add a `dnssec` command** for DNSSEC validation of a domain's DNS records (check DS records, validate chain of trust, report algorithm/key details).
 
-Alternative: Add a `dnssec` command for DNSSEC validation of a domain's DNS records (check DS records, validate chain of trust, report algorithm/key details).
+Alternative: Add a `--json` output mode to the `scan` command for machine-readable output (currently JSON is the default, but some users may want explicit `--format json`).

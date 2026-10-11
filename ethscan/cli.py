@@ -25,6 +25,7 @@ from ethscan.fuzz import (
     load_wordlist as load_fuzz_wordlist,
 )
 from ethscan.brute import (
+    format_brute_report_csv,
     format_brute_report_json,
     format_brute_report_markdown,
     run_brute,
@@ -1340,11 +1341,18 @@ def urlcheck(
 @click.option("--timeout", default=5.0, type=float, help="Connection timeout in seconds")
 @click.option("--workers", default=10, type=int, help="Maximum concurrent workers")
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format: json, markdown, or csv (credential dump).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    help="Deprecated alias for --output-format.",
 )
 @click.option(
     "--out",
@@ -1360,6 +1368,7 @@ def brute(
     pass_file: Optional[str],
     timeout: float,
     workers: int,
+    output_fmt: Optional[str],
     fmt: str,
     out_path: Optional[str],
 ) -> None:
@@ -1377,10 +1386,15 @@ def brute(
         max_workers=workers,
     )
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_brute_report_json(results)
-    else:
+    elif chosen_format == "markdown":
         output = format_brute_report_markdown(results)
+    else:
+        output = format_brute_report_csv(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

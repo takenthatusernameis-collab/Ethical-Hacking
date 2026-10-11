@@ -1898,7 +1898,7 @@ def test_brute_offline_target_markdown(monkeypatch) -> None:
             "brute",
             "--target",
             "example.com",
-            "--format",
+            "--output-format",
             "markdown",
             "--timeout",
             "1.0",
@@ -2111,6 +2111,230 @@ def test_brute_out_option(tmp_path, monkeypatch) -> None:
     content = out_file.read_text()
     assert "example.com" in content
     assert "connection refused" in content
+
+
+def test_brute_help_shows_output_format() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["brute", "--help"])
+    assert result.exit_code == 0
+    assert "--output-format" in result.output
+    assert "csv" in result.output
+
+
+def test_brute_output_format_csv(monkeypatch) -> None:
+    def mock_run_brute(
+        target,
+        protocol="ftp",
+        usernames=None,
+        passwords=None,
+        port=None,
+        timeout=5.0,
+        max_workers=10,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "protocol": protocol,
+            "port": 21,
+            "timeout": timeout,
+            "usernames_tested": 1,
+            "passwords_tested": 2,
+            "attempts": 2,
+            "successful_count": 1,
+            "successful": [
+                {
+                    "username": "admin",
+                    "password": "secret",
+                    "success": True,
+                    "error": None,
+                }
+            ],
+            "results": [
+                {
+                    "username": "admin",
+                    "password": "secret",
+                    "success": True,
+                    "error": None,
+                },
+                {
+                    "username": "admin",
+                    "password": "wrong",
+                    "success": False,
+                    "error": "530 Login incorrect",
+                },
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_brute", mock_run_brute)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "brute",
+            "--target",
+            "example.com",
+            "--output-format",
+            "csv",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "username,password,success,error" in result.output
+    assert "admin,secret,true," in result.output
+    assert "admin,wrong,false,530 Login incorrect" in result.output
+
+
+def test_brute_output_format_markdown(monkeypatch) -> None:
+    def mock_run_brute(
+        target,
+        protocol="ftp",
+        usernames=None,
+        passwords=None,
+        port=None,
+        timeout=5.0,
+        max_workers=10,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "protocol": protocol,
+            "port": 21,
+            "timeout": timeout,
+            "usernames_tested": 1,
+            "passwords_tested": 1,
+            "attempts": 1,
+            "successful_count": 0,
+            "successful": [],
+            "results": [
+                {
+                    "username": "admin",
+                    "password": "wrong",
+                    "success": False,
+                    "error": "connection refused",
+                }
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_brute", mock_run_brute)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "brute",
+            "--target",
+            "example.com",
+            "--output-format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Brute Force Report" in result.output
+
+
+def test_brute_output_format_default_is_json(monkeypatch) -> None:
+    def mock_run_brute(
+        target,
+        protocol="ftp",
+        usernames=None,
+        passwords=None,
+        port=None,
+        timeout=5.0,
+        max_workers=10,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "protocol": protocol,
+            "port": 21,
+            "timeout": timeout,
+            "usernames_tested": 1,
+            "passwords_tested": 1,
+            "attempts": 1,
+            "successful_count": 0,
+            "successful": [],
+            "results": [
+                {
+                    "username": "admin",
+                    "password": "wrong",
+                    "success": False,
+                    "error": "connection refused",
+                }
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_brute", mock_run_brute)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["brute", "--target", "example.com", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    # JSON output starts with {
+    assert "{" in result.output
+    assert '"target"' in result.output
+
+
+def test_brute_output_format_csv_out(tmp_path, monkeypatch) -> None:
+    def mock_run_brute(
+        target,
+        protocol="ftp",
+        usernames=None,
+        passwords=None,
+        port=None,
+        timeout=5.0,
+        max_workers=10,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "protocol": protocol,
+            "port": 21,
+            "timeout": timeout,
+            "usernames_tested": 1,
+            "passwords_tested": 1,
+            "attempts": 1,
+            "successful_count": 0,
+            "successful": [],
+            "results": [
+                {
+                    "username": "admin",
+                    "password": "wrong",
+                    "success": False,
+                    "error": "connection refused",
+                }
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_brute", mock_run_brute)
+
+    out_file = tmp_path / "brute_report.csv"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "brute",
+            "--target",
+            "example.com",
+            "--output-format",
+            "csv",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "username,password,success,error" in content
+    assert "admin,wrong,false,connection refused" in content
 
 
 def test_service_help() -> None:
