@@ -41,6 +41,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - **Shell completion: `completion` command to generate bash/zsh/fish completion scripts for interactive tab completion of commands, options, and option values** (implemented)
 - **JWT inspection: `jwt` command to decode and analyze JWT tokens (header, claims, algorithm type, expiration/not-before/issued-at status, security findings like alg=none and expired tokens) without verifying the signature, with JSON/Markdown output** (implemented)
 - **Port & CIDR validation: `validate` command to validate and expand port specifications (comma-separated lists/ranges) and CIDR inputs offline, with JSON/Markdown output** (implemented)
+- **DNS resolution: `resolve` command for forward/reverse DNS resolution of a target (A, AAAA, CNAME, PTR record types), with optional custom resolver and JSON/Markdown output** (implemented)
 
 ## Configuration
 

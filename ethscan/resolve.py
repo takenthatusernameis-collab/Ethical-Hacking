@@ -213,11 +213,14 @@ def format_resolve_report_markdown(data: Dict[str, object]) -> str:
         lines.append(f"- **Custom Resolver:** {server}")
     lines.append("")
 
+    def _escape(value: str) -> str:
+        return value.replace("|", "\\|")
+
     for rtype, values in records.items():
         lines.append(f"## {rtype} Records")
         if values:
             for value in values:
-                lines.append(f"- {value}")
+                lines.append(f"- {_escape(str(value))}")
         else:
             lines.append("*No records found*")
         lines.append("")

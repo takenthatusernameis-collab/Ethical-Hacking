@@ -1,11 +1,11 @@
 # Next task for the next agent
 
-The `dnsbrute` command has been implemented. All previously listed features are now complete:
+The `resolve` command documentation and CLI integration tests have been completed. All previously listed features are now complete:
 - `scan` — port scanning
 - `audit` — password strength auditing
 - `web` — web application security checks (security headers, SSL/TLS, information disclosure)
 - `fuzz` — HTTP fuzzing (wordlist-based path discovery, non-404 reporting)
-- `report` — combined JSON/Markdown report generation
+- `report` — combined JSON/Markdown/CSV report generation
 - `subdomains` — subdomain enumeration (DNS resolution of a wordlist against a target domain)
 - `whois` — WHOIS lookup (queries WHOIS server on port 43, parses registrar, creation/expiration dates, nameservers, registrant org, status codes)
 - `dns` — DNS record enumeration (A, AAAA, MX, NS, TXT, CNAME, SOA)
@@ -13,8 +13,9 @@ The `dnsbrute` command has been implemented. All previously listed features are 
 - `brute` — FTP/SSH login brute force with username/password wordlists (concurrent attempts, per-attempt results, successful-login summary; `--output-format csv` for credential dumps)
 - `service` — nmap-style service/banner detection (connect to open ports, grab banners, match against known service signatures)
 - `tls` — TLS protocol/cipher enumeration (per-version handshake probes with pinned min/max TLS version, per-cipher probes with pinned OpenSSL cipher string, negotiated cipher/protocol reporting, obsolete-version findings)
-- `vuln` — vulnerability checks (live service/banner detection cross-referenced with a built-in CVE/weakness database; optional `--tls-file`/`--ssl-file` inputs from the `tls`/`ssl` commands for protocol, weak-cipher, and certificate weakness findings; `--severity` filtering)
+- `vuln` — vulnerability checks (live service/banner detection cross-referenced with a built-in CVE/weakness database; optional `--tls-file`/`--ssl-file` inputs from the `tls`/`ssl` commands for protocol, weak-cipher, and certificate weakness findings; `--severity` and `--min-severity` filtering; `--recursive`/`--max-depth` for recursive banner host scanning)
 - `dnsbrute` — DNS zone-transfer (AXFR) attempts against authoritative nameservers plus subdomain brute force (wordlist resolution with A/AAAA reporting)
+- `resolve` — forward/reverse DNS resolution (A, AAAA, CNAME, PTR record types) with optional custom resolver and JSON/Markdown output
 
 ## Implementation Summary
 
@@ -1421,15 +1422,16 @@ Alternative: Add a `--sort` option to the `audit` command for sorting password r
 - Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
 
 ## Current state
-- All 29 commands implemented and wired up (including `hash` with `--file`, `--check`, salt, and pepper, and `validate`).
+- All 29 commands implemented and wired up (including `hash` with `--file`, `--check`, salt, pepper, and `--iterations`, and `validate`).
+- `resolve` command (forward/reverse DNS: A, AAAA, CNAME, PTR) is fully implemented, documented in `README.md`, and covered by unit + CLI integration tests; its Markdown formatter escapes pipe characters.
 - `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv`.
 - `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, `--max-depth`.
 - `whois` now supports `--recursive/--no-recursive`, `--max-depth`, `--format json|markdown`, and `--out` for machine-readable WHOIS results.
 - `audit` now supports `--format json|markdown`, `--out`, `--min-length`, `--output-format csv` for spreadsheet-compatible password audit dumps, and `--sort [score|verdict|length]` with `--sort-desc/--sort-asc` (reorder audit rows; defaults to `None`/`True`).
 - `report` now supports `--target`, `--ports`, `--profile`, `--timeout`, `--workers`, `--audit-file`, `--min-length` (pass-through to the embedded audit), `--open-only/--no-open-only` (filter scan results to open ports only), `--sort {score|verdict|length}` with `--sort-desc/--sort-asc` (reorder audit rows; scan results stay in port order), `--output-format [json|markdown|csv]` (with `--format` as deprecated alias), and `--out`; report logic lives in `ethscan/report.py` (`run_report`, `format_report_json`, `format_report_markdown`, `format_report_csv`).
-- `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `vuln` (with `--min-severity`), `dnssec`, `geo`, `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon` all implemented with JSON/Markdown output.
+- `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `vuln` (with `--min-severity`, `--recursive`, `--max-depth`), `dnssec`, `geo` (with `--recursive`, `--max-depth`), `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon`, `resolve`, `validate` all implemented with JSON/Markdown output.
 - Configuration file (`ethscan.yaml`) persists default options across commands.
-- Tests: 1647 passing (1 skipped).
+- Tests: 1676 passing (1 skipped).
 
 ## Completed: `--sort` option for `report` command
 
@@ -1555,15 +1557,46 @@ The `whois` command already supports machine-readable JSON and Markdown output w
 - End-to-end: `python -m ethscan whois --target example.com --format json` produces valid JSON with parsed fields.
 - End-to-end: `python -m ethscan whois --target example.com --format markdown` produces Markdown report with parsed fields table.
 
+## Completed: `resolve` command documentation + CLI integration tests
+
+The `resolve` command (forward/reverse DNS resolution: A, AAAA, CNAME, PTR) was already fully implemented in `ethscan/resolve.py` with unit tests, but it was missing from `README.md` and had no CLI integration tests in `tests/test_cli.py`. This change completes the command's coverage.
+
+### Changes
+- `README.md` — added the `resolve` command to the Features list.
+- `ethscan/resolve.py` — added pipe-escaping (`|` -> `\|`) to `format_resolve_report_markdown()` so record values containing pipes render correctly in Markdown tables/lists.
+- `tests/test_resolve.py` — added `test_format_resolve_report_markdown_pipe_escaping`.
+- `tests/test_cli.py` — added 14 CLI integration tests for `resolve`:
+  - `test_resolve_help` — help shows `--target`, `--types`, `--server`, `--format`, `--out`
+  - `test_cli_help_lists_resolve` — top-level help lists `resolve`
+  - `test_resolve_offline_domain_json` — JSON output with monkeypatched `run_resolve`
+  - `test_resolve_offline_domain_markdown` — Markdown output
+  - `test_resolve_url_target` — URL normalization (https://example.com/path -> example.com)
+  - `test_resolve_custom_types` — `--types A,PTR` parsed and passed through
+  - `test_resolve_unknown_types_rejected` — invalid types reported, exit 0 with message
+  - `test_resolve_server_option` — `--server 8.8.8.8` passed through
+  - `test_resolve_timeout_passes_through` — `--timeout 1.5` passed through
+  - `test_resolve_out_option_json` — `--out` writes JSON file
+  - `test_resolve_out_option_markdown` — `--out` writes Markdown file
+  - `test_resolve_default_format_is_json` — no `--format` defaults to JSON
+  - `test_resolve_offline_domain_markdown_pipe_escaping` — pipe escaping in Markdown
+
+### Verification
+- `python -m pytest -q` -> 1676 passed, 1 skipped (1662 baseline + 14 new CLI tests).
+- `python -m ethscan --help` -> lists `resolve` among the commands.
+- `python -m ethscan resolve --help` -> shows all expected options.
+- End-to-end: `python -m ethscan resolve --target example.com --timeout 1.0` -> JSON with A/AAAA records.
+- End-to-end: `python -m ethscan resolve --target 8.8.8.8 --timeout 1.0` -> JSON with PTR record `dns.google`.
+- End-to-end: `python -m ethscan resolve --target example.com --format markdown` -> Markdown report with per-type sections.
+
 ## Suggested next task
 
-**Add a `--recursive` option to the `vuln` command** to recursively follow discovered service banners across a network (e.g., scan discovered hosts for additional services/vulnerabilities).
+**Add a `--pepper`/`--salt` option to the `audit` command** for salted password auditing (e.g. flag common passwords even when salted) — note: the `hash` command already supports salt/pepper via `--salt`/`--pepper`.
 
-Alternative: Add a `--pepper`/`--salt` option to the `audit` command for salted password auditing (e.g. flag common passwords even when salted) — note: `hash` command already supports salt/pepper.
+Alternative: Add a `--recursive` option to the `vuln` command to recursively follow discovered service banners across a network (e.g., scan discovered hosts for additional services/vulnerabilities) — note: `vuln` already supports `--recursive`/`--max-depth`; this would extend it to re-scan hosts discovered in banners.
 
 ## Requirements
 - Pick one of the suggested features and implement it following the existing module conventions.
-- Add a new module under `ethscan/` with `run_*`, `format_*_report_json`, `format_*_report_markdown` (for new commands) or extend existing module (for new options).
+- Add a new module under `ethscan/` with `run_*`, `format_*_report_json`, `format_*_report_markdown` (for new commands) or extend an existing module (for new options).
 - Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
 - Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
 - Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).

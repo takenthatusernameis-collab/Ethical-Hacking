@@ -147,6 +147,24 @@ def test_format_resolve_report_markdown_empty_records() -> None:
     assert "*No records found*" in output
 
 
+def test_format_resolve_report_markdown_pipe_escaping() -> None:
+    """Markdown output escapes pipe characters in record values."""
+    data = {
+        "target": "example.com",
+        "normalized": "example.com",
+        "is_ip": False,
+        "record_types_queried": ["CNAME"],
+        "records": {
+            "CNAME": ["a|b.example.com."],
+        },
+        "dnspython_available": False,
+        "server": None,
+    }
+    output = format_resolve_report_markdown(data)
+    assert "a\\|b.example.com" in output
+    assert "a|b.example.com" not in output.replace("\\|", "")
+
+
 def test_run_resolve_domain_defaults(monkeypatch) -> None:
     def mock_resolve_a(domain, timeout=2.0):
         return ["93.184.216.34"]

@@ -12336,3 +12336,190 @@ def test_validate_default_format_is_json() -> None:
     assert result.exit_code == 0
     parsed = json.loads(result.output)
     assert parsed["summary"]["ports_specified"] == 1
+
+
+# ---------------------------------------------------------------------------
+# resolve command integration tests
+# ---------------------------------------------------------------------------
+
+
+def _mock_resolve_result() -> dict:
+    return {
+        "target": "example.com",
+        "normalized": "example.com",
+        "is_ip": False,
+        "record_types_queried": ["A", "AAAA", "CNAME"],
+        "records": {
+            "A": ["93.184.216.34"],
+            "AAAA": [],
+            "CNAME": ["example.com."],
+        },
+        "dnspython_available": False,
+        "server": None,
+    }
+
+
+def test_resolve_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["resolve", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--types" in result.output
+    assert "--server" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+
+
+def test_cli_help_lists_resolve() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "resolve" in result.output
+
+
+def test_resolve_offline_domain_json(monkeypatch) -> None:
+    runner = CliRunner()
+    monkeypatch.setattr("ethscan.cli.run_resolve", lambda *a, **k: _mock_resolve_result())
+    result = runner.invoke(cli, ["resolve", "--target", "example.com", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["target"] == "example.com"
+    assert parsed["records"]["A"] == ["93.184.216.34"]
+
+
+def test_resolve_offline_domain_markdown(monkeypatch) -> None:
+    runner = CliRunner()
+    monkeypatch.setattr("ethscan.cli.run_resolve", lambda *a, **k: _mock_resolve_result())
+    result = runner.invoke(
+        cli, ["resolve", "--target", "example.com", "--timeout", "1.0", "--format", "markdown"]
+    )
+    assert result.exit_code == 0
+    assert "ethscan DNS Forward/Reverse Resolution Report" in result.output
+    assert "example.com" in result.output
+
+
+def test_resolve_url_target(monkeypatch) -> None:
+    runner = CliRunner()
+    monkeypatch.setattr("ethscan.cli.run_resolve", lambda *a, **k: _mock_resolve_result())
+    result = runner.invoke(cli, ["resolve", "--target", "https://example.com/path"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["normalized"] == "example.com"
+
+
+def test_resolve_custom_types(monkeypatch) -> None:
+    runner = CliRunner()
+    captured = {}
+
+    def fake_run_resolve(target, record_types=None, server=None, timeout=2.0):
+        captured["record_types"] = record_types
+        return _mock_resolve_result()
+
+    monkeypatch.setattr("ethscan.cli.run_resolve", fake_run_resolve)
+    result = runner.invoke(
+        cli, ["resolve", "--target", "example.com", "--types", "A,PTR"]
+    )
+    assert result.exit_code == 0
+    assert captured["record_types"] == ["A", "PTR"]
+
+
+def test_resolve_unknown_types_rejected() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["resolve", "--target", "example.com", "--types", "A,FOO"]
+    )
+    assert result.exit_code == 0
+    assert "Unknown record types" in result.output
+    assert "FOO" in result.output
+
+
+def test_resolve_server_option(monkeypatch) -> None:
+    runner = CliRunner()
+    captured = {}
+
+    def fake_run_resolve(target, record_types=None, server=None, timeout=2.0):
+        captured["server"] = server
+        return _mock_resolve_result()
+
+    monkeypatch.setattr("ethscan.cli.run_resolve", fake_run_resolve)
+    result = runner.invoke(
+        cli, ["resolve", "--target", "example.com", "--server", "8.8.8.8"]
+    )
+    assert result.exit_code == 0
+    assert captured["server"] == "8.8.8.8"
+
+
+def test_resolve_timeout_passes_through(monkeypatch) -> None:
+    runner = CliRunner()
+    captured = {}
+
+    def fake_run_resolve(target, record_types=None, server=None, timeout=2.0):
+        captured["timeout"] = timeout
+        return _mock_resolve_result()
+
+    monkeypatch.setattr("ethscan.cli.run_resolve", fake_run_resolve)
+    result = runner.invoke(
+        cli, ["resolve", "--target", "example.com", "--timeout", "1.5"]
+    )
+    assert result.exit_code == 0
+    assert captured["timeout"] == 1.5
+
+
+def test_resolve_out_option_json(tmp_path, monkeypatch) -> None:
+    runner = CliRunner()
+    monkeypatch.setattr("ethscan.cli.run_resolve", lambda *a, **k: _mock_resolve_result())
+    out_file = tmp_path / "resolve.json"
+    result = runner.invoke(
+        cli,
+        ["resolve", "--target", "example.com", "--format", "json", "--out", str(out_file)],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    parsed = json.loads(out_file.read_text())
+    assert parsed["target"] == "example.com"
+
+
+def test_resolve_out_option_markdown(tmp_path, monkeypatch) -> None:
+    runner = CliRunner()
+    monkeypatch.setattr("ethscan.cli.run_resolve", lambda *a, **k: _mock_resolve_result())
+    out_file = tmp_path / "resolve.md"
+    result = runner.invoke(
+        cli,
+        [
+            "resolve",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "ethscan DNS Forward/Reverse Resolution Report" in content
+
+
+def test_resolve_default_format_is_json(monkeypatch) -> None:
+    runner = CliRunner()
+    monkeypatch.setattr("ethscan.cli.run_resolve", lambda *a, **k: _mock_resolve_result())
+    result = runner.invoke(cli, ["resolve", "--target", "example.com"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["target"] == "example.com"
+
+
+def test_resolve_offline_domain_markdown_pipe_escaping(monkeypatch) -> None:
+    """Markdown output escapes pipe characters in values."""
+    data = _mock_resolve_result()
+    data["records"]["CNAME"] = ["a|b.example.com."]
+    monkeypatch.setattr("ethscan.cli.run_resolve", lambda *a, **k: data)
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["resolve", "--target", "example.com", "--format", "markdown"]
+    )
+    assert result.exit_code == 0
+    assert "a\\|b.example.com" in result.output
