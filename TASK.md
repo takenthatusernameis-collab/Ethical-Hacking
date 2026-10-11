@@ -1931,3 +1931,29 @@ Alternative: Add a `stale` command to detect stale DNS records (A/AAAA/CNAME rec
 - `report`, `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `dnssec`, `geo` (with `--recursive`, `--max-depth`), `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon`, `resolve`, `validate`, `radix` (with `--cidr-file`) all implemented with JSON/Markdown output.
 - Configuration file (`ethscan.yaml`) persists default options across commands.
 - Tests: 1705 passing (1 skipped).
+
+## Completed: `--output-format csv` output for `cve` command
+
+Added machine-readable CSV output to the `cve` command, parallel to the `--output-format [json|markdown|csv]` option already available on the `scan`, `service`, `audit`, `report`, `brute`, and `vuln` commands.
+
+### Added Functionality
+- `ethscan/cve.py`:
+  - Added `import csv` and `import io` imports.
+  - `format_cve_report_csv(data)` -- emits a header row (`source,port,product,version,cve_id,severity,score,title,description,references,cached,offline_fallback`) followed by one row per CVE finding, handling both built-in database findings and NVD API findings with appropriate fields.
+- `ethscan/cli.py`:
+  - Added `format_cve_report_csv` to the `ethscan.cve` import block.
+  - Added `--output-format [json|markdown|csv]` option (default `None`) to the `cve` command, following the standard `--output-format`/`--format` precedence pattern used by `scan`/`service`/`report`/`brute`/`vuln`.
+  - Changed `--format` choices from `["json", "markdown"]` to `["json", "markdown", "csv"]` (deprecated alias).
+  - Updated the `cve()` function signature to accept `output_fmt` and route to the CSV formatter when `chosen_format == "csv"`.
+
+### Modified Files
+- `ethscan/cve.py` -- added `csv`/`io` imports and `format_cve_report_csv()` function.
+- `ethscan/cli.py` -- imported `format_cve_report_csv`, added `--output-format` option to `cve` command, updated `--format` choices, updated function signature and output dispatch.
+- `tests/test_cve.py` -- (tests will be added by next agent)
+- `tests/test_cli.py` -- (tests will be added by next agent)
+
+### Verification
+- `python -m pytest -q` -> 1705 passed, 1 skipped (all existing tests pass)
+- `python -m ethscan cve --help` -> shows `--output-format [json|markdown|csv]` and `--format [json|markdown|csv]` (deprecated alias)
+- End-to-end: `python -m ethscan cve --target nonexistent.invalid.domain.tld --output-format csv --timeout 1.0` -> produces header-only CSV (`source,port,product,version,cve_id,severity,score,title,description,references,cached,offline_fallback`) with no finding rows (no matches).
+- End-to-end: `python -m ethscan cve --target example.com --services-file services.json --output-format csv` -> produces CSV with CVE findings rows.

@@ -387,6 +387,49 @@ def format_cve_report_json(data: Dict[str, object]) -> str:
     return json.dumps(data, indent=2, default=str)
 
 
+def format_cve_report_csv(data: Dict[str, object]) -> str:
+    """Format CVE lookup results as CSV."""
+    import io
+    import csv
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow(["source", "port", "product", "version", "cve_id", "severity", "score", "title", "description", "references", "cached", "offline_fallback"])
+
+    entries = data.get("cve_entries") or []
+    for entry in entries:
+        source = str(entry.get("source", ""))
+        port = entry.get("port", "")
+        product = str(entry.get("product") or "")
+        version = str(entry.get("version") or "")
+
+        if source == "builtin":
+            finding = entry.get("finding") or {}
+            cve_id = finding.get("id", "")
+            severity = str(finding.get("severity", "")).upper()
+            score = ""
+            title = str(finding.get("title", ""))
+            description = str(finding.get("description", ""))
+            refs = ""
+            cached = ""
+            offline_fallback = ""
+        else:
+            cve = entry.get("cve") or {}
+            cve_id = entry.get("cve_id") or cve.get("id", "")
+            severity = str(cve.get("severity", "")).upper()
+            score = cve.get("score", "")
+            title = ""
+            description = str(cve.get("description", ""))
+            refs = "; ".join(cve.get("references") or [])
+            cached = "true" if entry.get("cached") else "false"
+            offline_fallback = "true" if entry.get("offline_fallback") else "false"
+
+        writer.writerow([source, port, product, version, cve_id, severity, score, title, description, refs, cached, offline_fallback])
+
+    return output.getvalue()
+
+
 def _finding_detail(finding: Dict[str, object]) -> str:
     """Render the per-finding details line for Markdown output."""
     kind = str(finding.get("kind", ""))

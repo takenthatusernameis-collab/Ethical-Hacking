@@ -123,6 +123,7 @@ from ethscan.cert import (
 from ethscan.cve import (
     format_cve_report_json,
     format_cve_report_markdown,
+    format_cve_report_csv,
     run_cve,
 )
 from ethscan.cidr import (
@@ -2305,11 +2306,18 @@ def cert(
     help="Drop findings below this severity threshold (e.g. --min-severity high).",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format: json, markdown, or csv.",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    help="Deprecated alias for --output-format.",
 )
 @click.option(
     "--out",
@@ -2330,6 +2338,7 @@ def cve(
     api_url: Optional[str],
     severity: Optional[str],
     min_severity: Optional[str],
+    output_fmt: Optional[str],
     fmt: str,
     out_path: Optional[str],
 ) -> None:
@@ -2371,10 +2380,15 @@ def cve(
         profile=profile,
     )
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_cve_report_json(results)
-    else:
+    elif chosen_format == "markdown":
         output = format_cve_report_markdown(results)
+    else:
+        output = format_cve_report_csv(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
