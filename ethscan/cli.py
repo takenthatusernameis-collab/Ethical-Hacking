@@ -992,6 +992,12 @@ def service(target: str, ports: Optional[str], profile: Optional[str], timeout: 
     type=click.Choice(["low", "medium", "high", "critical"]),
     help="Only report findings with the given severity.",
 )
+@click.option(
+    "--min-severity",
+    "min_severity",
+    type=click.Choice(["low", "medium", "high", "critical"]),
+    help="Drop findings below this severity threshold (e.g. --min-severity high).",
+)
 @click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
 @click.option("--workers", default=50, type=int, help="Maximum concurrent workers")
 @click.option(
@@ -1014,6 +1020,7 @@ def vuln(
     tls_file: Optional[str],
     ssl_file: Optional[str],
     severity: Optional[str],
+    min_severity: Optional[str],
     timeout: float,
     workers: int,
     fmt: str,
@@ -1049,6 +1056,7 @@ def vuln(
         tls=tls_data,
         certificate=certificate,
         severity=severity,
+        min_severity=min_severity,
     )
 
     if fmt == "json":

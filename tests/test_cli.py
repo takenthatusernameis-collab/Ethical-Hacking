@@ -2763,6 +2763,7 @@ def test_vuln_offline_target_json(monkeypatch) -> None:
         tls=None,
         certificate=None,
         severity=None,
+        min_severity=None,
     ):
         return {
             "target": target,
@@ -2813,6 +2814,7 @@ def test_vuln_offline_target_markdown(monkeypatch) -> None:
         tls=None,
         certificate=None,
         severity=None,
+        min_severity=None,
     ):
         return {
             "target": target,
@@ -2999,6 +3001,7 @@ def test_vuln_ports_option(monkeypatch) -> None:
         tls=None,
         certificate=None,
         severity=None,
+        min_severity=None,
     ):
         called_args["ports"] = ports
         called_args["target"] = target
@@ -3048,6 +3051,7 @@ def test_vuln_workers_option(monkeypatch) -> None:
         tls=None,
         certificate=None,
         severity=None,
+        min_severity=None,
     ):
         called_args["max_workers"] = max_workers
         called_args["target"] = target
@@ -3095,6 +3099,7 @@ def test_vuln_out_option(tmp_path, monkeypatch) -> None:
         tls=None,
         certificate=None,
         severity=None,
+        min_severity=None,
     ):
         return {
             "target": target,
@@ -3156,6 +3161,7 @@ def test_vuln_out_option_markdown(tmp_path, monkeypatch) -> None:
         tls=None,
         certificate=None,
         severity=None,
+        min_severity=None,
     ):
         return {
             "target": target,
@@ -3207,6 +3213,101 @@ def test_vuln_out_option_markdown(tmp_path, monkeypatch) -> None:
     content = out_file.read_text()
     assert "Vulnerability Report" in content
     assert "CVE-2018-15473" in content
+
+
+def test_vuln_help_shows_min_severity() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["vuln", "--help"])
+    assert result.exit_code == 0
+    assert "--min-severity" in result.output
+    assert "low" in result.output
+    assert "medium" in result.output
+    assert "high" in result.output
+    assert "critical" in result.output
+
+
+def test_vuln_min_severity_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+        min_severity=None,
+    ):
+        called_args["min_severity"] = min_severity
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports": ports,
+            "services_checked": 0,
+            "tls_checked": False,
+            "certificate_checked": False,
+            "severity_filter": severity,
+            "min_severity_filter": min_severity,
+            "findings": [],
+            "finding_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["vuln", "--target", "example.com", "--min-severity", "high", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert called_args["min_severity"] == "high"
+
+
+def test_vuln_min_severity_disabled_by_default(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+        min_severity=None,
+    ):
+        called_args["min_severity"] = min_severity
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports": ports,
+            "services_checked": 0,
+            "tls_checked": False,
+            "certificate_checked": False,
+            "severity_filter": severity,
+            "min_severity_filter": min_severity,
+            "findings": [],
+            "finding_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["vuln", "--target", "example.com", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert called_args["min_severity"] is None
 
 
 def test_dnsbrute_help() -> None:

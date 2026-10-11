@@ -582,11 +582,11 @@ Added a `--min-severity` option to the `cve` command that filters findings below
 
 ## Suggested next task
 
-**Add a `--min-severity` option to the `vuln` command** to filter vulnerability findings below a given severity threshold (critical > high > medium > low). The `vuln` command currently only supports `--severity` (exact match); adding `--min-severity` would parallel the new `cve` option and let users drop low/medium findings.
-
-Alternative: Add a `--ports` option to the `cve` command to run live service detection on a custom port set before querying the NVD/CVE API.
+**Add a `--ports` option to the `cve` command** to run live service detection on a custom port set before querying the NVD/CVE API.
 
 Alternative: Add a `--json` output mode to the `report` command for machine-readable combined scan+audit reports.
+
+Alternative: Add a `--recursive` option to the `whois` command for recursive WHOIS queries across registrar tiers.
 
 ## Requirements
 - Pick one of the suggested features and implement it following the existing module conventions.
@@ -594,3 +594,57 @@ Alternative: Add a `--json` output mode to the `report` command for machine-read
 - Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
 - Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
 - Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
+
+## Current state
+- All 25 commands implemented and wired up (`headers`, `ping`, `cidr` now functional via CLI).
+- `scan` and `service` now support `--profile fast|normal|full` option.
+- `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
+- `subdomains` now supports `--recursive` and `--max-depth` for recursive subdomain enumeration.
+- `dnsbrute` now supports `--recursive` and `--max-depth` for recursive zone transfers.
+- `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
+- `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
+- `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out` for CT log subdomain discovery.
+- `report` now supports `--format json|markdown` and `--out` for combined scan+audit reports (json and markdown).
+- `cve` now supports `--target`, `--services-file`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--severity`, `--min-severity`, `--format`, `--out` for NVD/CVE API vulnerability lookups.
+- `vuln` now supports `--target`, `--ports`, `--services-file`, `--tls-file`, `--ssl-file`, `--severity`, `--min-severity`, `--format`, `--out` for built-in vulnerability checks.
+- Tests: 1011 passing (1 skipped).
+
+## Completed: `--min-severity` option for `vuln` command
+
+Added a `--min-severity` option to the `vuln` command that filters vulnerability findings below a given severity threshold (critical > high > medium > low). The `vuln` command previously only supported `--severity` (exact match); adding `--min-severity` parallels the existing `cve` option and lets users drop low/medium findings.
+
+### Added Functionality
+- `ethscan/vuln.py`:
+  - Added `_SEVERITY_RANK` dictionary mapping severity labels to numeric ranks (critical=3, high=2, medium=1, low=0)
+  - Added `_severity_rank()` helper returning the rank for a severity label (or None if unknown)
+  - Updated `run_vuln()` to accept `min_severity` parameter
+  - Added `min_severity` filtering logic: drops findings whose severity rank is below the specified threshold
+  - Updated return dictionary to include `min_severity_filter` field
+  - Updated `format_vuln_report_markdown()` to display `-- **Min Severity:**` line when set
+- `ethscan/cli.py`:
+  - Added `--min-severity` option (choice: low/medium/high/critical) to the `vuln` command
+  - Passes `min_severity` to `run_vuln()`
+
+### Modified Files
+- `ethscan/vuln.py` — added severity rank helper and min_severity filtering
+- `ethscan/cli.py` — added `--min-severity` option and pass-through
+- `tests/test_vuln.py` — 8 new unit tests:
+  - `test_severity_rank` — verifies ranks for all four levels
+  - `test_severity_rank_case_insensitive` — verifies case-insensitive lookup
+  - `test_severity_rank_unknown` — verifies None for unknown/empty/None levels
+  - `test_run_vuln_min_severity_drops_lower` — verifies medium findings dropped when min_severity=high
+  - `test_run_vuln_min_severity_none_keeps_all` — verifies no filter keeps all findings
+  - `test_run_vuln_min_severity_low_keeps_all` — verifies min_severity=low keeps everything
+  - `test_run_vuln_min_severity_critical_drops_all` — verifies min_severity=critical drops non-critical findings
+  - `test_format_vuln_report_markdown_with_min_severity` — verifies markdown displays Min Severity line
+  - `test_format_vuln_report_json_includes_min_severity` — verifies JSON includes min_severity_filter field
+- `tests/test_cli.py` — 3 new CLI integration tests:
+  - `test_vuln_help_shows_min_severity` — verifies help shows `--min-severity` option with choices
+  - `test_vuln_min_severity_option` — verifies `--min-severity high` passes parameter
+  - `test_vuln_min_severity_disabled_by_default` — verifies min_severity defaults to None via CLI
+
+### Verification
+- `python -m pytest -q` -> 1011 passed, 1 skipped (999 baseline + 12 new: 9 unit + 3 CLI)
+- `python -m ethscan --help` -> lists `vuln` among the 25 commands
+- `python -m ethscan vuln --help` -> shows `--min-severity` option with low/medium/high/critical choices
+- End-to-end: `python -m ethscan vuln --target example.com --services-file services.json --min-severity high --format json` produces JSON with only high/critical findings (medium OpenSSH findings dropped, critical vsFTPd backdoor retained)

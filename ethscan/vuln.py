@@ -269,6 +269,20 @@ CERTIFICATE_VULNS = [
 
 VULN_DB = SERVICE_VULNS + PROTOCOL_VULNS + CIPHER_VULNS + CERTIFICATE_VULNS
 
+_SEVERITY_RANK: Dict[str, int] = {
+    name: idx for idx, name in enumerate(reversed(SEVERITIES))
+}
+
+
+def _severity_rank(level: Optional[str]) -> Optional[int]:
+    """Return the numeric rank for a severity label, or None if unknown.
+
+    Higher rank means higher severity: critical=3, high=2, medium=1, low=0.
+    """
+    if not level:
+        return None
+    return _SEVERITY_RANK.get(str(level).lower())
+
 
 def _normalize_host(target: str) -> str:
     """Extract a bare hostname from a target that may be a URL or host.
@@ -494,6 +508,7 @@ def run_vuln(
     tls: Optional[dict] = None,
     certificate: Optional[dict] = None,
     severity: Optional[str] = None,
+    min_severity: Optional[str] = None,
 ) -> Dict[str, object]:
     """Check a target for known service, protocol, and certificate vulnerabilities.
 
@@ -510,6 +525,8 @@ def run_vuln(
             certificate weaknesses.
         severity: Restrict findings to a single severity level
             (critical/high/medium/low). If None, all severities are reported.
+        min_severity: Drop findings below this severity threshold
+            (critical/high/medium/low). If None, no lower bound is applied.
 
     Returns:
         Structured results with matched findings, counts, and notes.
@@ -542,6 +559,15 @@ def run_vuln(
     if severity:
         findings = [f for f in findings if f["severity"] == severity]
 
+    if min_severity:
+        min_rank = _severity_rank(min_severity)
+        if min_rank is not None:
+            findings = [
+                f for f in findings
+                if _severity_rank(f.get("severity")) is not None
+                and _severity_rank(f.get("severity")) >= min_rank
+            ]
+
     severity_counts: Dict[str, int] = {name: 0 for name in SEVERITIES}
     for finding in findings:
         level = str(finding["severity"])
@@ -562,6 +588,7 @@ def run_vuln(
         "tls_checked": tls_checked,
         "certificate_checked": certificate_checked,
         "severity_filter": severity,
+        "min_severity_filter": min_severity,
         "findings": findings,
         "finding_count": len(findings),
         "severity_counts": severity_counts,
@@ -619,6 +646,10 @@ def format_vuln_report_markdown(data: Dict[str, object]) -> str:
         f"{'Yes' if data.get('certificate_checked') else 'No'}"
     )
     lines.append(f"- **Findings:** {data.get('finding_count', 0)}")
+    if data.get("severity_filter"):
+        lines.append(f"- **Severity Filter:** {data['severity_filter']}")
+    if data.get("min_severity_filter"):
+        lines.append(f"- **Min Severity:** {data['min_severity_filter']}")
     lines.append("")
 
     severity_counts = data.get("severity_counts") or {}
