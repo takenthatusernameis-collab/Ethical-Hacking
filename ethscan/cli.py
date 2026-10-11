@@ -1,7 +1,7 @@
 """Command-line interface for ethscan."""
 
 import json
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import click
 
@@ -2514,8 +2514,13 @@ def hash_cmd(passwords, password_file, algorithm, salt, pepper, iterations, chec
 @click.option(
     "--cidrs",
     "cidrs_option",
-    required=True,
     help="Comma-separated list of CIDR networks (e.g. '192.168.1.0/24,10.0.0.0/8,192.168.2.0/23').",
+)
+@click.option(
+    "--cidr-file",
+    "cidr_file",
+    type=click.Path(exists=True, readable=True),
+    help="Path to a file containing CIDR networks (one per line).",
 )
 @click.option(
     "--diff",
@@ -2552,7 +2557,8 @@ def hash_cmd(passwords, password_file, algorithm, salt, pepper, iterations, chec
     help="Output file path (default: stdout)",
 )
 def radix(
-    cidrs_option: str,
+    cidrs_option: Optional[str],
+    cidr_file: Optional[str],
     diff_option: Optional[str],
     no_merge: bool,
     max_depth: int,
@@ -2569,9 +2575,18 @@ def radix(
     Use --diff to compute the set difference between two CIDR sets
     (addresses in --cidrs but not in --diff).
     """
-    cidrs = [c.strip() for c in cidrs_option.split(",") if c.strip()]
+    cidrs: List[str] = []
+
+    if cidr_file:
+        with open(cidr_file, "r", encoding="utf-8") as f:
+            file_cidrs = [line.strip() for line in f if line.strip() and not line.strip().startswith("#")]
+            cidrs.extend(file_cidrs)
+
+    if cidrs_option:
+        cidrs.extend([c.strip() for c in cidrs_option.split(",") if c.strip()])
+
     if not cidrs:
-        click.echo("Error: at least one CIDR network is required.", err=True)
+        click.echo("Error: at least one CIDR network is required (via --cidrs or --cidr-file).", err=True)
         raise SystemExit(1)
 
     diff_cidrs = None

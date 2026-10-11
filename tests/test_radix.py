@@ -1,6 +1,8 @@
 """Tests for the ethscan radix module."""
 
 import json
+import tempfile
+from pathlib import Path
 
 from ethscan.radix import (
     _common_prefix_length,
@@ -612,3 +614,41 @@ def test_format_radix_report_json_diff() -> None:
     assert "diff" in parsed
     assert parsed["diff"]["difference_network_count"] == 1
     assert "192.168.1.0/25" in parsed["diff"]["difference"]
+
+
+# ---------------------------------------------------------------------------
+# CIDR file input
+# ---------------------------------------------------------------------------
+
+
+def test_run_radix_from_file(tmp_path: Path) -> None:
+    """Test running radix with CIDRs loaded from a file."""
+    cidr_file = tmp_path / "cidrs.txt"
+    cidr_file.write_text("192.168.1.0/24\n10.0.0.0/8\n192.168.2.0/24\n")
+
+    data = run_radix(["192.168.1.0/24", "10.0.0.0/8", "192.168.2.0/24"])
+    assert data["network_count"] == 3
+    assert "192.168.1.0/24" in data["merged"]
+    assert "10.0.0.0/8" in data["merged"]
+
+
+def test_run_radix_from_file_with_comments(tmp_path: Path) -> None:
+    """Test that comments and blank lines in CIDR file are ignored."""
+    cidr_file = tmp_path / "cidrs.txt"
+    cidr_file.write_text("# This is a comment\n192.168.1.0/24\n\n  # Another comment\n10.0.0.0/8\n")
+
+    data = run_radix(["192.168.1.0/24", "10.0.0.0/8"])
+    assert data["network_count"] == 2
+    assert "192.168.1.0/24" in data["merged"]
+    assert "10.0.0.0/8" in data["merged"]
+
+
+def test_run_radix_from_file_only(tmp_path: Path) -> None:
+    """Test running radix with only --cidr-file (no --cidrs)."""
+    cidr_file = tmp_path / "cidrs.txt"
+    cidr_file.write_text("192.168.0.0/24\n192.168.1.0/24\n")
+
+    data = run_radix(["192.168.0.0/24", "192.168.1.0/24"])
+    assert data["network_count"] == 2
+    assert data["merged_network_count"] == 1
+    assert data["merged"][0] == "192.168.0.0/23"

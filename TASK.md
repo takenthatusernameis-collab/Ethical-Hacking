@@ -1740,6 +1740,36 @@ The `radix` command visualizes CIDR blocks as a radix tree (Patricia trie), merg
 - End-to-end: `python -m ethscan radix --cidrs "192.168.1.0/24" --diff "192.168.1.128/25" --format json` computes set difference (192.168.1.0/25)
 - End-to-end: `python -m ethscan radix --cidrs "10.0.0.0/8,192.168.1.0/24" --contains "10.5.5.5" --format json` reports membership with matched network
 
+## Completed: `--cidr-file` option for `radix` command
+
+Added a `--cidr-file` option to the `radix` command to read CIDR networks from a file (one per line), with support for comments and blank lines. The option can be used alone or combined with `--cidrs` to specify networks from both sources.
+
+### Added Functionality
+- `ethscan/cli.py`:
+  - Added `--cidr-file` option to the `radix` command (type: click.Path, readable file)
+  - Updated `radix()` function to accept `cidr_file` parameter
+  - Reads CIDRs from file, stripping whitespace and ignoring lines starting with `#`
+  - Combines file CIDRs with `--cidrs` option CIDRs (both optional, but at least one required)
+  - Updated help text to reflect new option
+
+### Modified Files
+- `ethscan/cli.py` — added `--cidr-file` option and file reading logic
+- `tests/test_radix.py` — 3 new unit tests:
+  - `test_run_radix_from_file` — tests basic file input
+  - `test_run_radix_from_file_with_comments` — tests comments and blank lines are ignored
+  - `test_run_radix_from_file_only` — tests file-only usage (no --cidrs)
+- `tests/test_cli.py` — 4 new CLI integration tests:
+  - `test_radix_cidr_file_option` — tests CLI --cidr-file option
+  - `test_radix_cidr_file_with_comments` — tests CLI with comments in file
+  - `test_radix_cidr_file_and_cidrs_combined` — tests combined --cidr-file and --cidrs
+  - `test_radix_cidr_file_help` — verifies help shows --cidr-file option
+
+### Verification
+- `python -m pytest -q` -> 1726 passed, 1 skipped (1719 baseline + 7 new tests)
+- `python -m ethscan radix --help` -> shows `--cidr-file` option
+- End-to-end: `python -m ethscan radix --cidr-file cidrs.txt --format json` reads networks from file
+- End-to-end: `python -m ethscan radix --cidr-file cidrs.txt --cidrs "192.168.1.0/24" --format json` combines file and command-line CIDRs
+
 ## Current state
 - All 30 commands implemented and wired up (including `radix`).
 - `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv`.
@@ -1747,17 +1777,17 @@ The `radix` command visualizes CIDR blocks as a radix tree (Patricia trie), merg
 - `whois` now supports `--recursive/--no-recursive`, `--max-depth`, `--format json|markdown`, and `--out` for machine-readable WHOIS results.
 - `audit` now supports `--format json|markdown`, `--out`, `--min-length`, `--output-format csv` for spreadsheet-compatible password audit dumps, `--sort [score|verdict|length]` with `--sort-desc/--sort-asc` (reorder audit rows; defaults to `None`/`True`), and `--salt`/`--pepper`/`--algorithm` for salted/peppered password auditing.
 - `report` now supports `--target`, `--ports`, `--profile`, `--timeout`, `--workers`, `--audit-file`, `--min-length` (pass-through to the embedded audit), `--salt`/`--pepper`/`--algorithm` (pass-through to the embedded audit), `--open-only/--no-open-only` (filter scan results to open ports only), `--sort {score|verdict|length}` with `--sort-desc/--sort-asc` (reorder audit rows; scan results stay in port order), `--output-format [json|markdown|csv]` (with `--format` as deprecated alias), and `--out`; report logic lives in `ethscan/report.py` (`run_report`, `format_report_json`, `format_report_markdown`, `format_report_csv`).
-- `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `vuln` (with `--min-severity`, `--recursive`, `--max-depth`), `dnssec`, `geo` (with `--recursive`, `--max-depth`), `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon`, `resolve`, `validate`, `radix` all implemented with JSON/Markdown output.
+- `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `vuln` (with `--min-severity`, `--recursive`, `--max-depth`), `dnssec`, `geo` (with `--recursive`, `--max-depth`), `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon`, `resolve`, `validate`, `radix` (with `--cidr-file`) all implemented with JSON/Markdown output.
 - Configuration file (`ethscan.yaml`) persists default options across commands.
-- Tests: 1719 passing (1 skipped).
+- Tests: 1726 passing (1 skipped).
 
 ## Suggested next task
 
 **Add a `--recursive` option to the `geo` command** to recursively geolocate all IPs discovered in a traceroute (the `trace` command already supports `--recursive` for hop discovery).
 
-Alternative: Add a `--cidr-file` option to the `radix` command to read CIDR blocks from a file (one per line).
-
 Alternative: Add a `--pepper`/`--salt` option to the `vuln` command for cross-referencing against salted vulnerability signatures (unlikely but possible).
+
+Alternative: Add a `--json` output mode to the `audit` command for machine-readable password audit results (already supports JSON but could be enhanced).
 
 ## Requirements
 - Pick one of the suggested features and implement it following the existing module conventions.

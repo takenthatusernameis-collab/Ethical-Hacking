@@ -12940,3 +12940,59 @@ def test_radix_markdown_pipe_escaping() -> None:
     assert result.exit_code == 0
     # The merged networks table should not have raw pipes in values
     assert "|" in result.output  # table separators
+
+
+def test_radix_cidr_file_option(tmp_path) -> None:
+    """Test radix command with --cidr-file option."""
+    cidr_file = tmp_path / "cidrs.txt"
+    cidr_file.write_text("192.168.0.0/24\n192.168.1.0/24\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["radix", "--cidr-file", str(cidr_file), "--format", "json"],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["network_count"] == 2
+    assert parsed["merged_network_count"] == 1
+    assert parsed["merged"][0] == "192.168.0.0/23"
+
+
+def test_radix_cidr_file_with_comments(tmp_path) -> None:
+    """Test radix command with --cidr-file containing comments and blank lines."""
+    cidr_file = tmp_path / "cidrs.txt"
+    cidr_file.write_text("# Comment line\n192.168.1.0/24\n\n  # Another comment\n10.0.0.0/8\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["radix", "--cidr-file", str(cidr_file), "--format", "json"],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["network_count"] == 2
+    assert "192.168.1.0/24" in parsed["merged"]
+    assert "10.0.0.0/8" in parsed["merged"]
+
+
+def test_radix_cidr_file_and_cidrs_combined(tmp_path) -> None:
+    """Test radix command with both --cidr-file and --cidrs options."""
+    cidr_file = tmp_path / "cidrs.txt"
+    cidr_file.write_text("192.168.0.0/24\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["radix", "--cidr-file", str(cidr_file), "--cidrs", "192.168.1.0/24", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["network_count"] == 2
+    assert parsed["merged_network_count"] == 1
+    assert parsed["merged"][0] == "192.168.0.0/23"
+
+
+def test_radix_cidr_file_help() -> None:
+    """Test that --cidr-file appears in radix help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["radix", "--help"])
+    assert result.exit_code == 0
+    assert "--cidr-file" in result.output
