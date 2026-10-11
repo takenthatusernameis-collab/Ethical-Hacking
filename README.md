@@ -7,6 +7,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - Network reconnaissance and scanning utilities (implemented)
 - Password strength auditing with JSON/Markdown output (`audit`) (implemented)
 - Web application security checks (implemented)
+- **Security headers check: `headers` command for quick security header analysis** (implemented)
 - HTTP fuzzing (implemented)
 - Subdomain enumeration (implemented)
 - DNS record enumeration (implemented)

@@ -46,6 +46,11 @@ from ethscan.dns import (
     format_dns_report_markdown,
     run_dns,
 )
+from ethscan.resolve import (
+    format_resolve_report_json,
+    format_resolve_report_markdown,
+    run_resolve,
+)
 from ethscan.dnsbrute import (
     format_dnsbrute_report_json,
     format_dnsbrute_report_markdown,
@@ -209,7 +214,7 @@ def audit(file: str, fmt: str, out_path: str) -> None:
 
 
 @cli.command()
-@click.option("--target", required=True, help="Target host or IP address for port scan")
+@click.option("--target", required=True, help="Target URL (e.g. https://example.com)")
 @click.option(
     "--ports",
     default="common",
@@ -230,6 +235,7 @@ def audit(file: str, fmt: str, out_path: str) -> None:
     help="Output format (json or markdown)",
 )
 @click.option(
+    "--output",
     "--out",
     "out_path",
     type=click.Path(writable=True),
@@ -473,7 +479,7 @@ def subdomains(
 
 
 @cli.command()
-@click.option("--target", required=True, help="Target domain or IP address")
+@click.option("--target", required=True, help="Target URL (e.g. https://example.com)")
 @click.option(
     "--server",
     default="whois.iana.org",
@@ -519,7 +525,40 @@ def whois(
 
 
 @cli.command()
-@click.option("--target", required=True, help="Target domain or URL (e.g. example.com or https://example.com)")
+@click.option("--target", required=True, help="Target URL (e.g. https://example.com)")
+@click.option("--timeout", default=5.0, type=float, help="Request timeout in seconds")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def headers(target: str, timeout: float, fmt: str, out_path: str) -> None:
+    """Run security headers check against TARGET."""
+    results = run_headers(target, timeout=timeout)
+
+    if fmt == "json":
+        output = format_headers_report_json(results)
+    else:
+        output = format_headers_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option("--target", required=True, help="Target URL (e.g. https://example.com)")
 @click.option(
     "--types",
     "record_types",
@@ -567,6 +606,70 @@ def dns(
         output = format_dns_report_json(results)
     else:
         output = format_dns_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target domain, IP address, or URL (e.g. example.com, 8.8.8.8, https://example.com)",
+)
+@click.option(
+    "--types",
+    "record_types",
+    help="Comma-separated list of DNS record types: A, AAAA, CNAME, PTR. "
+    "Defaults to A,AAAA,CNAME for domains; PTR for IP addresses.",
+)
+@click.option(
+    "--server",
+    help="Custom DNS resolver IP address (requires dnspython)",
+)
+@click.option("--timeout", default=2.0, type=float, help="Resolution timeout in seconds")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def resolve(
+    target: str,
+    record_types: Optional[str],
+    server: Optional[str],
+    timeout: float,
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Perform forward/reverse DNS resolution for TARGET."""
+    types_list = None
+    if record_types:
+        types_list = [t.strip().upper() for t in record_types.split(",") if t.strip()]
+        valid_types = {"A", "AAAA", "CNAME", "PTR"}
+        unknown = [t for t in types_list if t not in valid_types]
+        if unknown:
+            click.echo(f"Unknown record types: {', '.join(unknown)}")
+            click.echo(f"Valid types: {', '.join(sorted(valid_types))}")
+            return
+
+    results = run_resolve(target, record_types=types_list, server=server, timeout=timeout)
+
+    if fmt == "json":
+        output = format_resolve_report_json(results)
+    else:
+        output = format_resolve_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
@@ -1243,6 +1346,80 @@ def trace(
         output = format_trace_report_json(results)
     else:
         output = format_trace_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target host or URL (e.g. example.com or https://example.com)",
+)
+@click.option(
+    "--count",
+    default=4,
+    type=int,
+    help="Number of echo requests to send (default: 4)",
+)
+@click.option(
+    "--timeout",
+    default=2.0,
+    type=float,
+    help="Per-probe timeout in seconds (default: 2.0)",
+)
+@click.option(
+    "--ttl",
+    default=64,
+    type=int,
+    help="Time-to-live value for probes (default: 64)",
+)
+@click.option(
+    "--tcp-port",
+    default=80,
+    type=int,
+    help="Target TCP port for connect-based fallback when ICMP is unavailable (default: 80)",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def ping(
+    target: str,
+    count: int,
+    timeout: float,
+    ttl: int,
+    tcp_port: int,
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Run ICMP ping (or TCP connect fallback) against TARGET for host discovery."""
+    results = run_ping(
+        target,
+        count=count,
+        timeout=timeout,
+        ttl=ttl,
+        port=tcp_port,
+    )
+
+    if fmt == "json":
+        output = format_ping_report_json(results)
+    else:
+        output = format_ping_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
