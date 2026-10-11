@@ -2023,8 +2023,23 @@ The `stale` command detects stale DNS records (A/AAAA/CNAME records pointing to 
 - `vuln` now supports `--output-format [json|markdown|csv]` and `--format [json|markdown|csv]` (deprecated alias) for machine-readable CSV export of vulnerability findings.
 - `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv`.
 - `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, `--max-depth`.
-- `whois` now supports `--recursive/--no-recursive`, `--max-depth`, `--format json|markdown`, and `--out`.
+- `whois` now supports `--recursive/--no-recursive`, `--max-depth`, `--format json|markdown`, and `--out` (including cross-registrar referral following).
 - `audit` now supports `--format json|markdown`, `--out`, `--min-length`, `--output-format csv`, `--sort`, and `--salt`/`--pepper`/`--algorithm`.
 - `report`, `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `dnssec`, `geo` (with `--recursive`, `--max-depth`), `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon`, `resolve`, `validate`, `radix` (with `--cidr-file`), `nmap`, `stale` all implemented with JSON/Markdown output.
 - Configuration file (`ethscan.yaml`) persists default options across commands.
 - Tests: 1772 passing (1 skipped).
+
+## Suggested next task
+
+**Add an `ssh` command** for SSH security assessment: enumerate supported key exchange algorithms, ciphers, MACs, and host key types on a target SSH server; check for weak/deprecated algorithms (e.g., `diffie-hellman-group1-sha1`, `arcfour`, `3des-cbc`); report host key fingerprint and algorithm; support `--target` (host:port), `--timeout`, `--format [json|markdown]`, `--out`. Use stdlib-only `socket` + `paramiko` if available (graceful fallback with `SSH_AVAILABLE` flag) or implement raw SSH protocol negotiation for algorithm enumeration without `paramiko`.
+
+Alternative: Add a `--recursive` option to the `trace` command to recursively trace routes to discovered intermediate hops.
+
+Alternative: Add a `s3` command for AWS S3 bucket enumeration (public bucket detection via DNS/HTTP, with wordlist-based bruteforce and `--region` filtering).
+
+## Requirements
+- Pick one of the suggested features and implement it following the existing module conventions.
+- Add a new module under `ethscan/` with `run_*`, `format_*_report_json`, `format_*_report_markdown` (for new commands) or extend an existing module (for new options).
+- Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
+- Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
+- Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
