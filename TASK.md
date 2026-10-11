@@ -977,9 +977,34 @@ The `cidr` command performs network calculations using the stdlib `ipaddress` mo
 - End-to-end: `python -m ethscan cidr --cidr 2001:db8::/32 --format markdown` renders IPv6 network table with no broadcast address.
 - End-to-end: `python -m ethscan cidr --cidr 192.168.1.100 --format json` treats bare IP as /32 single-host network.
 
+## Completed: `hash` command (Password hash generation)
+
+The `hash` command generates password hashes using common algorithms (MD5, SHA-1, SHA-256, SHA-512, NTLM) for password-audit workflows. It supports multiple input methods (file or stdin), algorithm selection, and JSON/Markdown output.
+
+### Added Files
+- `ethscan/hash.py` — Password hash generation module with:
+  - `_md4()` — pure Python MD4 implementation (stdlib doesn't guarantee MD4 availability) for NTLM hash generation
+  - `_compute_hash()` — computes hash for a single password using specified algorithm
+  - `run_hash()` — public entry point: accepts list of passwords and optional algorithm list, returns structured results
+  - `format_hash_report_json()` / `format_hash_report_markdown()` — output formatters (markdown includes summary table with pipe escaping)
+- `tests/test_hash.py` — 21 unit tests: hash computation (all algorithms), run_hash (default/custom algorithms, multiple passwords, empty, invalid algorithm, special chars), formatters (JSON, markdown basic/empty/pipe escaping), algorithm constants
+
+### Modified Files
+- `ethscan/cli.py` — registered `hash` command with `--file`, `--algorithm` (multiple, choice: md5/sha1/sha256/sha512/ntlm), `--format`, `--out`; imports `run_hash` and formatters from `ethscan.hash`
+- `tests/test_cli.py` — 8 CLI integration tests: `hash` help, top-level help listing, stdin json/markdown output (monkeypatched `run_hash`), `--file` option, `--algorithm` option, `--out` (json and markdown)
+- `README.md` — added password hash generation (`hash`) to the features list
+
+### Verification
+- `python -m pytest -q` -> 1262 passed, 1 skipped (1233 baseline + 29 new: 21 unit + 8 CLI).
+- `python -m ethscan --help` -> lists `hash` among the 29 commands.
+- `python -m ethscan hash --help` -> shows all expected options (`--file`, `--algorithm`, `--format`, `--out`).
+- End-to-end: `echo "password" | python -m ethscan hash --format markdown` -> produces Markdown report with all 5 algorithm columns.
+- End-to-end: `echo -e "password\nsecret" | python -m ethscan hash --algorithm md5 --algorithm sha256 --format json` -> produces JSON with only MD5 and SHA-256 hashes.
+- End-to-end: `python -m ethscan hash --file passwords.txt --format json --out hashes.json` -> writes JSON report to file.
+
 ## Suggested next task
 
-**Add a `hash` command** that generates password hashes (MD5, SHA-1, SHA-256, SHA-512, NTLM) for password-audit workflows, with `--algorithm` selection and JSON/Markdown output.
+**Add a `radix` command** for radix tree visualization of CIDR blocks (merging overlapping/supernetting adjacent networks).
 
 Alternative: Add a `radix` command for radix tree visualization of CIDR blocks (merging overlapping/supernetting adjacent networks).
 

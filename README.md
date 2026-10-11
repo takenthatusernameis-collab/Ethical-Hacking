@@ -10,7 +10,8 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - Web application security checks (implemented)
 - **Security headers check: `headers` command for quick security header analysis** (implemented)
 - **ICMP ping: `ping` command for host discovery with ICMP echo requests and TCP connect fallback** (implemented)
-- **CIDR network calculator: `cidr` command for offline network calculations (network address, netmask, broadcast, host range, membership test)** (implemented)
+- **CIDR network calculator: `cidr` command for offline network calculations (network address, netmask, broadcast, host range, membership test, and set difference via `--diff`)** (implemented)
+- **Radix tree visualization: `radix` command for merging overlapping/supernettable CIDR blocks and rendering a hierarchical binary radix tree** (implemented, `--contains` option for IP membership testing)
 - HTTP fuzzing (implemented)
 - Subdomain enumeration (implemented)
 - DNS record enumeration (implemented)
@@ -31,10 +32,12 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - Certificate Transparency log search: `cert` command to discover subdomains via CT logs (crt.sh-compatible APIs) with caching and offline fallback (implemented)
 - CVE lookup: `cve` command to query the NVD/CVE API for known vulnerabilities affecting detected service versions, with a built-in CVE/weakness database cross-reference, caching, offline fallback, JSON/Markdown output, `--out`, `--severity`, and `--min-severity` (implemented)
 - Subdomain takeover detection: `subtake` command to detect subdomain takeover vulnerabilities by checking CNAME records against known vulnerable cloud services (implemented)
+- **Password hash generation: `hash` command to generate password hashes (MD5, SHA-1, SHA-256, SHA-512, NTLM) for password-audit workflows with JSON/Markdown output** (implemented)
 - Configuration file: `ethscan.yaml` (or `~/.ethscan.yaml`) to persist default options across commands (global `defaults` plus per-command overrides); `ethscan config` command to inspect or initialize the config (implemented)
 - **MAC address vendor lookup: `mac` command to look up OUI vendor information via public API (api.macvendors.com) with filesystem caching, offline fallback, and JSON/Markdown output** (implemented)
 - **DNSSEC validation: `dnssec` command for DNSSEC validation of a domain's DNS records (check DS records, validate chain of trust, report algorithm/key details)** (implemented)
 - **Shell completion: `completion` command to generate bash/zsh/fish completion scripts for interactive tab completion of commands, options, and option values** (implemented)
+- **JWT inspection: `jwt` command to decode and analyze JWT tokens (header, claims, algorithm type, expiration/not-before/issued-at status, security findings like alg=none and expired tokens) without verifying the signature, with JSON/Markdown output** (implemented)
 
 ## Configuration
 

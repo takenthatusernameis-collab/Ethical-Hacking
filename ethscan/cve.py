@@ -209,12 +209,15 @@ def run_cve(
     target: str,
     services_file: Optional[str] = None,
     timeout: float = DEFAULT_TIMEOUT,
+    service_timeout: float = 3.0,
+    workers: int = 50,
     use_cache: bool = True,
     offline_fallback: bool = True,
     api_url: Optional[str] = None,
     severity: Optional[str] = None,
     min_severity: Optional[str] = None,
     ports: Optional[List[int]] = None,
+    profile: Optional[str] = None,
 ) -> Dict[str, object]:
     """Query the NVD/CVE API for known vulnerabilities affecting TARGET's services.
 
@@ -223,6 +226,8 @@ def run_cve(
         services_file: Optional JSON file with ``service`` command output. When
             omitted, live service detection is run against the target.
         timeout: API request timeout in seconds.
+        service_timeout: Connection timeout in seconds for live service detection.
+        workers: Maximum concurrent workers for live service detection.
         use_cache: Whether to use local filesystem cache.
         offline_fallback: Whether to use stale cache when API is unreachable.
         api_url: Optional custom NVD API base URL.
@@ -232,6 +237,8 @@ def run_cve(
             (critical/high/medium/low). If None, no lower bound is applied.
         ports: Optional list of ports to scan for live service detection.
             If None, uses default common ports.
+        profile: Optional scan profile (fast/normal/full) that maps to predefined
+            port sets and service-detection presets.
 
     Returns:
         Structured results with per-service CVE lookups, counts, and notes.
@@ -256,7 +263,9 @@ def run_cve(
     if services is None:
         from ethscan.service import run_service
 
-        services = run_service(host, ports=ports, timeout=timeout)
+        services = run_service(
+            host, ports=ports, timeout=service_timeout, max_workers=workers
+        )
 
     cve_entries: List[Dict[str, object]] = []
     services_checked = 0
@@ -344,12 +353,15 @@ def run_cve(
         "target": target,
         "host": host,
         "timeout": timeout,
+        "service_timeout": service_timeout,
+        "workers": workers,
         "use_cache": use_cache,
         "offline_fallback": offline_fallback,
         "api_url": api_url,
         "severity_filter": severity,
         "min_severity_filter": min_severity,
         "ports": ports,
+        "profile": profile,
         "services_checked": services_checked,
         "cve_entries": cve_entries,
         "cve_count": len(cve_entries),
@@ -400,6 +412,12 @@ def format_cve_report_markdown(data: Dict[str, object]) -> str:
     lines.append(f"- **Target:** {data['target']}")
     lines.append(f"- **Host:** {data['host']}")
     lines.append(f"- **Timeout:** {data['timeout']}s")
+    if data.get("profile"):
+        lines.append(f"- **Profile:** {data['profile']}")
+    if data.get("service_timeout"):
+        lines.append(f"- **Service Timeout:** {data['service_timeout']}s")
+    if data.get("workers"):
+        lines.append(f"- **Workers:** {data['workers']}")
     lines.append(f"- **Cache Enabled:** {'Yes' if data['use_cache'] else 'No'}")
     lines.append(
         f"- **Offline Fallback:** {'Yes' if data['offline_fallback'] else 'No'}"

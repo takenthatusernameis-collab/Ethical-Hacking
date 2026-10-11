@@ -47,7 +47,7 @@ def _format_network_info(network: ipaddress._BaseNetwork) -> Dict[str, object]:
         wildcard = str(network.hostmask)
         if network.num_addresses > 2:
             first_host = str(network[1])
-            last_host = str(network[-2])
+            last_host = str(network[-1])
         elif network.num_addresses == 2:
             first_host = str(network[1])
             last_host = str(network[1])
@@ -61,7 +61,7 @@ def _format_network_info(network: ipaddress._BaseNetwork) -> Dict[str, object]:
         wildcard = str(network.hostmask)
         if network.num_addresses > 2:
             first_host = str(network[1])
-            last_host = str(network[-2])
+            last_host = str(network[-1])
         elif network.num_addresses == 2:
             first_host = str(network[1])
             last_host = str(network[1])
@@ -92,18 +92,62 @@ def _contains_ip(network: ipaddress._BaseNetwork, ip: str) -> bool:
     return addr in network
 
 
+def _subtract_networks(
+    minuend: List[ipaddress._BaseNetwork],
+    subtrahend: List[ipaddress._BaseNetwork],
+) -> List[ipaddress._BaseNetwork]:
+    """Subtract subtrahend networks from minuend networks.
+
+    Returns a list of networks representing the address ranges in minuend
+    but not in subtrahend. Uses ipaddress collapse and subtraction logic.
+    """
+    if not minuend:
+        return []
+    if not subtrahend:
+        return sorted(minuend, key=lambda n: n.network_address)
+
+    result: List[ipaddress._BaseNetwork] = []
+    for m_net in sorted(minuend, key=lambda n: n.network_address):
+        remaining = [m_net]
+        for s_net in sorted(subtrahend, key=lambda n: n.network_address):
+            if m_net.version != s_net.version:
+                continue
+            if not m_net.overlaps(s_net):
+                continue
+            new_remaining = []
+            for r_net in remaining:
+                if not r_net.overlaps(s_net):
+                    new_remaining.append(r_net)
+                    continue
+                try:
+                    diffs = list(r_net.address_exclude(s_net))
+                except Exception:
+                    diffs = []
+                if diffs:
+                    new_remaining.extend(diffs)
+            remaining = new_remaining
+            if not remaining:
+                break
+        result.extend(remaining)
+    return sorted(result, key=lambda n: n.network_address)
+
+
 def run_cidr(
     cidr: str,
     contains: Optional[str] = None,
+    diff: Optional[str] = None,
 ) -> Dict[str, object]:
     """Compute network calculations for a CIDR.
 
     Args:
         cidr: CIDR notation (e.g. ``192.168.1.0/24``) or bare IP.
         contains: Optional IP address to test for membership.
+        diff: Optional second CIDR to compute set difference against
+            (addresses in ``cidr`` but not in ``diff``).
 
     Returns:
-        Structured results with network info and optional membership test.
+        Structured results with network info, optional membership test,
+        and optional set difference.
     """
     normalized = _normalize_cidr(cidr)
     network = ipaddress.ip_network(normalized, strict=False)
@@ -120,6 +164,18 @@ def run_cidr(
         result["contains"] = {
             "ip": contains_stripped,
             "in_network": _contains_ip(network, contains_stripped),
+        }
+
+    if diff is not None:
+        diff_normalized = _normalize_cidr(diff)
+        diff_network = ipaddress.ip_network(diff_normalized, strict=False)
+        diff_result = _subtract_networks([network], [diff_network])
+        total_diff_addresses = sum(n.num_addresses for n in diff_result)
+        result["diff"] = {
+            "diff_cidr": diff_normalized,
+            "difference": [str(n) for n in diff_result],
+            "difference_network_count": len(diff_result),
+            "total_diff_addresses": total_diff_addresses,
         }
 
     return result
@@ -169,6 +225,28 @@ def format_cidr_report_markdown(data: Dict[str, object]) -> str:
         lines.append("## Membership Test")
         lines.append(f"- **IP Tested:** {contains['ip']}")
         lines.append(f"- **In Network:** {'Yes' if contains['in_network'] else 'No'}")
+        lines.append("")
+
+    diff = data.get("diff")
+    if diff is not None:
+        lines.append("## Set Difference (In First, Not In Second)")
+        lines.append(f"- **Diff CIDR:** {diff['diff_cidr']}")
+        lines.append(f"- **Difference Networks:** {diff['difference_network_count']}")
+        lines.append(f"- **Total Difference Addresses:** {diff['total_diff_addresses']}")
+        lines.append("")
+        lines.append("### Difference Networks")
+        lines.append("| Network | Address Range | Total Addresses |")
+        lines.append("|---------|---------------|-----------------|")
+        for net_str in diff.get("difference", []) or []:
+            try:
+                network = ipaddress.ip_network(net_str, strict=False)
+                start = str(network.network_address)
+                end = str(network.broadcast_address) if network.version == 4 else str(network[-1])
+                total = network.num_addresses
+            except ValueError:
+                start = end = ""
+                total = "?"
+            lines.append(f"| {_escape(net_str)} | {_escape(start)} - {_escape(end)} | {total} |")
         lines.append("")
 
     return "\n".join(lines)

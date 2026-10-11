@@ -142,6 +142,11 @@ from ethscan.mac import (
     format_mac_report_markdown,
     run_mac,
 )
+from ethscan.hash import (
+    format_hash_report_json,
+    format_hash_report_markdown,
+    run_hash,
+)
 from ethscan.subdomains import load_subdomain_wordlist
 from ethscan.headers import (
     format_headers_report_json,
@@ -162,6 +167,11 @@ from ethscan.completion import (
     format_completion_report_json,
     format_completion_report_markdown,
     run_completion,
+)
+from ethscan.jwt import (
+    format_jwt_report_json,
+    format_jwt_report_markdown,
+    run_jwt,
 )
 
 
@@ -308,6 +318,59 @@ def audit(file: str, fmt: str, out_path: str) -> None:
         output = format_audit_report_json(passwords, results)
     else:
         output = format_audit_report_markdown(passwords, results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--file",
+    help="Path to a file containing one password per line. If omitted, reads stdin.",
+)
+@click.option(
+    "--algorithm",
+    "algorithms",
+    multiple=True,
+    type=click.Choice(["md5", "sha1", "sha256", "sha512", "ntlm"], case_sensitive=False),
+    help="Hash algorithm(s) to use. Can be specified multiple times. Default: all algorithms.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def hash(file: str, algorithms: tuple, fmt: str, out_path: str) -> None:
+    """Generate password hashes for password-audit workflows."""
+    if file:
+        with open(file, "r", encoding="utf-8") as handle:
+            passwords = [line.strip() for line in handle if line.strip()]
+    else:
+        passwords = [line.strip() for line in click.get_text_stream("stdin") if line.strip()]
+
+    if not passwords:
+        click.echo("No passwords provided.")
+        return
+
+    algo_list = list(algorithms) if algorithms else None
+    results = run_hash(passwords, algorithms=algo_list)
+
+    if fmt == "json":
+        output = format_hash_report_json(results)
+    else:
+        output = format_hash_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
@@ -2009,7 +2072,27 @@ def cert(
     help="Ports to scan for live service detection: comma-separated list/ranges "
     "(e.g., '21,22,80'). Defaults to common ports.",
 )
+@click.option(
+    "--profile",
+    type=click.Choice(["fast", "normal", "full"]),
+    help="Scan profile for live service detection: fast (top ~18 ports), "
+    "normal (common ports), full (1-1024 + common). Overrides --ports, "
+    "--service-timeout, --workers unless explicitly set.",
+)
 @click.option("--timeout", default=10.0, type=float, help="API request timeout in seconds")
+@click.option(
+    "--service-timeout",
+    "service_timeout",
+    default=3.0,
+    type=float,
+    help="Connection timeout in seconds for live service detection (default: 3.0)",
+)
+@click.option(
+    "--workers",
+    default=50,
+    type=int,
+    help="Maximum concurrent workers for live service detection (default: 50)",
+)
 @click.option(
     "--no-cache",
     is_flag=True,
@@ -2052,7 +2135,10 @@ def cve(
     target: str,
     services_file: Optional[str],
     ports: Optional[str],
+    profile: Optional[str],
     timeout: float,
+    service_timeout: float,
+    workers: int,
     no_cache: bool,
     no_offline_fallback: bool,
     api_url: Optional[str],
@@ -2068,20 +2154,35 @@ def cve(
             services = json.load(handle)
 
     port_list = None
-    if ports and not services_file:
-        from ethscan.scanner import parse_port_range
-        port_list = parse_port_range(ports)
+    if not services_file:
+        if profile:
+            defaults = get_profile_defaults(profile)
+            if ports:
+                from ethscan.scanner import parse_port_range
+                port_list = parse_port_range(ports)
+            else:
+                port_list = get_profile_ports(profile)
+            if service_timeout == 3.0:
+                service_timeout = defaults["timeout"]
+            if workers == 50:
+                workers = defaults["workers"]
+        elif ports:
+            from ethscan.scanner import parse_port_range
+            port_list = parse_port_range(ports)
 
     results = run_cve(
         target,
         services_file=services_file,
         timeout=timeout,
+        service_timeout=service_timeout,
+        workers=workers,
         use_cache=not no_cache,
         offline_fallback=not no_offline_fallback,
         api_url=api_url,
         severity=severity,
         min_severity=min_severity,
         ports=port_list,
+        profile=profile,
     )
 
     if fmt == "json":
@@ -2108,6 +2209,10 @@ def cve(
     help="Optional IP address to test for network membership.",
 )
 @click.option(
+    "--diff",
+    help="Optional CIDR to compute set difference against (addresses in --cidr but not in --diff).",
+)
+@click.option(
     "--format",
     "fmt",
     type=click.Choice(["json", "markdown"]),
@@ -2120,9 +2225,9 @@ def cve(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def cidr(cidr: str, contains: Optional[str], fmt: str, out_path: Optional[str]) -> None:
+def cidr(cidr: str, contains: Optional[str], diff: Optional[str], fmt: str, out_path: Optional[str]) -> None:
     """Compute network calculations for a CIDR (offline)."""
-    results = run_cidr(cidr, contains=contains)
+    results = run_cidr(cidr, contains=contains, diff=diff)
 
     if fmt == "json":
         output = format_cidr_report_json(results)
@@ -2179,6 +2284,95 @@ def hash_cmd(passwords, algorithm, fmt, out_path) -> None:
         output = format_hash_report_json(results)
     else:
         output = format_hash_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--cidrs",
+    "cidrs_option",
+    required=True,
+    help="Comma-separated list of CIDR networks (e.g. '192.168.1.0/24,10.0.0.0/8,192.168.2.0/23').",
+)
+@click.option(
+    "--diff",
+    "diff_option",
+    help="Comma-separated list of CIDR networks for set difference (addresses in --cidrs but not in --diff).",
+)
+@click.option(
+    "--no-merge",
+    "no_merge",
+    is_flag=True,
+    help="Disable merging of overlapping/supernettable networks before building the tree.",
+)
+@click.option(
+    "--max-depth",
+    default=64,
+    type=int,
+    help="Maximum recursion depth for the radix tree (default: 64).",
+)
+@click.option(
+    "--contains",
+    help="Optional IP address to test for membership in the merged networks.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def radix(
+    cidrs_option: str,
+    diff_option: Optional[str],
+    no_merge: bool,
+    max_depth: int,
+    contains: Optional[str],
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Build a radix tree visualization over a set of CIDR networks.
+
+    Merges overlapping and adjacent (supernettable) networks and renders
+    the resulting aggregate ranges as a hierarchical binary radix tree.
+    Fully offline and stdlib-only.
+
+    Use --diff to compute the set difference between two CIDR sets
+    (addresses in --cidrs but not in --diff).
+    """
+    cidrs = [c.strip() for c in cidrs_option.split(",") if c.strip()]
+    if not cidrs:
+        click.echo("Error: at least one CIDR network is required.", err=True)
+        raise SystemExit(1)
+
+    diff_cidrs = None
+    if diff_option is not None:
+        diff_cidrs = [c.strip() for c in diff_option.split(",") if c.strip()]
+
+    results = run_radix(
+        cidrs,
+        merge=not no_merge,
+        max_depth=max_depth,
+        contains=contains,
+        diff=diff_cidrs,
+    )
+
+    if fmt == "json":
+        output = format_radix_report_json(results)
+    else:
+        output = format_radix_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
@@ -2472,6 +2666,51 @@ def config(
         except OSError as exc:
             click.echo(f"Error writing output: {exc}", err=True)
             raise SystemExit(1)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--token",
+    help="JWT token to inspect (e.g. eyJhbGciOiJIUzI1NiJ9...). If omitted, reads from stdin.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def jwt(token: Optional[str], fmt: str, out_path: Optional[str]) -> None:
+    """Inspect a JWT (JSON Web Token) without verifying the signature."""
+    if token:
+        token = token.strip()
+    else:
+        stdin_text = click.get_text_stream("stdin").read()
+        token = stdin_text.strip() if stdin_text else ""
+
+    if not token:
+        click.echo("No token provided.")
+        return
+
+    results = run_jwt(token)
+
+    if fmt == "json":
+        output = format_jwt_report_json(results)
+    else:
+        output = format_jwt_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
         click.echo(f"Report written to {out_path}")
     else:
         click.echo(output)
