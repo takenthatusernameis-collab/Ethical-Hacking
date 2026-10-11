@@ -1,0 +1,1 @@
+"""SSH security assessment module for ethscan."""

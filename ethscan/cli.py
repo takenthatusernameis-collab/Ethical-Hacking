@@ -1471,6 +1471,7 @@ def vuln(
     algorithm: str,
     timeout: float,
     workers: int,
+    output_fmt: Optional[str],
     fmt: str,
     out_path: Optional[str],
 ) -> None:

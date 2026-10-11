@@ -5,8 +5,10 @@ TLS/SSL data (from ``tls``/``ssl`` command output) against a small built-in
 CVE/weakness database and reports matches.
 """
 
+import csv
 import hashlib
 import hmac
+import io
 import json
 import re
 from typing import Dict, List, Optional, Tuple
@@ -1069,11 +1071,10 @@ def format_vuln_report_markdown(data: Dict[str, object]) -> str:
     if data.get("min_severity_filter"):
         lines.append(f"- **Min Severity:** {data['min_severity_filter']}")
     if data.get("salt"):
-        lines.append("- **Salt:** applied (prepended to each banner)")
+        lines.append("- **Salt:** applied (prepended to banner)")
     if data.get("pepper"):
-        lines.append("- **Pepper:** applied (HMAC key for each banner)")
-    if data.get("salt") or data.get("pepper"):
-        lines.append(f"- **Algorithm:** {data.get('algorithm', 'sha256')}")
+        lines.append("- **Pepper:** applied (HMAC key)")
+    lines.append(f"- **Algorithm:** {data.get('algorithm', 'sha256')}")
     if data.get("recursive"):
         lines.append(f"- **Recursive:** Yes")
         lines.append(f"- **Max Depth:** {data.get('max_depth', 0)}")
