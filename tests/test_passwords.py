@@ -219,3 +219,118 @@ def test_format_audit_report_csv_escapes_special_characters() -> None:
     output = format_audit_report_csv(passwords, results)
     rows = list(csv.reader(io.StringIO(output)))
     assert rows[1][0] == "pass,word"
+
+
+def test_audit_passwords_sort_by_score_desc() -> None:
+    passwords = ["password", "correct-Horse-battery-staple-9x!", "123456"]
+    results = audit_passwords(passwords, sort_by="score", sort_desc=True)
+    scores = [eval_data["score"] for _, eval_data in results]
+    assert scores == sorted(scores, reverse=True)
+    # Strongest password should be first.
+    assert results[0][0] == "correct-Horse-battery-staple-9x!"
+
+
+def test_audit_passwords_sort_by_score_asc() -> None:
+    passwords = ["password", "correct-Horse-battery-staple-9x!", "123456"]
+    results = audit_passwords(passwords, sort_by="score", sort_desc=False)
+    scores = [eval_data["score"] for _, eval_data in results]
+    assert scores == sorted(scores)
+    # Strongest password should be last in ascending order.
+    assert results[-1][0] == "correct-Horse-battery-staple-9x!"
+
+
+def test_audit_passwords_sort_by_length_desc() -> None:
+    passwords = ["abc", "correct-Horse-battery-staple-9x!", "ab"]
+    results = audit_passwords(passwords, sort_by="length", sort_desc=True)
+    lengths = [eval_data["length"] for _, eval_data in results]
+    assert lengths == sorted(lengths, reverse=True)
+
+
+def test_audit_passwords_sort_by_verdict_desc() -> None:
+    passwords = ["password", "correct-Horse-battery-staple-9x!"]
+    results = audit_passwords(passwords, sort_by="verdict", sort_desc=True)
+    verdicts = [eval_data["verdict"].lower() for _, eval_data in results]
+    assert verdicts == sorted(verdicts, reverse=True)
+
+
+def test_audit_passwords_sort_defaults_to_none() -> None:
+    passwords = ["password", "correct-Horse-battery-staple-9x!"]
+    results = audit_passwords(passwords)
+    # Without sort, original order is preserved.
+    assert results[0][0] == "password"
+    assert results[1][0] == "correct-Horse-battery-staple-9x!"
+
+
+def test_audit_passwords_sort_preserves_original_when_invalid() -> None:
+    passwords = ["password", "correct-Horse-battery-staple-9x!"]
+    results = audit_passwords(passwords, sort_by="unknown", sort_desc=True)
+    assert results[0][0] == "password"
+    assert results[1][0] == "correct-Horse-battery-staple-9x!"
+
+
+def test_sort_audit_pairs_invalid_key_returns_copy() -> None:
+    from ethscan.passwords import _sort_audit_pairs
+
+    passwords = ["password", "correct-Horse-battery-staple-9x!"]
+    results = audit_passwords(passwords)
+    sorted_results = _sort_audit_pairs(results, "bogus", True)
+    assert sorted_results == results
+    assert sorted_results is not results  # returns a new list
+
+
+def test_sort_audit_pairs_preserves_empty() -> None:
+    from ethscan.passwords import _sort_audit_pairs
+
+    assert _sort_audit_pairs([], "score", True) == []
+
+
+def test_format_audit_report_json_with_sort() -> None:
+    passwords = ["password", "correct-Horse-battery-staple-9x!"]
+    results = audit_passwords(passwords, sort_by="score", sort_desc=True)
+    output = format_audit_report_json(
+        passwords, results, sort_by="score", sort_desc=True
+    )
+    data = json.loads(output)
+    assert data["sort_by"] == "score"
+    assert data["sort_desc"] is True
+    scores = [r["score"] for r in data["results"]]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_format_audit_report_json_sort_defaults() -> None:
+    passwords = ["password"]
+    results = audit_passwords(passwords)
+    output = format_audit_report_json(passwords, results)
+    data = json.loads(output)
+    assert data["sort_by"] is None
+    assert data["sort_desc"] is True
+
+
+def test_format_audit_report_markdown_with_sort() -> None:
+    passwords = ["password", "correct-Horse-battery-staple-9x!"]
+    results = audit_passwords(passwords, sort_by="score", sort_desc=True)
+    output = format_audit_report_markdown(
+        passwords, results, sort_by="score", sort_desc=True
+    )
+    assert "**Sorted By:** score (Descending)" in output
+    # Strongest password should appear first in the table.
+    strong_pos = output.index("correct-Horse-battery-staple-9x!")
+    weak_pos = output.index("password")
+    assert strong_pos < weak_pos
+
+
+def test_format_audit_report_markdown_sort_default_no_line() -> None:
+    passwords = ["password"]
+    results = audit_passwords(passwords)
+    output = format_audit_report_markdown(passwords, results)
+    assert "Sorted By" not in output
+
+
+def test_format_audit_report_csv_with_sort() -> None:
+    passwords = ["password", "correct-Horse-battery-staple-9x!"]
+    results = audit_passwords(passwords, sort_by="score", sort_desc=True)
+    output = format_audit_report_csv(passwords, results)
+    rows = list(csv.reader(io.StringIO(output)))
+    # First data row should be the stronger password.
+    assert rows[1][0] == "correct-Horse-battery-staple-9x!"
+    assert rows[2][0] == "password"

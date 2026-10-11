@@ -428,6 +428,153 @@ def test_audit_deprecated_format_csv_still_works(tmp_path) -> None:
     assert len(lines) == 2
 
 
+def test_audit_help_shows_sort() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["audit", "--help"])
+    assert result.exit_code == 0
+    assert "--sort" in result.output
+    assert "score" in result.output
+    assert "verdict" in result.output
+    assert "length" in result.output
+    assert "--sort-desc" in result.output
+    assert "--sort-asc" in result.output
+
+
+def test_audit_sort_option_json(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--format",
+            "json",
+            "--sort",
+            "score",
+            "--sort-desc",
+        ],
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["sort_by"] == "score"
+    assert data["sort_desc"] is True
+
+
+def test_audit_sort_asc_option(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--format",
+            "json",
+            "--sort",
+            "length",
+            "--sort-asc",
+        ],
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["sort_by"] == "length"
+    assert data["sort_desc"] is False
+
+
+def test_audit_sort_disabled_by_default(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["sort_by"] is None
+    assert data["sort_desc"] is True
+
+
+def test_audit_sort_markdown_shows_sorted_by(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--format",
+            "markdown",
+            "--sort",
+            "score",
+            "--sort-desc",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "**Sorted By:** score (Descending)" in result.output
+
+
+def test_audit_sort_reorders_results(tmp_path) -> None:
+    """Sort should actually reorder the audit rows in output."""
+    password_file = tmp_path / "passwords.txt"
+    # Mix of strong and weak passwords so scores differ.
+    password_file.write_text("correct-Horse-battery-staple-9x!\npassword\n123456\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--format",
+            "json",
+            "--sort",
+            "score",
+            "--sort-desc",
+        ],
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    scores = [r["score"] for r in data["results"]]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_audit_sort_verdict_case_insensitive(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n123456\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--format",
+            "json",
+            "--sort",
+            "verdict",
+            "--sort-desc",
+        ],
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    verdicts = [r["verdict"].lower() for r in data["results"]]
+    assert verdicts == sorted(verdicts, reverse=True)
+
+
 def test_report_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["report", "--help"])
