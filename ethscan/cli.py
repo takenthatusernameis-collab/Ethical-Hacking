@@ -126,6 +126,11 @@ from ethscan.subtake import (
     format_subtake_report_markdown,
     run_subtake,
 )
+from ethscan.mac import (
+    format_mac_report_json,
+    format_mac_report_markdown,
+    run_mac,
+)
 from ethscan.subdomains import load_subdomain_wordlist
 from ethscan.headers import (
     format_headers_report_json,
@@ -2055,6 +2060,76 @@ def cidr(cidr: str, contains: Optional[str], fmt: str, out_path: Optional[str]) 
         output = format_cidr_report_json(results)
     else:
         output = format_cidr_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="MAC address, hostname, or URL (e.g. 00:1A:2B:3C:4D:5E, example.com, https://example.com)",
+)
+@click.option(
+    "--timeout",
+    default=5.0,
+    type=float,
+    help="API request timeout in seconds (default: 5.0)",
+)
+@click.option(
+    "--no-cache",
+    is_flag=True,
+    help="Disable local filesystem cache",
+)
+@click.option(
+    "--no-offline-fallback",
+    is_flag=True,
+    help="Disable offline fallback to stale cache when API is unavailable",
+)
+@click.option(
+    "--api-url",
+    help="Custom OUI API base URL (must support api.macvendors.com query format)",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def mac(
+    target: str,
+    timeout: float,
+    no_cache: bool,
+    no_offline_fallback: bool,
+    api_url: Optional[str],
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Look up MAC address vendor using the OUI database (api.macvendors.com) with caching."""
+    results = run_mac(
+        target,
+        timeout=timeout,
+        use_cache=not no_cache,
+        offline_fallback=not no_offline_fallback,
+        api_url=api_url,
+    )
+
+    if fmt == "json":
+        output = format_mac_report_json(results)
+    else:
+        output = format_mac_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
