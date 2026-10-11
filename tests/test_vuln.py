@@ -934,3 +934,156 @@ def test_format_vuln_report_json_includes_recursive() -> None:
     assert parsed["max_depth"] == 2
     assert len(parsed["recursive_hosts_scanned"]) == 2
     assert len(parsed["recursive_findings"]) == 2
+
+
+# ---------------------------------------------------------------------------
+# Salt/pepper banner matching
+# ---------------------------------------------------------------------------
+
+
+def _mock_service_with_banner(banner: str):
+    def _inner(host, ports=None, timeout=3.0, max_workers=50):
+        return {"results": [{"port": 22, "banner": banner}]}
+
+    return _inner
+
+
+def test_transform_banner_no_salt_no_pepper() -> None:
+    from ethscan.vuln import _transform_banner
+
+    assert _transform_banner("SSH-2.0-OpenSSH_7.2p2", "sha256") == "SSH-2.0-OpenSSH_7.2p2"
+
+
+def test_transform_banner_salt_only() -> None:
+    from ethscan.vuln import _transform_banner
+
+    import hashlib
+
+    expected = hashlib.new("sha256", ("salt" + "SSH-2.0-OpenSSH_7.2p2").encode("utf-8")).hexdigest()
+    assert _transform_banner("SSH-2.0-OpenSSH_7.2p2", "sha256", salt="salt") == expected
+
+
+def test_transform_banner_pepper_only() -> None:
+    from ethscan.vuln import _transform_banner
+
+    import hmac
+
+    expected = hmac.new(b"pepper", b"SSH-2.0-OpenSSH_7.2p2", "sha256").hexdigest()
+    assert _transform_banner("SSH-2.0-OpenSSH_7.2p2", "sha256", pepper="pepper") == expected
+
+
+def test_transform_banner_salt_and_pepper() -> None:
+    from ethscan.vuln import _transform_banner
+
+    import hmac
+
+    expected = hmac.new(b"pepper", (b"salt" + b"SSH-2.0-OpenSSH_7.2p2"), "sha256").hexdigest()
+    assert (
+        _transform_banner(
+            "SSH-2.0-OpenSSH_7.2p2", "sha256", salt="salt", pepper="pepper"
+        )
+        == expected
+    )
+
+
+def test_transform_banner_empty_banner() -> None:
+    from ethscan.vuln import _transform_banner
+
+    assert _transform_banner("", "sha256", salt="salt") == ""
+
+
+def test_run_vuln_salt_flags_salt_field(monkeypatch) -> None:
+    monkeypatch.setattr("ethscan.vuln.run_service", _mock_service_with_banner("SSH-2.0-OpenSSH_7.2p2"))
+    results = run_vuln("example.com", salt="salt")
+    assert results["salt"] is True
+    assert results["pepper"] is False
+    assert results["algorithm"] == "sha256"
+
+
+def test_run_vuln_pepper_flags_pepper_field(monkeypatch) -> None:
+    monkeypatch.setattr("ethscan.vuln.run_service", _mock_service_with_banner("SSH-2.0-OpenSSH_7.2p2"))
+    results = run_vuln("example.com", pepper="pepper")
+    assert results["salt"] is False
+    assert results["pepper"] is True
+
+
+def test_run_vuln_algorithm_field_echoed(monkeypatch) -> None:
+    monkeypatch.setattr("ethscan.vuln.run_service", _mock_service_with_banner("SSH-2.0-OpenSSH_7.2p2"))
+    results = run_vuln("example.com", algorithm="md5")
+    assert results["algorithm"] == "md5"
+
+
+def test_run_vuln_salt_defaults_to_none(monkeypatch) -> None:
+    monkeypatch.setattr("ethscan.vuln.run_service", _mock_service_with_banner("SSH-2.0-OpenSSH_7.2p2"))
+    results = run_vuln("example.com")
+    assert results["salt"] is False
+    assert results["pepper"] is False
+
+
+def test_format_vuln_report_markdown_with_salt() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "services_checked": 1,
+        "tls_checked": False,
+        "certificate_checked": False,
+        "finding_count": 0,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+        "severity_filter": None,
+        "min_severity_filter": None,
+        "findings": [],
+        "notes": [],
+        "salt": True,
+        "pepper": False,
+        "algorithm": "sha256",
+    }
+    output = format_vuln_report_markdown(data)
+    assert "**Salt:** applied" in output
+    assert "**Pepper:**" not in output
+    assert "**Algorithm:** sha256" in output
+
+
+def test_format_vuln_report_markdown_with_pepper() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "services_checked": 1,
+        "tls_checked": False,
+        "certificate_checked": False,
+        "finding_count": 0,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+        "severity_filter": None,
+        "min_severity_filter": None,
+        "findings": [],
+        "notes": [],
+        "salt": False,
+        "pepper": True,
+        "algorithm": "sha256",
+    }
+    output = format_vuln_report_markdown(data)
+    assert "**Pepper:** applied" in output
+    assert "**Salt:**" not in output
+
+
+def test_format_vuln_report_json_includes_salt_pepper() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "services_checked": 1,
+        "tls_checked": False,
+        "certificate_checked": False,
+        "finding_count": 0,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+        "severity_filter": None,
+        "min_severity_filter": None,
+        "findings": [],
+        "notes": [],
+        "salt": True,
+        "pepper": True,
+        "algorithm": "sha256",
+    }
+    output = format_vuln_report_json(data)
+    parsed = json.loads(output)
+    assert parsed["salt"] is True
+    assert parsed["pepper"] is True
+    assert parsed["algorithm"] == "sha256"

@@ -1405,6 +1405,20 @@ def service(target: str, ports: Optional[str], profile: Optional[str], timeout: 
     type=int,
     help="Maximum recursion depth for recursive scanning (default: 2).",
 )
+@click.option(
+    "--salt",
+    help="Salt prepended to each banner before vulnerability matching (for salted banner auditing).",
+)
+@click.option(
+    "--pepper",
+    help="Pepper used as HMAC key for peppered banner matching (requires hashlib-backed algorithm).",
+)
+@click.option(
+    "--algorithm",
+    type=click.Choice(["md5", "sha1", "sha256", "sha512"], case_sensitive=False),
+    default="sha256",
+    help="Hash algorithm for salted/peppered banner matching (default: sha256).",
+)
 @click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
 @click.option("--workers", default=50, type=int, help="Maximum concurrent workers")
 @click.option(
@@ -1430,6 +1444,9 @@ def vuln(
     min_severity: Optional[str],
     recursive: bool,
     max_depth: int,
+    salt: Optional[str],
+    pepper: Optional[str],
+    algorithm: str,
     timeout: float,
     workers: int,
     fmt: str,
@@ -1468,6 +1485,9 @@ def vuln(
         min_severity=min_severity,
         recursive=recursive,
         max_depth=max_depth,
+        salt=salt,
+        pepper=pepper,
+        algorithm=algorithm,
     )
 
     if fmt == "json":

@@ -2168,6 +2168,9 @@ def test_subdomains_recursive_option(monkeypatch) -> None:
         resolver=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         called_args["recursive"] = recursive
         called_args["max_depth"] = max_depth
@@ -2223,6 +2226,9 @@ def test_subdomains_recursive_disabled_by_default(monkeypatch) -> None:
         resolver=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         called_args["recursive"] = recursive
         called_args["max_depth"] = max_depth
@@ -4925,6 +4931,9 @@ def test_vuln_offline_target_json(monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         return {
             "target": target,
@@ -4983,6 +4992,9 @@ def test_vuln_offline_target_markdown(monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         return {
             "target": target,
@@ -5177,6 +5189,9 @@ def test_vuln_ports_option(monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         called_args["ports"] = ports
         called_args["target"] = target
@@ -5234,6 +5249,9 @@ def test_vuln_workers_option(monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         called_args["max_workers"] = max_workers
         called_args["target"] = target
@@ -5289,6 +5307,9 @@ def test_vuln_out_option(tmp_path, monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         return {
             "target": target,
@@ -5358,6 +5379,9 @@ def test_vuln_out_option_markdown(tmp_path, monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         return {
             "target": target,
@@ -5442,6 +5466,9 @@ def test_vuln_min_severity_option(monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         called_args["min_severity"] = min_severity
         return {
@@ -5490,6 +5517,9 @@ def test_vuln_min_severity_disabled_by_default(monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         called_args["min_severity"] = min_severity
         return {
@@ -5546,6 +5576,9 @@ def test_vuln_recursive_option(monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         called_args["recursive"] = recursive
         called_args["max_depth"] = max_depth
@@ -5605,6 +5638,9 @@ def test_vuln_recursive_disabled_by_default(monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         called_args["recursive"] = recursive
         called_args["max_depth"] = max_depth
@@ -5653,6 +5689,9 @@ def test_vuln_recursive_output_json(monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         return {
             "target": target,
@@ -5743,6 +5782,9 @@ def test_vuln_recursive_output_markdown(monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         return {
             "target": target,
@@ -5853,6 +5895,9 @@ def test_dnsbrute_offline_target_json(monkeypatch) -> None:
         resolver=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         return {
             "target": target,
@@ -5918,6 +5963,9 @@ def test_dnsbrute_offline_target_markdown(monkeypatch) -> None:
         resolver=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         return {
             "target": target,
@@ -6149,6 +6197,9 @@ def test_dnsbrute_out_option_json(tmp_path, monkeypatch) -> None:
         resolver=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         return {
             "target": target,
@@ -6218,6 +6269,9 @@ def test_dnsbrute_out_option_markdown(tmp_path, monkeypatch) -> None:
         resolver=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         return {
             "target": target,
@@ -6352,6 +6406,9 @@ def test_dnsbrute_recursive_option(monkeypatch) -> None:
         resolver=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         called_args["recursive"] = recursive
         called_args["max_depth"] = max_depth
@@ -6416,6 +6473,9 @@ def test_dnsbrute_no_recursive_by_default(monkeypatch) -> None:
         resolver=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         called_args["recursive"] = recursive
         called_args["max_depth"] = max_depth

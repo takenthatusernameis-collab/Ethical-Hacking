@@ -5,6 +5,8 @@ TLS/SSL data (from ``tls``/``ssl`` command output) against a small built-in
 CVE/weakness database and reports matches.
 """
 
+import hashlib
+import hmac
 import json
 import re
 from typing import Dict, List, Optional, Tuple
@@ -17,6 +19,97 @@ DEFAULT_WORKERS = 50
 DEFAULT_RECURSIVE_DEPTH = 2
 
 SEVERITIES = ("critical", "high", "medium", "low")
+
+# Algorithms supported for HMAC (peppered hashing). Maps canonical key ->
+# hashlib algorithm name. Used when a pepper is supplied to the vuln command.
+_HASHLIB_ALGORITHMS = {
+    "md5": "md5",
+    "sha1": "sha1",
+    "sha256": "sha256",
+    "sha512": "sha512",
+}
+
+
+def _hashlib_name(algorithm: str) -> Optional[str]:
+    """Return the hashlib algorithm name for a canonical key, or None."""
+    return _HASHLIB_ALGORITHMS.get(algorithm)
+
+
+def _compute_peppered_hash(message: str, algorithm: str, pepper: str) -> str:
+    """Compute an HMAC keyed hash of ``message`` using the pepper as the key.
+
+    Only algorithms backed by a direct hashlib name (md5, sha1, sha256,
+    sha512) can be used for HMAC.
+
+    Args:
+        message: Plaintext message (the HMAC message).
+        algorithm: Canonical algorithm key.
+        pepper: Secret pepper value (the HMAC key).
+
+    Returns:
+        Hex digest of ``HMAC(pepper, message, algorithm)``.
+
+    Raises:
+        ValueError: If the algorithm cannot be expressed as a hashlib name.
+    """
+    name = _hashlib_name(algorithm)
+    if name is None:
+        raise ValueError(
+            f"Algorithm '{algorithm}' does not support HMAC (peppered hashing)."
+        )
+    return hmac.new(
+        pepper.encode("utf-8"),
+        message.encode("utf-8"),
+        name,
+    ).hexdigest()
+
+
+def _transform_banner(
+    banner: str,
+    algorithm: str,
+    salt: Optional[str] = None,
+    pepper: Optional[str] = None,
+) -> str:
+    """Apply an optional salt/pepper transformation to a banner before matching.
+
+    - ``salt`` is prepended to the banner before hashing: ``hash(salt + banner)``.
+    - ``pepper`` is used as the HMAC key, with the banner (or ``salt + banner``
+      when both are supplied) as the message.
+    - When both are supplied the salt is folded into the HMAC message and the
+      pepper is the HMAC key: ``HMAC(pepper, salt + banner, algorithm)``.
+    - When neither is supplied the banner is returned unchanged.
+
+    Args:
+        banner: Raw service banner text.
+        algorithm: Canonical algorithm key (md5, sha1, sha256, sha512).
+        salt: Optional salt string prepended to the banner.
+        pepper: Optional pepper string used as the HMAC key.
+
+    Returns:
+        Transformed banner string suitable for signature matching.
+
+    Raises:
+        ValueError: If the algorithm is unsupported or does not support HMAC
+            when a pepper is supplied.
+    """
+    if not banner:
+        return banner
+    if salt and pepper:
+        name = _hashlib_name(algorithm)
+        if name is None:
+            raise ValueError(
+                f"Algorithm '{algorithm}' does not support HMAC (peppered hashing)."
+            )
+        return hmac.new(
+            pepper.encode("utf-8"),
+            (salt + banner).encode("utf-8"),
+            name,
+        ).hexdigest()
+    if salt:
+        return hashlib.new(algorithm, (salt + banner).encode("utf-8")).hexdigest()
+    if pepper:
+        return _compute_peppered_hash(banner, algorithm, pepper)
+    return banner
 
 BANNER_SIGNATURES = [
     (
@@ -550,6 +643,9 @@ def run_vuln(
     min_severity: Optional[str] = None,
     recursive: bool = False,
     max_depth: int = DEFAULT_RECURSIVE_DEPTH,
+    salt: Optional[str] = None,
+    pepper: Optional[str] = None,
+    algorithm: str = "sha256",
 ) -> Dict[str, object]:
     """Check a target for known service, protocol, and certificate vulnerabilities.
 
@@ -570,6 +666,12 @@ def run_vuln(
             (critical/high/medium/low). If None, no lower bound is applied.
         recursive: Enable recursive scanning of hosts discovered in service banners.
         max_depth: Maximum recursion depth for recursive scanning (default: 2).
+        salt: Optional salt prepended to each banner before matching against
+            the vulnerability database.
+        pepper: Optional pepper used as the HMAC key for peppered banner
+            matching (requires a hashlib-backed algorithm).
+        algorithm: Hash algorithm to use for salted/peppered banner matching
+            (default: sha256).
 
     Returns:
         Structured results with matched findings, counts, and notes.
@@ -617,7 +719,11 @@ def run_vuln(
             banner = entry.get("banner") or ""
             if banner:
                 banners.append(banner)
-            product, version = parse_banner(banner)
+            # Apply salt/pepper transformation before matching signatures
+            match_banner = _transform_banner(
+                banner, algorithm, salt=salt, pepper=pepper
+            )
+            product, version = parse_banner(match_banner)
             findings.extend(
                 match_service_vulns(product, version, port=entry.get("port"))
             )
@@ -742,6 +848,9 @@ def run_vuln(
         "max_depth": max_depth if recursive else 0,
         "recursive_hosts_scanned": recursive_hosts_scanned,
         "recursive_findings": recursive_findings,
+        "salt": bool(salt),
+        "pepper": bool(pepper),
+        "algorithm": algorithm,
     }
 
 
@@ -799,6 +908,12 @@ def format_vuln_report_markdown(data: Dict[str, object]) -> str:
         lines.append(f"- **Severity Filter:** {data['severity_filter']}")
     if data.get("min_severity_filter"):
         lines.append(f"- **Min Severity:** {data['min_severity_filter']}")
+    if data.get("salt"):
+        lines.append("- **Salt:** applied (prepended to banner)")
+    if data.get("pepper"):
+        lines.append("- **Pepper:** applied (HMAC key)")
+    if data.get("algorithm"):
+        lines.append(f"- **Algorithm:** {data['algorithm']}")
     if data.get("recursive"):
         lines.append(f"- **Recursive:** Yes")
         lines.append(f"- **Max Depth:** {data.get('max_depth', 0)}")
