@@ -9532,3 +9532,142 @@ def test_dnssec_out_option_markdown(tmp_path, monkeypatch) -> None:
     content = out_file.read_text()
     assert "DNSSEC Validation Report" in content
     assert "example.com" in content
+
+
+# ---------------------------------------------------------------------------
+# completion command CLI tests
+# ---------------------------------------------------------------------------
+
+
+def test_completion_help() -> None:
+    """Test completion command help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["completion", "--help"])
+    assert result.exit_code == 0
+    assert "--shell" in result.output
+    assert "--prog-name" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "bash" in result.output
+    assert "zsh" in result.output
+    assert "fish" in result.output
+
+
+def test_completion_lists_in_top_level_help() -> None:
+    """Test completion command appears in top-level help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "completion" in result.output
+
+
+def test_completion_bash_json() -> None:
+    """Test completion command produces bash JSON."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["completion", "--shell", "bash"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["shell"] == "bash"
+    assert parsed["prog_name"] == "ethscan"
+    assert "_ethscan_completion" in parsed["script"]
+
+
+def test_completion_zsh_json() -> None:
+    """Test completion command produces zsh JSON."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["completion", "--shell", "zsh"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["shell"] == "zsh"
+    assert "#compdef ethscan" in parsed["script"]
+
+
+def test_completion_fish_json() -> None:
+    """Test completion command produces fish JSON."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["completion", "--shell", "fish"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["shell"] == "fish"
+    assert "function _ethscan_completion" in parsed["script"]
+
+
+def test_completion_default_shell_is_bash() -> None:
+    """Test completion defaults to bash shell."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["completion"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["shell"] == "bash"
+
+
+def test_completion_markdown() -> None:
+    """Test completion command produces markdown output."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["completion", "--shell", "bash", "--format", "markdown"]
+    )
+    assert result.exit_code == 0
+    assert "ethscan Shell Completion" in result.output
+    assert "_ethscan_completion" in result.output
+    assert "Installation" in result.output
+
+
+def test_completion_custom_prog_name() -> None:
+    """Test completion command with custom prog name."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["completion", "--shell", "bash", "--prog-name", "mytool"]
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["prog_name"] == "mytool"
+    assert "_mytool_completion" in parsed["script"]
+
+
+def test_completion_invalid_shell_errors() -> None:
+    """Test completion command rejects unsupported shells."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["completion", "--shell", "powershell"])
+    assert result.exit_code != 0
+    assert "not one of" in result.output
+    assert "bash" in result.output
+
+
+def test_completion_out_json(tmp_path) -> None:
+    """Test completion command with --out (json)."""
+    out_file = tmp_path / "completion.bash"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["completion", "--shell", "bash", "--out", str(out_file)]
+    )
+    assert result.exit_code == 0
+    assert "Completion script written" in result.output
+    assert out_file.exists()
+    parsed = json.loads(out_file.read_text())
+    assert parsed["shell"] == "bash"
+    assert "_ethscan_completion" in parsed["script"]
+
+
+def test_completion_out_markdown(tmp_path) -> None:
+    """Test completion command with --out (markdown)."""
+    out_file = tmp_path / "completion.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "completion",
+            "--shell",
+            "zsh",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Completion script written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "ethscan Shell Completion" in content
+    assert "zsh" in content

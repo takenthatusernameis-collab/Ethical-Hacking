@@ -153,6 +153,11 @@ from ethscan.config import (
     load_config,
     validate_config,
 )
+from ethscan.completion import (
+    format_completion_report_json,
+    format_completion_report_markdown,
+    run_completion,
+)
 
 
 @click.group()
@@ -2412,6 +2417,58 @@ def config(
             click.echo(f"Error writing output: {exc}", err=True)
             raise SystemExit(1)
         click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--shell",
+    type=click.Choice(["bash", "zsh", "fish"]),
+    default="bash",
+    help="Shell to generate a completion script for (default: bash).",
+)
+@click.option(
+    "--prog-name",
+    "prog_name",
+    default="ethscan",
+    help="Program name embedded in the completion script (default: ethscan).",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def completion(shell: str, prog_name: str, fmt: str, out_path: Optional[str]) -> None:
+    """Generate a shell completion script for ethscan.
+
+    Supported shells: bash, zsh, fish. Save the output and source it
+    in your shell to enable tab completion of commands, options, and
+    option values.
+    """
+    try:
+        results = run_completion(cli, shell=shell, prog_name=prog_name)
+    except ValueError as exc:
+        click.echo(str(exc), err=True)
+        raise SystemExit(1)
+
+    if fmt == "json":
+        output = format_completion_report_json(results)
+    else:
+        output = format_completion_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Completion script written to {out_path}")
     else:
         click.echo(output)
 

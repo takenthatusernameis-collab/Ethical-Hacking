@@ -950,4 +950,55 @@ Added a `--output-format` option to both `scan` and `service` commands that adds
 
 Alternative: Add a `--rate-limit` option to network commands (`scan`, `service`, `fuzz`, `web`, etc.) to control requests per second and avoid triggering rate limits or IDS alerts.
 
-Alternative: Add shell completion support (`ethscan completion bash|zsh|fish`) to generate shell completion scripts for interactive use.
+## Completed: `completion` command (shell completion)
+
+Added a `completion` command that generates shell completion scripts for bash, zsh, and fish using click's built-in shell completion machinery. The generated scripts wrap the `ethscan` CLI so interactive shells can tab-complete command names, option names, and option values.
+
+### Added Files
+- `ethscan/completion.py` — shell completion module with:
+  - `_available_shells()` / `available_shells()` — returns the mapping/tuple of supported shell names (bash, zsh, fish) from click's registry
+  - `_completion_class_for(shell)` — returns the click ShellComplete subclass for a shell, raising ValueError for unsupported shells
+  - `generate_completion_script(cli_obj, shell, prog_name)` — generates the raw completion script for a given shell
+  - `run_completion(cli_obj, shell, prog_name)` — public entry point returning a structured dict with `shell`, `prog_name`, `script`
+  - `format_completion_report_json()` / `format_completion_report_markdown()` — output formatters (markdown includes the script block and installation instructions for each shell)
+- `tests/test_completion.py` — 20 unit tests: available shells, completion class lookup (bash/zsh/fish/unknown), script generation (bash/zsh/fish/custom prog name/invalid), run_completion (bash/custom prog/invalid), both formatters (JSON/bash/zsh/fish, markdown/bash/zsh/fish)
+
+### Modified Files
+- `ethscan/cli.py` — registered `completion` command with `--shell [bash|zsh|fish]` (default bash), `--prog-name` (default ethscan), `--format`, `--out`; imports `run_completion` and both formatters from `ethscan.completion`
+- `tests/test_cli.py` — 11 CLI integration tests: `completion` help, top-level help listing, bash/zsh/fish JSON output, default shell is bash, markdown output, custom prog name, invalid shell errors, `--out` (json and markdown)
+- `README.md` — added shell completion (`completion`) to the features list
+
+### Verification
+- `python -m pytest -q` -> 1186 passed, 1 skipped (1155 baseline + 31 new: 20 unit + 11 CLI)
+- `python -m ethscan --help` -> lists `completion` among the 28 commands
+- `python -m ethscan completion --help` -> shows `--shell`, `--prog-name`, `--format`, `--out`
+- End-to-end: `python -m ethscan completion --shell bash` produces a bash completion script with `_ethscan_completion()` function
+- End-to-end: `python -m ethscan completion --shell zsh` produces a `#compdef ethscan` zsh script
+- End-to-end: `python -m ethscan completion --shell fish` produces a fish `complete --no-files` script
+- End-to-end: `python -m ethscan completion --shell bash --format markdown` produces a Markdown report with installation instructions
+- Live completion test: `ETHSCAN_COMPLETE=bash_complete COMP_WORDS="ethscan " COMP_CWORD=1 python -m ethscan` returns the full command list for tab completion
+
+## Current state
+- All 28 commands implemented and wired up (including `completion`).
+- `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv` options.
+- `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
+- `subdomains` now supports `--recursive` and `--max-depth` for recursive subdomain enumeration.
+- `dnsbrute` now supports `--recursive` and `--max-depth` for recursive zone transfers.
+- `whois` now supports `--recursive/--no-recursive` and `--max-depth` for recursive WHOIS queries.
+- `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
+- `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
+- `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out` for CT log subdomain discovery.
+- `report` now supports `--format json|markdown` and `--out` for combined scan+audit reports (json and markdown).
+- `cve` now supports `--target`, `--services-file`, `--ports`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--severity`, `--min-severity`, `--format`, `--out` for NVD/CVE API vulnerability lookups.
+- `vuln` now supports `--target`, `--ports`, `--services-file`, `--tls-file`, `--ssl-file`, `--severity`, `--min-severity`, `--format`, `--out` for built-in vulnerability checks.
+- `dnssec` now supports `--target`, `--server`, `--timeout`, `--format`, `--out` for DNSSEC validation (DNSKEY + DS chain of trust).
+- `geo` now supports `--recursive` and `--max-depth` for recursive hop geolocation.
+- Configuration file (`ethscan.yaml`) persists default options across commands via a `--config` group option and a `config` subcommand.
+- Shell completion (`completion` command) generates bash/zsh/fish scripts for interactive tab completion.
+- Tests: 1186 passing (1 skipped).
+
+## Suggested next task
+
+**Add a `--json` output mode to the `report` command** for explicit machine-readable output (the `report` command uses inline JSON serialization but some users may want an explicit `--format json` flag for clarity in scripts, similar to other commands).
+
+Alternative: Add a `--rate-limit` option to network commands (`scan`, `service`, `fuzz`, `web`, etc.) to control requests per second and avoid triggering rate limits or IDS alerts.
