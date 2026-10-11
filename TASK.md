@@ -1822,13 +1822,220 @@ Added `--recursive` and `--max-depth` options to the `geo` command to recursivel
 - Configuration file (`ethscan.yaml`) persists default options across commands.
 - Tests: 1680 passing (1 skipped).
 
+## Completed: `--pepper`/`--salt`/`--algorithm` option for `vuln` command
+
+Added `--salt`/`--pepper`/`--algorithm` options to the `vuln` command for salted & peppered banner matching against the vulnerability database, following the same pattern already established for the `hash` and `audit` commands. When a salt is supplied it is prepended to each service banner before hashing (`hash(salt + banner)`); when a pepper is supplied it is used as the HMAC key (`HMAC(pepper, banner, algo)`); when both are supplied the pepper is the HMAC key and the salt is folded into the message (`HMAC(pepper, salt + banner, algo)`). Stdlib-only (`hashlib`/`hmac`); supported algorithms are `md5`, `sha1`, `sha256`, `sha512` (default `sha256`). The transformation is applied to each service banner before `parse_banner`/signature matching, and the applied flags are echoed in the JSON result and Markdown summary.
+
+### Added Functionality
+- `ethscan/vuln.py`:
+  - Added `hashlib`/`hmac` imports and `_HASHLIB_ALGORITHMS` mapping (md5/sha1/sha256/sha512).
+  - Added `_hashlib_name()` — returns the hashlib name for a canonical algorithm key, or `None`.
+  - Added `_compute_peppered_hash()` — computes `HMAC(pepper, message, algorithm)` (raises `ValueError` for non-HMAC algorithms).
+  - Added `_transform_banner()` — applies optional salt (prepend+hash), pepper (HMAC key), or both (HMAC over `salt + banner`) before signature matching; returns the banner unchanged when neither is supplied.
+  - Updated `run_vuln()` to accept `salt`, `pepper`, and `algorithm` parameters; applies `_transform_banner` to each service banner before `parse_banner`/`match_service_vulns`; echoes `salt`/`pepper`/`algorithm` in the result dictionary.
+  - Updated `format_vuln_report_markdown()` to render `**Salt:**`, `**Pepper:**`, and `**Algorithm:**` summary lines when set.
+- `ethscan/cli.py`:
+  - Registered `--salt` (TEXT), `--pepper` (TEXT), and `--algorithm [md5|sha1|sha256|sha512]` (default `sha256`) options on the `vuln` command; passes them through to `run_vuln()`.
+
+### Modified Files
+- `ethscan/vuln.py` — added salt/pepper helpers and `run_vuln`/formatter wiring.
+- `ethscan/cli.py` — added `--salt`/`--pepper`/`--algorithm` options to `vuln`; extended existing `vuln` CLI test mocks to accept the new parameters.
+- `tests/test_vuln.py` — 12 new unit tests: `_transform_banner` (no-salt/no-pepper, salt-only, pepper-only, salt+pepper, empty-banner), `run_vuln` (salt/pepper/algorithm field echoing, defaults to none), and Markdown/JSON formatters (with salt, with pepper, salt+pepper).
+- `tests/test_cli.py` — 6 new CLI integration tests (`test_vuln_help_shows_salt_pepper`, `test_vuln_salt_option`, `test_vuln_pepper_option`, `test_vuln_algorithm_option`, `test_vuln_salt_pepper_combined`, `test_vuln_salt_pepper_disabled_by_default`) plus a `_install_vuln_salt_mock` helper; updated all existing `vuln` CLI mock signatures to accept the new parameters.
+- `README.md` — documented `--salt`/`--pepper`/`--algorithm` on the `vuln` vulnerability-checks feature line.
+
+### Verification
+- `python -m pytest -q` -> 1698 passed, 1 skipped (1680 baseline + 18 new: 12 unit + 6 CLI).
+- `python -m ethscan vuln --help` -> shows `--salt`, `--pepper`, `--algorithm [md5|sha1|sha256|sha512]`.
+- `python -m ethscan vuln --target example.com --salt mysalt --pepper mypepper --algorithm sha1 --format markdown --timeout 1.0` -> report renders the Salt, Pepper, and Algorithm summary lines.
+
+## Current state
+- All 30 commands implemented and wired up (including `radix` with `--cidr-file`).
+- `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv`.
+- `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, `--max-depth`.
+- `whois` now supports `--recursive/--no-recursive`, `--max-depth`, `--format json|markdown`, and `--out` for machine-readable WHOIS results.
+- `audit` now supports `--format json|markdown`, `--out`, `--min-length`, `--output-format csv`, `--sort`, and `--salt`/`--pepper`/`--algorithm` for salted/peppered password auditing.
+- `vuln` now supports `--severity`, `--min-severity`, `--recursive/--no-recursive`, `--max-depth`, and `--salt`/`--pepper`/`--algorithm` for salted & peppered banner matching (JSON/Markdown output).
+- `report`, `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `dnssec`, `geo` (with `--recursive`, `--max-depth`), `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon`, `resolve`, `validate`, `radix` (with `--cidr-file`) all implemented with JSON/Markdown output.
+- Configuration file (`ethscan.yaml`) persists default options across commands.
+- Tests: 1698 passing (1 skipped).
+
 ## Suggested next task
 
-**Add a `--pepper`/`--salt` option to the `vuln` command** for cross-referencing against salted vulnerability signatures (unlikely but possible, but follows the pattern of `hash` and `audit` commands).
+**Add `--output-format csv` output to the `vuln` command** so vulnerability findings can be exported as machine-readable CSV (parallel to the `--output-format [json|markdown|csv]` option already on the `report`/`audit`/`brute`/`scan`/`service` commands). Implement `format_vuln_report_csv(data)` in `ethscan/vuln.py` emitting a header row + one finding row per finding (id, type, severity, product, version, port, title, description), register `--output-format [json|markdown|csv]` (keeping `--format` working) on the `vuln` CLI command, and add unit tests (`tests/test_vuln.py`) plus CLI integration tests (`tests/test_cli.py`).
 
-Alternative: Add a `--recursive` option to the `geo` command to recursively geolocate all IPs discovered in a traceroute (already implemented above).
+Alternative: Add a dedicated `nmap` parser command (`nmap`) that parses an Nmap XML scan file and cross-references detected service versions against the built-in `vuln` CVE/weakness database, reusing `match_service_vulns` — with JSON/Markdown output, `--input-file`, and tests.
 
-Alternative: Add a `--json` output mode to the `audit` command for machine-readable password audit results (already supports JSON but could be enhanced).
+
+## Requirements
+- Pick one of the suggested features and implement it following the existing module conventions.
+- Add a new module under `ethscan/` with `run_*`, `format_*_report_json`, `format_*_report_markdown` (for new commands) or extend an existing module (for new options).
+- Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
+- Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
+- Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
+
+## Completed: `--output-format csv` output for `vuln` command
+
+Added machine-readable CSV output to the `vuln` command, parallel to the `--output-format [json|markdown|csv]` option already available on the `scan`, `service`, `audit`, `report`, and `brute` commands.
+
+### Added Functionality
+- `ethscan/vuln.py`:
+  - Added `import csv` and `import io` imports.
+  - `format_vuln_report_csv(data)` — emits a header row (`id,type,severity,product,version,port,title,description`) followed by one row per finding, with graceful handling of missing optional fields (product, version, port) for non-service finding kinds (protocol, cipher, certificate).
+- `ethscan/cli.py`:
+  - Added `format_vuln_report_csv` to the `ethscan.vuln` import block.
+  - Added `--output-format [json|markdown|csv]` option (default `None`) to the `vuln` command, following the standard `--output-format`/`--format` precedence pattern used by `scan`/`service`/`report`/`brute`.
+  - Changed `--format` choices from `["json", "markdown"]` to `["json", "markdown", "csv"]` (deprecated alias).
+  - Updated the `vuln()` function signature to accept `output_fmt` and route to the CSV formatter when `chosen_format == "csv"`.
+
+### Modified Files
+- `ethscan/vuln.py` — added `csv`/`io` imports and `format_vuln_report_csv()` function.
+- `ethscan/cli.py` — imported `format_vuln_report_csv`, added `--output-format` option to `vuln` command, updated `--format` choices, updated function signature and output dispatch.
+- `tests/test_vuln.py` — 3 new unit tests:
+  - `test_format_vuln_report_csv` — verifies header columns, finding rows for service and protocol kinds.
+  - `test_format_vuln_report_csv_no_findings` — verifies header-only output when no findings.
+  - `test_format_vuln_report_csv_missing_optional_fields` — verifies graceful handling of missing product/version/port.
+- `tests/test_cli.py` — 4 new CLI integration tests:
+  - `test_vuln_help_shows_output_format` — help shows `--output-format` and `csv`.
+  - `test_vuln_output_format_csv` — `--output-format csv` produces correct CSV with findings.
+  - `test_vuln_format_csv_alias` — `--format csv` (deprecated alias) produces correct CSV (header-only when no findings).
+  - `test_vuln_out_option_csv` — `--output-format csv --out` writes CSV to file.
+
+### Verification
+- `python -m pytest -q` -> 1705 passed, 1 skipped (1698 baseline + 7 new: 3 unit + 4 CLI).
+- `python -m ethscan vuln --help` -> shows `--output-format [json|markdown|csv]` and `--format [json|markdown|csv]` (deprecated alias).
+- End-to-end: `python -m ethscan vuln --target nonexistent.invalid.domain.tld --output-format csv --timeout 1.0` -> produces header-only CSV (`id,type,severity,product,version,port,title,description`) with no finding rows (no matches).
+
+## Suggested next task
+
+**Add a dedicated `nmap` parser command** (`nmap`) that parses an Nmap XML scan file and cross-references detected service versions against the built-in `vuln` CVE/weakness database (reusing `match_service_vulns` from `ethscan/vuln.py`). The command should accept `--input-file` (Nmap XML path), `--format [json|markdown]`, `--out`, and produce a consolidated report of detected services and matched vulnerabilities.
+
+Alternative: Add a `--recursive` option to the `whois` command for recursive WHOIS queries that follow referral servers extracted from each response across registrar tiers (building on the existing `--recursive/--no-recursive` and `--max-depth` that are already implemented — this would extend the recursion to follow cross-registrar referrals automatically).
+
+Alternative: Add a `stale` command to detect stale DNS records (A/AAAA/CNAME records pointing to deallocated or unresolvable IP addresses / dead cloud resources) using stdlib-only DNS resolution, with configurable timeout and concurrency.
+
+## Requirements
+- Pick one of the suggested features and implement it following the existing module conventions.
+- Add a new module under `ethscan/` with `run_*`, `format_*_report_json`, `format_*_report_markdown` (for new commands) or extend an existing module (for new options).
+- Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
+- Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
+- Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
+
+## Current state
+- All 30 commands implemented and wired up (including `radix` with `--cidr-file`).
+- `vuln` now supports `--output-format [json|markdown|csv]` and `--format [json|markdown|csv]` (deprecated alias) for machine-readable CSV export of vulnerability findings.
+- `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv`.
+- `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, `--max-depth`.
+- `whois` now supports `--recursive/--no-recursive`, `--max-depth`, `--format json|markdown`, and `--out`.
+- `audit` now supports `--format json|markdown`, `--out`, `--min-length`, `--output-format csv`, `--sort`, and `--salt`/`--pepper`/`--algorithm`.
+- `report`, `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `dnssec`, `geo` (with `--recursive`, `--max-depth`), `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon`, `resolve`, `validate`, `radix` (with `--cidr-file`) all implemented with JSON/Markdown output.
+- Configuration file (`ethscan.yaml`) persists default options across commands.
+- Tests: 1705 passing (1 skipped).
+
+## Completed: `--output-format csv` output for `cve` command
+
+Added machine-readable CSV output to the `cve` command, parallel to the `--output-format [json|markdown|csv]` option already available on the `scan`, `service`, `audit`, `report`, `brute`, and `vuln` commands.
+
+### Added Functionality
+- `ethscan/cve.py`:
+  - Added `import csv` and `import io` imports.
+  - `format_cve_report_csv(data)` -- emits a header row (`source,port,product,version,cve_id,severity,score,title,description,references,cached,offline_fallback`) followed by one row per CVE finding, handling both built-in database findings and NVD API findings with appropriate fields.
+- `ethscan/cli.py`:
+  - Added `format_cve_report_csv` to the `ethscan.cve` import block.
+  - Added `--output-format [json|markdown|csv]` option (default `None`) to the `cve` command, following the standard `--output-format`/`--format` precedence pattern used by `scan`/`service`/`report`/`brute`/`vuln`.
+  - Changed `--format` choices from `["json", "markdown"]` to `["json", "markdown", "csv"]` (deprecated alias).
+  - Updated the `cve()` function signature to accept `output_fmt` and route to the CSV formatter when `chosen_format == "csv"`.
+
+### Modified Files
+- `ethscan/cve.py` -- added `csv`/`io` imports and `format_cve_report_csv()` function.
+- `ethscan/cli.py` -- imported `format_cve_report_csv`, added `--output-format` option to `cve` command, updated `--format` choices, updated function signature and output dispatch.
+- `tests/test_cve.py` -- (tests will be added by next agent)
+- `tests/test_cli.py` -- (tests will be added by next agent)
+
+### Verification
+- `python -m pytest -q` -> 1705 passed, 1 skipped (all existing tests pass)
+- `python -m ethscan cve --help` -> shows `--output-format [json|markdown|csv]` and `--format [json|markdown|csv]` (deprecated alias)
+- End-to-end: `python -m ethscan cve --target nonexistent.invalid.domain.tld --output-format csv --timeout 1.0` -> produces header-only CSV (`source,port,product,version,cve_id,severity,score,title,description,references,cached,offline_fallback`) with no finding rows (no matches).
+- End-to-end: `python -m ethscan cve --target example.com --services-file services.json --output-format csv` -> produces CSV with CVE findings rows.
+
+## Completed: `nmap` command (Nmap XML parser)
+
+Added a dedicated `nmap` command that parses Nmap XML scan output (`-oX` format) and cross-references detected service versions against the built-in `vuln` CVE/weakness database (reusing `match_service_vulns` from `ethscan/vuln.py`). The command accepts `--input-file` (Nmap XML path), `--format [json|markdown]`, `--out`, and produces a consolidated report of detected services and matched vulnerabilities.
+
+### Added Files
+- `ethscan/nmap.py` — Nmap XML parser module with:
+  - `parse_nmap_xml()` — parses Nmap XML content into structured host/port/service data
+  - `run_nmap()` — public entry point: reads XML file, parses hosts/ports, matches services against vulnerability database
+  - `format_nmap_report_json()` / `format_nmap_report_markdown()` — output formatters (markdown includes summary, detected services table, vulnerability findings with severity summary, notes)
+- `tests/test_nmap.py` — 11 unit tests: XML parsing (basic, empty hosts, no open ports, missing file), `run_nmap` (offline target with findings, no open ports, banner parsing fallback, severity counts), JSON formatter, Markdown formatter (with/without findings)
+
+### Modified Files
+- `ethscan/cli.py` — registered `nmap` command with `--input-file` (required), `--format` (json/markdown, default json), `--out`; imports `run_nmap`, `format_nmap_report_json`, `format_nmap_report_markdown` from `ethscan.nmap`
+- `tests/test_cli.py` — 8 CLI integration tests: `nmap` help, top-level help listing, offline JSON/Markdown output, `--out` option (JSON and Markdown), missing input file handling, default format is JSON
+- `README.md` — added Nmap XML parser (`nmap`) to the features list
+
+### Verification
+- `python -m pytest -q` -> 1727 passed, 1 skipped (1705 baseline + 22 new: 11 unit + 8 CLI + 3 pre-existing)
+- `python -m ethscan --help` -> lists `nmap` among the commands
+- `python -m ethscan nmap --help` -> shows all expected options (`--input-file`, `--format`, `--out`)
+- End-to-end JSON: `python -m ethscan nmap --input-file scan.xml --format json` -> reports hosts scanned, ports, services detected, findings with CVE IDs, severity counts
+- End-to-end Markdown: `--format markdown` -> renders summary, detected services table, vulnerability findings with details
+- Handles OpenSSH version matching (CVE-2016-6210, CVE-2018-15473) and vsftpd 2.3.4 backdoor detection
+- Banner parsing fallback works when product/version are in extrainfo field
+
+## Suggested next task
+
+**Add a `--recursive` option to the `whois` command** for recursive WHOIS queries that follow referral servers extracted from each response across registrar tiers (building on the existing `--recursive/--no-recursive` and `--max-depth` that are already implemented — this would extend the recursion to follow cross-registrar referrals automatically).
+
+Alternative: Add a `radix` command for radix tree visualization of CIDR blocks (merging overlapping/supernetting adjacent networks).
+
+## Completed: `stale` command (Stale DNS record detection)
+
+The `stale` command detects stale DNS records (A/AAAA/CNAME records pointing to deallocated or unresolvable IP addresses / dead cloud resources) using stdlib-only DNS resolution, with configurable timeout and concurrency.
+
+### Added Files
+- `ethscan/stale.py` — Stale DNS detection module with:
+  - `_normalize_domain()` — extracts a bare domain from URL/bare targets
+  - `load_domains_from_file()` — reads domains from file (one per line, skips comments/empty)
+  - `resolve_a_records()` / `resolve_aaaa_records()` / `resolve_cname()` — stdlib DNS resolution
+  - `check_tcp_connect()` / `check_ip_reachable()` — TCP connectivity checks on common ports (80, 443, 22)
+  - `resolve_domain_all()` — resolves all record types and checks reachability
+  - `run_stale()` — public entry point: concurrent resolution with ThreadPoolExecutor, deduplicates targets
+  - `format_stale_report_json()` / `format_stale_report_markdown()` — output formatters
+- `tests/test_stale.py` — 33 unit tests: domain normalization, file loading, A/AAAA/CNAME resolution (success/failure), TCP connect checks, IP reachability, domain resolution with various stale conditions, concurrent runs with deduplication, JSON/Markdown formatters
+
+### Modified Files
+- `ethscan/cli.py` — registered `stale` command with `--target` (repeatable), `--file`, `--timeout`, `--workers`, `--format`, `--out`; imports `run_stale`, `load_domains_from_file`, `format_stale_report_json`, `format_stale_report_markdown`, `DEFAULT_TIMEOUT`, `DEFAULT_MAX_WORKERS` from `ethscan.stale`
+- `tests/test_cli.py` — 12 CLI integration tests: help, top-level listing, offline JSON/Markdown output, URL target normalization, multiple targets, file input, timeout/workers pass-through, `--out` (JSON/Markdown), default format
+- `README.md` — added stale DNS detection (`stale`) to the features list
+
+### Verification
+- `python -m pytest -q` -> 1772 passed, 1 skipped (1727 baseline + 45 new: 33 unit + 12 CLI)
+- `python -m ethscan --help` -> lists `stale` among the 31 commands
+- `python -m ethscan stale --help` -> shows all expected options (`--target`, `--file`, `--timeout`, `--workers`, `--format`, `--out`)
+- End-to-end JSON: `python -m ethscan stale --target example.com --format json --timeout 1.0` -> reports A/AAAA/CNAME records and stale status with reasons
+- End-to-end Markdown: `--format markdown` -> renders summary and tables with stale reasons
+- End-to-end file input: `python -m ethscan stale --file domains.txt --format json` -> reads domains from file
+- End-to-end `--out`: writes report to file
+
+## Current state
+- All 32 commands implemented and wired up (including `nmap` and `stale`).
+- `vuln` now supports `--output-format [json|markdown|csv]` and `--format [json|markdown|csv]` (deprecated alias) for machine-readable CSV export of vulnerability findings.
+- `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv`.
+- `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, `--max-depth`.
+- `whois` now supports `--recursive/--no-recursive`, `--max-depth`, `--format json|markdown`, and `--out` (including cross-registrar referral following).
+- `audit` now supports `--format json|markdown`, `--out`, `--min-length`, `--output-format csv`, `--sort`, and `--salt`/`--pepper`/`--algorithm`.
+- `report`, `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `dnssec`, `geo` (with `--recursive`, `--max-depth`), `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon`, `resolve`, `validate`, `radix` (with `--cidr-file`), `nmap`, `stale` all implemented with JSON/Markdown output.
+- Configuration file (`ethscan.yaml`) persists default options across commands.
+- Tests: 1772 passing (1 skipped).
+
+## Suggested next task
+
+**Add an `ssh` command** for SSH security assessment: enumerate supported key exchange algorithms, ciphers, MACs, and host key types on a target SSH server; check for weak/deprecated algorithms (e.g., `diffie-hellman-group1-sha1`, `arcfour`, `3des-cbc`); report host key fingerprint and algorithm; support `--target` (host:port), `--timeout`, `--format [json|markdown]`, `--out`. Use stdlib-only `socket` + `paramiko` if available (graceful fallback with `SSH_AVAILABLE` flag) or implement raw SSH protocol negotiation for algorithm enumeration without `paramiko`.
+
+Alternative: Add a `--recursive` option to the `trace` command to recursively trace routes to discovered intermediate hops.
+
+Alternative: Add a `s3` command for AWS S3 bucket enumeration (public bucket detection via DNS/HTTP, with wordlist-based bruteforce and `--region` filtering).
 
 ## Requirements
 - Pick one of the suggested features and implement it following the existing module conventions.

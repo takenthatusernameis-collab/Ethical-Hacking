@@ -21,7 +21,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - TLS protocol/cipher enumeration (implemented)
 - Brute-force login testing (FTP/SSH) with `--output-format csv` for credential dumps (implemented)
 - Service/banner detection (implemented)
-- Vulnerability checks against a built-in CVE/weakness database (implemented)
+- Vulnerability checks against a built-in CVE/weakness database, with `--severity`, `--min-severity`, `--recursive/--no-recursive`, `--max-depth`, `--salt`/`--pepper`/`--algorithm` for salted & peppered banner matching, and JSON/Markdown output (implemented)
 - Report generation (`report` command combining port scan + password audit, with `--output-format [json|markdown|csv]`, `--open-only` to filter scan results to open ports only, `--sort {score|verdict|length} [--sort-asc|--sort-desc]` to reorder audit rows) (implemented)
 - Consolidated web assessment: `urlcheck` command combining web checks, HTTP fuzzing, and SSL certificate inspection (implemented)
 - OS fingerprinting: `osdetect` command using TCP/IP stack behavior analysis, banner cross-referencing, and TTL-based inference (implemented)
@@ -42,6 +42,8 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - **JWT inspection: `jwt` command to decode and analyze JWT tokens (header, claims, algorithm type, expiration/not-before/issued-at status, security findings like alg=none and expired tokens) without verifying the signature, with JSON/Markdown output** (implemented)
 - **Port & CIDR validation: `validate` command to validate and expand port specifications (comma-separated lists/ranges) and CIDR inputs offline, with JSON/Markdown output** (implemented)
 - **DNS resolution: `resolve` command for forward/reverse DNS resolution of a target (A, AAAA, CNAME, PTR record types), with optional custom resolver and JSON/Markdown output** (implemented)
+- **Nmap XML parser: `nmap` command to parse Nmap XML scan output (`-oX`) and cross-reference detected service versions against the built-in vulnerability database, producing a consolidated report of matched CVEs in JSON or Markdown** (implemented)
+- **Stale DNS detection: `stale` command to detect stale DNS records (A/AAAA/CNAME) pointing to deallocated or unresolvable IPs/dead cloud resources, with configurable timeout, concurrency, and JSON/Markdown output** (implemented)
 
 ## Configuration
 

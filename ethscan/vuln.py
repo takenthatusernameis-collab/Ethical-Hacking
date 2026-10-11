@@ -20,6 +20,97 @@ DEFAULT_RECURSIVE_DEPTH = 2
 
 SEVERITIES = ("critical", "high", "medium", "low")
 
+# Algorithms supported for HMAC (peppered hashing). Maps canonical key ->
+# hashlib algorithm name. Used when a pepper is supplied to the vuln command.
+_HASHLIB_ALGORITHMS = {
+    "md5": "md5",
+    "sha1": "sha1",
+    "sha256": "sha256",
+    "sha512": "sha512",
+}
+
+
+def _hashlib_name(algorithm: str) -> Optional[str]:
+    """Return the hashlib algorithm name for a canonical key, or None."""
+    return _HASHLIB_ALGORITHMS.get(algorithm)
+
+
+def _compute_peppered_hash(message: str, algorithm: str, pepper: str) -> str:
+    """Compute an HMAC keyed hash of ``message`` using the pepper as the key.
+
+    Only algorithms backed by a direct hashlib name (md5, sha1, sha256,
+    sha512) can be used for HMAC.
+
+    Args:
+        message: Plaintext message (the HMAC message).
+        algorithm: Canonical algorithm key.
+        pepper: Secret pepper value (the HMAC key).
+
+    Returns:
+        Hex digest of ``HMAC(pepper, message, algorithm)``.
+
+    Raises:
+        ValueError: If the algorithm cannot be expressed as a hashlib name.
+    """
+    name = _hashlib_name(algorithm)
+    if name is None:
+        raise ValueError(
+            f"Algorithm '{algorithm}' does not support HMAC (peppered hashing)."
+        )
+    return hmac.new(
+        pepper.encode("utf-8"),
+        message.encode("utf-8"),
+        name,
+    ).hexdigest()
+
+
+def _transform_banner(
+    banner: str,
+    algorithm: str,
+    salt: Optional[str] = None,
+    pepper: Optional[str] = None,
+) -> str:
+    """Apply an optional salt/pepper transformation to a banner before matching.
+
+    - ``salt`` is prepended to the banner before hashing: ``hash(salt + banner)``.
+    - ``pepper`` is used as the HMAC key, with the banner (or ``salt + banner``
+      when both are supplied) as the message.
+    - When both are supplied the salt is folded into the HMAC message and the
+      pepper is the HMAC key: ``HMAC(pepper, salt + banner, algorithm)``.
+    - When neither is supplied the banner is returned unchanged.
+
+    Args:
+        banner: Raw service banner text.
+        algorithm: Canonical algorithm key (md5, sha1, sha256, sha512).
+        salt: Optional salt string prepended to the banner.
+        pepper: Optional pepper string used as the HMAC key.
+
+    Returns:
+        Transformed banner string suitable for signature matching.
+
+    Raises:
+        ValueError: If the algorithm is unsupported or does not support HMAC
+            when a pepper is supplied.
+    """
+    if not banner:
+        return banner
+    if salt and pepper:
+        name = _hashlib_name(algorithm)
+        if name is None:
+            raise ValueError(
+                f"Algorithm '{algorithm}' does not support HMAC (peppered hashing)."
+            )
+        return hmac.new(
+            pepper.encode("utf-8"),
+            (salt + banner).encode("utf-8"),
+            name,
+        ).hexdigest()
+    if salt:
+        return hashlib.new(algorithm, (salt + banner).encode("utf-8")).hexdigest()
+    if pepper:
+        return _compute_peppered_hash(banner, algorithm, pepper)
+    return banner
+
 BANNER_SIGNATURES = [
     (
         re.compile(
@@ -890,6 +981,42 @@ def run_vuln(
 def format_vuln_report_json(data: Dict[str, object]) -> str:
     """Format vulnerability check results as JSON."""
     return json.dumps(data, indent=2, default=str)
+
+
+def format_vuln_report_csv(data: Dict[str, object]) -> str:
+    """Format vulnerability check results as CSV.
+
+    Emits a header row followed by one row per finding with columns:
+    id, type, severity, product, version, port, title, description.
+    """
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "id",
+            "type",
+            "severity",
+            "product",
+            "version",
+            "port",
+            "title",
+            "description",
+        ]
+    )
+    for finding in data.get("findings") or []:
+        writer.writerow(
+            [
+                finding.get("id", ""),
+                finding.get("kind", ""),
+                finding.get("severity", ""),
+                finding.get("product") or "",
+                finding.get("version") or "",
+                finding.get("port") or "",
+                finding.get("title", ""),
+                finding.get("description", ""),
+            ]
+        )
+    return output.getvalue()
 
 
 def _finding_detail(finding: Dict[str, object]) -> str:

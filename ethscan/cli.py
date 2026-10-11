@@ -80,6 +80,7 @@ from ethscan.service import (
     run_service,
 )
 from ethscan.vuln import (
+    format_vuln_report_csv,
     format_vuln_report_json,
     format_vuln_report_markdown,
     run_vuln,
@@ -122,6 +123,7 @@ from ethscan.cert import (
 from ethscan.cve import (
     format_cve_report_json,
     format_cve_report_markdown,
+    format_cve_report_csv,
     run_cve,
 )
 from ethscan.cidr import (
@@ -188,6 +190,19 @@ from ethscan.radix import (
     format_radix_report_json,
     format_radix_report_markdown,
     run_radix,
+)
+from ethscan.nmap import (
+    format_nmap_report_json,
+    format_nmap_report_markdown,
+    run_nmap,
+)
+from ethscan.stale import (
+    format_stale_report_json,
+    format_stale_report_markdown,
+    run_stale,
+    load_domains_from_file,
+    DEFAULT_TIMEOUT,
+    DEFAULT_MAX_WORKERS,
 )
 
 
@@ -1422,11 +1437,18 @@ def service(target: str, ports: Optional[str], profile: Optional[str], timeout: 
 @click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
 @click.option("--workers", default=50, type=int, help="Maximum concurrent workers")
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format: json, markdown, or csv.",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    help="Deprecated alias for --output-format.",
 )
 @click.option(
     "--out",
@@ -1490,10 +1512,15 @@ def vuln(
         algorithm=algorithm,
     )
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_vuln_report_json(results)
-    else:
+    elif chosen_format == "markdown":
         output = format_vuln_report_markdown(results)
+    else:
+        output = format_vuln_report_csv(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
@@ -2291,11 +2318,18 @@ def cert(
     help="Drop findings below this severity threshold (e.g. --min-severity high).",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format: json, markdown, or csv.",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    help="Deprecated alias for --output-format.",
 )
 @click.option(
     "--out",
@@ -2316,6 +2350,7 @@ def cve(
     api_url: Optional[str],
     severity: Optional[str],
     min_severity: Optional[str],
+    output_fmt: Optional[str],
     fmt: str,
     out_path: Optional[str],
 ) -> None:
@@ -2357,10 +2392,15 @@ def cve(
         profile=profile,
     )
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_cve_report_json(results)
-    else:
+    elif chosen_format == "markdown":
         output = format_cve_report_markdown(results)
+    else:
+        output = format_cve_report_csv(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
@@ -3021,6 +3061,113 @@ def validate(
         output = format_validate_report_json(results)
     else:
         output = format_validate_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--input-file",
+    "input_file",
+    required=True,
+    type=click.Path(exists=True, readable=True),
+    help="Path to Nmap XML output file (-oX).",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def nmap(input_file: str, fmt: str, out_path: Optional[str]) -> None:
+    """Parse Nmap XML scan output and cross-reference services against vulnerability database."""
+    results = run_nmap(input_file)
+
+    if fmt == "json":
+        output = format_nmap_report_json(results)
+    else:
+        output = format_nmap_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    "targets",
+    multiple=True,
+    help="Target domain or URL to check for stale DNS records. Can be specified multiple times.",
+)
+@click.option(
+    "--file",
+    "target_file",
+    type=click.Path(exists=True, readable=True),
+    help="Path to a file containing domains (one per line).",
+)
+@click.option(
+    "--timeout",
+    default=DEFAULT_TIMEOUT,
+    type=float,
+    help="DNS resolution and TCP connect timeout in seconds.",
+)
+@click.option(
+    "--workers",
+    default=DEFAULT_MAX_WORKERS,
+    type=int,
+    help="Maximum concurrent workers for resolution.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def stale(
+    targets: tuple,
+    target_file: Optional[str],
+    timeout: float,
+    workers: int,
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Detect stale DNS records (A/AAAA/CNAME) pointing to deallocated or unresolvable IPs."""
+    all_targets: List[str] = list(targets)
+    if target_file:
+        all_targets.extend(load_domains_from_file(target_file))
+    if not all_targets:
+        click.echo("Error: At least one target must be provided via --target or --file", err=True)
+        return
+
+    results = run_stale(all_targets, timeout=timeout, max_workers=workers)
+
+    if fmt == "json":
+        output = format_stale_report_json(results)
+    else:
+        output = format_stale_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

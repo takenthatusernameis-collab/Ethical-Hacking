@@ -16,6 +16,7 @@ from ethscan.vuln import (
     _hashlib_name,
     _normalize_host,
     _severity_rank,
+    format_vuln_report_csv,
     format_vuln_report_json,
     format_vuln_report_markdown,
     match_certificate_vulns,
@@ -937,3 +938,255 @@ def test_format_vuln_report_json_includes_recursive() -> None:
     assert parsed["max_depth"] == 2
     assert len(parsed["recursive_hosts_scanned"]) == 2
     assert len(parsed["recursive_findings"]) == 2
+
+
+# ---------------------------------------------------------------------------
+# Salt/pepper banner matching
+# ---------------------------------------------------------------------------
+
+
+def _mock_service_with_banner(banner: str):
+    def _inner(host, ports=None, timeout=3.0, max_workers=50):
+        return {"results": [{"port": 22, "banner": banner}]}
+
+    return _inner
+
+
+def test_transform_banner_no_salt_no_pepper() -> None:
+    from ethscan.vuln import _transform_banner
+
+    assert _transform_banner("SSH-2.0-OpenSSH_7.2p2", "sha256") == "SSH-2.0-OpenSSH_7.2p2"
+
+
+def test_transform_banner_salt_only() -> None:
+    from ethscan.vuln import _transform_banner
+
+    import hashlib
+
+    expected = hashlib.new("sha256", ("salt" + "SSH-2.0-OpenSSH_7.2p2").encode("utf-8")).hexdigest()
+    assert _transform_banner("SSH-2.0-OpenSSH_7.2p2", "sha256", salt="salt") == expected
+
+
+def test_transform_banner_pepper_only() -> None:
+    from ethscan.vuln import _transform_banner
+
+    import hmac
+
+    expected = hmac.new(b"pepper", b"SSH-2.0-OpenSSH_7.2p2", "sha256").hexdigest()
+    assert _transform_banner("SSH-2.0-OpenSSH_7.2p2", "sha256", pepper="pepper") == expected
+
+
+def test_transform_banner_salt_and_pepper() -> None:
+    from ethscan.vuln import _transform_banner
+
+    import hmac
+
+    expected = hmac.new(b"pepper", (b"salt" + b"SSH-2.0-OpenSSH_7.2p2"), "sha256").hexdigest()
+    assert (
+        _transform_banner(
+            "SSH-2.0-OpenSSH_7.2p2", "sha256", salt="salt", pepper="pepper"
+        )
+        == expected
+    )
+
+
+def test_transform_banner_empty_banner() -> None:
+    from ethscan.vuln import _transform_banner
+
+    assert _transform_banner("", "sha256", salt="salt") == ""
+
+
+def test_run_vuln_salt_flags_salt_field(monkeypatch) -> None:
+    monkeypatch.setattr("ethscan.vuln.run_service", _mock_service_with_banner("SSH-2.0-OpenSSH_7.2p2"))
+    results = run_vuln("example.com", salt="salt")
+    assert results["salt"] is True
+    assert results["pepper"] is False
+    assert results["algorithm"] == "sha256"
+
+
+def test_run_vuln_pepper_flags_pepper_field(monkeypatch) -> None:
+    monkeypatch.setattr("ethscan.vuln.run_service", _mock_service_with_banner("SSH-2.0-OpenSSH_7.2p2"))
+    results = run_vuln("example.com", pepper="pepper")
+    assert results["salt"] is False
+    assert results["pepper"] is True
+
+
+def test_run_vuln_algorithm_field_echoed(monkeypatch) -> None:
+    monkeypatch.setattr("ethscan.vuln.run_service", _mock_service_with_banner("SSH-2.0-OpenSSH_7.2p2"))
+    results = run_vuln("example.com", algorithm="md5")
+    assert results["algorithm"] == "md5"
+
+
+def test_run_vuln_salt_defaults_to_none(monkeypatch) -> None:
+    monkeypatch.setattr("ethscan.vuln.run_service", _mock_service_with_banner("SSH-2.0-OpenSSH_7.2p2"))
+    results = run_vuln("example.com")
+    assert results["salt"] is False
+    assert results["pepper"] is False
+
+
+def test_format_vuln_report_markdown_with_salt() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "services_checked": 1,
+        "tls_checked": False,
+        "certificate_checked": False,
+        "finding_count": 0,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+        "severity_filter": None,
+        "min_severity_filter": None,
+        "findings": [],
+        "notes": [],
+        "salt": True,
+        "pepper": False,
+        "algorithm": "sha256",
+    }
+    output = format_vuln_report_markdown(data)
+    assert "**Salt:** applied" in output
+    assert "**Pepper:**" not in output
+    assert "**Algorithm:** sha256" in output
+
+
+def test_format_vuln_report_markdown_with_pepper() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "services_checked": 1,
+        "tls_checked": False,
+        "certificate_checked": False,
+        "finding_count": 0,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+        "severity_filter": None,
+        "min_severity_filter": None,
+        "findings": [],
+        "notes": [],
+        "salt": False,
+        "pepper": True,
+        "algorithm": "sha256",
+    }
+    output = format_vuln_report_markdown(data)
+    assert "**Pepper:** applied" in output
+    assert "**Salt:**" not in output
+
+
+def test_format_vuln_report_json_includes_salt_pepper() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "services_checked": 1,
+        "tls_checked": False,
+        "certificate_checked": False,
+        "finding_count": 0,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+        "severity_filter": None,
+        "min_severity_filter": None,
+        "findings": [],
+        "notes": [],
+        "salt": True,
+        "pepper": True,
+        "algorithm": "sha256",
+    }
+    output = format_vuln_report_json(data)
+    parsed = json.loads(output)
+    assert parsed["salt"] is True
+    assert parsed["pepper"] is True
+    assert parsed["algorithm"] == "sha256"
+
+
+def test_format_vuln_report_csv() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "services_checked": 1,
+        "tls_checked": False,
+        "certificate_checked": False,
+        "finding_count": 2,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 1, "low": 1},
+        "findings": [
+            {
+                "id": "CVE-2018-15473",
+                "kind": "service",
+                "title": "OpenSSH user enumeration",
+                "severity": "medium",
+                "description": "OpenSSH before 7.7 allows user enumeration.",
+                "product": "OpenSSH",
+                "version": "7.2p2",
+                "port": 22,
+            },
+            {
+                "id": "CVE-2014-3566",
+                "kind": "protocol",
+                "title": "SSLv3 is vulnerable to POODLE",
+                "severity": "high",
+                "description": "SSLv3 supports CBC-mode ciphers.",
+                "protocol": "SSLv3",
+            },
+        ],
+        "notes": [],
+    }
+    output = format_vuln_report_csv(data)
+    lines = output.strip().split("\n")
+    header = lines[0]
+    assert "id,type,severity,product,version,port,title,description" in header
+    # First finding row (service kind - has product/version/port)
+    row1 = lines[1]
+    assert "CVE-2018-15473" in row1
+    assert "service" in row1
+    assert "medium" in row1
+    assert "OpenSSH" in row1
+    assert "7.2p2" in row1
+    assert "22" in row1
+    # Second finding row (protocol kind - no product/version/port)
+    row2 = lines[2]
+    assert "CVE-2014-3566" in row2
+    assert "protocol" in row2
+    assert "high" in row2
+    assert "SSLv3 is vulnerable to POODLE" in row2
+
+
+def test_format_vuln_report_csv_no_findings() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "services_checked": 0,
+        "tls_checked": False,
+        "certificate_checked": False,
+        "finding_count": 0,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+        "findings": [],
+        "notes": [],
+    }
+    output = format_vuln_report_csv(data)
+    lines = output.strip().split("\n")
+    assert lines[0] == "id,type,severity,product,version,port,title,description"
+    assert len(lines) == 1  # header only, no finding rows
+
+
+def test_format_vuln_report_csv_missing_optional_fields() -> None:
+    """CSV formatter handles findings with missing optional fields gracefully."""
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "services_checked": 0,
+        "tls_checked": False,
+        "certificate_checked": False,
+        "finding_count": 1,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+        "findings": [
+            {
+                "id": "TEST-1",
+                "kind": "cipher",
+                "title": "Weak cipher",
+                "severity": "high",
+                "description": "Weak cipher detected",
+            },
+        ],
+        "notes": [],
+    }
+    output = format_vuln_report_csv(data)
+    lines = output.strip().split("\n")
+    assert len(lines) == 2  # header + 1 finding
+    row = lines[1]
+    assert "TEST-1" in row
+    assert "cipher" in row
+    assert "high" in row

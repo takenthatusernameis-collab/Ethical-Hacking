@@ -2168,6 +2168,9 @@ def test_subdomains_recursive_option(monkeypatch) -> None:
         resolver=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         called_args["recursive"] = recursive
         called_args["max_depth"] = max_depth
@@ -2223,6 +2226,9 @@ def test_subdomains_recursive_disabled_by_default(monkeypatch) -> None:
         resolver=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         called_args["recursive"] = recursive
         called_args["max_depth"] = max_depth
@@ -4925,6 +4931,9 @@ def test_vuln_offline_target_json(monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         return {
             "target": target,
@@ -4983,6 +4992,9 @@ def test_vuln_offline_target_markdown(monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         return {
             "target": target,
@@ -5177,6 +5189,9 @@ def test_vuln_ports_option(monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         called_args["ports"] = ports
         called_args["target"] = target
@@ -5234,6 +5249,9 @@ def test_vuln_workers_option(monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         called_args["max_workers"] = max_workers
         called_args["target"] = target
@@ -5289,6 +5307,9 @@ def test_vuln_out_option(tmp_path, monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         return {
             "target": target,
@@ -5358,6 +5379,9 @@ def test_vuln_out_option_markdown(tmp_path, monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         return {
             "target": target,
@@ -5442,6 +5466,9 @@ def test_vuln_min_severity_option(monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         called_args["min_severity"] = min_severity
         return {
@@ -5490,6 +5517,9 @@ def test_vuln_min_severity_disabled_by_default(monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         called_args["min_severity"] = min_severity
         return {
@@ -5546,6 +5576,9 @@ def test_vuln_recursive_option(monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         called_args["recursive"] = recursive
         called_args["max_depth"] = max_depth
@@ -5605,6 +5638,9 @@ def test_vuln_recursive_disabled_by_default(monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         called_args["recursive"] = recursive
         called_args["max_depth"] = max_depth
@@ -5653,6 +5689,9 @@ def test_vuln_recursive_output_json(monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         return {
             "target": target,
@@ -5743,6 +5782,9 @@ def test_vuln_recursive_output_markdown(monkeypatch) -> None:
         min_severity=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         return {
             "target": target,
@@ -5821,6 +5863,199 @@ def test_vuln_recursive_output_markdown(monkeypatch) -> None:
     assert "backend.internal.example.com" in result.output
 
 
+def _install_vuln_salt_mock(monkeypatch, called_args):
+    """Install a run_vuln mock capturing salt/pepper/algorithm args and echoing them."""
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+        min_severity=None,
+        recursive=False,
+        max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
+    ):
+        called_args["salt"] = salt
+        called_args["pepper"] = pepper
+        called_args["algorithm"] = algorithm
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports": ports,
+            "services_checked": 0,
+            "tls_checked": False,
+            "certificate_checked": False,
+            "severity_filter": severity,
+            "min_severity_filter": min_severity,
+            "findings": [],
+            "finding_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": ["No known vulnerabilities matched"],
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hosts_scanned": [],
+            "recursive_findings": [],
+            "salt": bool(salt),
+            "pepper": bool(pepper),
+            "algorithm": algorithm,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+
+def test_vuln_help_shows_salt_pepper() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["vuln", "--help"])
+    assert result.exit_code == 0
+    assert "--salt" in result.output
+    assert "--pepper" in result.output
+    assert "--algorithm" in result.output
+    assert "sha256" in result.output
+
+
+def test_vuln_salt_option(monkeypatch) -> None:
+    called_args = {}
+    _install_vuln_salt_mock(monkeypatch, called_args)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--salt",
+            "mysalt",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["salt"] == "mysalt"
+    assert called_args["pepper"] is None
+    assert "**Salt:** applied (prepended to banner)" in result.output
+    assert "**Pepper:**" not in result.output
+
+
+def test_vuln_pepper_option(monkeypatch) -> None:
+    called_args = {}
+    _install_vuln_salt_mock(monkeypatch, called_args)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--pepper",
+            "mysecret",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["pepper"] == "mysecret"
+    assert called_args["salt"] is None
+    assert "**Pepper:** applied (HMAC key)" in result.output
+    assert "**Salt:**" not in result.output
+
+
+def test_vuln_algorithm_option(monkeypatch) -> None:
+    called_args = {}
+    _install_vuln_salt_mock(monkeypatch, called_args)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--salt",
+            "mysalt",
+            "--algorithm",
+            "md5",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["algorithm"] == "md5"
+    assert "**Algorithm:** md5" in result.output
+
+
+def test_vuln_salt_pepper_combined(monkeypatch) -> None:
+    called_args = {}
+    _install_vuln_salt_mock(monkeypatch, called_args)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--salt",
+            "mysalt",
+            "--pepper",
+            "mypepper",
+            "--algorithm",
+            "sha1",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["salt"] == "mysalt"
+    assert called_args["pepper"] == "mypepper"
+    assert called_args["algorithm"] == "sha1"
+    assert "**Salt:** applied (prepended to banner)" in result.output
+    assert "**Pepper:** applied (HMAC key)" in result.output
+    assert "**Algorithm:** sha1" in result.output
+
+
+def test_vuln_salt_pepper_disabled_by_default(monkeypatch) -> None:
+    called_args = {}
+    _install_vuln_salt_mock(monkeypatch, called_args)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["salt"] is None
+    assert called_args["pepper"] is None
+    assert called_args["algorithm"] == "sha256"
+    assert "**Salt:**" not in result.output
+    assert "**Pepper:**" not in result.output
+    assert "**Algorithm:** sha256" in result.output
+
+
 def test_dnsbrute_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["dnsbrute", "--help"])
@@ -5853,6 +6088,9 @@ def test_dnsbrute_offline_target_json(monkeypatch) -> None:
         resolver=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         return {
             "target": target,
@@ -5918,6 +6156,9 @@ def test_dnsbrute_offline_target_markdown(monkeypatch) -> None:
         resolver=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         return {
             "target": target,
@@ -6149,6 +6390,9 @@ def test_dnsbrute_out_option_json(tmp_path, monkeypatch) -> None:
         resolver=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         return {
             "target": target,
@@ -6218,6 +6462,9 @@ def test_dnsbrute_out_option_markdown(tmp_path, monkeypatch) -> None:
         resolver=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         return {
             "target": target,
@@ -6352,6 +6599,9 @@ def test_dnsbrute_recursive_option(monkeypatch) -> None:
         resolver=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         called_args["recursive"] = recursive
         called_args["max_depth"] = max_depth
@@ -6416,6 +6666,9 @@ def test_dnsbrute_no_recursive_by_default(monkeypatch) -> None:
         resolver=None,
         recursive=False,
         max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
     ):
         called_args["recursive"] = recursive
         called_args["max_depth"] = max_depth
@@ -12996,3 +13249,772 @@ def test_radix_cidr_file_help() -> None:
     result = runner.invoke(cli, ["radix", "--help"])
     assert result.exit_code == 0
     assert "--cidr-file" in result.output
+
+
+def test_vuln_help_shows_output_format() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["vuln", "--help"])
+    assert result.exit_code == 0
+    assert "--output-format" in result.output
+    assert "csv" in result.output
+
+
+def test_vuln_output_format_csv(monkeypatch) -> None:
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+        min_severity=None,
+        recursive=False,
+        max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
+        output_fmt=None,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports": ports,
+            "services_checked": 1,
+            "tls_checked": False,
+            "certificate_checked": False,
+            "severity_filter": severity,
+            "min_severity_filter": min_severity,
+            "findings": [
+                {
+                    "id": "CVE-2018-15473",
+                    "kind": "service",
+                    "title": "OpenSSH user enumeration via malformed userauth request",
+                    "severity": "medium",
+                    "description": "OpenSSH before 7.7 allows user enumeration.",
+                    "product": "OpenSSH",
+                    "version": "7.2p2",
+                    "port": 22,
+                }
+            ],
+            "finding_count": 1,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 1, "low": 0},
+            "notes": [],
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hosts_scanned": [],
+            "recursive_findings": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["vuln", "--target", "example.com", "--output-format", "csv", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    header_line = result.output.split("\n")[0]
+    assert "id" in header_line
+    assert "type" in header_line
+    assert "severity" in header_line
+    assert "product" in header_line
+    assert "version" in header_line
+    assert "port" in header_line
+    assert "title" in header_line
+    assert "description" in header_line
+    assert "CVE-2018-15473" in result.output
+    assert "service" in result.output
+    assert "medium" in result.output
+    assert "OpenSSH" in result.output
+
+
+def test_vuln_format_csv_alias(monkeypatch) -> None:
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+        min_severity=None,
+        recursive=False,
+        max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports": ports,
+            "services_checked": 0,
+            "tls_checked": False,
+            "certificate_checked": False,
+            "severity_filter": severity,
+            "min_severity_filter": min_severity,
+            "findings": [],
+            "finding_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": ["No known vulnerabilities matched"],
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hosts_scanned": [],
+            "recursive_findings": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["vuln", "--target", "example.com", "--format", "csv", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    header_line = result.output.split("\n")[0]
+    assert "id,type,severity,product,version,port,title,description" in header_line
+
+
+def test_vuln_out_option_csv(tmp_path, monkeypatch) -> None:
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+        min_severity=None,
+        recursive=False,
+        max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports": ports,
+            "services_checked": 1,
+            "tls_checked": False,
+            "certificate_checked": False,
+            "severity_filter": severity,
+            "min_severity_filter": min_severity,
+            "findings": [
+                {
+                    "id": "VSFTPD-2.3.4-BACKDOOR",
+                    "kind": "service",
+                    "title": "vsftpd 2.3.4 backdoor",
+                    "severity": "critical",
+                    "description": "vsftpd 2.3.4 backdoor command execution.",
+                    "product": "vsftpd",
+                    "version": "2.3.4",
+                    "port": 21,
+                }
+            ],
+            "finding_count": 1,
+            "severity_counts": {"critical": 1, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hosts_scanned": [],
+            "recursive_findings": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+    out_file = tmp_path / "report.csv"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--output-format",
+            "csv",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    content = out_file.read_text(encoding="utf-8")
+    assert "id,type,severity,product,version,port,title,description" in content
+    assert "VSFTPD-2.3.4-BACKDOOR" in content
+    assert "critical" in content
+    assert "vsftpd" in content
+    assert "Report written to" in result.output
+
+
+# ---------------------------------------------------------------------------
+# nmap command CLI integration tests
+
+
+SAMPLE_NMAP_XML = """<runscanner version="1.0" scanner="nmap" args="nmap -oX - 192.168.1.1" start="1234567890" nmap_version="7.94" xmloutputversion="1.05">
+<scaninfo type="syn" protocol="tcp" numservices="1000" services="1-1000"/>
+<verbose level="0"/>
+<debugging level="0"/>
+<host starttime="1234567890" endtime="1234567891">
+<status state="up" reason="syn-ack"/>
+<address addr="192.168.1.1" addrtype="ipv4"/>
+<hostnames>
+<hostname name="router.local" type="PTR"/>
+</hostnames>
+<ports>
+<port protocol="tcp" portid="22">
+<state state="open" reason="syn-ack" reason_ttl="64"/>
+<service name="ssh" product="OpenSSH" version="7.2p2" extrainfo="protocol 2.0" method="probed" conf="10"/>
+</port>
+<port protocol="tcp" portid="21">
+<state state="open" reason="syn-ack" reason_ttl="64"/>
+<service name="ftp" product="vsftpd" version="2.3.4" method="probed" conf="10"/>
+</port>
+</ports>
+</host>
+</runscanner>
+"""
+
+
+def test_nmap_help() -> None:
+    """Test nmap command help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["nmap", "--help"])
+    assert result.exit_code == 0
+    assert "--input-file" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+
+
+def test_nmap_top_level_help_lists_command() -> None:
+    """Test that nmap appears in top-level help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "nmap" in result.output.lower()
+
+
+def test_nmap_offline_json(tmp_path) -> None:
+    """Test nmap command with valid Nmap XML and JSON output."""
+    xml_file = tmp_path / "scan.xml"
+    xml_file.write_text(SAMPLE_NMAP_XML, encoding="utf-8")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["nmap", "--input-file", str(xml_file), "--format", "json"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["input_file"] == str(xml_file)
+    assert parsed["hosts_scanned"] == 1
+    assert parsed["total_ports_scanned"] == 2
+    assert parsed["total_open_ports"] == 2
+    assert parsed["services_detected"] == 2
+    assert parsed["finding_count"] >= 1
+    # Should find OpenSSH 7.2p2 vulns and vsftpd 2.3.4 backdoor
+    cve_ids = [f["id"] for f in parsed["findings"]]
+    assert "CVE-2016-6210" in cve_ids
+    assert "VSFTPD-2.3.4-BACKDOOR" in cve_ids
+
+
+def test_nmap_offline_markdown(tmp_path) -> None:
+    """Test nmap command with valid Nmap XML and Markdown output."""
+    xml_file = tmp_path / "scan.xml"
+    xml_file.write_text(SAMPLE_NMAP_XML, encoding="utf-8")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["nmap", "--input-file", str(xml_file), "--format", "markdown"])
+    assert result.exit_code == 0
+    assert "ethscan Nmap Vulnerability Report" in result.output
+    assert "Severity Summary" in result.output
+    assert "Detected Services" in result.output
+    assert "Vulnerability Findings" in result.output
+    assert "CVE-2016-6210" in result.output
+    assert "VSFTPD-2.3.4-BACKDOOR" in result.output
+    assert "OpenSSH" in result.output
+    assert "vsftpd" in result.output
+
+
+def test_nmap_out_option_json(tmp_path) -> None:
+    """Test nmap command with --out option writing JSON to file."""
+    xml_file = tmp_path / "scan.xml"
+    xml_file.write_text(SAMPLE_NMAP_XML, encoding="utf-8")
+    out_file = tmp_path / "report.json"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "nmap",
+            "--input-file",
+            str(xml_file),
+            "--format",
+            "json",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert out_file.exists()
+    content = out_file.read_text(encoding="utf-8")
+    parsed = json.loads(content)
+    assert parsed["input_file"] == str(xml_file)
+    assert "Report written to" in result.output
+
+
+def test_nmap_out_option_markdown(tmp_path) -> None:
+    """Test nmap command with --out option writing Markdown to file."""
+    xml_file = tmp_path / "scan.xml"
+    xml_file.write_text(SAMPLE_NMAP_XML, encoding="utf-8")
+    out_file = tmp_path / "report.md"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "nmap",
+            "--input-file",
+            str(xml_file),
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert out_file.exists()
+    content = out_file.read_text(encoding="utf-8")
+    assert "ethscan Nmap Vulnerability Report" in content
+    assert "Report written to" in result.output
+
+
+def test_nmap_missing_input_file() -> None:
+    """Test nmap command with missing input file."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["nmap", "--input-file", "/nonexistent/scan.xml"])
+    assert result.exit_code != 0
+    assert "Error" in result.output or "does not exist" in result.output.lower()
+
+
+def test_nmap_default_format_is_json(tmp_path) -> None:
+    """Test that default format is JSON when --format not specified."""
+    xml_file = tmp_path / "scan.xml"
+    xml_file.write_text(SAMPLE_NMAP_XML, encoding="utf-8")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["nmap", "--input-file", str(xml_file)])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["input_file"] == str(xml_file)
+
+
+def test_stale_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["stale", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--file" in result.output
+    assert "--timeout" in result.output
+    assert "--workers" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_stale() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "stale" in result.output
+
+
+def test_stale_offline_target_json(monkeypatch) -> None:
+    def mock_run_stale(targets, timeout=2.0, max_workers=50):
+        return {
+            "targets": targets,
+            "total_checked": 1,
+            "stale_count": 1,
+            "fresh_count": 0,
+            "results": [
+                {
+                    "domain": "nonexistent.invalid.domain.tld",
+                    "A": [],
+                    "AAAA": [],
+                    "CNAME": None,
+                    "stale": True,
+                    "stale_reasons": ["No DNS records resolved (NXDOMAIN or SERVFAIL)"],
+                }
+            ],
+            "stale_results": [
+                {
+                    "domain": "nonexistent.invalid.domain.tld",
+                    "A": [],
+                    "AAAA": [],
+                    "CNAME": None,
+                    "stale": True,
+                    "stale_reasons": ["No DNS records resolved (NXDOMAIN or SERVFAIL)"],
+                }
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_stale", mock_run_stale)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "stale",
+            "--target",
+            "nonexistent.invalid.domain.tld",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "stale_count" in result.output
+    assert "stale_results" in result.output
+
+
+def test_stale_offline_target_markdown(monkeypatch) -> None:
+    def mock_run_stale(targets, timeout=2.0, max_workers=50):
+        return {
+            "targets": targets,
+            "total_checked": 1,
+            "stale_count": 1,
+            "fresh_count": 0,
+            "results": [
+                {
+                    "domain": "nonexistent.invalid.domain.tld",
+                    "A": [],
+                    "AAAA": [],
+                    "CNAME": None,
+                    "stale": True,
+                    "stale_reasons": ["No DNS records resolved (NXDOMAIN or SERVFAIL)"],
+                }
+            ],
+            "stale_results": [
+                {
+                    "domain": "nonexistent.invalid.domain.tld",
+                    "A": [],
+                    "AAAA": [],
+                    "CNAME": None,
+                    "stale": True,
+                    "stale_reasons": ["No DNS records resolved (NXDOMAIN or SERVFAIL)"],
+                }
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_stale", mock_run_stale)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "stale",
+            "--target",
+            "nonexistent.invalid.domain.tld",
+            "--format",
+            "markdown",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Stale DNS Record Detection Report" in result.output
+    assert "nonexistent.invalid.domain.tld" in result.output
+
+
+def test_stale_url_target(monkeypatch) -> None:
+    """Test that URL targets are normalized to bare domains."""
+    captured = {}
+
+    def mock_run_stale(targets, timeout=2.0, max_workers=50):
+        captured["targets"] = targets
+        return {
+            "targets": targets,
+            "total_checked": 1,
+            "stale_count": 0,
+            "fresh_count": 1,
+            "results": [
+                {
+                    "domain": "example.com",
+                    "A": ["1.1.1.1"],
+                    "AAAA": [],
+                    "CNAME": None,
+                    "stale": False,
+                    "stale_reasons": [],
+                }
+            ],
+            "stale_results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_stale", mock_run_stale)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "stale",
+            "--target",
+            "https://example.com/path",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert captured["targets"] == ["https://example.com/path"]
+
+
+def test_stale_multiple_targets(monkeypatch) -> None:
+    """Test multiple --target options."""
+    captured = {}
+
+    def mock_run_stale(targets, timeout=2.0, max_workers=50):
+        captured["targets"] = targets
+        return {
+            "targets": targets,
+            "total_checked": len(targets),
+            "stale_count": 0,
+            "fresh_count": len(targets),
+            "results": [
+                {"domain": t, "A": ["1.1.1.1"], "AAAA": [], "CNAME": None, "stale": False, "stale_reasons": []}
+                for t in targets
+            ],
+            "stale_results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_stale", mock_run_stale)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "stale",
+            "--target",
+            "example.com",
+            "--target",
+            "google.com",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert len(captured["targets"]) == 2
+    assert "example.com" in captured["targets"]
+    assert "google.com" in captured["targets"]
+
+
+def test_stale_file_option(tmp_path, monkeypatch) -> None:
+    """Test --file option for reading domains from file."""
+    domain_file = tmp_path / "domains.txt"
+    domain_file.write_text("example.com\ngoogle.com\n", encoding="utf-8")
+
+    captured = {}
+
+    def mock_run_stale(targets, timeout=2.0, max_workers=50):
+        captured["targets"] = targets
+        return {
+            "targets": targets,
+            "total_checked": len(targets),
+            "stale_count": 0,
+            "fresh_count": len(targets),
+            "results": [
+                {"domain": t, "A": ["1.1.1.1"], "AAAA": [], "CNAME": None, "stale": False, "stale_reasons": []}
+                for t in targets
+            ],
+            "stale_results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_stale", mock_run_stale)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "stale",
+            "--file",
+            str(domain_file),
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert len(captured["targets"]) == 2
+    assert "example.com" in captured["targets"]
+    assert "google.com" in captured["targets"]
+
+
+def test_stale_timeout_option(monkeypatch) -> None:
+    """Test --timeout option pass-through."""
+    captured = {}
+
+    def mock_run_stale(targets, timeout=2.0, max_workers=50):
+        captured["timeout"] = timeout
+        return {
+            "targets": targets,
+            "total_checked": 1,
+            "stale_count": 0,
+            "fresh_count": 1,
+            "results": [
+                {"domain": "example.com", "A": ["1.1.1.1"], "AAAA": [], "CNAME": None, "stale": False, "stale_reasons": []}
+            ],
+            "stale_results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_stale", mock_run_stale)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "stale",
+            "--target",
+            "example.com",
+            "--timeout",
+            "5.0",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert captured["timeout"] == 5.0
+
+
+def test_stale_workers_option(monkeypatch) -> None:
+    """Test --workers option pass-through."""
+    captured = {}
+
+    def mock_run_stale(targets, timeout=2.0, max_workers=50):
+        captured["max_workers"] = max_workers
+        return {
+            "targets": targets,
+            "total_checked": 1,
+            "stale_count": 0,
+            "fresh_count": 1,
+            "results": [
+                {"domain": "example.com", "A": ["1.1.1.1"], "AAAA": [], "CNAME": None, "stale": False, "stale_reasons": []}
+            ],
+            "stale_results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_stale", mock_run_stale)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "stale",
+            "--target",
+            "example.com",
+            "--workers",
+            "100",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert captured["max_workers"] == 100
+
+
+def test_stale_out_option_json(tmp_path, monkeypatch) -> None:
+    """Test --out option writing JSON to file."""
+    def mock_run_stale(targets, timeout=2.0, max_workers=50):
+        return {
+            "targets": targets,
+            "total_checked": 1,
+            "stale_count": 0,
+            "fresh_count": 1,
+            "results": [
+                {"domain": "example.com", "A": ["1.1.1.1"], "AAAA": [], "CNAME": None, "stale": False, "stale_reasons": []}
+            ],
+            "stale_results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_stale", mock_run_stale)
+
+    out_file = tmp_path / "report.json"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "stale",
+            "--target",
+            "example.com",
+            "--format",
+            "json",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert out_file.exists()
+    content = out_file.read_text(encoding="utf-8")
+    assert "stale_count" in content
+    assert "Report written to" in result.output
+
+
+def test_stale_out_option_markdown(tmp_path, monkeypatch) -> None:
+    """Test --out option writing Markdown to file."""
+    def mock_run_stale(targets, timeout=2.0, max_workers=50):
+        return {
+            "targets": targets,
+            "total_checked": 1,
+            "stale_count": 0,
+            "fresh_count": 1,
+            "results": [
+                {"domain": "example.com", "A": ["1.1.1.1"], "AAAA": [], "CNAME": None, "stale": False, "stale_reasons": []}
+            ],
+            "stale_results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_stale", mock_run_stale)
+
+    out_file = tmp_path / "report.md"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "stale",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert out_file.exists()
+    content = out_file.read_text(encoding="utf-8")
+    assert "Stale DNS Record Detection Report" in content
+    assert "Report written to" in result.output
+
+
+def test_stale_default_format_is_json(monkeypatch) -> None:
+    """Test that default format is JSON when --format not specified."""
+    def mock_run_stale(targets, timeout=2.0, max_workers=50):
+        return {
+            "targets": targets,
+            "total_checked": 1,
+            "stale_count": 0,
+            "fresh_count": 1,
+            "results": [
+                {"domain": "example.com", "A": ["1.1.1.1"], "AAAA": [], "CNAME": None, "stale": False, "stale_reasons": []}
+            ],
+            "stale_results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_stale", mock_run_stale)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["stale", "--target", "example.com"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert "stale_count" in parsed
