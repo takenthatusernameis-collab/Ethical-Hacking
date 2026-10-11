@@ -2475,6 +2475,85 @@ def test_scan_profile_override_timeout_workers(monkeypatch) -> None:
     assert called_args["max_workers"] == 10
 
 
+def test_scan_help_shows_format_out() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--help"])
+    assert result.exit_code == 0
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_scan_json_output(monkeypatch, tmp_path) -> None:
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        return [(22, True), (80, True), (443, False)]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "22,80,443", "--format", "json"])
+    assert result.exit_code == 0
+    assert '"target": "example.com"' in result.output
+    assert "22" in result.output and "80" in result.output  # open_ports contains 22 and 80
+    assert '"port": 22' in result.output
+    assert '"open": true' in result.output
+
+
+def test_scan_markdown_output(monkeypatch, tmp_path) -> None:
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        return [(22, True), (80, True), (443, False)]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "22,80,443", "--format", "markdown"])
+    assert result.exit_code == 0
+    assert "# ethscan Port Scan Report" in result.output
+    assert "**Target:** example.com" in result.output
+    assert "**Open Ports:** 22, 80" in result.output
+    assert "| Port | Status |" in result.output
+    assert "| 22 | Open |" in result.output
+    assert "| 443 | Closed |" in result.output
+
+
+def test_scan_out_json(monkeypatch, tmp_path) -> None:
+    out_file = tmp_path / "scan_report.json"
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        return [(22, True), (80, False)]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "22,80", "--format", "json", "--out", str(out_file)])
+    assert result.exit_code == 0
+    assert "Report written to" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert '"target": "example.com"' in content
+    assert "22" in content  # open_ports contains 22
+
+
+def test_scan_out_markdown(monkeypatch, tmp_path) -> None:
+    out_file = tmp_path / "scan_report.md"
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        return [(22, True), (80, False)]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "22,80", "--format", "markdown", "--out", str(out_file)])
+    assert result.exit_code == 0
+    assert "Report written to" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "# ethscan Port Scan Report" in content
+    assert "**Target:** example.com" in content
+    assert "**Open Ports:** 22" in content
+
+
 def test_service_profile_fast(monkeypatch) -> None:
     called_args = {}
 
@@ -8387,8 +8466,8 @@ def test_config_applies_to_scan_command(tmp_path) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["--config", str(cfg), "scan", "--target", "127.0.0.1"])
     assert result.exit_code == 0
-    # profile normal uses 24 common ports
-    assert "24 ports" in result.output
+    # profile normal uses 24 common ports - check JSON output
+    assert '"ports_scanned": 24' in result.output
 
 
 def test_config_explicit_overrides_config(tmp_path) -> None:

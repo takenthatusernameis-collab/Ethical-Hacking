@@ -7,6 +7,8 @@ from ethscan.scanner import (
     FAST_PORTS,
     FULL_PORTS,
     PROFILE_DEFAULTS,
+    format_scan_report_json,
+    format_scan_report_markdown,
     get_common_ports,
     get_profile_defaults,
     get_profile_ports,
@@ -115,3 +117,90 @@ def test_get_profile_defaults_full() -> None:
 def test_get_profile_defaults_invalid() -> None:
     with pytest.raises(ValueError, match="Unknown profile: invalid"):
         get_profile_defaults("invalid")
+
+
+def test_format_scan_report_json() -> None:
+    data = {
+        "target": "127.0.0.1",
+        "host": "127.0.0.1",
+        "timeout": 1.0,
+        "ports_scanned": 3,
+        "open_ports": [22, 80],
+        "details": [
+            {"port": 22, "open": True},
+            {"port": 80, "open": True},
+            {"port": 443, "open": False},
+        ],
+    }
+    output = format_scan_report_json(data)
+    assert '"target": "127.0.0.1"' in output
+    assert "22" in output and "80" in output  # open_ports contains 22 and 80
+    assert '"port": 22' in output
+    assert '"open": true' in output
+
+
+def test_format_scan_report_json_empty() -> None:
+    data = {
+        "target": "127.0.0.1",
+        "host": "127.0.0.1",
+        "timeout": 1.0,
+        "ports_scanned": 0,
+        "open_ports": [],
+        "details": [],
+    }
+    output = format_scan_report_json(data)
+    assert '"open_ports": []' in output
+    assert '"details": []' in output
+
+
+def test_format_scan_report_markdown() -> None:
+    data = {
+        "target": "127.0.0.1",
+        "host": "127.0.0.1",
+        "timeout": 1.0,
+        "ports_scanned": 3,
+        "open_ports": [22, 80],
+        "details": [
+            {"port": 22, "open": True},
+            {"port": 80, "open": True},
+            {"port": 443, "open": False},
+        ],
+    }
+    output = format_scan_report_markdown(data)
+    assert "# ethscan Port Scan Report" in output
+    assert "**Target:** 127.0.0.1" in output
+    assert "**Open Ports:** 22, 80" in output
+    assert "## Port Details" in output
+    assert "| Port | Status |" in output
+    assert "| 22 | Open |" in output
+    assert "| 443 | Closed |" in output
+
+
+def test_format_scan_report_markdown_no_open_ports() -> None:
+    data = {
+        "target": "127.0.0.1",
+        "host": "127.0.0.1",
+        "timeout": 1.0,
+        "ports_scanned": 3,
+        "open_ports": [],
+        "details": [
+            {"port": 22, "open": False},
+            {"port": 80, "open": False},
+            {"port": 443, "open": False},
+        ],
+    }
+    output = format_scan_report_markdown(data)
+    assert "**Open Ports:** None" in output
+
+
+def test_format_scan_report_markdown_no_ports_scanned() -> None:
+    data = {
+        "target": "127.0.0.1",
+        "host": "127.0.0.1",
+        "timeout": 1.0,
+        "ports_scanned": 0,
+        "open_ports": [],
+        "details": [],
+    }
+    output = format_scan_report_markdown(data)
+    assert "*No ports scanned.*" in output

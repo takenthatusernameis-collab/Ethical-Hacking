@@ -11,7 +11,7 @@ from ethscan.passwords import (
     format_audit_report_json,
     format_audit_report_markdown,
 )
-from ethscan.scanner import get_common_ports, parse_port_range, scan_ports, get_profile_ports, get_profile_defaults
+from ethscan.scanner import get_common_ports, parse_port_range, scan_ports, get_profile_ports, get_profile_defaults, format_scan_report_json, format_scan_report_markdown
 from ethscan.web import (
     format_web_report_json,
     format_web_report_markdown,
@@ -180,7 +180,20 @@ def cli(ctx, config_path: Optional[str]) -> None:
 )
 @click.option("--timeout", default=1.0, type=float, help="Connection timeout in seconds")
 @click.option("--workers", default=100, type=int, help="Maximum concurrent workers")
-def scan(target: str, ports: str, profile: Optional[str], timeout: float, workers: int) -> None:
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def scan(target: str, ports: str, profile: Optional[str], timeout: float, workers: int, fmt: str, out_path: Optional[str]) -> None:
     """Run a port scan against TARGET."""
     if profile:
         defaults = get_profile_defaults(profile)
@@ -199,15 +212,31 @@ def scan(target: str, ports: str, profile: Optional[str], timeout: float, worker
     else:
         port_list = parse_port_range(ports)
 
-    click.echo(f"Scanning {target} ({len(port_list)} ports)...")
-
     results = scan_ports(target, port_list, timeout=timeout, max_workers=workers)
 
     open_ports = [port for port, is_open in results if is_open]
-    if open_ports:
-        click.echo(f"Open ports: {', '.join(map(str, open_ports))}")
+
+    # Prepare structured output for formatters
+    scan_data = {
+        "target": target,
+        "host": target,
+        "timeout": timeout,
+        "ports_scanned": len(port_list),
+        "open_ports": open_ports,
+        "details": [{"port": port, "open": is_open} for port, is_open in results],
+    }
+
+    if fmt == "json":
+        output = format_scan_report_json(scan_data)
     else:
-        click.echo("No open ports found.")
+        output = format_scan_report_markdown(scan_data)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
 
 
 @cli.command()
