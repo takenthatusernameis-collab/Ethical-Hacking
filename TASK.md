@@ -1155,10 +1155,61 @@ Added a `--contains` option to the `radix` command that tests whether a given IP
 - End-to-end: `python -m ethscan radix --cidrs "192.168.1.0/24" --contains "172.16.0.1" --format markdown` produces Markdown with "## Membership Test" section and "In Network: No"
 - Edge cases: invalid IP returns `in_network: false` with `matched_network: null`; whitespace in `--contains` is stripped; works with both merge enabled and disabled
 
+## Completed: `--diff` option for `radix` command
+
+Added a `--diff` option to the `radix` command that computes the set difference between two CIDR sets (addresses in `--cidrs` but not in `--diff`). The implementation includes a `_subtract_networks()` helper using `ipaddress.address_exclude()` for proper network subtraction logic.
+
+### Added Functionality
+- `ethscan/radix.py`:
+  - Added `_subtract_networks()` — subtracts one list of networks from another using `ipaddress.collapse_addresses()` and `address_exclude()`
+  - Updated `run_radix()` to accept `diff` (Optional[List[str]]) parameter
+  - Added diff computation logic: parses diff CIDRs, merges them (if merge enabled), subtracts from merged networks
+  - Updated return dictionary to include `diff` dict with diff CIDRs, merged diff networks, difference networks, and counts
+  - Updated `format_radix_report_markdown()` to display "## Set Difference (In First, Not In Second)" section with difference table
+- `ethscan/cli.py`:
+  - Added `--diff` option (comma-separated CIDR list) to the `radix` command
+  - Passes `diff` to `run_radix()`
+
+### Modified Files
+- `ethscan/radix.py` — added `_subtract_networks`, updated `run_radix` and markdown formatter
+- `ethscan/cli.py` — added `--diff` option and pass-through
+- `tests/test_radix.py` — tests for `_subtract_networks` and diff logic (included in existing test suite)
+- `tests/test_cli.py` — CLI integration tests for `--diff` option
+
+### Verification
+- `python -m pytest -q` -> 1342 passed, 1 skipped
+- `python -m ethscan radix --help` -> shows `--diff` option
+- End-to-end: `python -m ethscan radix --cidrs "192.168.1.0/24,192.168.2.0/23,10.0.0.0/8" --diff "192.168.1.0/24,10.0.0.0/8" --format json` produces JSON with difference networks showing `192.168.2.0/23`
+
+## Current state
+- All 31 commands implemented and wired up (`jwt`, `completion`, `config`, `cidr`, `radix`, `mac`, `dnssec`, `hash`, `subtake`, `cert`, `recon`, `geo`, `trace`, `wifi`, `osdetect`, `urlcheck`, `vuln`, `cve`, `dnsbrute`, `subdomains`, `whois`, `dns`, `resolve`, `ssl`, `tls`, `service`, `scan`, `brute`, `web`, `headers`, `ping`, `audit`, `report`).
+- `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv` options.
+- `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, and `--max-depth`.
+- `whois` now supports `--recursive/--no-recursive` and `--max-depth`.
+- `geo` now supports `--recursive` and `--max-depth`.
+- `dnsbrute` now supports `--recursive` and `--max-depth` for recursive zone transfers.
+- `radix` now supports `--cidrs`, `--no-merge`, `--max-depth`, `--contains`, `--diff`, `--format`, `--out` for CIDR radix tree visualization.
+- `osdetect` supports `--ports`, `--banners-file`, `--timeout`, `--workers`.
+- `audit` now supports `--format json|markdown` and `--out`.
+- `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out`.
+- `report` now supports `--format json|markdown` and `--out`.
+- `cve` now supports `--target`, `--services-file`, `--ports`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--severity`, `--min-severity`, `--format`, `--out`.
+- `vuln` now supports `--target`, `--ports`, `--services-file`, `--tls-file`, `--ssl-file`, `--severity`, `--min-severity`, `--format`, `--out`.
+- `dnssec` now supports `--target`, `--server`, `--timeout`, `--format`, `--out`.
+- `brute` now supports `--output-format csv` (with deprecated `--format` alias).
+- `mac` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out`.
+- `hash` now supports `--file`, `--algorithm`, `--format`, `--out`.
+- `cidr` now supports `--cidr`, `--contains`, `--format`, `--out`.
+- `jwt` now supports `--token`, `--format`, `--out`.
+- `completion` now supports `--shell`, `--prog-name`, `--format`, `--out`.
+- `config` now supports `--config`, `--init`, `--format`, `--out`.
+- Configuration file (`ethscan.yaml`) persists default options across commands via a `--config` group option and a `config` subcommand.
+- Tests: 1342 passing (1 skipped).
+
 ## Suggested next task
 
-**Add a `--diff` option to the `radix` command** that shows the address ranges covered by one set of CIDRs but not another (set difference visualization).
+**Add a `--diff` option to the `cidr` command** for set difference calculations between two CIDR networks (similar to `radix --diff` but for single networks).
 
-Alternative: Add a `--json` output mode to the `report` command for explicit machine-readable output (the `report` command uses inline JSON serialization but some users may want an explicit `--format json` flag for clarity in scripts, similar to other commands).
+Alternative: Add a `--recursive` option to the `geo` command for recursive geolocation lookups across resolved hop IPs.
 
-Alternative: Add a `--ports` option to the `vuln` command to run live service detection on a custom port set before querying the built-in vulnerability database.
+Alternative: Add a `--profile fast|normal|full` option to the `cve` command to map to predefined port sets (similar to `scan`/`service`).
