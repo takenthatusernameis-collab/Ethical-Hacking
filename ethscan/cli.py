@@ -1,7 +1,7 @@
 """Command-line interface for ethscan."""
 
 import json
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import click
 
@@ -137,12 +137,33 @@ from ethscan.ping import (
     format_ping_report_markdown,
     run_ping,
 )
+from ethscan.config import (
+    build_default_map,
+    load_config,
+    validate_config,
+)
 
 
 @click.group()
+@click.option(
+    "--config",
+    "config_path",
+    type=click.Path(),
+    help="Path to an ethscan.yaml config file (default: ethscan.yaml or ~/.ethscan.yaml).",
+)
 @click.version_option(__version__)
-def cli() -> None:
+@click.pass_context
+def cli(ctx, config_path: Optional[str]) -> None:
     """ethscan: ethical hacking toolkit."""
+    config = load_config(config_path)
+    ctx.obj = {"config": config, "config_path": config_path}
+    known_commands = sorted(cli.commands.keys())
+    for warning in validate_config(config, known_commands=known_commands):
+        click.echo(f"Warning: {warning}", err=True)
+    default_map: Dict[str, Dict[str, Any]] = {}
+    for name in cli.commands:
+        default_map[name] = build_default_map(config, name)
+    ctx.default_map = default_map
 
 
 @cli.command()
@@ -2049,6 +2070,137 @@ def _generate_markdown(data: dict) -> str:
     lines.append("")
 
     return "\n".join(lines)
+
+
+@cli.command()
+@click.option(
+    "--config",
+    "config_path",
+    type=click.Path(),
+    help="Path to an ethscan.yaml config file (default: ethscan.yaml or ~/.ethscan.yaml).",
+)
+@click.option(
+    "--init",
+    "init_path",
+    type=click.Path(writable=True),
+    help="Write a sample config file to PATH and exit.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format for the loaded config (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+@click.pass_context
+def config(
+    ctx,
+    config_path: Optional[str],
+    init_path: Optional[str],
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Inspect or initialize the ethscan configuration file."""
+    from ethscan.config import dump_default_config
+
+    if init_path:
+        sample = dump_default_config()
+        try:
+            with open(init_path, "w", encoding="utf-8") as handle:
+                handle.write(sample)
+        except OSError as exc:
+            click.echo(f"Error writing config: {exc}", err=True)
+            raise SystemExit(1)
+        click.echo(f"Sample config written to {init_path}")
+        return
+
+    # Inherit the parent's --config path when the subcommand's own option
+    # was not provided, so `ethscan --config X config` works as expected.
+    if not config_path and ctx.obj and isinstance(ctx.obj, dict):
+        parent_config = ctx.obj.get("config_path")
+        if parent_config:
+            config_path = parent_config
+
+    loaded = load_config(config_path)
+    path = loaded.get("_path")
+    parse_error = loaded.get("_parse_error")
+
+    if fmt == "json":
+        payload: Dict[str, Any] = {
+            "config_file": path,
+            "defaults": loaded.get("defaults") or {},
+            "commands": loaded.get("commands") or {},
+        }
+        if isinstance(parse_error, str):
+            payload["parse_error"] = parse_error
+        output = json.dumps(payload, indent=2, default=str)
+    else:
+        lines = ["# ethscan Configuration", ""]
+        if path:
+            lines.append(f"- **Config file:** {path}")
+        else:
+            lines.append("*No config file found; using built-in defaults.*")
+        if isinstance(parse_error, str):
+            lines.append("")
+            lines.append("## Parse Error")
+            lines.append(f"```\n{parse_error}\n```")
+            lines.append("")
+        lines.append("")
+
+        defaults = loaded.get("defaults") or {}
+        lines.append("## Global Defaults")
+        if defaults:
+            lines.append("| Option | Value |")
+            lines.append("|--------|-------|")
+            for key, value in defaults.items():
+                lines.append(f"| {key} | {value} |")
+        else:
+            lines.append("*No global defaults configured.*")
+        lines.append("")
+
+        commands = loaded.get("commands") or {}
+        lines.append("## Per-Command Overrides")
+        if commands:
+            for cmd, opts in commands.items():
+                lines.append(f"### {cmd}")
+                if isinstance(opts, dict) and opts:
+                    lines.append("| Option | Value |")
+                    lines.append("|--------|-------|")
+                    for key, value in opts.items():
+                        lines.append(f"| {key} | {value} |")
+                else:
+                    lines.append("*No overrides.*")
+                lines.append("")
+        else:
+            lines.append("*No per-command overrides configured.*")
+        lines.append("")
+
+        lines.append("## Notes")
+        lines.append(
+            "- CLI arguments always take precedence over config values."
+        )
+        lines.append(
+            "- Use `ethscan config --init PATH` to create a sample config file."
+        )
+        lines.append("")
+        output = "\n".join(lines)
+
+    if out_path:
+        try:
+            with open(out_path, "w", encoding="utf-8") as handle:
+                handle.write(output)
+        except OSError as exc:
+            click.echo(f"Error writing output: {exc}", err=True)
+            raise SystemExit(1)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
 
 
 if __name__ == "__main__":

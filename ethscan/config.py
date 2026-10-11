@@ -1,0 +1,249 @@
+"""Configuration file support for ethscan.
+
+Loads an optional ``ethscan.yaml`` configuration file that persists default
+options across commands. The file may live in the current working directory
+(``ethscan.yaml``) or in the user's home directory (``~/.ethscan.yaml``).
+
+The YAML schema is::
+
+    # Global defaults applied to every command
+    defaults:
+      timeout: 5.0
+      workers: 50
+      format: json
+
+    # Per-command overrides (keys are Click option dest names)
+    commands:
+      scan:
+        ports: common
+        profile: normal
+        timeout: 1.0
+        workers: 100
+      subdomains:
+        timeout: 3.0
+        resolver: 8.8.8.8
+
+Only options explicitly listed in the config take effect; CLI arguments always
+take precedence over config values. The config is purely optional and the
+toolkit works unchanged when no config file is present.
+"""
+
+import os
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+try:
+    import yaml
+except ImportError:  # pragma: no cover - pyyaml is a declared dependency
+    yaml = None  # type: ignore
+
+# Candidate locations searched in order. The first existing file wins.
+# Evaluated lazily (see ``_candidate_paths``) so that ``Path.home()`` reflects
+# the current environment (useful for tests that monkeypatch the home dir).
+CONFIG_CANDIDATES: List[str] = [
+    "ethscan.yaml",
+    "ethscan.yml",
+    ".ethscan.yaml",
+    ".ethscan.yml",
+]
+
+# Default config used when no file is found.
+DEFAULT_CONFIG: Dict[str, Any] = {
+    "defaults": {},
+    "commands": {},
+}
+
+
+def _candidate_paths(explicit: Optional[str] = None) -> List[Path]:
+    """Return the list of config file paths to search.
+
+    When ``explicit`` is provided it is prepended to the standard candidates.
+    The first two candidates are relative to the current working directory;
+    the last two are relative to the user's home directory (``Path.home()``).
+    """
+    paths: List[Path] = []
+    if explicit:
+        paths.append(Path(explicit))
+    home = Path.home()
+    for candidate in CONFIG_CANDIDATES:
+        if candidate.startswith("."):
+            paths.append(home / candidate)
+        else:
+            paths.append(Path(candidate))
+    return paths
+
+
+def find_config_file(explicit: Optional[str] = None) -> Optional[Path]:
+    """Locate the first existing config file.
+
+    Args:
+        explicit: Optional explicit path to check first.
+
+    Returns:
+        Path to the config file, or None when none exists.
+    """
+    for candidate in _candidate_paths(explicit):
+        try:
+            if candidate.is_file():
+                return candidate
+        except OSError:
+            continue
+    return None
+
+
+def load_config(explicit: Optional[str] = None) -> Dict[str, Any]:
+    """Load and validate the ethscan configuration.
+
+    Args:
+        explicit: Optional explicit path to a config file.
+
+    Returns:
+        A dict with ``defaults`` and ``commands`` keys. Missing keys are
+        filled in with empty dicts so callers can safely index into them.
+        A ``_parse_error`` key is set to a human-readable message when the
+        file exists but could not be parsed; it is absent otherwise.
+    """
+    path = find_config_file(explicit)
+    if path is None:
+        return dict(DEFAULT_CONFIG)
+
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = yaml.safe_load(handle)
+    except yaml.YAMLError as exc:
+        return {
+            "defaults": {},
+            "commands": {},
+            "_path": str(path),
+            "_parse_error": f"Failed to parse {path}: {exc}",
+        }
+    except OSError as exc:
+        return {
+            "defaults": {},
+            "commands": {},
+            "_path": str(path),
+            "_parse_error": f"Failed to read {path}: {exc}",
+        }
+
+    if not isinstance(data, dict):
+        return {
+            "defaults": {},
+            "commands": {},
+            "_path": str(path),
+            "_parse_error": f"Config root must be a mapping in {path}",
+        }
+
+    defaults = data.get("defaults") or {}
+    commands = data.get("commands") or {}
+
+    if not isinstance(defaults, dict):
+        defaults = {}
+    if not isinstance(commands, dict):
+        commands = {}
+
+    return {
+        "defaults": defaults,
+        "commands": commands,
+        "_path": str(path),
+    }
+
+
+def _merge(defaults: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
+    """Merge command-level defaults with global defaults.
+
+    Command-level values take precedence over global defaults.
+    """
+    merged: Dict[str, Any] = {}
+    merged.update(defaults)
+    merged.update(overrides)
+    return merged
+
+
+def build_default_map(
+    config: Dict[str, Any],
+    command: str,
+) -> Dict[str, Any]:
+    """Build the Click ``default_map`` for a single command.
+
+    Args:
+        config: Parsed configuration dict (as returned by ``load_config``).
+        command: Command name (e.g. ``"scan"``).
+
+    Returns:
+        A dict mapping option dest names to config values. Empty when the
+        command has no configured defaults.
+    """
+    defaults = config.get("defaults") or {}
+    commands = config.get("commands") or {}
+    overrides = commands.get(command) or {}
+    if not isinstance(overrides, dict):
+        overrides = {}
+    return _merge(defaults, overrides)
+
+
+def config_path_string(config: Dict[str, Any]) -> Optional[str]:
+    """Return the path of the loaded config file, or None."""
+    path = config.get("_path")
+    if isinstance(path, str):
+        return path
+    return None
+
+
+def validate_config(config: Dict[str, Any], known_commands: Optional[List[str]] = None) -> List[str]:
+    """Validate a config dict and return a list of human-readable warnings.
+
+    An empty list means the config is structurally valid. Warnings are
+    non-fatal and do not prevent the toolkit from running.
+    """
+    warnings: List[str] = []
+    parse_error = config.get("_parse_error")
+    if isinstance(parse_error, str):
+        warnings.append(parse_error)
+        return warnings
+
+    defaults = config.get("defaults")
+    commands = config.get("commands")
+
+    if defaults is not None and not isinstance(defaults, dict):
+        warnings.append("'defaults' must be a mapping")
+
+    if commands is not None:
+        if not isinstance(commands, dict):
+            warnings.append("'commands' must be a mapping")
+        else:
+            if known_commands is not None:
+                for cmd in commands:
+                    if cmd not in known_commands:
+                        warnings.append(
+                            f"Unknown command '{cmd}' in config (no such command)"
+                        )
+            for cmd, opts in commands.items():
+                if not isinstance(opts, dict):
+                    warnings.append(
+                        f"command '{cmd}' must be a mapping of option names to values"
+                    )
+
+    return warnings
+
+
+def dump_default_config() -> str:
+    """Return a YAML string documenting the supported config schema."""
+    sample = """\
+# Global defaults applied to every command that does not override them.
+defaults:
+  timeout: 5.0
+  workers: 50
+  format: json
+
+# Per-command overrides (keys are Click option dest names).
+commands:
+  scan:
+    ports: common
+    profile: normal
+    timeout: 1.0
+    workers: 100
+  subdomains:
+    timeout: 3.0
+    resolver: 8.8.8.8
+"""
+    return sample

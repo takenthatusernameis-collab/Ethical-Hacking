@@ -8238,3 +8238,167 @@ def test_cidr_out_option_markdown(tmp_path) -> None:
     assert out_file.exists()
     content = out_file.read_text()
     assert "ethscan CIDR Network Calculator Report" in content
+
+
+def test_config_help() -> None:
+    """Test config command help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["config", "--help"])
+    assert result.exit_code == 0
+    assert "--config" in result.output
+    assert "--init" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+
+
+def test_config_lists_in_top_level_help() -> None:
+    """Test config command appears in top-level help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "config" in result.output
+
+
+def test_config_no_file_json() -> None:
+    """Test config command with no config file (json)."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["config"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["config_file"] is None
+    assert parsed["defaults"] == {}
+    assert parsed["commands"] == {}
+
+
+def test_config_no_file_markdown() -> None:
+    """Test config command with no config file (markdown)."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["config", "--format", "markdown"])
+    assert result.exit_code == 0
+    assert "ethscan Configuration" in result.output
+    assert "No config file found" in result.output
+
+
+def test_config_with_explicit_file(tmp_path) -> None:
+    """Test config command with an explicit config file."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text(
+        "defaults:\n  timeout: 5.0\ncommands:\n  scan:\n    ports: common\n"
+    )
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--config", str(cfg), "config"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["config_file"] == str(cfg)
+    assert parsed["defaults"]["timeout"] == 5.0
+    assert parsed["commands"]["scan"]["ports"] == "common"
+
+
+def test_config_inherits_parent_config(tmp_path) -> None:
+    """Test config subcommand inherits parent --config."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("defaults:\n  timeout: 7.0\n")
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--config", str(cfg), "config"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["config_file"] == str(cfg)
+    assert parsed["defaults"]["timeout"] == 7.0
+
+
+def test_config_init_writes_sample(tmp_path) -> None:
+    """Test config --init writes a sample config file."""
+    out = tmp_path / "sample.yaml"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["config", "--init", str(out)])
+    assert result.exit_code == 0
+    assert "Sample config written" in result.output
+    assert out.exists()
+    content = out.read_text()
+    assert "defaults:" in content
+    assert "commands:" in content
+
+
+def test_config_out_json(tmp_path) -> None:
+    """Test config command with --out (json)."""
+    out_file = tmp_path / "config.json"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["config", "--out", str(out_file)])
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    parsed = json.loads(out_file.read_text())
+    assert parsed["config_file"] is None
+
+
+def test_config_out_markdown(tmp_path) -> None:
+    """Test config command with --out (markdown)."""
+    out_file = tmp_path / "config.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["config", "--format", "markdown", "--out", str(out_file)]
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    assert "ethscan Configuration" in out_file.read_text()
+
+
+def test_config_invalid_yaml_shows_parse_error(tmp_path) -> None:
+    """Test config command surfaces parse errors."""
+    cfg = tmp_path / "bad.yaml"
+    cfg.write_text("{{{\n")
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(cli, ["--config", str(cfg), "config"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert "parse_error" in parsed
+    assert "Failed to parse" in parsed["parse_error"]
+
+
+def test_config_invalid_yaml_markdown(tmp_path) -> None:
+    """Test config command surfaces parse errors in markdown."""
+    cfg = tmp_path / "bad.yaml"
+    cfg.write_text("{{{\n")
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(
+        cli, ["--config", str(cfg), "config", "--format", "markdown"]
+    )
+    assert result.exit_code == 0
+    assert "Parse Error" in result.output
+    assert "Failed to parse" in result.output
+
+
+def test_config_unknown_command_warns(tmp_path) -> None:
+    """Test config command warns about unknown commands."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("commands:\n  nonexistentcmd:\n    foo: bar\n")
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(cli, ["--config", str(cfg), "config"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert "nonexistentcmd" in parsed["commands"]
+
+
+def test_config_applies_to_scan_command(tmp_path) -> None:
+    """Test config values apply to the scan command."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("commands:\n  scan:\n    profile: normal\n")
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--config", str(cfg), "scan", "--target", "127.0.0.1"])
+    assert result.exit_code == 0
+    # profile normal uses 24 common ports
+    assert "24 ports" in result.output
+
+
+def test_config_explicit_overrides_config(tmp_path) -> None:
+    """Test CLI argument overrides config value."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("commands:\n  cidr:\n    format: markdown\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["--config", str(cfg), "cidr", "--cidr", "192.168.1.0/24", "--format", "json"]
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["cidr"] == "192.168.1.0/24"

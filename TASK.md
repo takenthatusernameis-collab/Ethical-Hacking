@@ -716,6 +716,43 @@ The `subtake` command detects subdomain takeover vulnerabilities by enumerating 
 - End-to-end: `python -m ethscan subtake --target example.com --wordlist subs.txt --timeout 1.0 --format json` resolves subdomains, detects CNAME records, checks against 35+ service signatures
 - End-to-end: `python -m ethscan subtake --target nonexistent.invalid.domain.tld --format markdown` produces markdown report with Vulnerable Subdomains and All Results tables
 
+## Completed: configuration file (`ethscan.yaml`)
+
+Added an optional YAML configuration file that persists default options across commands. The file may live in the current working directory (`ethscan.yaml` / `ethscan.yml`) or in the user's home directory (`~/.ethscan.yaml` / `~/.ethscan.yml`). CLI arguments always take precedence over config values.
+
+### Added Files
+- `ethscan/config.py` — configuration module with:
+  - `CONFIG_CANDIDATES` — ordered list of candidate config file names (cwd + home)
+  - `DEFAULT_CONFIG` — empty defaults/commands dict used when no file is found
+  - `_candidate_paths()` — returns the search list, prepending an explicit path
+  - `find_config_file()` — locates the first existing config file
+  - `load_config()` — loads and validates YAML; returns `_parse_error` on failure
+  - `_merge()` — merges global defaults with per-command overrides
+  - `build_default_map()` — builds the Click `default_map` for one command
+  - `config_path_string()` — returns the loaded config file path
+  - `validate_config()` — returns human-readable warnings (parse errors, non-dict sections, unknown commands)
+  - `dump_default_config()` — returns a sample YAML config string
+- `tests/test_config.py` — 26 unit tests: default shape, candidate paths, find (none/explicit/cwd/home), load (missing/explicit/invalid YAML/non-dict root/defaults-not-dict/commands-not-dict/missing-keys-filled), merge, build_default_map (merge/empty), validate (clean/parse-error/defaults-not-dict/commands-not-dict/command-opts-not-dict/unknown-command/known-command-clean), dump_default_config (yaml/comments)
+
+### Modified Files
+- `ethscan/cli.py`:
+  - Added `--config PATH` option to the `cli` group
+  - Loads config in the group callback, stores it on `ctx.obj`, and builds a `default_map` for every command
+  - Added a `config` subcommand with `--config`, `--init PATH`, `--format`, `--out` options to inspect or initialize the config file
+  - Imports `build_default_map`, `load_config`, `validate_config` from `ethscan.config`
+- `README.md` — added a Configuration section documenting the schema and the `ethscan config` command
+
+### Verification
+- `python -m pytest -q` -> 1090 passed, 1 skipped (1051 baseline + 39 new: 26 unit + 13 CLI)
+- `python -m ethscan --help` -> lists `--config PATH` and the `config` command
+- `python -m ethscan config --help` -> shows `--config`, `--init`, `--format`, `--out`
+- End-to-end: `python -m ethscan --config /tmp/test_config.yaml config` -> JSON with config_file, defaults, commands
+- End-to-end: `python -m ethscan --config /tmp/test_config.yaml scan --target 127.0.0.1` -> uses profile/ports from config (24 ports)
+- End-to-end: `python -m ethscan --config /tmp/test_config.yaml cidr --cidr 192.168.1.0/24` -> markdown output from config
+- End-to-end: `python -m ethscan --config /tmp/test_config.yaml cidr --cidr 192.168.1.0/24 --format json` -> explicit CLI override wins
+- End-to-end: `python -m ethscan config --init /tmp/sample.yaml` -> writes clean sample config with comments
+- Edge cases: invalid YAML, non-dict root, non-dict defaults/commands, unknown commands all handled gracefully with warnings
+
 ## Current state
 - All 26 commands implemented (including `subtake`).
 - `scan` and `service` now support `--profile fast|normal|full` option.
@@ -729,12 +766,13 @@ The `subtake` command detects subdomain takeover vulnerabilities by enumerating 
 - `report` now supports `--format json|markdown` and `--out` for combined scan+audit reports (json and markdown).
 - `cve` now supports `--target`, `--services-file`, `--ports`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--severity`, `--min-severity`, `--format`, `--out` for NVD/CVE API vulnerability lookups.
 - `vuln` now supports `--target`, `--ports`, `--services-file`, `--tls-file`, `--ssl-file`, `--severity`, `--min-severity`, `--format`, `--out` for built-in vulnerability checks.
-- Tests: 1051 passing (1 skipped).
+- Configuration file (`ethscan.yaml`) persists default options across commands via a `--config` group option and a `config` subcommand.
+- Tests: 1090 passing (1 skipped).
 
 ## Suggested next task
 
-**Add a configuration file (`ethscan.yaml`)** to persist default options across commands (profiles, timeouts, wordlists, output format, cache settings).
-
-Alternative: Add a `--json` output mode to the `audit` command for machine-readable password audit results (currently only echoes human-readable lines).
+**Add a `--json` output mode to the `report` command** for machine-readable combined scan+audit reports (currently only echoes human-readable lines).
 
 Alternative: Add a `--recursive` option to the `whois` command for recursive WHOIS queries across registrar tiers.
+
+Alternative: Add a `--ports` option to the `cve` command to run live service detection on a custom port set before querying the NVD/CVE API.

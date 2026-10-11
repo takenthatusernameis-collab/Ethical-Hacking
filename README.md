@@ -29,6 +29,33 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - Consolidated reconnaissance: `recon` command running multiple modules (subdomains, dns, whois, geo, trace) in sequence with a unified report (implemented)
 - Certificate Transparency log search: `cert` command to discover subdomains via CT logs (crt.sh-compatible APIs) with caching and offline fallback (implemented)
 - CVE lookup: `cve` command to query the NVD/CVE API for known vulnerabilities affecting detected service versions, with a built-in CVE/weakness database cross-reference, caching, offline fallback, JSON/Markdown output, `--out`, `--severity`, and `--min-severity` (implemented)
+- Subdomain takeover detection: `subtake` command to detect subdomain takeover vulnerabilities by checking CNAME records against known vulnerable cloud services (implemented)
+- Configuration file: `ethscan.yaml` (or `~/.ethscan.yaml`) to persist default options across commands (global `defaults` plus per-command overrides); `ethscan config` command to inspect or initialize the config (implemented)
+
+## Configuration
+
+ethscan reads an optional YAML config file that persists default options across commands. The file may live in the current working directory (`ethscan.yaml` / `ethscan.yml`) or in your home directory (`~/.ethscan.yaml` / `~/.ethscan.yml`).
+
+```yaml
+# Global defaults applied to every command that does not override them.
+defaults:
+  timeout: 5.0
+  workers: 50
+  format: json
+
+# Per-command overrides (keys are Click option dest names).
+commands:
+  scan:
+    ports: common
+    profile: normal
+    timeout: 1.0
+    workers: 100
+  subdomains:
+    timeout: 3.0
+    resolver: 8.8.8.8
+```
+
+CLI arguments always take precedence over config values. Use `ethscan config --init PATH` to write a sample config file, or `ethscan config` to inspect the loaded configuration.
 
 ## Requirements
 
