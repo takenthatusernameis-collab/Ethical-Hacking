@@ -14,6 +14,7 @@ from ethscan.service import run_service
 
 DEFAULT_TIMEOUT = 3.0
 DEFAULT_WORKERS = 50
+DEFAULT_RECURSIVE_DEPTH = 2
 
 SEVERITIES = ("critical", "high", "medium", "low")
 
@@ -302,6 +303,44 @@ def _normalize_host(target: str) -> str:
     return (parsed.hostname or parsed.netloc or "").lower()
 
 
+def _extract_hosts_from_banner(banner: str) -> List[str]:
+    """Extract potential hostnames and IP addresses from a service banner.
+
+    Args:
+        banner: Raw service banner text.
+
+    Returns:
+        List of unique hostnames/IPs found in the banner.
+    """
+    import re
+
+    hosts: List[str] = []
+    seen: set = set()
+
+    # Pattern for hostnames (including subdomains)
+    hostname_pattern = re.compile(
+        r"\b([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+)\b"
+    )
+    # Pattern for IPv4 addresses
+    ipv4_pattern = re.compile(
+        r"\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b"
+    )
+
+    for match in hostname_pattern.finditer(banner):
+        host = match.group(1).lower()
+        if host not in seen and not host.startswith("www.") and len(host) > 3:
+            seen.add(host)
+            hosts.append(host)
+
+    for match in ipv4_pattern.finditer(banner):
+        ip = match.group(0)
+        if ip not in seen:
+            seen.add(ip)
+            hosts.append(ip)
+
+    return hosts
+
+
 def parse_banner(banner: str) -> Tuple[Optional[str], Optional[str]]:
     """Extract the product name and version from a service banner.
 
@@ -509,6 +548,8 @@ def run_vuln(
     certificate: Optional[dict] = None,
     severity: Optional[str] = None,
     min_severity: Optional[str] = None,
+    recursive: bool = False,
+    max_depth: int = DEFAULT_RECURSIVE_DEPTH,
 ) -> Dict[str, object]:
     """Check a target for known service, protocol, and certificate vulnerabilities.
 
@@ -527,72 +568,180 @@ def run_vuln(
             (critical/high/medium/low). If None, all severities are reported.
         min_severity: Drop findings below this severity threshold
             (critical/high/medium/low). If None, no lower bound is applied.
+        recursive: Enable recursive scanning of hosts discovered in service banners.
+        max_depth: Maximum recursion depth for recursive scanning (default: 2).
 
     Returns:
         Structured results with matched findings, counts, and notes.
     """
     host = _normalize_host(target)
 
-    if services is None:
-        services = run_service(
-            host, ports=ports, timeout=timeout, max_workers=max_workers
-        )
+    all_findings: List[Dict[str, object]] = []
+    all_notes: List[str] = []
+    recursive_hosts_scanned: List[str] = []
+    recursive_findings: List[Dict[str, object]] = []
+    scanned_hosts: set = set()
+    scanned_hosts.add(host)
 
-    findings: List[Dict[str, object]] = []
-    services_checked = 0
-    for entry in services.get("results") or []:
-        banner = entry.get("banner") or ""
-        product, version = parse_banner(banner)
-        findings.extend(
-            match_service_vulns(product, version, port=entry.get("port"))
-        )
-        services_checked += 1
+    # Track initial scan results for summary
+    initial_scan_results: Dict[str, object] = {}
 
-    tls_checked = tls is not None
-    if tls:
-        findings.extend(match_tls_vulns(tls))
+    def _scan_host(
+        current_host: str,
+        depth: int,
+        current_ports: Optional[List[int]] = None,
+        current_services: Optional[dict] = None,
+        current_tls: Optional[dict] = None,
+        current_certificate: Optional[dict] = None,
+    ) -> Dict[str, object]:
+        """Scan a single host and return its results including banners."""
+        # Use provided data only for the initial host; for recursive hosts, run live detection
+        if depth == 0:
+            svc_data = current_services
+            tls_data = current_tls
+            cert_data = current_certificate
+        else:
+            svc_data = None
+            tls_data = None
+            cert_data = None
 
-    certificate_checked = certificate is not None
-    if certificate:
-        findings.extend(match_ssl_vulns(certificate))
+        if svc_data is None:
+            svc_data = run_service(
+                current_host, ports=current_ports, timeout=timeout, max_workers=max_workers
+            )
 
-    if severity:
-        findings = [f for f in findings if f["severity"] == severity]
+        findings: List[Dict[str, object]] = []
+        services_checked = 0
+        banners: List[str] = []
+        for entry in svc_data.get("results") or []:
+            banner = entry.get("banner") or ""
+            if banner:
+                banners.append(banner)
+            product, version = parse_banner(banner)
+            findings.extend(
+                match_service_vulns(product, version, port=entry.get("port"))
+            )
+            services_checked += 1
 
-    if min_severity:
-        min_rank = _severity_rank(min_severity)
-        if min_rank is not None:
-            findings = [
-                f for f in findings
-                if _severity_rank(f.get("severity")) is not None
-                and _severity_rank(f.get("severity")) >= min_rank
-            ]
+        tls_checked = tls_data is not None
+        if tls_data:
+            findings.extend(match_tls_vulns(tls_data))
+
+        certificate_checked = cert_data is not None
+        if cert_data:
+            findings.extend(match_ssl_vulns(cert_data))
+
+        if severity:
+            findings = [f for f in findings if f["severity"] == severity]
+
+        if min_severity:
+            min_rank = _severity_rank(min_severity)
+            if min_rank is not None:
+                findings = [
+                    f for f in findings
+                    if _severity_rank(f.get("severity")) is not None
+                    and _severity_rank(f.get("severity")) >= min_rank
+                ]
+
+        severity_counts: Dict[str, int] = {name: 0 for name in SEVERITIES}
+        for finding in findings:
+            level = str(finding["severity"])
+            severity_counts[level] = severity_counts.get(level, 0) + 1
+
+        notes: List[str] = []
+        if services_checked == 0:
+            notes.append("No service banners detected")
+        if not findings:
+            notes.append("No known vulnerabilities matched")
+
+        return {
+            "host": current_host,
+            "findings": findings,
+            "finding_count": len(findings),
+            "severity_counts": severity_counts,
+            "services_checked": services_checked,
+            "tls_checked": tls_checked,
+            "certificate_checked": certificate_checked,
+            "notes": notes,
+            "banners": banners,
+        }
+
+    def _recursive_scan(current_host: str, depth: int) -> Dict[str, object]:
+        """Recursively scan a host and hosts discovered in its banners. Returns the scan result for current_host."""
+        if depth > max_depth:
+            return {}
+
+        # Scan the current host
+        result = _scan_host(current_host, depth, ports, services, tls, certificate)
+        all_findings.extend(result["findings"])
+        all_notes.extend(result["notes"])
+
+        if depth == 0:
+            # Track initial host results
+            initial_scan_results["services_checked"] = result["services_checked"]
+            initial_scan_results["tls_checked"] = result["tls_checked"]
+            initial_scan_results["certificate_checked"] = result["certificate_checked"]
+
+        # Extract hosts from banners for next recursion level
+        if depth < max_depth:
+            discovered_hosts: List[str] = []
+            for banner in result.get("banners", []):
+                discovered_hosts.extend(_extract_hosts_from_banner(banner))
+
+            for discovered_host in discovered_hosts:
+                normalized_discovered = _normalize_host(discovered_host)
+                if normalized_discovered and normalized_discovered not in scanned_hosts:
+                    scanned_hosts.add(normalized_discovered)
+                    recursive_hosts_scanned.append(normalized_discovered)
+                    # Recursively scan the discovered host and get its results
+                    recursive_result = _recursive_scan(normalized_discovered, depth + 1)
+                    if recursive_result:
+                        recursive_findings.append({
+                            "host": normalized_discovered,
+                            "depth": depth + 1,
+                            "findings": recursive_result.get("findings", []),
+                            "finding_count": recursive_result.get("finding_count", 0),
+                            "severity_counts": recursive_result.get("severity_counts", {}),
+                            "services_checked": recursive_result.get("services_checked", 0),
+                        })
+
+        return result
+
+    # Start recursive scanning
+    if recursive:
+        _recursive_scan(host, 0)
+    else:
+        # Non-recursive: just scan the initial host
+        initial_result = _scan_host(host, 0, ports, services, tls, certificate)
+        all_findings.extend(initial_result["findings"])
+        all_notes.extend(initial_result["notes"])
+        initial_scan_results["services_checked"] = initial_result["services_checked"]
+        initial_scan_results["tls_checked"] = initial_result["tls_checked"]
+        initial_scan_results["certificate_checked"] = initial_result["certificate_checked"]
 
     severity_counts: Dict[str, int] = {name: 0 for name in SEVERITIES}
-    for finding in findings:
+    for finding in all_findings:
         level = str(finding["severity"])
         severity_counts[level] = severity_counts.get(level, 0) + 1
-
-    notes: List[str] = []
-    if services_checked == 0:
-        notes.append("No service banners detected")
-    if not findings:
-        notes.append("No known vulnerabilities matched")
 
     return {
         "target": target,
         "host": host,
         "timeout": timeout,
         "ports": ports,
-        "services_checked": services_checked,
-        "tls_checked": tls_checked,
-        "certificate_checked": certificate_checked,
+        "services_checked": initial_scan_results.get("services_checked", 0),
+        "tls_checked": initial_scan_results.get("tls_checked", False),
+        "certificate_checked": initial_scan_results.get("certificate_checked", False),
         "severity_filter": severity,
         "min_severity_filter": min_severity,
-        "findings": findings,
-        "finding_count": len(findings),
+        "findings": all_findings,
+        "finding_count": len(all_findings),
         "severity_counts": severity_counts,
-        "notes": notes,
+        "notes": all_notes,
+        "recursive": recursive,
+        "max_depth": max_depth if recursive else 0,
+        "recursive_hosts_scanned": recursive_hosts_scanned,
+        "recursive_findings": recursive_findings,
     }
 
 
@@ -650,6 +799,10 @@ def format_vuln_report_markdown(data: Dict[str, object]) -> str:
         lines.append(f"- **Severity Filter:** {data['severity_filter']}")
     if data.get("min_severity_filter"):
         lines.append(f"- **Min Severity:** {data['min_severity_filter']}")
+    if data.get("recursive"):
+        lines.append(f"- **Recursive:** Yes")
+        lines.append(f"- **Max Depth:** {data.get('max_depth', 0)}")
+        lines.append(f"- **Recursive Hosts Scanned:** {len(data.get('recursive_hosts_scanned', []))}")
     lines.append("")
 
     severity_counts = data.get("severity_counts") or {}
@@ -684,5 +837,39 @@ def format_vuln_report_markdown(data: Dict[str, object]) -> str:
         for note in notes:
             lines.append(f"- {note}")
         lines.append("")
+
+    if data.get("recursive"):
+        recursive_hosts = data.get("recursive_hosts_scanned") or []
+        recursive_findings = data.get("recursive_findings") or []
+        if recursive_hosts or recursive_findings:
+            lines.append("## Recursive Scan Results")
+            if recursive_hosts:
+                lines.append("### Hosts Scanned")
+                lines.append("| Host | Depth | Findings |")
+                lines.append("|------|-------|----------|")
+                for rf in recursive_findings:
+                    lines.append(
+                        f"| {rf['host']} | {rf['depth']} | {rf['finding_count']} |"
+                    )
+                lines.append("")
+            if recursive_findings:
+                lines.append("### Recursive Findings")
+                for rf in recursive_findings:
+                    lines.append(f"#### Host: {rf['host']} (Depth {rf['depth']})")
+                    lines.append(f"- **Services Checked:** {rf['services_checked']}")
+                    lines.append(f"- **Findings:** {rf['finding_count']}")
+                    rf_severity = rf.get("severity_counts") or {}
+                    for name in SEVERITIES:
+                        lines.append(f"- **{name.capitalize()}:** {rf_severity.get(name, 0)}")
+                    rf_findings = rf.get("findings") or []
+                    if rf_findings:
+                        for finding in rf_findings:
+                            lines.append(
+                                f"  - {finding['id']} ({str(finding['severity']).upper()}): "
+                                f"{_escape(_finding_detail(finding))}"
+                            )
+                    else:
+                        lines.append("  *No vulnerabilities found.*")
+                    lines.append("")
 
     return "\n".join(lines)

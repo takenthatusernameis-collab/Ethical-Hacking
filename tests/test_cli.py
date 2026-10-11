@@ -4713,6 +4713,8 @@ def test_vuln_offline_target_json(monkeypatch) -> None:
         certificate=None,
         severity=None,
         min_severity=None,
+        recursive=False,
+        max_depth=2,
     ):
         return {
             "target": target,
@@ -4723,6 +4725,7 @@ def test_vuln_offline_target_json(monkeypatch) -> None:
             "tls_checked": False,
             "certificate_checked": False,
             "severity_filter": severity,
+            "min_severity_filter": min_severity,
             "findings": [
                 {
                     "id": "CVE-2018-15473",
@@ -4738,6 +4741,10 @@ def test_vuln_offline_target_json(monkeypatch) -> None:
             "finding_count": 1,
             "severity_counts": {"critical": 0, "high": 0, "medium": 1, "low": 0},
             "notes": [],
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hosts_scanned": [],
+            "recursive_findings": [],
         }
 
     monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
@@ -4764,6 +4771,8 @@ def test_vuln_offline_target_markdown(monkeypatch) -> None:
         certificate=None,
         severity=None,
         min_severity=None,
+        recursive=False,
+        max_depth=2,
     ):
         return {
             "target": target,
@@ -4774,6 +4783,7 @@ def test_vuln_offline_target_markdown(monkeypatch) -> None:
             "tls_checked": True,
             "certificate_checked": False,
             "severity_filter": severity,
+            "min_severity_filter": min_severity,
             "findings": [
                 {
                     "id": "CVE-2014-3566",
@@ -4787,6 +4797,10 @@ def test_vuln_offline_target_markdown(monkeypatch) -> None:
             "finding_count": 1,
             "severity_counts": {"critical": 0, "high": 1, "medium": 0, "low": 0},
             "notes": [],
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hosts_scanned": [],
+            "recursive_findings": [],
         }
 
     monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
@@ -4951,6 +4965,8 @@ def test_vuln_ports_option(monkeypatch) -> None:
         certificate=None,
         severity=None,
         min_severity=None,
+        recursive=False,
+        max_depth=2,
     ):
         called_args["ports"] = ports
         called_args["target"] = target
@@ -4963,10 +4979,15 @@ def test_vuln_ports_option(monkeypatch) -> None:
             "tls_checked": False,
             "certificate_checked": False,
             "severity_filter": severity,
+            "min_severity_filter": min_severity,
             "findings": [],
             "finding_count": 0,
             "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
             "notes": [],
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hosts_scanned": [],
+            "recursive_findings": [],
         }
 
     monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
@@ -5001,6 +5022,8 @@ def test_vuln_workers_option(monkeypatch) -> None:
         certificate=None,
         severity=None,
         min_severity=None,
+        recursive=False,
+        max_depth=2,
     ):
         called_args["max_workers"] = max_workers
         called_args["target"] = target
@@ -5013,10 +5036,15 @@ def test_vuln_workers_option(monkeypatch) -> None:
             "tls_checked": False,
             "certificate_checked": False,
             "severity_filter": severity,
+            "min_severity_filter": min_severity,
             "findings": [],
             "finding_count": 0,
             "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
             "notes": [],
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hosts_scanned": [],
+            "recursive_findings": [],
         }
 
     monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
@@ -5049,6 +5077,8 @@ def test_vuln_out_option(tmp_path, monkeypatch) -> None:
         certificate=None,
         severity=None,
         min_severity=None,
+        recursive=False,
+        max_depth=2,
     ):
         return {
             "target": target,
@@ -5059,6 +5089,7 @@ def test_vuln_out_option(tmp_path, monkeypatch) -> None:
             "tls_checked": False,
             "certificate_checked": False,
             "severity_filter": severity,
+            "min_severity_filter": min_severity,
             "findings": [
                 {
                     "id": "CVE-2018-15473",
@@ -5074,6 +5105,10 @@ def test_vuln_out_option(tmp_path, monkeypatch) -> None:
             "finding_count": 1,
             "severity_counts": {"critical": 0, "high": 0, "medium": 1, "low": 0},
             "notes": [],
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hosts_scanned": [],
+            "recursive_findings": [],
         }
 
     monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
@@ -5111,6 +5146,8 @@ def test_vuln_out_option_markdown(tmp_path, monkeypatch) -> None:
         certificate=None,
         severity=None,
         min_severity=None,
+        recursive=False,
+        max_depth=2,
     ):
         return {
             "target": target,
@@ -5121,6 +5158,7 @@ def test_vuln_out_option_markdown(tmp_path, monkeypatch) -> None:
             "tls_checked": False,
             "certificate_checked": False,
             "severity_filter": severity,
+            "min_severity_filter": min_severity,
             "findings": [
                 {
                     "id": "CVE-2018-15473",
@@ -5136,6 +5174,10 @@ def test_vuln_out_option_markdown(tmp_path, monkeypatch) -> None:
             "finding_count": 1,
             "severity_counts": {"critical": 0, "high": 0, "medium": 1, "low": 0},
             "notes": [],
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hosts_scanned": [],
+            "recursive_findings": [],
         }
 
     monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
@@ -5188,6 +5230,8 @@ def test_vuln_min_severity_option(monkeypatch) -> None:
         certificate=None,
         severity=None,
         min_severity=None,
+        recursive=False,
+        max_depth=2,
     ):
         called_args["min_severity"] = min_severity
         return {
@@ -5204,6 +5248,10 @@ def test_vuln_min_severity_option(monkeypatch) -> None:
             "finding_count": 0,
             "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
             "notes": [],
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hosts_scanned": [],
+            "recursive_findings": [],
         }
 
     monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
@@ -5230,6 +5278,8 @@ def test_vuln_min_severity_disabled_by_default(monkeypatch) -> None:
         certificate=None,
         severity=None,
         min_severity=None,
+        recursive=False,
+        max_depth=2,
     ):
         called_args["min_severity"] = min_severity
         return {
@@ -5246,6 +5296,10 @@ def test_vuln_min_severity_disabled_by_default(monkeypatch) -> None:
             "finding_count": 0,
             "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
             "notes": [],
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hosts_scanned": [],
+            "recursive_findings": [],
         }
 
     monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
@@ -5257,6 +5311,304 @@ def test_vuln_min_severity_disabled_by_default(monkeypatch) -> None:
     )
     assert result.exit_code == 0
     assert called_args["min_severity"] is None
+
+
+def test_vuln_help_shows_recursive() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["vuln", "--help"])
+    assert result.exit_code == 0
+    assert "--recursive / --no-recursive" in result.output
+    assert "--max-depth" in result.output
+
+
+def test_vuln_recursive_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+        min_severity=None,
+        recursive=False,
+        max_depth=2,
+    ):
+        called_args["recursive"] = recursive
+        called_args["max_depth"] = max_depth
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports": ports,
+            "services_checked": 0,
+            "tls_checked": False,
+            "certificate_checked": False,
+            "severity_filter": severity,
+            "min_severity_filter": min_severity,
+            "findings": [],
+            "finding_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hosts_scanned": [],
+            "recursive_findings": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--recursive",
+            "--max-depth",
+            "3",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["recursive"] is True
+    assert called_args["max_depth"] == 3
+
+
+def test_vuln_recursive_disabled_by_default(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+        min_severity=None,
+        recursive=False,
+        max_depth=2,
+    ):
+        called_args["recursive"] = recursive
+        called_args["max_depth"] = max_depth
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports": ports,
+            "services_checked": 0,
+            "tls_checked": False,
+            "certificate_checked": False,
+            "severity_filter": severity,
+            "min_severity_filter": min_severity,
+            "findings": [],
+            "finding_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hosts_scanned": [],
+            "recursive_findings": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["vuln", "--target", "example.com", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert called_args["recursive"] is False
+    assert called_args["max_depth"] == 2
+
+
+def test_vuln_recursive_output_json(monkeypatch) -> None:
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+        min_severity=None,
+        recursive=False,
+        max_depth=2,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports": ports,
+            "services_checked": 1,
+            "tls_checked": False,
+            "certificate_checked": False,
+            "severity_filter": severity,
+            "min_severity_filter": min_severity,
+            "findings": [
+                {
+                    "id": "CVE-2018-15473",
+                    "kind": "service",
+                    "title": "OpenSSH user enumeration",
+                    "severity": "medium",
+                    "description": "OpenSSH before 7.7 allows user enumeration.",
+                    "product": "OpenSSH",
+                    "version": "7.2p2",
+                    "port": 22,
+                }
+            ],
+            "finding_count": 1,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 1, "low": 0},
+            "notes": [],
+            "recursive": True,
+            "max_depth": 1,
+            "recursive_hosts_scanned": ["backend.internal.example.com"],
+            "recursive_findings": [
+                {
+                    "host": "backend.internal.example.com",
+                    "depth": 1,
+                    "finding_count": 1,
+                    "services_checked": 1,
+                    "severity_counts": {"critical": 0, "high": 0, "medium": 1, "low": 0},
+                    "findings": [
+                        {
+                            "id": "VSFTPD-2.3.4-BACKDOOR",
+                            "kind": "service",
+                            "title": "vsftpd backdoor",
+                            "severity": "critical",
+                            "description": "vsftpd 2.3.4 backdoor.",
+                            "product": "vsftpd",
+                            "version": "2.3.4",
+                            "port": 21,
+                        }
+                    ],
+                }
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--recursive",
+            "--max-depth",
+            "1",
+            "--format",
+            "json",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "recursive" in result.output
+    assert "true" in result.output.lower()
+    assert "backend.internal.example.com" in result.output
+    assert "VSFTPD-2.3.4-BACKDOOR" in result.output
+
+
+def test_vuln_recursive_output_markdown(monkeypatch) -> None:
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+        min_severity=None,
+        recursive=False,
+        max_depth=2,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports": ports,
+            "services_checked": 1,
+            "tls_checked": False,
+            "certificate_checked": False,
+            "severity_filter": severity,
+            "min_severity_filter": min_severity,
+            "findings": [
+                {
+                    "id": "CVE-2018-15473",
+                    "kind": "service",
+                    "title": "OpenSSH user enumeration",
+                    "severity": "medium",
+                    "description": "OpenSSH before 7.7 allows user enumeration.",
+                    "product": "OpenSSH",
+                    "version": "7.2p2",
+                    "port": 22,
+                }
+            ],
+            "finding_count": 1,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 1, "low": 0},
+            "notes": [],
+            "recursive": True,
+            "max_depth": 1,
+            "recursive_hosts_scanned": ["backend.internal.example.com"],
+            "recursive_findings": [
+                {
+                    "host": "backend.internal.example.com",
+                    "depth": 1,
+                    "finding_count": 1,
+                    "services_checked": 1,
+                    "severity_counts": {"critical": 0, "high": 0, "medium": 1, "low": 0},
+                    "findings": [
+                        {
+                            "id": "VSFTPD-2.3.4-BACKDOOR",
+                            "kind": "service",
+                            "title": "vsftpd backdoor",
+                            "severity": "critical",
+                            "description": "vsftpd 2.3.4 backdoor.",
+                            "product": "vsftpd",
+                            "version": "2.3.4",
+                            "port": 21,
+                        }
+                    ],
+                }
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--recursive",
+            "--max-depth",
+            "1",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "**Recursive:** Yes" in result.output
+    assert "**Max Depth:** 1" in result.output
+    assert "**Recursive Hosts Scanned:** 1" in result.output
+    assert "## Recursive Scan Results" in result.output
+    assert "backend.internal.example.com" in result.output
 
 
 def test_dnsbrute_help() -> None:

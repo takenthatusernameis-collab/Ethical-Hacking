@@ -703,3 +703,234 @@ def test_format_vuln_report_json_includes_min_severity() -> None:
     output = format_vuln_report_json(data)
     parsed = json.loads(output)
     assert parsed["min_severity_filter"] == "high"
+
+
+def test_extract_hosts_from_banner_hostname() -> None:
+    from ethscan.vuln import _extract_hosts_from_banner
+
+    banner = "Server: nginx/1.18.0 (Ubuntu) via proxy.example.com"
+    hosts = _extract_hosts_from_banner(banner)
+    assert "proxy.example.com" in hosts
+
+
+def test_extract_hosts_from_banner_ip() -> None:
+    from ethscan.vuln import _extract_hosts_from_banner
+
+    banner = "Connected to 192.168.1.100 on port 8080"
+    hosts = _extract_hosts_from_banner(banner)
+    assert "192.168.1.100" in hosts
+
+
+def test_extract_hosts_from_banner_multiple() -> None:
+    from ethscan.vuln import _extract_hosts_from_banner
+
+    banner = "Backend: api.internal.example.com, db.internal.example.com, 10.0.0.50"
+    hosts = _extract_hosts_from_banner(banner)
+    assert "api.internal.example.com" in hosts
+    assert "db.internal.example.com" in hosts
+    assert "10.0.0.50" in hosts
+
+
+def test_extract_hosts_from_banner_dedup() -> None:
+    from ethscan.vuln import _extract_hosts_from_banner
+
+    banner = "Host: example.com and example.com again"
+    hosts = _extract_hosts_from_banner(banner)
+    assert hosts.count("example.com") == 1
+
+
+def test_run_vuln_recursive_disabled_by_default(monkeypatch) -> None:
+    def mock_run_service(host, ports=None, timeout=3.0, max_workers=50):
+        return {
+            "results": [
+                {"port": 22, "banner": "SSH-2.0-OpenSSH_7.2p2", "service": "OpenSSH"},
+            ]
+        }
+
+    monkeypatch.setattr("ethscan.vuln.run_service", mock_run_service)
+
+    results = run_vuln("example.com")
+    assert results["recursive"] is False
+    assert results["max_depth"] == 0
+    assert results["recursive_hosts_scanned"] == []
+    assert results["recursive_findings"] == []
+
+
+def test_run_vuln_recursive_enabled(monkeypatch) -> None:
+    call_count = {"count": 0}
+
+    def mock_run_service(host, ports=None, timeout=3.0, max_workers=50):
+        call_count["count"] += 1
+        if host == "example.com":
+            return {
+                "results": [
+                    {"port": 80, "banner": "Server: nginx via backend.internal.example.com", "service": "nginx"},
+                ]
+            }
+        elif host == "backend.internal.example.com":
+            return {
+                "results": [
+                    {"port": 22, "banner": "SSH-2.0-OpenSSH_7.2p2", "service": "OpenSSH"},
+                ]
+            }
+        return {"results": []}
+
+    monkeypatch.setattr("ethscan.vuln.run_service", mock_run_service)
+
+    results = run_vuln("example.com", recursive=True, max_depth=1)
+    assert results["recursive"] is True
+    assert results["max_depth"] == 1
+    assert "backend.internal.example.com" in results["recursive_hosts_scanned"]
+    assert len(results["recursive_findings"]) >= 1
+    # Should have findings from both hosts
+    assert results["finding_count"] >= 2
+    # Should have called run_service twice (once for each host)
+    assert call_count["count"] == 2
+
+
+def test_run_vuln_recursive_respects_max_depth(monkeypatch) -> None:
+    call_count = {"count": 0}
+
+    def mock_run_service(host, ports=None, timeout=3.0, max_workers=50):
+        call_count["count"] += 1
+        if host == "example.com":
+            return {
+                "results": [
+                    {"port": 80, "banner": "Server: nginx via backend.internal.example.com", "service": "nginx"},
+                ]
+            }
+        elif host == "backend.internal.example.com":
+            return {
+                "results": [
+                    {"port": 80, "banner": "Server: apache via deeper.internal.example.com", "service": "apache"},
+                ]
+            }
+        elif host == "deeper.internal.example.com":
+            return {
+                "results": [
+                    {"port": 22, "banner": "SSH-2.0-OpenSSH_7.2p2", "service": "OpenSSH"},
+                ]
+            }
+        return {"results": []}
+
+    monkeypatch.setattr("ethscan.vuln.run_service", mock_run_service)
+
+    results = run_vuln("example.com", recursive=True, max_depth=1)
+    # Should only scan example.com (depth 0) and backend.internal.example.com (depth 1)
+    # Should NOT scan deeper.internal.example.com (depth 2)
+    assert "deeper.internal.example.com" not in results["recursive_hosts_scanned"]
+    assert call_count["count"] == 2
+
+
+def test_run_vuln_recursive_stops_when_no_new_hosts(monkeypatch) -> None:
+    def mock_run_service(host, ports=None, timeout=3.0, max_workers=50):
+        if host == "example.com":
+            return {
+                "results": [
+                    {"port": 80, "banner": "Server: nginx", "service": "nginx"},
+                ]
+            }
+        return {"results": []}
+
+    monkeypatch.setattr("ethscan.vuln.run_service", mock_run_service)
+
+    results = run_vuln("example.com", recursive=True, max_depth=2)
+    # No hosts discovered in banners, so no recursive scans
+    assert results["recursive_hosts_scanned"] == []
+
+
+def test_format_vuln_report_markdown_with_recursive() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "services_checked": 1,
+        "tls_checked": False,
+        "certificate_checked": False,
+        "finding_count": 2,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 2, "low": 0},
+        "severity_filter": None,
+        "min_severity_filter": None,
+        "findings": [
+            {
+                "id": "CVE-2018-15473",
+                "kind": "service",
+                "title": "OpenSSH user enumeration",
+                "severity": "medium",
+                "description": "OpenSSH before 7.7 allows user enumeration.",
+                "product": "OpenSSH",
+                "version": "7.2p2",
+                "port": 22,
+            },
+            {
+                "id": "CVE-2016-6210",
+                "kind": "service",
+                "title": "OpenSSH user enumeration timing",
+                "severity": "medium",
+                "description": "OpenSSH timing attack.",
+                "product": "OpenSSH",
+                "version": "7.2p2",
+                "port": 22,
+            },
+        ],
+        "notes": [],
+        "recursive": True,
+        "max_depth": 1,
+        "recursive_hosts_scanned": ["backend.internal.example.com"],
+        "recursive_findings": [
+            {
+                "host": "backend.internal.example.com",
+                "depth": 1,
+                "finding_count": 1,
+                "services_checked": 1,
+                "severity_counts": {"critical": 0, "high": 0, "medium": 1, "low": 0},
+                "findings": [
+                    {
+                        "id": "VSFTPD-2.3.4-BACKDOOR",
+                        "kind": "service",
+                        "title": "vsftpd backdoor",
+                        "severity": "critical",
+                        "description": "vsftpd 2.3.4 backdoor.",
+                        "product": "vsftpd",
+                        "version": "2.3.4",
+                        "port": 21,
+                    }
+                ],
+            }
+        ],
+    }
+    output = format_vuln_report_markdown(data)
+    assert "**Recursive:** Yes" in output
+    assert "**Max Depth:** 1" in output
+    assert "**Recursive Hosts Scanned:** 1" in output
+    assert "## Recursive Scan Results" in output
+    assert "backend.internal.example.com" in output
+    assert "VSFTPD-2.3.4-BACKDOOR" in output
+
+
+def test_format_vuln_report_json_includes_recursive() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "services_checked": 1,
+        "tls_checked": False,
+        "certificate_checked": False,
+        "finding_count": 1,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 1, "low": 0},
+        "severity_filter": None,
+        "min_severity_filter": None,
+        "findings": [],
+        "notes": [],
+        "recursive": True,
+        "max_depth": 2,
+        "recursive_hosts_scanned": ["host1.example.com", "host2.example.com"],
+        "recursive_findings": [
+            {"host": "host1.example.com", "depth": 1, "finding_count": 1},
+            {"host": "host2.example.com", "depth": 1, "finding_count": 0},
+        ],
+    }
+    output = format_vuln_report_json(data)
+    parsed = json.loads(output)
+    assert parsed["recursive"] is True
+    assert parsed["max_depth"] == 2
+    assert len(parsed["recursive_hosts_scanned"]) == 2
+    assert len(parsed["recursive_findings"]) == 2

@@ -1345,6 +1345,17 @@ def service(target: str, ports: Optional[str], profile: Optional[str], timeout: 
     type=click.Choice(["low", "medium", "high", "critical"]),
     help="Drop findings below this severity threshold (e.g. --min-severity high).",
 )
+@click.option(
+    "--recursive/--no-recursive",
+    default=False,
+    help="Enable recursive scanning of hosts discovered in service banners.",
+)
+@click.option(
+    "--max-depth",
+    default=2,
+    type=int,
+    help="Maximum recursion depth for recursive scanning (default: 2).",
+)
 @click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
 @click.option("--workers", default=50, type=int, help="Maximum concurrent workers")
 @click.option(
@@ -1368,6 +1379,8 @@ def vuln(
     ssl_file: Optional[str],
     severity: Optional[str],
     min_severity: Optional[str],
+    recursive: bool,
+    max_depth: int,
     timeout: float,
     workers: int,
     fmt: str,
@@ -1404,6 +1417,8 @@ def vuln(
         certificate=certificate,
         severity=severity,
         min_severity=min_severity,
+        recursive=recursive,
+        max_depth=max_depth,
     )
 
     if fmt == "json":
