@@ -204,6 +204,11 @@ from ethscan.stale import (
     DEFAULT_TIMEOUT,
     DEFAULT_MAX_WORKERS,
 )
+from ethscan.ssh import (
+    format_ssh_report_json,
+    format_ssh_report_markdown,
+    run_ssh,
+)
 
 
 @click.group()
@@ -3169,6 +3174,49 @@ def stale(
         output = format_stale_report_json(results)
     else:
         output = format_stale_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target host or URL (e.g. ssh.example.com or ssh://example.com:2222)",
+)
+@click.option(
+    "--port",
+    default=None,
+    type=int,
+    help="Target SSH port (default: 22, or extracted from target)",
+)
+@click.option("--timeout", default=10.0, type=float, help="Connection timeout in seconds")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def ssh(target: str, port: Optional[int], timeout: float, fmt: str, out_path: Optional[str]) -> None:
+    """Assess SSH server security: enumerate algorithms, check for weak/deprecated ciphers, MACs, KEX, and host keys."""
+    results = run_ssh(target, port=port, timeout=timeout)
+
+    if fmt == "json":
+        output = format_ssh_report_json(results)
+    else:
+        output = format_ssh_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

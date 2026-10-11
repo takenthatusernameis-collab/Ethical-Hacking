@@ -14018,3 +14018,319 @@ def test_stale_default_format_is_json(monkeypatch) -> None:
     assert result.exit_code == 0
     parsed = json.loads(result.output)
     assert "stale_count" in parsed
+
+
+def test_ssh_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ssh", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--port" in result.output
+    assert "--timeout" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_ssh() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "ssh" in result.output
+
+
+def test_ssh_offline_target_json(monkeypatch) -> None:
+    def mock_run_ssh(target, port=22, timeout=10.0):
+        return {
+            "target": target,
+            "host": "nonexistent.invalid.domain.tld",
+            "port": port,
+            "timeout": timeout,
+            "banner": None,
+            "paramiko_available": False,
+            "kex_algorithms": {"supported": [], "weak": [], "strong": []},
+            "host_key_algorithms": {"supported": [], "weak": [], "strong": []},
+            "encryption_algorithms": {"supported": [], "weak": [], "strong": []},
+            "mac_algorithms": {"supported": [], "weak": [], "strong": []},
+            "host_key": None,
+            "findings": [],
+            "error": "connection refused",
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_ssh", mock_run_ssh)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "ssh",
+            "--target",
+            "nonexistent.invalid.domain.tld",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "connection refused" in result.output
+    assert "nonexistent.invalid.domain.tld" in result.output
+
+
+def test_ssh_offline_target_markdown(monkeypatch) -> None:
+    def mock_run_ssh(target, port=22, timeout=10.0):
+        return {
+            "target": target,
+            "host": "nonexistent.invalid.domain.tld",
+            "port": port,
+            "timeout": timeout,
+            "banner": None,
+            "paramiko_available": False,
+            "kex_algorithms": {"supported": [], "weak": [], "strong": []},
+            "host_key_algorithms": {"supported": [], "weak": [], "strong": []},
+            "encryption_algorithms": {"supported": [], "weak": [], "strong": []},
+            "mac_algorithms": {"supported": [], "weak": [], "strong": []},
+            "host_key": None,
+            "findings": [],
+            "error": "connection refused",
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_ssh", mock_run_ssh)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "ssh",
+            "--target",
+            "nonexistent.invalid.domain.tld",
+            "--format",
+            "markdown",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "connection refused" in result.output
+
+
+def test_ssh_url_target(monkeypatch) -> None:
+    def mock_run_ssh(target, port=22, timeout=10.0):
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": 2222,
+            "timeout": timeout,
+            "banner": "SSH-2.0-OpenSSH_8.9",
+            "paramiko_available": False,
+            "kex_algorithms": {"supported": ["curve25519-sha256"], "weak": [], "strong": ["curve25519-sha256"]},
+            "host_key_algorithms": {"supported": ["ssh-ed25519"], "weak": [], "strong": ["ssh-ed25519"]},
+            "encryption_algorithms": {"supported": ["aes256-ctr"], "weak": [], "strong": ["aes256-ctr"]},
+            "mac_algorithms": {"supported": ["hmac-sha2-256"], "weak": [], "strong": ["hmac-sha2-256"]},
+            "host_key": None,
+            "findings": [],
+            "error": None,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_ssh", mock_run_ssh)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "ssh",
+            "--target",
+            "ssh://example.com:2222",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["host"] == "example.com"
+    assert parsed["port"] == 2222
+
+
+def test_ssh_port_option(monkeypatch) -> None:
+    def mock_run_ssh(target, port=22, timeout=10.0):
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": port,
+            "timeout": timeout,
+            "banner": "SSH-2.0-OpenSSH_8.9",
+            "paramiko_available": False,
+            "kex_algorithms": {"supported": [], "weak": [], "strong": []},
+            "host_key_algorithms": {"supported": [], "weak": [], "strong": []},
+            "encryption_algorithms": {"supported": [], "weak": [], "strong": []},
+            "mac_algorithms": {"supported": [], "weak": [], "strong": []},
+            "host_key": None,
+            "findings": [],
+            "error": None,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_ssh", mock_run_ssh)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "ssh",
+            "--target",
+            "example.com",
+            "--port",
+            "2222",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["port"] == 2222
+
+
+def test_ssh_timeout_option(monkeypatch) -> None:
+    def mock_run_ssh(target, port=22, timeout=10.0):
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": port,
+            "timeout": timeout,
+            "banner": "SSH-2.0-OpenSSH_8.9",
+            "paramiko_available": False,
+            "kex_algorithms": {"supported": [], "weak": [], "strong": []},
+            "host_key_algorithms": {"supported": [], "weak": [], "strong": []},
+            "encryption_algorithms": {"supported": [], "weak": [], "strong": []},
+            "mac_algorithms": {"supported": [], "weak": [], "strong": []},
+            "host_key": None,
+            "findings": [],
+            "error": None,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_ssh", mock_run_ssh)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "ssh",
+            "--target",
+            "example.com",
+            "--timeout",
+            "5.0",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["timeout"] == 5.0
+
+
+def test_ssh_out_option_json(tmp_path, monkeypatch) -> None:
+    def mock_run_ssh(target, port=22, timeout=10.0):
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": port,
+            "timeout": timeout,
+            "banner": "SSH-2.0-OpenSSH_8.9",
+            "paramiko_available": False,
+            "kex_algorithms": {"supported": ["curve25519-sha256"], "weak": [], "strong": ["curve25519-sha256"]},
+            "host_key_algorithms": {"supported": ["ssh-ed25519"], "weak": [], "strong": ["ssh-ed25519"]},
+            "encryption_algorithms": {"supported": ["aes256-ctr"], "weak": [], "strong": ["aes256-ctr"]},
+            "mac_algorithms": {"supported": ["hmac-sha2-256"], "weak": [], "strong": ["hmac-sha2-256"]},
+            "host_key": {"fingerprint": "aa:bb:cc", "key_type": "ssh-ed25519", "key_bits": 256},
+            "findings": [],
+            "error": None,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_ssh", mock_run_ssh)
+
+    out_file = tmp_path / "report.json"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "ssh",
+            "--target",
+            "example.com",
+            "--format",
+            "json",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert out_file.exists()
+    content = out_file.read_text(encoding="utf-8")
+    assert "example.com" in content
+    assert "curve25519-sha256" in content
+    assert "Report written to" in result.output
+
+
+def test_ssh_out_option_markdown(tmp_path, monkeypatch) -> None:
+    def mock_run_ssh(target, port=22, timeout=10.0):
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": port,
+            "timeout": timeout,
+            "banner": "SSH-2.0-OpenSSH_8.9",
+            "paramiko_available": False,
+            "kex_algorithms": {"supported": ["curve25519-sha256"], "weak": [], "strong": ["curve25519-sha256"]},
+            "host_key_algorithms": {"supported": ["ssh-ed25519"], "weak": [], "strong": ["ssh-ed25519"]},
+            "encryption_algorithms": {"supported": ["aes256-ctr"], "weak": [], "strong": ["aes256-ctr"]},
+            "mac_algorithms": {"supported": ["hmac-sha2-256"], "weak": [], "strong": ["hmac-sha2-256"]},
+            "host_key": None,
+            "findings": [],
+            "error": None,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_ssh", mock_run_ssh)
+
+    out_file = tmp_path / "report.md"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "ssh",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert out_file.exists()
+    content = out_file.read_text(encoding="utf-8")
+    assert "SSH Security Assessment Report" in content
+    assert "Report written to" in result.output
+
+
+def test_ssh_default_format_is_json(monkeypatch) -> None:
+    def mock_run_ssh(target, port=22, timeout=10.0):
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": port,
+            "timeout": timeout,
+            "banner": "SSH-2.0-OpenSSH_8.9",
+            "paramiko_available": False,
+            "kex_algorithms": {"supported": ["curve25519-sha256"], "weak": [], "strong": ["curve25519-sha256"]},
+            "host_key_algorithms": {"supported": ["ssh-ed25519"], "weak": [], "strong": ["ssh-ed25519"]},
+            "encryption_algorithms": {"supported": ["aes256-ctr"], "weak": [], "strong": ["aes256-ctr"]},
+            "mac_algorithms": {"supported": ["hmac-sha2-256"], "weak": [], "strong": ["hmac-sha2-256"]},
+            "host_key": None,
+            "findings": [],
+            "error": None,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_ssh", mock_run_ssh)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ssh", "--target", "example.com"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert "curve25519-sha256" in parsed["kex_algorithms"]["supported"]

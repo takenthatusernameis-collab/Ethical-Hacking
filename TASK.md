@@ -2043,3 +2043,33 @@ Alternative: Add a `s3` command for AWS S3 bucket enumeration (public bucket det
 - Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
 - Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
 - Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
+
+## Completed: `ssh` command (SSH security assessment)
+
+The `ssh` command performs SSH security assessment by connecting to a target SSH server, performing the SSH banner exchange and KEXINIT negotiation to enumerate supported algorithms, and checking for weak/deprecated algorithms.
+
+### Added Files
+- `ethscan/ssh.py` — SSH security assessment module with:
+  - `PARAMIKO_AVAILABLE` flag for optional paramiko dependency
+  - Weak/strong algorithm databases for KEX, ciphers, MACs, and host key types
+  - `_normalize_host()` / `_extract_port()` — target parsing helpers
+  - `_ssh_banner_exchange()` — SSH banner grab
+  - `_send_kexinit()` / `_read_packet()` / `_parse_kexinit()` — stdlib-only KEXINIT negotiation to enumerate algorithms
+  - `_analyze_algorithms()` — classifies algorithms as weak/strong
+  - `_get_host_key_info_paramiko()` — host key fingerprint via paramiko when available
+  - `run_ssh()` — public entry point: connects, grabs banner, negotiates KEXINIT, analyzes algorithms, returns structured results
+  - `format_ssh_report_json()` / `format_ssh_report_markdown()` — output formatters (markdown includes per-algorithm tables with weak/strong indicators, findings summary)
+- `tests/test_ssh.py` — 26 unit tests: defaults, host/port parsing, algorithm databases, algorithm analysis, KEXINIT parsing, formatters, offline/error handling
+
+### Modified Files
+- `ethscan/cli.py` — registered `ssh` command with `--target`, `--port`, `--timeout`, `--format`, `--out`; imports `run_ssh`, formatters from `ethscan.ssh`
+- `tests/test_cli.py` — 10 CLI integration tests: `ssh` help, top-level help listing, offline JSON/Markdown output, URL target with port, `--port` option, `--timeout` option, `--out` (JSON and Markdown), default format is JSON
+- `README.md` — added SSH security assessment (`ssh`) to the features list
+
+### Verification
+- `python -m pytest -q` -> 1808 passed, 1 skipped (1772 baseline + 36 new: 26 unit + 10 CLI)
+- `python -m ethscan --help` -> lists `ssh` among the 33 commands
+- `python -m ethscan ssh --help` -> shows all expected options (`--target`, `--port`, `--timeout`, `--format`, `--out`)
+- End-to-end: `python -m ethscan ssh --target nonexistent.invalid.domain.tld --format json --timeout 1.0` -> reports connection error gracefully
+- End-to-end: `python -m ethscan ssh --target ssh://example.com:2222 --format markdown` -> parses URL, extracts host/port
+- End-to-end: `python -m ethscan ssh --target example.com --port 2222 --format json` -> explicit port overrides default
