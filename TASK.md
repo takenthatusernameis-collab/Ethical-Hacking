@@ -649,3 +649,36 @@ The `jwt` command decodes and analyzes JSON Web Tokens without verifying the sig
 **Add a `cidr` command** for network calculations using the stdlib `ipaddress` module: given a CIDR notation (e.g. 192.168.1.0/24), report network address, netmask, broadcast, wildcard, host range, usable-host count, IP version, and whether a given `--contains` IP belongs to the network. Fully offline and stdlib-only.
 
 Alternative: Add a `hash` command that generates password hashes (MD5, SHA-1, SHA-256, SHA-512, NTLM) for password-audit workflows, with `--algorithm` selection and JSON/Markdown output.
+
+## Completed: `cidr` command (CIDR network calculations)
+
+The `cidr` command performs network calculations using the stdlib `ipaddress` module. Given a CIDR notation (e.g. `192.168.1.0/24`) or a bare IP address, it reports network address, netmask, broadcast address, wildcard mask, host range (first/last host), usable host count, total addresses, prefix length, and IP version. An optional `--contains` IP address can be tested for network membership. Fully offline and stdlib-only.
+
+### Added Files
+- `ethscan/cidr.py` — CIDR network calculation module with:
+  - `_normalize_cidr()` — normalizes CIDR string, ensuring network address (host bits zeroed); bare IPs treated as /32 (IPv4) or /128 (IPv6)
+  - `_format_network_info()` — builds structured network info dict (network_address, netmask, broadcast_address, wildcard_mask, first_host, last_host, usable_host_count, total_addresses, prefixlen)
+  - `_contains_ip()` — checks whether an IP address belongs to the network
+  - `run_cidr()` — public entry point: normalizes CIDR, computes network info, optional membership test
+  - `format_cidr_report_json()` / `format_cidr_report_markdown()` — output formatters (markdown includes network table and optional membership test section with pipe escaping)
+- `tests/test_cidr.py` — 33 unit tests: CIDR normalization (bare IPv4/IPv6, with prefix, host bits zeroed, whitespace, empty, uppercase), network info formatting (IPv4 basic/31/32, IPv6 basic/128), IP containment (IPv4/IPv6 in/out of network, invalid IP), run_cidr (IPv4/IPv6 basic, bare IP, contains true/false/invalid/strips whitespace), both formatters (JSON, markdown basic/IPv6/contains true/false/pipe escaping).
+
+### Modified Files
+- `ethscan/cli.py` — registered `cidr` command with `--cidr` (required), `--contains`, `--format`, `--out`; imports `run_cidr`, `format_cidr_report_json`, `format_cidr_report_markdown` from `ethscan.cidr`.
+- `tests/test_cli.py` — 10 CLI integration tests: `cidr` help, top-level help listing, IPv4 JSON/Markdown output, IPv6 JSON output, bare IP JSON, `--contains` option (true/false), `--out` (JSON and Markdown).
+- `README.md` — added CIDR network calculations (`cidr`) to the features list.
+
+### Verification
+- `python -m pytest -q` -> 1043 passed, 1 skipped (1000 baseline + 43 new: 33 unit + 10 CLI).
+- `python -m ethscan --help` -> lists `cidr` among the 28 commands.
+- `python -m ethscan cidr --help` -> shows all expected options (`--cidr`, `--contains`, `--format`, `--out`).
+- End-to-end: `python -m ethscan cidr --cidr 192.168.1.0/24 --format json` reports network_address, netmask, broadcast, usable_host_count=254.
+- End-to-end: `python -m ethscan cidr --cidr 192.168.1.0/24 --contains 192.168.1.50 --format json` includes membership test with in_network=true.
+- End-to-end: `python -m ethscan cidr --cidr 2001:db8::/32 --format markdown` renders IPv6 network table with no broadcast address.
+- End-to-end: `python -m ethscan cidr --cidr 192.168.1.100 --format json` treats bare IP as /32 single-host network.
+
+## Suggested next task
+
+**Add a `hash` command** that generates password hashes (MD5, SHA-1, SHA-256, SHA-512, NTLM) for password-audit workflows, with `--algorithm` selection and JSON/Markdown output.
+
+Alternative: Add a `radix` command for radix tree visualization of CIDR blocks (merging overlapping/supernetting adjacent networks).

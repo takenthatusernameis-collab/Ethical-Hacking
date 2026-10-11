@@ -7747,3 +7747,106 @@ def test_jwt_none_algorithm_cli() -> None:
     result = runner.invoke(cli, ["jwt", "--token", token, "--format", "json"])
     assert result.exit_code == 0
     assert "alg=none" in result.output
+
+
+# ---------------------------------------------------------------------------
+# CIDR CLI tests
+# ---------------------------------------------------------------------------
+
+
+def test_cidr_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cidr", "--help"])
+    assert result.exit_code == 0
+    assert "--cidr" in result.output
+    assert "--contains" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+
+
+def test_cidr_top_level_help_lists_command() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "cidr" in result.output
+
+
+def test_cidr_ipv4_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cidr", "--cidr", "192.168.1.0/24", "--format", "json"])
+    assert result.exit_code == 0
+    assert "192.168.1.0/24" in result.output
+    assert "IPv4" in result.output
+    assert "network_address" in result.output
+
+
+def test_cidr_ipv4_markdown() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cidr", "--cidr", "192.168.1.0/24", "--format", "markdown"])
+    assert result.exit_code == 0
+    assert "CIDR Network Calculator Report" in result.output
+    assert "192.168.1.0/24" in result.output
+    assert "Network Address" in result.output
+
+
+def test_cidr_ipv6_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cidr", "--cidr", "2001:db8::/32", "--format", "json"])
+    assert result.exit_code == 0
+    assert "2001:db8::/32" in result.output
+    assert "IPv6" in result.output
+
+
+def test_cidr_bare_ip_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cidr", "--cidr", "192.168.1.100", "--format", "json"])
+    assert result.exit_code == 0
+    assert "192.168.1.100/32" in result.output
+
+
+def test_cidr_contains_option_true_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["cidr", "--cidr", "192.168.1.0/24", "--contains", "192.168.1.50", "--format", "json"]
+    )
+    assert result.exit_code == 0
+    assert "in_network" in result.output
+    assert "true" in result.output.lower()
+
+
+def test_cidr_contains_option_false_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["cidr", "--cidr", "192.168.1.0/24", "--contains", "10.0.0.1", "--format", "json"]
+    )
+    assert result.exit_code == 0
+    assert "in_network" in result.output
+    assert "false" in result.output.lower()
+
+
+def test_cidr_out_option_json(tmp_path) -> None:
+    out_file = tmp_path / "cidr.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cidr", "--cidr", "192.168.1.0/24", "--format", "json", "--out", str(out_file)],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "192.168.1.0/24" in content
+
+
+def test_cidr_out_option_markdown(tmp_path) -> None:
+    out_file = tmp_path / "cidr.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cidr", "--cidr", "192.168.1.0/24", "--format", "markdown", "--out", str(out_file)],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "CIDR Network Calculator Report" in content
