@@ -8902,3 +8902,321 @@ def test_mac_out_option_markdown(tmp_path, monkeypatch) -> None:
     assert "Report written" in result.output
     assert out_file.exists()
     assert "MAC Vendor Lookup Report" in out_file.read_text()
+
+
+# ---------------------------------------------------------------------------
+# dnssec command CLI tests
+# ---------------------------------------------------------------------------
+
+
+def test_dnssec_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["dnssec", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--server" in result.output
+    assert "--timeout" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_dnssec() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "dnssec" in result.output
+
+
+def test_dnssec_offline_target_json(monkeypatch) -> None:
+    def mock_run_dnssec(target, server=None, timeout=5.0):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "validated": False,
+            "dnskey": {"success": True, "keys": [], "error": None},
+            "ds": {"success": True, "records": [], "error": None},
+            "chain": [],
+            "notes": ["No DNSKEY records found (unsigned zone)"],
+            "dnspython_available": False,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_dnssec", mock_run_dnssec)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["dnssec", "--target", "example.com", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "example.com" in result.output
+    assert "validated" in result.output
+    assert "false" in result.output.lower()
+
+
+def test_dnssec_offline_target_markdown(monkeypatch) -> None:
+    def mock_run_dnssec(target, server=None, timeout=5.0):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "validated": True,
+            "dnskey": {
+                "success": True,
+                "keys": [
+                    {
+                        "name": "example.com.",
+                        "flags": 257,
+                        "protocol": 3,
+                        "algorithm": 8,
+                        "algorithm_name": "RSASHA256",
+                        "key_tag": 12345,
+                        "key_data": "abc123",
+                    }
+                ],
+                "error": None,
+            },
+            "ds": {
+                "success": True,
+                "records": [
+                    {
+                        "name": "example.com.",
+                        "key_tag": 12345,
+                        "algorithm": 8,
+                        "algorithm_name": "RSASHA256",
+                        "digest_type": 2,
+                        "digest_type_name": "SHA-256",
+                        "digest": "abcdef123456",
+                    }
+                ],
+                "error": None,
+            },
+            "chain": [
+                {"zone": "example.com", "dnskey": {"success": True, "keys": [{}], "error": None}},
+                {"zone": "com", "ds": {"success": True, "records": [{}], "error": None}},
+            ],
+            "notes": [],
+            "dnspython_available": False,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_dnssec", mock_run_dnssec)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "dnssec",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "DNSSEC Validation Report" in result.output
+    assert "RSASHA256" in result.output
+    assert "SHA-256" in result.output
+
+
+def test_dnssec_server_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_dnssec(target, server=None, timeout=5.0):
+        called_args["server"] = server
+        called_args["target"] = target
+        return {
+            "target": target,
+            "domain": "example.com",
+            "validated": False,
+            "dnskey": {"success": False, "keys": [], "error": "no response"},
+            "ds": {"success": False, "records": [], "error": "no response"},
+            "chain": [],
+            "notes": [],
+            "dnspython_available": False,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_dnssec", mock_run_dnssec)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "dnssec",
+            "--target",
+            "example.com",
+            "--server",
+            "8.8.8.8",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["server"] == "8.8.8.8"
+
+
+def test_dnssec_timeout_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_dnssec(target, server=None, timeout=5.0):
+        called_args["timeout"] = timeout
+        called_args["target"] = target
+        return {
+            "target": target,
+            "domain": "example.com",
+            "validated": False,
+            "dnskey": {"success": False, "keys": [], "error": "no response"},
+            "ds": {"success": False, "records": [], "error": "no response"},
+            "chain": [],
+            "notes": [],
+            "dnspython_available": False,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_dnssec", mock_run_dnssec)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "dnssec",
+            "--target",
+            "example.com",
+            "--timeout",
+            "10.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["timeout"] == 10.0
+
+
+def test_dnssec_out_option_json(tmp_path, monkeypatch) -> None:
+    def mock_run_dnssec(target, server=None, timeout=5.0):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "validated": True,
+            "dnskey": {
+                "success": True,
+                "keys": [
+                    {
+                        "name": "example.com.",
+                        "flags": 257,
+                        "protocol": 3,
+                        "algorithm": 8,
+                        "algorithm_name": "RSASHA256",
+                        "key_tag": 12345,
+                        "key_data": "abc123",
+                    }
+                ],
+                "error": None,
+            },
+            "ds": {
+                "success": True,
+                "records": [
+                    {
+                        "name": "example.com.",
+                        "key_tag": 12345,
+                        "algorithm": 8,
+                        "algorithm_name": "RSASHA256",
+                        "digest_type": 2,
+                        "digest_type_name": "SHA-256",
+                        "digest": "abcdef123456",
+                    }
+                ],
+                "error": None,
+            },
+            "chain": [],
+            "notes": [],
+            "dnspython_available": False,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_dnssec", mock_run_dnssec)
+
+    out_file = tmp_path / "dnssec_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "dnssec",
+            "--target",
+            "example.com",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "example.com" in content
+    assert "RSASHA256" in content
+
+
+def test_dnssec_out_option_markdown(tmp_path, monkeypatch) -> None:
+    def mock_run_dnssec(target, server=None, timeout=5.0):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "validated": True,
+            "dnskey": {
+                "success": True,
+                "keys": [
+                    {
+                        "name": "example.com.",
+                        "flags": 257,
+                        "protocol": 3,
+                        "algorithm": 8,
+                        "algorithm_name": "RSASHA256",
+                        "key_tag": 12345,
+                        "key_data": "abc123",
+                    }
+                ],
+                "error": None,
+            },
+            "ds": {
+                "success": True,
+                "records": [
+                    {
+                        "name": "example.com.",
+                        "key_tag": 12345,
+                        "algorithm": 8,
+                        "algorithm_name": "RSASHA256",
+                        "digest_type": 2,
+                        "digest_type_name": "SHA-256",
+                        "digest": "abcdef123456",
+                    }
+                ],
+                "error": None,
+            },
+            "chain": [],
+            "notes": [],
+            "dnspython_available": False,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_dnssec", mock_run_dnssec)
+
+    out_file = tmp_path / "dnssec_report.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "dnssec",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "DNSSEC Validation Report" in content
+    assert "example.com" in content

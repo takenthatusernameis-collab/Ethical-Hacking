@@ -32,6 +32,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - Subdomain takeover detection: `subtake` command to detect subdomain takeover vulnerabilities by checking CNAME records against known vulnerable cloud services (implemented)
 - Configuration file: `ethscan.yaml` (or `~/.ethscan.yaml`) to persist default options across commands (global `defaults` plus per-command overrides); `ethscan config` command to inspect or initialize the config (implemented)
 - **MAC address vendor lookup: `mac` command to look up OUI vendor information via public API (api.macvendors.com) with filesystem caching, offline fallback, and JSON/Markdown output** (implemented)
+- **DNSSEC validation: `dnssec` command for DNSSEC validation of a domain's DNS records (check DS records, validate chain of trust, report algorithm/key details)** (implemented)
 
 ## Configuration
 

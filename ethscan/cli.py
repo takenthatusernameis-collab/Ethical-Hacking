@@ -122,6 +122,11 @@ from ethscan.cidr import (
     format_cidr_report_markdown,
     run_cidr,
 )
+from ethscan.dnssec import (
+    format_dnssec_report_json,
+    format_dnssec_report_markdown,
+    run_dnssec,
+)
 from ethscan.subtake import (
     format_subtake_report_json,
     format_subtake_report_markdown,
@@ -2074,6 +2079,57 @@ def cidr(cidr: str, contains: Optional[str], fmt: str, out_path: Optional[str]) 
         output = format_cidr_report_json(results)
     else:
         output = format_cidr_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target domain or URL (e.g. example.com or https://example.com)",
+)
+@click.option(
+    "--server",
+    help="Custom DNS resolver IP address (requires dnspython)",
+)
+@click.option("--timeout", default=5.0, type=float, help="Query timeout in seconds")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def dnssec(
+    target: str,
+    server: Optional[str],
+    timeout: float,
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Validate DNSSEC for TARGET domain."""
+    results = run_dnssec(
+        target,
+        server=server,
+        timeout=timeout,
+    )
+
+    if fmt == "json":
+        output = format_dnssec_report_json(results)
+    else:
+        output = format_dnssec_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
