@@ -289,6 +289,216 @@ def test_audit_help_shows_output_format_csv() -> None:
     assert "csv" in result.output
 
 
+def test_audit_help_shows_salt_pepper() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["audit", "--help"])
+    assert result.exit_code == 0
+    assert "--salt" in result.output
+    assert "--pepper" in result.output
+    assert "--algorithm" in result.output
+    assert "sha256" in result.output
+
+
+def test_audit_salt_option_json(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--salt",
+            "mysalt",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["salt"] is True
+    assert data["pepper"] is False
+    assert data["results"][0]["salt"] is True
+    assert data["results"][0]["pepper"] is False
+
+
+def test_audit_salt_option_markdown(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--salt",
+            "mysalt",
+            "--format",
+            "markdown",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "**Salt:** applied (prepended to password)" in result.output
+    assert "**Pepper:**" not in result.output
+
+
+def test_audit_pepper_option_json(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--pepper",
+            "mysecret",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["salt"] is False
+    assert data["pepper"] is True
+    assert data["results"][0]["salt"] is False
+    assert data["results"][0]["pepper"] is True
+
+
+def test_audit_pepper_option_markdown(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--pepper",
+            "mysecret",
+            "--format",
+            "markdown",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "**Pepper:** applied (HMAC key)" in result.output
+    assert "**Salt:**" not in result.output
+
+
+def test_audit_salt_pepper_combined_json(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--salt",
+            "mysalt",
+            "--pepper",
+            "mysecret",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["salt"] is True
+    assert data["pepper"] is True
+    assert data["results"][0]["salt"] is True
+    assert data["results"][0]["pepper"] is True
+
+
+def test_audit_salt_with_file_option(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n123456\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--salt",
+            "mysalt",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["passwords_audited"] == 2
+    assert data["salt"] is True
+
+
+def test_audit_salt_pepper_with_out_option(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    out_file = tmp_path / "audit_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--salt",
+            "mysalt",
+            "--pepper",
+            "mysecret",
+            "--out",
+            str(out_file),
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written to" in result.output
+    content = out_file.read_text()
+    data = json.loads(content)
+    assert data["salt"] is True
+    assert data["pepper"] is True
+
+
+def test_audit_algorithm_option(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--salt",
+            "mysalt",
+            "--algorithm",
+            "sha512",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["results"][0]["length"] == 128  # SHA-512 = 128 hex chars
+
+
+def test_audit_help_shows_salt_pepper_in_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["audit", "--help"])
+    assert result.exit_code == 0
+    assert "Salt prepended to each password before" in result.output
+    assert "evaluation (for salted password auditing)" in result.output
+    assert "Pepper used as HMAC key for peppered" in result.output
+    assert "Hash algorithm for salted/peppered evaluation" in result.output
+
+
 def test_audit_csv_output(tmp_path) -> None:
     password_file = tmp_path / "passwords.txt"
     password_file.write_text("password\ncorrect-Horse-battery-staple-9x!\n")
@@ -305,7 +515,7 @@ def test_audit_csv_output(tmp_path) -> None:
     )
     assert result.exit_code == 0
     lines = result.output.strip().split("\n")
-    assert lines[0] == "password,length,entropy,common,patterns,too_short,score,verdict"
+    assert lines[0] == "password,length,entropy,common,patterns,too_short,score,verdict,salt,pepper"
     assert len(lines) == 3
     assert "password" in lines[1]
     assert "true" in lines[1]  # common
@@ -424,7 +634,7 @@ def test_audit_deprecated_format_csv_still_works(tmp_path) -> None:
     )
     assert result.exit_code == 0
     lines = result.output.strip().split("\n")
-    assert lines[0] == "password,length,entropy,common,patterns,too_short,score,verdict"
+    assert lines[0] == "password,length,entropy,common,patterns,too_short,score,verdict,salt,pepper"
     assert len(lines) == 2
 
 

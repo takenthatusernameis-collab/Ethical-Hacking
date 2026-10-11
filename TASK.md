@@ -1600,3 +1600,70 @@ Alternative: Add a `--recursive` option to the `vuln` command to recursively fol
 - Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
 - Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
 - Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
+
+## Completed: `--pepper`/`--salt` option for `audit` command
+
+Added `--salt` and `--pepper` options to the `audit` command for salted/peppered password auditing, following the same pattern as the `hash` command. This allows flagging common passwords even when salted/peppered by prepending a salt and/or applying an HMAC key (pepper) before evaluation.
+
+### Added Functionality
+- `ethscan/passwords.py`:
+  - Added `_HASHLIB_ALGORITHMS` mapping for HMAC-supported algorithms (md5, sha1, sha256, sha512)
+  - Added `_hashlib_name()`, `_compute_peppered_hash()`, `_compute_password_hash()` helpers for salted/peppered hash computation
+  - Updated `evaluate_password()` to accept `salt`, `pepper`, and `algorithm` parameters; applies salt/pepper transformation before evaluation
+  - Updated `audit_passwords()` to pass through `salt`, `pepper`, `algorithm` parameters
+  - Updated `format_audit_report_json()` to include `salt`/`pepper` fields in top-level and per-result output
+  - Updated `format_audit_report_markdown()` to display `**Salt:**`/`**Pepper:**` summary lines when applied
+  - Updated `format_audit_report_csv()` to include `salt`/`pepper` columns
+- `ethscan/cli.py`:
+  - Added `--salt`, `--pepper`, `--algorithm` options to the `audit` command
+  - Passes all three parameters to `audit_passwords()` and formatters
+
+### Tests Added
+- `tests/test_passwords.py` — 14 new unit tests:
+  - `test_evaluate_password_with_salt` / `with_pepper` / `with_salt_and_pepper` / `different_algorithm`
+  - `test_audit_passwords_with_salt` / `with_pepper`
+  - `test_format_audit_report_json_with_salt` / `with_pepper`
+  - `test_format_audit_report_markdown_with_salt` / `with_pepper` / `with_salt_and_pepper`
+  - `test_format_audit_report_csv_with_salt` / `with_pepper`
+- `tests/test_cli.py` — 11 new CLI integration tests:
+  - `test_audit_help_shows_salt_pepper` — verifies help shows new options
+  - `test_audit_salt_option_json` / `markdown`
+  - `test_audit_pepper_option_json` / `markdown`
+  - `test_audit_salt_pepper_combined_json`
+  - `test_audit_salt_with_file_option`
+  - `test_audit_salt_pepper_with_out_option`
+  - `test_audit_algorithm_option` (tests sha512)
+  - `test_audit_help_shows_salt_pepper_in_help`
+
+### Verification
+- `python -m pytest -q` -> 1699 passed, 1 skipped (1676 baseline + 23 new: 14 unit + 9 CLI)
+- `python -m ethscan audit --help` -> shows `--salt`, `--pepper`, `--algorithm` options
+- End-to-end JSON: `echo "password" | python -m ethscan audit --salt mysalt --pepper mysecret --format json` -> includes `salt: true`, `pepper: true`, length 64 (SHA-256)
+- End-to-end Markdown: `--salt mysalt --pepper mysecret --format markdown` -> shows `**Salt:** applied` and `**Pepper:** applied` lines
+- End-to-end CSV: `--output-format csv` -> includes `salt,pepper` columns with `true/false` values
+- Algorithm selection: `--algorithm sha512` -> length 128 (SHA-512 hex digest)
+
+## Current state
+- All 29 commands implemented and wired up (including `hash` with `--file`, `--check`, salt, pepper, and `--iterations`, and `validate`).
+- `resolve` command (forward/reverse DNS: A, AAAA, CNAME, PTR) is fully implemented, documented in `README.md`, and covered by unit + CLI integration tests; its Markdown formatter escapes pipe characters.
+- `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv`.
+- `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, `--max-depth`.
+- `whois` now supports `--recursive/--no-recursive`, `--max-depth`, `--format json|markdown`, and `--out` for machine-readable WHOIS results.
+- `audit` now supports `--format json|markdown`, `--out`, `--min-length`, `--output-format csv` for spreadsheet-compatible password audit dumps, `--sort [score|verdict|length]` with `--sort-desc/--sort-asc` (reorder audit rows; defaults to `None`/`True`), and `--salt`/`--pepper`/`--algorithm` for salted/peppered password auditing.
+- `report` now supports `--target`, `--ports`, `--profile`, `--timeout`, `--workers`, `--audit-file`, `--min-length` (pass-through to the embedded audit), `--open-only/--no-open-only` (filter scan results to open ports only), `--sort {score|verdict|length}` with `--sort-desc/--sort-asc` (reorder audit rows; scan results stay in port order), `--output-format [json|markdown|csv]` (with `--format` as deprecated alias), and `--out`; report logic lives in `ethscan/report.py` (`run_report`, `format_report_json`, `format_report_markdown`, `format_report_csv`).
+- `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `vuln` (with `--min-severity`, `--recursive`, `--max-depth`), `dnssec`, `geo` (with `--recursive`, `--max-depth`), `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon`, `resolve`, `validate` all implemented with JSON/Markdown output.
+- Configuration file (`ethscan.yaml`) persists default options across commands.
+- Tests: 1699 passing (1 skipped).
+
+## Suggested next task
+
+**Add a `--recursive` option to the `vuln` command** to recursively follow discovered service banners across a network (e.g., scan discovered hosts for additional services/vulnerabilities) — note: `vuln` already supports `--recursive`/`--max-depth`; this would extend it to re-scan hosts discovered in banners.
+
+Alternative: Add a `--min-length` pass-through to the `report` command for the embedded audit (the standalone `audit` command already supports `--min-length` and `--salt`/`--pepper`).
+
+## Requirements
+- Pick one of the suggested features and implement it following the existing module conventions.
+- Add a new module under `ethscan/` with `run_*`, `format_*_report_json`, `format_*_report_markdown` (for new commands) or extend an existing module (for new options).
+- Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
+- Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
+- Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).

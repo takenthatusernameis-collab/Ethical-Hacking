@@ -305,6 +305,20 @@ def scan(target: str, ports: str, profile: Optional[str], timeout: float, worker
     help="Flag passwords shorter than this length as too short.",
 )
 @click.option(
+    "--salt",
+    help="Salt prepended to each password before evaluation (for salted password auditing).",
+)
+@click.option(
+    "--pepper",
+    help="Pepper used as HMAC key for peppered password evaluation (requires hashlib-backed algorithm).",
+)
+@click.option(
+    "--algorithm",
+    type=click.Choice(["md5", "sha1", "sha256", "sha512"], case_sensitive=False),
+    default="sha256",
+    help="Hash algorithm for salted/peppered evaluation (default: sha256).",
+)
+@click.option(
     "--sort",
     "sort_by",
     type=click.Choice(["score", "verdict", "length"]),
@@ -340,6 +354,9 @@ def scan(target: str, ports: str, profile: Optional[str], timeout: float, worker
 def audit(
     file: str,
     min_length: Optional[int],
+    salt: Optional[str],
+    pepper: Optional[str],
+    algorithm: str,
     sort_by: Optional[str],
     sort_desc: bool,
     output_fmt: Optional[str],
@@ -362,6 +379,9 @@ def audit(
         min_length=min_length,
         sort_by=sort_by,
         sort_desc=sort_desc,
+        salt=salt,
+        pepper=pepper,
+        algorithm=algorithm,
     )
 
     # --output-format takes precedence over the deprecated --format alias
@@ -374,6 +394,8 @@ def audit(
             min_length=min_length,
             sort_by=sort_by,
             sort_desc=sort_desc,
+            salt=salt,
+            pepper=pepper,
         )
     elif chosen_format == "markdown":
         output = format_audit_report_markdown(
@@ -382,9 +404,11 @@ def audit(
             min_length=min_length,
             sort_by=sort_by,
             sort_desc=sort_desc,
+            salt=salt,
+            pepper=pepper,
         )
     else:
-        output = format_audit_report_csv(passwords, results, min_length=min_length)
+        output = format_audit_report_csv(passwords, results, min_length=min_length, salt=salt, pepper=pepper)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

@@ -1,6 +1,8 @@
 """Password strength auditing module for ethscan."""
 
 import csv
+import hashlib
+import hmac
 import io
 import json
 import math
@@ -24,6 +26,98 @@ LOWER = "abcdefghijklmnopqrstuvwxyz"
 UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 DIGITS = "0123456789"
 SYMBOL = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
+
+
+# Algorithms supported for HMAC (peppered hashing).
+# Maps canonical key -> hashlib algorithm name.
+_HASHLIB_ALGORITHMS = {
+    "md5": "md5",
+    "sha1": "sha1",
+    "sha256": "sha256",
+    "sha512": "sha512",
+}
+
+
+def _hashlib_name(algorithm: str) -> Optional[str]:
+    """Return the hashlib algorithm name for a canonical key, or None."""
+    return _HASHLIB_ALGORITHMS.get(algorithm)
+
+
+def _compute_peppered_hash(password: str, algorithm: str, pepper: str) -> str:
+    """Compute an HMAC keyed hash of the password using the pepper as the key.
+
+    Only algorithms backed by a direct hashlib name (md5, sha1, sha256,
+    sha512) can be used for HMAC.
+
+    Args:
+        password: Plaintext password (the HMAC message).
+        algorithm: Canonical algorithm key.
+        pepper: Secret pepper value (the HMAC key).
+
+    Returns:
+        Hex digest of ``HMAC(pepper, password, algorithm)``.
+
+    Raises:
+        ValueError: If the algorithm cannot be expressed as a hashlib name.
+    """
+    name = _hashlib_name(algorithm)
+    if name is None:
+        raise ValueError(
+            f"Algorithm '{algorithm}' does not support HMAC (peppered hashing)."
+        )
+    return hmac.new(
+        pepper.encode("utf-8"),
+        password.encode("utf-8"),
+        name,
+    ).hexdigest()
+
+
+def _compute_password_hash(
+    password: str,
+    algorithm: str,
+    salt: Optional[str] = None,
+    pepper: Optional[str] = None,
+) -> str:
+    """Compute a (optionally salted/peppered) hash for a password.
+
+    - ``salt`` is prepended to the password before hashing (a classic salted
+      hash), e.g. ``hash(salt + password)``.
+    - ``pepper`` is used as the HMAC key, with the password (or ``salt +
+      password`` when both are supplied) as the message.
+    - When both are supplied the salt is folded into the HMAC message and the
+      pepper is the HMAC key: ``HMAC(pepper, salt + password, algorithm)``.
+    - When neither ``salt`` nor ``pepper`` is supplied this behaves identically
+      to a standard hash.
+
+    Args:
+        password: Plaintext password.
+        algorithm: Canonical algorithm key (md5, sha1, sha256, sha512).
+        salt: Optional salt string prepended to the password.
+        pepper: Optional pepper string used as the HMAC key.
+
+    Returns:
+        Hex digest string.
+
+    Raises:
+        ValueError: If the algorithm is unsupported or does not support HMAC
+            when a pepper is supplied.
+    """
+    if salt and pepper:
+        name = _hashlib_name(algorithm)
+        if name is None:
+            raise ValueError(
+                f"Algorithm '{algorithm}' does not support HMAC (peppered hashing)."
+            )
+        return hmac.new(
+            pepper.encode("utf-8"),
+            (salt + password).encode("utf-8"),
+            name,
+        ).hexdigest()
+    if salt:
+        return hashlib.new(algorithm, (salt + password).encode("utf-8")).hexdigest()
+    if pepper:
+        return _compute_peppered_hash(password, algorithm, pepper)
+    return hashlib.new(algorithm, password.encode("utf-8")).hexdigest()
 
 
 def _character_pool(password: str) -> int:
@@ -70,23 +164,43 @@ def has_repeated_patterns(password: str) -> bool:
     return False
 
 
-def evaluate_password(password: str, min_length: Optional[int] = None) -> Dict[str, object]:
+def evaluate_password(
+    password: str,
+    min_length: Optional[int] = None,
+    salt: Optional[str] = None,
+    pepper: Optional[str] = None,
+    algorithm: str = "sha256",
+) -> Dict[str, object]:
     """Evaluate a single password and return a structured report.
 
     Args:
         password: The password to evaluate.
         min_length: Optional minimum length threshold. Passwords shorter than
             this will be flagged as too short.
+        salt: Optional salt prepended to the password before evaluation.
+        pepper: Optional pepper used as HMAC key for peppered evaluation.
+        algorithm: Hash algorithm to use for salted/peppered evaluation
+            (default: sha256).
 
     Returns:
         A dict with keys ``length``, ``entropy``, ``common``, ``patterns``,
         ``score`` (0-100), ``verdict`` (one of ``strong``, ``fair``,
-        ``weak``, ``very weak``), and ``too_short`` (bool).
+        ``weak``, ``very weak``), ``too_short`` (bool), ``salt`` (bool),
+        ``pepper`` (bool).
     """
-    length = len(password)
-    entropy = estimate_entropy(password)
-    common = is_common_password(password)
-    patterns = has_repeated_patterns(password)
+    # Apply salt/pepper transformation if provided
+    eval_password = password
+    if salt and pepper:
+        eval_password = _compute_password_hash(password, algorithm, salt=salt, pepper=pepper)
+    elif salt:
+        eval_password = _compute_password_hash(password, algorithm, salt=salt)
+    elif pepper:
+        eval_password = _compute_password_hash(password, algorithm, pepper=pepper)
+
+    length = len(eval_password)
+    entropy = estimate_entropy(eval_password)
+    common = is_common_password(eval_password)
+    patterns = has_repeated_patterns(eval_password)
     too_short = min_length is not None and length < min_length
 
     # Start from a base score driven by entropy, then apply penalties.
@@ -117,6 +231,8 @@ def evaluate_password(password: str, min_length: Optional[int] = None) -> Dict[s
         "too_short": too_short,
         "score": round(score, 1),
         "verdict": verdict,
+        "salt": bool(salt),
+        "pepper": bool(pepper),
     }
 
 
@@ -158,6 +274,9 @@ def audit_passwords(
     min_length: Optional[int] = None,
     sort_by: Optional[str] = None,
     sort_desc: bool = True,
+    salt: Optional[str] = None,
+    pepper: Optional[str] = None,
+    algorithm: str = "sha256",
 ) -> List[Tuple[str, Dict[str, object]]]:
     """Audit a list of passwords.
 
@@ -167,12 +286,19 @@ def audit_passwords(
         sort_by: Optional sort field ('score', 'verdict', or 'length'); None
             keeps the original order.
         sort_desc: When True (default), sort descending.
+        salt: Optional salt prepended to each password before evaluation.
+        pepper: Optional pepper used as HMAC key for peppered evaluation.
+        algorithm: Hash algorithm to use for salted/peppered evaluation
+            (default: sha256).
 
     Returns:
         A list of ``(password, evaluation)`` tuples, sorted when ``sort_by`` is
         provided.
     """
-    results = [(pwd, evaluate_password(pwd, min_length=min_length)) for pwd in passwords]
+    results = [
+        (pwd, evaluate_password(pwd, min_length=min_length, salt=salt, pepper=pepper, algorithm=algorithm))
+        for pwd in passwords
+    ]
     return _sort_audit_pairs(results, sort_by, sort_desc)
 
 
@@ -182,11 +308,15 @@ def format_audit_report_json(
     min_length: Optional[int] = None,
     sort_by: Optional[str] = None,
     sort_desc: bool = True,
+    salt: Optional[str] = None,
+    pepper: Optional[str] = None,
 ) -> str:
     """Render password audit results as a JSON string."""
     report = {
         "passwords_audited": len(passwords),
         "min_length": min_length,
+        "salt": bool(salt),
+        "pepper": bool(pepper),
         "sort_by": sort_by,
         "sort_desc": sort_desc,
         "results": [
@@ -199,6 +329,8 @@ def format_audit_report_json(
                 "too_short": eval_data.get("too_short", False),
                 "score": eval_data["score"],
                 "verdict": eval_data["verdict"],
+                "salt": eval_data.get("salt", False),
+                "pepper": eval_data.get("pepper", False),
             }
             for pwd, eval_data in results
         ],
@@ -212,12 +344,18 @@ def format_audit_report_markdown(
     min_length: Optional[int] = None,
     sort_by: Optional[str] = None,
     sort_desc: bool = True,
+    salt: Optional[str] = None,
+    pepper: Optional[str] = None,
 ) -> str:
     """Render password audit results as a Markdown string."""
     lines = ["# Password Audit Report", ""]
     lines.append(f"- **Passwords Audited:** {len(passwords)}")
     if min_length is not None:
         lines.append(f"- **Min Length:** {min_length}")
+    if salt:
+        lines.append("- **Salt:** applied (prepended to password)")
+    if pepper:
+        lines.append("- **Pepper:** applied (HMAC key)")
     if sort_by:
         direction = "Descending" if sort_desc else "Ascending"
         lines.append(f"- **Sorted By:** {sort_by} ({direction})")
@@ -247,10 +385,12 @@ def format_audit_report_csv(
     passwords: List[str],
     results: List[Tuple[str, Dict[str, object]]],
     min_length: Optional[int] = None,
+    salt: Optional[str] = None,
+    pepper: Optional[str] = None,
 ) -> str:
     """Render password audit results as a CSV string.
 
-    Columns: password,length,entropy,common,patterns,too_short,score,verdict
+    Columns: password,length,entropy,common,patterns,too_short,score,verdict,salt,pepper
     """
     output = io.StringIO()
     writer = csv.writer(output)
@@ -264,6 +404,8 @@ def format_audit_report_csv(
             "too_short",
             "score",
             "verdict",
+            "salt",
+            "pepper",
         ]
     )
     for pwd, eval_data in results:
@@ -277,6 +419,8 @@ def format_audit_report_csv(
                 "true" if eval_data.get("too_short", False) else "false",
                 eval_data["score"],
                 eval_data["verdict"],
+                "true" if eval_data.get("salt", False) else "false",
+                "true" if eval_data.get("pepper", False) else "false",
             ]
         )
     return output.getvalue().rstrip("\r\n")

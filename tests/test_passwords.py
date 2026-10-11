@@ -178,6 +178,8 @@ def test_format_audit_report_csv_basic() -> None:
         "too_short",
         "score",
         "verdict",
+        "salt",
+        "pepper",
     ]
     assert len(rows) == 3
     assert rows[1][0] == "password"
@@ -209,6 +211,8 @@ def test_format_audit_report_csv_empty() -> None:
         "too_short",
         "score",
         "verdict",
+        "salt",
+        "pepper",
     ]
     assert len(rows) == 1
 
@@ -334,3 +338,122 @@ def test_format_audit_report_csv_with_sort() -> None:
     # First data row should be the stronger password.
     assert rows[1][0] == "correct-Horse-battery-staple-9x!"
     assert rows[2][0] == "password"
+
+
+# Salt/Pepper tests
+
+def test_evaluate_password_with_salt() -> None:
+    result = evaluate_password("password", salt="mysalt", algorithm="sha256")
+    # Salted password should be longer (SHA-256 = 64 hex chars)
+    assert result["length"] == 64
+    assert result["salt"] is True
+    assert result["pepper"] is False
+    # Salted "password" should not be in common list
+    assert result["common"] is False
+
+
+def test_evaluate_password_with_pepper() -> None:
+    result = evaluate_password("password", pepper="mysecret", algorithm="sha256")
+    # Peppered password should be longer (SHA-256 = 64 hex chars)
+    assert result["length"] == 64
+    assert result["salt"] is False
+    assert result["pepper"] is True
+    # Peppered "password" should not be in common list
+    assert result["common"] is False
+
+
+def test_evaluate_password_with_salt_and_pepper() -> None:
+    result = evaluate_password("password", salt="mysalt", pepper="mysecret", algorithm="sha256")
+    assert result["length"] == 64
+    assert result["salt"] is True
+    assert result["pepper"] is True
+
+
+def test_evaluate_password_salt_pepper_different_algorithm() -> None:
+    # Test with SHA-512 (128 hex chars)
+    result = evaluate_password("password", salt="mysalt", algorithm="sha512")
+    assert result["length"] == 128
+    result2 = evaluate_password("password", pepper="mysecret", algorithm="sha512")
+    assert result2["length"] == 128
+
+
+def test_audit_passwords_with_salt() -> None:
+    results = audit_passwords(["password", "123456"], salt="mysalt", algorithm="sha256")
+    assert len(results) == 2
+    for pwd, eval_data in results:
+        assert eval_data["salt"] is True
+        assert eval_data["pepper"] is False
+        assert eval_data["length"] == 64
+
+
+def test_audit_passwords_with_pepper() -> None:
+    results = audit_passwords(["password", "123456"], pepper="mysecret", algorithm="sha256")
+    assert len(results) == 2
+    for pwd, eval_data in results:
+        assert eval_data["salt"] is False
+        assert eval_data["pepper"] is True
+        assert eval_data["length"] == 64
+
+
+def test_format_audit_report_json_with_salt() -> None:
+    passwords = ["password"]
+    results = audit_passwords(passwords, salt="mysalt", algorithm="sha256")
+    output = format_audit_report_json(passwords, results, salt="mysalt")
+    data = json.loads(output)
+    assert data["salt"] is True
+    assert data["pepper"] is False
+    assert data["results"][0]["salt"] is True
+    assert data["results"][0]["pepper"] is False
+
+
+def test_format_audit_report_json_with_pepper() -> None:
+    passwords = ["password"]
+    results = audit_passwords(passwords, pepper="mysecret", algorithm="sha256")
+    output = format_audit_report_json(passwords, results, pepper="mysecret")
+    data = json.loads(output)
+    assert data["salt"] is False
+    assert data["pepper"] is True
+
+
+def test_format_audit_report_markdown_with_salt() -> None:
+    passwords = ["password"]
+    results = audit_passwords(passwords, salt="mysalt", algorithm="sha256")
+    output = format_audit_report_markdown(passwords, results, salt="mysalt")
+    assert "**Salt:** applied (prepended to password)" in output
+    assert "**Pepper:**" not in output
+
+
+def test_format_audit_report_markdown_with_pepper() -> None:
+    passwords = ["password"]
+    results = audit_passwords(passwords, pepper="mysecret", algorithm="sha256")
+    output = format_audit_report_markdown(passwords, results, pepper="mysecret")
+    assert "**Pepper:** applied (HMAC key)" in output
+    assert "**Salt:**" not in output
+
+
+def test_format_audit_report_markdown_with_salt_and_pepper() -> None:
+    passwords = ["password"]
+    results = audit_passwords(passwords, salt="mysalt", pepper="mysecret", algorithm="sha256")
+    output = format_audit_report_markdown(passwords, results, salt="mysalt", pepper="mysecret")
+    assert "**Salt:** applied (prepended to password)" in output
+    assert "**Pepper:** applied (HMAC key)" in output
+
+
+def test_format_audit_report_csv_with_salt() -> None:
+    passwords = ["password"]
+    results = audit_passwords(passwords, salt="mysalt", algorithm="sha256")
+    output = format_audit_report_csv(passwords, results, salt="mysalt")
+    rows = list(csv.reader(io.StringIO(output)))
+    assert rows[0][-2] == "salt"
+    assert rows[0][-1] == "pepper"
+    assert rows[1][-2] == "true"
+    assert rows[1][-1] == "false"
+
+
+def test_format_audit_report_csv_with_pepper() -> None:
+    passwords = ["password"]
+    results = audit_passwords(passwords, pepper="mysecret", algorithm="sha256")
+    output = format_audit_report_csv(passwords, results, pepper="mysecret")
+    rows = list(csv.reader(io.StringIO(output)))
+    assert rows[1][-2] == "false"
+    assert rows[1][-1] == "true"
