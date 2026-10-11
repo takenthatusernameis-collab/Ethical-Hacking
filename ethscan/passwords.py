@@ -1,5 +1,7 @@
 """Password strength auditing module for ethscan."""
 
+import csv
+import io
 import json
 import math
 from typing import Dict, List, Optional, Tuple
@@ -187,3 +189,42 @@ def format_audit_report_markdown(
     lines.append("")
 
     return "\n".join(lines)
+
+
+def format_audit_report_csv(
+    passwords: List[str],
+    results: List[Tuple[str, Dict[str, object]]],
+    min_length: Optional[int] = None,
+) -> str:
+    """Render password audit results as a CSV string.
+
+    Columns: password,length,entropy,common,patterns,too_short,score,verdict
+    """
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "password",
+            "length",
+            "entropy",
+            "common",
+            "patterns",
+            "too_short",
+            "score",
+            "verdict",
+        ]
+    )
+    for pwd, eval_data in results:
+        writer.writerow(
+            [
+                pwd,
+                eval_data["length"],
+                eval_data["entropy"],
+                "true" if eval_data["common"] else "false",
+                "true" if eval_data["patterns"] else "false",
+                "true" if eval_data.get("too_short", False) else "false",
+                eval_data["score"],
+                eval_data["verdict"],
+            ]
+        )
+    return output.getvalue().rstrip("\r\n")

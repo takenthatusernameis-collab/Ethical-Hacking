@@ -281,6 +281,153 @@ def test_audit_min_length_disabled_by_default(tmp_path) -> None:
     assert data.get("min_length") is None
 
 
+def test_audit_help_shows_output_format_csv() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["audit", "--help"])
+    assert result.exit_code == 0
+    assert "--output-format" in result.output
+    assert "csv" in result.output
+
+
+def test_audit_csv_output(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\ncorrect-Horse-battery-staple-9x!\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--output-format",
+            "csv",
+        ],
+    )
+    assert result.exit_code == 0
+    lines = result.output.strip().split("\n")
+    assert lines[0] == "password,length,entropy,common,patterns,too_short,score,verdict"
+    assert len(lines) == 3
+    assert "password" in lines[1]
+    assert "true" in lines[1]  # common
+    assert "correct-Horse-battery-staple-9x!" in lines[2]
+    assert "false" in lines[2]  # not common
+
+
+def test_audit_csv_output_with_min_length(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("short\nlongenoughpassword\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--output-format",
+            "csv",
+            "--min-length",
+            "10",
+        ],
+    )
+    assert result.exit_code == 0
+    lines = result.output.strip().split("\n")
+    assert len(lines) == 3
+    assert "short" in lines[1]
+    assert "true" in lines[1]  # too_short
+    assert "longenoughpassword" in lines[2]
+    assert "false" in lines[2]  # not too_short
+
+
+def test_audit_csv_with_out_option(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    out_file = tmp_path / "audit_report.csv"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--output-format",
+            "csv",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "password,length,entropy,common,patterns,too_short,score,verdict" in content
+    assert "password" in content
+
+
+def test_audit_csv_escapes_special_characters(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("pass,word\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--output-format",
+            "csv",
+        ],
+    )
+    assert result.exit_code == 0
+    lines = result.output.strip().split("\n")
+    assert len(lines) == 2
+    # CSV should properly quote the password with comma
+    assert '"pass,word"' in lines[1]
+
+
+def test_audit_output_format_precedence_over_format(tmp_path) -> None:
+    """--output-format should take precedence over deprecated --format."""
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--output-format",
+            "json",
+            "--format",
+            "csv",
+        ],
+    )
+    assert result.exit_code == 0
+    # Should be JSON (from --output-format), not CSV (from --format)
+    assert "passwords_audited" in result.output
+    assert "password" in result.output
+
+
+def test_audit_deprecated_format_csv_still_works(tmp_path) -> None:
+    """Deprecated --format csv should still work when --output-format not given."""
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--format",
+            "csv",
+        ],
+    )
+    assert result.exit_code == 0
+    lines = result.output.strip().split("\n")
+    assert lines[0] == "password,length,entropy,common,patterns,too_short,score,verdict"
+    assert len(lines) == 2
+
+
 def test_report_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["report", "--help"])

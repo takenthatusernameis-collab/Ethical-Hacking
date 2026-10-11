@@ -8,6 +8,7 @@ import click
 from ethscan import __version__
 from ethscan.passwords import (
     audit_passwords,
+    format_audit_report_csv,
     format_audit_report_json,
     format_audit_report_markdown,
 )
@@ -299,11 +300,18 @@ def scan(target: str, ports: str, profile: Optional[str], timeout: float, worker
     help="Flag passwords shorter than this length as too short.",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format: json, markdown, or csv.",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    help="Deprecated alias for --output-format.",
 )
 @click.option(
     "--out",
@@ -311,7 +319,7 @@ def scan(target: str, ports: str, profile: Optional[str], timeout: float, worker
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def audit(file: str, min_length: Optional[int], fmt: str, out_path: str) -> None:
+def audit(file: str, min_length: Optional[int], output_fmt: Optional[str], fmt: str, out_path: str) -> None:
     """Audit passwords for strength and common weaknesses."""
     if file:
         with open(file, "r", encoding="utf-8") as handle:
@@ -325,10 +333,15 @@ def audit(file: str, min_length: Optional[int], fmt: str, out_path: str) -> None
 
     results = audit_passwords(passwords, min_length=min_length)
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_audit_report_json(passwords, results, min_length=min_length)
-    else:
+    elif chosen_format == "markdown":
         output = format_audit_report_markdown(passwords, results, min_length=min_length)
+    else:
+        output = format_audit_report_csv(passwords, results, min_length=min_length)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

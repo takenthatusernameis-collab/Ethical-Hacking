@@ -1,5 +1,7 @@
 """Tests for the ethscan password auditing module."""
 
+import csv
+import io
 import json
 
 import pytest
@@ -8,6 +10,7 @@ from ethscan.passwords import (
     audit_passwords,
     evaluate_password,
     estimate_entropy,
+    format_audit_report_csv,
     format_audit_report_json,
     format_audit_report_markdown,
     has_repeated_patterns,
@@ -159,3 +162,60 @@ def test_format_audit_report_markdown_pipe_escape() -> None:
     results = audit_passwords(passwords)
     output = format_audit_report_markdown(passwords, results)
     assert "pass\\|word" in output
+
+
+def test_format_audit_report_csv_basic() -> None:
+    passwords = ["password", "correct-Horse-battery-staple-9x!"]
+    results = audit_passwords(passwords)
+    output = format_audit_report_csv(passwords, results)
+    rows = list(csv.reader(io.StringIO(output)))
+    assert rows[0] == [
+        "password",
+        "length",
+        "entropy",
+        "common",
+        "patterns",
+        "too_short",
+        "score",
+        "verdict",
+    ]
+    assert len(rows) == 3
+    assert rows[1][0] == "password"
+    assert rows[1][1] == "8"
+    assert rows[1][3] == "true"  # common
+    assert rows[2][0] == "correct-Horse-battery-staple-9x!"
+    assert rows[2][3] == "false"  # not common
+
+
+def test_format_audit_report_csv_with_min_length() -> None:
+    passwords = ["short", "longenoughpassword"]
+    results = audit_passwords(passwords, min_length=10)
+    output = format_audit_report_csv(passwords, results, min_length=10)
+    rows = list(csv.reader(io.StringIO(output)))
+    assert len(rows) == 3
+    assert rows[1][5] == "true"  # too_short
+    assert rows[2][5] == "false"  # not too_short
+
+
+def test_format_audit_report_csv_empty() -> None:
+    output = format_audit_report_csv([], [])
+    rows = list(csv.reader(io.StringIO(output)))
+    assert rows[0] == [
+        "password",
+        "length",
+        "entropy",
+        "common",
+        "patterns",
+        "too_short",
+        "score",
+        "verdict",
+    ]
+    assert len(rows) == 1
+
+
+def test_format_audit_report_csv_escapes_special_characters() -> None:
+    passwords = ["pass,word"]
+    results = audit_passwords(passwords)
+    output = format_audit_report_csv(passwords, results)
+    rows = list(csv.reader(io.StringIO(output)))
+    assert rows[1][0] == "pass,word"
