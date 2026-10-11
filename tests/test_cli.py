@@ -7799,6 +7799,8 @@ def test_trace_offline_target_json(monkeypatch) -> None:
         timeout=3.0,
         probes_per_hop=3,
         raw_socket=None,
+        recursive=False,
+        max_depth=2,
     ):
         return {
             "target": target,
@@ -7857,6 +7859,8 @@ def test_trace_offline_target_markdown(monkeypatch) -> None:
         timeout=3.0,
         probes_per_hop=3,
         raw_socket=None,
+        recursive=False,
+        max_depth=2,
     ):
         return {
             "target": target,
@@ -7923,6 +7927,8 @@ def test_trace_port_option(monkeypatch) -> None:
         timeout=3.0,
         probes_per_hop=3,
         raw_socket=None,
+        recursive=False,
+        max_depth=2,
     ):
         called_args["port"] = port
         called_args["target"] = target
@@ -7962,6 +7968,8 @@ def test_trace_max_hops_option(monkeypatch) -> None:
         timeout=3.0,
         probes_per_hop=3,
         raw_socket=None,
+        recursive=False,
+        max_depth=2,
     ):
         called_args["max_hops"] = max_hops
         called_args["target"] = target
@@ -8009,6 +8017,8 @@ def test_trace_probes_per_hop_option(monkeypatch) -> None:
         timeout=3.0,
         probes_per_hop=3,
         raw_socket=None,
+        recursive=False,
+        max_depth=2,
     ):
         called_args["probes_per_hop"] = probes_per_hop
         return {
@@ -8055,6 +8065,8 @@ def test_trace_timeout_option(monkeypatch) -> None:
         timeout=3.0,
         probes_per_hop=3,
         raw_socket=None,
+        recursive=False,
+        max_depth=2,
     ):
         called_args["timeout"] = timeout
         called_args["target"] = target
@@ -8092,6 +8104,8 @@ def test_trace_out_option_json(tmp_path, monkeypatch) -> None:
         timeout=3.0,
         probes_per_hop=3,
         raw_socket=None,
+        recursive=False,
+        max_depth=2,
     ):
         return {
             "target": target,
@@ -8142,6 +8156,8 @@ def test_trace_out_option_markdown(tmp_path, monkeypatch) -> None:
         timeout=3.0,
         probes_per_hop=3,
         raw_socket=None,
+        recursive=False,
+        max_depth=2,
     ):
         return {
             "target": target,
@@ -8181,6 +8197,324 @@ def test_trace_out_option_markdown(tmp_path, monkeypatch) -> None:
     assert out_file.exists()
     content = out_file.read_text()
     assert "TCP Traceroute Report" in content
+
+
+def test_trace_help_shows_recursive() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["trace", "--help"])
+    assert result.exit_code == 0
+    assert "--recursive" in result.output
+    assert "--no-recursive" in result.output
+    assert "--max-depth" in result.output
+
+
+def test_trace_recursive_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_trace(
+        target,
+        port=80,
+        max_hops=30,
+        timeout=3.0,
+        probes_per_hop=3,
+        raw_socket=None,
+        recursive=False,
+        max_depth=2,
+    ):
+        called_args["recursive"] = recursive
+        called_args["max_depth"] = max_depth
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "10.0.0.1",
+            "port": port,
+            "max_hops": max_hops,
+            "timeout": timeout,
+            "probes_per_hop": probes_per_hop,
+            "raw_socket_available": False,
+            "hops": [
+                {"hop": 1, "ip": "1.1.1.1", "reached_destination": False}
+            ],
+            "hop_count": 1,
+            "destination_reached": True,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_trace", mock_run_trace)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["trace", "--target", "example.com", "--recursive", "--max-depth", "3", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert called_args["recursive"] is True
+    assert called_args["max_depth"] == 3
+
+
+def test_trace_recursive_disabled_by_default(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_trace(
+        target,
+        port=80,
+        max_hops=30,
+        timeout=3.0,
+        probes_per_hop=3,
+        raw_socket=None,
+        recursive=False,
+        max_depth=2,
+    ):
+        called_args["recursive"] = recursive
+        called_args["max_depth"] = max_depth
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "10.0.0.1",
+            "port": port,
+            "max_hops": max_hops,
+            "timeout": timeout,
+            "probes_per_hop": probes_per_hop,
+            "raw_socket_available": False,
+            "hops": [],
+            "hop_count": 0,
+            "destination_reached": False,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_trace", mock_run_trace)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["trace", "--target", "example.com", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert called_args["recursive"] is False
+    assert called_args["max_depth"] == 2
+
+
+def test_trace_max_depth_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_trace(
+        target,
+        port=80,
+        max_hops=30,
+        timeout=3.0,
+        probes_per_hop=3,
+        raw_socket=None,
+        recursive=False,
+        max_depth=2,
+    ):
+        called_args["max_depth"] = max_depth
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "10.0.0.1",
+            "port": port,
+            "max_hops": max_hops,
+            "timeout": timeout,
+            "probes_per_hop": probes_per_hop,
+            "raw_socket_available": False,
+            "hops": [],
+            "hop_count": 0,
+            "destination_reached": False,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_trace", mock_run_trace)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["trace", "--target", "example.com", "--max-depth", "5", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert called_args["max_depth"] == 5
+
+
+def test_trace_recursive_json_output(monkeypatch) -> None:
+    def mock_run_trace(
+        target,
+        port=80,
+        max_hops=30,
+        timeout=3.0,
+        probes_per_hop=3,
+        raw_socket=None,
+        recursive=False,
+        max_depth=2,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "93.184.216.34",
+            "port": port,
+            "max_hops": max_hops,
+            "timeout": timeout,
+            "probes_per_hop": probes_per_hop,
+            "raw_socket_available": False,
+            "hops": [
+                {"hop": 1, "ip": "1.1.1.1", "reached_destination": False}
+            ],
+            "hop_count": 1,
+            "destination_reached": True,
+            "recursive": True,
+            "max_depth": 2,
+            "recursive_traces": [
+                {
+                    "target": "1.1.1.1",
+                    "host": "1.1.1.1",
+                    "ip": "1.1.1.1",
+                    "port": port,
+                    "max_hops": max_hops,
+                    "timeout": timeout,
+                    "probes_per_hop": probes_per_hop,
+                    "raw_socket_available": False,
+                    "hops": [
+                        {"hop": 1, "ip": "10.0.0.1", "reached_destination": False}
+                    ],
+                    "hop_count": 1,
+                    "destination_reached": True,
+                    "notes": [],
+                }
+            ],
+            "notes": ["Recursive tracing completed"],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_trace", mock_run_trace)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["trace", "--target", "example.com", "--recursive", "--max-depth", "2", "--format", "json", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["recursive"] is True
+    assert parsed["max_depth"] == 2
+    assert "recursive_traces" in parsed
+    assert len(parsed["recursive_traces"]) == 1
+    assert parsed["recursive_traces"][0]["target"] == "1.1.1.1"
+
+
+def test_trace_recursive_markdown_output(monkeypatch) -> None:
+    def mock_run_trace(
+        target,
+        port=80,
+        max_hops=30,
+        timeout=3.0,
+        probes_per_hop=3,
+        raw_socket=None,
+        recursive=False,
+        max_depth=2,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "93.184.216.34",
+            "port": port,
+            "max_hops": max_hops,
+            "timeout": timeout,
+            "probes_per_hop": probes_per_hop,
+            "raw_socket_available": False,
+            "hops": [
+                {"hop": 1, "ip": "1.1.1.1", "reached_destination": False}
+            ],
+            "hop_count": 1,
+            "destination_reached": True,
+            "recursive": True,
+            "max_depth": 2,
+            "recursive_traces": [
+                {
+                    "target": "1.1.1.1",
+                    "host": "1.1.1.1",
+                    "ip": "1.1.1.1",
+                    "port": port,
+                    "max_hops": max_hops,
+                    "timeout": timeout,
+                    "probes_per_hop": probes_per_hop,
+                    "raw_socket_available": False,
+                    "hops": [
+                        {"hop": 1, "ip": "10.0.0.1", "reached_destination": False}
+                    ],
+                    "hop_count": 1,
+                    "destination_reached": True,
+                    "notes": [],
+                }
+            ],
+            "notes": ["Recursive tracing completed"],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_trace", mock_run_trace)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["trace", "--target", "example.com", "--recursive", "--format", "markdown", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "Recursive Traces" in result.output
+    assert "Recursive Trace 1" in result.output
+    assert "1.1.1.1" in result.output
+
+
+def test_trace_recursive_with_trace_notes(monkeypatch) -> None:
+    def mock_run_trace(
+        target,
+        port=80,
+        max_hops=30,
+        timeout=3.0,
+        probes_per_hop=3,
+        raw_socket=None,
+        recursive=False,
+        max_depth=2,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "93.184.216.34",
+            "port": port,
+            "max_hops": max_hops,
+            "timeout": timeout,
+            "probes_per_hop": probes_per_hop,
+            "raw_socket_available": False,
+            "hops": [
+                {"hop": 1, "ip": "1.1.1.1", "reached_destination": False}
+            ],
+            "hop_count": 1,
+            "destination_reached": True,
+            "recursive": True,
+            "max_depth": 2,
+            "recursive_traces": [
+                {
+                    "target": "1.1.1.1",
+                    "host": "1.1.1.1",
+                    "ip": "1.1.1.1",
+                    "port": port,
+                    "max_hops": max_hops,
+                    "timeout": timeout,
+                    "probes_per_hop": probes_per_hop,
+                    "raw_socket_available": False,
+                    "hops": [],
+                    "hop_count": 0,
+                    "destination_reached": False,
+                    "notes": ["Raw ICMP socket unavailable; connect-only fallback mode"],
+                }
+            ],
+            "notes": ["Recursive tracing completed for 1 intermediate hops (max depth: 2)"],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_trace", mock_run_trace)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["trace", "--target", "example.com", "--recursive", "--format", "markdown", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "Recursive tracing completed" in result.output
 
 
 # ---------------------------------------------------------------------------

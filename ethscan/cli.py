@@ -1812,6 +1812,17 @@ def osdetect(
 )
 @click.option("--timeout", default=3.0, type=float, help="Per-probe timeout in seconds")
 @click.option(
+    "--recursive/--no-recursive",
+    default=False,
+    help="Recursively trace routes to intermediate hops (default: off)",
+)
+@click.option(
+    "--max-depth",
+    default=2,
+    type=int,
+    help="Maximum recursion depth for recursive tracing (default: 2)",
+)
+@click.option(
     "--format",
     "fmt",
     type=click.Choice(["json", "markdown"]),
@@ -1830,6 +1841,8 @@ def trace(
     max_hops: int,
     probes_per_hop: int,
     timeout: float,
+    recursive: bool,
+    max_depth: int,
     fmt: str,
     out_path: Optional[str],
 ) -> None:
@@ -1840,6 +1853,8 @@ def trace(
         max_hops=max_hops,
         timeout=timeout,
         probes_per_hop=probes_per_hop,
+        recursive=recursive,
+        max_depth=max_depth,
     )
 
     if fmt == "json":

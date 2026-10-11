@@ -2073,3 +2073,55 @@ The `ssh` command performs SSH security assessment by connecting to a target SSH
 - End-to-end: `python -m ethscan ssh --target nonexistent.invalid.domain.tld --format json --timeout 1.0` -> reports connection error gracefully
 - End-to-end: `python -m ethscan ssh --target ssh://example.com:2222 --format markdown` -> parses URL, extracts host/port
 - End-to-end: `python -m ethscan ssh --target example.com --port 2222 --format json` -> explicit port overrides default
+
+## Completed: `--recursive` option for `trace` command
+
+Added `--recursive/--no-recursive` and `--max-depth` options to the `trace` command for recursively tracing routes to intermediate hops discovered during the main traceroute. When enabled, after the main trace reaches the destination, the module extracts intermediate hop IPs and recursively traces routes to each of those hops up to the specified maximum depth.
+
+### Added Functionality
+- `ethscan/trace.py`:
+  - Added `_trace_single()` helper for single-target tracing (refactored from `run_trace`)
+  - Added `_extract_hop_ips()` helper to extract intermediate hop IPs from trace results
+  - Added recursive tracing logic in `run_trace()` with `recursive` (bool) and `max_depth` (int, default 2) parameters
+  - Recursive tracing deduplicates targets using a `seen_targets` set to avoid cycles
+  - Updated return dictionary to include `recursive`, `max_depth`, and `recursive_traces` fields
+  - Updated `format_trace_report_markdown()` to display recursive trace sections with per-hop tables
+
+### Modified Files
+- `ethscan/cli.py` — added `--recursive/--no-recursive` flag and `--max-depth` option to the `trace` command; passes both to `run_trace()`
+- `tests/test_trace.py` — 7 new unit tests: `test_extract_hop_ips`, `test_extract_hop_ips_empty`, `test_run_trace_recursive_disabled_by_default`, `test_run_trace_recursive_enabled`, `test_run_trace_recursive_respects_max_depth`, `test_run_trace_recursive_stops_when_no_intermediate_hops`, `test_format_trace_report_markdown_recursive`
+- `tests/test_trace_cli.py` — 2 updated CLI integration tests: updated `fake_run` mocks to accept new parameters
+- `tests/test_cli.py` — 7 new CLI integration tests: `test_trace_help_shows_recursive`, `test_trace_recursive_option`, `test_trace_recursive_disabled_by_default`, `test_trace_max_depth_option`, `test_trace_recursive_json_output`, `test_trace_recursive_markdown_output`, `test_trace_recursive_with_trace_notes`; updated 8 existing trace CLI mocks to accept `recursive` and `max_depth` parameters
+
+### Verification
+- `python -m pytest -q` -> 1822 passed, 1 skipped (1808 baseline + 14 new: 7 unit + 7 CLI)
+- `python -m ethscan trace --help` -> shows `--recursive / --no-recursive` and `--max-depth` options
+- End-to-end (JSON): `python -m ethscan trace --target example.com --recursive --max-depth 2 --format json` -> includes `recursive: true`, `max_depth: 2`, and `recursive_traces` array
+- End-to-end (Markdown): `--recursive --format markdown` -> shows `**Recursive:** Yes (max depth: 2)` and `## Recursive Traces` section
+- Backward compatibility: without `--recursive`, trace behaves exactly as before (no recursive fields in output)
+
+## Current state
+- All 33 commands implemented and wired up (including `ssh` and `trace` with `--recursive`).
+- `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv`.
+- `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, `--max-depth`.
+- `whois` now supports `--recursive/--no-recursive`, `--max-depth`, `--format json|markdown`, and `--out`.
+- `audit` now supports `--format json|markdown`, `--out`, `--min-length`, `--output-format csv`, `--sort`, and `--salt`/`--pepper`/`--algorithm`.
+- `vuln` now supports `--severity`, `--min-severity`, `--recursive/--no-recursive`, `--max-depth`, and `--salt`/`--pepper`/`--algorithm`.
+- `report`, `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `dnssec`, `geo` (with `--recursive`, `--max-depth`), `subtake`, `cidr`, `mac`, `trace` (with `--recursive`, `--max-depth`), `wifi`, `osdetect`, `urlcheck`, `recon`, `resolve`, `validate`, `radix` (with `--cidr-file`), `nmap`, `stale`, `ssh` all implemented with JSON/Markdown output.
+- Configuration file (`ethscan.yaml`) persists default options across commands.
+- Tests: 1822 passing (1 skipped).
+
+## Suggested next task
+
+**Add a `s3` command** for AWS S3 bucket enumeration (public bucket detection via DNS/HTTP, with wordlist-based bruteforce and `--region` filtering).
+
+Alternative: Add a `--recursive` option to the `trace` command to recursively trace routes to discovered intermediate hops (now completed).
+
+Alternative: Add a `jwt` command to decode and analyze JWT tokens (header, claims, algorithm type, expiration/not-before/issued-at status, security findings like alg=none and expired tokens) without verifying the signature, with JSON/Markdown output.
+
+## Requirements
+- Pick one of the suggested features and implement it following the existing module conventions.
+- Add a new module under `ethscan/` with `run_*`, `format_*_report_json`, `format_*_report_markdown` (for new commands) or extend an existing module (for new options).
+- Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
+- Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
+- Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).

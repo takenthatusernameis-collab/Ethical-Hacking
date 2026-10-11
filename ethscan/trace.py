@@ -4,12 +4,13 @@ from __future__ import annotations
 import json
 import socket
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 DEFAULT_PORT = 80
 DEFAULT_MAX_HOPS = 30
 DEFAULT_TIMEOUT = 2.0
 DEFAULT_PROBES_PER_HOP = 3
+DEFAULT_MAX_DEPTH = 2
 
 __all__ = [
     "run_trace",
@@ -64,14 +65,14 @@ def _probe_once(dst_ip: str, port: int, ttl: int, timeout: float) -> Dict[str, A
             pass
 
 
-def run_trace(
+def _trace_single(
     target: str,
-    port: int = DEFAULT_PORT,
-    max_hops: int = DEFAULT_MAX_HOPS,
-    timeout: float = DEFAULT_TIMEOUT,
-    probes_per_hop: int = DEFAULT_PROBES_PER_HOP,
-    raw_socket=None,
+    port: int,
+    max_hops: int,
+    timeout: float,
+    probes_per_hop: int,
 ) -> Dict[str, Any]:
+    """Trace a single target and return the result."""
     host = _normalize_host(target)
     if not host:
         raise ValueError("Invalid target")
@@ -202,6 +203,76 @@ def run_trace(
     }
 
 
+def _extract_hop_ips(hops: List[Dict[str, Any]]) -> List[str]:
+    """Extract unique hop IPs from trace results (excluding the destination)."""
+    ips: Set[str] = set()
+    for hop in hops:
+        ip = hop.get("ip")
+        if ip and not hop.get("reached_destination", False):
+            ips.add(ip)
+    return list(ips)
+
+
+def run_trace(
+    target: str,
+    port: int = DEFAULT_PORT,
+    max_hops: int = DEFAULT_MAX_HOPS,
+    timeout: float = DEFAULT_TIMEOUT,
+    probes_per_hop: int = DEFAULT_PROBES_PER_HOP,
+    raw_socket=None,
+    recursive: bool = False,
+    max_depth: int = DEFAULT_MAX_DEPTH,
+) -> Dict[str, Any]:
+    """Run TCP traceroute, optionally recursively tracing intermediate hops."""
+    # First, trace the main target
+    main_result = _trace_single(target, port, max_hops, timeout, probes_per_hop)
+
+    # If not recursive or destination not reached, return the main result
+    if not recursive or not main_result.get("destination_reached", False):
+        if recursive:
+            main_result.setdefault("notes", []).append("Recursive tracing enabled but destination not reached")
+        return main_result
+
+    # Extract intermediate hop IPs
+    hop_ips = _extract_hop_ips(main_result.get("hops", []))
+    if not hop_ips:
+        main_result.setdefault("notes", []).append("Recursive tracing enabled but no intermediate hops found")
+        main_result["recursive"] = True
+        main_result["max_depth"] = max_depth
+        main_result["recursive_traces"] = []
+        return main_result
+
+    # Recursively trace each hop IP up to max_depth
+    recursive_results: List[Dict[str, Any]] = []
+    seen_targets: Set[str] = {main_result.get("target", "").lower()}
+
+    def _recursive_trace(targets: List[str], depth: int) -> None:
+        if depth > max_depth or not targets:
+            return
+        next_targets: List[str] = []
+        for t in targets:
+            t_lower = t.lower()
+            if t_lower in seen_targets:
+                continue
+            seen_targets.add(t_lower)
+            res = _trace_single(t, port, max_hops, timeout, probes_per_hop)
+            recursive_results.append(res)
+            if res.get("destination_reached", False):
+                next_targets.extend(_extract_hop_ips(res.get("hops", [])))
+        if next_targets:
+            _recursive_trace(next_targets, depth + 1)
+
+    _recursive_trace(hop_ips, 1)
+
+    # Combine results
+    main_result["recursive"] = True
+    main_result["max_depth"] = max_depth
+    main_result["recursive_traces"] = recursive_results
+    main_result.setdefault("notes", []).append(f"Recursive tracing completed for {len(recursive_results)} intermediate hops (max depth: {max_depth})")
+
+    return main_result
+
+
 def format_trace_report_json(result: Dict[str, Any]) -> str:
     return json.dumps(result, indent=2)
 
@@ -218,6 +289,8 @@ def format_trace_report_markdown(result: Dict[str, Any]) -> str:
     lines.append(f"**Max Hops:** {result.get('max_hops', DEFAULT_MAX_HOPS)}")
     lines.append(f"**Timeout:** {result.get('timeout', DEFAULT_TIMEOUT)}s")
     lines.append(f"**Probes per Hop:** {result.get('probes_per_hop', DEFAULT_PROBES_PER_HOP)}")
+    if result.get("recursive"):
+        lines.append(f"**Recursive:** Yes (max depth: {result.get('max_depth', DEFAULT_MAX_DEPTH)})")
     if result.get("error"):
         lines.append(f"**Error:** {result.get('error')}")
     if result.get("notes"):
@@ -244,4 +317,48 @@ def format_trace_report_markdown(result: Dict[str, Any]) -> str:
     lines.append("")
     reached = result.get("destination_reached") or result.get("reached_destination") or result.get("reached")
     lines.append(f"**Reached target:** {'Yes' if reached else 'No'}")
+
+    # Add recursive trace sections
+    recursive_traces = result.get("recursive_traces", [])
+    if recursive_traces:
+        lines.append("")
+        lines.append("## Recursive Traces")
+        lines.append("")
+        for i, trace_res in enumerate(recursive_traces):
+            lines.append(f"### Recursive Trace {i + 1}: {trace_res.get('target', 'N/A')}")
+            lines.append("")
+            trace_ip = trace_res.get('dst_ip') or trace_res.get('ip')
+            if trace_ip:
+                lines.append(f"**Destination IP:** {trace_ip}")
+            lines.append(f"**Port:** {trace_res.get('port', DEFAULT_PORT)}")
+            lines.append(f"**Max Hops:** {trace_res.get('max_hops', DEFAULT_MAX_HOPS)}")
+            lines.append(f"**Timeout:** {trace_res.get('timeout', DEFAULT_TIMEOUT)}s")
+            lines.append(f"**Probes per Hop:** {trace_res.get('probes_per_hop', DEFAULT_PROBES_PER_HOP)}")
+            if trace_res.get("error"):
+                lines.append(f"**Error:** {trace_res.get('error')}")
+            if trace_res.get("notes"):
+                for n in trace_res.get("notes"):
+                    lines.append(f"**Note:** {n}")
+            lines.append("")
+            trace_hops = trace_res.get("hops", []) or []
+            if trace_hops:
+                lines.append("#### Hop Table")
+                lines.append("")
+                lines.append("| Hop | IP | Host | Response | RTT (avg) | Reached |")
+                lines.append("|---|-----|------|----------|-----------|---------|")
+                for h in trace_hops:
+                    hop_no = h.get("hop", h.get("ttl", "?"))
+                    ip = h.get("ip") or "*"
+                    host = h.get("host") or ip or "*"
+                    resp = h.get("response_type") or ("REACHED" if h.get("reached") else "NO-RESPONSE")
+                    rtt = _fmt_rtt(h.get("rtt_avg_ms") or h.get("rtt_ms"))
+                    reached = "Yes" if (h.get("reached_destination") or h.get("reached")) else "No"
+                    lines.append(f"| {hop_no} | {ip} | {host} | {resp} | {rtt} | {reached} |")
+            else:
+                lines.append("No hops recorded.")
+            lines.append("")
+            trace_reached = trace_res.get("destination_reached") or trace_res.get("reached_destination") or trace_res.get("reached")
+            lines.append(f"**Reached target:** {'Yes' if trace_reached else 'No'}")
+            lines.append("")
+
     return "\n".join(lines)

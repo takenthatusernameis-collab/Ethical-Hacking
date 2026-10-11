@@ -24,7 +24,7 @@ def test_trace_help_lists_options():
 def test_trace_runs_json(monkeypatch):
     runner = CliRunner()
 
-    def fake_run(target, port=80, max_hops=30, timeout=2.0, probes_per_hop=3):
+    def fake_run(target, port=80, max_hops=30, timeout=2.0, probes_per_hop=3, recursive=False, max_depth=2):
         return {
             "target": target,
             "dst_ip": "1.1.1.1",
@@ -45,7 +45,7 @@ def test_trace_runs_json(monkeypatch):
 def test_trace_runs_markdown(monkeypatch):
     runner = CliRunner()
 
-    def fake_run(target, port=80, max_hops=30, timeout=2.0, probes_per_hop=3):
+    def fake_run(target, port=80, max_hops=30, timeout=2.0, probes_per_hop=3, recursive=False, max_depth=2):
         return {
             "target": target,
             "dst_ip": "1.1.1.1",
