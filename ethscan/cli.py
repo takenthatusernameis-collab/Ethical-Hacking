@@ -498,6 +498,20 @@ def hash(file: str, algorithms: tuple, fmt: str, out_path: str) -> None:
     help="Flag passwords shorter than this length as too short (passed to the embedded audit).",
 )
 @click.option(
+    "--salt",
+    help="Salt prepended to each password before audit evaluation (for salted password auditing).",
+)
+@click.option(
+    "--pepper",
+    help="Pepper used as HMAC key for peppered password audit evaluation (requires hashlib-backed algorithm).",
+)
+@click.option(
+    "--algorithm",
+    type=click.Choice(["md5", "sha1", "sha256", "sha512"], case_sensitive=False),
+    default="sha256",
+    help="Hash algorithm for salted/peppered audit evaluation (default: sha256).",
+)
+@click.option(
     "--open-only/--no-open-only",
     "open_only",
     default=False,
@@ -545,6 +559,9 @@ def report(
     workers: int,
     audit_file: str,
     min_length: Optional[int],
+    salt: Optional[str],
+    pepper: Optional[str],
+    algorithm: str,
     open_only: bool,
     sort_by: Optional[str],
     sort_desc: bool,
@@ -564,6 +581,9 @@ def report(
         open_only=open_only,
         sort_by=sort_by,
         sort_desc=sort_desc,
+        salt=salt,
+        pepper=pepper,
+        algorithm=algorithm,
     )
 
     # --output-format takes precedence over the deprecated --format alias

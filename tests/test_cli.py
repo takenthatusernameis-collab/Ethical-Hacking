@@ -1021,7 +1021,7 @@ def test_report_output_format_csv(tmp_path) -> None:
     )
     assert result.exit_code == 0
     rows = [line for line in result.output.splitlines() if line.strip()]
-    assert rows[0] == "section,port,open,password,length,entropy,common,patterns,too_short,score,verdict"
+    assert rows[0] == "section,port,open,password,length,entropy,common,patterns,too_short,score,verdict,salt,pepper"
     assert any(line.startswith("scan,") for line in rows)
     assert any(line.startswith("audit,") for line in rows)
     assert any("password" in line for line in rows)
@@ -1054,7 +1054,7 @@ def test_report_output_format_csv_with_out(tmp_path) -> None:
     assert "Report written" in result.output
     assert out_file.exists()
     content = out_file.read_text()
-    assert "section,port,open,password,length,entropy,common,patterns,too_short,score,verdict" in content
+    assert "section,port,open,password,length,entropy,common,patterns,too_short,score,verdict,salt,pepper" in content
     assert "scan," in content
     assert "audit," in content
 
@@ -1541,7 +1541,7 @@ def test_report_open_only_option_csv(monkeypatch) -> None:
     )
     assert result.exit_code == 0
     lines = result.output.strip().split("\n")
-    assert lines[0] == "section,port,open,password,length,entropy,common,patterns,too_short,score,verdict"
+    assert lines[0] == "section,port,open,password,length,entropy,common,patterns,too_short,score,verdict,salt,pepper"
     assert "scan,80,true" in lines[1]
     assert len(lines) == 2
 

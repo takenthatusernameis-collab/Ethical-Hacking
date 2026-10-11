@@ -233,6 +233,8 @@ def test_format_report_csv_header() -> None:
         "too_short",
         "score",
         "verdict",
+        "salt",
+        "pepper",
     ]
     assert len(rows) == 1
 
@@ -257,14 +259,16 @@ def test_format_report_csv_scan_and_audit_rows() -> None:
                     "too_short": False,
                     "score": 3.0,
                     "verdict": "weak",
+                    "salt": False,
+                    "pepper": False,
                 }
             ],
         },
     }
     rows = list(csv.reader(io.StringIO(format_report_csv(data))))
     assert len(rows) == 4
-    assert rows[1] == ["scan", "80", "true", "", "", "", "", "", "", "", ""]
-    assert rows[2] == ["scan", "443", "false", "", "", "", "", "", "", "", ""]
+    assert rows[1] == ["scan", "80", "true", "", "", "", "", "", "", "", "", "", ""]
+    assert rows[2] == ["scan", "443", "false", "", "", "", "", "", "", "", "", "", ""]
     assert rows[3][0] == "audit"
     assert rows[3][3] == "secret"
     assert rows[3][4] == "6"
@@ -274,6 +278,8 @@ def test_format_report_csv_scan_and_audit_rows() -> None:
     assert rows[3][8] == "false"
     assert rows[3][9] == "3.0"
     assert rows[3][10] == "weak"
+    assert rows[3][11] == "false"
+    assert rows[3][12] == "false"
 
 
 def test_format_report_csv_escapes_special_characters() -> None:
@@ -844,3 +850,226 @@ def test_format_report_csv_with_sort() -> None:
     assert rows[1][9] == "30.0"
     assert rows[2][9] == "20.0"
     assert rows[3][9] == "10.0"
+
+
+def test_run_report_with_salt_and_pepper(tmp_path, monkeypatch) -> None:
+    """Test run_report with salt and pepper options."""
+    audit_file = tmp_path / "passwords.txt"
+    audit_file.write_text("password\n")
+
+    def mock_scan_ports(host, port_list, timeout=1.0, max_workers=100):
+        return [(80, False)]
+
+    monkeypatch.setattr("ethscan.report.scan_ports", mock_scan_ports)
+
+    data = run_report(
+        "127.0.0.1",
+        "80",
+        timeout=0.1,
+        workers=10,
+        audit_file=str(audit_file),
+        salt="mysalt",
+        pepper="mysecret",
+        algorithm="sha256",
+    )
+    assert data["audit"]["salt"] is True
+    assert data["audit"]["pepper"] is True
+    assert data["audit"]["results"][0]["salt"] is True
+    assert data["audit"]["results"][0]["pepper"] is True
+    # Length should be 64 for SHA-256 hex digest
+    assert data["audit"]["results"][0]["length"] == 64
+
+
+def test_run_report_with_salt_only(tmp_path, monkeypatch) -> None:
+    """Test run_report with salt only."""
+    audit_file = tmp_path / "passwords.txt"
+    audit_file.write_text("password\n")
+
+    def mock_scan_ports(host, port_list, timeout=1.0, max_workers=100):
+        return [(80, False)]
+
+    monkeypatch.setattr("ethscan.report.scan_ports", mock_scan_ports)
+
+    data = run_report(
+        "127.0.0.1",
+        "80",
+        timeout=0.1,
+        workers=10,
+        audit_file=str(audit_file),
+        salt="mysalt",
+        algorithm="sha256",
+    )
+    assert data["audit"]["salt"] is True
+    assert data["audit"]["pepper"] is False
+    assert data["audit"]["results"][0]["salt"] is True
+    assert data["audit"]["results"][0]["pepper"] is False
+
+
+def test_run_report_with_pepper_only(tmp_path, monkeypatch) -> None:
+    """Test run_report with pepper only."""
+    audit_file = tmp_path / "passwords.txt"
+    audit_file.write_text("password\n")
+
+    def mock_scan_ports(host, port_list, timeout=1.0, max_workers=100):
+        return [(80, False)]
+
+    monkeypatch.setattr("ethscan.report.scan_ports", mock_scan_ports)
+
+    data = run_report(
+        "127.0.0.1",
+        "80",
+        timeout=0.1,
+        workers=10,
+        audit_file=str(audit_file),
+        pepper="mysecret",
+        algorithm="sha256",
+    )
+    assert data["audit"]["salt"] is False
+    assert data["audit"]["pepper"] is True
+    assert data["audit"]["results"][0]["salt"] is False
+    assert data["audit"]["results"][0]["pepper"] is True
+
+
+def test_run_report_salt_pepper_defaults_to_false(tmp_path, monkeypatch) -> None:
+    """Test run_report defaults salt and pepper to False."""
+    audit_file = tmp_path / "passwords.txt"
+    audit_file.write_text("password\n")
+
+    def mock_scan_ports(host, port_list, timeout=1.0, max_workers=100):
+        return [(80, False)]
+
+    monkeypatch.setattr("ethscan.report.scan_ports", mock_scan_ports)
+
+    data = run_report(
+        "127.0.0.1",
+        "80",
+        timeout=0.1,
+        workers=10,
+        audit_file=str(audit_file),
+    )
+    assert data["audit"]["salt"] is False
+    assert data["audit"]["pepper"] is False
+    assert data["audit"]["results"][0]["salt"] is False
+    assert data["audit"]["results"][0]["pepper"] is False
+
+
+def test_format_report_json_with_salt_pepper() -> None:
+    data = {
+        "scan": {"target": "h", "ports_scanned": 0, "open_ports": [], "details": []},
+        "audit": {
+            "passwords_audited": 1,
+            "min_length": None,
+            "salt": True,
+            "pepper": True,
+            "results": [
+                {
+                    "password": "password",
+                    "length": 64,
+                    "entropy": 4.0,
+                    "common": False,
+                    "patterns": False,
+                    "too_short": False,
+                    "score": 10.0,
+                    "verdict": "weak",
+                    "salt": True,
+                    "pepper": True,
+                }
+            ],
+        },
+    }
+    parsed = json.loads(format_report_json(data))
+    assert parsed["audit"]["salt"] is True
+    assert parsed["audit"]["pepper"] is True
+    assert parsed["audit"]["results"][0]["salt"] is True
+    assert parsed["audit"]["results"][0]["pepper"] is True
+
+
+def test_format_report_markdown_with_salt_pepper() -> None:
+    data = {
+        "scan": {"target": "h", "ports_scanned": 0, "open_ports": [], "details": []},
+        "audit": {
+            "passwords_audited": 1,
+            "min_length": None,
+            "salt": True,
+            "pepper": True,
+            "results": [
+                {
+                    "password": "password",
+                    "length": 64,
+                    "entropy": 4.0,
+                    "common": False,
+                    "patterns": False,
+                    "too_short": False,
+                    "score": 10.0,
+                    "verdict": "weak",
+                    "salt": True,
+                    "pepper": True,
+                }
+            ],
+        },
+    }
+    output = format_report_markdown(data)
+    assert "**Salt:** applied (prepended to password)" in output
+    assert "**Pepper:** applied (HMAC key)" in output
+
+
+def test_format_report_markdown_without_salt_pepper() -> None:
+    data = {
+        "scan": {"target": "h", "ports_scanned": 0, "open_ports": [], "details": []},
+        "audit": {
+            "passwords_audited": 1,
+            "min_length": None,
+            "salt": False,
+            "pepper": False,
+            "results": [
+                {
+                    "password": "password",
+                    "length": 8,
+                    "entropy": 4.0,
+                    "common": False,
+                    "patterns": False,
+                    "too_short": False,
+                    "score": 10.0,
+                    "verdict": "weak",
+                    "salt": False,
+                    "pepper": False,
+                }
+            ],
+        },
+    }
+    output = format_report_markdown(data)
+    assert "**Salt:**" not in output
+    assert "**Pepper:**" not in output
+
+
+def test_format_report_csv_with_salt_pepper() -> None:
+    data = {
+        "scan": {"target": "h", "ports_scanned": 0, "open_ports": [], "details": []},
+        "audit": {
+            "passwords_audited": 1,
+            "min_length": None,
+            "salt": True,
+            "pepper": True,
+            "results": [
+                {
+                    "password": "password",
+                    "length": 64,
+                    "entropy": 4.0,
+                    "common": False,
+                    "patterns": False,
+                    "too_short": False,
+                    "score": 10.0,
+                    "verdict": "weak",
+                    "salt": True,
+                    "pepper": True,
+                }
+            ],
+        },
+    }
+    rows = list(csv.reader(io.StringIO(format_report_csv(data))))
+    # Header + 1 audit row
+    assert len(rows) == 2
+    assert rows[0][11] == "salt"
+    assert rows[0][12] == "pepper"
+    assert rows[1][11] == "true"
+    assert rows[1][12] == "true"

@@ -26,6 +26,8 @@ CSV_COLUMNS = [
     "too_short",
     "score",
     "verdict",
+    "salt",
+    "pepper",
 ]
 
 
@@ -115,6 +117,9 @@ def run_report(
     open_only: bool = False,
     sort_by: Optional[str] = None,
     sort_desc: bool = True,
+    salt: Optional[str] = None,
+    pepper: Optional[str] = None,
+    algorithm: str = "sha256",
 ) -> Dict[str, Any]:
     """Run a port scan and an optional password audit, returning combined report data.
 
@@ -130,6 +135,9 @@ def run_report(
         open_only: If True, filter scan results to open ports only in output.
         sort_by: Optional audit sort field ('score', 'verdict', 'length').
         sort_desc: When True (default), sort descending.
+        salt: Optional salt prepended to each password before audit evaluation.
+        pepper: Optional pepper used as HMAC key for peppered audit evaluation.
+        algorithm: Hash algorithm for salted/peppered audit (default: sha256).
 
     Returns:
         Combined report dict with ``scan`` and ``audit`` sections.
@@ -143,7 +151,15 @@ def run_report(
 
     passwords = _load_passwords(audit_file)
     audit_results = (
-        audit_passwords(passwords, min_length=min_length) if passwords else []
+        audit_passwords(
+            passwords,
+            min_length=min_length,
+            salt=salt,
+            pepper=pepper,
+            algorithm=algorithm,
+        )
+        if passwords
+        else []
     )
 
     scan_details = [{"port": port, "open": is_open} for port, is_open in scan_results]
@@ -160,6 +176,8 @@ def run_report(
             "too_short": eval_data.get("too_short", False),
             "score": eval_data["score"],
             "verdict": eval_data["verdict"],
+            "salt": eval_data.get("salt", False),
+            "pepper": eval_data.get("pepper", False),
         }
         for pwd, eval_data in audit_results
     ]
@@ -177,6 +195,8 @@ def run_report(
         "audit": {
             "passwords_audited": len(passwords),
             "min_length": min_length,
+            "salt": bool(salt),
+            "pepper": bool(pepper),
             "sort_by": sort_by,
             "sort_desc": sort_desc,
             "results": audit_result_dicts,
@@ -214,6 +234,10 @@ def format_report_markdown(data: Dict[str, Any]) -> str:
     lines.append(f"- **Passwords Audited:** {audit['passwords_audited']}")
     if audit.get("min_length") is not None:
         lines.append(f"- **Min Length:** {audit['min_length']}")
+    if audit.get("salt"):
+        lines.append("- **Salt:** applied (prepended to password)")
+    if audit.get("pepper"):
+        lines.append("- **Pepper:** applied (HMAC key)")
     if audit.get("sort_by"):
         direction = "Descending" if audit.get("sort_desc") else "Ascending"
         lines.append(f"- **Sorted By:** {audit['sort_by']} ({direction})")
@@ -262,6 +286,8 @@ def format_report_csv(data: Dict[str, Any]) -> str:
                 "",
                 "",
                 "",
+                "",
+                "",
             ]
         )
 
@@ -279,6 +305,8 @@ def format_report_csv(data: Dict[str, Any]) -> str:
                 "true" if result.get("too_short", False) else "false",
                 result["score"],
                 result["verdict"],
+                "true" if result.get("salt", False) else "false",
+                "true" if result.get("pepper", False) else "false",
             ]
         )
 
