@@ -1,11 +1,28 @@
 """Tests for the ethscan CLI."""
 
+import base64
 import json
 
 from click.testing import CliRunner
 
 from ethscan.cli import cli
 from ethscan.web import SECURITY_HEADERS
+
+
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+
+def _make_jwt(header: dict, payload: dict, with_sig: bool = True) -> str:
+    """Build a JWT token string from header/payload dicts for CLI tests."""
+    token = (
+        _b64url(json.dumps(header).encode())
+        + "."
+        + _b64url(json.dumps(payload).encode())
+    )
+    if with_sig:
+        token += "." + _b64url(b"fake-signature-bytes")
+    return token
 
 
 def test_cli_version() -> None:
@@ -9669,7 +9686,9 @@ def test_completion_out_markdown(tmp_path) -> None:
     assert "Completion script written" in result.output
     assert out_file.exists()
     content = out_file.read_text()
-    assert "user1" in content
+    assert "ethscan Shell Completion" in content
+    assert "zsh" in content
+    assert "#compdef ethscan" in content
 
 
 def test_jwt_out_option_markdown(tmp_path) -> None:

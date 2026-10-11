@@ -47,7 +47,7 @@ def _format_network_info(network: ipaddress._BaseNetwork) -> Dict[str, object]:
         wildcard = str(network.hostmask)
         if network.num_addresses > 2:
             first_host = str(network[1])
-            last_host = str(network[-2])
+            last_host = str(network[-1])
         elif network.num_addresses == 2:
             first_host = str(network[1])
             last_host = str(network[1])
@@ -61,7 +61,7 @@ def _format_network_info(network: ipaddress._BaseNetwork) -> Dict[str, object]:
         wildcard = str(network.hostmask)
         if network.num_addresses > 2:
             first_host = str(network[1])
-            last_host = str(network[-2])
+            last_host = str(network[-1])
         elif network.num_addresses == 2:
             first_host = str(network[1])
             last_host = str(network[1])

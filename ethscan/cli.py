@@ -168,6 +168,11 @@ from ethscan.completion import (
     format_completion_report_markdown,
     run_completion,
 )
+from ethscan.jwt import (
+    format_jwt_report_json,
+    format_jwt_report_markdown,
+    run_jwt,
+)
 
 
 @click.group()
@@ -2544,6 +2549,51 @@ def config(
         except OSError as exc:
             click.echo(f"Error writing output: {exc}", err=True)
             raise SystemExit(1)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--token",
+    help="JWT token to inspect (e.g. eyJhbGciOiJIUzI1NiJ9...). If omitted, reads from stdin.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def jwt(token: Optional[str], fmt: str, out_path: Optional[str]) -> None:
+    """Inspect a JWT (JSON Web Token) without verifying the signature."""
+    if token:
+        token = token.strip()
+    else:
+        stdin_text = click.get_text_stream("stdin").read()
+        token = stdin_text.strip() if stdin_text else ""
+
+    if not token:
+        click.echo("No token provided.")
+        return
+
+    results = run_jwt(token)
+
+    if fmt == "json":
+        output = format_jwt_report_json(results)
+    else:
+        output = format_jwt_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
         click.echo(f"Report written to {out_path}")
     else:
         click.echo(output)

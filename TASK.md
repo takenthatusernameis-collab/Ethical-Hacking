@@ -1071,3 +1071,53 @@ The `radix` command builds a binary radix tree (Patricia trie) over a set of CID
 - End-to-end: `python -m ethscan radix --cidrs "192.168.1.0/24,192.168.2.0/23,10.0.0.0/8" --format markdown` produces a Markdown report with merged networks table and hierarchical radix tree
 - End-to-end: `python -m ethscan radix --cidrs "192.168.1.0/24,192.168.1.128/25" --format json` merges overlapping networks into `192.168.1.0/24`
 - End-to-end: `python -m ethscan radix --cidrs "192.168.1.0/24,192.168.2.0/24" --no-merge --format json` keeps both networks unmerged
+
+## Completed: `jwt` command wiring + test fixes
+
+The `jwt` module (`ethscan/jwt.py`) was already implemented with full unit test coverage (32 tests), but the command was not registered in `ethscan/cli.py`, causing the CLI command to fail at runtime with `AttributeError`. Additionally, `tests/test_cli.py` referenced a missing `_make_jwt` helper and one completion test had a bogus assertion.
+
+### Fixed
+- `ethscan/cli.py` — added imports for `run_jwt`, `format_jwt_report_json`, `format_jwt_report_markdown` from `ethscan.jwt`, and registered the `jwt` command with `--token` (optional, falls back to stdin), `--format` (json/markdown), and `--out`.
+- `tests/test_cli.py` — added a module-level `_make_jwt(header, payload, with_sig=True)` helper (mirrors the `_make_token` helper in `tests/test_jwt.py`) so the JWT CLI tests can build tokens; fixed `test_completion_out_markdown` to assert on real completion output (`ethscan Shell Completion`, `zsh`, `#compdef ethscan`) instead of an unrelated `"user1"` string.
+- `ethscan/cidr.py` — fixed `_format_network_info` so `last_host` returns the broadcast address (`network[-1]`) for IPv4/IPv6 networks with more than 2 addresses, matching the existing test expectations (`test_format_network_info_ipv4_basic`).
+- `README.md` — added JWT inspection (`jwt`) to the features list.
+
+### Verification
+- `python -m pytest -q` -> 1293 passed, 1 skipped (1287 baseline + 6 new: 3 jwt CLI + 1 completion fix + 2 cidr last_host fix).
+- `python -m ethscan --help` -> lists `jwt` among the commands.
+- `python -m ethscan jwt --help` -> shows `--token`, `--format`, `--out`.
+- End-to-end: `echo "<jwt>" | python -m ethscan jwt --format json` produces valid JSON with header/claims/findings.
+- End-to-end: `python -m ethscan jwt --token "not-a-jwt" --format json` reports `valid_structure: false`.
+
+## Current state
+- All 31 commands implemented and wired up (`jwt`, `completion`, `config`, `cidr`, `radix`, `mac`, `dnssec`, `hash`, `subtake`, `cert`, `recon`, `geo`, `trace`, `wifi`, `osdetect`, `urlcheck`, `vuln`, `cve`, `dnsbrute`, `subdomains`, `whois`, `dns`, `resolve`, `ssl`, `tls`, `service`, `scan`, `brute`, `web`, `headers`, `ping`, `audit`, `report`).
+- `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv` options.
+- `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, and `--max-depth`.
+- `whois` now supports `--recursive/--no-recursive` and `--max-depth`.
+- `geo` now supports `--recursive` and `--max-depth`.
+- `dnsbrute` now supports `--recursive` and `--max-depth` for recursive zone transfers.
+- `osdetect` supports `--ports`, `--banners-file`, `--timeout`, `--workers`.
+- `audit` now supports `--format json|markdown` and `--out`.
+- `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out`.
+- `report` now supports `--format json|markdown` and `--out`.
+- `cve` now supports `--target`, `--services-file`, `--ports`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--severity`, `--min-severity`, `--format`, `--out`.
+- `vuln` now supports `--target`, `--ports`, `--services-file`, `--tls-file`, `--ssl-file`, `--severity`, `--min-severity`, `--format`, `--out`.
+- `dnssec` now supports `--target`, `--server`, `--timeout`, `--format`, `--out`.
+- `brute` now supports `--output-format csv` (with deprecated `--format` alias).
+- `mac` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out`.
+- `hash` now supports `--file`, `--algorithm`, `--format`, `--out`.
+- `cidr` now supports `--cidr`, `--contains`, `--format`, `--out`.
+- `radix` now supports `--cidrs`, `--no-merge`, `--max-depth`, `--format`, `--out`.
+- `jwt` now supports `--token`, `--format`, `--out`.
+- `completion` now supports `--shell`, `--prog-name`, `--format`, `--out`.
+- `config` now supports `--config`, `--init`, `--format`, `--out`.
+- Configuration file (`ethscan.yaml`) persists default options across commands via a `--config` group option and a `config` subcommand.
+- Tests: 1293 passing (1 skipped).
+
+## Suggested next task
+
+**Add a `--contains` option to the `radix` command** to test whether a given IP address falls within any of the merged aggregate networks in the radix tree (similar to the `cidr` command's `--contains` membership test).
+
+Alternative: Add a `--diff` option to the `radix` command that shows the address ranges covered by one set of CIDRs but not another (set difference visualization).
+
+Alternative: Add a `--json` output mode to the `report` command for explicit machine-readable output (the `report` command uses inline JSON serialization but some users may want an explicit `--format json` flag for clarity in scripts, similar to other commands).
