@@ -131,6 +131,11 @@ from ethscan.mac import (
     format_mac_report_markdown,
     run_mac,
 )
+from ethscan.jwt import (
+    format_jwt_report_json,
+    format_jwt_report_markdown,
+    run_jwt,
+)
 
 
 @click.group()
@@ -1901,6 +1906,60 @@ def mac(
         output = format_mac_report_json(results)
     else:
         output = format_mac_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--token",
+    help="JWT string to inspect. If omitted, reads from --token-file or stdin.",
+)
+@click.option(
+    "--token-file",
+    "token_file",
+    type=click.Path(exists=True, readable=True),
+    help="Path to a file containing a JWT.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def jwt(token: Optional[str], token_file: Optional[str], fmt: str, out_path: Optional[str]) -> None:
+    """Inspect a JWT (JSON Web Token) header and claims."""
+    if not token:
+        if token_file:
+            with open(token_file, "r", encoding="utf-8") as handle:
+                token = handle.read().strip()
+        else:
+            token = "\n".join(
+                line for line in click.get_text_stream("stdin") if line.strip()
+            )
+
+    if not token:
+        click.echo("No token provided.")
+        return
+
+    results = run_jwt(token)
+
+    if fmt == "json":
+        output = format_jwt_report_json(results)
+    else:
+        output = format_jwt_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

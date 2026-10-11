@@ -7613,3 +7613,137 @@ def test_resolve_url_target(monkeypatch) -> None:
     result = runner.invoke(cli, ["resolve", "--target", "https://example.com/path", "--format", "json"])
     assert result.exit_code == 0
     assert "example.com" in result.output
+
+
+def _b64url(data: bytes) -> str:
+    import base64
+
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+
+def _make_jwt(header: dict, payload: dict, with_sig: bool = True) -> str:
+    import json as _json
+
+    token = _b64url(_json.dumps(header).encode()) + "." + _b64url(
+        _json.dumps(payload).encode()
+    )
+    if with_sig:
+        token += "." + _b64url(b"fake-signature")
+    return token
+
+
+def test_jwt_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["jwt", "--help"])
+    assert result.exit_code == 0
+    assert "--token" in result.output
+    assert "--token-file" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+
+
+def test_jwt_top_level_help_lists_command() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "jwt" in result.output
+
+
+def test_jwt_token_option_json() -> None:
+    token = _make_jwt(
+        {"alg": "HS256", "typ": "JWT"},
+        {"iss": "example.com", "sub": "user1", "exp": 1800000000},
+    )
+    runner = CliRunner()
+    result = runner.invoke(cli, ["jwt", "--token", token, "--format", "json"])
+    assert result.exit_code == 0
+    assert "valid_structure" in result.output
+    assert "HS256" in result.output
+    assert "example.com" in result.output
+
+
+def test_jwt_token_option_markdown() -> None:
+    token = _make_jwt(
+        {"alg": "RS256", "typ": "JWT"},
+        {"sub": "user1", "exp": 1800000000},
+    )
+    runner = CliRunner()
+    result = runner.invoke(cli, ["jwt", "--token", token, "--format", "markdown"])
+    assert result.exit_code == 0
+    assert "JWT Inspection Report" in result.output
+    assert "**Algorithm:** RS256" in result.output
+    assert "**Subject (sub):** user1" in result.output
+
+
+def test_jwt_token_file_option(tmp_path) -> None:
+    token = _make_jwt({"alg": "HS256"}, {"sub": "user1", "exp": 1800000000})
+    token_file = tmp_path / "token.txt"
+    token_file.write_text(token + "\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["jwt", "--token-file", str(token_file), "--format", "json"],
+    )
+    assert result.exit_code == 0
+    assert "user1" in result.output
+
+
+def test_jwt_stdin_input() -> None:
+    token = _make_jwt({"alg": "HS256"}, {"sub": "stdin-user", "exp": 1800000000})
+    runner = CliRunner()
+    result = runner.invoke(cli, ["jwt", "--format", "json"], input=token)
+    assert result.exit_code == 0
+    assert "stdin-user" in result.output
+
+
+def test_jwt_out_option_json(tmp_path) -> None:
+    token = _make_jwt({"alg": "HS256"}, {"sub": "user1", "exp": 1800000000})
+    out_file = tmp_path / "report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["jwt", "--token", token, "--format", "json", "--out", str(out_file)],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "user1" in content
+
+
+def test_jwt_out_option_markdown(tmp_path) -> None:
+    token = _make_jwt({"alg": "HS256"}, {"sub": "user1", "exp": 1800000000})
+    out_file = tmp_path / "report.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["jwt", "--token", token, "--format", "markdown", "--out", str(out_file)],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "JWT Inspection Report" in content
+
+
+def test_jwt_invalid_token() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["jwt", "--token", "not-a-jwt", "--format", "json"])
+    assert result.exit_code == 0
+    assert "valid_structure" in result.output
+    assert "false" in result.output
+
+
+def test_jwt_no_token_empty_stdin() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["jwt"], input="")
+    assert result.exit_code == 0
+    assert "No token provided." in result.output
+
+
+def test_jwt_none_algorithm_cli() -> None:
+    token = _make_jwt({"alg": "none"}, {"sub": "user1"}, with_sig=False)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["jwt", "--token", token, "--format", "json"])
+    assert result.exit_code == 0
+    assert "alg=none" in result.output

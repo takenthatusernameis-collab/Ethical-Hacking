@@ -606,3 +606,46 @@ The `resolve` command performs forward and reverse DNS resolution for domains an
 **Add a `headers` shorthand command** that runs just the `web` check with `--checks headers` for quick security header checks.
 
 Alternative: Add a `cve` command that queries the NVD/CVE API for known vulnerabilities in detected service versions (using `service` output via `--services-file`).
+
+## Completed: `headers` shorthand command + `cve` command (verification)
+
+Both suggested tasks from the previous round were already implemented in earlier commits and verified in place:
+- `headers` — security headers check shorthand (`ethscan/headers.py`, registered at `ethscan/cli.py:558`, tests in `tests/test_headers.py`)
+- `cve` — NVD/CVE API lookup with caching/offline fallback (`ethscan/cve.py`, registered in `ethscan/cli.py`, tests in `tests/test_cve.py`)
+- Verification: `python -m pytest tests/test_headers.py tests/test_cve.py -q` -> 58 passed; both `--help` screens show all expected options.
+
+## Completed: `jwt` command (JWT inspection)
+
+The `jwt` command decodes and analyzes JSON Web Tokens without verifying the signature. It parses the base64url header and payload segments, reports standard claims (iss, sub, aud, exp, iat, nbf, jti), classifies the signing algorithm (none/symmetric/asymmetric/unknown), and flags security findings (alg=none unsigned tokens, expired tokens, missing expiration, not-yet-valid tokens, long-lived tokens, unknown algorithms, undecodable segments). Fully stdlib-only and offline.
+
+### Added Files
+- `ethscan/jwt.py` — JWT inspection module with:
+  - `KNOWN_ALGORITHMS` — algorithm -> category map (none/symmetric/asymmetric)
+  - `STANDARD_CLAIMS` — registered claim names (iss, sub, aud, exp, iat, nbf, jti)
+  - `LONG_LIVED_THRESHOLD_SECONDS` — 1-year lifetime threshold
+  - `_b64url_decode()` — base64url decoding with padding restoration
+  - `_decode_json_segment()` — decodes a segment to a JSON object (None on failure)
+  - `parse_jwt()` — splits a token into header/payload/signature (2- or 3-part)
+  - `_format_timestamp()` / `_escape()` / `_format_value()` — output helpers
+  - `run_jwt()` — public entry point: parses token, extracts claims, computes exp/nbf/iat status, collects findings (injectable `now` for deterministic tests)
+  - `format_jwt_report_json()` / `format_jwt_report_markdown()` — output formatters (markdown includes header section, claims section with statuses, other-claims table with pipe escaping, findings list)
+- `tests/test_jwt.py` — 32 unit tests: algorithm constants, base64url roundtrip/empty/invalid, parse_jwt (three-part, two-part unsigned, invalid segment counts, empty, garbage segments, non-object segment), run_jwt (HS256 full claims, none algorithm, expired, missing exp, not-yet-valid nbf, iat in future, long-lived, unknown algorithm, missing alg, invalid structure, undecodable segments, other claims, kid header, default now), both formatters (JSON, markdown full/invalid/findings/pipe-escape/invalid-structure).
+
+### Modified Files
+- `ethscan/cli.py` — registered `jwt` command with `--token` (direct string), `--token-file` (file containing a JWT), stdin fallback, `--format` (json/markdown), `--out`; imports `run_jwt` and both formatters from `ethscan.jwt`.
+- `tests/test_cli.py` — 11 CLI integration tests: `jwt` help, top-level help listing, `--token` json/markdown output, `--token-file` option, stdin input, `--out` (json and markdown), invalid token, empty stdin, alg=none token.
+- `README.md` — added JWT inspection (`jwt`) to the features list.
+
+### Verification
+- `python -m pytest -q` -> 1000 passed, 1 skipped (957 baseline + 43 new: 32 unit + 11 CLI).
+- `python -m ethscan --help` -> lists `jwt` among the 27 commands.
+- `python -m ethscan jwt --help` -> shows all expected options (`--token`, `--token-file`, `--format`, `--out`).
+- End-to-end: `python -m ethscan jwt --token <JWT> --format json` reports valid_structure, algorithm HS256, claims, and findings.
+- End-to-end: `python -m ethscan jwt --token <JWT> --format markdown` renders header/claims/findings sections.
+- End-to-end: an `alg=none` two-part token is flagged as unsigned with no signature segment.
+
+## Suggested next task
+
+**Add a `cidr` command** for network calculations using the stdlib `ipaddress` module: given a CIDR notation (e.g. 192.168.1.0/24), report network address, netmask, broadcast, wildcard, host range, usable-host count, IP version, and whether a given `--contains` IP belongs to the network. Fully offline and stdlib-only.
+
+Alternative: Add a `hash` command that generates password hashes (MD5, SHA-1, SHA-256, SHA-512, NTLM) for password-audit workflows, with `--algorithm` selection and JSON/Markdown output.
