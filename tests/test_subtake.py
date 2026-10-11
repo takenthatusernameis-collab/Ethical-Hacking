@@ -7,6 +7,7 @@ from ethscan.subtake import (
     TAKEOVER_SIGNATURES,
     _normalize_domain,
     check_takeover_signature,
+    format_subtake_report_csv,
     format_subtake_report_json,
     format_subtake_report_markdown,
     run_subtake,
@@ -527,3 +528,131 @@ def test_format_subtake_report_markdown_pipe_escape() -> None:
     assert "test\\|value" in output
     assert "Test\\|Service" in output
     assert "finger\\|print" in output
+
+
+def test_format_subtake_report_csv_basic() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "subdomains_tested": 2,
+        "vulnerable_count": 1,
+        "vulnerable": [
+            {
+                "subdomain": "www",
+                "hostname": "www.example.com",
+                "cname": "mybucket.s3.amazonaws.com",
+                "a_records": [],
+                "aaaa_records": [],
+                "vulnerable": True,
+                "takeover": {
+                    "service": "AWS S3",
+                    "cname": "mybucket.s3.amazonaws.com",
+                    "fingerprint": "NoSuchBucket",
+                    "description": "S3 bucket does not exist",
+                    "http_confirmed": True,
+                    "evidence": "NoSuchBucket",
+                },
+            }
+        ],
+        "all_results": [
+            {
+                "subdomain": "www",
+                "hostname": "www.example.com",
+                "cname": "mybucket.s3.amazonaws.com",
+                "a_records": [],
+                "aaaa_records": [],
+                "vulnerable": True,
+                "takeover": {
+                    "service": "AWS S3",
+                    "cname": "mybucket.s3.amazonaws.com",
+                    "fingerprint": "NoSuchBucket",
+                    "description": "S3 bucket does not exist",
+                    "http_confirmed": True,
+                    "evidence": "NoSuchBucket",
+                },
+            },
+            {
+                "subdomain": "mail",
+                "hostname": "mail.example.com",
+                "cname": None,
+                "a_records": ["1.2.3.4"],
+                "aaaa_records": [],
+                "vulnerable": False,
+                "takeover": None,
+            },
+        ],
+    }
+    output = format_subtake_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "subdomain,hostname,cname,a_records,aaaa_records,vulnerable,service,fingerprint,http_confirmed"
+    # vulnerable entry row (empty a_records/aaaa_records yield empty fields)
+    assert "www,www.example.com,mybucket.s3.amazonaws.com,,,true,AWS S3,NoSuchBucket,true" == lines[1]
+    # non-vulnerable entry row (cname=None and takeover=None yield empty fields)
+    assert "mail,mail.example.com,,1.2.3.4,,false,,,false" == lines[2]
+
+
+def test_format_subtake_report_csv_empty() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "subdomains_tested": 0,
+        "vulnerable_count": 0,
+        "vulnerable": [],
+        "all_results": [],
+    }
+    output = format_subtake_report_csv(data)
+    assert output == "subdomain,hostname,cname,a_records,aaaa_records,vulnerable,service,fingerprint,http_confirmed"
+
+
+def test_format_subtake_report_csv_missing_fields() -> None:
+    """CSV formatter handles candidates with missing/None fields gracefully."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "subdomains_tested": 1,
+        "vulnerable_count": 0,
+        "vulnerable": [],
+        "all_results": [
+            {
+                "subdomain": "www",
+                "hostname": "www.example.com",
+            }
+        ],
+    }
+    output = format_subtake_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "subdomain,hostname,cname,a_records,aaaa_records,vulnerable,service,fingerprint,http_confirmed"
+    assert lines[1] == "www,www.example.com,,,,false,,,false"
+
+
+def test_format_subtake_report_csv_pipe_escaping() -> None:
+    """CSV writer quotes fields containing commas, quotes, and pipes."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "subdomains_tested": 1,
+        "vulnerable_count": 1,
+        "vulnerable": [],
+        "all_results": [
+            {
+                "subdomain": "www",
+                "hostname": "www.example.com",
+                "cname": "mybucket.s3.amazonaws.com",
+                "a_records": ["1.2.3.4", "5.6.7.8"],
+                "aaaa_records": [],
+                "vulnerable": True,
+                "takeover": {
+                    "service": "AWS S3",
+                    "cname": "mybucket.s3.amazonaws.com",
+                    "fingerprint": 'finger"print,with,comma',
+                    "description": "desc",
+                    "http_confirmed": False,
+                    "evidence": "evidence",
+                },
+            }
+        ],
+    }
+    output = format_subtake_report_csv(data)
+    lines = output.splitlines()
+    # a_records joined with comma is quoted; fingerprint with comma+quote is quoted/escaped
+    assert lines[1] == 'www,www.example.com,mybucket.s3.amazonaws.com,"1.2.3.4, 5.6.7.8",,true,AWS S3,"finger""print,with,comma",false'

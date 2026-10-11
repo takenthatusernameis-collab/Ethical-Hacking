@@ -2505,6 +2505,136 @@ def test_subtake_http_timeout_option(monkeypatch) -> None:
     assert called_args["http_timeout"] == 10.0
 
 
+def test_subtake_help_shows_output_format() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["subtake", "--help"])
+    assert result.exit_code == 0
+    assert "--output-format" in result.output
+    assert "csv" in result.output
+
+
+def _subtake_csv_result():
+    return {
+        "target": "example.com",
+        "domain": "example.com",
+        "subdomains_tested": 2,
+        "vulnerable_count": 1,
+        "vulnerable": [],
+        "all_results": [
+            {
+                "subdomain": "www",
+                "hostname": "www.example.com",
+                "cname": "mybucket.s3.amazonaws.com",
+                "a_records": [],
+                "aaaa_records": [],
+                "vulnerable": True,
+                "takeover": {
+                    "service": "AWS S3",
+                    "cname": "mybucket.s3.amazonaws.com",
+                    "fingerprint": "NoSuchBucket",
+                    "description": "S3 bucket does not exist",
+                    "http_confirmed": True,
+                    "evidence": "NoSuchBucket",
+                },
+            },
+            {
+                "subdomain": "mail",
+                "hostname": "mail.example.com",
+                "cname": None,
+                "a_records": ["1.2.3.4"],
+                "aaaa_records": [],
+                "vulnerable": False,
+                "takeover": None,
+            },
+        ],
+        "resolver": None,
+        "dnspython_available": False,
+    }
+
+
+def test_subtake_output_format_csv(monkeypatch) -> None:
+    monkeypatch.setattr("ethscan.cli.run_subtake", lambda target, **kw: _subtake_csv_result())
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "subtake",
+            "--target",
+            "example.com",
+            "--output-format",
+            "csv",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "subdomain,hostname,cname,a_records,aaaa_records,vulnerable,service,fingerprint,http_confirmed" in result.output
+    assert "www,www.example.com,mybucket.s3.amazonaws.com,,,true,AWS S3,NoSuchBucket,true" in result.output
+    assert "mail,mail.example.com,,1.2.3.4,,false,,,false" in result.output
+
+
+def test_subtake_output_format_csv_out(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("ethscan.cli.run_subtake", lambda target, **kw: _subtake_csv_result())
+
+    out_file = tmp_path / "subtake_report.csv"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "subtake",
+            "--target",
+            "example.com",
+            "--output-format",
+            "csv",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "subdomain,hostname,cname,a_records,aaaa_records,vulnerable,service,fingerprint,http_confirmed" in content
+    assert "www,www.example.com,mybucket.s3.amazonaws.com,,,true,AWS S3,NoSuchBucket,true" in content
+
+
+def test_subtake_format_csv_alias(monkeypatch) -> None:
+    """Deprecated --format csv alias still routes to the CSV formatter."""
+    monkeypatch.setattr("ethscan.cli.run_subtake", lambda target, **kw: _subtake_csv_result())
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "subtake",
+            "--target",
+            "example.com",
+            "--format",
+            "csv",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "subdomain,hostname,cname,a_records,aaaa_records,vulnerable,service,fingerprint,http_confirmed" in result.output
+
+
+def test_subtake_output_format_default_is_json(monkeypatch) -> None:
+    monkeypatch.setattr("ethscan.cli.run_subtake", lambda target, **kw: _subtake_csv_result())
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["subtake", "--target", "example.com", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "{" in result.output
+    assert '"target"' in result.output
+
+
 def test_whois_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["whois", "--help"])

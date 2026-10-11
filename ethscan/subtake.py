@@ -5,6 +5,8 @@ point to known vulnerable cloud services (AWS S3, GitHub Pages, Heroku, Azure,
 Shopify, etc.) where the target resource no longer exists.
 """
 
+import csv
+import io
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Set, Tuple
@@ -495,6 +497,48 @@ def format_subtake_report_json(data: Dict[str, object]) -> str:
     """Format subdomain takeover results as JSON."""
     import json
     return json.dumps(data, indent=2, default=str)
+
+
+def format_subtake_report_csv(data: Dict[str, object]) -> str:
+    """Format subdomain takeover results as CSV.
+
+    Produces a header row followed by one row per candidate with columns:
+    subdomain, hostname, cname, a_records, aaaa_records, vulnerable, service,
+    fingerprint, http_confirmed.
+    """
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "subdomain",
+            "hostname",
+            "cname",
+            "a_records",
+            "aaaa_records",
+            "vulnerable",
+            "service",
+            "fingerprint",
+            "http_confirmed",
+        ]
+    )
+    for entry in data.get("all_results", []) or []:
+        takeover = entry.get("takeover") or {}
+        a_records = entry.get("a_records") or []
+        aaaa_records = entry.get("aaaa_records") or []
+        writer.writerow(
+            [
+                entry.get("subdomain", ""),
+                entry.get("hostname", ""),
+                entry.get("cname") or "",
+                ", ".join(str(record) for record in a_records),
+                ", ".join(str(record) for record in aaaa_records),
+                "true" if entry.get("vulnerable") else "false",
+                takeover.get("service") or "",
+                takeover.get("fingerprint") or "",
+                "true" if takeover.get("http_confirmed") else "false",
+            ]
+        )
+    return output.getvalue().rstrip("\r\n")
 
 
 def _escape(value: str) -> str:

@@ -146,6 +146,7 @@ from ethscan.dnssec import (
     run_dnssec,
 )
 from ethscan.subtake import (
+    format_subtake_report_csv,
     format_subtake_report_json,
     format_subtake_report_markdown,
     run_subtake,
@@ -832,11 +833,18 @@ def subdomains(
 )
 @click.option("--http-timeout", default=5.0, type=float, help="HTTP request timeout for fingerprinting in seconds")
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format: json, markdown, or csv.",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    help="Deprecated alias for --output-format.",
 )
 @click.option(
     "--out",
@@ -851,6 +859,7 @@ def subtake(
     timeout: float,
     workers: int,
     http_timeout: float,
+    output_fmt: Optional[str],
     fmt: str,
     out_path: Optional[str],
 ) -> None:
@@ -868,10 +877,15 @@ def subtake(
         http_timeout=http_timeout,
     )
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_subtake_report_json(results)
-    else:
+    elif chosen_format == "markdown":
         output = format_subtake_report_markdown(results)
+    else:
+        output = format_subtake_report_csv(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

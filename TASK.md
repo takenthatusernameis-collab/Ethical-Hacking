@@ -2182,3 +2182,44 @@ Alternative: Add `--output-format csv` to the `validate` command for spreadsheet
 - Register the `--output-format [json|markdown|csv]` option in `ethscan/cli.py` (keeping `--format` as a deprecated alias that takes lower precedence), routing to the CSV formatter when `chosen_format == "csv"`.
 - Add unit tests in `tests/test_*_.py` (CSV formatter: basic, empty, pipe/CSV escaping) and CLI integration tests in `tests/test_cli.py` (help shows `--output-format`, CSV output, CSV with `--out`, deprecated `--format csv` alias still works, default format unchanged).
 - Use stdlib only — `csv` and `io` modules for proper quoting/escaping.
+
+## Completed: `--output-format csv` output for the `subtake` command
+
+Added machine-readable CSV export to the `subtake` command (subdomain-takeover findings), parallel to the existing `--output-format [json|markdown|csv]` option already present on `scan`, `service`, `audit`, `report`, `brute`, `vuln`, and `cve`.
+
+### Added Functionality
+- `ethscan/subtake.py`:
+  - Added `format_subtake_report_csv(data)` — emits a header row + one row per candidate (from `all_results`) with columns: `subdomain, hostname, cname, a_records, aaaa_records, vulnerable, service, fingerprint, http_confirmed`. Uses stdlib `csv.writer` for proper comma/quote escaping; `a_records`/`aaaa_records` are joined with `", "`. Boolean fields render as `true`/`false`; missing/None fields render as empty strings. Returns `output.getvalue().rstrip("\r\n")`.
+  - Added `import csv` and `import io` at module top.
+
+### Modified Files
+- `ethscan/subtake.py` — added `format_subtake_report_csv()` and the `csv`/`io` imports.
+- `ethscan/cli.py` — added `format_subtake_report_csv` to the `ethscan.subtake` import; registered `--output-format [json|markdown|csv]` (dest `output_fmt`, default `None`) on the `subtake` command while keeping `--format` as a deprecated alias (dest `fmt`, default `json`, now allowing `csv`); added `chosen_format = output_fmt if output_fmt is not None else fmt` precedence logic and routing to the CSV formatter when `chosen_format == "csv"`.
+- `tests/test_subtake.py` — 4 new unit tests: `test_format_subtake_report_csv_basic`, `test_format_subtake_report_csv_empty`, `test_format_subtake_report_csv_missing_fields`, `test_format_subtake_report_csv_pipe_escaping`.
+- `tests/test_cli.py` — 5 new CLI integration tests: `test_subtake_help_shows_output_format`, `test_subtake_output_format_csv`, `test_subtake_output_format_csv_out`, `test_subtake_format_csv_alias`, `test_subtake_output_format_default_is_json`.
+- `README.md` — `subtake` entry now notes `--output-format [json|markdown|csv]`.
+
+### Verification
+- `python -m pytest -q` -> 1884 passed, 1 skipped (1875 baseline + 9 new: 4 unit + 5 CLI).
+- `python -m ethscan subtake --help` -> shows `--output-format [json|markdown|csv]` and the deprecated `--format [json|markdown|csv]`.
+- End-to-end: `python -m ethscan subtake --target nonexistent.invalid.domain.tld --output-format csv --timeout 1.0` -> emits header + one CSV row per tested subdomain with empty cname/records and `false` flags; `--format csv` (deprecated alias) produces identical output; default (no format) remains JSON.
+
+## Current state
+- All 34 commands implemented and wired up (including `s3`).
+- `--output-format [json|markdown|csv]` (with `--format` deprecated alias) is now supported on: `scan`, `service`, `audit`, `report`, `brute`, `vuln`, `cve`, **and `subtake`**.
+- `subtake` detects subdomain takeover via CNAME cross-reference against known vulnerable cloud services with optional HTTP fingerprint confirmation; supports `--resolver`, `--timeout`, `--workers`, `--http-timeout`, `--wordlist`, `--output-format [json|markdown|csv]`, and `--out`.
+- Configuration file (`ethscan.yaml`) persists default options across commands via a `--config` group option and a `config` subcommand.
+- Tests: 1884 passing (1 skipped).
+
+## Suggested next task
+
+**Add `--output-format csv` output to the `nmap` command** so that Nmap XML-parsed CVE findings can be exported as spreadsheet-compatible CSV. Implement `format_nmap_report_csv(data)` in `ethscan/nmap.py` emitting a header row + one row per matched CVE with columns: `host,addr,port,state,service,product,version,cve_id,severity,score,title`, register `--output-format [json|markdown|csv]` (keeping `--format` as a deprecated alias) on the `nmap` CLI command, and add unit tests (`tests/test_nmap.py`) plus CLI integration tests (`tests/test_cli.py`).
+
+Alternative: Add `--output-format csv` to the `validate` command for spreadsheet-compatible port/CIDR validation results (header: `type,spec,valid,detail`).
+
+## Requirements
+- Pick one of the suggested features and implement it following the existing module conventions.
+- Extend an existing module (`ethscan/nmap.py` or `ethscan/validate.py`) with a `format_*_report_csv()` function.
+- Register the `--output-format [json|markdown|csv]` option in `ethscan/cli.py` (keeping `--format` as a deprecated alias that takes lower precedence), routing to the CSV formatter when `chosen_format == "csv"`.
+- Add unit tests in `tests/test_*_.py` (CSV formatter: basic, empty, pipe/CSV escaping) and CLI integration tests in `tests/test_cli.py` (help shows `--output-format`, CSV output, CSV with `--out`, deprecated `--format csv` alias still works, default format unchanged).
+- Use stdlib only — `csv` and `io` modules for proper quoting/escaping.
