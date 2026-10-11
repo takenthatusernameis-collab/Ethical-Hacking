@@ -10124,3 +10124,107 @@ def test_radix_overlapping_merges() -> None:
     result = runner.invoke(cli, ["radix", "--cidrs", "192.168.1.0/24,192.168.1.128/25", "--format", "json"])
     assert result.exit_code == 0
     assert "192.168.1.0/24" in result.output
+
+
+def test_radix_help_shows_contains() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["radix", "--help"])
+    assert result.exit_code == 0
+    assert "--contains" in result.output
+
+
+def test_radix_contains_inside_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["radix", "--cidrs", "192.168.1.0/24,10.0.0.0/8", "--contains", "10.5.5.5", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    assert "10.5.5.5" in result.output
+    assert "true" in result.output
+    assert "10.0.0.0/8" in result.output
+
+
+def test_radix_contains_outside_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["radix", "--cidrs", "192.168.1.0/24", "--contains", "172.16.0.1", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    assert "172.16.0.1" in result.output
+    assert "false" in result.output
+
+
+def test_radix_contains_markdown_inside() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["radix", "--cidrs", "192.168.1.0/24,10.0.0.0/8", "--contains", "10.5.5.5", "--format", "markdown"],
+    )
+    assert result.exit_code == 0
+    assert "## Membership Test" in result.output
+    assert "10.5.5.5" in result.output
+    assert "Yes" in result.output
+    assert "10.0.0.0/8" in result.output
+
+
+def test_radix_contains_markdown_outside() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["radix", "--cidrs", "192.168.1.0/24", "--contains", "172.16.0.1", "--format", "markdown"],
+    )
+    assert result.exit_code == 0
+    assert "## Membership Test" in result.output
+    assert "No" in result.output
+
+
+def test_radix_contains_out_option_json(tmp_path) -> None:
+    out_file = tmp_path / "radix_contains.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "radix",
+            "--cidrs",
+            "192.168.1.0/24,10.0.0.0/8",
+            "--contains",
+            "10.5.5.5",
+            "--format",
+            "json",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "10.5.5.5" in content
+    assert "true" in content
+
+
+def test_radix_contains_out_option_markdown(tmp_path) -> None:
+    out_file = tmp_path / "radix_contains.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "radix",
+            "--cidrs",
+            "192.168.1.0/24,10.0.0.0/8",
+            "--contains",
+            "10.5.5.5",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "## Membership Test" in content
+    assert "10.5.5.5" in content

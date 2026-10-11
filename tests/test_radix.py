@@ -5,6 +5,8 @@ import json
 from ethscan.radix import (
     _common_prefix_length,
     _common_prefix_of_pair,
+    _contains_in_merged,
+    _contains_ip,
     _merge_networks,
     _nth_bit,
     _normalize_cidr,
@@ -281,6 +283,110 @@ def test_run_radix_input_addresses() -> None:
 
 
 # ---------------------------------------------------------------------------
+# IP containment
+# ---------------------------------------------------------------------------
+
+
+def test_contains_ip_inside_network() -> None:
+    net = ipaddress.ip_network("192.168.1.0/24")
+    assert _contains_ip(net, "192.168.1.50") is True
+
+
+def test_contains_ip_outside_network() -> None:
+    net = ipaddress.ip_network("192.168.1.0/24")
+    assert _contains_ip(net, "10.0.0.5") is False
+
+
+def test_contains_ip_invalid_returns_false() -> None:
+    net = ipaddress.ip_network("192.168.1.0/24")
+    assert _contains_ip(net, "not-an-ip") is False
+
+
+def test_contains_ip_ipv6_inside() -> None:
+    net = ipaddress.ip_network("2001:db8::/32")
+    assert _contains_ip(net, "2001:db8::1") is True
+
+
+def test_contains_in_merged_inside() -> None:
+    nets = [ipaddress.ip_network("192.168.1.0/24"), ipaddress.ip_network("10.0.0.0/8")]
+    in_net, matched = _contains_in_merged(nets, "10.5.5.5")
+    assert in_net is True
+    assert matched == "10.0.0.0/8"
+
+
+def test_contains_in_merged_outside() -> None:
+    nets = [ipaddress.ip_network("192.168.1.0/24"), ipaddress.ip_network("10.0.0.0/8")]
+    in_net, matched = _contains_in_merged(nets, "172.16.0.1")
+    assert in_net is False
+    assert matched is None
+
+
+def test_contains_in_merged_invalid() -> None:
+    nets = [ipaddress.ip_network("192.168.1.0/24")]
+    in_net, matched = _contains_in_merged(nets, "bad")
+    assert in_net is False
+    assert matched is None
+
+
+def test_contains_in_merged_empty() -> None:
+    in_net, matched = _contains_in_merged([], "1.2.3.4")
+    assert in_net is False
+    assert matched is None
+
+
+# ---------------------------------------------------------------------------
+# run_radix with contains
+# ---------------------------------------------------------------------------
+
+
+def test_run_radix_contains_inside() -> None:
+    data = run_radix(["192.168.1.0/24", "10.0.0.0/8"], contains="10.5.5.5")
+    assert "contains" in data
+    assert data["contains"]["ip"] == "10.5.5.5"
+    assert data["contains"]["in_network"] is True
+    assert data["contains"]["matched_network"] == "10.0.0.0/8"
+
+
+def test_run_radix_contains_outside() -> None:
+    data = run_radix(["192.168.1.0/24", "10.0.0.0/8"], contains="172.16.0.1")
+    assert data["contains"]["in_network"] is False
+    assert data["contains"]["matched_network"] is None
+
+
+def test_run_radix_contains_invalid_ip() -> None:
+    data = run_radix(["192.168.1.0/24"], contains="not-an-ip")
+    assert data["contains"]["in_network"] is False
+    assert data["contains"]["matched_network"] is None
+
+
+def test_run_radix_contains_strips_whitespace() -> None:
+    data = run_radix(["192.168.1.0/24"], contains="  192.168.1.50  ")
+    assert data["contains"]["ip"] == "192.168.1.50"
+    assert data["contains"]["in_network"] is True
+
+
+def test_run_radix_contains_ipv6_inside() -> None:
+    data = run_radix(["2001:db8::/32"], contains="2001:db8::1")
+    assert data["contains"]["in_network"] is True
+    assert data["contains"]["matched_network"] == "2001:db8::/32"
+
+
+def test_run_radix_contains_no_contains_field() -> None:
+    data = run_radix(["192.168.1.0/24"])
+    assert "contains" not in data
+
+
+def test_run_radix_contains_merge_disabled() -> None:
+    data = run_radix(
+        ["192.168.1.0/24", "192.168.2.0/24"],
+        merge=False,
+        contains="192.168.2.100",
+    )
+    assert data["contains"]["in_network"] is True
+    assert data["contains"]["matched_network"] == "192.168.2.0/24"
+
+
+# ---------------------------------------------------------------------------
 # JSON formatter
 # ---------------------------------------------------------------------------
 
@@ -341,3 +447,27 @@ def test_format_radix_report_markdown_empty_merged() -> None:
     data["merged"] = []
     output = format_radix_report_markdown(data)
     assert "Merged Networks" in output
+
+
+def test_format_radix_report_markdown_contains_inside() -> None:
+    data = run_radix(["192.168.1.0/24", "10.0.0.0/8"], contains="10.5.5.5")
+    output = format_radix_report_markdown(data)
+    assert "## Membership Test" in output
+    assert "10.5.5.5" in output
+    assert "Yes" in output
+    assert "10.0.0.0/8" in output
+
+
+def test_format_radix_report_markdown_contains_outside() -> None:
+    data = run_radix(["192.168.1.0/24"], contains="172.16.0.1")
+    output = format_radix_report_markdown(data)
+    assert "## Membership Test" in output
+    assert "No" in output
+
+
+def test_format_radix_report_json_contains() -> None:
+    data = run_radix(["192.168.1.0/24", "10.0.0.0/8"], contains="10.5.5.5")
+    output = format_radix_report_json(data)
+    parsed = json.loads(output)
+    assert parsed["contains"]["in_network"] is True
+    assert parsed["contains"]["matched_network"] == "10.0.0.0/8"

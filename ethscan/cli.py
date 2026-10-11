@@ -2220,6 +2220,10 @@ def cidr(cidr: str, contains: Optional[str], fmt: str, out_path: Optional[str]) 
     help="Maximum recursion depth for the radix tree (default: 64).",
 )
 @click.option(
+    "--contains",
+    help="Optional IP address to test for membership in the merged networks.",
+)
+@click.option(
     "--format",
     "fmt",
     type=click.Choice(["json", "markdown"]),
@@ -2236,6 +2240,7 @@ def radix(
     cidrs_option: str,
     no_merge: bool,
     max_depth: int,
+    contains: Optional[str],
     fmt: str,
     out_path: Optional[str],
 ) -> None:
@@ -2250,7 +2255,7 @@ def radix(
         click.echo("Error: at least one CIDR network is required.", err=True)
         raise SystemExit(1)
 
-    results = run_radix(cidrs, merge=not no_merge, max_depth=max_depth)
+    results = run_radix(cidrs, merge=not no_merge, max_depth=max_depth, contains=contains)
 
     if fmt == "json":
         output = format_radix_report_json(results)

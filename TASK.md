@@ -1107,17 +1107,58 @@ The `jwt` module (`ethscan/jwt.py`) was already implemented with full unit test 
 - `mac` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out`.
 - `hash` now supports `--file`, `--algorithm`, `--format`, `--out`.
 - `cidr` now supports `--cidr`, `--contains`, `--format`, `--out`.
-- `radix` now supports `--cidrs`, `--no-merge`, `--max-depth`, `--format`, `--out`.
+- `radix` now supports `--cidrs`, `--no-merge`, `--max-depth`, `--contains`, `--format`, `--out`.
 - `jwt` now supports `--token`, `--format`, `--out`.
 - `completion` now supports `--shell`, `--prog-name`, `--format`, `--out`.
 - `config` now supports `--config`, `--init`, `--format`, `--out`.
 - Configuration file (`ethscan.yaml`) persists default options across commands via a `--config` group option and a `config` subcommand.
-- Tests: 1293 passing (1 skipped).
+- Tests: 1318 passing (1 skipped).
+
+## Completed: `--contains` option for `radix` command
+
+Added a `--contains` option to the `radix` command that tests whether a given IP address falls within any of the merged aggregate networks in the radix tree (similar to the `cidr` command's `--contains` membership test). It reports the matched network when the IP is found inside.
+
+### Added Functionality
+- `ethscan/radix.py`:
+  - Added `_contains_ip()` helper — checks whether an IP address belongs to a single network (returns False for invalid IPs)
+  - Added `_contains_in_merged()` helper — checks whether an IP address belongs to any of the merged networks; returns a tuple of (in_network, matched_network_str_or_None)
+  - Updated `run_radix()` to accept `contains` (Optional[str]) parameter
+  - Added membership test logic: strips whitespace, tests against merged networks, records `contains` dict with `ip`, `in_network`, and `matched_network` fields
+  - Updated `format_radix_report_markdown()` to display a "## Membership Test" section with IP Tested, In Network, and Matched Network lines
+- `ethscan/cli.py`:
+  - Added `--contains` option (optional) to the `radix` command
+  - Passes `contains` to `run_radix()`
+
+### Modified Files
+- `ethscan/radix.py` — added `_contains_ip`, `_contains_in_merged`, updated `run_radix` and markdown formatter
+- `ethscan/cli.py` — added `--contains` option and pass-through
+- `tests/test_radix.py` — 14 new unit tests:
+  - `test_contains_ip_inside_network`, `test_contains_ip_outside_network`, `test_contains_ip_invalid_returns_false`, `test_contains_ip_ipv6_inside`
+  - `test_contains_in_merged_inside`, `test_contains_in_merged_outside`, `test_contains_in_merged_invalid`, `test_contains_in_merged_empty`
+  - `test_run_radix_contains_inside`, `test_run_radix_contains_outside`, `test_run_radix_contains_invalid_ip`, `test_run_radix_contains_strips_whitespace`, `test_run_radix_contains_ipv6_inside`, `test_run_radix_contains_no_contains_field`, `test_run_radix_contains_merge_disabled`
+  - `test_format_radix_report_markdown_contains_inside`, `test_format_radix_report_markdown_contains_outside`, `test_format_radix_report_json_contains`
+- `tests/test_cli.py` — 8 new CLI integration tests:
+  - `test_radix_help_shows_contains` — verifies help shows `--contains` option
+  - `test_radix_contains_inside_json` — verifies JSON output with IP inside a network
+  - `test_radix_contains_outside_json` — verifies JSON output with IP outside all networks
+  - `test_radix_contains_markdown_inside` — verifies Markdown output with IP inside
+  - `test_radix_contains_markdown_outside` — verifies Markdown output with IP outside
+  - `test_radix_contains_out_option_json` — verifies `--out` with JSON
+  - `test_radix_contains_out_option_markdown` — verifies `--out` with Markdown
+- `README.md` — clarified radix feature description
+
+### Verification
+- `python -m pytest -q` -> 1318 passed, 1 skipped (1293 baseline + 25 new: 16 unit + 9 CLI)
+- `python -m ethscan --help` -> lists `radix` among the commands
+- `python -m ethscan radix --help` -> shows `--contains` option
+- End-to-end: `python -m ethscan radix --cidrs "192.168.1.0/24,10.0.0.0/8" --contains "10.5.5.5" --format json` produces JSON with `"in_network": true` and `"matched_network": "10.0.0.0/8"`
+- End-to-end: `python -m ethscan radix --cidrs "192.168.1.0/24" --contains "172.16.0.1" --format markdown` produces Markdown with "## Membership Test" section and "In Network: No"
+- Edge cases: invalid IP returns `in_network: false` with `matched_network: null`; whitespace in `--contains` is stripped; works with both merge enabled and disabled
 
 ## Suggested next task
 
-**Add a `--contains` option to the `radix` command** to test whether a given IP address falls within any of the merged aggregate networks in the radix tree (similar to the `cidr` command's `--contains` membership test).
-
-Alternative: Add a `--diff` option to the `radix` command that shows the address ranges covered by one set of CIDRs but not another (set difference visualization).
+**Add a `--diff` option to the `radix` command** that shows the address ranges covered by one set of CIDRs but not another (set difference visualization).
 
 Alternative: Add a `--json` output mode to the `report` command for explicit machine-readable output (the `report` command uses inline JSON serialization but some users may want an explicit `--format json` flag for clarity in scripts, similar to other commands).
+
+Alternative: Add a `--ports` option to the `vuln` command to run live service detection on a custom port set before querying the built-in vulnerability database.

@@ -63,6 +63,30 @@ def _common_prefix_length(networks: List[ipaddress._BaseNetwork]) -> int:
     return min(n.prefixlen for n in networks)
 
 
+def _contains_ip(network: ipaddress._BaseNetwork, ip: str) -> bool:
+    """Check whether an IP address belongs to the network."""
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return addr in network
+
+
+def _contains_in_merged(merged: List[ipaddress._BaseNetwork], ip: str) -> Tuple[bool, Optional[str]]:
+    """Check whether an IP address belongs to any of the merged networks.
+
+    Returns a tuple of (in_network, matched_network_str_or_None).
+    """
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return False, None
+    for net in sorted(merged, key=lambda n: n.network_address):
+        if addr in net:
+            return True, str(net)
+    return False, None
+
+
 def _merge_networks(networks: List[ipaddress._BaseNetwork]) -> List[ipaddress._BaseNetwork]:
     """Merge overlapping and adjacent (supernettable) networks.
 
@@ -234,6 +258,7 @@ def run_radix(
     cidrs: List[str],
     merge: bool = True,
     max_depth: int = 64,
+    contains: Optional[str] = None,
 ) -> Dict[str, object]:
     """Build a radix tree visualization over a set of CIDR networks.
 
@@ -241,10 +266,11 @@ def run_radix(
         cidrs: List of CIDR strings (e.g. ``["192.168.1.0/24", "10.0.0.0/8"]``).
         merge: When True, merge overlapping and supernettable networks first.
         max_depth: Maximum recursion depth for the radix tree (default 64).
+        contains: Optional IP address to test for membership in the merged networks.
 
     Returns:
         Structured results with parsed networks, merged networks, radix tree
-        node, and summary counts.
+        node, summary counts, and optional membership test.
     """
     parsed = _parse_networks(cidrs)
 
@@ -263,7 +289,7 @@ def run_radix(
         else 0.0
     )
 
-    return {
+    result: Dict[str, object] = {
         "cidrs": cidrs,
         "network_count": len(parsed),
         "merged_network_count": len(merged),
@@ -275,6 +301,17 @@ def run_radix(
         "max_depth": max_depth,
         "radix_tree": root,
     }
+
+    if contains is not None:
+        contains_stripped = contains.strip()
+        in_network, matched = _contains_in_merged(merged, contains_stripped)
+        result["contains"] = {
+            "ip": contains_stripped,
+            "in_network": in_network,
+            "matched_network": matched,
+        }
+
+    return result
 
 
 def format_radix_report_json(data: Dict[str, object]) -> str:
@@ -336,6 +373,15 @@ def format_radix_report_markdown(data: Dict[str, object]) -> str:
         lines.append("## Radix Tree")
         lines.append("")
         _render_node_md(root, lines)
+        lines.append("")
+
+    contains = data.get("contains")
+    if contains is not None:
+        lines.append("## Membership Test")
+        lines.append(f"- **IP Tested:** {contains['ip']}")
+        lines.append(f"- **In Network:** {'Yes' if contains['in_network'] else 'No'}")
+        if contains.get("matched_network"):
+            lines.append(f"- **Matched Network:** {contains['matched_network']}")
         lines.append("")
 
     return "\n".join(lines)
