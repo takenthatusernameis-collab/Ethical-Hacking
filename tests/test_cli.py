@@ -13612,3 +13612,409 @@ def test_nmap_default_format_is_json(tmp_path) -> None:
     assert result.exit_code == 0
     parsed = json.loads(result.output)
     assert parsed["input_file"] == str(xml_file)
+
+
+def test_stale_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["stale", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--file" in result.output
+    assert "--timeout" in result.output
+    assert "--workers" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_stale() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "stale" in result.output
+
+
+def test_stale_offline_target_json(monkeypatch) -> None:
+    def mock_run_stale(targets, timeout=2.0, max_workers=50):
+        return {
+            "targets": targets,
+            "total_checked": 1,
+            "stale_count": 1,
+            "fresh_count": 0,
+            "results": [
+                {
+                    "domain": "nonexistent.invalid.domain.tld",
+                    "A": [],
+                    "AAAA": [],
+                    "CNAME": None,
+                    "stale": True,
+                    "stale_reasons": ["No DNS records resolved (NXDOMAIN or SERVFAIL)"],
+                }
+            ],
+            "stale_results": [
+                {
+                    "domain": "nonexistent.invalid.domain.tld",
+                    "A": [],
+                    "AAAA": [],
+                    "CNAME": None,
+                    "stale": True,
+                    "stale_reasons": ["No DNS records resolved (NXDOMAIN or SERVFAIL)"],
+                }
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_stale", mock_run_stale)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "stale",
+            "--target",
+            "nonexistent.invalid.domain.tld",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "stale_count" in result.output
+    assert "stale_results" in result.output
+
+
+def test_stale_offline_target_markdown(monkeypatch) -> None:
+    def mock_run_stale(targets, timeout=2.0, max_workers=50):
+        return {
+            "targets": targets,
+            "total_checked": 1,
+            "stale_count": 1,
+            "fresh_count": 0,
+            "results": [
+                {
+                    "domain": "nonexistent.invalid.domain.tld",
+                    "A": [],
+                    "AAAA": [],
+                    "CNAME": None,
+                    "stale": True,
+                    "stale_reasons": ["No DNS records resolved (NXDOMAIN or SERVFAIL)"],
+                }
+            ],
+            "stale_results": [
+                {
+                    "domain": "nonexistent.invalid.domain.tld",
+                    "A": [],
+                    "AAAA": [],
+                    "CNAME": None,
+                    "stale": True,
+                    "stale_reasons": ["No DNS records resolved (NXDOMAIN or SERVFAIL)"],
+                }
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_stale", mock_run_stale)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "stale",
+            "--target",
+            "nonexistent.invalid.domain.tld",
+            "--format",
+            "markdown",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Stale DNS Record Detection Report" in result.output
+    assert "nonexistent.invalid.domain.tld" in result.output
+
+
+def test_stale_url_target(monkeypatch) -> None:
+    """Test that URL targets are normalized to bare domains."""
+    captured = {}
+
+    def mock_run_stale(targets, timeout=2.0, max_workers=50):
+        captured["targets"] = targets
+        return {
+            "targets": targets,
+            "total_checked": 1,
+            "stale_count": 0,
+            "fresh_count": 1,
+            "results": [
+                {
+                    "domain": "example.com",
+                    "A": ["1.1.1.1"],
+                    "AAAA": [],
+                    "CNAME": None,
+                    "stale": False,
+                    "stale_reasons": [],
+                }
+            ],
+            "stale_results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_stale", mock_run_stale)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "stale",
+            "--target",
+            "https://example.com/path",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert captured["targets"] == ["https://example.com/path"]
+
+
+def test_stale_multiple_targets(monkeypatch) -> None:
+    """Test multiple --target options."""
+    captured = {}
+
+    def mock_run_stale(targets, timeout=2.0, max_workers=50):
+        captured["targets"] = targets
+        return {
+            "targets": targets,
+            "total_checked": len(targets),
+            "stale_count": 0,
+            "fresh_count": len(targets),
+            "results": [
+                {"domain": t, "A": ["1.1.1.1"], "AAAA": [], "CNAME": None, "stale": False, "stale_reasons": []}
+                for t in targets
+            ],
+            "stale_results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_stale", mock_run_stale)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "stale",
+            "--target",
+            "example.com",
+            "--target",
+            "google.com",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert len(captured["targets"]) == 2
+    assert "example.com" in captured["targets"]
+    assert "google.com" in captured["targets"]
+
+
+def test_stale_file_option(tmp_path, monkeypatch) -> None:
+    """Test --file option for reading domains from file."""
+    domain_file = tmp_path / "domains.txt"
+    domain_file.write_text("example.com\ngoogle.com\n", encoding="utf-8")
+
+    captured = {}
+
+    def mock_run_stale(targets, timeout=2.0, max_workers=50):
+        captured["targets"] = targets
+        return {
+            "targets": targets,
+            "total_checked": len(targets),
+            "stale_count": 0,
+            "fresh_count": len(targets),
+            "results": [
+                {"domain": t, "A": ["1.1.1.1"], "AAAA": [], "CNAME": None, "stale": False, "stale_reasons": []}
+                for t in targets
+            ],
+            "stale_results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_stale", mock_run_stale)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "stale",
+            "--file",
+            str(domain_file),
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert len(captured["targets"]) == 2
+    assert "example.com" in captured["targets"]
+    assert "google.com" in captured["targets"]
+
+
+def test_stale_timeout_option(monkeypatch) -> None:
+    """Test --timeout option pass-through."""
+    captured = {}
+
+    def mock_run_stale(targets, timeout=2.0, max_workers=50):
+        captured["timeout"] = timeout
+        return {
+            "targets": targets,
+            "total_checked": 1,
+            "stale_count": 0,
+            "fresh_count": 1,
+            "results": [
+                {"domain": "example.com", "A": ["1.1.1.1"], "AAAA": [], "CNAME": None, "stale": False, "stale_reasons": []}
+            ],
+            "stale_results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_stale", mock_run_stale)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "stale",
+            "--target",
+            "example.com",
+            "--timeout",
+            "5.0",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert captured["timeout"] == 5.0
+
+
+def test_stale_workers_option(monkeypatch) -> None:
+    """Test --workers option pass-through."""
+    captured = {}
+
+    def mock_run_stale(targets, timeout=2.0, max_workers=50):
+        captured["max_workers"] = max_workers
+        return {
+            "targets": targets,
+            "total_checked": 1,
+            "stale_count": 0,
+            "fresh_count": 1,
+            "results": [
+                {"domain": "example.com", "A": ["1.1.1.1"], "AAAA": [], "CNAME": None, "stale": False, "stale_reasons": []}
+            ],
+            "stale_results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_stale", mock_run_stale)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "stale",
+            "--target",
+            "example.com",
+            "--workers",
+            "100",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert captured["max_workers"] == 100
+
+
+def test_stale_out_option_json(tmp_path, monkeypatch) -> None:
+    """Test --out option writing JSON to file."""
+    def mock_run_stale(targets, timeout=2.0, max_workers=50):
+        return {
+            "targets": targets,
+            "total_checked": 1,
+            "stale_count": 0,
+            "fresh_count": 1,
+            "results": [
+                {"domain": "example.com", "A": ["1.1.1.1"], "AAAA": [], "CNAME": None, "stale": False, "stale_reasons": []}
+            ],
+            "stale_results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_stale", mock_run_stale)
+
+    out_file = tmp_path / "report.json"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "stale",
+            "--target",
+            "example.com",
+            "--format",
+            "json",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert out_file.exists()
+    content = out_file.read_text(encoding="utf-8")
+    assert "stale_count" in content
+    assert "Report written to" in result.output
+
+
+def test_stale_out_option_markdown(tmp_path, monkeypatch) -> None:
+    """Test --out option writing Markdown to file."""
+    def mock_run_stale(targets, timeout=2.0, max_workers=50):
+        return {
+            "targets": targets,
+            "total_checked": 1,
+            "stale_count": 0,
+            "fresh_count": 1,
+            "results": [
+                {"domain": "example.com", "A": ["1.1.1.1"], "AAAA": [], "CNAME": None, "stale": False, "stale_reasons": []}
+            ],
+            "stale_results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_stale", mock_run_stale)
+
+    out_file = tmp_path / "report.md"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "stale",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert out_file.exists()
+    content = out_file.read_text(encoding="utf-8")
+    assert "Stale DNS Record Detection Report" in content
+    assert "Report written to" in result.output
+
+
+def test_stale_default_format_is_json(monkeypatch) -> None:
+    """Test that default format is JSON when --format not specified."""
+    def mock_run_stale(targets, timeout=2.0, max_workers=50):
+        return {
+            "targets": targets,
+            "total_checked": 1,
+            "stale_count": 0,
+            "fresh_count": 1,
+            "results": [
+                {"domain": "example.com", "A": ["1.1.1.1"], "AAAA": [], "CNAME": None, "stale": False, "stale_reasons": []}
+            ],
+            "stale_results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_stale", mock_run_stale)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["stale", "--target", "example.com"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert "stale_count" in parsed

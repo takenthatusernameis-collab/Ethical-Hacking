@@ -196,6 +196,14 @@ from ethscan.nmap import (
     format_nmap_report_markdown,
     run_nmap,
 )
+from ethscan.stale import (
+    format_stale_report_json,
+    format_stale_report_markdown,
+    run_stale,
+    load_domains_from_file,
+    DEFAULT_TIMEOUT,
+    DEFAULT_MAX_WORKERS,
+)
 
 
 @click.group()
@@ -3092,6 +3100,75 @@ def nmap(input_file: str, fmt: str, out_path: Optional[str]) -> None:
         output = format_nmap_report_json(results)
     else:
         output = format_nmap_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    "targets",
+    multiple=True,
+    help="Target domain or URL to check for stale DNS records. Can be specified multiple times.",
+)
+@click.option(
+    "--file",
+    "target_file",
+    type=click.Path(exists=True, readable=True),
+    help="Path to a file containing domains (one per line).",
+)
+@click.option(
+    "--timeout",
+    default=DEFAULT_TIMEOUT,
+    type=float,
+    help="DNS resolution and TCP connect timeout in seconds.",
+)
+@click.option(
+    "--workers",
+    default=DEFAULT_MAX_WORKERS,
+    type=int,
+    help="Maximum concurrent workers for resolution.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def stale(
+    targets: tuple,
+    target_file: Optional[str],
+    timeout: float,
+    workers: int,
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Detect stale DNS records (A/AAAA/CNAME) pointing to deallocated or unresolvable IPs."""
+    all_targets: List[str] = list(targets)
+    if target_file:
+        all_targets.extend(load_domains_from_file(target_file))
+    if not all_targets:
+        click.echo("Error: At least one target must be provided via --target or --file", err=True)
+        return
+
+    results = run_stale(all_targets, timeout=timeout, max_workers=workers)
+
+    if fmt == "json":
+        output = format_stale_report_json(results)
+    else:
+        output = format_stale_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

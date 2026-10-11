@@ -1987,24 +1987,44 @@ Added a dedicated `nmap` command that parses Nmap XML scan output (`-oX` format)
 
 **Add a `--recursive` option to the `whois` command** for recursive WHOIS queries that follow referral servers extracted from each response across registrar tiers (building on the existing `--recursive/--no-recursive` and `--max-depth` that are already implemented — this would extend the recursion to follow cross-registrar referrals automatically).
 
-Alternative: Add a `stale` command to detect stale DNS records (A/AAAA/CNAME records pointing to deallocated or unresolvable IP addresses / dead cloud resources) using stdlib-only DNS resolution, with configurable timeout and concurrency.
-
 Alternative: Add a `radix` command for radix tree visualization of CIDR blocks (merging overlapping/supernetting adjacent networks).
 
-## Requirements
-- Pick one of the suggested features and implement it following the existing module conventions.
-- Add a new module under `ethscan/` with `run_*`, `format_*_report_json`, `format_*_report_markdown` (for new commands) or extend an existing module (for new options).
-- Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
-- Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
-- Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
+## Completed: `stale` command (Stale DNS record detection)
+
+The `stale` command detects stale DNS records (A/AAAA/CNAME records pointing to deallocated or unresolvable IP addresses / dead cloud resources) using stdlib-only DNS resolution, with configurable timeout and concurrency.
+
+### Added Files
+- `ethscan/stale.py` — Stale DNS detection module with:
+  - `_normalize_domain()` — extracts a bare domain from URL/bare targets
+  - `load_domains_from_file()` — reads domains from file (one per line, skips comments/empty)
+  - `resolve_a_records()` / `resolve_aaaa_records()` / `resolve_cname()` — stdlib DNS resolution
+  - `check_tcp_connect()` / `check_ip_reachable()` — TCP connectivity checks on common ports (80, 443, 22)
+  - `resolve_domain_all()` — resolves all record types and checks reachability
+  - `run_stale()` — public entry point: concurrent resolution with ThreadPoolExecutor, deduplicates targets
+  - `format_stale_report_json()` / `format_stale_report_markdown()` — output formatters
+- `tests/test_stale.py` — 33 unit tests: domain normalization, file loading, A/AAAA/CNAME resolution (success/failure), TCP connect checks, IP reachability, domain resolution with various stale conditions, concurrent runs with deduplication, JSON/Markdown formatters
+
+### Modified Files
+- `ethscan/cli.py` — registered `stale` command with `--target` (repeatable), `--file`, `--timeout`, `--workers`, `--format`, `--out`; imports `run_stale`, `load_domains_from_file`, `format_stale_report_json`, `format_stale_report_markdown`, `DEFAULT_TIMEOUT`, `DEFAULT_MAX_WORKERS` from `ethscan.stale`
+- `tests/test_cli.py` — 12 CLI integration tests: help, top-level listing, offline JSON/Markdown output, URL target normalization, multiple targets, file input, timeout/workers pass-through, `--out` (JSON/Markdown), default format
+- `README.md` — added stale DNS detection (`stale`) to the features list
+
+### Verification
+- `python -m pytest -q` -> 1772 passed, 1 skipped (1727 baseline + 45 new: 33 unit + 12 CLI)
+- `python -m ethscan --help` -> lists `stale` among the 31 commands
+- `python -m ethscan stale --help` -> shows all expected options (`--target`, `--file`, `--timeout`, `--workers`, `--format`, `--out`)
+- End-to-end JSON: `python -m ethscan stale --target example.com --format json --timeout 1.0` -> reports A/AAAA/CNAME records and stale status with reasons
+- End-to-end Markdown: `--format markdown` -> renders summary and tables with stale reasons
+- End-to-end file input: `python -m ethscan stale --file domains.txt --format json` -> reads domains from file
+- End-to-end `--out`: writes report to file
 
 ## Current state
-- All 31 commands implemented and wired up (including `nmap`).
+- All 32 commands implemented and wired up (including `nmap` and `stale`).
 - `vuln` now supports `--output-format [json|markdown|csv]` and `--format [json|markdown|csv]` (deprecated alias) for machine-readable CSV export of vulnerability findings.
 - `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv`.
 - `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, `--max-depth`.
 - `whois` now supports `--recursive/--no-recursive`, `--max-depth`, `--format json|markdown`, and `--out`.
 - `audit` now supports `--format json|markdown`, `--out`, `--min-length`, `--output-format csv`, `--sort`, and `--salt`/`--pepper`/`--algorithm`.
-- `report`, `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `dnssec`, `geo` (with `--recursive`, `--max-depth`), `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon`, `resolve`, `validate`, `radix` (with `--cidr-file`), `nmap` all implemented with JSON/Markdown output.
+- `report`, `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `dnssec`, `geo` (with `--recursive`, `--max-depth`), `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon`, `resolve`, `validate`, `radix` (with `--cidr-file`), `nmap`, `stale` all implemented with JSON/Markdown output.
 - Configuration file (`ethscan.yaml`) persists default options across commands.
-- Tests: 1727 passing (1 skipped).
+- Tests: 1772 passing (1 skipped).
