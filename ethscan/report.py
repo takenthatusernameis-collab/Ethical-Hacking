@@ -17,6 +17,7 @@ CSV_COLUMNS = [
     "entropy",
     "common",
     "patterns",
+    "too_short",
     "score",
     "verdict",
 ]
@@ -43,15 +44,30 @@ def run_report(
     timeout: float = 1.0,
     workers: int = 100,
     audit_file: Optional[str] = None,
+    min_length: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """Run a port scan and an optional password audit, returning combined report data."""
+    """Run a port scan and an optional password audit, returning combined report data.
+
+    Args:
+        target: Target host (URL or bare IP/hostname).
+        ports: Port specification ('common', 'all', or comma-separated list/ranges).
+        timeout: Connection timeout in seconds.
+        workers: Maximum concurrent workers.
+        audit_file: Optional path to a file with one password per line.
+        min_length: Optional minimum length threshold passed to the password audit.
+
+    Returns:
+        Combined report dict with ``scan`` and ``audit`` sections.
+    """
     port_list = _parse_ports(ports)
 
     scan_results = scan_ports(target, port_list, timeout=timeout, max_workers=workers)
     open_ports = [port for port, is_open in scan_results if is_open]
 
     passwords = _load_passwords(audit_file)
-    audit_results = audit_passwords(passwords) if passwords else []
+    audit_results = (
+        audit_passwords(passwords, min_length=min_length) if passwords else []
+    )
 
     return {
         "scan": {
@@ -62,6 +78,7 @@ def run_report(
         },
         "audit": {
             "passwords_audited": len(passwords),
+            "min_length": min_length,
             "results": [
                 {
                     "password": pwd,
@@ -69,6 +86,7 @@ def run_report(
                     "entropy": eval_data["entropy"],
                     "common": eval_data["common"],
                     "patterns": eval_data["patterns"],
+                    "too_short": eval_data.get("too_short", False),
                     "score": eval_data["score"],
                     "verdict": eval_data["verdict"],
                 }
@@ -105,14 +123,18 @@ def format_report_markdown(data: Dict[str, Any]) -> str:
     audit = data["audit"]
     lines.append("## Password Audit")
     lines.append(f"- **Passwords Audited:** {audit['passwords_audited']}")
+    if audit.get("min_length") is not None:
+        lines.append(f"- **Min Length:** {audit['min_length']}")
     lines.append("")
     if audit["results"]:
-        lines.append("| Password | Length | Entropy | Common | Patterns | Score | Verdict |")
-        lines.append("|----------|--------|---------|--------|----------|-------|---------|")
+        lines.append("| Password | Length | Entropy | Common | Patterns | Too Short | Score | Verdict |")
+        lines.append("|----------|--------|---------|--------|----------|-----------|-------|---------|")
         for result in audit["results"]:
+            too_short = "Yes" if result.get("too_short", False) else "No"
             lines.append(
                 f"| {result['password']!r} | {result['length']} | {result['entropy']} | "
                 f"{'Yes' if result['common'] else 'No'} | {'Yes' if result['patterns'] else 'No'} | "
+                f"{too_short} | "
                 f"{result['score']} | {result['verdict']} |"
             )
     else:
@@ -161,6 +183,7 @@ def format_report_csv(data: Dict[str, Any]) -> str:
                 result["entropy"],
                 "true" if result["common"] else "false",
                 "true" if result["patterns"] else "false",
+                "true" if result.get("too_short", False) else "false",
                 result["score"],
                 result["verdict"],
             ]

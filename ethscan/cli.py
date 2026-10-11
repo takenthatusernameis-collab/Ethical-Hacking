@@ -419,6 +419,13 @@ def hash(file: str, algorithms: tuple, fmt: str, out_path: str) -> None:
     help="Path to a file containing one password per line for password audit",
 )
 @click.option(
+    "--min-length",
+    "min_length",
+    type=int,
+    default=None,
+    help="Flag passwords shorter than this length as too short (passed to the embedded audit).",
+)
+@click.option(
     "--output-format",
     "output_fmt",
     type=click.Choice(["json", "markdown", "csv"]),
@@ -445,6 +452,7 @@ def report(
     timeout: float,
     workers: int,
     audit_file: str,
+    min_length: Optional[int],
     output_fmt: Optional[str],
     fmt: str,
     out_path: str,
@@ -456,6 +464,7 @@ def report(
         timeout=timeout,
         workers=workers,
         audit_file=audit_file,
+        min_length=min_length,
     )
 
     # --output-format takes precedence over the deprecated --format alias

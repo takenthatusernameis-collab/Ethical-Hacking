@@ -115,6 +115,7 @@ def test_format_report_csv_header() -> None:
         "entropy",
         "common",
         "patterns",
+        "too_short",
         "score",
         "verdict",
     ]
@@ -138,6 +139,7 @@ def test_format_report_csv_scan_and_audit_rows() -> None:
                     "entropy": 2.5,
                     "common": False,
                     "patterns": True,
+                    "too_short": False,
                     "score": 3.0,
                     "verdict": "weak",
                 }
@@ -146,16 +148,17 @@ def test_format_report_csv_scan_and_audit_rows() -> None:
     }
     rows = list(csv.reader(io.StringIO(format_report_csv(data))))
     assert len(rows) == 4
-    assert rows[1] == ["scan", "80", "true", "", "", "", "", "", "", ""]
-    assert rows[2] == ["scan", "443", "false", "", "", "", "", "", "", ""]
+    assert rows[1] == ["scan", "80", "true", "", "", "", "", "", "", "", ""]
+    assert rows[2] == ["scan", "443", "false", "", "", "", "", "", "", "", ""]
     assert rows[3][0] == "audit"
     assert rows[3][3] == "secret"
     assert rows[3][4] == "6"
     assert rows[3][5] == "2.5"
     assert rows[3][6] == "false"
     assert rows[3][7] == "true"
-    assert rows[3][8] == "3.0"
-    assert rows[3][9] == "weak"
+    assert rows[3][8] == "false"
+    assert rows[3][9] == "3.0"
+    assert rows[3][10] == "weak"
 
 
 def test_format_report_csv_escapes_special_characters() -> None:
