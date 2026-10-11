@@ -137,6 +137,11 @@ from ethscan.mac import (
     format_mac_report_markdown,
     run_mac,
 )
+from ethscan.hash import (
+    format_hash_report_json,
+    format_hash_report_markdown,
+    run_hash,
+)
 from ethscan.subdomains import load_subdomain_wordlist
 from ethscan.headers import (
     format_headers_report_json,
@@ -303,6 +308,59 @@ def audit(file: str, fmt: str, out_path: str) -> None:
         output = format_audit_report_json(passwords, results)
     else:
         output = format_audit_report_markdown(passwords, results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--file",
+    help="Path to a file containing one password per line. If omitted, reads stdin.",
+)
+@click.option(
+    "--algorithm",
+    "algorithms",
+    multiple=True,
+    type=click.Choice(["md5", "sha1", "sha256", "sha512", "ntlm"], case_sensitive=False),
+    help="Hash algorithm(s) to use. Can be specified multiple times. Default: all algorithms.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def hash(file: str, algorithms: tuple, fmt: str, out_path: str) -> None:
+    """Generate password hashes for password-audit workflows."""
+    if file:
+        with open(file, "r", encoding="utf-8") as handle:
+            passwords = [line.strip() for line in handle if line.strip()]
+    else:
+        passwords = [line.strip() for line in click.get_text_stream("stdin") if line.strip()]
+
+    if not passwords:
+        click.echo("No passwords provided.")
+        return
+
+    algo_list = list(algorithms) if algorithms else None
+    results = run_hash(passwords, algorithms=algo_list)
+
+    if fmt == "json":
+        output = format_hash_report_json(results)
+    else:
+        output = format_hash_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

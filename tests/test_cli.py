@@ -9811,3 +9811,208 @@ def test_cidr_out_option_markdown(tmp_path) -> None:
     assert out_file.exists()
     content = out_file.read_text()
     assert "CIDR Network Calculator Report" in content
+
+
+# hash command tests
+# ---------------------------------------------------------------------------
+
+
+def test_hash_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["hash", "--help"])
+    assert result.exit_code == 0
+    assert "--file" in result.output
+    assert "--algorithm" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "md5" in result.output
+    assert "sha1" in result.output
+    assert "sha256" in result.output
+    assert "sha512" in result.output
+    assert "ntlm" in result.output
+
+
+def test_cli_help_lists_hash() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "hash" in result.output
+
+
+def test_hash_stdin_json(monkeypatch) -> None:
+    def mock_run_hash(passwords, algorithms=None):
+        return {
+            "passwords_hashed": len(passwords),
+            "algorithms": ["MD5", "SHA-256"],
+            "results": [
+                {"password": p, "hashes": {"MD5": "md5hash", "SHA-256": "sha256hash"}}
+                for p in passwords
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_hash", mock_run_hash)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--format",
+            "json",
+        ],
+        input="password\n123456\n",
+    )
+    assert result.exit_code == 0
+    assert "passwords_hashed" in result.output
+    assert "2" in result.output
+
+
+def test_hash_stdin_markdown(monkeypatch) -> None:
+    def mock_run_hash(passwords, algorithms=None):
+        return {
+            "passwords_hashed": len(passwords),
+            "algorithms": ["MD5"],
+            "results": [{"password": p, "hashes": {"MD5": "md5hash"}} for p in passwords],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_hash", mock_run_hash)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--format",
+            "markdown",
+        ],
+        input="password\n",
+    )
+    assert result.exit_code == 0
+    assert "Password Hash Report" in result.output
+    assert "Passwords Hashed" in result.output
+
+
+def test_hash_file_option_json(tmp_path, monkeypatch) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n123456\n")
+
+    def mock_run_hash(passwords, algorithms=None):
+        return {
+            "passwords_hashed": len(passwords),
+            "algorithms": ["MD5"],
+            "results": [{"password": p, "hashes": {"MD5": "md5hash"}} for p in passwords],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_hash", mock_run_hash)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--file",
+            str(password_file),
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "passwords_hashed" in result.output
+
+
+def test_hash_algorithm_option_json(monkeypatch) -> None:
+    captured = {}
+
+    def mock_run_hash(passwords, algorithms=None):
+        captured["algorithms"] = algorithms
+        return {
+            "passwords_hashed": len(passwords),
+            "algorithms": ["SHA-256", "NTLM"],
+            "results": [
+                {"password": p, "hashes": {"SHA-256": "sha256hash", "NTLM": "ntlmhash"}}
+                for p in passwords
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_hash", mock_run_hash)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--algorithm",
+            "sha256",
+            "--algorithm",
+            "ntlm",
+            "--format",
+            "json",
+        ],
+        input="password\n",
+    )
+    assert result.exit_code == 0
+    assert captured["algorithms"] == ["sha256", "ntlm"]
+    assert "SHA-256" in result.output
+    assert "NTLM" in result.output
+
+
+def test_hash_out_option_json(tmp_path, monkeypatch) -> None:
+    out_file = tmp_path / "hash.json"
+
+    def mock_run_hash(passwords, algorithms=None):
+        return {
+            "passwords_hashed": 1,
+            "algorithms": ["MD5"],
+            "results": [{"password": "password", "hashes": {"MD5": "md5hash"}}],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_hash", mock_run_hash)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--format",
+            "json",
+            "--out",
+            str(out_file),
+        ],
+        input="password\n",
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "md5hash" in content
+
+
+def test_hash_out_option_markdown(tmp_path, monkeypatch) -> None:
+    out_file = tmp_path / "hash.md"
+
+    def mock_run_hash(passwords, algorithms=None):
+        return {
+            "passwords_hashed": 1,
+            "algorithms": ["MD5"],
+            "results": [{"password": "password", "hashes": {"MD5": "md5hash"}}],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_hash", mock_run_hash)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+        ],
+        input="password\n",
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "Password Hash Report" in content
