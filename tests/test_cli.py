@@ -14668,3 +14668,389 @@ def test_ssh_default_format_is_json(monkeypatch) -> None:
     assert result.exit_code == 0
     parsed = json.loads(result.output)
     assert "curve25519-sha256" in parsed["kex_algorithms"]["supported"]
+
+
+# ---------------------------------------------------------------------------
+# s3 command CLI integration tests
+# ---------------------------------------------------------------------------
+
+
+def test_s3_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["s3", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--wordlist" in result.output
+    assert "--region" in result.output
+    assert "--timeout" in result.output
+    assert "--workers" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_s3() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "s3" in result.output
+
+
+def test_s3_offline_target_json(monkeypatch) -> None:
+    def mock_run_s3(
+        target, wordlist=None, region=None, timeout=5.0, max_workers=20
+    ):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "region": region or "us-east-1",
+            "timeout": timeout,
+            "workers": max_workers,
+            "wordlist_used": wordlist is not None,
+            "candidates_tested": 3,
+            "regions_checked": [region or "us-east-1"],
+            "results": [],
+            "public_buckets": [],
+            "private_buckets": [],
+            "existing_buckets": [],
+            "notes": ["offline target"],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_s3", mock_run_s3)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["s3", "--target", "example.com", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["target"] == "example.com"
+    assert parsed["candidates_tested"] == 3
+    assert parsed["public_buckets"] == []
+
+
+def test_s3_offline_target_markdown(monkeypatch) -> None:
+    def mock_run_s3(
+        target, wordlist=None, region=None, timeout=5.0, max_workers=20
+    ):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "region": region or "us-east-1",
+            "timeout": timeout,
+            "workers": max_workers,
+            "wordlist_used": False,
+            "candidates_tested": 0,
+            "regions_checked": [],
+            "results": [],
+            "public_buckets": [],
+            "private_buckets": [],
+            "existing_buckets": [],
+            "notes": ["No bucket candidates."],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_s3", mock_run_s3)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["s3", "--target", "example.com", "--format", "markdown"],
+    )
+    assert result.exit_code == 0
+    assert "S3 Bucket Enumeration Report" in result.output
+    assert "example.com" in result.output
+
+
+def test_s3_wordlist_option(tmp_path, monkeypatch) -> None:
+    wordlist_file = tmp_path / "buckets.txt"
+    wordlist_file.write_text("mybucket\nother-bucket\n")
+
+    captured = {}
+
+    def mock_run_s3(
+        target, wordlist=None, region=None, timeout=5.0, max_workers=20
+    ):
+        captured["wordlist"] = wordlist
+        captured["target"] = target
+        return {
+            "target": target,
+            "domain": "example.com",
+            "region": region or "us-east-1",
+            "timeout": timeout,
+            "workers": max_workers,
+            "wordlist_used": wordlist is not None,
+            "candidates_tested": len(wordlist) if wordlist else 0,
+            "regions_checked": [region or "us-east-1"],
+            "results": [],
+            "public_buckets": [],
+            "private_buckets": [],
+            "existing_buckets": [],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_s3", mock_run_s3)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["s3", "--target", "example.com", "--wordlist", str(wordlist_file)],
+    )
+    assert result.exit_code == 0
+    assert captured["wordlist"] == ["mybucket", "other-bucket"]
+
+
+def test_s3_region_option(monkeypatch) -> None:
+    captured = {}
+
+    def mock_run_s3(
+        target, wordlist=None, region=None, timeout=5.0, max_workers=20
+    ):
+        captured["region"] = region
+        captured["target"] = target
+        return {
+            "target": target,
+            "domain": "example.com",
+            "region": region or "us-east-1",
+            "timeout": timeout,
+            "workers": max_workers,
+            "wordlist_used": False,
+            "candidates_tested": 1,
+            "regions_checked": [region or "us-east-1"],
+            "results": [],
+            "public_buckets": [],
+            "private_buckets": [],
+            "existing_buckets": [],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_s3", mock_run_s3)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["s3", "--target", "example.com", "--region", "eu-west-1"])
+    assert result.exit_code == 0
+    assert captured["region"] == "eu-west-1"
+
+
+def test_s3_timeout_workers_pass_through(monkeypatch) -> None:
+    captured = {}
+
+    def mock_run_s3(
+        target, wordlist=None, region=None, timeout=5.0, max_workers=20
+    ):
+        captured["timeout"] = timeout
+        captured["workers"] = max_workers
+        captured["target"] = target
+        captured["region"] = region
+        return {
+            "target": target,
+            "domain": "example.com",
+            "region": region or "us-east-1",
+            "timeout": timeout,
+            "workers": max_workers,
+            "wordlist_used": False,
+            "candidates_tested": 1,
+            "regions_checked": [region or "us-east-1"],
+            "results": [],
+            "public_buckets": [],
+            "private_buckets": [],
+            "existing_buckets": [],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_s3", mock_run_s3)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "s3",
+            "--target",
+            "example.com",
+            "--timeout",
+            "2.5",
+            "--workers",
+            "15",
+            "--region",
+            "us-west-2",
+        ],
+    )
+    assert result.exit_code == 0
+    assert captured["timeout"] == 2.5
+    assert captured["workers"] == 15
+    assert captured["region"] == "us-west-2"
+
+
+def test_s3_region_all_option(monkeypatch) -> None:
+    captured = {}
+
+    def mock_run_s3(
+        target, wordlist=None, region=None, timeout=5.0, max_workers=20
+    ):
+        captured["region"] = region
+        return {
+            "target": target,
+            "domain": "example.com",
+            "region": region or "us-east-1",
+            "timeout": timeout,
+            "workers": max_workers,
+            "wordlist_used": False,
+            "candidates_tested": 1,
+            "regions_checked": [],
+            "results": [],
+            "public_buckets": [],
+            "private_buckets": [],
+            "existing_buckets": [],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_s3", mock_run_s3)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["s3", "--target", "example.com", "--region", "all"])
+    assert result.exit_code == 0
+    assert captured["region"] == "all"
+
+
+def test_s3_out_option_json(tmp_path, monkeypatch) -> None:
+    def mock_run_s3(
+        target, wordlist=None, region=None, timeout=5.0, max_workers=20
+    ):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "region": region or "us-east-1",
+            "timeout": timeout,
+            "workers": max_workers,
+            "wordlist_used": False,
+            "candidates_tested": 1,
+            "regions_checked": [region or "us-east-1"],
+            "results": [],
+            "public_buckets": [],
+            "private_buckets": [],
+            "existing_buckets": [],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_s3", mock_run_s3)
+
+    out_file = tmp_path / "s3_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "s3",
+            "--target",
+            "example.com",
+            "--format",
+            "json",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written to" in result.output
+    assert out_file.exists()
+    content = out_file.read_text(encoding="utf-8")
+    assert "example.com" in content
+
+
+def test_s3_out_option_markdown(tmp_path, monkeypatch) -> None:
+    def mock_run_s3(
+        target, wordlist=None, region=None, timeout=5.0, max_workers=20
+    ):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "region": region or "us-east-1",
+            "timeout": timeout,
+            "workers": max_workers,
+            "wordlist_used": False,
+            "candidates_tested": 1,
+            "regions_checked": [region or "us-east-1"],
+            "results": [],
+            "public_buckets": [],
+            "private_buckets": [],
+            "existing_buckets": [],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_s3", mock_run_s3)
+
+    out_file = tmp_path / "s3_report.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "s3",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written to" in result.output
+    assert out_file.exists()
+    content = out_file.read_text(encoding="utf-8")
+    assert "S3 Bucket Enumeration Report" in content
+
+
+def test_s3_url_target(monkeypatch) -> None:
+    captured = {}
+
+    def mock_run_s3(
+        target, wordlist=None, region=None, timeout=5.0, max_workers=20
+    ):
+        captured["target"] = target
+        return {
+            "target": target,
+            "domain": "example.com",
+            "region": region or "us-east-1",
+            "timeout": timeout,
+            "workers": max_workers,
+            "wordlist_used": False,
+            "candidates_tested": 1,
+            "regions_checked": [region or "us-east-1"],
+            "results": [],
+            "public_buckets": [],
+            "private_buckets": [],
+            "existing_buckets": [],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_s3", mock_run_s3)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["s3", "--target", "https://example.com/path"])
+    assert result.exit_code == 0
+    assert captured["target"] == "https://example.com/path"
+
+
+def test_s3_default_format_is_json(monkeypatch) -> None:
+    def mock_run_s3(
+        target, wordlist=None, region=None, timeout=5.0, max_workers=20
+    ):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "region": region or "us-east-1",
+            "timeout": timeout,
+            "workers": max_workers,
+            "wordlist_used": False,
+            "candidates_tested": 1,
+            "regions_checked": [region or "us-east-1"],
+            "results": [],
+            "public_buckets": [],
+            "private_buckets": [],
+            "existing_buckets": [],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_s3", mock_run_s3)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["s3", "--target", "example.com"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["target"] == "example.com"

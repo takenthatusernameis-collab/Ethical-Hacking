@@ -45,6 +45,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - **Nmap XML parser: `nmap` command to parse Nmap XML scan output (`-oX`) and cross-reference detected service versions against the built-in vulnerability database, producing a consolidated report of matched CVEs in JSON or Markdown** (implemented)
 - **Stale DNS detection: `stale` command to detect stale DNS records (A/AAAA/CNAME) pointing to deallocated or unresolvable IPs/dead cloud resources, with configurable timeout, concurrency, and JSON/Markdown output** (implemented)
 - **SSH security assessment: `ssh` command to enumerate supported key exchange algorithms, ciphers, MACs, and host key types on a target SSH server; check for weak/deprecated algorithms (e.g., `diffie-hellman-group1-sha1`, `arcfour`, `3des-cbc`, `ssh-rsa`); report host key fingerprint and algorithm; supports `--target` (host:port), `--timeout`, `--format [json|markdown]`, `--out`; stdlib-only with optional `paramiko` for host key details** (implemented)
+- **AWS S3 bucket enumeration: `s3` command to detect publicly accessible S3 buckets via HTTP probing of generated candidate bucket names (from the target domain with optional `--wordlist`); supports `--region` (including `all`), `--timeout`, `--workers`, `--format [json|markdown]`, and `--out`** (implemented)
 
 ## Configuration
 

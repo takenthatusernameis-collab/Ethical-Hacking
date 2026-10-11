@@ -209,6 +209,11 @@ from ethscan.ssh import (
     format_ssh_report_markdown,
     run_ssh,
 )
+from ethscan.s3 import (
+    format_s3_report_json,
+    format_s3_report_markdown,
+    run_s3,
+)
 
 
 @click.group()
@@ -3232,6 +3237,84 @@ def ssh(target: str, port: Optional[int], timeout: float, fmt: str, out_path: Op
         output = format_ssh_report_json(results)
     else:
         output = format_ssh_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target domain or URL (e.g. example.com or https://example.com)",
+)
+@click.option(
+    "--wordlist",
+    "wordlist_path",
+    type=click.Path(exists=True, readable=True),
+    help="Path to a wordlist file (one bucket name per line). Uses built-in "
+    "default derivations if omitted.",
+)
+@click.option(
+    "--region",
+    "region",
+    default="us-east-1",
+    help="AWS region to probe (e.g. us-east-1). Use 'all' to check every "
+    "common S3 region (default: us-east-1).",
+)
+@click.option(
+    "--timeout",
+    default=5.0,
+    type=float,
+    help="HTTP request timeout in seconds (default: 5.0)",
+)
+@click.option(
+    "--workers",
+    default=20,
+    type=int,
+    help="Maximum concurrent HTTP probes (default: 20)",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def s3(
+    target: str,
+    wordlist_path: Optional[str],
+    region: str,
+    timeout: float,
+    workers: int,
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Enumerate AWS S3 buckets for TARGET and detect publicly accessible ones."""
+    wordlist = load_subdomain_wordlist(wordlist_path) if wordlist_path else None
+
+    results = run_s3(
+        target,
+        wordlist=wordlist,
+        region=region,
+        timeout=timeout,
+        max_workers=workers,
+    )
+
+    if fmt == "json":
+        output = format_s3_report_json(results)
+    else:
+        output = format_s3_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

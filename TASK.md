@@ -2125,3 +2125,60 @@ Alternative: Add a `jwt` command to decode and analyze JWT tokens (header, claim
 - Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
 - Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
 - Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
+
+## Completed: `s3` command (AWS S3 bucket enumeration)
+
+Added a `s3` command that detects publicly accessible AWS S3 buckets by generating candidate bucket names from a target domain (with optional wordlist) and probing each candidate via HTTP (virtual-hosted-style S3 REST endpoint) plus an informational DNS resolution of the endpoint. Supports `--region` (including `all` to check every common AWS region), `--timeout`, `--workers`, `--format [json|markdown]`, `--out`, and `--wordlist`. Stdlib-only (`urllib`/`socket`).
+
+### Added Files
+- `ethscan/s3.py` — S3 enumeration module with:
+  - `_normalize_target()` — extracts a bare domain from URL/bare targets (reuses the `https://`-prefix + `urlparse` pattern from `subdomains`/`subtake`).
+  - `_build_s3_url(bucket_name, region)` — builds the virtual-hosted-style S3 URL (`s3.amazonaws.com` for `us-east-1`/empty, `s3.<region>.amazonaws.com` otherwise).
+  - `_resolve_s3_endpoint()` — DNS resolution of the S3 endpoint (informational signal; stdlib `socket.gethostbyname`).
+  - `_build_bucket_candidates(target, wordlist)` — generates candidate bucket names: dash-delimited domain, apex label, base domain, plus `<base>-<word>` / `<word>-<base>` pairs from `DEFAULT_BUCKET_NAMES`; optional `--wordlist` items are added as standalone, prefixed, and suffixed candidates. Case-insensitive dedup preserving original case.
+  - `check_bucket_public(bucket_name, region, timeout)` — public entry point that performs DNS resolution + HTTP GET on the S3 endpoint and classifies the result: 200 → exists+public, 403 → exists+private, 404 → does-not-exist, 400 → invalid name, URL/timeout errors → unknown with `error` set. Graceful handling of `urllib.error.HTTPError`, `urllib.error.URLError`, and `socket.timeout`.
+  - `run_s3(target, wordlist, region, timeout, max_workers)` — public entry point: normalizes target, builds candidates, concurrently probes each candidate × region (ThreadPoolExecutor), aggregates `public_buckets` / `private_buckets` / `existing_buckets`, supports `region="all"` (checks every `S3_REGIONS` entry), collects notes (e.g. multi-region notice), returns structured results.
+  - `format_s3_report_json()` — JSON output via `json.dumps(..., default=str)`.
+  - `format_s3_report_markdown()` — Markdown with summary (target, region, candidates tested, counts), a Public Buckets table, an All Bucket Results table (with pipe escaping), and a Notes section.
+  - Module constants: `DEFAULT_TIMEOUT=5.0`, `DEFAULT_MAX_WORKERS=20`, `DEFAULT_REGION="us-east-1"`, `S3_REGIONS` (20 common region list), `DEFAULT_BUCKET_NAMES` (38 common bucket-name components).
+- `tests/test_s3.py` — 41 unit tests: `_normalize_target` (bare/URL/uppercase/port/whitespace/empty), `_build_s3_url` (us-east-1/other/empty region), `_build_bucket_candidates` (basic/dedup/wordlist/empty/www-stripped), `_resolve_s3_endpoint` (success/failure via gethostbyname mock), `check_bucket_public` (200/403/404/400/URLError/timeout + field checks via urlopen mock), `run_s3` (default region/public detection/private detection/wordlist/region-all/empty-target/sorted/pass-through/timeout-workers/region-normalization), JSON formatter (basic/with-public), Markdown formatter (full/no-public/no-results/pipe-escaping/all-regions).
+
+### Modified Files
+- `ethscan/cli.py` — added `from ethscan.s3 import (format_s3_report_json, format_s3_report_markdown, run_s3)` import; registered `s3` command with `--target` (required), `--wordlist`, `--region` (default `us-east-1`), `--timeout` (default 5.0), `--workers` (default 20), `--format [json|markdown]` (default json), `--out`; the `--wordlist` path is loaded via the shared `load_subdomain_wordlist` helper from `ethscan.subdomains` (matching `subtake`/`dnsbrute`).
+- `tests/test_cli.py` — 12 CLI integration tests: `s3` help, top-level help listing, offline json/markdown output (monkeypatched `run_s3`), `--wordlist` option (verifies candidates passed through), `--region` option, `--timeout`/`--workers` pass-through, `--region all`, `--out` (json and markdown), URL target normalization, default-format-is-JSON.
+- `README.md` — added AWS S3 bucket enumeration (`s3`) to the features list.
+
+### Verification
+- `python -m pytest -q` -> 1875 passed, 1 skipped (1822 baseline + 53 new: 41 unit + 12 CLI).
+- `python -m ethscan --help` -> lists `s3` among the commands.
+- `python -m ethscan s3 --help` -> shows `--target`, `--wordlist`, `--region`, `--timeout`, `--workers`, `--format`, `--out`.
+- End-to-end (mocked HTTP): `check_bucket_public` correctly classifies 200 (public), 403 (private/exists), 404 (no bucket), 400 (invalid name), and connection/timeout errors.
+- `run_s3` with `region="all"` probes every region in `S3_REGIONS`; with a wordlist, candidates include standalone/word-prefix/word-suffix variants.
+- Markdown output renders summary, public-bucket table, all-results table, and notes with pipe escaping.
+
+## Current state
+- All 34 commands implemented and wired up (including `s3`).
+- `s3` supports `--target`, `--wordlist`, `--region` (incl. `all`), `--timeout`, `--workers`, `--format [json|markdown]`, `--out` for AWS S3 bucket enumeration with public-bucket detection via HTTP + DNS.
+- `scan`/`service`/`audit`/`report`/`brute`/`vuln`/`cve` support `--output-format [json|markdown|csv]` (with `--format` deprecated alias).
+- `subdomains`/`dnsbrute` support `--resolver`, `--recursive`, `--max-depth`.
+- `whois` supports `--recursive/--no-recursive`, `--max-depth`, `--format json|markdown`, `--out`.
+- `audit` supports `--format json|markdown`, `--out`, `--min-length`, `--output-format csv`, `--sort`, `--salt`/`--pepper`/`--algorithm`.
+- `report` supports `--target`, `--ports`, `--profile`, `--timeout`, `--workers`, `--audit-file`, `--min-length`, `--salt`/`--pepper`/`--algorithm`, `--open-only/--no-open-only`, `--sort`, `--output-format [json|markdown|csv]`, `--out`.
+- `vuln` supports `--severity`, `--min-severity`, `--recursive/--no-recursive`, `--max-depth`, `--salt`/`--pepper`/`--algorithm`, `--output-format [json|markdown|csv]`, `--out`.
+- Configuration file (`ethscan.yaml`) persists default options across commands via a `--config` group option and a `config` subcommand.
+- Tests: 1875 passing (1 skipped).
+
+## Suggested next task
+
+**Add `--output-format csv` output to the `subtake` command** so subdomain-takeover findings can be exported as machine-readable CSV (parallel to the `--output-format [json|markdown|csv]` option already on the `scan`, `service`, `audit`, `report`, `brute`, `vuln`, and `cve` commands). Implement `format_subtake_report_csv(data)` in `ethscan/subtake.py` emitting a header row + one row per candidate (columns: `subdomain,hostname,cname,a_records,aaaa_records,vulnerable,service,fingerprint,http_confirmed`), register `--output-format [json|markdown|csv]` (keeping `--format` as a deprecated alias) on the `subtake` CLI command, and add unit tests (`tests/test_subtake.py`) plus CLI integration tests (`tests/test_cli.py`).
+
+Alternative: Add `--output-format csv` to the `nmap` command for spreadsheet-compatible CVE finding export (header: `host,addr,port,state,service,product,version,cve_id,severity,score,title`).
+
+Alternative: Add `--output-format csv` to the `validate` command for spreadsheet-compatible port/CIDR validation results (header: `type,spec,valid,detail`).
+
+## Requirements
+- Pick one of the suggested features and implement it following the existing module conventions.
+- Extend an existing module (`ethscan/subtake.py`, `ethscan/nmap.py`, or `ethscan/validate.py`) with a `format_*_report_csv()` function.
+- Register the `--output-format [json|markdown|csv]` option in `ethscan/cli.py` (keeping `--format` as a deprecated alias that takes lower precedence), routing to the CSV formatter when `chosen_format == "csv"`.
+- Add unit tests in `tests/test_*_.py` (CSV formatter: basic, empty, pipe/CSV escaping) and CLI integration tests in `tests/test_cli.py` (help shows `--output-format`, CSV output, CSV with `--out`, deprecated `--format csv` alias still works, default format unchanged).
+- Use stdlib only — `csv` and `io` modules for proper quoting/escaping.

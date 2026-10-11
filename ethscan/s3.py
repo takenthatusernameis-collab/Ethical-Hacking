@@ -1,1 +1,420 @@
-"""S3 bucket enumeration module for ethscan."""
+"""S3 bucket enumeration module for ethscan.
+
+Detects publicly accessible AWS S3 buckets by generating candidate bucket
+names from a target domain (with optional wordlist) and probing each
+candidate via HTTP against the S3 REST endpoint. A DNS resolution of the
+S3 endpoint is also recorded as an informational signal.
+
+Stdlib only.
+"""
+
+import socket
+import urllib.error
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Dict, List, Optional, Set
+from urllib.parse import urlparse
+
+DEFAULT_TIMEOUT = 5.0
+DEFAULT_MAX_WORKERS = 20
+DEFAULT_REGION = "us-east-1"
+
+S3_REGIONS = [
+    "us-east-1",
+    "us-east-2",
+    "us-west-1",
+    "us-west-2",
+    "eu-west-1",
+    "eu-west-2",
+    "eu-west-3",
+    "eu-central-1",
+    "eu-north-1",
+    "ap-east-1",
+    "ap-south-1",
+    "ap-southeast-1",
+    "ap-southeast-2",
+    "ap-northeast-1",
+    "ap-northeast-2",
+    "ap-northeast-3",
+    "sa-east-1",
+    "ca-central-1",
+    "me-south-1",
+    "af-south-1",
+]
+
+# Common bucket-name components combined with the target base name when no
+# wordlist is supplied, mirroring the label-list approach used by other
+# ethscan enumeration modules.
+DEFAULT_BUCKET_NAMES = [
+    "backup",
+    "backups",
+    "bak",
+    "cdn",
+    "dev",
+    "staging",
+    "stage",
+    "prod",
+    "production",
+    "test",
+    "www",
+    "ftp",
+    "mail",
+    "api",
+    "admin",
+    "logs",
+    "log",
+    "images",
+    "img",
+    "static",
+    "assets",
+    "media",
+    "upload",
+    "uploads",
+    "files",
+    "docs",
+    "data",
+    "config",
+    "private",
+    "public",
+    "share",
+    "shared",
+    "tmp",
+    "temp",
+    "old",
+    "new",
+    "app",
+    "apps",
+]
+
+
+def _normalize_target(target: str) -> str:
+    """Extract a bare domain from a target that may be a URL or host.
+
+    Args:
+        target: Bare domain (e.g. ``example.com``) or URL
+            (e.g. ``https://example.com/path``).
+
+    Returns:
+        Lowercased hostname / netloc without scheme or path.
+    """
+    normalized = target.strip()
+    if "://" not in normalized:
+        normalized = "https://" + normalized
+    parsed = urlparse(normalized)
+    return (parsed.hostname or parsed.netloc or "").lower()
+
+
+def _build_s3_url(bucket_name: str, region: str) -> str:
+    """Build the virtual-hosted-style S3 URL for a bucket in a region.
+
+    The ``us-east-1`` region (and an empty region) uses the global
+    ``s3.amazonaws.com`` endpoint.
+    """
+    if not region or region == DEFAULT_REGION:
+        return f"https://{bucket_name}.s3.amazonaws.com/"
+    return f"https://{bucket_name}.s3.{region}.amazonaws.com/"
+
+
+def _resolve_s3_endpoint(
+    bucket_name: str, region: str, timeout: float = DEFAULT_TIMEOUT
+) -> Optional[str]:
+    """Resolve the S3 endpoint hostname to an IPv4 address (informational).
+
+    Args:
+        bucket_name: The S3 bucket name.
+        region: AWS region for the endpoint.
+        timeout: DNS resolution timeout in seconds.
+
+    Returns:
+        Resolved IPv4 address string, or ``None`` if it could not resolve.
+    """
+    url = _build_s3_url(bucket_name, region)
+    hostname = urlparse(url).hostname
+    if not hostname:
+        return None
+    try:
+        socket.setdefaulttimeout(timeout)
+        return socket.gethostbyname(hostname)
+    except (socket.gaierror, socket.herror, OSError, ValueError):
+        return None
+    finally:
+        try:
+            socket.setdefaulttimeout(None)
+        except OSError:
+            pass
+
+
+def _build_bucket_candidates(
+    target: str, wordlist: Optional[List[str]] = None
+) -> List[str]:
+    """Build a list of candidate bucket names from the target and wordlist.
+
+    Args:
+        target: Bare domain or URL (e.g. ``example.com``).
+        wordlist: Optional list of additional bucket-name candidates.
+
+    Returns:
+        Ordered list of unique (case-insensitive dedup, original case kept)
+        candidate bucket names.
+    """
+    domain = _normalize_target(target)
+    if not domain:
+        return []
+
+    base = domain
+    if base.startswith("www."):
+        base = base[4:]
+
+    dash_name = base.replace(".", "-")
+    apex = base.split(".")[0]
+
+    candidates: List[str] = [dash_name, apex, base]
+
+    for word in DEFAULT_BUCKET_NAMES:
+        candidates.append(f"{dash_name}-{word}")
+        candidates.append(f"{word}-{dash_name}")
+
+    if wordlist:
+        for word in wordlist:
+            cleaned = word.strip()
+            if not cleaned:
+                continue
+            candidates.append(cleaned)
+            candidates.append(f"{cleaned}-{dash_name}")
+            candidates.append(f"{dash_name}-{cleaned}")
+
+    seen: Set[str] = set()
+    unique: List[str] = []
+    for candidate in candidates:
+        key = candidate.lower()
+        if key not in seen and key:
+            seen.add(key)
+            unique.append(candidate)
+    return unique
+
+
+def check_bucket_public(
+    bucket_name: str, region: str = DEFAULT_REGION, timeout: float = DEFAULT_TIMEOUT
+) -> Dict[str, object]:
+    """Check if an S3 bucket exists and is publicly readable via HTTP.
+
+    Args:
+        bucket_name: The S3 bucket name.
+        region: AWS region (e.g. ``us-east-1``).
+        timeout: HTTP request timeout in seconds.
+
+    Returns:
+        Dict with ``bucket``, ``region``, ``url``, ``dns_resolved``,
+        ``status_code``, ``exists``, ``public``, and ``error`` fields.
+    """
+    url = _build_s3_url(bucket_name, region)
+    dns_ip = _resolve_s3_endpoint(bucket_name, region, timeout)
+
+    result: Dict[str, object] = {
+        "bucket": bucket_name,
+        "region": region,
+        "url": url,
+        "dns_resolved": dns_ip,
+        "status_code": None,
+        "exists": False,
+        "public": False,
+        "error": None,
+    }
+
+    req = urllib.request.Request(url, headers={"User-Agent": "ethscan/0.1"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            status = response.getcode()
+            result["status_code"] = status
+            if status == 200:
+                result["exists"] = True
+                result["public"] = True
+            elif status == 403:
+                result["exists"] = True
+                result["public"] = False
+    except urllib.error.HTTPError as exc:
+        status = exc.code
+        result["status_code"] = status
+        if status == 403:
+            result["exists"] = True
+            result["public"] = False
+        elif status == 404:
+            result["exists"] = False
+            result["public"] = False
+        elif status == 400:
+            result["exists"] = False
+            result["public"] = False
+            result["error"] = "Invalid bucket name or request"
+    except (urllib.error.URLError, socket.timeout, OSError) as exc:
+        result["error"] = str(exc) or exc.__class__.__name__
+
+    return result
+
+
+def run_s3(
+    target: str,
+    wordlist: Optional[List[str]] = None,
+    region: Optional[str] = None,
+    timeout: float = DEFAULT_TIMEOUT,
+    max_workers: int = DEFAULT_MAX_WORKERS,
+) -> Dict[str, object]:
+    """Enumerate S3 buckets for a target and detect public access.
+
+    Args:
+        target: Bare domain or URL (e.g. ``example.com``).
+        wordlist: Optional list of bucket-name candidates. If ``None``,
+            candidates are generated from the target domain using
+            :data:`DEFAULT_BUCKET_NAMES`.
+        region: AWS region to check (default ``us-east-1``). Use ``all`` to
+            check every region in :data:`S3_REGIONS`.
+        timeout: HTTP request timeout in seconds.
+        max_workers: Maximum number of concurrent HTTP probes.
+
+    Returns:
+        Structured results with per-bucket findings and summary counts.
+    """
+    if region is None:
+        region = DEFAULT_REGION
+    region = region.strip().lower() if isinstance(region, str) else DEFAULT_REGION
+
+    domain = _normalize_target(target)
+    candidates = _build_bucket_candidates(target, wordlist)
+
+    notes: List[str] = []
+
+    if not candidates:
+        notes.append("No bucket candidates could be derived from the target.")
+        return {
+            "target": target,
+            "domain": domain,
+            "region": region,
+            "timeout": timeout,
+            "workers": max_workers,
+            "wordlist_used": wordlist is not None,
+            "candidates_tested": 0,
+            "regions_checked": [],
+            "results": [],
+            "public_buckets": [],
+            "private_buckets": [],
+            "existing_buckets": [],
+            "notes": notes,
+        }
+
+    regions = list(S3_REGIONS) if region == "all" else [region]
+
+    results: List[Dict[str, object]] = []
+
+    def _probe(bucket_name: str, region_to_check: str) -> Dict[str, object]:
+        return check_bucket_public(
+            bucket_name, region=region_to_check, timeout=timeout
+        )
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_key = {}
+        for candidate in candidates:
+            for reg in regions:
+                future = executor.submit(_probe, candidate, reg)
+                future_to_key[future] = (candidate, reg)
+        for future in as_completed(future_to_key):
+            results.append(future.result())
+
+    results.sort(key=lambda r: (str(r.get("bucket")), str(r.get("region"))))
+
+    public_buckets = [r for r in results if r.get("public")]
+    private_buckets = [r for r in results if r.get("exists") and not r.get("public")]
+    existing_buckets = [r for r in results if r.get("exists")]
+
+    if region == "all":
+        notes.append(
+            f"Checked {len(regions)} regions for each of "
+            f"{len(candidates)} bucket candidates."
+        )
+
+    return {
+        "target": target,
+        "domain": domain,
+        "region": region,
+        "timeout": timeout,
+        "workers": max_workers,
+        "wordlist_used": wordlist is not None,
+        "candidates_tested": len(candidates),
+        "regions_checked": regions,
+        "results": results,
+        "public_buckets": public_buckets,
+        "private_buckets": private_buckets,
+        "existing_buckets": existing_buckets,
+        "notes": notes,
+    }
+
+
+def format_s3_report_json(data: Dict[str, object]) -> str:
+    """Format S3 enumeration results as JSON."""
+    import json
+
+    return json.dumps(data, indent=2, default=str)
+
+
+def _escape(value: object) -> str:
+    """Escape pipe and newline characters for Markdown table cells."""
+    return str(value).replace("|", "\\|").replace("\n", " ")
+
+
+def format_s3_report_markdown(data: Dict[str, object]) -> str:
+    """Format S3 enumeration results as Markdown."""
+    lines = ["# ethscan S3 Bucket Enumeration Report", ""]
+    lines.append(f"- **Target:** {data['target']}")
+    lines.append(f"- **Domain:** {data['domain']}")
+    lines.append(f"- **Region:** {data['region']}")
+    lines.append(f"- **Timeout:** {data['timeout']}s")
+    lines.append(f"- **Workers:** {data['workers']}")
+    lines.append(f"- **Wordlist Used:** {'Yes' if data['wordlist_used'] else 'No'}")
+    lines.append(f"- **Candidates Tested:** {data['candidates_tested']}")
+    lines.append(f"- **Regions Checked:** {', '.join(data.get('regions_checked', []) or [])}")
+    lines.append(f"- **Public Buckets:** {len(data['public_buckets'])}")
+    lines.append(f"- **Private Buckets:** {len(data['private_buckets'])}")
+    lines.append(f"- **Existing Buckets:** {len(data['existing_buckets'])}")
+    lines.append("")
+
+    public = data.get("public_buckets") or []
+    lines.append("## Public Buckets (Accessible)")
+    if public:
+        lines.append("| Bucket | Region | URL | DNS Resolved |")
+        lines.append("|--------|--------|-----|--------------|")
+        for entry in public:
+            lines.append(
+                f"| {_escape(entry.get('bucket', ''))} | "
+                f"{_escape(entry.get('region', ''))} | "
+                f"{_escape(entry.get('url', ''))} | "
+                f"{_escape(entry.get('dns_resolved') or 'No')} |"
+            )
+    else:
+        lines.append("*No publicly accessible buckets found.*")
+    lines.append("")
+
+    results = data.get("results") or []
+    lines.append("## All Bucket Results")
+    if results:
+        lines.append("| Bucket | Region | Exists | Public | Status | DNS Resolved | Error |")
+        lines.append("|--------|--------|--------|--------|--------|--------------|-------|")
+        for entry in results:
+            lines.append(
+                f"| {_escape(entry.get('bucket', ''))} | "
+                f"{_escape(entry.get('region', ''))} | "
+                f"{'Yes' if entry.get('exists') else 'No'} | "
+                f"{'Yes' if entry.get('public') else 'No'} | "
+                f"{_escape(entry.get('status_code') or '-')} | "
+                f"{_escape(entry.get('dns_resolved') or 'No')} | "
+                f"{_escape(entry.get('error') or '')} |"
+            )
+    else:
+        lines.append("*No buckets were tested.*")
+    lines.append("")
+
+    notes = data.get("notes") or []
+    if notes:
+        lines.append("## Notes")
+        for note in notes:
+            lines.append(f"- {note}")
+        lines.append("")
+
+    return "\n".join(lines)
