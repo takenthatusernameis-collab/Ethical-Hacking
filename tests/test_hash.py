@@ -12,12 +12,16 @@ from ethscan.hash import (
     _compute_sha256,
     _compute_sha512,
     _hashlib_name,
+    _infer_algorithm,
     _normalize_algorithm,
     _normalize_passwords,
     _supported_algorithms,
+    format_check_report_json,
+    format_check_report_markdown,
     format_hash_report_json,
     format_hash_report_markdown,
     load_passwords_from_file,
+    run_check,
     run_hash,
 )
 

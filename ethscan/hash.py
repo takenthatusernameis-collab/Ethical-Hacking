@@ -135,6 +135,96 @@ def load_passwords_from_file(path: str) -> List[str]:
         return [line.strip() for line in handle if line.strip()]
 
 
+# ---------------------------------------------------------------------------
+# Password check (compare plaintext against a known digest)
+# ---------------------------------------------------------------------------
+
+# Canonical digest lengths (hex) per algorithm, used to infer the algorithm
+# from an unknown digest when ``--algorithm`` is not specified.
+_DIGEST_LENGTHS: Dict[str, int] = {
+    "md5": 32,
+    "sha1": 40,
+    "sha256": 64,
+    "sha512": 128,
+    "ntlm": 32,
+    "md4": 32,
+}
+
+
+def _infer_algorithm(digest: str) -> Optional[str]:
+    """Infer the algorithm from a hex digest's length.
+
+    Args:
+        digest: Hex digest string (case-insensitive).
+
+    Returns:
+        Canonical algorithm key, or ``None`` if no match.
+    """
+    if not digest:
+        return None
+    candidate = digest.strip().lower()
+    # NTLM and MD4 share the 32-char length with MD5; prefer MD5 as the
+    # most common guess but allow callers to disambiguate via --algorithm.
+    matches = [name for name, length in _DIGEST_LENGTHS.items() if len(candidate) == length]
+    if not matches:
+        return None
+    if len(matches) == 1:
+        return matches[0]
+    # Multiple matches (md5/ntlm/md4 all 32 chars): prefer md5.
+    if "md5" in matches:
+        return "md5"
+    return matches[0]
+
+
+def run_check(
+    password: str,
+    digest: str,
+    algorithm: Optional[str] = None,
+) -> Dict[str, object]:
+    """Compare a plaintext password against a known hash digest.
+
+    Args:
+        password: Plaintext password to check.
+        digest: Expected hex digest to compare against.
+        algorithm: Optional algorithm key (md5, sha1, sha256, sha512, ntlm,
+            md4). When omitted, inferred from the digest length.
+
+    Returns:
+        Structured result with ``password``, ``digest``, ``algorithm``,
+        ``computed``, ``match``, ``error`` fields.
+    """
+    error: Optional[str] = None
+    chosen_algorithm: Optional[str] = None
+    computed: Optional[str] = None
+    match: Optional[bool] = None
+
+    try:
+        if algorithm:
+            chosen_algorithm = _normalize_algorithm(algorithm)
+        else:
+            chosen_algorithm = _infer_algorithm(digest)
+
+        if chosen_algorithm is None:
+            error = (
+                f"Could not infer algorithm from digest length {len(digest.strip())}; "
+                "specify --algorithm explicitly."
+            )
+        else:
+            computed = _compute_hash(password, chosen_algorithm)
+            match = computed.lower() == digest.strip().lower()
+    except ValueError as exc:
+        error = str(exc)
+
+    return {
+        "password": password,
+        "digest": digest,
+        "algorithm": chosen_algorithm,
+        "computed": computed,
+        "match": match,
+        "error": error,
+    }
+
+
 def run_hash(
     passwords: List[str],
     algorithm: str = "md5",
@@ -202,6 +292,13 @@ def format_hash_report_json(data: Dict[str, object]) -> str:
     return json.dumps(data, indent=2, default=str)
 
 
+def format_check_report_json(data: Dict[str, object]) -> str:
+    """Format a password check result as a JSON string."""
+    import json
+
+    return json.dumps(data, indent=2, default=str)
+
+
 def _escape(value: str) -> str:
     """Escape pipe characters for Markdown output."""
     return value.replace("|", "\\|")
@@ -235,4 +332,31 @@ def format_hash_report_markdown(data: Dict[str, object]) -> str:
             lines.append(f"- {note}")
         lines.append("")
 
+    return "\n".join(lines)
+
+
+def format_check_report_markdown(data: Dict[str, object]) -> str:
+    """Format a password check result as a Markdown string."""
+    lines = ["# ethscan Password Check Report", ""]
+    lines.append(f"- **Password:** `{_escape(str(data.get('password', '')))}`")
+    lines.append(f"- **Digest:** `{_escape(str(data.get('digest', '')))}`")
+    algorithm = data.get("algorithm")
+    if algorithm:
+        lines.append(f"- **Algorithm:** {algorithm}")
+    computed = data.get("computed")
+    if computed is not None:
+        lines.append(f"- **Computed:** `{_escape(str(computed))}`")
+    match = data.get("match")
+    if match is True:
+        lines.append("- **Result:** MATCH")
+    elif match is False:
+        lines.append("- **Result:** MISMATCH")
+    else:
+        lines.append("- **Result:** UNKNOWN")
+    error = data.get("error")
+    if error:
+        lines.append("")
+        lines.append("## Error")
+        lines.append(f"```\n{error}\n```")
+    lines.append("")
     return "\n".join(lines)
