@@ -9811,3 +9811,137 @@ def test_cidr_out_option_markdown(tmp_path) -> None:
     assert out_file.exists()
     content = out_file.read_text()
     assert "CIDR Network Calculator Report" in content
+
+# ---------------------------------------------------------------------------
+# Hash CLI tests
+# ---------------------------------------------------------------------------
+
+
+def test_hash_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["hash", "--help"])
+    assert result.exit_code == 0
+    assert "--password" in result.output
+    assert "--algorithm" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "md5" in result.output
+    assert "sha256" in result.output
+    assert "ntlm" in result.output
+
+
+def test_hash_lists_in_top_level_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "hash" in result.output
+
+
+def test_hash_password_md5_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["hash", "--password", "password", "--algorithm", "md5", "--format", "json"]
+    )
+    assert result.exit_code == 0
+    assert "5f4dcc3b5aa765d61d8327deb882cf99" in result.output
+    assert "md5" in result.output
+    assert "passwords_hashed" in result.output
+
+
+def test_hash_password_sha256_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["hash", "--password", "password", "--algorithm", "sha256", "--format", "json"]
+    )
+    assert result.exit_code == 0
+    assert "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8" in result.output
+
+
+def test_hash_password_md5_markdown() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["hash", "--password", "password", "--algorithm", "md5", "--format", "markdown"]
+    )
+    assert result.exit_code == 0
+    assert "Password Hash Report" in result.output
+    assert "5f4dcc3b5aa765d61d8327deb882cf99" in result.output
+
+
+def test_hash_default_algorithm_is_md5() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["hash", "--password", "password", "--format", "json"])
+    assert result.exit_code == 0
+    assert "5f4dcc3b5aa765d61d8327deb882cf99" in result.output
+    assert '"algorithm": "md5"' in result.output
+
+
+def test_hash_multiple_passwords() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["hash", "--password", "password", "--password", "123456", "--algorithm", "sha1", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    assert "passwords_hashed" in result.output
+    assert "5baa61e4c9b93f3f0682250b6cf8331b7ee68fd8" in result.output
+
+
+def test_hash_stdin_input_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["hash", "--algorithm", "md5", "--format", "json"], input="password\n")
+    assert result.exit_code == 0
+    assert "5f4dcc3b5aa765d61d8327deb882cf99" in result.output
+
+
+def test_hash_stdin_input_markdown() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["hash", "--algorithm", "sha256", "--format", "markdown"], input="password\n"
+    )
+    assert result.exit_code == 0
+    assert "Password Hash Report" in result.output
+    assert "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8" in result.output
+
+
+def test_hash_no_passwords() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["hash", "--format", "json"], input="")
+    assert result.exit_code == 0
+    assert "No passwords provided" in result.output
+
+
+def test_hash_out_option_json(tmp_path) -> None:
+    out_file = tmp_path / "hash.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["hash", "--password", "password", "--algorithm", "md5", "--format", "json", "--out", str(out_file)],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "5f4dcc3b5aa765d61d8327deb882cf99" in content
+
+
+def test_hash_out_option_markdown(tmp_path) -> None:
+    out_file = tmp_path / "hash.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["hash", "--password", "password", "--algorithm", "sha256", "--format", "markdown", "--out", str(out_file)],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "Password Hash Report" in content
+
+
+def test_hash_pipe_escape_in_markdown() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["hash", "--password", "pass|word", "--algorithm", "md5", "--format", "markdown"]
+    )
+    assert result.exit_code == 0
+    assert "pass\\|word" in result.output

@@ -6,6 +6,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 
 - Network reconnaissance and scanning utilities (implemented)
 - Password strength auditing with JSON/Markdown output (`audit`) (implemented)
+- **Password hash generation: `hash` command for MD5, SHA-1, SHA-256, SHA-512, NTLM, and MD4 hashing with `--algorithm` selection and JSON/Markdown output** (implemented)
 - Web application security checks (implemented)
 - **Security headers check: `headers` command for quick security header analysis** (implemented)
 - **ICMP ping: `ping` command for host discovery with ICMP echo requests and TCP connect fallback** (implemented)

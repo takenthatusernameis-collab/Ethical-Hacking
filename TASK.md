@@ -982,3 +982,61 @@ The `cidr` command performs network calculations using the stdlib `ipaddress` mo
 **Add a `hash` command** that generates password hashes (MD5, SHA-1, SHA-256, SHA-512, NTLM) for password-audit workflows, with `--algorithm` selection and JSON/Markdown output.
 
 Alternative: Add a `radix` command for radix tree visualization of CIDR blocks (merging overlapping/supernetting adjacent networks).
+
+## Completed: `hash` command (password hash generation)
+
+The `hash` command generates cryptographic hashes for passwords using the stdlib `hashlib` module. Supports MD5, SHA-1, SHA-256, SHA-512, NTLM, and MD4 (when available via OpenSSL). Fully offline and stdlib-only.
+
+### Added Files
+- `ethscan/hash.py` — password hash generation module with:
+  - `_normalize_algorithm()` — normalizes algorithm names (case-insensitive, alias support for `sha-1`/`sha-256`/`sha-512`)
+  - `_hashlib_name()` / `_supported_algorithms()` — helpers for algorithm discovery
+  - `MD4_AVAILABLE` flag for graceful MD4/NTLM fallback when OpenSSL lacks MD4
+  - `_compute_md5()` / `_compute_sha1()` / `_compute_sha256()` / `_compute_sha512()` / `_compute_md4()` / `_compute_ntlm()` — per-algorithm hashers (NTLM = MD4 of UTF-16LE)
+  - `_compute_hash()` — dispatcher returning the digest or raising ValueError for unavailable algorithms
+  - `run_hash()` — public entry point: normalizes algorithm, hashes passwords (drops empty), records per-password results with graceful error handling, collects notes for unavailable MD4/NTLM
+  - `format_hash_report_json()` / `format_hash_report_markdown()` — output formatters (markdown includes pipe-escaped table and notes section)
+- `tests/test_hash.py` — 39 unit tests: algorithm normalization (case-insensitive, aliases, whitespace, unsupported), hashlib name/supported-algorithms helpers, password normalization, per-algorithm hashers (md5/sha1/sha256/sha512 known values, empty), dispatch, NTLM UTF-16LE correctness, MD4 availability handling, run_hash (basic/multi/drops-empty/default/normalizes/unsupported/ntlm/md4 notes/empty/all-algorithms), both formatters (JSON basic/empty/notes, markdown basic/empty/pipe-escape/notes/multi-algo)
+
+### Modified Files
+- `ethscan/cli.py` — registered `hash` command with `--password` (repeatable), `--algorithm` (choice: md5/sha1/sha256/sha512/ntlm/md4, default md5), `--format`, `--out`; reads passwords from `--password` flags or stdin; imports `run_hash`, `format_hash_report_json`, `format_hash_report_markdown` from `ethscan.hash`
+- `tests/test_cli.py` — 13 CLI integration tests: `hash` help, top-level help listing, md5/sha256 JSON, md5 markdown, default-is-md5, multiple passwords, stdin JSON/markdown, no-passwords, `--out` (json and markdown), pipe escaping in markdown
+- `README.md` — added password hash generation (`hash`) to the features list
+
+### Verification
+- `python -m pytest -q` -> 1256 passed, 1 skipped (1243 baseline + 52 new: 39 unit + 13 CLI)
+- `python -m ethscan --help` -> lists `hash` among the commands
+- `python -m ethscan hash --help` -> shows `--password`, `--algorithm [md5|sha1|sha256|sha512|ntlm|md4]`, `--format`, `--out`
+- End-to-end: `python -m ethscan hash --password password --algorithm md5 --format json` -> `5f4dcc3b5aa765d61d8327deb882cf99`
+- End-to-end: `python -m ethscan hash --password password --algorithm sha256 --format markdown` -> Markdown report with `5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8`
+- End-to-end: `echo password | python -m ethscan hash --algorithm sha1 --format json` -> `5baa61e4c9b93f3f0682250b6cf8331b7ee68fd8`
+- NTLM/MD4 graceful fallback: on builds without OpenSSL MD4, `--algorithm ntlm` records `hash: null` with an error and a note instead of crashing
+- Pipe escaping: `--password "pass|word" --format markdown` renders `pass\|word`
+
+## Current state
+- All 28 commands implemented (including `hash`).
+- `scan` and `service` now support `--profile fast|normal|full` option.
+- `scan` and `service` now support `--output-format csv` for spreadsheet-compatible output.
+- `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
+- `subdomains` now supports `--recursive` and `--max-depth` for recursive subdomain enumeration.
+- `dnsbrute` now supports `--recursive` and `--max-depth` for recursive zone transfers.
+- `whois` now supports `--recursive/--no-recursive` and `--max-depth` for recursive WHOIS queries.
+- `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
+- `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
+- `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out` for CT log subdomain discovery.
+- `report` now supports `--format json|markdown` and `--out` for combined scan+audit reports (json and markdown).
+- `cve` now supports `--target`, `--services-file`, `--ports`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--severity`, `--min-severity`, `--format`, `--out` for NVD/CVE API vulnerability lookups.
+- `vuln` now supports `--target`, `--ports`, `--services-file`, `--tls-file`, `--ssl-file`, `--severity`, `--min-severity`, `--format`, `--out` for built-in vulnerability checks.
+- `dnssec` now supports `--target`, `--server`, `--timeout`, `--format`, `--out` for DNSSEC validation (DNSKEY + DS chain of trust).
+- `geo` now supports `--recursive` and `--max-depth` for recursive hop geolocation.
+- `hash` now supports `--password`, `--algorithm [md5|sha1|sha256|sha512|ntlm|md4]`, `--format`, `--out` for password hash generation.
+- Configuration file (`ethscan.yaml`) persists default options across commands via a `--config` group option and a `config` subcommand.
+- Tests: 1256 passing (1 skipped). (6 pre-existing failures in test_cidr/test_completion/test_jwt are unrelated to this change.)
+
+## Suggested next task
+
+**Add a `--file` option to the `hash` command** to read passwords from a file (one per line), mirroring the `audit` command's `--file` input mode for batch hashing workflows.
+
+Alternative: Add a `--check` option to the `hash` command that compares a plaintext password against a known hash (e.g. verify a stored MD5/SHA-256 digest).
+
+Alternative: Add a `--pepper`/`--salt` option to the `hash` command for salted hash generation (e.g. HMAC-SHA-256 with a user-provided salt).

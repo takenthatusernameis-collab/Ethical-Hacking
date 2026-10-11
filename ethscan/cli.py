@@ -122,6 +122,11 @@ from ethscan.cidr import (
     format_cidr_report_markdown,
     run_cidr,
 )
+from ethscan.hash import (
+    format_hash_report_json,
+    format_hash_report_markdown,
+    run_hash,
+)
 from ethscan.dnssec import (
     format_dnssec_report_json,
     format_dnssec_report_markdown,
@@ -2123,6 +2128,57 @@ def cidr(cidr: str, contains: Optional[str], fmt: str, out_path: Optional[str]) 
         output = format_cidr_report_json(results)
     else:
         output = format_cidr_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command(name="hash")
+@click.option(
+    "--password",
+    "passwords",
+    multiple=True,
+    help="Password to hash (repeatable). If omitted, reads one password per line from stdin.",
+)
+@click.option(
+    "--algorithm",
+    default="md5",
+    type=click.Choice(["md5", "sha1", "sha256", "sha512", "ntlm", "md4"]),
+    help="Hash algorithm (default: md5).",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def hash_cmd(passwords, algorithm, fmt, out_path) -> None:
+    """Generate cryptographic hashes for passwords (MD5, SHA-1, SHA-256, SHA-512, NTLM, MD4)."""
+    password_list = list(passwords)
+    if not password_list:
+        password_list = [line.strip() for line in click.get_text_stream("stdin") if line.strip()]
+
+    if not password_list:
+        click.echo("No passwords provided.")
+        return
+
+    results = run_hash(password_list, algorithm=algorithm)
+
+    if fmt == "json":
+        output = format_hash_report_json(results)
+    else:
+        output = format_hash_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
