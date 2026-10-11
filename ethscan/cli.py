@@ -2072,7 +2072,27 @@ def cert(
     help="Ports to scan for live service detection: comma-separated list/ranges "
     "(e.g., '21,22,80'). Defaults to common ports.",
 )
+@click.option(
+    "--profile",
+    type=click.Choice(["fast", "normal", "full"]),
+    help="Scan profile for live service detection: fast (top ~18 ports), "
+    "normal (common ports), full (1-1024 + common). Overrides --ports, "
+    "--service-timeout, --workers unless explicitly set.",
+)
 @click.option("--timeout", default=10.0, type=float, help="API request timeout in seconds")
+@click.option(
+    "--service-timeout",
+    "service_timeout",
+    default=3.0,
+    type=float,
+    help="Connection timeout in seconds for live service detection (default: 3.0)",
+)
+@click.option(
+    "--workers",
+    default=50,
+    type=int,
+    help="Maximum concurrent workers for live service detection (default: 50)",
+)
 @click.option(
     "--no-cache",
     is_flag=True,
@@ -2115,7 +2135,10 @@ def cve(
     target: str,
     services_file: Optional[str],
     ports: Optional[str],
+    profile: Optional[str],
     timeout: float,
+    service_timeout: float,
+    workers: int,
     no_cache: bool,
     no_offline_fallback: bool,
     api_url: Optional[str],
@@ -2131,20 +2154,35 @@ def cve(
             services = json.load(handle)
 
     port_list = None
-    if ports and not services_file:
-        from ethscan.scanner import parse_port_range
-        port_list = parse_port_range(ports)
+    if not services_file:
+        if profile:
+            defaults = get_profile_defaults(profile)
+            if ports:
+                from ethscan.scanner import parse_port_range
+                port_list = parse_port_range(ports)
+            else:
+                port_list = get_profile_ports(profile)
+            if service_timeout == 3.0:
+                service_timeout = defaults["timeout"]
+            if workers == 50:
+                workers = defaults["workers"]
+        elif ports:
+            from ethscan.scanner import parse_port_range
+            port_list = parse_port_range(ports)
 
     results = run_cve(
         target,
         services_file=services_file,
         timeout=timeout,
+        service_timeout=service_timeout,
+        workers=workers,
         use_cache=not no_cache,
         offline_fallback=not no_offline_fallback,
         api_url=api_url,
         severity=severity,
         min_severity=min_severity,
         ports=port_list,
+        profile=profile,
     )
 
     if fmt == "json":

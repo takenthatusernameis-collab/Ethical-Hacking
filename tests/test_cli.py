@@ -10471,3 +10471,4 @@ def test_radix_diff_out_option_markdown(tmp_path) -> None:
     content = out_file.read_text()
     assert "## Set Difference (In First, Not In Second)" in content
     assert "192.168.1.0/25" in content
+test
