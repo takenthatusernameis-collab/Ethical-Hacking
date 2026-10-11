@@ -11691,3 +11691,149 @@ def test_hash_check_with_iterations() -> None:
     assert parsed["match"] is True
     assert parsed["iterations"] == 1000
     assert parsed["salt_value"] == "saltvalue"
+
+
+# ---------------------------------------------------------------------------
+# Validate CLI tests
+# ---------------------------------------------------------------------------
+
+
+def test_validate_help() -> None:
+    """Test validate command help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["validate", "--help"])
+    assert result.exit_code == 0
+    assert "--ports" in result.output
+    assert "--cidr" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+
+
+def test_validate_top_level_help_lists_command() -> None:
+    """Test that validate appears in top-level help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "validate" in result.output.lower()
+
+
+def test_validate_ports_json() -> None:
+    """Test validate command with valid port specs and JSON output."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["validate", "--ports", "80,443,8000-8002", "--format", "json"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["summary"]["ports_specified"] == 1
+    assert parsed["summary"]["ports_valid"] == 1
+    assert parsed["summary"]["ports_total"] == 5
+    assert parsed["summary"]["all_valid"] is True
+
+
+def test_validate_ports_markdown() -> None:
+    """Test validate command with valid port specs and Markdown output."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["validate", "--ports", "80,443", "--format", "markdown"])
+    assert result.exit_code == 0
+    assert "# ethscan Validate Report" in result.output
+    assert "80, 443" in result.output
+
+
+def test_validate_cidr_json() -> None:
+    """Test validate command with valid CIDR specs and JSON output."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["validate", "--cidr", "192.168.1.0/24", "--format", "json"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["summary"]["cidrs_specified"] == 1
+    assert parsed["summary"]["cidrs_valid"] == 1
+    assert parsed["summary"]["all_valid"] is True
+
+
+def test_validate_cidr_markdown() -> None:
+    """Test validate command with valid CIDR specs and Markdown output."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["validate", "--cidr", "192.168.1.0/24", "--format", "markdown"])
+    assert result.exit_code == 0
+    assert "192.168.1.0/24" in result.output
+    assert "Network Address" in result.output or "192.168.1.0" in result.output
+
+
+def test_validate_both_ports_and_cidr_json() -> None:
+    """Test validate with both ports and CIDRs."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["validate", "--ports", "80,443", "--cidr", "10.0.0.0/8", "--format", "json"]
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["summary"]["ports_specified"] == 1
+    assert parsed["summary"]["cidrs_specified"] == 1
+    assert parsed["summary"]["all_valid"] is True
+
+
+def test_validate_invalid_port_json() -> None:
+    """Test validate with an invalid port spec."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["validate", "--ports", "abc", "--format", "json"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["summary"]["ports_valid"] == 0
+    assert parsed["summary"]["all_valid"] is False
+    assert parsed["ports"][0]["valid"] is False
+
+
+def test_validate_invalid_cidr_json() -> None:
+    """Test validate with an invalid CIDR spec."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["validate", "--cidr", "not-an-ip", "--format", "json"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["summary"]["cidrs_valid"] == 0
+    assert parsed["summary"]["all_valid"] == False
+
+
+def test_validate_no_specs_json() -> None:
+    """Test validate with no specs provided."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["validate", "--format", "json"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["summary"]["ports_specified"] == 0
+    assert parsed["summary"]["cidrs_specified"] == 0
+
+
+def test_validate_out_option_json(tmp_path) -> None:
+    """Test validate with --out (json)."""
+    out_file = tmp_path / "validate.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["validate", "--ports", "80,443", "--format", "json", "--out", str(out_file)]
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    parsed = json.loads(out_file.read_text())
+    assert parsed["summary"]["ports_total"] == 2
+
+
+def test_validate_out_option_markdown(tmp_path) -> None:
+    """Test validate with --out (markdown)."""
+    out_file = tmp_path / "validate.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["validate", "--cidr", "192.168.1.0/24", "--format", "markdown", "--out", str(out_file)]
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "ethscan Validate Report" in content
+
+
+def test_validate_default_format_is_json() -> None:
+    """Test validate defaults to JSON output."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["validate", "--ports", "80"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["summary"]["ports_specified"] == 1

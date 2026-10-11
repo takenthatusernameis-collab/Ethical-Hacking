@@ -179,6 +179,11 @@ from ethscan.jwt import (
     format_jwt_report_markdown,
     run_jwt,
 )
+from ethscan.validate import (
+    format_validate_report_json,
+    format_validate_report_markdown,
+    run_validate,
+)
 
 
 @click.group()
@@ -2837,6 +2842,53 @@ def completion(shell: str, prog_name: str, fmt: str, out_path: Optional[str]) ->
         with open(out_path, "w", encoding="utf-8") as handle:
             handle.write(output)
         click.echo(f"Completion script written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--ports",
+    help="Comma-separated port specifications to validate and expand "
+    "(e.g. '80,443,8000-9000').",
+)
+@click.option(
+    "--cidr",
+    "cidrs",
+    help="Comma-separated CIDR/network specifications to validate "
+    "(e.g. '192.168.1.0/24,10.0.0.0/8').",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def validate(
+    ports: Optional[str],
+    cidrs: Optional[str],
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Validate and expand port specifications and CIDR inputs (offline)."""
+    results = run_validate(ports=ports, cidrs=cidrs)
+
+    if fmt == "json":
+        output = format_validate_report_json(results)
+    else:
+        output = format_validate_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
     else:
         click.echo(output)
 

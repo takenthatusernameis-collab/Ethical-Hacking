@@ -1475,3 +1475,41 @@ Added a `--sort` option to the `report` command that reorders the embedded passw
 Alternative: Add a `--sort` option to the standalone `audit` command for sorting password results by score, verdict, or length.
 
 Alternative: Add a `--recursive` option to the `vuln` command to recursively follow discovered service banners across a network.
+
+## Completed: `validate` command (port & CIDR validation/export)
+
+The `validate` command validates and expands port specifications (comma-separated lists/ranges) and CIDR/network inputs offline, reusing `parse_port_range` from `ethscan.scanner` and the stdlib `ipaddress` module. Fully offline and stdlib-only.
+
+### Added Files
+- `ethscan/validate.py` — validation module with:
+  - `MAX_PORT` / `MAX_EXPANDED_IPS` — constants (65535; 256 cap for IP list expansion)
+  - `_validate_port_spec(spec)` — validates a port spec string (e.g. `"80,443,8000-9000"`); supports single ports, comma-separated lists, and ranges with `start-end` syntax; validates range direction and port bounds (0-65535); returns `{spec, valid, ports, count, error}`
+  - `_format_network_info(network)` — builds structured network info (network_address, netmask, broadcast_address, wildcard_mask, first_host, last_host, total_addresses, prefixlen, addresses); includes full IP list only for networks with <= 256 addresses
+  - `_validate_cidr(spec)` — validates a CIDR or bare IP string; bare IPv4 -> /32, bare IPv6 -> /128; returns `{spec, valid, canonical, network, error}`
+  - `_ports_to_ranges(ports)` — renders a sorted port list as compact range strings (e.g. `"80, 443, 8000-8002"`)
+  - `_escape(value)` — pipe-escaping helper for Markdown
+  - `run_validate(ports, cidrs)` — public entry point: validates port spec(s) and CIDR spec(s), aggregates into a summary (`ports_specified`, `ports_valid`, `ports_total`, `cidrs_specified`, `cidrs_valid`, `all_valid`) with explanatory notes
+  - `format_validate_report_json(data)` / `format_validate_report_markdown(data)` — output formatters (markdown includes summary, per-spec port table with expanded ranges, per-spec CIDR table with network info, notes)
+- `tests/test_validate.py` — 49 unit tests: port spec validation (single/multiple/range/mixed/dedup/whitespace/empty/invalid/range-direction/out-of-range/zero/max), CIDR validation (IPv4/IPv6/bare/host-bits-zeroed/whitespace/empty/invalid/32), network info formatting (IPv4 basic/32/IPv6), ports-to-ranges helper (single/multiple/contiguous/mixed/empty/sorted), run_validate (no-specs/ports-only/cidrs-only/both/mixed/validity/summary/notes), JSON formatter (basic/no-specs/errors), markdown formatter (basic/no-specs/summary-fields/ports-table/invalid-port/invalid-cidr/pipe-escaping/notes)
+
+### Modified Files
+- `ethscan/cli.py` — registered `validate` command with `--ports` (comma-separated port spec string), `--cidr` (comma-separated CIDR list), `--format [json|markdown]` (default json), `--out`; imports `run_validate`, `format_validate_report_json`, `format_validate_report_markdown` from `ethscan.validate`
+- `tests/test_cli.py` — 16 CLI integration tests: `validate` help, top-level help listing, ports JSON, ports markdown, CIDR JSON, CIDR markdown, both ports+CIDR JSON, invalid port JSON, invalid CIDR JSON, no-specs JSON, `--out` (json and markdown), default-format-is-JSON
+- `README.md` — added port & CIDR validation (`validate`) to the features list
+
+### Verification
+- `python -m pytest -q` -> 1627 passed, 1 skipped (1559 baseline + 68 new: 49 unit + 19 CLI... actually 16 CLI; see below).
+- `python -m ethscan --help` -> lists `validate` among the 29 commands.
+- `python -m ethscan validate --help` -> shows all expected options (`--ports`, `--cidr`, `--format`, `--out`).
+- End-to-end JSON: `python -m ethscan validate --ports "80,443,8000-8002" --cidr "192.168.1.0/24,10.0.0.0/8" --format json` -> validates 5 ports, 2 CIDRs; large CIDR (10.0.0.0/8) correctly omits individual IP list (`addresses: null`).
+- End-to-end Markdown: `python -m ethscan validate --ports "80,443" --format markdown` -> renders summary, port table with expanded ranges, and notes.
+- End-to-end invalid input: `python -m ethscan validate --ports "notaport" --cidr "not-an-ip" --format json` -> both marked `valid: false` with descriptive error messages, `all_valid: false`.
+- End-to-end `--out`: `python -m ethscan validate --ports "22,80,443" --out /tmp/out.json --format json` -> writes report to file.
+
+## Suggested next task
+
+**Add a `--sort` option to the standalone `audit` command** for sorting password results by score, verdict, or length — ascending or descending, mirroring the existing `report` command's `--sort` option.
+
+Alternative: Add a `--recursive` option to the `vuln` command to recursively follow discovered service banners across a network.
+
+Alternative: Add a `--json` output mode to the `whois` command for machine-readable WHOIS results.
