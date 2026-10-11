@@ -81,6 +81,7 @@ def run_report(
     audit_file: Optional[str] = None,
     min_length: Optional[int] = None,
     profile: Optional[str] = None,
+    open_only: bool = False,
 ) -> Dict[str, Any]:
     """Run a port scan and an optional password audit, returning combined report data.
 
@@ -93,6 +94,7 @@ def run_report(
         min_length: Optional minimum length threshold passed to the password audit.
         profile: Optional scan profile ('fast', 'normal', 'full') that overrides
             ports/timeout/workers unless explicitly set.
+        open_only: If True, filter scan results to open ports only in output.
 
     Returns:
         Combined report dict with ``scan`` and ``audit`` sections.
@@ -109,13 +111,18 @@ def run_report(
         audit_passwords(passwords, min_length=min_length) if passwords else []
     )
 
+    scan_details = [{"port": port, "open": is_open} for port, is_open in scan_results]
+    if open_only:
+        scan_details = [d for d in scan_details if d["open"]]
+
     return {
         "scan": {
             "target": target,
             "profile": profile,
             "ports_scanned": len(port_list),
             "open_ports": open_ports,
-            "details": [{"port": port, "open": is_open} for port, is_open in scan_results],
+            "details": scan_details,
+            "open_only": open_only,
         },
         "audit": {
             "passwords_audited": len(passwords),
