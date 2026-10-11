@@ -13453,3 +13453,162 @@ def test_vuln_out_option_csv(tmp_path, monkeypatch) -> None:
     assert "critical" in content
     assert "vsftpd" in content
     assert "Report written to" in result.output
+
+
+# ---------------------------------------------------------------------------
+# nmap command CLI integration tests
+
+
+SAMPLE_NMAP_XML = """<runscanner version="1.0" scanner="nmap" args="nmap -oX - 192.168.1.1" start="1234567890" nmap_version="7.94" xmloutputversion="1.05">
+<scaninfo type="syn" protocol="tcp" numservices="1000" services="1-1000"/>
+<verbose level="0"/>
+<debugging level="0"/>
+<host starttime="1234567890" endtime="1234567891">
+<status state="up" reason="syn-ack"/>
+<address addr="192.168.1.1" addrtype="ipv4"/>
+<hostnames>
+<hostname name="router.local" type="PTR"/>
+</hostnames>
+<ports>
+<port protocol="tcp" portid="22">
+<state state="open" reason="syn-ack" reason_ttl="64"/>
+<service name="ssh" product="OpenSSH" version="7.2p2" extrainfo="protocol 2.0" method="probed" conf="10"/>
+</port>
+<port protocol="tcp" portid="21">
+<state state="open" reason="syn-ack" reason_ttl="64"/>
+<service name="ftp" product="vsftpd" version="2.3.4" method="probed" conf="10"/>
+</port>
+</ports>
+</host>
+</runscanner>
+"""
+
+
+def test_nmap_help() -> None:
+    """Test nmap command help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["nmap", "--help"])
+    assert result.exit_code == 0
+    assert "--input-file" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+
+
+def test_nmap_top_level_help_lists_command() -> None:
+    """Test that nmap appears in top-level help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "nmap" in result.output.lower()
+
+
+def test_nmap_offline_json(tmp_path) -> None:
+    """Test nmap command with valid Nmap XML and JSON output."""
+    xml_file = tmp_path / "scan.xml"
+    xml_file.write_text(SAMPLE_NMAP_XML, encoding="utf-8")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["nmap", "--input-file", str(xml_file), "--format", "json"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["input_file"] == str(xml_file)
+    assert parsed["hosts_scanned"] == 1
+    assert parsed["total_ports_scanned"] == 2
+    assert parsed["total_open_ports"] == 2
+    assert parsed["services_detected"] == 2
+    assert parsed["finding_count"] >= 1
+    # Should find OpenSSH 7.2p2 vulns and vsftpd 2.3.4 backdoor
+    cve_ids = [f["id"] for f in parsed["findings"]]
+    assert "CVE-2016-6210" in cve_ids
+    assert "VSFTPD-2.3.4-BACKDOOR" in cve_ids
+
+
+def test_nmap_offline_markdown(tmp_path) -> None:
+    """Test nmap command with valid Nmap XML and Markdown output."""
+    xml_file = tmp_path / "scan.xml"
+    xml_file.write_text(SAMPLE_NMAP_XML, encoding="utf-8")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["nmap", "--input-file", str(xml_file), "--format", "markdown"])
+    assert result.exit_code == 0
+    assert "ethscan Nmap Vulnerability Report" in result.output
+    assert "Severity Summary" in result.output
+    assert "Detected Services" in result.output
+    assert "Vulnerability Findings" in result.output
+    assert "CVE-2016-6210" in result.output
+    assert "VSFTPD-2.3.4-BACKDOOR" in result.output
+    assert "OpenSSH" in result.output
+    assert "vsftpd" in result.output
+
+
+def test_nmap_out_option_json(tmp_path) -> None:
+    """Test nmap command with --out option writing JSON to file."""
+    xml_file = tmp_path / "scan.xml"
+    xml_file.write_text(SAMPLE_NMAP_XML, encoding="utf-8")
+    out_file = tmp_path / "report.json"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "nmap",
+            "--input-file",
+            str(xml_file),
+            "--format",
+            "json",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert out_file.exists()
+    content = out_file.read_text(encoding="utf-8")
+    parsed = json.loads(content)
+    assert parsed["input_file"] == str(xml_file)
+    assert "Report written to" in result.output
+
+
+def test_nmap_out_option_markdown(tmp_path) -> None:
+    """Test nmap command with --out option writing Markdown to file."""
+    xml_file = tmp_path / "scan.xml"
+    xml_file.write_text(SAMPLE_NMAP_XML, encoding="utf-8")
+    out_file = tmp_path / "report.md"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "nmap",
+            "--input-file",
+            str(xml_file),
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert out_file.exists()
+    content = out_file.read_text(encoding="utf-8")
+    assert "ethscan Nmap Vulnerability Report" in content
+    assert "Report written to" in result.output
+
+
+def test_nmap_missing_input_file() -> None:
+    """Test nmap command with missing input file."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["nmap", "--input-file", "/nonexistent/scan.xml"])
+    assert result.exit_code != 0
+    assert "Error" in result.output or "does not exist" in result.output.lower()
+
+
+def test_nmap_default_format_is_json(tmp_path) -> None:
+    """Test that default format is JSON when --format not specified."""
+    xml_file = tmp_path / "scan.xml"
+    xml_file.write_text(SAMPLE_NMAP_XML, encoding="utf-8")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["nmap", "--input-file", str(xml_file)])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["input_file"] == str(xml_file)

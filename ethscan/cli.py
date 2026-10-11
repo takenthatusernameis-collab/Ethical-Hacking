@@ -191,6 +191,11 @@ from ethscan.radix import (
     format_radix_report_markdown,
     run_radix,
 )
+from ethscan.nmap import (
+    format_nmap_report_json,
+    format_nmap_report_markdown,
+    run_nmap,
+)
 
 
 @click.group()
@@ -3049,6 +3054,44 @@ def validate(
         output = format_validate_report_json(results)
     else:
         output = format_validate_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--input-file",
+    "input_file",
+    required=True,
+    type=click.Path(exists=True, readable=True),
+    help="Path to Nmap XML output file (-oX).",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def nmap(input_file: str, fmt: str, out_path: Optional[str]) -> None:
+    """Parse Nmap XML scan output and cross-reference services against vulnerability database."""
+    results = run_nmap(input_file)
+
+    if fmt == "json":
+        output = format_nmap_report_json(results)
+    else:
+        output = format_nmap_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

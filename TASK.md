@@ -1957,3 +1957,54 @@ Added machine-readable CSV output to the `cve` command, parallel to the `--outpu
 - `python -m ethscan cve --help` -> shows `--output-format [json|markdown|csv]` and `--format [json|markdown|csv]` (deprecated alias)
 - End-to-end: `python -m ethscan cve --target nonexistent.invalid.domain.tld --output-format csv --timeout 1.0` -> produces header-only CSV (`source,port,product,version,cve_id,severity,score,title,description,references,cached,offline_fallback`) with no finding rows (no matches).
 - End-to-end: `python -m ethscan cve --target example.com --services-file services.json --output-format csv` -> produces CSV with CVE findings rows.
+
+## Completed: `nmap` command (Nmap XML parser)
+
+Added a dedicated `nmap` command that parses Nmap XML scan output (`-oX` format) and cross-references detected service versions against the built-in `vuln` CVE/weakness database (reusing `match_service_vulns` from `ethscan/vuln.py`). The command accepts `--input-file` (Nmap XML path), `--format [json|markdown]`, `--out`, and produces a consolidated report of detected services and matched vulnerabilities.
+
+### Added Files
+- `ethscan/nmap.py` — Nmap XML parser module with:
+  - `parse_nmap_xml()` — parses Nmap XML content into structured host/port/service data
+  - `run_nmap()` — public entry point: reads XML file, parses hosts/ports, matches services against vulnerability database
+  - `format_nmap_report_json()` / `format_nmap_report_markdown()` — output formatters (markdown includes summary, detected services table, vulnerability findings with severity summary, notes)
+- `tests/test_nmap.py` — 11 unit tests: XML parsing (basic, empty hosts, no open ports, missing file), `run_nmap` (offline target with findings, no open ports, banner parsing fallback, severity counts), JSON formatter, Markdown formatter (with/without findings)
+
+### Modified Files
+- `ethscan/cli.py` — registered `nmap` command with `--input-file` (required), `--format` (json/markdown, default json), `--out`; imports `run_nmap`, `format_nmap_report_json`, `format_nmap_report_markdown` from `ethscan.nmap`
+- `tests/test_cli.py` — 8 CLI integration tests: `nmap` help, top-level help listing, offline JSON/Markdown output, `--out` option (JSON and Markdown), missing input file handling, default format is JSON
+- `README.md` — added Nmap XML parser (`nmap`) to the features list
+
+### Verification
+- `python -m pytest -q` -> 1727 passed, 1 skipped (1705 baseline + 22 new: 11 unit + 8 CLI + 3 pre-existing)
+- `python -m ethscan --help` -> lists `nmap` among the commands
+- `python -m ethscan nmap --help` -> shows all expected options (`--input-file`, `--format`, `--out`)
+- End-to-end JSON: `python -m ethscan nmap --input-file scan.xml --format json` -> reports hosts scanned, ports, services detected, findings with CVE IDs, severity counts
+- End-to-end Markdown: `--format markdown` -> renders summary, detected services table, vulnerability findings with details
+- Handles OpenSSH version matching (CVE-2016-6210, CVE-2018-15473) and vsftpd 2.3.4 backdoor detection
+- Banner parsing fallback works when product/version are in extrainfo field
+
+## Suggested next task
+
+**Add a `--recursive` option to the `whois` command** for recursive WHOIS queries that follow referral servers extracted from each response across registrar tiers (building on the existing `--recursive/--no-recursive` and `--max-depth` that are already implemented — this would extend the recursion to follow cross-registrar referrals automatically).
+
+Alternative: Add a `stale` command to detect stale DNS records (A/AAAA/CNAME records pointing to deallocated or unresolvable IP addresses / dead cloud resources) using stdlib-only DNS resolution, with configurable timeout and concurrency.
+
+Alternative: Add a `radix` command for radix tree visualization of CIDR blocks (merging overlapping/supernetting adjacent networks).
+
+## Requirements
+- Pick one of the suggested features and implement it following the existing module conventions.
+- Add a new module under `ethscan/` with `run_*`, `format_*_report_json`, `format_*_report_markdown` (for new commands) or extend an existing module (for new options).
+- Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
+- Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
+- Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
+
+## Current state
+- All 31 commands implemented and wired up (including `nmap`).
+- `vuln` now supports `--output-format [json|markdown|csv]` and `--format [json|markdown|csv]` (deprecated alias) for machine-readable CSV export of vulnerability findings.
+- `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv`.
+- `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, `--max-depth`.
+- `whois` now supports `--recursive/--no-recursive`, `--max-depth`, `--format json|markdown`, and `--out`.
+- `audit` now supports `--format json|markdown`, `--out`, `--min-length`, `--output-format csv`, `--sort`, and `--salt`/`--pepper`/`--algorithm`.
+- `report`, `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `dnssec`, `geo` (with `--recursive`, `--max-depth`), `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon`, `resolve`, `validate`, `radix` (with `--cidr-file`), `nmap` all implemented with JSON/Markdown output.
+- Configuration file (`ethscan.yaml`) persists default options across commands.
+- Tests: 1727 passing (1 skipped).
