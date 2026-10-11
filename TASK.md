@@ -574,6 +574,35 @@ The `mac` command resolves a MAC address to its vendor via OUI lookup using a pu
 - `python -m ethscan --help` -> lists `mac` among the 23 commands.
 - `python -m ethscan mac --help` -> shows all expected options (`--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out`).
 
+## Completed: `resolve` command (forward/reverse DNS resolution)
+
+The `resolve` command performs forward and reverse DNS resolution for domains and IP addresses. It supports A, AAAA, CNAME records for forward lookups and PTR records for reverse lookups. Uses stdlib `socket` for A/AAAA/PTR lookups with optional dnspython support for CNAME and custom resolver selection.
+
+### Added Files
+- `ethscan/resolve.py` — DNS resolution module with:
+  - `_normalize_target()` — extracts a bare domain/IP from URL/bare targets
+  - `_is_ip_address()` — validates whether a string is an IP address
+  - `resolve_a_records()` / `resolve_aaaa_records()` / `resolve_cname_records()` / `resolve_ptr_records()` — stdlib/dnspython-based record resolution
+  - `run_resolve()` — public entry point: auto-detects IP vs domain, selects appropriate default record types, queries specified types
+  - `format_resolve_report_json()` / `format_resolve_report_markdown()` — output formatters
+
+### Modified Files
+- `ethscan/cli.py` — registered `resolve` command with `--target`, `--types` (A,AAAA,CNAME,PTR), `--server` (custom resolver), `--timeout`, `--format`, `--out`
+- `tests/test_resolve.py` — 21 unit tests: target normalization (domain/IP/URL), IP detection, formatters (JSON/Markdown for domain/IP/empty), `run_resolve` (defaults, custom types, type filtering, custom server, URL targets, offline)
+- `tests/test_cli.py` — 12 CLI integration tests: help, top-level listing, offline JSON/Markdown (domain/IP), `--types`, unknown type rejection, `--server`, `--timeout`, `--out` (JSON/Markdown), URL target
+- `README.md` — added DNS forward/reverse resolution (`resolve`) to the features list
+
+### Verification
+- `python -m pytest -q` -> 957 passed, 1 skipped (924 baseline + 33 new: 21 unit + 12 CLI).
+- `python -m ethscan --help` -> lists `resolve` among the 24 commands.
+- `python -m ethscan resolve --help` -> shows all expected options.
+- End-to-end: `python -m ethscan resolve --target example.com --format markdown` -> reports A/AAAA records.
+- End-to-end: `python -m ethscan resolve --target 8.8.8.8 --format markdown` -> reports PTR record (dns.google).
+- End-to-end: `python -m ethscan resolve --target example.com --types A,PTR --format json` -> queries A only (PTR ignored for domains).
+- End-to-end: `python -m ethscan resolve --target https://example.com/path --format json` -> normalizes URL, resolves correctly.
+
 ## Suggested next task
 
-**Add a `resolve` command** for forward/reverse DNS resolution (A, AAAA, PTR, CNAME records; dnspython optional with stdlib `socket` fallback).
+**Add a `headers` shorthand command** that runs just the `web` check with `--checks headers` for quick security header checks.
+
+Alternative: Add a `cve` command that queries the NVD/CVE API for known vulnerabilities in detected service versions (using `service` output via `--services-file`).

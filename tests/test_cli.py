@@ -7379,3 +7379,237 @@ def test_mac_timeout_option(monkeypatch) -> None:
     result = runner.invoke(cli, ["mac", "--target", "00:1A:2B:3C:4D:5E", "--timeout", "10.0"])
     assert result.exit_code == 0
     assert called_args["timeout"] == 10.0
+
+
+def test_resolve_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["resolve", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--types" in result.output
+    assert "--server" in result.output
+    assert "--timeout" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+
+
+def test_resolve_top_level_help_lists_command() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "resolve" in result.output
+
+
+def test_resolve_offline_domain_json(monkeypatch) -> None:
+    def mock_run_resolve(target, record_types=None, server=None, timeout=2.0):
+        return {
+            "target": target,
+            "normalized": "example.com",
+            "is_ip": False,
+            "record_types_queried": ["A", "AAAA", "CNAME"],
+            "records": {"A": [], "AAAA": [], "CNAME": []},
+            "dnspython_available": False,
+            "server": server,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_resolve", mock_run_resolve)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["resolve", "--target", "example.com", "--format", "json"])
+    assert result.exit_code == 0
+    assert "example.com" in result.output
+    assert "is_ip" in result.output
+    assert "A" in result.output
+    assert "AAAA" in result.output
+    assert "CNAME" in result.output
+
+
+def test_resolve_offline_domain_markdown(monkeypatch) -> None:
+    def mock_run_resolve(target, record_types=None, server=None, timeout=2.0):
+        return {
+            "target": target,
+            "normalized": "example.com",
+            "is_ip": False,
+            "record_types_queried": ["A", "AAAA", "CNAME"],
+            "records": {"A": [], "AAAA": [], "CNAME": []},
+            "dnspython_available": False,
+            "server": server,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_resolve", mock_run_resolve)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["resolve", "--target", "example.com", "--format", "markdown"])
+    assert result.exit_code == 0
+    assert "DNS Forward/Reverse Resolution Report" in result.output
+    assert "example.com" in result.output
+    assert "Domain Name" in result.output
+
+
+def test_resolve_offline_ip_json(monkeypatch) -> None:
+    def mock_run_resolve(target, record_types=None, server=None, timeout=2.0):
+        return {
+            "target": target,
+            "normalized": "8.8.8.8",
+            "is_ip": True,
+            "record_types_queried": ["PTR"],
+            "records": {"PTR": []},
+            "dnspython_available": False,
+            "server": server,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_resolve", mock_run_resolve)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["resolve", "--target", "8.8.8.8", "--format", "json"])
+    assert result.exit_code == 0
+    assert "8.8.8.8" in result.output
+    assert "is_ip" in result.output
+    assert "PTR" in result.output
+
+
+def test_resolve_types_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_resolve(target, record_types=None, server=None, timeout=2.0):
+        called_args["record_types"] = record_types
+        return {
+            "target": target,
+            "normalized": "example.com",
+            "is_ip": False,
+            "record_types_queried": record_types or ["A", "AAAA", "CNAME"],
+            "records": {rt: [] for rt in (record_types or ["A", "AAAA", "CNAME"])},
+            "dnspython_available": False,
+            "server": server,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_resolve", mock_run_resolve)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["resolve", "--target", "example.com", "--types", "A,PTR", "--format", "json"])
+    assert result.exit_code == 0
+    assert called_args["record_types"] == ["A", "PTR"]
+
+
+def test_resolve_unknown_type_rejected() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["resolve", "--target", "example.com", "--types", "INVALID", "--format", "json"])
+    assert result.exit_code == 0
+    assert "Unknown record types" in result.output
+    assert "INVALID" in result.output
+
+
+def test_resolve_server_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_resolve(target, record_types=None, server=None, timeout=2.0):
+        called_args["server"] = server
+        return {
+            "target": target,
+            "normalized": "example.com",
+            "is_ip": False,
+            "record_types_queried": ["A"],
+            "records": {"A": []},
+            "dnspython_available": False,
+            "server": server,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_resolve", mock_run_resolve)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["resolve", "--target", "example.com", "--server", "1.1.1.1", "--format", "json"])
+    assert result.exit_code == 0
+    assert called_args["server"] == "1.1.1.1"
+
+
+def test_resolve_timeout_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_resolve(target, record_types=None, server=None, timeout=2.0):
+        called_args["timeout"] = timeout
+        return {
+            "target": target,
+            "normalized": "example.com",
+            "is_ip": False,
+            "record_types_queried": ["A"],
+            "records": {"A": []},
+            "dnspython_available": False,
+            "server": server,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_resolve", mock_run_resolve)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["resolve", "--target", "example.com", "--timeout", "5.0", "--format", "json"])
+    assert result.exit_code == 0
+    assert called_args["timeout"] == 5.0
+
+
+def test_resolve_out_option_json(tmp_path, monkeypatch) -> None:
+    def mock_run_resolve(target, record_types=None, server=None, timeout=2.0):
+        return {
+            "target": target,
+            "normalized": "example.com",
+            "is_ip": False,
+            "record_types_queried": ["A"],
+            "records": {"A": ["93.184.216.34"]},
+            "dnspython_available": False,
+            "server": server,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_resolve", mock_run_resolve)
+
+    out_file = tmp_path / "resolve_report.json"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["resolve", "--target", "example.com", "--out", str(out_file)])
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "example.com" in content
+    assert "93.184.216.34" in content
+
+
+def test_resolve_out_option_markdown(tmp_path, monkeypatch) -> None:
+    def mock_run_resolve(target, record_types=None, server=None, timeout=2.0):
+        return {
+            "target": target,
+            "normalized": "example.com",
+            "is_ip": False,
+            "record_types_queried": ["A"],
+            "records": {"A": ["93.184.216.34"]},
+            "dnspython_available": False,
+            "server": server,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_resolve", mock_run_resolve)
+
+    out_file = tmp_path / "resolve_report.md"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["resolve", "--target", "example.com", "--format", "markdown", "--out", str(out_file)])
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "DNS Forward/Reverse Resolution Report" in content
+    assert "93.184.216.34" in content
+
+
+def test_resolve_url_target(monkeypatch) -> None:
+    def mock_run_resolve(target, record_types=None, server=None, timeout=2.0):
+        return {
+            "target": target,
+            "normalized": "example.com",
+            "is_ip": False,
+            "record_types_queried": ["A", "AAAA", "CNAME"],
+            "records": {"A": [], "AAAA": [], "CNAME": []},
+            "dnspython_available": False,
+            "server": server,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_resolve", mock_run_resolve)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["resolve", "--target", "https://example.com/path", "--format", "json"])
+    assert result.exit_code == 0
+    assert "example.com" in result.output

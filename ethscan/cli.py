@@ -46,6 +46,11 @@ from ethscan.dns import (
     format_dns_report_markdown,
     run_dns,
 )
+from ethscan.resolve import (
+    format_resolve_report_json,
+    format_resolve_report_markdown,
+    run_resolve,
+)
 from ethscan.dnsbrute import (
     format_dnsbrute_report_json,
     format_dnsbrute_report_markdown,
@@ -616,6 +621,70 @@ def dns(
         output = format_dns_report_json(results)
     else:
         output = format_dns_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target domain, IP address, or URL (e.g. example.com, 8.8.8.8, https://example.com)",
+)
+@click.option(
+    "--types",
+    "record_types",
+    help="Comma-separated list of DNS record types: A, AAAA, CNAME, PTR. "
+    "Defaults to A,AAAA,CNAME for domains; PTR for IP addresses.",
+)
+@click.option(
+    "--server",
+    help="Custom DNS resolver IP address (requires dnspython)",
+)
+@click.option("--timeout", default=2.0, type=float, help="Resolution timeout in seconds")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def resolve(
+    target: str,
+    record_types: Optional[str],
+    server: Optional[str],
+    timeout: float,
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Perform forward/reverse DNS resolution for TARGET."""
+    types_list = None
+    if record_types:
+        types_list = [t.strip().upper() for t in record_types.split(",") if t.strip()]
+        valid_types = {"A", "AAAA", "CNAME", "PTR"}
+        unknown = [t for t in types_list if t not in valid_types]
+        if unknown:
+            click.echo(f"Unknown record types: {', '.join(unknown)}")
+            click.echo(f"Valid types: {', '.join(sorted(valid_types))}")
+            return
+
+    results = run_resolve(target, record_types=types_list, server=server, timeout=timeout)
+
+    if fmt == "json":
+        output = format_resolve_report_json(results)
+    else:
+        output = format_resolve_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
