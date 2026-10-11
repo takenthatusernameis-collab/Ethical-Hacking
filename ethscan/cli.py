@@ -305,6 +305,19 @@ def scan(target: str, ports: str, profile: Optional[str], timeout: float, worker
     help="Flag passwords shorter than this length as too short.",
 )
 @click.option(
+    "--sort",
+    "sort_by",
+    type=click.Choice(["score", "verdict", "length"]),
+    default=None,
+    help="Sort audit results by score, verdict, or length.",
+)
+@click.option(
+    "--sort-desc/--sort-asc",
+    "sort_desc",
+    default=True,
+    help="Sort direction: descending (default) or ascending.",
+)
+@click.option(
     "--output-format",
     "output_fmt",
     type=click.Choice(["json", "markdown", "csv"]),
@@ -324,7 +337,15 @@ def scan(target: str, ports: str, profile: Optional[str], timeout: float, worker
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def audit(file: str, min_length: Optional[int], output_fmt: Optional[str], fmt: str, out_path: str) -> None:
+def audit(
+    file: str,
+    min_length: Optional[int],
+    sort_by: Optional[str],
+    sort_desc: bool,
+    output_fmt: Optional[str],
+    fmt: str,
+    out_path: str,
+) -> None:
     """Audit passwords for strength and common weaknesses."""
     if file:
         with open(file, "r", encoding="utf-8") as handle:
@@ -336,15 +357,32 @@ def audit(file: str, min_length: Optional[int], output_fmt: Optional[str], fmt: 
         click.echo("No passwords provided.")
         return
 
-    results = audit_passwords(passwords, min_length=min_length)
+    results = audit_passwords(
+        passwords,
+        min_length=min_length,
+        sort_by=sort_by,
+        sort_desc=sort_desc,
+    )
 
     # --output-format takes precedence over the deprecated --format alias
     chosen_format = output_fmt if output_fmt is not None else fmt
 
     if chosen_format == "json":
-        output = format_audit_report_json(passwords, results, min_length=min_length)
+        output = format_audit_report_json(
+            passwords,
+            results,
+            min_length=min_length,
+            sort_by=sort_by,
+            sort_desc=sort_desc,
+        )
     elif chosen_format == "markdown":
-        output = format_audit_report_markdown(passwords, results, min_length=min_length)
+        output = format_audit_report_markdown(
+            passwords,
+            results,
+            min_length=min_length,
+            sort_by=sort_by,
+            sort_desc=sort_desc,
+        )
     else:
         output = format_audit_report_csv(passwords, results, min_length=min_length)
 
