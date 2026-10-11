@@ -1419,3 +1419,59 @@ Alternative: Add a `--sort` option to the `audit` command for sorting password r
 - Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
 - Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
 - Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
+
+## Current state
+- All 28 commands implemented and wired up (including `hash` with `--file`, `--check`, salt, and pepper).
+- `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv`.
+- `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, `--max-depth`.
+- `whois` now supports `--recursive/--no-recursive` and `--max-depth`.
+- `audit` now supports `--format json|markdown`, `--out`, `--min-length`, and `--output-format csv` for spreadsheet-compatible password audit dumps.
+- `report` now supports `--target`, `--ports`, `--profile`, `--timeout`, `--workers`, `--audit-file`, `--min-length` (pass-through to the embedded audit), `--open-only/--no-open-only` (filter scan results to open ports only), `--sort {score|verdict|length}` with `--sort-desc/--sort-asc` (reorder audit rows; scan results stay in port order), `--output-format [json|markdown|csv]` (with `--format` as deprecated alias), and `--out`; report logic lives in `ethscan/report.py` (`run_report`, `format_report_json`, `format_report_markdown`, `format_report_csv`).
+- `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `vuln` (with `--min-severity`), `dnssec`, `geo`, `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon` all implemented with JSON/Markdown output.
+- Configuration file (`ethscan.yaml`) persists default options across commands.
+- Tests: 1559 passing (1 skipped).
+
+## Completed: `--sort` option for `report` command
+
+Added a `--sort` option to the `report` command that reorders the embedded password audit results by score, verdict, or length, in ascending or descending direction. The port scan results remain in port order; only the audit table/CSV rows are reordered.
+
+### Implementation
+- `ethscan/report.py`:
+  - Added `VALID_SORT_KEYS = ("score", "verdict", "length")` constant.
+  - Added `_sort_audit_results(results, sort_by, sort_desc)` helper that returns a sorted copy of the audit result dicts. Verdicts are sorted case-insensitively; invalid sort keys preserve original order.
+  - Updated `run_report()` to accept `sort_by` and `sort_desc` (defaults `None` and `True`) and include `sort_by`/`sort_desc` in the returned audit section.
+  - Updated `format_report_markdown()` to render a `**Sorted By:** <field> (<Direction>)` summary line.
+- `ethscan/cli.py` — added `--sort [score|verdict|length]` (default None) and `--sort-desc/--sort-asc` (default True) options to the `report` command; passes both through to `run_report()`.
+
+### Tests Added
+- `tests/test_report.py` — 9 new unit tests:
+  - `test_run_report_sort_by_score_desc` — descending score order, `sort_by`/`sort_desc` echoed
+  - `test_run_report_sort_by_score_asc` — ascending score order
+  - `test_run_report_sort_by_length_desc` — descending length order
+  - `test_run_report_sort_by_verdict_desc` — descending (alphabetical) verdict order
+  - `test_run_report_sort_defaults_to_none` — defaults are `None`/`True`
+  - `test_run_report_sort_preserves_original_when_invalid` — invalid key keeps original order
+  - `test_format_report_json_with_sort` — JSON echoes sort fields and ordering
+  - `test_format_report_markdown_with_sort` — markdown shows `Sorted By:` line and row order
+  - `test_format_report_csv_with_sort` — CSV rows follow sort order
+- `tests/test_cli.py` — 5 new CLI integration tests:
+  - `test_report_help_shows_sort` — help shows `--sort`, choices, and `--sort-desc`/`--sort-asc`
+  - `test_report_sort_option_json` — `--sort score --sort-desc` passes through
+  - `test_report_sort_asc_option` — `--sort length --sort-asc` passes through
+  - `test_report_sort_disabled_by_default` — defaults are `None`/`True`
+  - `test_report_sort_markdown_shows_sorted_by` — markdown output contains the `Sorted By:` line
+
+### Verification
+- `python -m pytest -q` -> 1559 passed, 1 skipped (1545 baseline + 14 new: 9 unit + 5 CLI).
+- `python -m ethscan report --help` -> shows `--sort [score|verdict|length]` and `--sort-desc / --sort-asc`.
+- End-to-end (Markdown): `--sort score --sort-desc` -> audit rows ordered 100.0, 30.0, 20.0, 20.0; `**Sorted By:** score (Descending)` present.
+- End-to-end (JSON): `--sort length --sort-asc` -> `sort_by: length`, `sort_desc: false`, lengths `[5, 6, 8, 18]`.
+- Backward compatibility: without `--sort`, audit rows remain in original order and no `Sorted By:` line is rendered.
+
+## Suggested next task
+
+**Add a `validate` command** that validates and expands port specifications (comma-separated lists/ranges) and CIDR inputs offline, reusing `parse_port_range` and the stdlib `ipaddress` module, with JSON/Markdown output.
+
+Alternative: Add a `--sort` option to the standalone `audit` command for sorting password results by score, verdict, or length.
+
+Alternative: Add a `--recursive` option to the `vuln` command to recursively follow discovered service banners across a network.

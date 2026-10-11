@@ -73,6 +73,37 @@ def _load_passwords(audit_file: Optional[str]) -> List[str]:
         return [line.strip() for line in handle if line.strip()]
 
 
+VALID_SORT_KEYS = ("score", "verdict", "length")
+
+
+def _sort_audit_results(
+    results: List[Dict[str, Any]],
+    sort_by: Optional[str],
+    sort_desc: bool,
+) -> List[Dict[str, Any]]:
+    """Return a sorted copy of the audit results.
+
+    Args:
+        results: Audit result dicts (each with ``score``/``verdict``/``length``).
+        sort_by: Field to sort by ('score', 'verdict', or 'length'); None keeps order.
+        sort_desc: When True, sort descending.
+
+    Returns:
+        A new list sorted in place-safe order.
+    """
+    if sort_by not in VALID_SORT_KEYS:
+        return list(results)
+
+    def sort_key(item: Dict[str, Any]) -> Any:
+        value = item.get(sort_by)
+        if sort_by == "verdict":
+            # Verdicts are strings; sort alphabetically (case-insensitive).
+            return str(value).lower()
+        return value
+
+    return sorted(results, key=sort_key, reverse=sort_desc)
+
+
 def run_report(
     target: str,
     ports: str = "common",
@@ -82,6 +113,8 @@ def run_report(
     min_length: Optional[int] = None,
     profile: Optional[str] = None,
     open_only: bool = False,
+    sort_by: Optional[str] = None,
+    sort_desc: bool = True,
 ) -> Dict[str, Any]:
     """Run a port scan and an optional password audit, returning combined report data.
 
@@ -95,6 +128,8 @@ def run_report(
         profile: Optional scan profile ('fast', 'normal', 'full') that overrides
             ports/timeout/workers unless explicitly set.
         open_only: If True, filter scan results to open ports only in output.
+        sort_by: Optional audit sort field ('score', 'verdict', 'length').
+        sort_desc: When True (default), sort descending.
 
     Returns:
         Combined report dict with ``scan`` and ``audit`` sections.
@@ -115,6 +150,21 @@ def run_report(
     if open_only:
         scan_details = [d for d in scan_details if d["open"]]
 
+    audit_result_dicts = [
+        {
+            "password": pwd,
+            "length": eval_data["length"],
+            "entropy": eval_data["entropy"],
+            "common": eval_data["common"],
+            "patterns": eval_data["patterns"],
+            "too_short": eval_data.get("too_short", False),
+            "score": eval_data["score"],
+            "verdict": eval_data["verdict"],
+        }
+        for pwd, eval_data in audit_results
+    ]
+    audit_result_dicts = _sort_audit_results(audit_result_dicts, sort_by, sort_desc)
+
     return {
         "scan": {
             "target": target,
@@ -127,19 +177,9 @@ def run_report(
         "audit": {
             "passwords_audited": len(passwords),
             "min_length": min_length,
-            "results": [
-                {
-                    "password": pwd,
-                    "length": eval_data["length"],
-                    "entropy": eval_data["entropy"],
-                    "common": eval_data["common"],
-                    "patterns": eval_data["patterns"],
-                    "too_short": eval_data.get("too_short", False),
-                    "score": eval_data["score"],
-                    "verdict": eval_data["verdict"],
-                }
-                for pwd, eval_data in audit_results
-            ],
+            "sort_by": sort_by,
+            "sort_desc": sort_desc,
+            "results": audit_result_dicts,
         },
     }
 
@@ -174,6 +214,9 @@ def format_report_markdown(data: Dict[str, Any]) -> str:
     lines.append(f"- **Passwords Audited:** {audit['passwords_audited']}")
     if audit.get("min_length") is not None:
         lines.append(f"- **Min Length:** {audit['min_length']}")
+    if audit.get("sort_by"):
+        direction = "Descending" if audit.get("sort_desc") else "Ascending"
+        lines.append(f"- **Sorted By:** {audit['sort_by']} ({direction})")
     lines.append("")
     if audit["results"]:
         lines.append("| Password | Length | Entropy | Common | Patterns | Too Short | Score | Verdict |")

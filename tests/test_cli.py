@@ -1227,6 +1227,181 @@ def test_report_open_only_disabled_by_default(monkeypatch) -> None:
     )
     assert result.exit_code == 0
     assert called_args["open_only"] is False
+
+
+def test_report_help_shows_sort() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["report", "--help"])
+    assert result.exit_code == 0
+    assert "--sort" in result.output
+    assert "score" in result.output
+    assert "verdict" in result.output
+    assert "length" in result.output
+    assert "--sort-desc" in result.output
+    assert "--sort-asc" in result.output
+
+
+def test_report_sort_option_json(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_report(*args, **kwargs):
+        called_args.update(kwargs)
+        return {
+            "scan": {
+                "target": "127.0.0.1",
+                "profile": None,
+                "ports_scanned": 1,
+                "open_ports": [],
+                "details": [{"port": 80, "open": False}],
+                "open_only": False,
+            },
+            "audit": {
+                "passwords_audited": 0,
+                "min_length": None,
+                "sort_by": kwargs.get("sort_by"),
+                "sort_desc": kwargs.get("sort_desc", True),
+                "results": [],
+            },
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_report", mock_run_report)
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--ports",
+            "80",
+            "--format",
+            "json",
+            "--sort",
+            "score",
+            "--sort-desc",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["sort_by"] == "score"
+    assert called_args["sort_desc"] is True
+
+
+def test_report_sort_asc_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_report(*args, **kwargs):
+        called_args.update(kwargs)
+        return {
+            "scan": {
+                "target": "127.0.0.1",
+                "profile": None,
+                "ports_scanned": 1,
+                "open_ports": [],
+                "details": [{"port": 80, "open": False}],
+                "open_only": False,
+            },
+            "audit": {
+                "passwords_audited": 0,
+                "min_length": None,
+                "sort_by": kwargs.get("sort_by"),
+                "sort_desc": kwargs.get("sort_desc", True),
+                "results": [],
+            },
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_report", mock_run_report)
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--ports",
+            "80",
+            "--format",
+            "json",
+            "--sort",
+            "length",
+            "--sort-asc",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["sort_by"] == "length"
+    assert called_args["sort_desc"] is False
+
+
+def test_report_sort_disabled_by_default(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_report(*args, **kwargs):
+        called_args.update(kwargs)
+        return {
+            "scan": {
+                "target": "127.0.0.1",
+                "profile": None,
+                "ports_scanned": 1,
+                "open_ports": [],
+                "details": [{"port": 80, "open": False}],
+                "open_only": False,
+            },
+            "audit": {
+                "passwords_audited": 0,
+                "min_length": None,
+                "sort_by": kwargs.get("sort_by"),
+                "sort_desc": kwargs.get("sort_desc", True),
+                "results": [],
+            },
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_report", mock_run_report)
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--ports",
+            "80",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["sort_by"] is None
+    assert called_args["sort_desc"] is True
+
+
+def test_report_sort_markdown_shows_sorted_by(tmp_path) -> None:
+    audit_file = tmp_path / "passwords.txt"
+    audit_file.write_text("a\nb\nc\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--ports",
+            "80",
+            "--timeout",
+            "0.1",
+            "--workers",
+            "10",
+            "--audit-file",
+            str(audit_file),
+            "--format",
+            "markdown",
+            "--sort",
+            "score",
+            "--sort-desc",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "**Sorted By:** score (Descending)" in result.output
+
+
     runner = CliRunner()
     result = runner.invoke(cli, ["web", "--help"])
     assert result.exit_code == 0

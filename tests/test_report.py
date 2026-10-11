@@ -694,3 +694,153 @@ def test_format_report_csv_open_only() -> None:
     assert rows[1][0] == "scan"
     assert rows[1][1] == "80"
     assert rows[1][2] == "true"
+
+
+# --- sort option tests ---
+
+
+def _audit_results():
+    return [
+        {"password": "a", "length": 1, "entropy": 1.0, "common": False, "patterns": False, "too_short": False, "score": 10.0, "verdict": "strong"},
+        {"password": "b", "length": 8, "entropy": 3.0, "common": True, "patterns": False, "too_short": False, "score": 20.0, "verdict": "weak"},
+        {"password": "c", "length": 16, "entropy": 4.0, "common": False, "patterns": True, "too_short": False, "score": 30.0, "verdict": "fair"},
+    ]
+
+
+def test_run_report_sort_by_score_desc(tmp_path) -> None:
+    audit_file = tmp_path / "passwords.txt"
+    audit_file.write_text("a\nb\nc\n")
+    data = run_report(
+        "127.0.0.1", "80", timeout=0.1, workers=10, audit_file=str(audit_file),
+        sort_by="score", sort_desc=True,
+    )
+    scores = [r["score"] for r in data["audit"]["results"]]
+    assert scores == sorted(scores, reverse=True)
+    assert data["audit"]["sort_by"] == "score"
+    assert data["audit"]["sort_desc"] is True
+
+
+def test_run_report_sort_by_score_asc(tmp_path) -> None:
+    audit_file = tmp_path / "passwords.txt"
+    audit_file.write_text("a\nb\nc\n")
+    data = run_report(
+        "127.0.0.1", "80", timeout=0.1, workers=10, audit_file=str(audit_file),
+        sort_by="score", sort_desc=False,
+    )
+    scores = [r["score"] for r in data["audit"]["results"]]
+    assert scores == sorted(scores)
+    assert data["audit"]["sort_desc"] is False
+
+
+def test_run_report_sort_by_length_desc(tmp_path) -> None:
+    audit_file = tmp_path / "passwords.txt"
+    audit_file.write_text("a\nb\nc\n")
+    data = run_report(
+        "127.0.0.1", "80", timeout=0.1, workers=10, audit_file=str(audit_file),
+        sort_by="length", sort_desc=True,
+    )
+    lengths = [r["length"] for r in data["audit"]["results"]]
+    assert lengths == sorted(lengths, reverse=True)
+    assert data["audit"]["sort_by"] == "length"
+
+
+def test_run_report_sort_by_verdict_desc(tmp_path) -> None:
+    audit_file = tmp_path / "passwords.txt"
+    audit_file.write_text("a\nb\nc\n")
+    data = run_report(
+        "127.0.0.1", "80", timeout=0.1, workers=10, audit_file=str(audit_file),
+        sort_by="verdict", sort_desc=True,
+    )
+    verdicts = [r["verdict"].lower() for r in data["audit"]["results"]]
+    assert verdicts == sorted(verdicts, reverse=True)
+    assert data["audit"]["sort_by"] == "verdict"
+
+
+def test_run_report_sort_defaults_to_none(tmp_path) -> None:
+    audit_file = tmp_path / "passwords.txt"
+    audit_file.write_text("a\nb\nc\n")
+    data = run_report(
+        "127.0.0.1", "80", timeout=0.1, workers=10, audit_file=str(audit_file),
+    )
+    assert data["audit"]["sort_by"] is None
+    assert data["audit"]["sort_desc"] is True
+
+
+def test_run_report_sort_preserves_original_when_invalid(tmp_path) -> None:
+    audit_file = tmp_path / "passwords.txt"
+    audit_file.write_text("a\nb\nc\n")
+    data = run_report(
+        "127.0.0.1", "80", timeout=0.1, workers=10, audit_file=str(audit_file),
+        sort_by="bogus",
+    )
+    assert data["audit"]["sort_by"] == "bogus"
+    # Invalid key keeps original order (a, b, c)
+    assert [r["password"] for r in data["audit"]["results"]] == ["a", "b", "c"]
+
+
+def test_format_report_json_with_sort() -> None:
+    data = {
+        "scan": {"target": "h", "ports_scanned": 0, "open_ports": [], "details": []},
+        "audit": {
+            "passwords_audited": 3,
+            "min_length": None,
+            "sort_by": "score",
+            "sort_desc": True,
+            "results": sorted(
+                _audit_results(),
+                key=lambda r: r["score"],
+                reverse=True,
+            ),
+        },
+    }
+    parsed = json.loads(format_report_json(data))
+    assert parsed["audit"]["sort_by"] == "score"
+    assert parsed["audit"]["sort_desc"] is True
+    assert parsed["audit"]["results"][0]["score"] == 30.0
+
+
+def test_format_report_markdown_with_sort() -> None:
+    data = {
+        "scan": {"target": "h", "ports_scanned": 0, "open_ports": [], "details": []},
+        "audit": {
+            "passwords_audited": 3,
+            "min_length": None,
+            "sort_by": "length",
+            "sort_desc": False,
+            "results": sorted(
+                _audit_results(),
+                key=lambda r: r["length"],
+            ),
+        },
+    }
+    output = format_report_markdown(data)
+    assert "**Sorted By:** length (Ascending)" in output
+    # Ascending length order: 1, 8, 16 (passwords rendered with repr quotes)
+    idx_a = output.index("| 'a' ")
+    idx_b = output.index("| 'b' ")
+    idx_c = output.index("| 'c' ")
+    assert idx_a < idx_b < idx_c
+
+
+def test_format_report_csv_with_sort() -> None:
+    data = {
+        "scan": {"target": "h", "ports_scanned": 0, "open_ports": [], "details": []},
+        "audit": {
+            "passwords_audited": 3,
+            "min_length": None,
+            "sort_by": "score",
+            "sort_desc": True,
+            "results": sorted(
+                _audit_results(),
+                key=lambda r: r["score"],
+                reverse=True,
+            ),
+        },
+    }
+    rows = list(csv.reader(io.StringIO(format_report_csv(data))))
+    # Header + 3 audit rows
+    assert len(rows) == 4
+    # Descending score: 30, 20, 10
+    assert rows[1][9] == "30.0"
+    assert rows[2][9] == "20.0"
+    assert rows[3][9] == "10.0"

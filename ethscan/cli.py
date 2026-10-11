@@ -437,6 +437,19 @@ def hash(file: str, algorithms: tuple, fmt: str, out_path: str) -> None:
     help="Filter scan results to open ports only (JSON, Markdown, and CSV output).",
 )
 @click.option(
+    "--sort",
+    "sort_by",
+    type=click.Choice(["score", "verdict", "length"]),
+    default=None,
+    help="Sort audit (password) results by score, verdict, or length.",
+)
+@click.option(
+    "--sort-desc/--sort-asc",
+    "sort_desc",
+    default=True,
+    help="Sort direction: descending (default) or ascending.",
+)
+@click.option(
     "--output-format",
     "output_fmt",
     type=click.Choice(["json", "markdown", "csv"]),
@@ -466,6 +479,8 @@ def report(
     audit_file: str,
     min_length: Optional[int],
     open_only: bool,
+    sort_by: Optional[str],
+    sort_desc: bool,
     output_fmt: Optional[str],
     fmt: str,
     out_path: str,
@@ -480,6 +495,8 @@ def report(
         min_length=min_length,
         profile=profile,
         open_only=open_only,
+        sort_by=sort_by,
+        sort_desc=sort_desc,
     )
 
     # --output-format takes precedence over the deprecated --format alias
