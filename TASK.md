@@ -1256,3 +1256,57 @@ Added a `--min-length` option to the `audit` command that flags passwords shorte
 - `cert`, `report`, `cve` (with `--min-severity` and `--ports`), `vuln` (with `--min-severity`), `dnssec`, `geo`, `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon` all implemented with JSON/Markdown output.
 - Configuration file (`ethscan.yaml`) persists default options across commands.
 - Tests: 1480 passing (1 skipped).
+
+## Completed: `--output-format csv` option for `report` command
+
+Added a `--output-format [json|markdown|csv]` option to the `report` command for spreadsheet-compatible CSV export of the combined scan+audit report. The report logic was extracted from `ethscan/cli.py` into a dedicated `ethscan/report.py` module, bringing the command in line with the toolkit's module convention (`run_report`, `format_report_json`, `format_report_markdown`, `format_report_csv`).
+
+### Added Files
+- `ethscan/report.py` — combined report module with:
+  - `run_report(target, ports, timeout, workers, audit_file)` — public entry point: parses ports (`common`/`all`/comma-separated list/ranges), runs the port scan, optionally loads passwords from the audit file and audits them, returns the combined report dict
+  - `format_report_json()` — JSON formatter
+  - `format_report_markdown()` — Markdown formatter (moved from `ethscan/cli.py`'s `_generate_markdown`; output unchanged)
+  - `format_report_csv()` — CSV formatter emitting a single valid CSV document with a `section` discriminator column: `scan` rows carry `port`/`open`, `audit` rows carry `password`/`length`/`entropy`/`common`/`patterns`/`score`/`verdict`; any CSV reader can filter by section
+  - `CSV_COLUMNS` — canonical column list
+
+### Modified Files
+- `ethscan/cli.py`:
+  - Added `--output-format [json|markdown|csv]` option to the `report` command; `--format` remains as a deprecated alias and `--output-format` takes precedence when both are given (same pattern as `scan`/`service`/`brute`)
+  - The `report` command now delegates to `run_report()` and the `ethscan.report` formatters
+  - Removed the now-unused `_generate_markdown()` helper (moved to `ethscan.report.format_report_markdown`)
+- `tests/test_report.py` — 10 new unit tests: `run_report` (offline target, common ports, all ports, with audit file), `format_report_json`, `format_report_markdown` (empty audit / with audit), `format_report_csv` (header only, scan+audit rows, CSV quoting of passwords containing commas)
+- `tests/test_cli.py` — 6 new CLI integration tests: help shows `--output-format` with csv choice, CSV output to stdout (scan + audit rows), CSV with `--out`, explicit `--output-format json`, `--output-format` precedence over deprecated `--format`, deprecated `--format csv` still works
+- `README.md` — report feature description now mentions CSV output
+
+### Verification
+- `python -m pytest -q` -> 1496 passed, 1 skipped (1480 baseline + 16 new: 10 unit + 6 CLI).
+- `python -m ethscan report --help` -> shows `--output-format [json|markdown|csv]` and the deprecated `--format` alias.
+- End-to-end: `python -m ethscan report --target 127.0.0.1 --ports 80,443 --output-format csv` -> `section,port,open,password,...` header plus `scan,80,false,...` / `scan,443,false,...` rows.
+- End-to-end with `--audit-file`: CSV includes `audit` rows with all per-password fields; passwords containing commas are properly CSV-quoted.
+- Backward compatibility: `--format json` (default) and `--format markdown` behave exactly as before; markdown output is identical to the previous inline `_generate_markdown` output.
+
+## Suggested next task
+
+**Add a `--output-format csv` option to the `audit` command** for spreadsheet-compatible password audit dumps (`password,length,entropy,common,patterns,score,verdict,too_short`), mirroring the CSV modes of `scan`/`service`/`brute`/`report`.
+
+Alternative: Add a `--min-length` pass-through to the `report` command so the embedded password audit can flag short passwords (the standalone `audit` command already supports `--min-length`).
+
+Alternative: Add `--profile fast|normal|full` support to the `report` command to reuse the scan profile presets (port set, timeout, workers) when generating combined reports.
+
+## Requirements
+- Pick one of the suggested features and implement it following the existing module conventions.
+- Add a new module under `ethscan/` with `run_*`, `format_*_report_json`, `format_*_report_markdown` (for new commands) or extend existing module (for new options).
+- Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
+- Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
+- Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
+
+## Current state
+- All 28 commands implemented and wired up (including `hash` with `--file`, `--check`, `--salt`, `--pepper`, `--iterations`).
+- `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv`.
+- `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, `--max-depth`.
+- `whois` now supports `--recursive/--no-recursive` and `--max-depth`.
+- `audit` now supports `--format json|markdown`, `--out`, and `--min-length` for custom minimum password length threshold.
+- `report` now supports `--output-format [json|markdown|csv]` (with `--format` as deprecated alias) and `--out`; report logic lives in `ethscan/report.py` (`run_report`, `format_report_json`, `format_report_markdown`, `format_report_csv`).
+- `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `vuln` (with `--min-severity`), `dnssec`, `geo`, `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon` all implemented with JSON/Markdown output.
+- Configuration file (`ethscan.yaml`) persists default options across commands.
+- Tests: 1496 passing (1 skipped).

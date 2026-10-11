@@ -11,6 +11,12 @@ from ethscan.passwords import (
     format_audit_report_json,
     format_audit_report_markdown,
 )
+from ethscan.report import (
+    format_report_csv,
+    format_report_json,
+    format_report_markdown,
+    run_report,
+)
 from ethscan.scanner import get_common_ports, parse_port_range, scan_ports, get_profile_ports, get_profile_defaults, format_scan_report_json, format_scan_report_markdown, format_scan_report_csv, format_service_report_csv
 from ethscan.web import (
     format_web_report_json,
@@ -400,11 +406,18 @@ def hash(file: str, algorithms: tuple, fmt: str, out_path: str) -> None:
     help="Path to a file containing one password per line for password audit",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format: json, markdown, or csv.",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    help="Deprecated alias for --output-format.",
 )
 @click.option(
     "--output",
@@ -419,55 +432,28 @@ def report(
     timeout: float,
     workers: int,
     audit_file: str,
+    output_fmt: Optional[str],
     fmt: str,
     out_path: str,
 ) -> None:
     """Generate a report combining port scan and password audit results."""
-    if ports.lower() == "common":
-        port_list = get_common_ports()
-    elif ports.lower() == "all":
-        port_list = list(range(1, 65536))
+    report_data = run_report(
+        target,
+        ports,
+        timeout=timeout,
+        workers=workers,
+        audit_file=audit_file,
+    )
+
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
+        output = format_report_json(report_data)
+    elif chosen_format == "markdown":
+        output = format_report_markdown(report_data)
     else:
-        port_list = parse_port_range(ports)
-
-    scan_results = scan_ports(target, port_list, timeout=timeout, max_workers=workers)
-    open_ports = [port for port, is_open in scan_results if is_open]
-
-    passwords = []
-    if audit_file:
-        with open(audit_file, "r", encoding="utf-8") as handle:
-            passwords = [line.strip() for line in handle if line.strip()]
-
-    audit_results = audit_passwords(passwords) if passwords else []
-
-    report_data = {
-        "scan": {
-            "target": target,
-            "ports_scanned": len(port_list),
-            "open_ports": open_ports,
-            "details": [{"port": port, "open": is_open} for port, is_open in scan_results],
-        },
-        "audit": {
-            "passwords_audited": len(passwords),
-            "results": [
-                {
-                    "password": pwd,
-                    "length": eval_data["length"],
-                    "entropy": eval_data["entropy"],
-                    "common": eval_data["common"],
-                    "patterns": eval_data["patterns"],
-                    "score": eval_data["score"],
-                    "verdict": eval_data["verdict"],
-                }
-                for pwd, eval_data in audit_results
-            ],
-        },
-    }
-
-    if fmt == "json":
-        output = json.dumps(report_data, indent=2)
-    else:
-        output = _generate_markdown(report_data)
+        output = format_report_csv(report_data)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
@@ -2571,43 +2557,6 @@ def mac(
         click.echo(f"Report written to {out_path}")
     else:
         click.echo(output)
-
-
-def _generate_markdown(data: dict) -> str:
-    """Generate a Markdown report from the data dictionary."""
-    lines = ["# ethscan Report", ""]
-
-    scan = data["scan"]
-    lines.append("## Port Scan")
-    lines.append(f"- **Target:** {scan['target']}")
-    lines.append(f"- **Ports Scanned:** {scan['ports_scanned']}")
-    lines.append(f"- **Open Ports:** {', '.join(map(str, scan['open_ports'])) if scan['open_ports'] else 'None'}")
-    lines.append("")
-    lines.append("| Port | Status |")
-    lines.append("|------|--------|")
-    for detail in scan["details"]:
-        status = "Open" if detail["open"] else "Closed"
-        lines.append(f"| {detail['port']} | {status} |")
-    lines.append("")
-
-    audit = data["audit"]
-    lines.append("## Password Audit")
-    lines.append(f"- **Passwords Audited:** {audit['passwords_audited']}")
-    lines.append("")
-    if audit["results"]:
-        lines.append("| Password | Length | Entropy | Common | Patterns | Score | Verdict |")
-        lines.append("|----------|--------|---------|--------|----------|-------|---------|")
-        for result in audit["results"]:
-            lines.append(
-                f"| {result['password']!r} | {result['length']} | {result['entropy']} | "
-                f"{'Yes' if result['common'] else 'No'} | {'Yes' if result['patterns'] else 'No'} | "
-                f"{result['score']} | {result['verdict']} |"
-            )
-    else:
-        lines.append("*No passwords provided for audit.*")
-    lines.append("")
-
-    return "\n".join(lines)
 
 
 @cli.command()

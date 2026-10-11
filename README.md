@@ -22,7 +22,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - Brute-force login testing (FTP/SSH) with `--output-format csv` for credential dumps (implemented)
 - Service/banner detection (implemented)
 - Vulnerability checks against a built-in CVE/weakness database (implemented)
-- Report generation (JSON / Markdown) (implemented)
+- Report generation (JSON / Markdown / CSV) (implemented)
 - Consolidated web assessment: `urlcheck` command combining web checks, HTTP fuzzing, and SSL certificate inspection (implemented)
 - OS fingerprinting: `osdetect` command using TCP/IP stack behavior analysis, banner cross-referencing, and TTL-based inference (implemented)
 - TCP traceroute: `trace` command using TTL-incremented TCP SYN probes with per-hop IP/RTT reporting (implemented)

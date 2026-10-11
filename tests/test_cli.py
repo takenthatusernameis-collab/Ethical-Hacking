@@ -487,6 +487,152 @@ def test_report_output_option_markdown(tmp_path) -> None:
     assert "Password Audit" in content
 
 
+def test_report_help_shows_output_format() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["report", "--help"])
+    assert result.exit_code == 0
+    assert "--output-format" in result.output
+    assert "csv" in result.output
+
+
+def test_report_output_format_csv(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--ports",
+            "80,443",
+            "--audit-file",
+            str(password_file),
+            "--output-format",
+            "csv",
+            "--timeout",
+            "0.5",
+        ],
+    )
+    assert result.exit_code == 0
+    rows = [line for line in result.output.splitlines() if line.strip()]
+    assert rows[0] == "section,port,open,password,length,entropy,common,patterns,score,verdict"
+    assert any(line.startswith("scan,") for line in rows)
+    assert any(line.startswith("audit,") for line in rows)
+    assert any("password" in line for line in rows)
+
+
+def test_report_output_format_csv_with_out(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    out_file = tmp_path / "report.csv"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--ports",
+            "80",
+            "--audit-file",
+            str(password_file),
+            "--output-format",
+            "csv",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "0.5",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "section,port,open,password,length,entropy,common,patterns,score,verdict" in content
+    assert "scan," in content
+    assert "audit," in content
+
+
+def test_report_output_format_json_explicit(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--ports",
+            "80",
+            "--audit-file",
+            str(password_file),
+            "--output-format",
+            "json",
+            "--timeout",
+            "0.5",
+        ],
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["scan"]["target"] == "127.0.0.1"
+    assert data["audit"]["passwords_audited"] == 1
+
+
+def test_report_output_format_takes_precedence_over_format(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--ports",
+            "80",
+            "--audit-file",
+            str(password_file),
+            "--output-format",
+            "markdown",
+            "--format",
+            "csv",
+            "--timeout",
+            "0.5",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "ethscan Report" in result.output
+    assert "section,port,open" not in result.output
+
+
+def test_report_deprecated_format_csv(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--ports",
+            "80",
+            "--audit-file",
+            str(password_file),
+            "--format",
+            "csv",
+            "--timeout",
+            "0.5",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "section,port,open,password,length,entropy,common,patterns,score,verdict" in result.output
+    assert "audit," in result.output
+
+
 def test_web_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["web", "--help"])
