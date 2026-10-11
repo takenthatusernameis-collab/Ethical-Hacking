@@ -771,8 +771,14 @@ Added an optional YAML configuration file that persists default options across c
 
 ## Suggested next task
 
-**Add a `--json` output mode to the `report` command** for machine-readable combined scan+audit reports (currently only echoes human-readable lines).
+**Add `--format json|markdown` and `--out` options to the `scan` and `service` commands** so their results are machine-readable like every other command. Currently both commands only echo human-readable lines (`Scanning ...`, `Open ports: ...`).
+
+### Requirements
+- Extend `ethscan/scanner.py` (or add formatters in a new module) with `format_scan_report_json()` / `format_scan_report_markdown()` and `format_service_report_json()` / `format_service_report_markdown()` that render the existing `scan_ports` / `run_service` results.
+- Register `--format` (default `json`) and `--out` on both commands in `ethscan/cli.py`; keep the human-readable echo when no format is requested (or default to JSON for machine-readability).
+- Add unit tests in `tests/test_scanner.py` for the new formatters and CLI integration tests in `tests/test_cli.py` for the new options.
+- Use stdlib only.
+
+Alternative: Add a `--json` output mode to the `audit` command for machine-readable password audit results (currently only echoes human-readable lines).
 
 Alternative: Add a `--recursive` option to the `whois` command for recursive WHOIS queries across registrar tiers.
-
-Alternative: Add a `--ports` option to the `cve` command to run live service detection on a custom port set before querying the NVD/CVE API.
