@@ -1655,11 +1655,56 @@ Added `--salt` and `--pepper` options to the `audit` command for salted/peppered
 - Configuration file (`ethscan.yaml`) persists default options across commands.
 - Tests: 1699 passing (1 skipped).
 
+## Completed: `--recursive` option for `vuln` command (already implemented)
+
+The `vuln` command already supports `--recursive/--no-recursive` and `--max-depth` for recursive scanning of hosts discovered in service banners. The implementation in `ethscan/vuln.py` includes:
+
+- `_extract_hosts_from_banner()` — extracts hostnames and IP addresses from service banners
+- `_recursive_scan()` — recursively scans discovered hosts up to `max_depth`, deduplicating scanned hosts
+- Results include `recursive_hosts_scanned`, `recursive_findings` with per-host finding details
+- JSON and Markdown formatters display recursive scan results with host tables and finding summaries
+
+### Verification
+- `python -m pytest -q` -> 1707 passed, 1 skipped (includes recursive tests)
+- `python -m ethscan vuln --help` -> shows `--recursive / --no-recursive` and `--max-depth` options
+- Unit tests cover: recursive disabled by default, recursive enabled with host discovery, max depth respected, stops when no new hosts
+
+## Completed: `--min-length`, `--salt`, `--pepper`, `--algorithm` pass-through for `report` command (already implemented)
+
+The `report` command already supports `--min-length`, `--salt`, `--pepper`, `--algorithm` options that are passed through to the embedded password audit. The implementation in `ethscan/report.py` and `ethscan/cli.py` includes:
+
+- `run_report()` accepts `min_length`, `salt`, `pepper`, `algorithm` parameters and passes them to `audit_passwords()`
+- `audit_passwords()` in `ethscan/passwords.py` evaluates passwords with salt/pepper transformations
+- JSON, Markdown, and CSV formatters include salt/pepper fields and min_length in output
+- CLI options wired up with help text and pass-through to `run_report()`
+
+### Verification
+- `python -m pytest -q` -> 1707 passed, 1 skipped (includes report audit parameter tests)
+- `python -m ethscan report --help` -> shows `--min-length`, `--salt`, `--pepper`, `--algorithm` options
+- End-to-end: `python -m ethscan report --target 127.0.0.1 --audit-file passwords.txt --min-length 10 --salt mysalt --pepper secret --format json` works correctly
+
+## Current state
+- All 29 commands implemented and wired up (including `hash` with `--file`, `--check`, salt, pepper, and `--iterations`, and `validate`).
+- `resolve` command (forward/reverse DNS: A, AAAA, CNAME, PTR) is fully implemented, documented in `README.md`, and covered by unit + CLI integration tests; its Markdown formatter escapes pipe characters.
+- `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv`.
+- `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, `--max-depth`.
+- `whois` now supports `--recursive/--no-recursive`, `--max-depth`, `--format json|markdown`, and `--out` for machine-readable WHOIS results.
+- `audit` now supports `--format json|markdown`, `--out`, `--min-length`, `--output-format csv` for spreadsheet-compatible password audit dumps, `--sort [score|verdict|length]` with `--sort-desc/--sort-asc` (reorder audit rows; defaults to `None`/`True`), and `--salt`/`--pepper`/`--algorithm` for salted/peppered password auditing.
+- `report` now supports `--target`, `--ports`, `--profile`, `--timeout`, `--workers`, `--audit-file`, `--min-length` (pass-through to the embedded audit), `--salt`/`--pepper`/`--algorithm` (pass-through to the embedded audit), `--open-only/--no-open-only` (filter scan results to open ports only), `--sort {score|verdict|length}` with `--sort-desc/--sort-asc` (reorder audit rows; scan results stay in port order), `--output-format [json|markdown|csv]` (with `--format` as deprecated alias), and `--out`; report logic lives in `ethscan/report.py` (`run_report`, `format_report_json`, `format_report_markdown`, `format_report_csv`).
+- `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `vuln` (with `--min-severity`, `--recursive`, `--max-depth`), `dnssec`, `geo` (with `--recursive`, `--max-depth`), `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon`, `resolve`, `validate` all implemented with JSON/Markdown output.
+- Configuration file (`ethscan.yaml`) persists default options across commands.
+- Tests: 1707 passing (1 skipped).
+
 ## Suggested next task
 
-**Add a `--recursive` option to the `vuln` command** to recursively follow discovered service banners across a network (e.g., scan discovered hosts for additional services/vulnerabilities) — note: `vuln` already supports `--recursive`/`--max-depth`; this would extend it to re-scan hosts discovered in banners.
+**Add a `radix` command** for radix tree visualization of CIDR blocks (merging overlapping/supernetting adjacent networks). This would:
+- Accept CIDR blocks via `--cidr` (comma-separated) or `--cidr-file`
+- Build a radix tree (patricia trie) from the input networks using stdlib `ipaddress`
+- Merge overlapping/adjacent networks (supernetting)
+- Output JSON/Markdown with: original CIDRs, merged CIDRs, tree visualization (ASCII), space savings statistics
+- Include `--format json|markdown`, `--out` options
 
-Alternative: Add a `--min-length` pass-through to the `report` command for the embedded audit (the standalone `audit` command already supports `--min-length` and `--salt`/`--pepper`).
+Alternative: Add a `--recursive` option to the `geo` command to recursively geolocate all IPs discovered in a traceroute (the `trace` command already supports `--recursive` for hop discovery).
 
 ## Requirements
 - Pick one of the suggested features and implement it following the existing module conventions.
