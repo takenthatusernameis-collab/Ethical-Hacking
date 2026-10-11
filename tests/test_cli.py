@@ -5863,6 +5863,199 @@ def test_vuln_recursive_output_markdown(monkeypatch) -> None:
     assert "backend.internal.example.com" in result.output
 
 
+def _install_vuln_salt_mock(monkeypatch, called_args):
+    """Install a run_vuln mock capturing salt/pepper/algorithm args and echoing them."""
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+        min_severity=None,
+        recursive=False,
+        max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
+    ):
+        called_args["salt"] = salt
+        called_args["pepper"] = pepper
+        called_args["algorithm"] = algorithm
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports": ports,
+            "services_checked": 0,
+            "tls_checked": False,
+            "certificate_checked": False,
+            "severity_filter": severity,
+            "min_severity_filter": min_severity,
+            "findings": [],
+            "finding_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": ["No known vulnerabilities matched"],
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hosts_scanned": [],
+            "recursive_findings": [],
+            "salt": bool(salt),
+            "pepper": bool(pepper),
+            "algorithm": algorithm,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+
+def test_vuln_help_shows_salt_pepper() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["vuln", "--help"])
+    assert result.exit_code == 0
+    assert "--salt" in result.output
+    assert "--pepper" in result.output
+    assert "--algorithm" in result.output
+    assert "sha256" in result.output
+
+
+def test_vuln_salt_option(monkeypatch) -> None:
+    called_args = {}
+    _install_vuln_salt_mock(monkeypatch, called_args)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--salt",
+            "mysalt",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["salt"] == "mysalt"
+    assert called_args["pepper"] is None
+    assert "**Salt:** applied (prepended to banner)" in result.output
+    assert "**Pepper:**" not in result.output
+
+
+def test_vuln_pepper_option(monkeypatch) -> None:
+    called_args = {}
+    _install_vuln_salt_mock(monkeypatch, called_args)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--pepper",
+            "mysecret",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["pepper"] == "mysecret"
+    assert called_args["salt"] is None
+    assert "**Pepper:** applied (HMAC key)" in result.output
+    assert "**Salt:**" not in result.output
+
+
+def test_vuln_algorithm_option(monkeypatch) -> None:
+    called_args = {}
+    _install_vuln_salt_mock(monkeypatch, called_args)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--salt",
+            "mysalt",
+            "--algorithm",
+            "md5",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["algorithm"] == "md5"
+    assert "**Algorithm:** md5" in result.output
+
+
+def test_vuln_salt_pepper_combined(monkeypatch) -> None:
+    called_args = {}
+    _install_vuln_salt_mock(monkeypatch, called_args)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--salt",
+            "mysalt",
+            "--pepper",
+            "mypepper",
+            "--algorithm",
+            "sha1",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["salt"] == "mysalt"
+    assert called_args["pepper"] == "mypepper"
+    assert called_args["algorithm"] == "sha1"
+    assert "**Salt:** applied (prepended to banner)" in result.output
+    assert "**Pepper:** applied (HMAC key)" in result.output
+    assert "**Algorithm:** sha1" in result.output
+
+
+def test_vuln_salt_pepper_disabled_by_default(monkeypatch) -> None:
+    called_args = {}
+    _install_vuln_salt_mock(monkeypatch, called_args)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["salt"] is None
+    assert called_args["pepper"] is None
+    assert called_args["algorithm"] == "sha256"
+    assert "**Salt:**" not in result.output
+    assert "**Pepper:**" not in result.output
+    assert "**Algorithm:** sha256" in result.output
+
+
 def test_dnsbrute_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["dnsbrute", "--help"])

@@ -21,7 +21,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - TLS protocol/cipher enumeration (implemented)
 - Brute-force login testing (FTP/SSH) with `--output-format csv` for credential dumps (implemented)
 - Service/banner detection (implemented)
-- Vulnerability checks against a built-in CVE/weakness database (implemented)
+- Vulnerability checks against a built-in CVE/weakness database, with `--severity`, `--min-severity`, `--recursive/--no-recursive`, `--max-depth`, `--salt`/`--pepper`/`--algorithm` for salted & peppered banner matching, and JSON/Markdown output (implemented)
 - Report generation (`report` command combining port scan + password audit, with `--output-format [json|markdown|csv]`, `--open-only` to filter scan results to open ports only, `--sort {score|verdict|length} [--sort-asc|--sort-desc]` to reorder audit rows) (implemented)
 - Consolidated web assessment: `urlcheck` command combining web checks, HTTP fuzzing, and SSL certificate inspection (implemented)
 - OS fingerprinting: `osdetect` command using TCP/IP stack behavior analysis, banner cross-referencing, and TTL-based inference (implemented)

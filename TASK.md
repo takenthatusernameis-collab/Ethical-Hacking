@@ -1822,13 +1822,50 @@ Added `--recursive` and `--max-depth` options to the `geo` command to recursivel
 - Configuration file (`ethscan.yaml`) persists default options across commands.
 - Tests: 1680 passing (1 skipped).
 
+## Completed: `--pepper`/`--salt`/`--algorithm` option for `vuln` command
+
+Added `--salt`/`--pepper`/`--algorithm` options to the `vuln` command for salted & peppered banner matching against the vulnerability database, following the same pattern already established for the `hash` and `audit` commands. When a salt is supplied it is prepended to each service banner before hashing (`hash(salt + banner)`); when a pepper is supplied it is used as the HMAC key (`HMAC(pepper, banner, algo)`); when both are supplied the pepper is the HMAC key and the salt is folded into the message (`HMAC(pepper, salt + banner, algo)`). Stdlib-only (`hashlib`/`hmac`); supported algorithms are `md5`, `sha1`, `sha256`, `sha512` (default `sha256`). The transformation is applied to each service banner before `parse_banner`/signature matching, and the applied flags are echoed in the JSON result and Markdown summary.
+
+### Added Functionality
+- `ethscan/vuln.py`:
+  - Added `hashlib`/`hmac` imports and `_HASHLIB_ALGORITHMS` mapping (md5/sha1/sha256/sha512).
+  - Added `_hashlib_name()` — returns the hashlib name for a canonical algorithm key, or `None`.
+  - Added `_compute_peppered_hash()` — computes `HMAC(pepper, message, algorithm)` (raises `ValueError` for non-HMAC algorithms).
+  - Added `_transform_banner()` — applies optional salt (prepend+hash), pepper (HMAC key), or both (HMAC over `salt + banner`) before signature matching; returns the banner unchanged when neither is supplied.
+  - Updated `run_vuln()` to accept `salt`, `pepper`, and `algorithm` parameters; applies `_transform_banner` to each service banner before `parse_banner`/`match_service_vulns`; echoes `salt`/`pepper`/`algorithm` in the result dictionary.
+  - Updated `format_vuln_report_markdown()` to render `**Salt:**`, `**Pepper:**`, and `**Algorithm:**` summary lines when set.
+- `ethscan/cli.py`:
+  - Registered `--salt` (TEXT), `--pepper` (TEXT), and `--algorithm [md5|sha1|sha256|sha512]` (default `sha256`) options on the `vuln` command; passes them through to `run_vuln()`.
+
+### Modified Files
+- `ethscan/vuln.py` — added salt/pepper helpers and `run_vuln`/formatter wiring.
+- `ethscan/cli.py` — added `--salt`/`--pepper`/`--algorithm` options to `vuln`; extended existing `vuln` CLI test mocks to accept the new parameters.
+- `tests/test_vuln.py` — 12 new unit tests: `_transform_banner` (no-salt/no-pepper, salt-only, pepper-only, salt+pepper, empty-banner), `run_vuln` (salt/pepper/algorithm field echoing, defaults to none), and Markdown/JSON formatters (with salt, with pepper, salt+pepper).
+- `tests/test_cli.py` — 6 new CLI integration tests (`test_vuln_help_shows_salt_pepper`, `test_vuln_salt_option`, `test_vuln_pepper_option`, `test_vuln_algorithm_option`, `test_vuln_salt_pepper_combined`, `test_vuln_salt_pepper_disabled_by_default`) plus a `_install_vuln_salt_mock` helper; updated all existing `vuln` CLI mock signatures to accept the new parameters.
+- `README.md` — documented `--salt`/`--pepper`/`--algorithm` on the `vuln` vulnerability-checks feature line.
+
+### Verification
+- `python -m pytest -q` -> 1698 passed, 1 skipped (1680 baseline + 18 new: 12 unit + 6 CLI).
+- `python -m ethscan vuln --help` -> shows `--salt`, `--pepper`, `--algorithm [md5|sha1|sha256|sha512]`.
+- `python -m ethscan vuln --target example.com --salt mysalt --pepper mypepper --algorithm sha1 --format markdown --timeout 1.0` -> report renders the Salt, Pepper, and Algorithm summary lines.
+
+## Current state
+- All 30 commands implemented and wired up (including `radix` with `--cidr-file`).
+- `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv`.
+- `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, `--max-depth`.
+- `whois` now supports `--recursive/--no-recursive`, `--max-depth`, `--format json|markdown`, and `--out` for machine-readable WHOIS results.
+- `audit` now supports `--format json|markdown`, `--out`, `--min-length`, `--output-format csv`, `--sort`, and `--salt`/`--pepper`/`--algorithm` for salted/peppered password auditing.
+- `vuln` now supports `--severity`, `--min-severity`, `--recursive/--no-recursive`, `--max-depth`, and `--salt`/`--pepper`/`--algorithm` for salted & peppered banner matching (JSON/Markdown output).
+- `report`, `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `dnssec`, `geo` (with `--recursive`, `--max-depth`), `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon`, `resolve`, `validate`, `radix` (with `--cidr-file`) all implemented with JSON/Markdown output.
+- Configuration file (`ethscan.yaml`) persists default options across commands.
+- Tests: 1698 passing (1 skipped).
+
 ## Suggested next task
 
-**Add a `--pepper`/`--salt` option to the `vuln` command** for cross-referencing against salted vulnerability signatures (unlikely but possible, but follows the pattern of `hash` and `audit` commands).
+**Add `--output-format csv` output to the `vuln` command** so vulnerability findings can be exported as machine-readable CSV (parallel to the `--output-format [json|markdown|csv]` option already on the `report`/`audit`/`brute`/`scan`/`service` commands). Implement `format_vuln_report_csv(data)` in `ethscan/vuln.py` emitting a header row + one finding row per finding (id, type, severity, product, version, port, title, description), register `--output-format [json|markdown|csv]` (keeping `--format` working) on the `vuln` CLI command, and add unit tests (`tests/test_vuln.py`) plus CLI integration tests (`tests/test_cli.py`).
 
-Alternative: Add a `--recursive` option to the `geo` command to recursively geolocate all IPs discovered in a traceroute (already implemented above).
+Alternative: Add a dedicated `nmap` parser command (`nmap`) that parses an Nmap XML scan file and cross-references detected service versions against the built-in `vuln` CVE/weakness database, reusing `match_service_vulns` — with JSON/Markdown output, `--input-file`, and tests.
 
-Alternative: Add a `--json` output mode to the `audit` command for machine-readable password audit results (already supports JSON but could be enhanced).
 
 ## Requirements
 - Pick one of the suggested features and implement it following the existing module conventions.
