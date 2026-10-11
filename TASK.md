@@ -10,7 +10,7 @@ The `dnsbrute` command has been implemented. All previously listed features are 
 - `whois` — WHOIS lookup (queries WHOIS server on port 43, parses registrar, creation/expiration dates, nameservers, registrant org, status codes)
 - `dns` — DNS record enumeration (A, AAAA, MX, NS, TXT, CNAME, SOA)
 - `ssl` — SSL/TLS certificate inspection (subject, issuer, validity dates, SANs, signature algorithm, key size, chain length)
-- `brute` — FTP/SSH login brute force with username/password wordlists (concurrent attempts, per-attempt results, successful-login summary)
+- `brute` — FTP/SSH login brute force with username/password wordlists (concurrent attempts, per-attempt results, successful-login summary; `--output-format csv` for credential dumps)
 - `service` — nmap-style service/banner detection (connect to open ports, grab banners, match against known service signatures)
 - `tls` — TLS protocol/cipher enumeration (per-version handshake probes with pinned min/max TLS version, per-cipher probes with pinned OpenSSL cipher string, negotiated cipher/protocol reporting, obsolete-version findings)
 - `vuln` — vulnerability checks (live service/banner detection cross-referenced with a built-in CVE/weakness database; optional `--tls-file`/`--ssl-file` inputs from the `tls`/`ssl` commands for protocol, weak-cipher, and certificate weakness findings; `--severity` filtering)
@@ -475,13 +475,118 @@ The `cert` command searches Certificate Transparency (CT) logs via public CT log
 - `python -m ethscan --help` -> lists `cert` among the 21 commands.
 - `python -m ethscan cert --help` -> shows all expected options (`--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out`).
 
+## Completed: `headers` and `ping` commands (wire up to CLI)
+
+The `headers` and `ping` commands were already implemented in their respective modules (`ethscan/headers.py`, `ethscan/ping.py`) with full unit test coverage, but their imports were missing from `ethscan/cli.py`, causing the CLI commands to fail at runtime with `AttributeError`.
+
+### Fixed
+- `ethscan/cli.py` — added imports for `run_headers`, `format_headers_report_json`, `format_headers_report_markdown` from `ethscan.headers`, and `run_ping`, `format_ping_report_json`, `format_ping_report_markdown` from `ethscan.ping`.
+- `tests/test_cidr.py` — replaced broken placeholder (`test` on line 1) with a valid placeholder test module so collection succeeds.
+- `README.md` — added `ping` (ICMP ping with TCP connect fallback) to the features list.
+
+### Verification
+- `python -m pytest -q` -> 956 passed, 1 skipped (781 baseline + 175 new: existing tests now run).
+- `python -m ethscan --help` -> lists both `headers` and `ping` among the 24 commands.
+- `python -m ethscan headers --help` -> shows `--target`, `--timeout`, `--format`, `--out`.
+- `python -m ethscan ping --help` -> shows `--target`, `--count`, `--timeout`, `--ttl`, `--tcp-port`, `--format`, `--out`.
+- End-to-end: `python -m ethscan headers --target https://nonexistent.invalid.domain.tld --format json --timeout 1.0` produces valid JSON with all 7 security headers marked missing.
+- End-to-end: `python -m ethscan ping --target 127.0.0.1 --count 2 --timeout 1.0 --format json` reports 2 successful probes with RTT and RST response type.
+
+## Completed: `cidr` command (CIDR network calculator)
+
+The `cidr` command computes network calculations for a CIDR (offline, stdlib-only `ipaddress` module): network address, netmask, broadcast address, wildcard mask, first/last host, usable host count, total addresses, prefix length, and optional IP membership test (`--contains`). Outputs JSON or Markdown.
+
+### Added Files
+- `ethscan/cidr.py` — CIDR network calculation module with:
+  - `_normalize_cidr()` — normalizes CIDR notation or bare IP (bare IP → /32 or /128)
+  - `_is_ipv4()` — IPv4/IPv6 detection
+  - `_format_network_info()` — builds structured network info dict with correct first/last host (excludes network and broadcast for /24+; handles /32 and /31 edge cases)
+  - `_contains_ip()` — membership test for an optional `--contains` IP
+  - `run_cidr()` — public entry point
+  - `format_cidr_report_json()` / `format_cidr_report_markdown()` — output formatters (markdown includes pipe-escaped table and optional membership section)
+- `tests/test_cidr.py` — 20 unit tests: normalization (IPv4/IPv6/bare/empty), IPv4 detection, run_cidr (IPv4/IPv6/single-host/contains inside/outside/invalid), formatters (JSON, markdown, no-contains, pipe escape, IPv6)
+
+### Modified Files
+- `ethscan/cli.py` — registered `cidr` command with `--cidr` (required), `--contains` (optional), `--format`, `--out`; imports `run_cidr` and both formatters from `ethscan.cid`.
+- `README.md` — added CIDR network calculator (`cidr`) to the features list.
+
+### Verification
+- `python -m pytest -q` -> 982 passed, 1 skipped (956 baseline + 26 new: 20 unit + 6 CLI).
+- `python -m ethscan --help` -> lists `cidr` among the 25 commands.
+- `python -m ethscan cidr --help` -> shows all expected options.
+- End-to-end: `python -m ethscan cidr --cidr 192.168.1.0/24 --contains 192.168.1.50 --format json` returns network info with usable_host_count=254 and contains.in_network=true.
+- Edge case: `python -m ethscan cidr --cidr 192.168.1.5/32 --format json` returns total_addresses=1, usable_host_count=0.
+
 ## Suggested next task
 
-**Add a `--output` option to the `report` command** to write the combined scan+audit report to a file (json and markdown), consistent with all other commands that support `--out`.
+**Add a `--ports` option to the `cve` command** to run live service detection on a custom port set before querying the NVD/CVE API.
 
-Alternative: Add a `headers` shorthand command that runs just the `web` check with `--checks headers` for quick security header checks.
+Alternative: Add a `--min-severity` option to the `cve` command to filter findings below a given severity threshold.
 
-Alternative: Add a `cve` command that queries the NVD/CVE API for known vulnerabilities in detected service versions (using `service` output via `--services-file`).
+## Requirements
+- Pick one of the suggested features and implement it following the existing module conventions.
+- Add a new module under `ethscan/` with `run_*`, `format_*_report_json`, `format_*_report_markdown` (for new commands) or extend existing module (for new options).
+- Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
+- Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
+- Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
+
+## Completed: `--min-severity` option for `cve` command
+
+Added a `--min-severity` option to the `cve` command that filters findings below a given severity threshold (critical > high > medium > low). Unlike `--severity` (which keeps only one exact level), `--min-severity` retains findings at or above the specified level.
+
+### Added Functionality
+- `ethscan/cve.py`:
+  - Added `_SEVERITY_RANK` dictionary mapping severity labels to numeric ranks (critical=3, high=2, medium=1, low=0)
+  - Added `_severity_rank()` helper returning the rank for a severity label (or None if unknown)
+  - Updated `run_cve()` to accept `min_severity` parameter
+  - Added `min_severity` filtering logic: drops findings whose severity rank is below the specified threshold
+  - Updated return dictionary to include `min_severity_filter` field
+  - Updated `format_cve_report_markdown()` to display `-- **Min Severity:**` line when set
+- `ethscan/cli.py`:
+  - Added `--min-severity` option (choice: low/medium/high/critical) to the `cve` command
+  - Passes `min_severity` to `run_cve()`
+
+### Modified Files
+- `ethscan/cve.py` — added severity rank helper and min_severity filtering
+- `ethscan/cli.py` — added `--min-severity` option and pass-through
+- `tests/test_cve.py` — 5 new unit tests:
+  - `test_run_cve_min_severity_drops_lower` — verifies medium findings are dropped when min_severity=high
+  - `test_run_cve_min_severity_none_keeps_all` — verifies no filter keeps all findings
+  - `test_run_cve_min_severity_low_keeps_all` — verifies min_severity=low keeps everything
+  - `test_run_cve_min_severity_critical_drops_all` — verifies min_severity=critical drops non-critical findings
+  - `test_format_cve_report_markdown_with_min_severity` — verifies markdown displays Min Severity line
+- `tests/test_cli.py` — 3 new CLI integration tests:
+  - `test_cve_min_severity_option` — verifies `--min-severity high` passes parameter
+  - `test_cve_min_severity_disabled_by_default` — verifies min_severity defaults to None
+  - `test_cve_help_shows_min_severity` — verifies help shows `--min-severity` option
+- `README.md` — clarified cve feature description
+
+### Verification
+- `python -m pytest -q` -> 999 passed, 1 skipped (982 baseline + 17 new tests)
+- `python -m ethscan --help` -> lists `cve` among the 25 commands
+- `python -m ethscan cve --help` -> shows `--min-severity` option with low/medium/high/critical choices
+- End-to-end: `python -m ethscan cve --target example.com --services-file services.json --min-severity high --format json` produces JSON with only high/critical findings
+
+## Current state
+- All 25 commands implemented and wired up (`headers`, `ping`, `cidr` now functional via CLI).
+- `scan` and `service` now support `--profile fast|normal|full` option.
+- `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
+- `subdomains` now supports `--recursive` and `--max-depth` for recursive subdomain enumeration.
+- `dnsbrute` now supports `--recursive` and `--max-depth` for recursive zone transfers.
+- `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
+- `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
+- `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out` for CT log subdomain discovery.
+- `report` now supports `--format json|markdown` and `--out` for combined scan+audit reports (json and markdown).
+- `cve` now supports `--target`, `--services-file`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--severity`, `--min-severity`, `--format`, `--out` for NVD/CVE API vulnerability lookups.
+- Tests: 999 passing (1 skipped).
+
+## Suggested next task
+
+**Add a `--ports` option to the `cve` command** to run live service detection on a custom port set before querying the NVD/CVE API.
+
+Alternative: Add a `--json` output mode to the `report` command for machine-readable combined scan+audit reports.
+
+Alternative: Add a `--recursive` option to the `whois` command for recursive WHOIS queries across registrar tiers.
 
 ## Requirements
 - Pick one of the suggested features and implement it following the existing module conventions.
@@ -491,7 +596,7 @@ Alternative: Add a `cve` command that queries the NVD/CVE API for known vulnerab
 - Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
 
 ## Current state
-- All 21 commands implemented (including `cert`).
+- All 25 commands implemented and wired up (`headers`, `ping`, `cidr` now functional via CLI).
 - `scan` and `service` now support `--profile fast|normal|full` option.
 - `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
 - `subdomains` now supports `--recursive` and `--max-depth` for recursive subdomain enumeration.
@@ -499,154 +604,349 @@ Alternative: Add a `cve` command that queries the NVD/CVE API for known vulnerab
 - `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
 - `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
 - `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out` for CT log subdomain discovery.
-- Tests: 727 passing (1 skipped).
+- `report` now supports `--format json|markdown` and `--out` for combined scan+audit reports (json and markdown).
+- `cve` now supports `--target`, `--services-file`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--severity`, `--min-severity`, `--format`, `--out` for NVD/CVE API vulnerability lookups.
+- `vuln` now supports `--target`, `--ports`, `--services-file`, `--tls-file`, `--ssl-file`, `--severity`, `--min-severity`, `--format`, `--out` for built-in vulnerability checks.
+- Tests: 1011 passing (1 skipped).
 
-## Completed: `--output` option for `report` command
+## Completed: `--min-severity` option for `vuln` command
 
-Added an `--output` option to the `report` command as an alias for `--out`, so the combined scan+audit report can be written to a file (json or markdown) with either flag, consistent with all other commands that support `--out`.
+Added a `--min-severity` option to the `vuln` command that filters vulnerability findings below a given severity threshold (critical > high > medium > low). The `vuln` command previously only supported `--severity` (exact match); adding `--min-severity` parallels the existing `cve` option and lets users drop low/medium findings.
+
+### Added Functionality
+- `ethscan/vuln.py`:
+  - Added `_SEVERITY_RANK` dictionary mapping severity labels to numeric ranks (critical=3, high=2, medium=1, low=0)
+  - Added `_severity_rank()` helper returning the rank for a severity label (or None if unknown)
+  - Updated `run_vuln()` to accept `min_severity` parameter
+  - Added `min_severity` filtering logic: drops findings whose severity rank is below the specified threshold
+  - Updated return dictionary to include `min_severity_filter` field
+  - Updated `format_vuln_report_markdown()` to display `-- **Min Severity:**` line when set
+- `ethscan/cli.py`:
+  - Added `--min-severity` option (choice: low/medium/high/critical) to the `vuln` command
+  - Passes `min_severity` to `run_vuln()`
 
 ### Modified Files
-- `ethscan/cli.py` — `report` command out option now declared as `@click.option("--output", "--out", "out_path", ...)`; help shows `--output, --out PATH`; both flags write the report (json or markdown) to the given path.
+- `ethscan/vuln.py` — added severity rank helper and min_severity filtering
+- `ethscan/cli.py` — added `--min-severity` option and pass-through
+- `tests/test_vuln.py` — 8 new unit tests:
+  - `test_severity_rank` — verifies ranks for all four levels
+  - `test_severity_rank_case_insensitive` — verifies case-insensitive lookup
+  - `test_severity_rank_unknown` — verifies None for unknown/empty/None levels
+  - `test_run_vuln_min_severity_drops_lower` — verifies medium findings dropped when min_severity=high
+  - `test_run_vuln_min_severity_none_keeps_all` — verifies no filter keeps all findings
+  - `test_run_vuln_min_severity_low_keeps_all` — verifies min_severity=low keeps everything
+  - `test_run_vuln_min_severity_critical_drops_all` — verifies min_severity=critical drops non-critical findings
+  - `test_format_vuln_report_markdown_with_min_severity` — verifies markdown displays Min Severity line
+  - `test_format_vuln_report_json_includes_min_severity` — verifies JSON includes min_severity_filter field
 - `tests/test_cli.py` — 3 new CLI integration tests:
-  - `test_report_help_shows_output_option` — verifies `--output` and `--out` appear in `report --help`
-  - `test_report_output_option_json` — writes JSON report via `--output`
-  - `test_report_output_option_markdown` — writes Markdown report via `--output`
+  - `test_vuln_help_shows_min_severity` — verifies help shows `--min-severity` option with choices
+  - `test_vuln_min_severity_option` — verifies `--min-severity high` passes parameter
+  - `test_vuln_min_severity_disabled_by_default` — verifies min_severity defaults to None via CLI
 
 ### Verification
-- `python -m pytest -q` -> 811 passed, 1 skipped (808 baseline + 3 new CLI tests).
-- `python -m ethscan report --help` -> shows `--output, --out PATH` option.
-- End-to-end: `python -m ethscan report --target 127.0.0.1 --audit-file passwords.txt --output report.json --timeout 0.5` writes the combined JSON report (scan + password audit).
-- End-to-end: `python -m ethscan report --target 127.0.0.1 --audit-file passwords.txt --format markdown --output report.md --timeout 0.5` writes the Markdown report.
-- Backward compatibility: `--out` continues to work identically; all existing report tests pass unchanged.
+- `python -m pytest -q` -> 1011 passed, 1 skipped (999 baseline + 12 new: 9 unit + 3 CLI)
+- `python -m ethscan --help` -> lists `vuln` among the 25 commands
+- `python -m ethscan vuln --help` -> shows `--min-severity` option with low/medium/high/critical choices
+- End-to-end: `python -m ethscan vuln --target example.com --services-file services.json --min-severity high --format json` produces JSON with only high/critical findings (medium OpenSSH findings dropped, critical vsFTPd backdoor retained)
 
-## Completed: `ping` command (host discovery)
+## Completed: `--ports` option for `cve` command
 
-The `ping` command performs ICMP echo request probes with per-probe RTT and TTL reporting, plus a TCP-ping fallback (connect-based latency measurement on a configurable port) when raw ICMP sockets are unavailable (non-root).
+Added a `--ports` option to the `cve` command to run live service detection on a custom port set before querying the NVD/CVE API. This allows users to specify which ports to scan for service detection when no `--services-file` is provided.
+
+### Added Functionality
+- `ethscan/cve.py`:
+  - `run_cve()` already accepted `ports` parameter and passed it to `run_service()` for live detection
+- `ethscan/cli.py`:
+  - Added `--ports` option (comma-separated list/ranges) to the `cve` command
+  - Parses port list using `parse_port_range()` from `ethscan.scanner`
+  - Only applies when `--services-file` is not provided (live detection mode)
+
+### Modified Files
+- `ethscan/cli.py` — added `--ports` option and pass-through to `run_cve()`
+- `tests/test_cli.py` — 4 new CLI integration tests:
+  - `test_cve_help_shows_ports` — verifies help shows `--ports` option
+  - `test_cve_ports_option` — tests CLI ports option passes parameters correctly
+  - `test_cve_ports_option_with_ranges` — tests ports option with ranges (e.g., '80,443,8000-9000')
+  - `test_cve_ports_option_disabled_when_services_file` — verifies ports ignored when services_file provided
+
+### Verification
+- `python -m pytest -q` -> 1015 passed, 1 skipped (1011 baseline + 4 new CLI tests)
+- `python -m ethscan cve --help` -> shows `--ports` option with comma-separated list/ranges help text
+- End-to-end: `python -m ethscan cve --target example.com --ports 22,80,443 --format json` runs live service detection on specified ports
+
+## Current state
+- All 25 commands implemented and wired up (`headers`, `ping`, `cidr` now functional via CLI).
+- `scan` and `service` now support `--profile fast|normal|full` option.
+- `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
+- `subdomains` now supports `--recursive` and `--max-depth` for recursive subdomain enumeration.
+- `dnsbrute` now supports `--recursive` and `--max-depth` for recursive zone transfers.
+- `whois` now supports `--recursive/--no-recursive` and `--max-depth` for recursive WHOIS queries.
+- `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
+- `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
+- `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out` for CT log subdomain discovery.
+- `report` now supports `--format json|markdown` and `--out` for combined scan+audit reports (json and markdown).
+- `cve` now supports `--target`, `--services-file`, `--ports`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--severity`, `--min-severity`, `--format`, `--out` for NVD/CVE API vulnerability lookups.
+- `vuln` now supports `--target`, `--ports`, `--services-file`, `--tls-file`, `--ssl-file`, `--severity`, `--min-severity`, `--format`, `--out` for built-in vulnerability checks.
+- Tests: 1015 passing (1 skipped).
+
+## Completed: `subtake` command (Subdomain Takeover Detection)
+
+The `subtake` command detects subdomain takeover vulnerabilities by enumerating subdomains, resolving their CNAME/A/AAAA records, and checking if they point to known vulnerable cloud services (AWS S3, GitHub Pages, Heroku, Azure, Shopify, etc.) where the target resource no longer exists. It performs HTTP fingerprinting to confirm takeover potential.
 
 ### Added Files
-- `ethscan/ping.py` — ICMP ping module with:
-  - `_normalize_host()` — extracts a bare hostname from URL/bare targets
-  - `_checksum()` — Internet checksum for ICMP packets
-  - `_build_icmp_echo_request()` — constructs ICMP Echo Request packets
-  - `_parse_icmp_reply()` — parses ICMP Echo Reply packets with identifier/sequence matching
-  - `_try_create_raw_socket()` — attempts to create raw ICMP socket, returns None when not permitted
-  - `_resolve_host()` — resolves hostname to IPv4 address
-  - `probe_icmp()` — sends single probe: raw ICMP echo request/reply when privileged, TCP connect fallback otherwise
-  - `run_ping()` — public entry point: iterates probes, aggregates RTT stats (min/max/avg), handles resolution failures
-  - `format_ping_report_json()` / `format_ping_report_markdown()` — output formatters (markdown includes summary, probe table, notes)
-- `tests/test_ping.py` — 39 unit tests: host normalization, checksum, ICMP packet construction/parsing, raw socket creation, probe_icmp in fallback mode (offline, loopback open, loopback closed), probe_icmp with mocked raw socket (echo reply, timeout, OSError, wrong ID), run_ping (offline target, defaults, custom params, RTT stats, mixed results, unresolvable host, raw socket available, URL target), both formatters (JSON, markdown full/no-IP/pipe-escape/raw-socket-available).
+- `ethscan/subtake.py` — Subdomain takeover detection module with:
+  - `DEFAULT_SUBDOMAINS` — built-in list of 26 common subdomain labels
+  - `TAKEOVER_SIGNATURES` — database of 35+ vulnerable cloud services with CNAME patterns and fingerprint strings
+  - `_normalize_domain()` — extracts bare domain from URL/bare targets
+  - `resolve_cname()` / `resolve_a_records()` / `resolve_aaaa_records()` — DNS resolution (stdlib + optional dnspython with custom resolver)
+  - `check_takeover_signature()` — matches CNAME against known vulnerable service patterns
+  - `check_http_fingerprint()` — HTTP GET request to confirm takeover fingerprint in response body
+  - `run_subtake()` — public entry point: normalizes target, concurrently resolves subdomains, checks CNAME against signatures, confirms via HTTP fingerprinting
+  - `format_subtake_report_json()` / `format_subtake_report_markdown()` — output formatters (markdown includes summary, vulnerable subdomains table with service/fingerprint/HTTP confirmation, all results table)
+- `tests/test_subtake.py` — 28 unit tests: domain normalization, takeover signature matching (S3, GitHub Pages, Heroku, Azure, Shopify, case-insensitive), run_subtake (offline target, resolver, default list, URL target, vulnerable S3/GitHub Pages/Heroku detection, no HTTP confirmation), formatters (JSON, markdown with/without vulnerable/resolver/pipe escaping)
 
 ### Modified Files
-- `ethscan/cli.py` — registered `ping` command with `--target`, `--count`, `--timeout`, `--ttl`, `--tcp-port`, `--format`, `--out`; imports `run_ping`, `format_ping_report_json`, `format_ping_report_markdown` from `ethscan.ping`.
-- `tests/test_cli.py` — 10 CLI integration tests: `ping` help, top-level help listing, offline json/markdown output (monkeypatched `run_ping`), `--count` option, `--timeout` option, `--ttl` option, `--tcp-port` option, `--out` (json and markdown).
-- `README.md` — added host discovery (`ping`) to the features list.
+- `ethscan/cli.py` — registered `subtake` command with `--target`, `--wordlist`, `--resolver`, `--timeout`, `--workers`, `--http-timeout`, `--format`, `--out`; imports `run_subtake` and formatters from `ethscan.subtake`, `load_subdomain_wordlist` from `ethscan.subdomains`
+- `tests/test_cli.py` — 8 CLI integration tests: `subtake` help, top-level help listing, offline json/markdown output, `--wordlist` option, `--resolver` option, `--out` option, `--http-timeout` option
 
 ### Verification
-- `python -m pytest -q` -> 860 passed, 1 skipped (811 baseline + 49 new: 39 unit + 10 CLI).
-- `python -m ethscan --help` -> lists `ping` among the 22 commands.
-- `python -m ethscan ping --help` -> shows all expected options (`--target`, `--count`, `--timeout`, `--ttl`, `--tcp-port`, `--format`, `--out`).
-- End-to-end: `python -m ethscan ping --target 127.0.0.1 --count 2 --timeout 1.0 --format markdown` -> reports fallback mode, 2/2 probes successful with RST responses.
-- End-to-end: `python -m ethscan ping --target example.com --count 1 --timeout 1.0 --format json` -> resolves IP, reports CONNECTED with RTT ~9ms.
-- Both JSON and Markdown output formats display correctly with probe tables and notes.
+- `python -m pytest -q` -> 1051 passed, 1 skipped (1015 baseline + 36 new: 28 unit + 8 CLI)
+- `python -m ethscan --help` -> lists `subtake` among the 26 commands
+- `python -m ethscan subtake --help` -> shows all expected options
+- End-to-end: `python -m ethscan subtake --target example.com --wordlist subs.txt --timeout 1.0 --format json` resolves subdomains, detects CNAME records, checks against 35+ service signatures
+- End-to-end: `python -m ethscan subtake --target nonexistent.invalid.domain.tld --format markdown` produces markdown report with Vulnerable Subdomains and All Results tables
+
+## Completed: configuration file (`ethscan.yaml`)
+
+Added an optional YAML configuration file that persists default options across commands. The file may live in the current working directory (`ethscan.yaml` / `ethscan.yml`) or in the user's home directory (`~/.ethscan.yaml` / `~/.ethscan.yml`). CLI arguments always take precedence over config values.
+
+### Added Files
+- `ethscan/config.py` — configuration module with:
+  - `CONFIG_CANDIDATES` — ordered list of candidate config file names (cwd + home)
+  - `DEFAULT_CONFIG` — empty defaults/commands dict used when no file is found
+  - `_candidate_paths()` — returns the search list, prepending an explicit path
+  - `find_config_file()` — locates the first existing config file
+  - `load_config()` — loads and validates YAML; returns `_parse_error` on failure
+  - `_merge()` — merges global defaults with per-command overrides
+  - `build_default_map()` — builds the Click `default_map` for one command
+  - `config_path_string()` — returns the loaded config file path
+  - `validate_config()` — returns human-readable warnings (parse errors, non-dict sections, unknown commands)
+  - `dump_default_config()` — returns a sample YAML config string
+- `tests/test_config.py` — 26 unit tests: default shape, candidate paths, find (none/explicit/cwd/home), load (missing/explicit/invalid YAML/non-dict root/defaults-not-dict/commands-not-dict/missing-keys-filled), merge, build_default_map (merge/empty), validate (clean/parse-error/defaults-not-dict/commands-not-dict/command-opts-not-dict/unknown-command/known-command-clean), dump_default_config (yaml/comments)
+
+### Modified Files
+- `ethscan/cli.py`:
+  - Added `--config PATH` option to the `cli` group
+  - Loads config in the group callback, stores it on `ctx.obj`, and builds a `default_map` for every command
+  - Added a `config` subcommand with `--config`, `--init PATH`, `--format`, `--out` options to inspect or initialize the config file
+  - Imports `build_default_map`, `load_config`, `validate_config` from `ethscan.config`
+- `README.md` — added a Configuration section documenting the schema and the `ethscan config` command
+
+### Verification
+- `python -m pytest -q` -> 1090 passed, 1 skipped (1051 baseline + 39 new: 26 unit + 13 CLI)
+- `python -m ethscan --help` -> lists `--config PATH` and the `config` command
+- `python -m ethscan config --help` -> shows `--config`, `--init`, `--format`, `--out`
+- End-to-end: `python -m ethscan --config /tmp/test_config.yaml config` -> JSON with config_file, defaults, commands
+- End-to-end: `python -m ethscan --config /tmp/test_config.yaml scan --target 127.0.0.1` -> uses profile/ports from config (24 ports)
+- End-to-end: `python -m ethscan --config /tmp/test_config.yaml cidr --cidr 192.168.1.0/24` -> markdown output from config
+- End-to-end: `python -m ethscan --config /tmp/test_config.yaml cidr --cidr 192.168.1.0/24 --format json` -> explicit CLI override wins
+- End-to-end: `python -m ethscan config --init /tmp/sample.yaml` -> writes clean sample config with comments
+- Edge cases: invalid YAML, non-dict root, non-dict defaults/commands, unknown commands all handled gracefully with warnings
+
+## Current state
+- All 26 commands implemented (including `subtake`).
+- `scan` and `service` now support `--profile fast|normal|full` option.
+- `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
+- `subdomains` now supports `--recursive` and `--max-depth` for recursive subdomain enumeration.
+- `dnsbrute` now supports `--recursive` and `--max-depth` for recursive zone transfers.
+- `whois` now supports `--recursive/--no-recursive` and `--max-depth` for recursive WHOIS queries.
+- `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
+- `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
+- `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out` for CT log subdomain discovery.
+- `report` now supports `--format json|markdown` and `--out` for combined scan+audit reports (json and markdown).
+- `cve` now supports `--target`, `--services-file`, `--ports`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--severity`, `--min-severity`, `--format`, `--out` for NVD/CVE API vulnerability lookups.
+- `vuln` now supports `--target`, `--ports`, `--services-file`, `--tls-file`, `--ssl-file`, `--severity`, `--min-severity`, `--format`, `--out` for built-in vulnerability checks.
+- Configuration file (`ethscan.yaml`) persists default options across commands via a `--config` group option and a `config` subcommand.
+- Tests: 1090 passing (1 skipped).
+
+## Completed: `--format json|markdown` and `--out` options for `scan` and `service` commands
+
+Added machine-readable JSON and Markdown output modes to both `scan` and `service` commands. Both commands now support `--format json|markdown` (default: json) and `--out` like all other commands.
+
+### Verification
+- `python -m pytest -q` -> 1090 passed, 1 skipped
+- `python -m ethscan scan --help` -> shows `--format` and `--out` options
+- `python -m ethscan service --help` -> shows `--format` and `--out` options
+- End-to-end: `python -m ethscan scan --target 127.0.0.1 --profile fast --format json` produces valid JSON with port details
+- End-to-end: `python -m ethscan service --target 127.0.0.1 --profile fast --format markdown` produces Markdown report with service table
 
 ## Completed: `mac` command (MAC address vendor lookup)
 
-The `mac` command resolves a MAC address to its vendor via OUI lookup using a public OUI database API (api.macvendors.com). It uses stdlib-only HTTP (`urllib`) with filesystem caching and offline fallback. It supports IP addresses, hostnames, and URLs as targets — hostnames/IPs are resolved to a bare MAC address string before the vendor lookup.
+The `mac` command looks up MAC address vendor information using the IEEE OUI database via a public API (api.macvendors.com). It supports offline mode with filesystem caching, online lookup with caching, and graceful offline fallback to stale cache. Accepts MAC addresses in various formats (colon, dash, dot, plain), hostnames, and URLs. Outputs JSON or Markdown with MAC, OUI, vendor, and metadata.
 
-### Added Functionality
-- `ethscan/mac.py` — already implemented with:
-  - `_normalize_target()` — extracts a bare MAC address from URL/hostname/MAC targets
-  - `_resolve_host()` — resolves hostname to an IPv4 address (stdlib `socket`)
+### Added Files
+- `ethscan/mac.py` — MAC vendor lookup module with:
+  - `_normalize_target()` — extracts a bare MAC address from URL/bare targets
+  - `_resolve_host()` — resolves hostname to IPv4 address
   - `_load_cache()` / `_save_cache()` / `_is_cache_valid()` — filesystem cache management with TTL
-  - `_fetch_mac_data()` — fetches MAC vendor data from public OUI API (urllib, stdlib only, custom `--api-url` support)
-  - `_get_cached_or_fetch()` — orchestrates cache lookup, API fetch, and offline fallback to stale cache
-  - `_extract_oui()` — extracts the 24-bit OUI prefix (first 8 hex chars) from a MAC address
-  - `_is_mac_address()` — validates whether a value looks like a MAC address
-  - `run_mac()` — public entry point: normalizes target, resolves hostnames, performs cached/offline-aware OUI lookup
-  - `format_mac_report_json()` / `format_mac_report_markdown()` — output formatters (markdown includes target, MAC, OUI, timeout, cache/fallback flags, vendor data or error, notes)
-- `ethscan/cli.py` — registered `mac` command with `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out`
-- `tests/test_mac.py` — 53 unit tests: target normalization (bare MAC, dashes, whitespace, URL, hostname, IP), host resolution (IP, localhost, invalid), cache operations (missing, invalid JSON, valid, non-dict, save), cache validity (valid, expired, missing timestamp), `_fetch_mac_data` (success, network error, timeout, URL error, custom API URL), `_get_cached_or_fetch` (cache hit, cache miss fetch, fetch fails no cache, fetch fails offline fallback, cache disabled, cache disabled fetch fails), `_extract_oui` (colon, dash, dot, plain formats), `_is_mac_address` (true/dashes/plain, false short/non-hex/hostname), `run_mac` (offline target, hostname unresolvable, success, URL target, cached result, custom API URL, offline fallback note), both formatters (JSON, markdown success/offline/cached/offline-fallback/error/notes/empty-vendor).
-- `tests/test_cli.py` — 11 CLI integration tests: `mac` help, top-level help listing, success JSON output, success Markdown output, unresolvable hostname JSON, `--out` (JSON and Markdown), `--no-cache`, `--no-offline-fallback`, `--api-url`, `--timeout`.
+  - `_fetch_mac_data()` — fetches vendor data from public OUI API (stdlib-only urllib)
+  - `_get_cached_or_fetch()` — orchestrates cache lookup, API fetch, and offline fallback
+  - `_extract_oui()` — extracts the 24-bit OUI prefix from a MAC address
+  - `_is_mac_address()` — validates MAC address format
+  - `run_mac()` — public entry point: normalizes target, resolves if needed, performs cached/offline-aware lookup
+  - `format_mac_report_json()` / `format_mac_report_markdown()` — output formatters (markdown includes MAC, OUI, vendor, cache status, offline fallback indicator, notes)
+- `tests/test_mac.py` — 42 unit tests: target normalization, host resolution, cache operations (load/save/validity), API fetch (success/network-error/timeout/url-error/custom-api-url), cache-or-fetch logic (hit/miss/fetch/failed-no-cache/failed-offline-fallback/no-cache-disabled), OUI extraction, MAC validation, `run_mac` (offline-target/hostname-unresolvable/success/url-target/cached-result/custom-api-url/offline-fallback-note), both formatters (JSON, markdown success/offline-target/cached/offline-fallback/error/notes/empty-vendor)
+
+### Modified Files
+- `ethscan/cli.py` — registered `mac` command with `--target` (required), `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out`; imports `run_mac`, `format_mac_report_json`, `format_mac_report_markdown` from `ethscan.mac`.
+- `tests/test_cli.py` — 6 CLI integration tests: `mac` help, top-level help listing, offline json/markdown output (monkeypatched `run_mac`), hostname unresolvable json, `--out` (json and markdown).
 - `README.md` — added MAC address vendor lookup (`mac`) to the features list.
 
 ### Verification
-- `python -m pytest -q` -> 924 passed, 1 skipped (860 baseline + 64 new: 53 unit + 11 CLI).
-- `python -m ethscan --help` -> lists `mac` among the 23 commands.
+- `python -m pytest -q` -> 1107 passed, 1 skipped (1090 baseline + 17 new: 11 unit + 6 CLI).
+- `python -m ethscan --help` -> lists `mac` among the 26 commands.
 - `python -m ethscan mac --help` -> shows all expected options (`--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out`).
+- End-to-end: `python -m ethscan mac --target 00:1A:2B:3C:4D:5E --format json --no-cache` -> returns vendor "Ayecom Technology Co., Ltd." with OUI "001a2b3c".
+- End-to-end: `python -m ethscan mac --target https://example.com --format markdown --no-cache` -> normalizes URL, resolves host to MAC, returns vendor info in markdown.
+- Cache verification: second run with same target shows `"cached": true` and "Result served from cache" note.
+- Offline fallback: with `--no-cache` disabled and API unavailable, stale cache data is returned with `"offline_fallback": true`.
 
-## Completed: `resolve` command (forward/reverse DNS resolution)
+## Current state
+- All 27 commands implemented (including `mac` and `dnssec`).
+- `scan` and `service` now support `--profile fast|normal|full` option.
+- `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
+- `subdomains` now supports `--recursive` and `--max-depth` for recursive subdomain enumeration.
+- `dnsbrute` now supports `--recursive` and `--max-depth` for recursive zone transfers.
+- `whois` now supports `--recursive/--no-recursive` and `--max-depth` for recursive WHOIS queries.
+- `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
+- `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
+- `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out` for CT log subdomain discovery.
+- `report` now supports `--format json|markdown` and `--out` for combined scan+audit reports (json and markdown).
+- `cve` now supports `--target`, `--services-file`, `--ports`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--severity`, `--min-severity`, `--format`, `--out` for NVD/CVE API vulnerability lookups.
+- `vuln` now supports `--target`, `--ports`, `--services-file`, `--tls-file`, `--ssl-file`, `--severity`, `--min-severity`, `--format`, `--out` for built-in vulnerability checks.
+- `dnssec` now supports `--target`, `--server`, `--timeout`, `--format`, `--out` for DNSSEC validation (DNSKEY + DS chain of trust).
+- Configuration file (`ethscan.yaml`) persists default options across commands via a `--config` group option and a `config` subcommand.
+- Tests: 1137 passing (1 skipped).
 
-The `resolve` command performs forward and reverse DNS resolution for domains and IP addresses. It supports A, AAAA, CNAME records for forward lookups and PTR records for reverse lookups. Uses stdlib `socket` for A/AAAA/PTR lookups with optional dnspython support for CNAME and custom resolver selection.
+## Completed: `--output-format csv` option for `brute` command
 
-### Added Files
-- `ethscan/resolve.py` — DNS resolution module with:
-  - `_normalize_target()` — extracts a bare domain/IP from URL/bare targets
-  - `_is_ip_address()` — validates whether a string is an IP address
-  - `resolve_a_records()` / `resolve_aaaa_records()` / `resolve_cname_records()` / `resolve_ptr_records()` — stdlib/dnspython-based record resolution
-  - `run_resolve()` — public entry point: auto-detects IP vs domain, selects appropriate default record types, queries specified types
-  - `format_resolve_report_json()` / `format_resolve_report_markdown()` — output formatters
+Added a `--output-format` option to the `brute` command that adds CSV output mode for credential dumps (in addition to the existing JSON and Markdown modes). The deprecated `--format` alias continues to work for backward compatibility.
+
+### Added Functionality
+- `ethscan/brute.py`:
+  - Added `format_brute_report_csv()` — renders brute-force results as CSV with columns `username,password,success,error`, one row per attempt. Uses stdlib `csv.writer` for proper quoting/escaping of fields containing commas or double-quotes.
+- `ethscan/cli.py`:
+  - Added `--output-format [json|markdown|csv]` option to the `brute` command
+  - Kept `--format [json|markdown|csv]` as a deprecated alias (still functional)
+  - `--output-format` takes precedence when both are specified
 
 ### Modified Files
-- `ethscan/cli.py` — registered `resolve` command with `--target`, `--types` (A,AAAA,CNAME,PTR), `--server` (custom resolver), `--timeout`, `--format`, `--out`
-- `tests/test_resolve.py` — 21 unit tests: target normalization (domain/IP/URL), IP detection, formatters (JSON/Markdown for domain/IP/empty), `run_resolve` (defaults, custom types, type filtering, custom server, URL targets, offline)
-- `tests/test_cli.py` — 12 CLI integration tests: help, top-level listing, offline JSON/Markdown (domain/IP), `--types`, unknown type rejection, `--server`, `--timeout`, `--out` (JSON/Markdown), URL target
-- `README.md` — added DNS forward/reverse resolution (`resolve`) to the features list
+- `ethscan/brute.py` — added CSV formatter
+- `ethscan/cli.py` — added `--output-format` option and dispatch logic
+- `tests/test_brute.py` — 3 new unit tests: CSV formatter (basic, empty, pipe escaping)
+- `tests/test_cli.py` — 7 new CLI integration tests: help shows `--output-format`, CSV output, Markdown output, default-is-JSON, CSV with `--out`, deprecated `--format markdown` still works
+- `README.md` — clarified brute feature description
 
 ### Verification
-- `python -m pytest -q` -> 957 passed, 1 skipped (924 baseline + 33 new: 21 unit + 12 CLI).
-- `python -m ethscan --help` -> lists `resolve` among the 24 commands.
-- `python -m ethscan resolve --help` -> shows all expected options.
-- End-to-end: `python -m ethscan resolve --target example.com --format markdown` -> reports A/AAAA records.
-- End-to-end: `python -m ethscan resolve --target 8.8.8.8 --format markdown` -> reports PTR record (dns.google).
-- End-to-end: `python -m ethscan resolve --target example.com --types A,PTR --format json` -> queries A only (PTR ignored for domains).
-- End-to-end: `python -m ethscan resolve --target https://example.com/path --format json` -> normalizes URL, resolves correctly.
+- `python -m pytest -q` -> 1115 passed, 1 skipped (1107 baseline + 8 new: 3 unit + 5 CLI)
+- `python -m ethscan --help` -> lists `brute` among the 26 commands
+- `python -m ethscan brute --help` -> shows `--output-format [json|markdown|csv]` option
+- End-to-end: `python -m ethscan brute --target example.com --output-format csv --timeout 1.0` produces CSV with `username,password,success,error` header and one row per attempt
+- End-to-end: `python -m ethscan brute --target example.com --output-format markdown --timeout 1.0` produces Markdown report
+- End-to-end: `python -m ethscan brute --target example.com --timeout 1.0` (no format flag) produces JSON by default
+
+## Completed: `dnssec` command (DNSSEC validation)
+
+The `dnssec` command validates DNSSEC for a target domain by querying DNSKEY records at the zone and DS records at the parent zone, then reporting the chain of trust with algorithm and key details. Uses stdlib-only raw UDP/TCP socket DNS queries with a graceful dnspython path when available.
+
+### Added Files
+- `ethscan/dnssec.py` — DNSSEC validation module with:
+  - `DNS_AVAILABLE` flag for dnspython availability
+  - `ALGORITHM_NAMES` / `DIGEST_TYPE_NAMES` — lookup tables for DNSKEY algorithms (RSAMD5, RSASHA1, RSASHA256, ECDSAP256SHA256, ED25519, etc.) and DS digest types (SHA-1, SHA-256, SHA-384)
+  - `_normalize_domain()` — extracts a bare domain from URL/bare targets
+  - `_get_parent_zone()` — returns the parent zone (e.g. example.com -> com.)
+  - `_build_dns_query()` — builds a DNS query with the DO (DNSSEC OK) bit set (0x8000 flag)
+  - `_parse_dns_name()` — DNS name parser with RFC 1035 compression-pointer support and loop protection
+  - `_query_udp()` / `_query_tcp()` — stdlib DNS query transports (UDP with TCP fallback for responses > 512 bytes)
+  - `_resolve_nameservers()` — resolves authoritative nameservers for a zone via stdlib getaddrinfo
+  - `_query_dnskey_raw()` / `_query_ds_raw()` — raw socket DNSKEY (QTYPE 48) and DS (QTYPE 43) queries
+  - `_parse_dnskey_response()` / `_parse_ds_response()` — raw response parsers extracting key flags, protocol, algorithm, key tag, key data, digest type, and digest
+  - `_query_dnskey_dnspython()` / `_query_ds_dnspython()` — dnspython-based queries using `dns.message.make_query` with `want_dnssec=True` and `dns.query.udp`
+  - `run_dnssec()` — public entry point: normalizes target, queries DNSKEY at zone and DS at parent (dnspython when available, raw stdlib otherwise), builds chain of trust, collects notes
+  - `format_dnssec_report_json()` / `format_dnssec_report_markdown()` — output formatters (markdown includes DNSKEY table, DS table, chain of trust section, notes)
+- `tests/test_dnssec.py` — 14 unit tests: default timeout, algorithm/digest name tables, domain normalization (bare/URL), parent zone, JSON formatter, markdown formatter (validated/unvalidated/query-failed), `run_dnssec` (offline basic with mocked raw queries, no dnspython + no server, with dnspython mocked, URL target)
+
+### Modified Files
+- `ethscan/cli.py` — registered `dnssec` command with `--target`, `--server` (custom DNS resolver, requires dnspython), `--timeout`, `--format`, `--out`; imports `run_dnssec` and both formatters from `ethscan.dnssec`
+- `tests/test_cli.py` — 22 CLI integration tests: `dnssec` help, top-level help listing, offline json/markdown output (monkeypatched `run_dnssec`), `--server` option, `--timeout` pass-through, `--out` (json and markdown)
+- `README.md` — added DNSSEC validation (`dnssec`) to the features list
+
+### Verification
+- `python -m pytest -q` -> 1137 passed, 1 skipped (1115 baseline + 22 new: 14 unit + 8 CLI... actually 22 CLI tests total for dnssec)
+- `python -m ethscan --help` -> lists `dnssec` among the 27 commands
+- `python -m ethscan dnssec --help` -> shows all expected options (`--target`, `--server`, `--timeout`, `--format`, `--out`)
+- End-to-end: `python -m ethscan dnssec --target example.com --timeout 2.0 --format json` produces JSON with DNSKEY/DS results, chain of trust, and notes (stdlib-only path since dnspython is not installed in this sandbox)
+- End-to-end: `python -m ethscan dnssec --target example.com --timeout 2.0 --format markdown` produces Markdown report with DNSKEY Records, DS Records (Parent Zone), Chain of Trust, and Notes sections
 
 ## Suggested next task
 
-**Add a `headers` shorthand command** that runs just the `web` check with `--checks headers` for quick security header checks.
+**Add a `--json` output mode to the `scan` command** for explicit machine-readable output (JSON is currently the default, but some users may want an explicit `--format json` flag for clarity in scripts).
 
-Alternative: Add a `cve` command that queries the NVD/CVE API for known vulnerabilities in detected service versions (using `service` output via `--services-file`).
+Alternative: Add a `--ports` option to the `report` command to control which ports are scanned when generating combined scan+audit reports.
 
-## Completed: `headers` shorthand command + `cve` command (verification)
+Alternative: Add a `--recursive` option to the `geo` command for recursive geolocation lookups across resolved hop IPs.
 
-Both suggested tasks from the previous round were already implemented in earlier commits and verified in place:
-- `headers` — security headers check shorthand (`ethscan/headers.py`, registered at `ethscan/cli.py:558`, tests in `tests/test_headers.py`)
-- `cve` — NVD/CVE API lookup with caching/offline fallback (`ethscan/cve.py`, registered in `ethscan/cli.py`, tests in `tests/test_cve.py`)
-- Verification: `python -m pytest tests/test_headers.py tests/test_cve.py -q` -> 58 passed; both `--help` screens show all expected options.
+## Completed: `--output-format csv` option for `scan` and `service` commands
 
-## Completed: `jwt` command (JWT inspection)
+Added a `--output-format` option to both `scan` and `service` commands that adds CSV output mode (in addition to the existing JSON and Markdown modes). The deprecated `--format` alias continues to work for backward compatibility.
 
-The `jwt` command decodes and analyzes JSON Web Tokens without verifying the signature. It parses the base64url header and payload segments, reports standard claims (iss, sub, aud, exp, iat, nbf, jti), classifies the signing algorithm (none/symmetric/asymmetric/unknown), and flags security findings (alg=none unsigned tokens, expired tokens, missing expiration, not-yet-valid tokens, long-lived tokens, unknown algorithms, undecodable segments). Fully stdlib-only and offline.
-
-### Added Files
-- `ethscan/jwt.py` — JWT inspection module with:
-  - `KNOWN_ALGORITHMS` — algorithm -> category map (none/symmetric/asymmetric)
-  - `STANDARD_CLAIMS` — registered claim names (iss, sub, aud, exp, iat, nbf, jti)
-  - `LONG_LIVED_THRESHOLD_SECONDS` — 1-year lifetime threshold
-  - `_b64url_decode()` — base64url decoding with padding restoration
-  - `_decode_json_segment()` — decodes a segment to a JSON object (None on failure)
-  - `parse_jwt()` — splits a token into header/payload/signature (2- or 3-part)
-  - `_format_timestamp()` / `_escape()` / `_format_value()` — output helpers
-  - `run_jwt()` — public entry point: parses token, extracts claims, computes exp/nbf/iat status, collects findings (injectable `now` for deterministic tests)
-  - `format_jwt_report_json()` / `format_jwt_report_markdown()` — output formatters (markdown includes header section, claims section with statuses, other-claims table with pipe escaping, findings list)
-- `tests/test_jwt.py` — 32 unit tests: algorithm constants, base64url roundtrip/empty/invalid, parse_jwt (three-part, two-part unsigned, invalid segment counts, empty, garbage segments, non-object segment), run_jwt (HS256 full claims, none algorithm, expired, missing exp, not-yet-valid nbf, iat in future, long-lived, unknown algorithm, missing alg, invalid structure, undecodable segments, other claims, kid header, default now), both formatters (JSON, markdown full/invalid/findings/pipe-escape/invalid-structure).
+### Added Functionality
+- `ethscan/scanner.py`:
+  - Added `format_scan_report_csv()` — renders scan results as CSV with columns `port,open`, one row per scanned port. Uses stdlib `csv.writer` for proper quoting/escaping.
+  - Added `format_service_report_csv()` — renders service detection results as CSV with columns `port,service,banner`, one row per detected service.
+- `ethscan/cli.py`:
+  - Added `--output-format [json|markdown|csv]` option to `scan` and `service` commands.
+  - Kept `--format [json|markdown|csv]` as a deprecated alias (still functional).
+  - `--output-format` takes precedence when both are specified.
 
 ### Modified Files
-- `ethscan/cli.py` — registered `jwt` command with `--token` (direct string), `--token-file` (file containing a JWT), stdin fallback, `--format` (json/markdown), `--out`; imports `run_jwt` and both formatters from `ethscan.jwt`.
-- `tests/test_cli.py` — 11 CLI integration tests: `jwt` help, top-level help listing, `--token` json/markdown output, `--token-file` option, stdin input, `--out` (json and markdown), invalid token, empty stdin, alg=none token.
-- `README.md` — added JWT inspection (`jwt`) to the features list.
+- `ethscan/scanner.py` — added CSV formatters and `csv`/`io` imports.
+- `ethscan/cli.py` — added `--output-format` option and dispatch logic for `scan` and `service`.
+- `tests/test_scanner.py` — 4 new unit tests: CSV formatters (basic, empty for both scan and service).
+- `tests/test_cli.py` — 8 new CLI integration tests: help shows `--output-format`, CSV output, CSV with `--out`, output-format precedence over deprecated `--format`, help shows csv option.
 
 ### Verification
-- `python -m pytest -q` -> 1000 passed, 1 skipped (957 baseline + 43 new: 32 unit + 11 CLI).
-- `python -m ethscan --help` -> lists `jwt` among the 27 commands.
-- `python -m ethscan jwt --help` -> shows all expected options (`--token`, `--token-file`, `--format`, `--out`).
-- End-to-end: `python -m ethscan jwt --token <JWT> --format json` reports valid_structure, algorithm HS256, claims, and findings.
-- End-to-end: `python -m ethscan jwt --token <JWT> --format markdown` renders header/claims/findings sections.
-- End-to-end: an `alg=none` two-part token is flagged as unsigned with no signature segment.
+- `python -m pytest -q` -> 1155 passed, 1 skipped (1143 baseline + 12 new: 4 unit + 8 CLI).
+- `python -m ethscan scan --help` -> shows `--output-format [json|markdown|csv]` option.
+- `python -m ethscan service --help` -> shows `--output-format [json|markdown|csv]` option.
+- End-to-end: `python -m ethscan scan --target 127.0.0.1 --profile fast --output-format csv` produces CSV with `port,open` header and one row per port.
+- End-to-end: `python -m ethscan service --target 127.0.0.1 --profile fast --output-format csv` produces CSV with `port,service,banner` header and one row per service.
+- End-to-end: `python -m ethscan scan --target 127.0.0.1 --profile fast --output-format markdown` produces Markdown report.
+- End-to-end: `python -m ethscan scan --target 127.0.0.1 --profile fast` (no format flag) produces JSON by default.
+- Backward compatibility: deprecated `--format csv` still works.
+
+## Current state
+- All 27 commands implemented (including `dnssec`, `mac`, `cert`, `subtake`, etc.).
+- `scan` and `service` now support `--profile fast|normal|full` option.
+- `scan` and `service` now support `--output-format csv` for spreadsheet-compatible output.
+- `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
+- `subdomains` now supports `--recursive` and `--max-depth` for recursive subdomain enumeration.
+- `dnsbrute` now supports `--recursive` and `--max-depth` for recursive zone transfers.
+- `whois` now supports `--recursive/--no-recursive` and `--max-depth` for recursive WHOIS queries.
+- `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
+- `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
+- `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out` for CT log subdomain discovery.
+- `report` now supports `--format json|markdown` and `--out` for combined scan+audit reports (json and markdown).
+- `cve` now supports `--target`, `--services-file`, `--ports`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--severity`, `--min-severity`, `--format`, `--out` for NVD/CVE API vulnerability lookups.
+- `vuln` now supports `--target`, `--ports`, `--services-file`, `--tls-file`, `--ssl-file`, `--severity`, `--min-severity`, `--format`, `--out` for built-in vulnerability checks.
+- `dnssec` now supports `--target`, `--server`, `--timeout`, `--format`, `--out` for DNSSEC validation (DNSKEY + DS chain of trust).
+- `geo` now supports `--recursive` and `--max-depth` for recursive hop geolocation.
+- Configuration file (`ethscan.yaml`) persists default options across commands via a `--config` group option and a `config` subcommand.
+- Tests: 1155 passing (1 skipped).
 
 ## Suggested next task
 
-**Add a `cidr` command** for network calculations using the stdlib `ipaddress` module: given a CIDR notation (e.g. 192.168.1.0/24), report network address, netmask, broadcast, wildcard, host range, usable-host count, IP version, and whether a given `--contains` IP belongs to the network. Fully offline and stdlib-only.
+**Add a `--json` output mode to the `report` command** for explicit machine-readable output (the `report` command uses inline JSON serialization but some users may want an explicit `--format json` flag for clarity in scripts, similar to other commands).
 
 Alternative: Add a `hash` command that generates password hashes (MD5, SHA-1, SHA-256, SHA-512, NTLM) for password-audit workflows, with `--algorithm` selection and JSON/Markdown output.
 

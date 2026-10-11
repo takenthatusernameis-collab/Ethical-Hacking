@@ -1,11 +1,12 @@
 """CVE lookup module for ethscan.
 
 Queries the public NVD/CVE API for known vulnerabilities affecting detected
-service versions, with filesystem caching and offline fallback. Stdlib only.
+service versions (provided via ``--services-file`` JSON output from the
+``service`` command). Stdlib only with filesystem caching and offline fallback.
 """
 
 import json
-import re
+import os
 import socket
 import time
 import urllib.error
@@ -14,44 +15,31 @@ import urllib.request
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from ethscan.service import run_service
-
 DEFAULT_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 DEFAULT_TIMEOUT = 10.0
 CACHE_DIR = Path.home() / ".cache" / "ethscan"
 CACHE_FILE = CACHE_DIR / "cve_cache.json"
 CACHE_TTL = 3600  # 1 hour
 
-SEVERITIES = ("critical", "high", "medium", "low")
-
-PRODUCT_ALIASES = {
-    "openssh": ["openssh", "ssh"],
-    "proftpd": ["proftpd", "ftp"],
-    "vsftpd": ["vsftpd", "ftp"],
-    "pure-ftpd": ["pure-ftpd", "ftp"],
-    "filezilla": ["filezilla", "ftp"],
-    "dovecot": ["dovecot", "imap", "pop3"],
-    "postfix": ["postfix", "smtp"],
-    "exim": ["exim", "smtp"],
-    "sendmail": ["sendmail", "smtp"],
-    "apache": ["apache", "http"],
-    "nginx": ["nginx", "http"],
-    "iis": ["iis", "http"],
-    "mysql": ["mysql"],
-    "mariadb": ["mariadb"],
-    "postgresql": ["postgresql"],
-    "redis": ["redis"],
-    "mongodb": ["mongodb"],
-    "openssh": ["openssh", "ssh"],
-}
+from ethscan.vuln import (  # noqa: E402
+    BANNER_SIGNATURES,
+    SEVERITIES,
+    SERVICE_VULNS,
+    VULN_DB,
+    match_service_vulns,
+    parse_banner,
+    version_in_range,
+)
 
 
-def _normalize_target(target: str) -> str:
+def _normalize_host(target: str) -> str:
     """Extract a bare hostname from a target that may be a URL or host."""
     normalized = target.strip()
     if "://" not in normalized:
         normalized = "https://" + normalized
-    parsed = urllib.parse.urlparse(normalized)
+    from urllib.parse import urlparse
+
+    parsed = urlparse(normalized)
     return (parsed.hostname or parsed.netloc or "").lower()
 
 
@@ -87,21 +75,20 @@ def _save_cache(cache: Dict[str, Dict]) -> None:
 
 def _is_cache_valid(entry: Dict, ttl: int = CACHE_TTL) -> bool:
     """Check if a cache entry is still valid."""
-    if "timestamp" not in entry:
+    if not isinstance(entry, dict) or "timestamp" not in entry:
         return False
-    return (time.time() - entry["timestamp"]) < ttl
+    try:
+        return (time.time() - float(entry["timestamp"])) < ttl
+    except (TypeError, ValueError):
+        return False
 
 
 def _fetch_cve_data(
-    product: str,
-    version: str,
-    timeout: float = DEFAULT_TIMEOUT,
-    api_url: Optional[str] = None,
+    cve_id: str, timeout: float = DEFAULT_TIMEOUT, api_url: Optional[str] = None
 ) -> Optional[Dict]:
-    """Fetch CVE data from the public NVD API."""
+    """Fetch CVE details from the public NVD API."""
     base = (api_url or DEFAULT_API_URL).rstrip("/")
-    query = urllib.parse.quote(f"{product} {version}")
-    url = f"{base}?keywordSearch={query}&resultsPerPage=5"
+    url = f"{base}?cveId={urllib.parse.quote(cve_id)}"
     req = urllib.request.Request(url, headers={"User-Agent": "ethscan/0.1"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as response:
@@ -113,214 +100,246 @@ def _fetch_cve_data(
         return None
 
 
-def _parse_cve_response(data: Dict) -> List[Dict]:
-    """Parse NVD API response into a list of CVE findings."""
-    findings: List[Dict] = []
-    vulns = data.get("vulnerabilities") or []
-    for entry in vulns:
-        cve = entry.get("cve") or {}
-        cve_id = cve.get("id") or ""
-        descriptions = cve.get("descriptions") or []
-        title = ""
-        description = ""
-        for desc in descriptions:
-            if desc.get("lang") == "en":
-                title = desc.get("value") or ""
-                if not description:
-                    description = title
-                break
-        if not title and descriptions:
-            title = descriptions[0].get("value") or ""
-            description = title
-        metrics = cve.get("metrics") or {}
-        severity = "unknown"
-        for key in ("cvssMetricV31", "cvssMetricV30", "cvssMetricV2"):
-            metric_list = metrics.get(key) or []
-            if metric_list:
-                score = (metric_list[0].get("cvssData") or {}).get("baseScore")
-                severity = _score_to_severity(score)
-                break
-        published = cve.get("published") or ""
-        findings.append({
-            "id": cve_id,
-            "title": title,
-            "description": description,
-            "severity": severity,
-            "published": published,
-        })
-    return findings
-
-
-def _score_to_severity(score: Optional[float]) -> str:
-    """Map a CVSS score to a severity label."""
-    if score is None:
-        return "unknown"
-    if score >= 9.0:
-        return "critical"
-    if score >= 7.0:
-        return "high"
-    if score >= 4.0:
-        return "medium"
-    if score > 0.0:
-        return "low"
-    return "unknown"
-
-
 def _get_cached_or_fetch(
-    product: str,
-    version: str,
+    cve_id: str,
     timeout: float,
     use_cache: bool,
     offline_fallback: bool,
     api_url: Optional[str],
 ) -> Dict[str, object]:
     """Get CVE data from cache or fetch from API."""
-    cache_key = f"{product}|{version}"
     cache = _load_cache() if use_cache else {}
 
-    if use_cache and cache_key in cache and _is_cache_valid(cache[cache_key]):
-        result = dict(cache[cache_key])
+    if use_cache and cve_id in cache and _is_cache_valid(cache[cve_id]):
+        result = dict(cache[cve_id])
         result["cached"] = True
         return result
 
-    data = _fetch_cve_data(product, version, timeout, api_url)
+    data = _fetch_cve_data(cve_id, timeout, api_url)
 
     if data is None:
-        if offline_fallback and use_cache and cache_key in cache:
-            result = dict(cache[cache_key])
+        if offline_fallback and use_cache and cve_id in cache:
+            result = dict(cache[cve_id])
             result["cached"] = True
             result["offline_fallback"] = True
             return result
         return {
-            "product": product,
-            "version": version,
-            "findings": [],
+            "cve_id": cve_id,
             "error": "Failed to fetch CVE data",
             "cached": False,
         }
 
-    findings = _parse_cve_response(data)
-    payload = {
-        "product": product,
-        "version": version,
-        "findings": findings,
-        "count": len(findings),
-        "cached": False,
-    }
-
     if use_cache:
-        cache[cache_key] = payload
+        data["timestamp"] = time.time()
+        cache[cve_id] = data
         _save_cache(cache)
 
-    return payload
+    data["cached"] = False
+    return data
 
 
-def _parse_banner_product(banner: str) -> Tuple[Optional[str], Optional[str]]:
-    """Extract product name and version from a service banner."""
-    patterns = [
-        (re.compile(r"OpenSSH[_-]([0-9]+(?:\.[0-9]+)*(?:p[0-9]+)?)", re.IGNORECASE), "OpenSSH"),
-        (re.compile(r"ProFTPD\s+([0-9]+(?:\.[0-9]+)+)", re.IGNORECASE), "ProFTPD"),
-        (re.compile(r"vsFTPd\s+([0-9]+(?:\.[0-9]+)*)", re.IGNORECASE), "vsftpd"),
-        (re.compile(r"Pure-FTPd\s+([0-9]+(?:\.[0-9]+)+)", re.IGNORECASE), "Pure-FTPd"),
-        (re.compile(r"FileZilla\s+Server\s+([0-9]+(?:\.[0-9]+)*)", re.IGNORECASE), "FileZilla"),
-        (re.compile(r"Dovecot\s+([0-9]+(?:\.[0-9]+)*)", re.IGNORECASE), "Dovecot"),
-        (re.compile(r"Postfix\s+([0-9]+(?:\.[0-9]+)*)", re.IGNORECASE), "Postfix"),
-        (re.compile(r"Exim\s+([0-9]+(?:\.[0-9]+)*)", re.IGNORECASE), "Exim"),
-        (re.compile(r"Apache[/\s]([0-9]+(?:\.[0-9]+)*)", re.IGNORECASE), "Apache"),
-        (re.compile(r"nginx[/\s]([0-9]+(?:\.[0-9]+)*)", re.IGNORECASE), "nginx"),
-        (re.compile(r"MySQL\s+([0-9]+(?:\.[0-9]+)*)", re.IGNORECASE), "MySQL"),
-        (re.compile(r"MariaDB\s+([0-9]+(?:\.[0-9]+)*)", re.IGNORECASE), "MariaDB"),
-        (re.compile(r"PostgreSQL\s+([0-9]+(?:\.[0-9]+)*)", re.IGNORECASE), "PostgreSQL"),
-        (re.compile(r"Redis\s+([0-9]+(?:\.[0-9]+)*)", re.IGNORECASE), "Redis"),
+def _extract_cve_summary(cve_data: Dict[str, object]) -> Dict[str, object]:
+    """Extract a normalized CVE summary from raw NVD API response."""
+    vulns = (cve_data.get("vulnerabilities") or [])
+    if not vulns:
+        return {}
+    first = vulns[0]
+    if not isinstance(first, dict):
+        return {}
+    cve = first.get("cve") or {}
+    if not isinstance(cve, dict):
+        return {}
+
+    cve_id = cve.get("id") or ""
+    descriptions = cve.get("descriptions") or []
+    description = ""
+    for entry in descriptions:
+        if isinstance(entry, dict) and entry.get("lang") == "en":
+            description = entry.get("value") or ""
+            break
+    if not description and descriptions and isinstance(descriptions[0], dict):
+        description = descriptions[0].get("value") or ""
+
+    metrics = cve.get("metrics") or {}
+    cvss = {}
+    for key in ("cvssMetricV31", "cvssMetricV30", "cvssMetricV2"):
+        entries = metrics.get(key) or []
+        if entries and isinstance(entries[0], dict):
+            cvss = entries[0].get("cvssData") or {}
+            break
+
+    severity = (cvss.get("baseSeverity") or "").upper() or None
+    score = cvss.get("baseScore")
+    published = cve.get("published") or ""
+    last_modified = cve.get("lastModified") or ""
+
+    references = [
+        r.get("url")
+        for r in (cve.get("references") or [])
+        if isinstance(r, dict) and r.get("url")
     ]
-    for pattern, product in patterns:
-        match = pattern.search(banner)
-        if match:
-            return product, match.group(1)
-    return None, None
+
+    return {
+        "id": cve_id,
+        "description": description,
+        "severity": severity,
+        "score": score,
+        "published": published,
+        "last_modified": last_modified,
+        "references": references,
+    }
 
 
-def _normalize_product(product: str) -> str:
-    """Normalize product name for cache key consistency."""
-    return product.strip().lower()
+_SEVERITY_RANK: Dict[str, int] = {
+    name: idx for idx, name in enumerate(reversed(SEVERITIES))
+}
+
+
+def _severity_rank(level: Optional[str]) -> Optional[int]:
+    """Return the numeric rank for a severity label, or None if unknown.
+
+    Higher rank means higher severity: critical=3, high=2, medium=1, low=0.
+    """
+    if not level:
+        return None
+    return _SEVERITY_RANK.get(str(level).lower())
 
 
 def run_cve(
     target: str,
-    services: Optional[dict] = None,
+    services_file: Optional[str] = None,
     timeout: float = DEFAULT_TIMEOUT,
     use_cache: bool = True,
     offline_fallback: bool = True,
     api_url: Optional[str] = None,
     severity: Optional[str] = None,
+    min_severity: Optional[str] = None,
+    ports: Optional[List[int]] = None,
 ) -> Dict[str, object]:
-    """Query the NVD/CVE API for known vulnerabilities in detected services.
+    """Query the NVD/CVE API for known vulnerabilities affecting TARGET's services.
 
     Args:
         target: Hostname or URL (e.g. example.com or https://example.com).
-        services: Pre-computed ``service`` command results. If None, service
-            detection is run against the target.
+        services_file: Optional JSON file with ``service`` command output. When
+            omitted, live service detection is run against the target.
         timeout: API request timeout in seconds.
         use_cache: Whether to use local filesystem cache.
-        offline_fallback: Whether to use stale cache when API is unavailable.
+        offline_fallback: Whether to use stale cache when API is unreachable.
         api_url: Optional custom NVD API base URL.
-        severity: Restrict findings to a single severity level.
+        severity: Restrict findings to a single severity level
+            (critical/high/medium/low). If None, all severities are reported.
+        min_severity: Drop findings below this severity threshold
+            (critical/high/medium/low). If None, no lower bound is applied.
+        ports: Optional list of ports to scan for live service detection.
+            If None, uses default common ports.
 
     Returns:
-        Structured results with per-service CVE findings and notes.
+        Structured results with per-service CVE lookups, counts, and notes.
     """
-    host = _normalize_target(target)
+    global DEFAULT_API_URL
+    original_api = DEFAULT_API_URL
+    if api_url:
+        DEFAULT_API_URL = api_url.rstrip("/") + "/"
+
+    host = _normalize_host(target)
+    notes: List[str] = []
+
+    services = None
+    if services_file:
+        try:
+            with open(services_file, "r", encoding="utf-8") as handle:
+                services = json.load(handle)
+        except (json.JSONDecodeError, OSError) as exc:
+            notes.append(f"Failed to read services file: {exc}")
+            services = None
 
     if services is None:
-        services = run_service(host)
+        from ethscan.service import run_service
 
-    findings: List[Dict[str, object]] = []
+        services = run_service(host, ports=ports, timeout=timeout)
+
+    cve_entries: List[Dict[str, object]] = []
     services_checked = 0
-    cve_queries: List[Dict[str, object]] = []
-
     for entry in services.get("results") or []:
         banner = entry.get("banner") or ""
-        product, version = _parse_banner_product(banner)
-        if not product or not version:
-            continue
+        product, version = parse_banner(banner)
+        port = entry.get("port")
         services_checked += 1
-        cve_data = _get_cached_or_fetch(
-            product, version, timeout, use_cache, offline_fallback, api_url
-        )
-        cve_queries.append({
-            "product": product,
-            "version": version,
-            "port": entry.get("port"),
-            "cached": cve_data.get("cached", False),
-            "offline_fallback": cve_data.get("offline_fallback", False),
-            "findings": cve_data.get("findings") or [],
-        })
-        for finding in cve_data.get("findings") or []:
-            findings.append({
-                "product": product,
-                "version": version,
-                "port": entry.get("port"),
-                "id": finding.get("id"),
-                "title": finding.get("title"),
-                "description": finding.get("description"),
-                "severity": finding.get("severity"),
-                "published": finding.get("published"),
-            })
+
+        # Cross-reference against the built-in CVE/weakness database so offline
+        # results are still useful even when the NVD API is unreachable.
+        builtin_findings = match_service_vulns(product, version, port=port)
+        for finding in builtin_findings:
+            cve_entries.append(
+                {
+                    "source": "builtin",
+                    "port": port,
+                    "product": product,
+                    "version": version,
+                    "finding": finding,
+                }
+            )
+
+        if product and version:
+            cve_id = _lookup_cve_id(product, version)
+            if cve_id:
+                cve_data = _get_cached_or_fetch(
+                    cve_id, timeout, use_cache, offline_fallback, api_url
+                )
+                summary = _extract_cve_summary(cve_data) if cve_data else {}
+                if summary:
+                    cve_entries.append(
+                        {
+                            "source": "nvd",
+                            "port": port,
+                            "product": product,
+                            "version": version,
+                            "cve_id": cve_id,
+                            "cve": summary,
+                            "cached": bool(cve_data.get("cached")),
+                            "offline_fallback": bool(cve_data.get("offline_fallback")),
+                        }
+                    )
 
     if severity:
-        findings = [f for f in findings if f.get("severity") == severity]
+        filtered: List[Dict[str, object]] = []
+        for entry in cve_entries:
+            finding = entry.get("finding") or {}
+            cve = entry.get("cve") or {}
+            sev = finding.get("severity") or cve.get("severity")
+            if sev and str(sev).lower() == severity:
+                filtered.append(entry)
+        cve_entries = filtered
+
+    if min_severity:
+        min_rank = _severity_rank(min_severity)
+        if min_rank is not None:
+            filtered_min: List[Dict[str, object]] = []
+            for entry in cve_entries:
+                finding = entry.get("finding") or {}
+                cve = entry.get("cve") or {}
+                level = finding.get("severity") or cve.get("severity")
+                rank = _severity_rank(level)
+                if rank is not None and rank >= min_rank:
+                    filtered_min.append(entry)
+            cve_entries = filtered_min
 
     severity_counts: Dict[str, int] = {name: 0 for name in SEVERITIES}
-    for finding in findings:
-        level = str(finding.get("severity") or "unknown")
-        severity_counts[level] = severity_counts.get(level, 0) + 1
+    for entry in cve_entries:
+        finding = entry.get("finding") or {}
+        cve = entry.get("cve") or {}
+        level = finding.get("severity") or cve.get("severity")
+        if level:
+            severity_counts[str(level).lower()] = severity_counts.get(
+                str(level).lower(), 0
+            ) + 1
 
-    notes: List[str] = []
     if services_checked == 0:
-        notes.append("No service banners with parseable product/version detected")
-    if not findings:
-        notes.append("No known CVEs matched")
+        notes.append("No service banners detected")
+    if not cve_entries:
+        notes.append("No CVEs matched")
 
+    DEFAULT_API_URL = original_api
     return {
         "target": target,
         "host": host,
@@ -329,18 +348,45 @@ def run_cve(
         "offline_fallback": offline_fallback,
         "api_url": api_url,
         "severity_filter": severity,
+        "min_severity_filter": min_severity,
+        "ports": ports,
         "services_checked": services_checked,
-        "cve_queries": cve_queries,
-        "findings": findings,
-        "finding_count": len(findings),
+        "cve_entries": cve_entries,
+        "cve_count": len(cve_entries),
         "severity_counts": severity_counts,
         "notes": notes,
     }
 
 
+def _lookup_cve_id(product: str, version: str) -> Optional[str]:
+    """Return a representative CVE id for a product/version, if known."""
+    product_lower = str(product).lower()
+    version_lower = str(version).lower()
+    for entry in SERVICE_VULNS:
+        if str(entry["product"]).lower() != product_lower:
+            continue
+        if version_in_range(version_lower, entry):
+            return str(entry["id"])
+    return None
+
+
 def format_cve_report_json(data: Dict[str, object]) -> str:
     """Format CVE lookup results as JSON."""
     return json.dumps(data, indent=2, default=str)
+
+
+def _finding_detail(finding: Dict[str, object]) -> str:
+    """Render the per-finding details line for Markdown output."""
+    kind = str(finding.get("kind", ""))
+    if kind == "service":
+        product = str(finding.get("product") or "Unknown")
+        version = str(finding.get("version") or "")
+        detail = f"{product} {version}".strip()
+        port = finding.get("port")
+        if port is not None:
+            detail = f"{detail} (port {port})"
+        return detail
+    return ""
 
 
 def _escape(value: str) -> str:
@@ -350,20 +396,23 @@ def _escape(value: str) -> str:
 
 def format_cve_report_markdown(data: Dict[str, object]) -> str:
     """Format CVE lookup results as Markdown."""
-    lines = ["# ethscan CVE Lookup Report", ""]
+    lines = ["# ethscan CVE Report", ""]
     lines.append(f"- **Target:** {data['target']}")
     lines.append(f"- **Host:** {data['host']}")
     lines.append(f"- **Timeout:** {data['timeout']}s")
     lines.append(f"- **Cache Enabled:** {'Yes' if data['use_cache'] else 'No'}")
-    lines.append(f"- **Offline Fallback:** {'Yes' if data['offline_fallback'] else 'No'}")
+    lines.append(
+        f"- **Offline Fallback:** {'Yes' if data['offline_fallback'] else 'No'}"
+    )
     if data.get("api_url"):
         lines.append(f"- **API URL:** {data['api_url']}")
     if data.get("severity_filter"):
         lines.append(f"- **Severity Filter:** {data['severity_filter']}")
-    lines.append("")
-
-    lines.append(f"- **Services Checked:** {data.get('services_checked', 0)}")
-    lines.append(f"- **Findings:** {data.get('finding_count', 0)}")
+    if data.get("min_severity_filter"):
+        lines.append(f"- **Min Severity:** {data['min_severity_filter']}")
+    if data.get("ports"):
+        ports_str = ", ".join(str(p) for p in data["ports"])
+        lines.append(f"- **Ports Scanned:** {ports_str}")
     lines.append("")
 
     severity_counts = data.get("severity_counts") or {}
@@ -372,22 +421,61 @@ def format_cve_report_markdown(data: Dict[str, object]) -> str:
         lines.append(f"- **{name.capitalize()}:** {severity_counts.get(name, 0)}")
     lines.append("")
 
-    findings = data.get("findings") or []
+    entries = data.get("cve_entries") or []
     lines.append("## CVE Findings")
-    if findings:
-        lines.append("| CVE ID | Product | Version | Port | Severity | Title |")
-        lines.append("|--------|---------|---------|------|----------|-------|")
-        for finding in findings:
-            cve_id = _escape(str(finding.get("id") or ""))
-            product = _escape(str(finding.get("product") or ""))
-            version = _escape(str(finding.get("version") or ""))
-            port = finding.get("port")
-            port_str = str(port) if port is not None else ""
-            severity_label = str(finding.get("severity") or "unknown").upper()
-            title = _escape(str(finding.get("title") or ""))
-            lines.append(f"| {cve_id} | {product} | {version} | {port_str} | {severity_label} | {title} |")
+    if entries:
+        for entry in entries:
+            source = str(entry.get("source", ""))
+            if source == "builtin":
+                finding = entry.get("finding") or {}
+                lines.append(
+                    f"### {finding.get('id', 'Unknown')} "
+                    f"({str(finding.get('severity', '')).upper()})"
+                )
+                lines.append(f"- **Source:** Built-in database")
+                detail = _escape(_finding_detail(finding))
+                if detail:
+                    lines.append(f"- **Details:** {detail}")
+                lines.append(f"- **Title:** {_escape(str(finding.get('title', '')))}")
+                lines.append(
+                    f"- **Description:** {_escape(str(finding.get('description', '')))}"
+                )
+            else:
+                cve = entry.get("cve") or {}
+                cve_id = entry.get("cve_id") or cve.get("id") or "Unknown"
+                lines.append(
+                    f"### {cve_id} ({str(cve.get('severity', '')).upper()})"
+                )
+                lines.append(f"- **Source:** NVD API")
+                product = str(entry.get("product") or "")
+                version = str(entry.get("version") or "")
+                if product or version:
+                    lines.append(f"- **Product:** {product} {version}".strip())
+                port = entry.get("port")
+                if port is not None:
+                    lines.append(f"- **Port:** {port}")
+                if cve.get("score") is not None:
+                    lines.append(f"- **CVSS Score:** {cve.get('score')}")
+                if cve.get("published"):
+                    lines.append(f"- **Published:** {cve.get('published')}")
+                if cve.get("last_modified"):
+                    lines.append(f"- **Last Modified:** {cve.get('last_modified')}")
+                if cve.get("description"):
+                    lines.append(
+                        f"- **Description:** {_escape(str(cve.get('description')))}"
+                    )
+                refs = cve.get("references") or []
+                if refs:
+                    lines.append("- **References:**")
+                    for ref in refs:
+                        lines.append(f"  - {ref}")
+                if entry.get("cached"):
+                    lines.append("- **Cached:** Yes")
+                if entry.get("offline_fallback"):
+                    lines.append("- **Offline Fallback:** Yes")
+            lines.append("")
     else:
-        lines.append("*No known CVEs matched.*")
+        lines.append("*No CVEs matched.*")
         lines.append("")
 
     notes = data.get("notes") or []

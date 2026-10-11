@@ -12,6 +12,7 @@ from ethscan.vuln import (
     SERVICE_VULNS,
     VULN_DB,
     _normalize_host,
+    _severity_rank,
     format_vuln_report_json,
     format_vuln_report_markdown,
     match_certificate_vulns,
@@ -576,3 +577,129 @@ def test_format_vuln_report_markdown_detail_variants() -> None:
     assert "- **Details:** SSLv3" in output
     assert "- **Details:** RC4-SHA" in output
     assert "- **Details:** key size 1024 bits" in output
+
+
+def test_severity_rank() -> None:
+    assert _severity_rank("critical") == 3
+    assert _severity_rank("high") == 2
+    assert _severity_rank("medium") == 1
+    assert _severity_rank("low") == 0
+
+
+def test_severity_rank_case_insensitive() -> None:
+    assert _severity_rank("CRITICAL") == 3
+    assert _severity_rank("High") == 2
+
+
+def test_severity_rank_unknown() -> None:
+    assert _severity_rank("unknown") is None
+    assert _severity_rank(None) is None
+    assert _severity_rank("") is None
+
+
+def test_run_vuln_min_severity_drops_lower(monkeypatch) -> None:
+    def mock_run_service(host, ports=None, timeout=3.0, max_workers=50):
+        return {
+            "results": [
+                {"port": 22, "banner": "SSH-2.0-OpenSSH_7.2p2"},
+                {"port": 21, "banner": "220 (vsFTPd 2.3.4)"},
+            ]
+        }
+
+    monkeypatch.setattr("ethscan.vuln.run_service", mock_run_service)
+
+    results = run_vuln("example.com", min_severity="high")
+    assert results["min_severity_filter"] == "high"
+    # OpenSSH 7.2p2 matches medium findings, vsFTPd 2.3.4 is critical
+    # min_severity=high should drop the medium findings
+    for finding in results["findings"]:
+        assert finding["severity"] in ("high", "critical")
+    assert results["severity_counts"]["medium"] == 0
+    assert results["severity_counts"]["critical"] == 1
+
+
+def test_run_vuln_min_severity_none_keeps_all(monkeypatch) -> None:
+    def mock_run_service(host, ports=None, timeout=3.0, max_workers=50):
+        return {
+            "results": [
+                {"port": 22, "banner": "SSH-2.0-OpenSSH_7.2p2"},
+                {"port": 21, "banner": "220 (vsFTPd 2.3.4)"},
+            ]
+        }
+
+    monkeypatch.setattr("ethscan.vuln.run_service", mock_run_service)
+
+    results = run_vuln("example.com")
+    assert results["min_severity_filter"] is None
+    assert results["finding_count"] >= 1
+    assert results["severity_counts"]["medium"] >= 1
+
+
+def test_run_vuln_min_severity_low_keeps_all(monkeypatch) -> None:
+    def mock_run_service(host, ports=None, timeout=3.0, max_workers=50):
+        return {
+            "results": [
+                {"port": 22, "banner": "SSH-2.0-OpenSSH_7.2p2"},
+                {"port": 21, "banner": "220 (vsFTPd 2.3.4)"},
+            ]
+        }
+
+    monkeypatch.setattr("ethscan.vuln.run_service", mock_run_service)
+
+    results = run_vuln("example.com", min_severity="low")
+    assert results["min_severity_filter"] == "low"
+    assert results["finding_count"] >= 1
+    assert results["severity_counts"]["medium"] >= 1
+
+
+def test_run_vuln_min_severity_critical_drops_all(monkeypatch) -> None:
+    def mock_run_service(host, ports=None, timeout=3.0, max_workers=50):
+        return {
+            "results": [
+                {"port": 22, "banner": "SSH-2.0-OpenSSH_7.2p2"},
+            ]
+        }
+
+    monkeypatch.setattr("ethscan.vuln.run_service", mock_run_service)
+
+    results = run_vuln("example.com", min_severity="critical")
+    assert results["min_severity_filter"] == "critical"
+    assert results["finding_count"] == 0
+
+
+def test_format_vuln_report_markdown_with_min_severity() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "services_checked": 1,
+        "tls_checked": False,
+        "certificate_checked": False,
+        "finding_count": 1,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 1, "low": 0},
+        "severity_filter": None,
+        "min_severity_filter": "high",
+        "findings": [],
+        "notes": [],
+    }
+    output = format_vuln_report_markdown(data)
+    assert "Min Severity" in output
+    assert "high" in output
+
+
+def test_format_vuln_report_json_includes_min_severity() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "services_checked": 1,
+        "tls_checked": False,
+        "certificate_checked": False,
+        "finding_count": 1,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 1, "low": 0},
+        "severity_filter": None,
+        "min_severity_filter": "high",
+        "findings": [],
+        "notes": [],
+    }
+    output = format_vuln_report_json(data)
+    parsed = json.loads(output)
+    assert parsed["min_severity_filter"] == "high"

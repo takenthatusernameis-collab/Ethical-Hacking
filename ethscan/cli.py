@@ -1,7 +1,7 @@
 """Command-line interface for ethscan."""
 
 import json
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import click
 
@@ -11,7 +11,7 @@ from ethscan.passwords import (
     format_audit_report_json,
     format_audit_report_markdown,
 )
-from ethscan.scanner import get_common_ports, parse_port_range, scan_ports, get_profile_ports, get_profile_defaults
+from ethscan.scanner import get_common_ports, parse_port_range, scan_ports, get_profile_ports, get_profile_defaults, format_scan_report_json, format_scan_report_markdown, format_scan_report_csv, format_service_report_csv
 from ethscan.web import (
     format_web_report_json,
     format_web_report_markdown,
@@ -25,6 +25,7 @@ from ethscan.fuzz import (
     load_wordlist as load_fuzz_wordlist,
 )
 from ethscan.brute import (
+    format_brute_report_csv,
     format_brute_report_json,
     format_brute_report_markdown,
     run_brute,
@@ -116,6 +117,27 @@ from ethscan.cve import (
     format_cve_report_markdown,
     run_cve,
 )
+from ethscan.cidr import (
+    format_cidr_report_json,
+    format_cidr_report_markdown,
+    run_cidr,
+)
+from ethscan.dnssec import (
+    format_dnssec_report_json,
+    format_dnssec_report_markdown,
+    run_dnssec,
+)
+from ethscan.subtake import (
+    format_subtake_report_json,
+    format_subtake_report_markdown,
+    run_subtake,
+)
+from ethscan.mac import (
+    format_mac_report_json,
+    format_mac_report_markdown,
+    run_mac,
+)
+from ethscan.subdomains import load_subdomain_wordlist
 from ethscan.headers import (
     format_headers_report_json,
     format_headers_report_markdown,
@@ -126,27 +148,38 @@ from ethscan.ping import (
     format_ping_report_markdown,
     run_ping,
 )
-from ethscan.mac import (
-    format_mac_report_json,
-    format_mac_report_markdown,
-    run_mac,
+from ethscan.config import (
+    build_default_map,
+    load_config,
+    validate_config,
 )
-from ethscan.jwt import (
-    format_jwt_report_json,
-    format_jwt_report_markdown,
-    run_jwt,
-)
-from ethscan.cidr import (
-    format_cidr_report_json,
-    format_cidr_report_markdown,
-    run_cidr,
+from ethscan.completion import (
+    format_completion_report_json,
+    format_completion_report_markdown,
+    run_completion,
 )
 
 
 @click.group()
+@click.option(
+    "--config",
+    "config_path",
+    type=click.Path(),
+    help="Path to an ethscan.yaml config file (default: ethscan.yaml or ~/.ethscan.yaml).",
+)
 @click.version_option(__version__)
-def cli() -> None:
+@click.pass_context
+def cli(ctx, config_path: Optional[str]) -> None:
     """ethscan: ethical hacking toolkit."""
+    config = load_config(config_path)
+    ctx.obj = {"config": config, "config_path": config_path}
+    known_commands = sorted(cli.commands.keys())
+    for warning in validate_config(config, known_commands=known_commands):
+        click.echo(f"Warning: {warning}", err=True)
+    default_map: Dict[str, Dict[str, Any]] = {}
+    for name in cli.commands:
+        default_map[name] = build_default_map(config, name)
+    ctx.default_map = default_map
 
 
 @cli.command()
@@ -163,7 +196,27 @@ def cli() -> None:
 )
 @click.option("--timeout", default=1.0, type=float, help="Connection timeout in seconds")
 @click.option("--workers", default=100, type=int, help="Maximum concurrent workers")
-def scan(target: str, ports: str, profile: Optional[str], timeout: float, workers: int) -> None:
+@click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format: json, markdown, or csv.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default="json",
+    help="Deprecated alias for --output-format.",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def scan(target: str, ports: str, profile: Optional[str], timeout: float, workers: int, output_fmt: Optional[str], fmt: str, out_path: Optional[str]) -> None:
     """Run a port scan against TARGET."""
     if profile:
         defaults = get_profile_defaults(profile)
@@ -182,15 +235,36 @@ def scan(target: str, ports: str, profile: Optional[str], timeout: float, worker
     else:
         port_list = parse_port_range(ports)
 
-    click.echo(f"Scanning {target} ({len(port_list)} ports)...")
-
     results = scan_ports(target, port_list, timeout=timeout, max_workers=workers)
 
     open_ports = [port for port, is_open in results if is_open]
-    if open_ports:
-        click.echo(f"Open ports: {', '.join(map(str, open_ports))}")
+
+    # Prepare structured output for formatters
+    scan_data = {
+        "target": target,
+        "host": target,
+        "timeout": timeout,
+        "ports_scanned": len(port_list),
+        "open_ports": open_ports,
+        "details": [{"port": port, "open": is_open} for port, is_open in results],
+    }
+
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
+        output = format_scan_report_json(scan_data)
+    elif chosen_format == "markdown":
+        output = format_scan_report_markdown(scan_data)
     else:
-        click.echo("No open ports found.")
+        output = format_scan_report_csv(scan_data)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
 
 
 @cli.command()
@@ -504,6 +578,80 @@ def subdomains(
 
 
 @cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target domain or URL (e.g. example.com or https://example.com)",
+)
+@click.option(
+    "--wordlist",
+    "wordlist_path",
+    type=click.Path(exists=True, readable=True),
+    help="Path to wordlist file (one subdomain per line). Uses built-in default if omitted.",
+)
+@click.option(
+    "--resolver",
+    help="Custom DNS resolver IP address (requires dnspython)",
+)
+@click.option("--timeout", default=2.0, type=float, help="DNS resolution timeout in seconds")
+@click.option(
+    "--workers",
+    default=50,
+    type=int,
+    help="Maximum concurrent DNS resolution workers",
+)
+@click.option("--http-timeout", default=5.0, type=float, help="HTTP request timeout for fingerprinting in seconds")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def subtake(
+    target: str,
+    wordlist_path: Optional[str],
+    resolver: Optional[str],
+    timeout: float,
+    workers: int,
+    http_timeout: float,
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Detect subdomain takeover vulnerabilities for TARGET."""
+    subdomains_list = (
+        load_subdomain_wordlist(wordlist_path) if wordlist_path else None
+    )
+
+    results = run_subtake(
+        target,
+        subdomains=subdomains_list,
+        timeout=timeout,
+        max_workers=workers,
+        resolver=resolver,
+        http_timeout=http_timeout,
+    )
+
+    if fmt == "json":
+        output = format_subtake_report_json(results)
+    else:
+        output = format_subtake_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
 @click.option("--target", required=True, help="Target URL (e.g. https://example.com)")
 @click.option(
     "--server",
@@ -512,6 +660,18 @@ def subdomains(
 )
 @click.option("--port", default=43, type=int, help="WHOIS server port (default: 43)")
 @click.option("--timeout", default=5.0, type=float, help="Connection timeout in seconds")
+@click.option(
+    "--recursive/--no-recursive",
+    default=False,
+    help="Enable recursive WHOIS queries: follow referral servers extracted from "
+    "each response (e.g. from whois.iana.org to the registrar's WHOIS server).",
+)
+@click.option(
+    "--max-depth",
+    default=2,
+    type=int,
+    help="Maximum recursive hops when --recursive is enabled (default: 2).",
+)
 @click.option(
     "--format",
     "fmt",
@@ -530,11 +690,20 @@ def whois(
     server: str,
     port: int,
     timeout: float,
+    recursive: bool,
+    max_depth: int,
     fmt: str,
     out_path: str,
 ) -> None:
     """Run a WHOIS lookup for TARGET."""
-    results = run_whois(target, server=server, port=port, timeout=timeout)
+    results = run_whois(
+        target,
+        server=server,
+        port=port,
+        timeout=timeout,
+        recursive=recursive,
+        max_depth=max_depth,
+    )
 
     if fmt == "json":
         output = format_whois_report_json(results)
@@ -921,11 +1090,18 @@ def tls(
 @click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
 @click.option("--workers", default=50, type=int, help="Maximum concurrent workers")
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format: json, markdown, or csv.",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    help="Deprecated alias for --output-format.",
 )
 @click.option(
     "--out",
@@ -933,7 +1109,7 @@ def tls(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def service(target: str, ports: Optional[str], profile: Optional[str], timeout: float, workers: int, fmt: str, out_path: Optional[str]) -> None:
+def service(target: str, ports: Optional[str], profile: Optional[str], timeout: float, workers: int, output_fmt: Optional[str], fmt: str, out_path: Optional[str]) -> None:
     """Detect services and grab banners on open ports (nmap-style)."""
     port_list = None
     if profile:
@@ -953,10 +1129,15 @@ def service(target: str, ports: Optional[str], profile: Optional[str], timeout: 
 
     results = run_service(target, ports=port_list, timeout=timeout, max_workers=workers)
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_service_report_json(results)
-    else:
+    elif chosen_format == "markdown":
         output = format_service_report_markdown(results)
+    else:
+        output = format_service_report_csv(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
@@ -1002,6 +1183,12 @@ def service(target: str, ports: Optional[str], profile: Optional[str], timeout: 
     type=click.Choice(["low", "medium", "high", "critical"]),
     help="Only report findings with the given severity.",
 )
+@click.option(
+    "--min-severity",
+    "min_severity",
+    type=click.Choice(["low", "medium", "high", "critical"]),
+    help="Drop findings below this severity threshold (e.g. --min-severity high).",
+)
 @click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
 @click.option("--workers", default=50, type=int, help="Maximum concurrent workers")
 @click.option(
@@ -1024,6 +1211,7 @@ def vuln(
     tls_file: Optional[str],
     ssl_file: Optional[str],
     severity: Optional[str],
+    min_severity: Optional[str],
     timeout: float,
     workers: int,
     fmt: str,
@@ -1059,6 +1247,7 @@ def vuln(
         tls=tls_data,
         certificate=certificate,
         severity=severity,
+        min_severity=min_severity,
     )
 
     if fmt == "json":
@@ -1186,11 +1375,18 @@ def urlcheck(
 @click.option("--timeout", default=5.0, type=float, help="Connection timeout in seconds")
 @click.option("--workers", default=10, type=int, help="Maximum concurrent workers")
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format: json, markdown, or csv (credential dump).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    help="Deprecated alias for --output-format.",
 )
 @click.option(
     "--out",
@@ -1206,6 +1402,7 @@ def brute(
     pass_file: Optional[str],
     timeout: float,
     workers: int,
+    output_fmt: Optional[str],
     fmt: str,
     out_path: Optional[str],
 ) -> None:
@@ -1223,10 +1420,15 @@ def brute(
         max_workers=workers,
     )
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_brute_report_json(results)
-    else:
+    elif chosen_format == "markdown":
         output = format_brute_report_markdown(results)
+    else:
+        output = format_brute_report_csv(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
@@ -1511,6 +1713,17 @@ def wifi(interface: Optional[str], fmt: str, out_path: Optional[str]) -> None:
     help="Custom geolocation API base URL (must support ip-api.com query format)",
 )
 @click.option(
+    "--recursive/--no-recursive",
+    default=False,
+    help="Enable recursive hop geolocation: run a traceroute to the target and geolocate each discovered hop IP.",
+)
+@click.option(
+    "--max-depth",
+    default=30,
+    type=int,
+    help="Maximum number of traceroute hops when --recursive is enabled (default: 30, max: 128).",
+)
+@click.option(
     "--format",
     "fmt",
     type=click.Choice(["json", "markdown"]),
@@ -1529,6 +1742,8 @@ def geo(
     no_cache: bool,
     no_offline_fallback: bool,
     api_url: Optional[str],
+    recursive: bool,
+    max_depth: int,
     fmt: str,
     out_path: Optional[str],
 ) -> None:
@@ -1539,6 +1754,8 @@ def geo(
         use_cache=not no_cache,
         offline_fallback=not no_offline_fallback,
         api_url=api_url,
+        recursive=recursive,
+        max_depth=max_depth,
     )
 
     if fmt == "json":
@@ -1782,6 +1999,11 @@ def cert(
     type=click.Path(exists=True, readable=True),
     help="JSON file with 'service' command output (skips live detection).",
 )
+@click.option(
+    "--ports",
+    help="Ports to scan for live service detection: comma-separated list/ranges "
+    "(e.g., '21,22,80'). Defaults to common ports.",
+)
 @click.option("--timeout", default=10.0, type=float, help="API request timeout in seconds")
 @click.option(
     "--no-cache",
@@ -1795,12 +2017,18 @@ def cert(
 )
 @click.option(
     "--api-url",
-    help="Custom CVE API base URL (NVD-compatible query format)",
+    help="Custom NVD/CVE API base URL (must support NVD query format)",
 )
 @click.option(
     "--severity",
     type=click.Choice(["low", "medium", "high", "critical"]),
     help="Only report findings with the given severity.",
+)
+@click.option(
+    "--min-severity",
+    "min_severity",
+    type=click.Choice(["low", "medium", "high", "critical"]),
+    help="Drop findings below this severity threshold (e.g. --min-severity high).",
 )
 @click.option(
     "--format",
@@ -1818,28 +2046,37 @@ def cert(
 def cve(
     target: str,
     services_file: Optional[str],
+    ports: Optional[str],
     timeout: float,
     no_cache: bool,
     no_offline_fallback: bool,
     api_url: Optional[str],
     severity: Optional[str],
+    min_severity: Optional[str],
     fmt: str,
     out_path: Optional[str],
 ) -> None:
-    """Query NVD/CVE API for known vulnerabilities in detected services."""
+    """Query the NVD/CVE API for known vulnerabilities affecting TARGET's services."""
     services = None
     if services_file:
         with open(services_file, "r", encoding="utf-8") as handle:
             services = json.load(handle)
 
+    port_list = None
+    if ports and not services_file:
+        from ethscan.scanner import parse_port_range
+        port_list = parse_port_range(ports)
+
     results = run_cve(
         target,
-        services=services,
+        services_file=services_file,
         timeout=timeout,
         use_cache=not no_cache,
         offline_fallback=not no_offline_fallback,
         api_url=api_url,
         severity=severity,
+        min_severity=min_severity,
+        ports=port_list,
     )
 
     if fmt == "json":
@@ -1857,11 +2094,107 @@ def cve(
 
 @cli.command()
 @click.option(
+    "--cidr",
+    required=True,
+    help="CIDR notation (e.g. 192.168.1.0/24) or bare IP address.",
+)
+@click.option(
+    "--contains",
+    help="Optional IP address to test for network membership.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def cidr(cidr: str, contains: Optional[str], fmt: str, out_path: Optional[str]) -> None:
+    """Compute network calculations for a CIDR (offline)."""
+    results = run_cidr(cidr, contains=contains)
+
+    if fmt == "json":
+        output = format_cidr_report_json(results)
+    else:
+        output = format_cidr_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
     "--target",
     required=True,
-    help="Target MAC address, hostname, or URL (e.g., 00:1A:2B:3C:4D:5E, 00-1A-2B-3C-4D-5E)",
+    help="Target domain or URL (e.g. example.com or https://example.com)",
 )
-@click.option("--timeout", default=5.0, type=float, help="API request timeout in seconds")
+@click.option(
+    "--server",
+    help="Custom DNS resolver IP address (requires dnspython)",
+)
+@click.option("--timeout", default=5.0, type=float, help="Query timeout in seconds")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def dnssec(
+    target: str,
+    server: Optional[str],
+    timeout: float,
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Validate DNSSEC for TARGET domain."""
+    results = run_dnssec(
+        target,
+        server=server,
+        timeout=timeout,
+    )
+
+    if fmt == "json":
+        output = format_dnssec_report_json(results)
+    else:
+        output = format_dnssec_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="MAC address, hostname, or URL (e.g. 00:1A:2B:3C:4D:5E, example.com, https://example.com)",
+)
+@click.option(
+    "--timeout",
+    default=5.0,
+    type=float,
+    help="API request timeout in seconds (default: 5.0)",
+)
 @click.option(
     "--no-cache",
     is_flag=True,
@@ -1874,7 +2207,7 @@ def cve(
 )
 @click.option(
     "--api-url",
-    help="Custom MAC vendor API base URL (must support api.macvendors.com query format)",
+    help="Custom OUI API base URL (must support api.macvendors.com query format)",
 )
 @click.option(
     "--format",
@@ -1898,7 +2231,7 @@ def mac(
     fmt: str,
     out_path: Optional[str],
 ) -> None:
-    """Look up the vendor for a MAC address using a public OUI API with caching."""
+    """Look up MAC address vendor using the OUI database (api.macvendors.com) with caching."""
     results = run_mac(
         target,
         timeout=timeout,
@@ -1911,102 +2244,6 @@ def mac(
         output = format_mac_report_json(results)
     else:
         output = format_mac_report_markdown(results)
-
-    if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
-    else:
-        click.echo(output)
-
-
-@cli.command()
-@click.option(
-    "--token",
-    help="JWT string to inspect. If omitted, reads from --token-file or stdin.",
-)
-@click.option(
-    "--token-file",
-    "token_file",
-    type=click.Path(exists=True, readable=True),
-    help="Path to a file containing a JWT.",
-)
-@click.option(
-    "--format",
-    "fmt",
-    type=click.Choice(["json", "markdown"]),
-    default="json",
-    help="Output format (json or markdown)",
-)
-@click.option(
-    "--out",
-    "out_path",
-    type=click.Path(writable=True),
-    help="Output file path (default: stdout)",
-)
-def jwt(token: Optional[str], token_file: Optional[str], fmt: str, out_path: Optional[str]) -> None:
-    """Inspect a JWT (JSON Web Token) header and claims."""
-    if not token:
-        if token_file:
-            with open(token_file, "r", encoding="utf-8") as handle:
-                token = handle.read().strip()
-        else:
-            token = "\n".join(
-                line for line in click.get_text_stream("stdin") if line.strip()
-            )
-
-    if not token:
-        click.echo("No token provided.")
-        return
-
-    results = run_jwt(token)
-
-    if fmt == "json":
-        output = format_jwt_report_json(results)
-    else:
-        output = format_jwt_report_markdown(results)
-
-    if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
-    else:
-        click.echo(output)
-
-
-@cli.command()
-@click.option(
-    "--cidr",
-    "cidr_value",
-    required=True,
-    help="CIDR notation (e.g. 192.168.1.0/24) or bare IP address",
-)
-@click.option(
-    "--contains",
-    default=None,
-    help="Optional IP address to test for network membership",
-)
-@click.option(
-    "--format",
-    "fmt",
-    type=click.Choice(["json", "markdown"]),
-    default="json",
-    help="Output format (json or markdown)",
-)
-@click.option(
-    "--out",
-    "out_path",
-    type=click.Path(writable=True),
-    help="Output file path (default: stdout)",
-)
-def cidr(cidr_value: str, contains: Optional[str], fmt: str, out_path: Optional[str]) -> None:
-    """Perform CIDR network calculations (network, netmask, broadcast, hosts)."""
-    results = run_cidr(cidr_value, contains=contains)
-
-    if fmt == "json":
-        output = format_cidr_report_json(results)
-    else:
-        output = format_cidr_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
@@ -2051,6 +2288,189 @@ def _generate_markdown(data: dict) -> str:
     lines.append("")
 
     return "\n".join(lines)
+
+
+@cli.command()
+@click.option(
+    "--config",
+    "config_path",
+    type=click.Path(),
+    help="Path to an ethscan.yaml config file (default: ethscan.yaml or ~/.ethscan.yaml).",
+)
+@click.option(
+    "--init",
+    "init_path",
+    type=click.Path(writable=True),
+    help="Write a sample config file to PATH and exit.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format for the loaded config (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+@click.pass_context
+def config(
+    ctx,
+    config_path: Optional[str],
+    init_path: Optional[str],
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Inspect or initialize the ethscan configuration file."""
+    from ethscan.config import dump_default_config
+
+    if init_path:
+        sample = dump_default_config()
+        try:
+            with open(init_path, "w", encoding="utf-8") as handle:
+                handle.write(sample)
+        except OSError as exc:
+            click.echo(f"Error writing config: {exc}", err=True)
+            raise SystemExit(1)
+        click.echo(f"Sample config written to {init_path}")
+        return
+
+    # Inherit the parent's --config path when the subcommand's own option
+    # was not provided, so `ethscan --config X config` works as expected.
+    if not config_path and ctx.obj and isinstance(ctx.obj, dict):
+        parent_config = ctx.obj.get("config_path")
+        if parent_config:
+            config_path = parent_config
+
+    loaded = load_config(config_path)
+    path = loaded.get("_path")
+    parse_error = loaded.get("_parse_error")
+
+    if fmt == "json":
+        payload: Dict[str, Any] = {
+            "config_file": path,
+            "defaults": loaded.get("defaults") or {},
+            "commands": loaded.get("commands") or {},
+        }
+        if isinstance(parse_error, str):
+            payload["parse_error"] = parse_error
+        output = json.dumps(payload, indent=2, default=str)
+    else:
+        lines = ["# ethscan Configuration", ""]
+        if path:
+            lines.append(f"- **Config file:** {path}")
+        else:
+            lines.append("*No config file found; using built-in defaults.*")
+        if isinstance(parse_error, str):
+            lines.append("")
+            lines.append("## Parse Error")
+            lines.append(f"```\n{parse_error}\n```")
+            lines.append("")
+        lines.append("")
+
+        defaults = loaded.get("defaults") or {}
+        lines.append("## Global Defaults")
+        if defaults:
+            lines.append("| Option | Value |")
+            lines.append("|--------|-------|")
+            for key, value in defaults.items():
+                lines.append(f"| {key} | {value} |")
+        else:
+            lines.append("*No global defaults configured.*")
+        lines.append("")
+
+        commands = loaded.get("commands") or {}
+        lines.append("## Per-Command Overrides")
+        if commands:
+            for cmd, opts in commands.items():
+                lines.append(f"### {cmd}")
+                if isinstance(opts, dict) and opts:
+                    lines.append("| Option | Value |")
+                    lines.append("|--------|-------|")
+                    for key, value in opts.items():
+                        lines.append(f"| {key} | {value} |")
+                else:
+                    lines.append("*No overrides.*")
+                lines.append("")
+        else:
+            lines.append("*No per-command overrides configured.*")
+        lines.append("")
+
+        lines.append("## Notes")
+        lines.append(
+            "- CLI arguments always take precedence over config values."
+        )
+        lines.append(
+            "- Use `ethscan config --init PATH` to create a sample config file."
+        )
+        lines.append("")
+        output = "\n".join(lines)
+
+    if out_path:
+        try:
+            with open(out_path, "w", encoding="utf-8") as handle:
+                handle.write(output)
+        except OSError as exc:
+            click.echo(f"Error writing output: {exc}", err=True)
+            raise SystemExit(1)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--shell",
+    type=click.Choice(["bash", "zsh", "fish"]),
+    default="bash",
+    help="Shell to generate a completion script for (default: bash).",
+)
+@click.option(
+    "--prog-name",
+    "prog_name",
+    default="ethscan",
+    help="Program name embedded in the completion script (default: ethscan).",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def completion(shell: str, prog_name: str, fmt: str, out_path: Optional[str]) -> None:
+    """Generate a shell completion script for ethscan.
+
+    Supported shells: bash, zsh, fish. Save the output and source it
+    in your shell to enable tab completion of commands, options, and
+    option values.
+    """
+    try:
+        results = run_completion(cli, shell=shell, prog_name=prog_name)
+    except ValueError as exc:
+        click.echo(str(exc), err=True)
+        raise SystemExit(1)
+
+    if fmt == "json":
+        output = format_completion_report_json(results)
+    else:
+        output = format_completion_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Completion script written to {out_path}")
+    else:
+        click.echo(output)
 
 
 if __name__ == "__main__":

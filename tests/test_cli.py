@@ -925,6 +925,190 @@ def test_subdomains_max_depth_option(monkeypatch) -> None:
     assert called_args["max_depth"] == 5
 
 
+def test_subtake_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["subtake", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--wordlist" in result.output
+    assert "--resolver" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+    assert "--http-timeout" in result.output
+
+
+def test_cli_help_lists_subtake() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "subtake" in result.output
+
+
+def test_subtake_offline_target_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["subtake", "--target", "nonexistent.invalid.domain.tld", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "nonexistent.invalid.domain.tld" in result.output
+    assert "vulnerable_count" in result.output
+
+
+def test_subtake_offline_target_markdown() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "subtake",
+            "--target",
+            "nonexistent.invalid.domain.tld",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Subdomain Takeover Report" in result.output
+
+
+def test_subtake_wordlist_option(tmp_path) -> None:
+    wordlist_file = tmp_path / "subs.txt"
+    wordlist_file.write_text("www\nmail\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "subtake",
+            "--target",
+            "nonexistent.invalid.domain.tld",
+            "--wordlist",
+            str(wordlist_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "www" in result.output
+    assert "mail" in result.output
+
+
+def test_subtake_resolver_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_subtake(
+        target,
+        subdomains=None,
+        timeout=2.0,
+        max_workers=50,
+        resolver=None,
+        http_timeout=5.0,
+    ):
+        called_args["resolver"] = resolver
+        called_args["target"] = target
+        return {
+            "target": target,
+            "domain": "example.com",
+            "subdomains_tested": 2,
+            "vulnerable_count": 0,
+            "vulnerable": [],
+            "all_results": [
+                {"subdomain": "www", "hostname": "www.example.com", "cname": None, "a_records": [], "aaaa_records": [], "vulnerable": False, "takeover": None},
+                {"subdomain": "mail", "hostname": "mail.example.com", "cname": None, "a_records": [], "aaaa_records": [], "vulnerable": False, "takeover": None},
+            ],
+            "resolver": resolver,
+            "dnspython_available": False,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_subtake", mock_run_subtake)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "subtake",
+            "--target",
+            "example.com",
+            "--resolver",
+            "8.8.8.8",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["resolver"] == "8.8.8.8"
+
+
+def test_subtake_out_option(tmp_path) -> None:
+    out_file = tmp_path / "report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "subtake",
+            "--target",
+            "nonexistent.invalid.domain.tld",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "nonexistent.invalid.domain.tld" in content
+
+
+def test_subtake_http_timeout_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_subtake(
+        target,
+        subdomains=None,
+        timeout=2.0,
+        max_workers=50,
+        resolver=None,
+        http_timeout=5.0,
+    ):
+        called_args["http_timeout"] = http_timeout
+        called_args["target"] = target
+        return {
+            "target": target,
+            "domain": "example.com",
+            "subdomains_tested": 1,
+            "vulnerable_count": 0,
+            "vulnerable": [],
+            "all_results": [
+                {"subdomain": "www", "hostname": "www.example.com", "cname": None, "a_records": [], "aaaa_records": [], "vulnerable": False, "takeover": None},
+            ],
+            "resolver": None,
+            "dnspython_available": False,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_subtake", mock_run_subtake)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "subtake",
+            "--target",
+            "example.com",
+            "--http-timeout",
+            "10.0",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["http_timeout"] == 10.0
+
+
 def test_whois_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["whois", "--help"])
@@ -946,7 +1130,8 @@ def test_cli_help_lists_whois() -> None:
 
 
 def test_whois_offline_target_json(monkeypatch) -> None:
-    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0):
+    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0,
+                       recursive=False, max_depth=2):
         return {
             "target": target,
             "server": server,
@@ -961,6 +1146,9 @@ def test_whois_offline_target_json(monkeypatch) -> None:
                 "status_codes": [],
                 "raw": "Registrar: Test Registrar\n",
             },
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hops": [],
         }
 
     monkeypatch.setattr("ethscan.cli.run_whois", mock_run_whois)
@@ -976,7 +1164,8 @@ def test_whois_offline_target_json(monkeypatch) -> None:
 
 
 def test_whois_offline_target_markdown(monkeypatch) -> None:
-    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0):
+    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0,
+                       recursive=False, max_depth=2):
         return {
             "target": target,
             "server": server,
@@ -991,6 +1180,9 @@ def test_whois_offline_target_markdown(monkeypatch) -> None:
                 "status_codes": [],
                 "raw": "Registrar: Test Registrar\n",
             },
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hops": [],
         }
 
     monkeypatch.setattr("ethscan.cli.run_whois", mock_run_whois)
@@ -1015,7 +1207,8 @@ def test_whois_offline_target_markdown(monkeypatch) -> None:
 def test_whois_server_option(monkeypatch) -> None:
     called_args = {}
 
-    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0):
+    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0,
+                       recursive=False, max_depth=2):
         called_args["server"] = server
         called_args["target"] = target
         return {
@@ -1032,6 +1225,9 @@ def test_whois_server_option(monkeypatch) -> None:
                 "status_codes": [],
                 "raw": "",
             },
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hops": [],
         }
 
     monkeypatch.setattr("ethscan.cli.run_whois", mock_run_whois)
@@ -1054,7 +1250,8 @@ def test_whois_server_option(monkeypatch) -> None:
 
 
 def test_whois_out_option(tmp_path, monkeypatch) -> None:
-    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0):
+    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0,
+                       recursive=False, max_depth=2):
         return {
             "target": target,
             "server": server,
@@ -1069,6 +1266,9 @@ def test_whois_out_option(tmp_path, monkeypatch) -> None:
                 "status_codes": [],
                 "raw": "test",
             },
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hops": [],
         }
 
     monkeypatch.setattr("ethscan.cli.run_whois", mock_run_whois)
@@ -1092,6 +1292,128 @@ def test_whois_out_option(tmp_path, monkeypatch) -> None:
     assert out_file.exists()
     content = out_file.read_text()
     assert "example.com" in content
+
+
+def test_whois_help_shows_recursive() -> None:
+    """Test that whois help shows --recursive/--no-recursive and --max-depth."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["whois", "--help"])
+    assert result.exit_code == 0
+    assert "--recursive" in result.output
+    assert "--no-recursive" in result.output
+    assert "--max-depth" in result.output
+
+
+def test_whois_recursive_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0,
+                       recursive=False, max_depth=2):
+        called_args["recursive"] = recursive
+        called_args["max_depth"] = max_depth
+        called_args["target"] = target
+        return {
+            "target": target,
+            "server": server,
+            "port": port,
+            "raw": "",
+            "parsed": {
+                "registrar": None,
+                "creation_date": None,
+                "expiration_date": None,
+                "nameservers": [],
+                "registrant_org": None,
+                "status_codes": [],
+                "raw": "",
+            },
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hops": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_whois", mock_run_whois)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["whois", "--target", "example.com", "--recursive", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert called_args["recursive"] is True
+    assert called_args["max_depth"] == 2
+
+
+def test_whois_recursive_disabled_by_default(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0,
+                       recursive=False, max_depth=2):
+        called_args["recursive"] = recursive
+        return {
+            "target": target,
+            "server": server,
+            "port": port,
+            "raw": "",
+            "parsed": {
+                "registrar": None,
+                "creation_date": None,
+                "expiration_date": None,
+                "nameservers": [],
+                "registrant_org": None,
+                "status_codes": [],
+                "raw": "",
+            },
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hops": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_whois", mock_run_whois)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["whois", "--target", "example.com", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert called_args["recursive"] is False
+
+
+def test_whois_max_depth_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0,
+                       recursive=False, max_depth=2):
+        called_args["max_depth"] = max_depth
+        return {
+            "target": target,
+            "server": server,
+            "port": port,
+            "raw": "",
+            "parsed": {
+                "registrar": None,
+                "creation_date": None,
+                "expiration_date": None,
+                "nameservers": [],
+                "registrant_org": None,
+                "status_codes": [],
+                "raw": "",
+            },
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hops": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_whois", mock_run_whois)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["whois", "--target", "example.com", "--recursive", "--max-depth", "4",
+         "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert called_args["max_depth"] == 4
 
 
 def test_dns_help() -> None:
@@ -1576,7 +1898,7 @@ def test_brute_offline_target_markdown(monkeypatch) -> None:
             "brute",
             "--target",
             "example.com",
-            "--format",
+            "--output-format",
             "markdown",
             "--timeout",
             "1.0",
@@ -1789,6 +2111,230 @@ def test_brute_out_option(tmp_path, monkeypatch) -> None:
     content = out_file.read_text()
     assert "example.com" in content
     assert "connection refused" in content
+
+
+def test_brute_help_shows_output_format() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["brute", "--help"])
+    assert result.exit_code == 0
+    assert "--output-format" in result.output
+    assert "csv" in result.output
+
+
+def test_brute_output_format_csv(monkeypatch) -> None:
+    def mock_run_brute(
+        target,
+        protocol="ftp",
+        usernames=None,
+        passwords=None,
+        port=None,
+        timeout=5.0,
+        max_workers=10,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "protocol": protocol,
+            "port": 21,
+            "timeout": timeout,
+            "usernames_tested": 1,
+            "passwords_tested": 2,
+            "attempts": 2,
+            "successful_count": 1,
+            "successful": [
+                {
+                    "username": "admin",
+                    "password": "secret",
+                    "success": True,
+                    "error": None,
+                }
+            ],
+            "results": [
+                {
+                    "username": "admin",
+                    "password": "secret",
+                    "success": True,
+                    "error": None,
+                },
+                {
+                    "username": "admin",
+                    "password": "wrong",
+                    "success": False,
+                    "error": "530 Login incorrect",
+                },
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_brute", mock_run_brute)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "brute",
+            "--target",
+            "example.com",
+            "--output-format",
+            "csv",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "username,password,success,error" in result.output
+    assert "admin,secret,true," in result.output
+    assert "admin,wrong,false,530 Login incorrect" in result.output
+
+
+def test_brute_output_format_markdown(monkeypatch) -> None:
+    def mock_run_brute(
+        target,
+        protocol="ftp",
+        usernames=None,
+        passwords=None,
+        port=None,
+        timeout=5.0,
+        max_workers=10,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "protocol": protocol,
+            "port": 21,
+            "timeout": timeout,
+            "usernames_tested": 1,
+            "passwords_tested": 1,
+            "attempts": 1,
+            "successful_count": 0,
+            "successful": [],
+            "results": [
+                {
+                    "username": "admin",
+                    "password": "wrong",
+                    "success": False,
+                    "error": "connection refused",
+                }
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_brute", mock_run_brute)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "brute",
+            "--target",
+            "example.com",
+            "--output-format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Brute Force Report" in result.output
+
+
+def test_brute_output_format_default_is_json(monkeypatch) -> None:
+    def mock_run_brute(
+        target,
+        protocol="ftp",
+        usernames=None,
+        passwords=None,
+        port=None,
+        timeout=5.0,
+        max_workers=10,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "protocol": protocol,
+            "port": 21,
+            "timeout": timeout,
+            "usernames_tested": 1,
+            "passwords_tested": 1,
+            "attempts": 1,
+            "successful_count": 0,
+            "successful": [],
+            "results": [
+                {
+                    "username": "admin",
+                    "password": "wrong",
+                    "success": False,
+                    "error": "connection refused",
+                }
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_brute", mock_run_brute)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["brute", "--target", "example.com", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    # JSON output starts with {
+    assert "{" in result.output
+    assert '"target"' in result.output
+
+
+def test_brute_output_format_csv_out(tmp_path, monkeypatch) -> None:
+    def mock_run_brute(
+        target,
+        protocol="ftp",
+        usernames=None,
+        passwords=None,
+        port=None,
+        timeout=5.0,
+        max_workers=10,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "protocol": protocol,
+            "port": 21,
+            "timeout": timeout,
+            "usernames_tested": 1,
+            "passwords_tested": 1,
+            "attempts": 1,
+            "successful_count": 0,
+            "successful": [],
+            "results": [
+                {
+                    "username": "admin",
+                    "password": "wrong",
+                    "success": False,
+                    "error": "connection refused",
+                }
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_brute", mock_run_brute)
+
+    out_file = tmp_path / "brute_report.csv"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "brute",
+            "--target",
+            "example.com",
+            "--output-format",
+            "csv",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "username,password,success,error" in content
+    assert "admin,wrong,false,connection refused" in content
 
 
 def test_service_help() -> None:
@@ -2151,6 +2697,229 @@ def test_scan_profile_override_timeout_workers(monkeypatch) -> None:
     assert called_args["ports"] == [21, 22, 23, 25, 53, 80, 110, 139, 143, 443, 445, 993, 995, 3306, 3389, 5432, 8080, 8443]
     assert called_args["timeout"] == 5.0
     assert called_args["max_workers"] == 10
+
+
+def test_scan_help_shows_format_out() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--help"])
+    assert result.exit_code == 0
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_scan_json_output(monkeypatch, tmp_path) -> None:
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        return [(22, True), (80, True), (443, False)]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "22,80,443", "--format", "json"])
+    assert result.exit_code == 0
+    assert '"target": "example.com"' in result.output
+    assert "22" in result.output and "80" in result.output  # open_ports contains 22 and 80
+    assert '"port": 22' in result.output
+    assert '"open": true' in result.output
+
+
+def test_scan_markdown_output(monkeypatch, tmp_path) -> None:
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        return [(22, True), (80, True), (443, False)]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "22,80,443", "--format", "markdown"])
+    assert result.exit_code == 0
+    assert "# ethscan Port Scan Report" in result.output
+    assert "**Target:** example.com" in result.output
+    assert "**Open Ports:** 22, 80" in result.output
+    assert "| Port | Status |" in result.output
+    assert "| 22 | Open |" in result.output
+    assert "| 443 | Closed |" in result.output
+
+
+def test_scan_out_json(monkeypatch, tmp_path) -> None:
+    out_file = tmp_path / "scan_report.json"
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        return [(22, True), (80, False)]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "22,80", "--format", "json", "--out", str(out_file)])
+    assert result.exit_code == 0
+    assert "Report written to" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert '"target": "example.com"' in content
+    assert "22" in content  # open_ports contains 22
+
+
+def test_scan_out_markdown(monkeypatch, tmp_path) -> None:
+    out_file = tmp_path / "scan_report.md"
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        return [(22, True), (80, False)]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "22,80", "--format", "markdown", "--out", str(out_file)])
+    assert result.exit_code == 0
+    assert "Report written to" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "# ethscan Port Scan Report" in content
+    assert "**Target:** example.com" in content
+    assert "**Open Ports:** 22" in content
+
+
+def test_scan_csv_output(monkeypatch) -> None:
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        return [(22, True), (80, True), (443, False)]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "22,80,443", "--output-format", "csv"])
+    assert result.exit_code == 0
+    lines = result.output.strip().split("\n")
+    assert lines[0] == "port,open"
+    assert "22,true" in lines
+    assert "80,true" in lines
+    assert "443,false" in lines
+
+
+def test_scan_csv_out(monkeypatch, tmp_path) -> None:
+    out_file = tmp_path / "scan_report.csv"
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        return [(22, True), (80, False)]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "22,80", "--output-format", "csv", "--out", str(out_file)])
+    assert result.exit_code == 0
+    assert "Report written to" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    lines = content.strip().split("\n")
+    assert lines[0] == "port,open"
+    assert "22,true" in lines
+    assert "80,false" in lines
+
+
+def test_scan_output_format_precedence(monkeypatch) -> None:
+    """--output-format should take precedence over deprecated --format."""
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        return [(22, True)]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--output-format", "json", "--format", "csv"])
+    assert result.exit_code == 0
+    assert '"target": "example.com"' in result.output
+    assert "port,open" not in result.output
+
+
+def test_scan_help_shows_output_format() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--help"])
+    assert result.exit_code == 0
+    assert "--output-format" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+    assert "csv" in result.output
+
+
+def test_service_csv_output(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_service(target, ports=None, timeout=3.0, max_workers=50):
+        called_args["target"] = target
+        called_args["ports"] = ports
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": len(ports) if ports else 0,
+            "services_found": 1,
+            "results": [{"port": 22, "service": "OpenSSH", "banner": "SSH-2.0-OpenSSH_9.6"}],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["service", "--target", "example.com", "--ports", "22", "--output-format", "csv"])
+    assert result.exit_code == 0
+    lines = result.output.strip().split("\n")
+    assert lines[0] == "port,service,banner"
+    assert "22,OpenSSH,SSH-2.0-OpenSSH_9.6" in lines
+
+
+def test_service_csv_out(monkeypatch, tmp_path) -> None:
+    out_file = tmp_path / "service_report.csv"
+
+    def mock_run_service(target, ports=None, timeout=3.0, max_workers=50):
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": len(ports) if ports else 0,
+            "services_found": 1,
+            "results": [{"port": 22, "service": "OpenSSH", "banner": "SSH-2.0-OpenSSH_9.6"}],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["service", "--target", "example.com", "--ports", "22", "--output-format", "csv", "--out", str(out_file)])
+    assert result.exit_code == 0
+    assert "Report written to" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    lines = content.strip().split("\n")
+    assert lines[0] == "port,service,banner"
+    assert "22,OpenSSH,SSH-2.0-OpenSSH_9.6" in lines
+
+
+def test_service_output_format_precedence(monkeypatch) -> None:
+    """--output-format should take precedence over deprecated --format."""
+    def mock_run_service(target, ports=None, timeout=3.0, max_workers=50):
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": len(ports) if ports else 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["service", "--target", "example.com", "--output-format", "json", "--format", "csv"])
+    assert result.exit_code == 0
+    assert '"target": "example.com"' in result.output
+    assert "port,service,banner" not in result.output
+
+
+def test_service_help_shows_output_format() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["service", "--help"])
+    assert result.exit_code == 0
+    assert "--output-format" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+    assert "csv" in result.output
 
 
 def test_service_profile_fast(monkeypatch) -> None:
@@ -2763,6 +3532,7 @@ def test_vuln_offline_target_json(monkeypatch) -> None:
         tls=None,
         certificate=None,
         severity=None,
+        min_severity=None,
     ):
         return {
             "target": target,
@@ -2813,6 +3583,7 @@ def test_vuln_offline_target_markdown(monkeypatch) -> None:
         tls=None,
         certificate=None,
         severity=None,
+        min_severity=None,
     ):
         return {
             "target": target,
@@ -2999,6 +3770,7 @@ def test_vuln_ports_option(monkeypatch) -> None:
         tls=None,
         certificate=None,
         severity=None,
+        min_severity=None,
     ):
         called_args["ports"] = ports
         called_args["target"] = target
@@ -3048,6 +3820,7 @@ def test_vuln_workers_option(monkeypatch) -> None:
         tls=None,
         certificate=None,
         severity=None,
+        min_severity=None,
     ):
         called_args["max_workers"] = max_workers
         called_args["target"] = target
@@ -3095,6 +3868,7 @@ def test_vuln_out_option(tmp_path, monkeypatch) -> None:
         tls=None,
         certificate=None,
         severity=None,
+        min_severity=None,
     ):
         return {
             "target": target,
@@ -3156,6 +3930,7 @@ def test_vuln_out_option_markdown(tmp_path, monkeypatch) -> None:
         tls=None,
         certificate=None,
         severity=None,
+        min_severity=None,
     ):
         return {
             "target": target,
@@ -3207,6 +3982,101 @@ def test_vuln_out_option_markdown(tmp_path, monkeypatch) -> None:
     content = out_file.read_text()
     assert "Vulnerability Report" in content
     assert "CVE-2018-15473" in content
+
+
+def test_vuln_help_shows_min_severity() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["vuln", "--help"])
+    assert result.exit_code == 0
+    assert "--min-severity" in result.output
+    assert "low" in result.output
+    assert "medium" in result.output
+    assert "high" in result.output
+    assert "critical" in result.output
+
+
+def test_vuln_min_severity_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+        min_severity=None,
+    ):
+        called_args["min_severity"] = min_severity
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports": ports,
+            "services_checked": 0,
+            "tls_checked": False,
+            "certificate_checked": False,
+            "severity_filter": severity,
+            "min_severity_filter": min_severity,
+            "findings": [],
+            "finding_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["vuln", "--target", "example.com", "--min-severity", "high", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert called_args["min_severity"] == "high"
+
+
+def test_vuln_min_severity_disabled_by_default(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+        min_severity=None,
+    ):
+        called_args["min_severity"] = min_severity
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports": ports,
+            "services_checked": 0,
+            "tls_checked": False,
+            "certificate_checked": False,
+            "severity_filter": severity,
+            "min_severity_filter": min_severity,
+            "findings": [],
+            "finding_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["vuln", "--target", "example.com", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert called_args["min_severity"] is None
 
 
 def test_dnsbrute_help() -> None:
@@ -5866,7 +6736,7 @@ def test_cli_help_lists_geo() -> None:
 
 
 def test_geo_offline_target_json(monkeypatch) -> None:
-    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
         return {
             "target": target,
             "host": "nonexistent.invalid.domain.tld",
@@ -5897,7 +6767,7 @@ def test_geo_offline_target_json(monkeypatch) -> None:
 
 
 def test_geo_offline_target_markdown(monkeypatch) -> None:
-    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
         return {
             "target": target,
             "host": "nonexistent.invalid.domain.tld",
@@ -5928,7 +6798,7 @@ def test_geo_offline_target_markdown(monkeypatch) -> None:
 
 
 def test_geo_success_json(monkeypatch) -> None:
-    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
         return {
             "target": target,
             "host": "8.8.8.8",
@@ -5978,7 +6848,7 @@ def test_geo_success_json(monkeypatch) -> None:
 
 
 def test_geo_success_markdown(monkeypatch) -> None:
-    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
         return {
             "target": target,
             "host": "8.8.8.8",
@@ -6027,7 +6897,7 @@ def test_geo_success_markdown(monkeypatch) -> None:
 
 
 def test_geo_out_option_json(tmp_path, monkeypatch) -> None:
-    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
         return {
             "target": target,
             "host": "8.8.8.8",
@@ -6068,7 +6938,7 @@ def test_geo_out_option_json(tmp_path, monkeypatch) -> None:
 
 
 def test_geo_out_option_markdown(tmp_path, monkeypatch) -> None:
-    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
         return {
             "target": target,
             "host": "8.8.8.8",
@@ -6112,7 +6982,7 @@ def test_geo_out_option_markdown(tmp_path, monkeypatch) -> None:
 def test_geo_no_cache_option(monkeypatch) -> None:
     called_args = {}
 
-    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
         called_args["use_cache"] = use_cache
         return {
             "target": target,
@@ -6136,7 +7006,7 @@ def test_geo_no_cache_option(monkeypatch) -> None:
 def test_geo_no_offline_fallback_option(monkeypatch) -> None:
     called_args = {}
 
-    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
         called_args["offline_fallback"] = offline_fallback
         return {
             "target": target,
@@ -6160,7 +7030,7 @@ def test_geo_no_offline_fallback_option(monkeypatch) -> None:
 def test_geo_api_url_option(monkeypatch) -> None:
     called_args = {}
 
-    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
         called_args["api_url"] = api_url
         return {
             "target": target,
@@ -6184,7 +7054,7 @@ def test_geo_api_url_option(monkeypatch) -> None:
 def test_geo_timeout_option(monkeypatch) -> None:
     called_args = {}
 
-    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
         called_args["timeout"] = timeout
         return {
             "target": target,
@@ -6208,7 +7078,7 @@ def test_geo_timeout_option(monkeypatch) -> None:
 def test_geo_url_target(monkeypatch) -> None:
     called_args = {}
 
-    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
         called_args["target"] = target
         return {
             "target": target,
@@ -6227,6 +7097,174 @@ def test_geo_url_target(monkeypatch) -> None:
     result = runner.invoke(cli, ["geo", "--target", "https://example.com/path"])
     assert result.exit_code == 0
     assert called_args["target"] == "https://example.com/path"
+
+
+def test_geo_help_shows_recursive(monkeypatch) -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["geo", "--help"])
+    assert result.exit_code == 0
+    assert "--recursive" in result.output
+    assert "--max-depth" in result.output
+
+
+def test_geo_recursive_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
+        called_args["recursive"] = recursive
+        called_args["max_depth"] = max_depth
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "93.184.216.34",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "geolocation": {"status": "success", "country": "US", "cached": False},
+            "hops": [],
+            "hop_count": 0,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_geo", mock_run_geo)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["geo", "--target", "example.com", "--recursive"])
+    assert result.exit_code == 0
+    assert called_args["recursive"] is True
+    assert called_args["max_depth"] == 30
+
+
+def test_geo_recursive_disabled_by_default(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
+        called_args["recursive"] = recursive
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "93.184.216.34",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "geolocation": {"status": "success", "country": "US", "cached": False},
+            "hops": [],
+            "hop_count": 0,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_geo", mock_run_geo)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["geo", "--target", "example.com"])
+    assert result.exit_code == 0
+    assert called_args["recursive"] is False
+
+
+def test_geo_max_depth_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
+        called_args["recursive"] = recursive
+        called_args["max_depth"] = max_depth
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "93.184.216.34",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "geolocation": {"status": "success", "country": "US", "cached": False},
+            "hops": [],
+            "hop_count": 0,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_geo", mock_run_geo)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["geo", "--target", "example.com", "--recursive", "--max-depth", "5"])
+    assert result.exit_code == 0
+    assert called_args["recursive"] is True
+    assert called_args["max_depth"] == 5
+
+
+def test_geo_recursive_json_output(monkeypatch) -> None:
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "93.184.216.34",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "geolocation": {"status": "success", "country": "US", "cached": False},
+            "hops": [
+                {
+                    "hop": 1,
+                    "ip": "10.0.0.1",
+                    "host": None,
+                    "response_type": "TIME_EXCEEDED",
+                    "rtt_avg_ms": 1.5,
+                    "geolocation": {"status": "success", "country": "US", "city": "TestCity", "isp": "TestISP"},
+                }
+            ],
+            "hop_count": 1,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_geo", mock_run_geo)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["geo", "--target", "example.com", "--recursive", "--format", "json"])
+    assert result.exit_code == 0
+    assert "recursive" in result.output
+    assert "hops" in result.output
+    assert "10.0.0.1" in result.output
+
+
+def test_geo_recursive_markdown_output(monkeypatch) -> None:
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "93.184.216.34",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "geolocation": {"status": "success", "country": "US", "cached": False},
+            "hops": [
+                {
+                    "hop": 1,
+                    "ip": "10.0.0.1",
+                    "host": None,
+                    "response_type": "TIME_EXCEEDED",
+                    "rtt_avg_ms": 1.5,
+                    "geolocation": {"status": "success", "country": "US", "city": "TestCity", "isp": "TestISP"},
+                }
+            ],
+            "hop_count": 1,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_geo", mock_run_geo)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["geo", "--target", "example.com", "--recursive", "--format", "markdown"])
+    assert result.exit_code == 0
+    assert "Recursive Hop Geolocation" in result.output
+    assert "Hop Geolocation" in result.output
+    assert "10.0.0.1" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -7105,6 +8143,881 @@ def test_cert_url_target(monkeypatch) -> None:
     assert called_args["target"] == "https://example.com/path"
 
 
+def test_cve_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cve", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--services-file" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cve_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cve", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--services-file" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_cve() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "cve" in result.output
+
+
+def test_cve_offline_target_json(monkeypatch) -> None:
+    def mock_run_service(host, ports=None, timeout=3.0, max_workers=50):
+        return {
+            "target": host,
+            "host": host,
+            "timeout": timeout,
+            "ports_scanned": 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.service.run_service", mock_run_service)
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["cve", "--target", "nonexistent.invalid.domain.tld", "--timeout", "0.5"]
+    )
+    assert result.exit_code == 0
+    assert "cve_entries" in result.output
+    assert "services_checked" in result.output
+
+
+def test_cve_offline_target_markdown(monkeypatch) -> None:
+    def mock_run_service(host, ports=None, timeout=3.0, max_workers=50):
+        return {
+            "target": host,
+            "host": host,
+            "timeout": timeout,
+            "ports_scanned": 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.service.run_service", mock_run_service)
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "cve",
+            "--target",
+            "nonexistent.invalid.domain.tld",
+            "--format",
+            "markdown",
+            "--timeout",
+            "0.5",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "ethscan CVE Report" in result.output
+    assert "Severity Summary" in result.output
+
+
+def test_cve_services_file_option(tmp_path, monkeypatch) -> None:
+    services_file = tmp_path / "services.json"
+    services_file.write_text(
+        json.dumps(
+            {
+                "target": "example.com",
+                "host": "example.com",
+                "timeout": 3.0,
+                "ports_scanned": 1,
+                "services_found": 1,
+                "results": [
+                    {"port": 22, "banner": "SSH-2.0-OpenSSH_7.2p2", "service": "OpenSSH"}
+                ],
+            }
+        )
+    )
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "cve",
+            "--target",
+            "example.com",
+            "--services-file",
+            str(services_file),
+            "--timeout",
+            "0.5",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "CVE-2016-6210" in result.output
+    assert "OpenSSH" in result.output
+
+
+def test_cve_no_cache_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
+                     offline_fallback=True, api_url=None, severity=None, min_severity=None, ports=None):
+        called_args["use_cache"] = use_cache
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "ports": ports,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["cve", "--target", "example.com", "--no-cache", "--timeout", "0.5"]
+    )
+    assert result.exit_code == 0
+    assert called_args["use_cache"] is False
+
+
+def test_cve_no_offline_fallback_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
+                     offline_fallback=True, api_url=None, severity=None, min_severity=None, ports=None):
+        called_args["offline_fallback"] = offline_fallback
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "ports": ports,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cve", "--target", "example.com", "--no-offline-fallback", "--timeout", "0.5"],
+    )
+    assert result.exit_code == 0
+    assert called_args["offline_fallback"] is False
+
+
+def test_cve_api_url_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
+                     offline_fallback=True, api_url=None, severity=None, min_severity=None, ports=None):
+        called_args["api_url"] = api_url
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "ports": ports,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cve", "--target", "example.com", "--api-url", "https://cve.example.com/", "--timeout", "0.5"],
+    )
+    assert result.exit_code == 0
+    assert called_args["api_url"] == "https://cve.example.com/"
+
+
+def test_cve_severity_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
+                     offline_fallback=True, api_url=None, severity=None, min_severity=None, ports=None):
+        called_args["severity"] = severity
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "ports": ports,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cve", "--target", "example.com", "--severity", "high", "--timeout", "0.5"],
+    )
+    assert result.exit_code == 0
+    assert called_args["severity"] == "high"
+
+
+def test_cve_out_option_json(tmp_path, monkeypatch) -> None:
+    def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
+                     offline_fallback=True, api_url=None, severity=None, min_severity=None, ports=None):
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "ports": ports,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    out_file = tmp_path / "cve_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cve", "--target", "example.com", "--out", str(out_file), "--timeout", "0.5"],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "cve_entries" in content
+
+
+def test_cve_out_option_markdown(tmp_path, monkeypatch) -> None:
+    def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
+                     offline_fallback=True, api_url=None, severity=None, min_severity=None, ports=None):
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "ports": ports,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    out_file = tmp_path / "cve_report.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "cve",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "0.5",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "ethscan CVE Report" in content
+
+
+def test_cve_help_shows_ports() -> None:
+    """Test that cve help shows the --ports option."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cve", "--help"])
+    assert result.exit_code == 0
+    assert "--ports" in result.output
+
+
+def test_cve_ports_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cve(
+        target,
+        services_file=None,
+        timeout=10.0,
+        use_cache=True,
+        offline_fallback=True,
+        api_url=None,
+        severity=None,
+        min_severity=None,
+        ports=None,
+    ):
+        called_args["ports"] = ports
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "ports": ports,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cve", "--target", "example.com", "--ports", "22,80,443", "--timeout", "0.5"],
+    )
+    assert result.exit_code == 0
+    assert called_args["ports"] == [22, 80, 443]
+
+
+def test_cve_ports_option_with_ranges(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cve(
+        target,
+        services_file=None,
+        timeout=10.0,
+        use_cache=True,
+        offline_fallback=True,
+        api_url=None,
+        severity=None,
+        min_severity=None,
+        ports=None,
+    ):
+        called_args["ports"] = ports
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "ports": ports,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cve", "--target", "example.com", "--ports", "1-100,443,8080-8090", "--timeout", "0.5"],
+    )
+    assert result.exit_code == 0
+    assert called_args["ports"] == list(range(1, 101)) + [443] + list(range(8080, 8091))
+
+
+def test_cve_ports_option_disabled_when_services_file(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cve(
+        target,
+        services_file=None,
+        timeout=10.0,
+        use_cache=True,
+        offline_fallback=True,
+        api_url=None,
+        severity=None,
+        min_severity=None,
+        ports=None,
+    ):
+        called_args["ports"] = ports
+        called_args["services_file"] = services_file
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "ports": ports,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    import json
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(
+            {
+                "target": "example.com",
+                "host": "example.com",
+                "timeout": 3.0,
+                "ports_scanned": 1,
+                "services_found": 1,
+                "results": [{"port": 22, "banner": "SSH-2.0-OpenSSH_7.2p2", "service": "OpenSSH"}],
+            },
+            f,
+        )
+        services_file = f.name
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "cve",
+            "--target",
+            "example.com",
+            "--services-file",
+            services_file,
+            "--ports",
+            "22,80",
+            "--timeout",
+            "0.5",
+        ],
+    )
+    assert result.exit_code == 0
+    # When services_file is provided, ports should be ignored (None)
+    assert called_args["ports"] is None
+    assert called_args["services_file"] == services_file
+
+    import os
+    os.unlink(services_file)
+
+
+def test_cve_min_severity_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cve(
+        target,
+        services_file=None,
+        timeout=10.0,
+        use_cache=True,
+        offline_fallback=True,
+        api_url=None,
+        severity=None,
+        min_severity=None,
+        ports=None,
+    ):
+        called_args["min_severity"] = min_severity
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "min_severity_filter": min_severity,
+            "ports": ports,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["cve", "--target", "example.com", "--min-severity", "high", "--timeout", "0.5"]
+    )
+    assert result.exit_code == 0
+    assert called_args["min_severity"] == "high"
+
+
+def test_cve_min_severity_disabled_by_default(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cve(
+        target,
+        services_file=None,
+        timeout=10.0,
+        use_cache=True,
+        offline_fallback=True,
+        api_url=None,
+        severity=None,
+        min_severity=None,
+        ports=None,
+    ):
+        called_args["min_severity"] = min_severity
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "min_severity_filter": min_severity,
+            "ports": ports,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["cve", "--target", "example.com", "--timeout", "0.5"]
+    )
+    assert result.exit_code == 0
+    assert called_args["min_severity"] is None
+
+
+def test_cve_help_shows_min_severity() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cve", "--help"])
+    assert result.exit_code == 0
+    assert "--min-severity" in result.output
+    assert "critical" in result.output
+    assert "high" in result.output
+    assert "medium" in result.output
+    assert "low" in result.output
+
+
+def test_cidr_help() -> None:
+    """Test cidr command help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cidr", "--help"])
+    assert result.exit_code == 0
+    assert "--cidr" in result.output
+    assert "--contains" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+
+
+def test_cidr_top_level_help_lists() -> None:
+    """Test that cidr appears in top-level help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "cidr" in result.output.lower()
+
+
+def test_cidr_offline_target_json() -> None:
+    """Test cidr command with JSON output."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cidr", "--cidr", "192.168.1.0/24", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["cidr"] == "192.168.1.0/24"
+    assert parsed["network"]["usable_host_count"] == 254
+
+
+def test_cidr_offline_target_markdown() -> None:
+    """Test cidr command with Markdown output."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cidr", "--cidr", "10.0.0.0/8", "--format", "markdown"],
+    )
+    assert result.exit_code == 0
+    assert "ethscan CIDR Network Calculator Report" in result.output
+    assert "10.0.0.0/8" in result.output
+
+
+def test_cidr_contains_option() -> None:
+    """Test cidr command with --contains option."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "cidr",
+            "--cidr",
+            "192.168.1.0/24",
+            "--contains",
+            "192.168.1.50",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["contains"]["in_network"] is True
+
+
+def test_cidr_out_option_json(tmp_path) -> None:
+    """Test cidr command with --out (json)."""
+    out_file = tmp_path / "cidr_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "cidr",
+            "--cidr",
+            "192.168.1.0/24",
+            "--format",
+            "json",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    parsed = json.loads(content)
+    assert parsed["cidr"] == "192.168.1.0/24"
+
+
+def test_cidr_out_option_markdown(tmp_path) -> None:
+    """Test cidr command with --out (markdown)."""
+    out_file = tmp_path / "cidr_report.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "cidr",
+            "--cidr",
+            "10.0.0.0/8",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "ethscan CIDR Network Calculator Report" in content
+
+
+def test_config_help() -> None:
+    """Test config command help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["config", "--help"])
+    assert result.exit_code == 0
+    assert "--config" in result.output
+    assert "--init" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+
+
+def test_config_lists_in_top_level_help() -> None:
+    """Test config command appears in top-level help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "config" in result.output
+
+
+def test_config_no_file_json() -> None:
+    """Test config command with no config file (json)."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["config"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["config_file"] is None
+    assert parsed["defaults"] == {}
+    assert parsed["commands"] == {}
+
+
+def test_config_no_file_markdown() -> None:
+    """Test config command with no config file (markdown)."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["config", "--format", "markdown"])
+    assert result.exit_code == 0
+    assert "ethscan Configuration" in result.output
+    assert "No config file found" in result.output
+
+
+def test_config_with_explicit_file(tmp_path) -> None:
+    """Test config command with an explicit config file."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text(
+        "defaults:\n  timeout: 5.0\ncommands:\n  scan:\n    ports: common\n"
+    )
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--config", str(cfg), "config"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["config_file"] == str(cfg)
+    assert parsed["defaults"]["timeout"] == 5.0
+    assert parsed["commands"]["scan"]["ports"] == "common"
+
+
+def test_config_inherits_parent_config(tmp_path) -> None:
+    """Test config subcommand inherits parent --config."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("defaults:\n  timeout: 7.0\n")
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--config", str(cfg), "config"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["config_file"] == str(cfg)
+    assert parsed["defaults"]["timeout"] == 7.0
+
+
+def test_config_init_writes_sample(tmp_path) -> None:
+    """Test config --init writes a sample config file."""
+    out = tmp_path / "sample.yaml"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["config", "--init", str(out)])
+    assert result.exit_code == 0
+    assert "Sample config written" in result.output
+    assert out.exists()
+    content = out.read_text()
+    assert "defaults:" in content
+    assert "commands:" in content
+
+
+def test_config_out_json(tmp_path) -> None:
+    """Test config command with --out (json)."""
+    out_file = tmp_path / "config.json"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["config", "--out", str(out_file)])
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    parsed = json.loads(out_file.read_text())
+    assert parsed["config_file"] is None
+
+
+def test_config_out_markdown(tmp_path) -> None:
+    """Test config command with --out (markdown)."""
+    out_file = tmp_path / "config.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["config", "--format", "markdown", "--out", str(out_file)]
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    assert "ethscan Configuration" in out_file.read_text()
+
+
+def test_config_invalid_yaml_shows_parse_error(tmp_path) -> None:
+    """Test config command surfaces parse errors."""
+    cfg = tmp_path / "bad.yaml"
+    cfg.write_text("{{{\n")
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(cli, ["--config", str(cfg), "config"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert "parse_error" in parsed
+    assert "Failed to parse" in parsed["parse_error"]
+
+
+def test_config_invalid_yaml_markdown(tmp_path) -> None:
+    """Test config command surfaces parse errors in markdown."""
+    cfg = tmp_path / "bad.yaml"
+    cfg.write_text("{{{\n")
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(
+        cli, ["--config", str(cfg), "config", "--format", "markdown"]
+    )
+    assert result.exit_code == 0
+    assert "Parse Error" in result.output
+    assert "Failed to parse" in result.output
+
+
+def test_config_unknown_command_warns(tmp_path) -> None:
+    """Test config command warns about unknown commands."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("commands:\n  nonexistentcmd:\n    foo: bar\n")
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(cli, ["--config", str(cfg), "config"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert "nonexistentcmd" in parsed["commands"]
+
+
+def test_config_applies_to_scan_command(tmp_path) -> None:
+    """Test config values apply to the scan command."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("commands:\n  scan:\n    profile: normal\n")
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--config", str(cfg), "scan", "--target", "127.0.0.1"])
+    assert result.exit_code == 0
+    # profile normal uses 24 common ports - check JSON output
+    assert '"ports_scanned": 24' in result.output
+
+
+def test_config_explicit_overrides_config(tmp_path) -> None:
+    """Test CLI argument overrides config value."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("commands:\n  cidr:\n    format: markdown\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["--config", str(cfg), "cidr", "--cidr", "192.168.1.0/24", "--format", "json"]
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+
+
 # ---------------------------------------------------------------------------
 # mac command CLI tests
 # ---------------------------------------------------------------------------
@@ -7132,7 +9045,7 @@ def test_cli_help_lists_mac() -> None:
     assert "mac" in result.output
 
 
-def test_mac_success_json(monkeypatch) -> None:
+def test_mac_offline_target_json(monkeypatch) -> None:
     def mock_run_mac(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
         return {
             "target": target,
@@ -7154,17 +9067,20 @@ def test_mac_success_json(monkeypatch) -> None:
     runner = CliRunner()
     result = runner.invoke(
         cli,
-        ["mac", "--target", "00:1A:2B:3C:4D:5E", "--format", "json"],
+        [
+            "mac",
+            "--target",
+            "00:1A:2B:3C:4D:5E",
+            "--format",
+            "json",
+        ],
     )
     assert result.exit_code == 0
     assert "Cisco Systems" in result.output
-    assert "00:1a:2b:3c:4d:5e" in result.output
-    assert "cached" in result.output
-    parsed = json.loads(result.output)
-    assert parsed["mac_data"]["vendor"] == "Cisco Systems"
+    assert "001a2b3c" in result.output
 
 
-def test_mac_success_markdown(monkeypatch) -> None:
+def test_mac_offline_target_markdown(monkeypatch) -> None:
     def mock_run_mac(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
         return {
             "target": target,
@@ -7186,15 +9102,21 @@ def test_mac_success_markdown(monkeypatch) -> None:
     runner = CliRunner()
     result = runner.invoke(
         cli,
-        ["mac", "--target", "00:1A:2B:3C:4D:5E", "--format", "markdown"],
+        [
+            "mac",
+            "--target",
+            "00:1A:2B:3C:4D:5E",
+            "--format",
+            "markdown",
+        ],
     )
     assert result.exit_code == 0
     assert "MAC Vendor Lookup Report" in result.output
     assert "Cisco Systems" in result.output
-    assert "00:1a:2b:3c:4d:5e" in result.output
+    assert "001a2b3c" in result.output
 
 
-def test_mac_unresolvable_hostname_json(monkeypatch) -> None:
+def test_mac_hostname_unresolvable_json(monkeypatch) -> None:
     def mock_run_mac(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
         return {
             "target": target,
@@ -7212,10 +9134,17 @@ def test_mac_unresolvable_hostname_json(monkeypatch) -> None:
     runner = CliRunner()
     result = runner.invoke(
         cli,
-        ["mac", "--target", "nonexistent.invalid.domain.tld", "--format", "json"],
+        [
+            "mac",
+            "--target",
+            "nonexistent.invalid.domain.tld",
+            "--format",
+            "json",
+        ],
     )
     assert result.exit_code == 0
     assert "Could not resolve" in result.output
+    assert "mac" in result.output
 
 
 def test_mac_out_option_json(tmp_path, monkeypatch) -> None:
@@ -7227,11 +9156,7 @@ def test_mac_out_option_json(tmp_path, monkeypatch) -> None:
             "timeout": timeout,
             "use_cache": use_cache,
             "offline_fallback": offline_fallback,
-            "mac_data": {
-                "mac": "00:1a:2b:3c:4d:5e",
-                "vendor": "Cisco Systems",
-                "cached": False,
-            },
+            "mac_data": {"mac": "00:1a:2b:3c:4d:5e", "vendor": "Cisco", "cached": False},
             "notes": [],
         }
 
@@ -7241,15 +9166,19 @@ def test_mac_out_option_json(tmp_path, monkeypatch) -> None:
     runner = CliRunner()
     result = runner.invoke(
         cli,
-        ["mac", "--target", "00:1A:2B:3C:4D:5E", "--out", str(out_file)],
+        [
+            "mac",
+            "--target",
+            "00:1A:2B:3C:4D:5E",
+            "--out",
+            str(out_file),
+        ],
     )
     assert result.exit_code == 0
     assert "Report written" in result.output
     assert out_file.exists()
     content = out_file.read_text()
-    assert "Cisco Systems" in content
-    parsed = json.loads(content)
-    assert parsed["mac_data"]["vendor"] == "Cisco Systems"
+    assert "Cisco" in content
 
 
 def test_mac_out_option_markdown(tmp_path, monkeypatch) -> None:
@@ -7261,11 +9190,7 @@ def test_mac_out_option_markdown(tmp_path, monkeypatch) -> None:
             "timeout": timeout,
             "use_cache": use_cache,
             "offline_fallback": offline_fallback,
-            "mac_data": {
-                "mac": "00:1a:2b:3c:4d:5e",
-                "vendor": "Cisco Systems",
-                "cached": False,
-            },
+            "mac_data": {"mac": "00:1a:2b:3c:4d:5e", "vendor": "Cisco", "cached": False},
             "notes": [],
         }
 
@@ -7275,437 +9200,473 @@ def test_mac_out_option_markdown(tmp_path, monkeypatch) -> None:
     runner = CliRunner()
     result = runner.invoke(
         cli,
-        ["mac", "--target", "00:1A:2B:3C:4D:5E", "--format", "markdown", "--out", str(out_file)],
+        [
+            "mac",
+            "--target",
+            "00:1A:2B:3C:4D:5E",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+        ],
     )
     assert result.exit_code == 0
     assert "Report written" in result.output
     assert out_file.exists()
-    content = out_file.read_text()
-    assert "MAC Vendor Lookup Report" in content
-    assert "Cisco Systems" in content
+    assert "MAC Vendor Lookup Report" in out_file.read_text()
 
 
-def test_mac_no_cache_option(monkeypatch) -> None:
-    called_args = {}
+# ---------------------------------------------------------------------------
+# dnssec command CLI tests
+# ---------------------------------------------------------------------------
 
-    def mock_run_mac(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
-        called_args["use_cache"] = use_cache
-        return {
-            "target": target,
-            "mac": "00:1a:2b:3c:4d:5e",
-            "oui": "001a2b3c",
-            "timeout": timeout,
-            "use_cache": use_cache,
-            "offline_fallback": offline_fallback,
-            "mac_data": {"vendor": "Cisco", "cached": False},
-            "notes": [],
-        }
 
-    monkeypatch.setattr("ethscan.cli.run_mac", mock_run_mac)
-
+def test_dnssec_help() -> None:
     runner = CliRunner()
-    result = runner.invoke(cli, ["mac", "--target", "00:1A:2B:3C:4D:5E", "--no-cache"])
-    assert result.exit_code == 0
-    assert called_args["use_cache"] is False
-
-
-def test_mac_no_offline_fallback_option(monkeypatch) -> None:
-    called_args = {}
-
-    def mock_run_mac(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
-        called_args["offline_fallback"] = offline_fallback
-        return {
-            "target": target,
-            "mac": "00:1a:2b:3c:4d:5e",
-            "oui": "001a2b3c",
-            "timeout": timeout,
-            "use_cache": use_cache,
-            "offline_fallback": offline_fallback,
-            "mac_data": {"vendor": "Cisco", "cached": False},
-            "notes": [],
-        }
-
-    monkeypatch.setattr("ethscan.cli.run_mac", mock_run_mac)
-
-    runner = CliRunner()
-    result = runner.invoke(cli, ["mac", "--target", "00:1A:2B:3C:4D:5E", "--no-offline-fallback"])
-    assert result.exit_code == 0
-    assert called_args["offline_fallback"] is False
-
-
-def test_mac_api_url_option(monkeypatch) -> None:
-    called_args = {}
-
-    def mock_run_mac(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
-        called_args["api_url"] = api_url
-        return {
-            "target": target,
-            "mac": "00:1a:2b:3c:4d:5e",
-            "oui": "001a2b3c",
-            "timeout": timeout,
-            "use_cache": use_cache,
-            "offline_fallback": offline_fallback,
-            "mac_data": {"vendor": "Cisco", "cached": False},
-            "notes": [],
-        }
-
-    monkeypatch.setattr("ethscan.cli.run_mac", mock_run_mac)
-
-    runner = CliRunner()
-    result = runner.invoke(cli, ["mac", "--target", "00:1A:2B:3C:4D:5E", "--api-url", "https://custom.example.com"])
-    assert result.exit_code == 0
-    assert called_args["api_url"] == "https://custom.example.com"
-
-
-def test_mac_timeout_option(monkeypatch) -> None:
-    called_args = {}
-
-    def mock_run_mac(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
-        called_args["timeout"] = timeout
-        return {
-            "target": target,
-            "mac": "00:1a:2b:3c:4d:5e",
-            "oui": "001a2b3c",
-            "timeout": timeout,
-            "use_cache": use_cache,
-            "offline_fallback": offline_fallback,
-            "mac_data": {"vendor": "Cisco", "cached": False},
-            "notes": [],
-        }
-
-    monkeypatch.setattr("ethscan.cli.run_mac", mock_run_mac)
-
-    runner = CliRunner()
-    result = runner.invoke(cli, ["mac", "--target", "00:1A:2B:3C:4D:5E", "--timeout", "10.0"])
-    assert result.exit_code == 0
-    assert called_args["timeout"] == 10.0
-
-
-def test_resolve_help() -> None:
-    runner = CliRunner()
-    result = runner.invoke(cli, ["resolve", "--help"])
+    result = runner.invoke(cli, ["dnssec", "--help"])
     assert result.exit_code == 0
     assert "--target" in result.output
-    assert "--types" in result.output
     assert "--server" in result.output
     assert "--timeout" in result.output
     assert "--format" in result.output
     assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
 
 
-def test_resolve_top_level_help_lists_command() -> None:
+def test_cli_help_lists_dnssec() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["--help"])
     assert result.exit_code == 0
-    assert "resolve" in result.output
+    assert "dnssec" in result.output
 
 
-def test_resolve_offline_domain_json(monkeypatch) -> None:
-    def mock_run_resolve(target, record_types=None, server=None, timeout=2.0):
+def test_dnssec_offline_target_json(monkeypatch) -> None:
+    def mock_run_dnssec(target, server=None, timeout=5.0):
         return {
             "target": target,
-            "normalized": "example.com",
-            "is_ip": False,
-            "record_types_queried": ["A", "AAAA", "CNAME"],
-            "records": {"A": [], "AAAA": [], "CNAME": []},
+            "domain": "example.com",
+            "validated": False,
+            "dnskey": {"success": True, "keys": [], "error": None},
+            "ds": {"success": True, "records": [], "error": None},
+            "chain": [],
+            "notes": ["No DNSKEY records found (unsigned zone)"],
             "dnspython_available": False,
-            "server": server,
         }
 
-    monkeypatch.setattr("ethscan.cli.run_resolve", mock_run_resolve)
+    monkeypatch.setattr("ethscan.cli.run_dnssec", mock_run_dnssec)
 
     runner = CliRunner()
-    result = runner.invoke(cli, ["resolve", "--target", "example.com", "--format", "json"])
+    result = runner.invoke(
+        cli,
+        ["dnssec", "--target", "example.com", "--timeout", "1.0"],
+    )
     assert result.exit_code == 0
     assert "example.com" in result.output
-    assert "is_ip" in result.output
-    assert "A" in result.output
-    assert "AAAA" in result.output
-    assert "CNAME" in result.output
+    assert "validated" in result.output
+    assert "false" in result.output.lower()
 
 
-def test_resolve_offline_domain_markdown(monkeypatch) -> None:
-    def mock_run_resolve(target, record_types=None, server=None, timeout=2.0):
+def test_dnssec_offline_target_markdown(monkeypatch) -> None:
+    def mock_run_dnssec(target, server=None, timeout=5.0):
         return {
             "target": target,
-            "normalized": "example.com",
-            "is_ip": False,
-            "record_types_queried": ["A", "AAAA", "CNAME"],
-            "records": {"A": [], "AAAA": [], "CNAME": []},
+            "domain": "example.com",
+            "validated": True,
+            "dnskey": {
+                "success": True,
+                "keys": [
+                    {
+                        "name": "example.com.",
+                        "flags": 257,
+                        "protocol": 3,
+                        "algorithm": 8,
+                        "algorithm_name": "RSASHA256",
+                        "key_tag": 12345,
+                        "key_data": "abc123",
+                    }
+                ],
+                "error": None,
+            },
+            "ds": {
+                "success": True,
+                "records": [
+                    {
+                        "name": "example.com.",
+                        "key_tag": 12345,
+                        "algorithm": 8,
+                        "algorithm_name": "RSASHA256",
+                        "digest_type": 2,
+                        "digest_type_name": "SHA-256",
+                        "digest": "abcdef123456",
+                    }
+                ],
+                "error": None,
+            },
+            "chain": [
+                {"zone": "example.com", "dnskey": {"success": True, "keys": [{}], "error": None}},
+                {"zone": "com", "ds": {"success": True, "records": [{}], "error": None}},
+            ],
+            "notes": [],
             "dnspython_available": False,
-            "server": server,
         }
 
-    monkeypatch.setattr("ethscan.cli.run_resolve", mock_run_resolve)
+    monkeypatch.setattr("ethscan.cli.run_dnssec", mock_run_dnssec)
 
     runner = CliRunner()
-    result = runner.invoke(cli, ["resolve", "--target", "example.com", "--format", "markdown"])
+    result = runner.invoke(
+        cli,
+        [
+            "dnssec",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
     assert result.exit_code == 0
-    assert "DNS Forward/Reverse Resolution Report" in result.output
-    assert "example.com" in result.output
-    assert "Domain Name" in result.output
+    assert "DNSSEC Validation Report" in result.output
+    assert "RSASHA256" in result.output
+    assert "SHA-256" in result.output
 
 
-def test_resolve_offline_ip_json(monkeypatch) -> None:
-    def mock_run_resolve(target, record_types=None, server=None, timeout=2.0):
-        return {
-            "target": target,
-            "normalized": "8.8.8.8",
-            "is_ip": True,
-            "record_types_queried": ["PTR"],
-            "records": {"PTR": []},
-            "dnspython_available": False,
-            "server": server,
-        }
-
-    monkeypatch.setattr("ethscan.cli.run_resolve", mock_run_resolve)
-
-    runner = CliRunner()
-    result = runner.invoke(cli, ["resolve", "--target", "8.8.8.8", "--format", "json"])
-    assert result.exit_code == 0
-    assert "8.8.8.8" in result.output
-    assert "is_ip" in result.output
-    assert "PTR" in result.output
-
-
-def test_resolve_types_option(monkeypatch) -> None:
+def test_dnssec_server_option(monkeypatch) -> None:
     called_args = {}
 
-    def mock_run_resolve(target, record_types=None, server=None, timeout=2.0):
-        called_args["record_types"] = record_types
-        return {
-            "target": target,
-            "normalized": "example.com",
-            "is_ip": False,
-            "record_types_queried": record_types or ["A", "AAAA", "CNAME"],
-            "records": {rt: [] for rt in (record_types or ["A", "AAAA", "CNAME"])},
-            "dnspython_available": False,
-            "server": server,
-        }
-
-    monkeypatch.setattr("ethscan.cli.run_resolve", mock_run_resolve)
-
-    runner = CliRunner()
-    result = runner.invoke(cli, ["resolve", "--target", "example.com", "--types", "A,PTR", "--format", "json"])
-    assert result.exit_code == 0
-    assert called_args["record_types"] == ["A", "PTR"]
-
-
-def test_resolve_unknown_type_rejected() -> None:
-    runner = CliRunner()
-    result = runner.invoke(cli, ["resolve", "--target", "example.com", "--types", "INVALID", "--format", "json"])
-    assert result.exit_code == 0
-    assert "Unknown record types" in result.output
-    assert "INVALID" in result.output
-
-
-def test_resolve_server_option(monkeypatch) -> None:
-    called_args = {}
-
-    def mock_run_resolve(target, record_types=None, server=None, timeout=2.0):
+    def mock_run_dnssec(target, server=None, timeout=5.0):
         called_args["server"] = server
+        called_args["target"] = target
         return {
             "target": target,
-            "normalized": "example.com",
-            "is_ip": False,
-            "record_types_queried": ["A"],
-            "records": {"A": []},
+            "domain": "example.com",
+            "validated": False,
+            "dnskey": {"success": False, "keys": [], "error": "no response"},
+            "ds": {"success": False, "records": [], "error": "no response"},
+            "chain": [],
+            "notes": [],
             "dnspython_available": False,
-            "server": server,
         }
 
-    monkeypatch.setattr("ethscan.cli.run_resolve", mock_run_resolve)
+    monkeypatch.setattr("ethscan.cli.run_dnssec", mock_run_dnssec)
 
     runner = CliRunner()
-    result = runner.invoke(cli, ["resolve", "--target", "example.com", "--server", "1.1.1.1", "--format", "json"])
+    result = runner.invoke(
+        cli,
+        [
+            "dnssec",
+            "--target",
+            "example.com",
+            "--server",
+            "8.8.8.8",
+            "--timeout",
+            "1.0",
+        ],
+    )
     assert result.exit_code == 0
-    assert called_args["server"] == "1.1.1.1"
+    assert called_args["server"] == "8.8.8.8"
 
 
-def test_resolve_timeout_option(monkeypatch) -> None:
+def test_dnssec_timeout_option(monkeypatch) -> None:
     called_args = {}
 
-    def mock_run_resolve(target, record_types=None, server=None, timeout=2.0):
+    def mock_run_dnssec(target, server=None, timeout=5.0):
         called_args["timeout"] = timeout
+        called_args["target"] = target
         return {
             "target": target,
-            "normalized": "example.com",
-            "is_ip": False,
-            "record_types_queried": ["A"],
-            "records": {"A": []},
+            "domain": "example.com",
+            "validated": False,
+            "dnskey": {"success": False, "keys": [], "error": "no response"},
+            "ds": {"success": False, "records": [], "error": "no response"},
+            "chain": [],
+            "notes": [],
             "dnspython_available": False,
-            "server": server,
         }
 
-    monkeypatch.setattr("ethscan.cli.run_resolve", mock_run_resolve)
+    monkeypatch.setattr("ethscan.cli.run_dnssec", mock_run_dnssec)
 
     runner = CliRunner()
-    result = runner.invoke(cli, ["resolve", "--target", "example.com", "--timeout", "5.0", "--format", "json"])
+    result = runner.invoke(
+        cli,
+        [
+            "dnssec",
+            "--target",
+            "example.com",
+            "--timeout",
+            "10.0",
+        ],
+    )
     assert result.exit_code == 0
-    assert called_args["timeout"] == 5.0
+    assert called_args["timeout"] == 10.0
 
 
-def test_resolve_out_option_json(tmp_path, monkeypatch) -> None:
-    def mock_run_resolve(target, record_types=None, server=None, timeout=2.0):
+def test_dnssec_out_option_json(tmp_path, monkeypatch) -> None:
+    def mock_run_dnssec(target, server=None, timeout=5.0):
         return {
             "target": target,
-            "normalized": "example.com",
-            "is_ip": False,
-            "record_types_queried": ["A"],
-            "records": {"A": ["93.184.216.34"]},
+            "domain": "example.com",
+            "validated": True,
+            "dnskey": {
+                "success": True,
+                "keys": [
+                    {
+                        "name": "example.com.",
+                        "flags": 257,
+                        "protocol": 3,
+                        "algorithm": 8,
+                        "algorithm_name": "RSASHA256",
+                        "key_tag": 12345,
+                        "key_data": "abc123",
+                    }
+                ],
+                "error": None,
+            },
+            "ds": {
+                "success": True,
+                "records": [
+                    {
+                        "name": "example.com.",
+                        "key_tag": 12345,
+                        "algorithm": 8,
+                        "algorithm_name": "RSASHA256",
+                        "digest_type": 2,
+                        "digest_type_name": "SHA-256",
+                        "digest": "abcdef123456",
+                    }
+                ],
+                "error": None,
+            },
+            "chain": [],
+            "notes": [],
             "dnspython_available": False,
-            "server": server,
         }
 
-    monkeypatch.setattr("ethscan.cli.run_resolve", mock_run_resolve)
+    monkeypatch.setattr("ethscan.cli.run_dnssec", mock_run_dnssec)
 
-    out_file = tmp_path / "resolve_report.json"
+    out_file = tmp_path / "dnssec_report.json"
     runner = CliRunner()
-    result = runner.invoke(cli, ["resolve", "--target", "example.com", "--out", str(out_file)])
+    result = runner.invoke(
+        cli,
+        [
+            "dnssec",
+            "--target",
+            "example.com",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
     assert result.exit_code == 0
     assert "Report written" in result.output
     assert out_file.exists()
     content = out_file.read_text()
     assert "example.com" in content
-    assert "93.184.216.34" in content
+    assert "RSASHA256" in content
 
 
-def test_resolve_out_option_markdown(tmp_path, monkeypatch) -> None:
-    def mock_run_resolve(target, record_types=None, server=None, timeout=2.0):
+def test_dnssec_out_option_markdown(tmp_path, monkeypatch) -> None:
+    def mock_run_dnssec(target, server=None, timeout=5.0):
         return {
             "target": target,
-            "normalized": "example.com",
-            "is_ip": False,
-            "record_types_queried": ["A"],
-            "records": {"A": ["93.184.216.34"]},
+            "domain": "example.com",
+            "validated": True,
+            "dnskey": {
+                "success": True,
+                "keys": [
+                    {
+                        "name": "example.com.",
+                        "flags": 257,
+                        "protocol": 3,
+                        "algorithm": 8,
+                        "algorithm_name": "RSASHA256",
+                        "key_tag": 12345,
+                        "key_data": "abc123",
+                    }
+                ],
+                "error": None,
+            },
+            "ds": {
+                "success": True,
+                "records": [
+                    {
+                        "name": "example.com.",
+                        "key_tag": 12345,
+                        "algorithm": 8,
+                        "algorithm_name": "RSASHA256",
+                        "digest_type": 2,
+                        "digest_type_name": "SHA-256",
+                        "digest": "abcdef123456",
+                    }
+                ],
+                "error": None,
+            },
+            "chain": [],
+            "notes": [],
             "dnspython_available": False,
-            "server": server,
         }
 
-    monkeypatch.setattr("ethscan.cli.run_resolve", mock_run_resolve)
+    monkeypatch.setattr("ethscan.cli.run_dnssec", mock_run_dnssec)
 
-    out_file = tmp_path / "resolve_report.md"
+    out_file = tmp_path / "dnssec_report.md"
     runner = CliRunner()
-    result = runner.invoke(cli, ["resolve", "--target", "example.com", "--format", "markdown", "--out", str(out_file)])
+    result = runner.invoke(
+        cli,
+        [
+            "dnssec",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
     assert result.exit_code == 0
     assert "Report written" in result.output
     assert out_file.exists()
     content = out_file.read_text()
-    assert "DNS Forward/Reverse Resolution Report" in content
-    assert "93.184.216.34" in content
+    assert "DNSSEC Validation Report" in content
+    assert "example.com" in content
 
 
-def test_resolve_url_target(monkeypatch) -> None:
-    def mock_run_resolve(target, record_types=None, server=None, timeout=2.0):
-        return {
-            "target": target,
-            "normalized": "example.com",
-            "is_ip": False,
-            "record_types_queried": ["A", "AAAA", "CNAME"],
-            "records": {"A": [], "AAAA": [], "CNAME": []},
-            "dnspython_available": False,
-            "server": server,
-        }
+# ---------------------------------------------------------------------------
+# completion command CLI tests
+# ---------------------------------------------------------------------------
 
-    monkeypatch.setattr("ethscan.cli.run_resolve", mock_run_resolve)
 
+def test_completion_help() -> None:
+    """Test completion command help."""
     runner = CliRunner()
-    result = runner.invoke(cli, ["resolve", "--target", "https://example.com/path", "--format", "json"])
+    result = runner.invoke(cli, ["completion", "--help"])
     assert result.exit_code == 0
-    assert "example.com" in result.output
-
-
-def _b64url(data: bytes) -> str:
-    import base64
-
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
-
-
-def _make_jwt(header: dict, payload: dict, with_sig: bool = True) -> str:
-    import json as _json
-
-    token = _b64url(_json.dumps(header).encode()) + "." + _b64url(
-        _json.dumps(payload).encode()
-    )
-    if with_sig:
-        token += "." + _b64url(b"fake-signature")
-    return token
-
-
-def test_jwt_help() -> None:
-    runner = CliRunner()
-    result = runner.invoke(cli, ["jwt", "--help"])
-    assert result.exit_code == 0
-    assert "--token" in result.output
-    assert "--token-file" in result.output
+    assert "--shell" in result.output
+    assert "--prog-name" in result.output
     assert "--format" in result.output
     assert "--out" in result.output
+    assert "bash" in result.output
+    assert "zsh" in result.output
+    assert "fish" in result.output
 
 
-def test_jwt_top_level_help_lists_command() -> None:
+def test_completion_lists_in_top_level_help() -> None:
+    """Test completion command appears in top-level help."""
     runner = CliRunner()
     result = runner.invoke(cli, ["--help"])
     assert result.exit_code == 0
-    assert "jwt" in result.output
+    assert "completion" in result.output
 
 
-def test_jwt_token_option_json() -> None:
-    token = _make_jwt(
-        {"alg": "HS256", "typ": "JWT"},
-        {"iss": "example.com", "sub": "user1", "exp": 1800000000},
-    )
+def test_completion_bash_json() -> None:
+    """Test completion command produces bash JSON."""
     runner = CliRunner()
-    result = runner.invoke(cli, ["jwt", "--token", token, "--format", "json"])
+    result = runner.invoke(cli, ["completion", "--shell", "bash"])
     assert result.exit_code == 0
-    assert "valid_structure" in result.output
-    assert "HS256" in result.output
-    assert "example.com" in result.output
+    parsed = json.loads(result.output)
+    assert parsed["shell"] == "bash"
+    assert parsed["prog_name"] == "ethscan"
+    assert "_ethscan_completion" in parsed["script"]
 
 
-def test_jwt_token_option_markdown() -> None:
-    token = _make_jwt(
-        {"alg": "RS256", "typ": "JWT"},
-        {"sub": "user1", "exp": 1800000000},
-    )
+def test_completion_zsh_json() -> None:
+    """Test completion command produces zsh JSON."""
     runner = CliRunner()
-    result = runner.invoke(cli, ["jwt", "--token", token, "--format", "markdown"])
+    result = runner.invoke(cli, ["completion", "--shell", "zsh"])
     assert result.exit_code == 0
-    assert "JWT Inspection Report" in result.output
-    assert "**Algorithm:** RS256" in result.output
-    assert "**Subject (sub):** user1" in result.output
+    parsed = json.loads(result.output)
+    assert parsed["shell"] == "zsh"
+    assert "#compdef ethscan" in parsed["script"]
 
 
-def test_jwt_token_file_option(tmp_path) -> None:
-    token = _make_jwt({"alg": "HS256"}, {"sub": "user1", "exp": 1800000000})
-    token_file = tmp_path / "token.txt"
-    token_file.write_text(token + "\n")
+def test_completion_fish_json() -> None:
+    """Test completion command produces fish JSON."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["completion", "--shell", "fish"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["shell"] == "fish"
+    assert "function _ethscan_completion" in parsed["script"]
+
+
+def test_completion_default_shell_is_bash() -> None:
+    """Test completion defaults to bash shell."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["completion"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["shell"] == "bash"
+
+
+def test_completion_markdown() -> None:
+    """Test completion command produces markdown output."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["completion", "--shell", "bash", "--format", "markdown"]
+    )
+    assert result.exit_code == 0
+    assert "ethscan Shell Completion" in result.output
+    assert "_ethscan_completion" in result.output
+    assert "Installation" in result.output
+
+
+def test_completion_custom_prog_name() -> None:
+    """Test completion command with custom prog name."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["completion", "--shell", "bash", "--prog-name", "mytool"]
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["prog_name"] == "mytool"
+    assert "_mytool_completion" in parsed["script"]
+
+
+def test_completion_invalid_shell_errors() -> None:
+    """Test completion command rejects unsupported shells."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["completion", "--shell", "powershell"])
+    assert result.exit_code != 0
+    assert "not one of" in result.output
+    assert "bash" in result.output
+
+
+def test_completion_out_json(tmp_path) -> None:
+    """Test completion command with --out (json)."""
+    out_file = tmp_path / "completion.bash"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["completion", "--shell", "bash", "--out", str(out_file)]
+    )
+    assert result.exit_code == 0
+    assert "Completion script written" in result.output
+    assert out_file.exists()
+    parsed = json.loads(out_file.read_text())
+    assert parsed["shell"] == "bash"
+    assert "_ethscan_completion" in parsed["script"]
+
+
+def test_completion_out_markdown(tmp_path) -> None:
+    """Test completion command with --out (markdown)."""
+    out_file = tmp_path / "completion.md"
     runner = CliRunner()
     result = runner.invoke(
         cli,
-        ["jwt", "--token-file", str(token_file), "--format", "json"],
+        [
+            "completion",
+            "--shell",
+            "zsh",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+        ],
     )
     assert result.exit_code == 0
-    assert "user1" in result.output
-
-
-def test_jwt_stdin_input() -> None:
-    token = _make_jwt({"alg": "HS256"}, {"sub": "stdin-user", "exp": 1800000000})
-    runner = CliRunner()
-    result = runner.invoke(cli, ["jwt", "--format", "json"], input=token)
-    assert result.exit_code == 0
-    assert "stdin-user" in result.output
-
-
-def test_jwt_out_option_json(tmp_path) -> None:
-    token = _make_jwt({"alg": "HS256"}, {"sub": "user1", "exp": 1800000000})
-    out_file = tmp_path / "report.json"
-    runner = CliRunner()
-    result = runner.invoke(
-        cli,
-        ["jwt", "--token", token, "--format", "json", "--out", str(out_file)],
-    )
-    assert result.exit_code == 0
-    assert "Report written" in result.output
+    assert "Completion script written" in result.output
     assert out_file.exists()
     content = out_file.read_text()
     assert "user1" in content

@@ -1,5 +1,7 @@
 """Brute-force login module for ethscan (FTP/SSH)."""
 
+import csv
+import io
 import json
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -249,6 +251,26 @@ def run_brute(
         "successful": successful,
         "results": results,
     }
+
+
+def format_brute_report_csv(data: Dict[str, object]) -> str:
+    """Format brute-force results as CSV (credential dump).
+
+    Produces one row per attempt with columns: username, password, success, error.
+    """
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["username", "password", "success", "error"])
+    for result in data.get("results", []):
+        writer.writerow(
+            [
+                result.get("username", ""),
+                result.get("password", "") or "",
+                "true" if result.get("success") else "false",
+                result.get("error", "") or "",
+            ]
+        )
+    return output.getvalue().rstrip("\r\n")
 
 
 def format_brute_report_json(data: Dict[str, object]) -> str:

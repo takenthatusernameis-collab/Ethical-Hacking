@@ -12,6 +12,7 @@ from ethscan.brute import (
     _attempt_ftp,
     _attempt_ssh,
     _normalize_host,
+    format_brute_report_csv,
     format_brute_report_json,
     format_brute_report_markdown,
     load_wordlist,
@@ -402,3 +403,89 @@ def test_format_brute_report_markdown_no_success() -> None:
     output = format_brute_report_markdown(data)
     assert "*No successful logins.*" in output
     assert "connection refused" in output
+
+
+def test_format_brute_report_csv_basic() -> None:
+    data = {
+        "target": "ftp.example.com",
+        "host": "ftp.example.com",
+        "protocol": "ftp",
+        "port": 21,
+        "timeout": 5.0,
+        "usernames_tested": 1,
+        "passwords_tested": 2,
+        "attempts": 2,
+        "successful_count": 1,
+        "successful": [
+            {
+                "username": "admin",
+                "password": "secret",
+                "success": True,
+                "error": None,
+            }
+        ],
+        "results": [
+            {
+                "username": "admin",
+                "password": "secret",
+                "success": True,
+                "error": None,
+            },
+            {
+                "username": "admin",
+                "password": "wrong",
+                "success": False,
+                "error": "530 Login incorrect",
+            },
+        ],
+    }
+    output = format_brute_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "username,password,success,error"
+    assert "admin,secret,true," in lines[1]
+    assert "admin,wrong,false,530 Login incorrect" in lines[2]
+
+
+def test_format_brute_report_csv_empty() -> None:
+    data = {
+        "target": "ftp.example.com",
+        "host": "ftp.example.com",
+        "protocol": "ftp",
+        "port": 21,
+        "timeout": 5.0,
+        "usernames_tested": 0,
+        "passwords_tested": 0,
+        "attempts": 0,
+        "successful_count": 0,
+        "successful": [],
+        "results": [],
+    }
+    output = format_brute_report_csv(data)
+    assert output == "username,password,success,error"
+
+
+def test_format_brute_report_csv_pipe_escaping() -> None:
+    data = {
+        "target": "ftp.example.com",
+        "host": "ftp.example.com",
+        "protocol": "ftp",
+        "port": 21,
+        "timeout": 5.0,
+        "usernames_tested": 1,
+        "passwords_tested": 1,
+        "attempts": 1,
+        "successful_count": 0,
+        "successful": [],
+        "results": [
+            {
+                "username": "ad|min",
+                "password": "pass,word",
+                "success": False,
+                "error": "530 \"Login incorrect\"",
+            }
+        ],
+    }
+    output = format_brute_report_csv(data)
+    lines = output.splitlines()
+    # CSV writer quotes fields containing commas and double-quotes
+    assert lines[1] == 'ad|min,"pass,word",false,"530 ""Login incorrect"""'

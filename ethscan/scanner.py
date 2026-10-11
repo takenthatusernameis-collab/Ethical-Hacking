@@ -1,8 +1,11 @@
 """Port scanner module for ethscan."""
 
+import csv
+import io
+import json
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 
 def scan_port(host: str, port: int, timeout: float = 1.0) -> Tuple[int, bool]:
@@ -140,3 +143,50 @@ def get_profile_defaults(profile: str) -> dict:
         "timeout": PROFILE_DEFAULTS[profile]["timeout"],
         "workers": PROFILE_DEFAULTS[profile]["workers"],
     }
+
+
+def format_scan_report_json(data: Dict[str, object]) -> str:
+    """Format scan results as JSON."""
+    return json.dumps(data, indent=2, default=str)
+
+
+def format_scan_report_markdown(data: Dict[str, object]) -> str:
+    """Format scan results as Markdown."""
+    lines = ["# ethscan Port Scan Report", ""]
+    lines.append(f"- **Target:** {data['target']}")
+    lines.append(f"- **Host:** {data['host']}")
+    lines.append(f"- **Ports Scanned:** {data['ports_scanned']}")
+    lines.append(f"- **Open Ports:** {', '.join(map(str, data['open_ports'])) if data['open_ports'] else 'None'}")
+    lines.append("")
+
+    if data["details"]:
+        lines.append("## Port Details")
+        lines.append("| Port | Status |")
+        lines.append("|------|--------|")
+        for detail in data["details"]:
+            status = "Open" if detail["open"] else "Closed"
+            lines.append(f"| {detail['port']} | {status} |")
+    else:
+        lines.append("*No ports scanned.*")
+
+    return "\n".join(lines)
+
+
+def format_scan_report_csv(data: Dict[str, object]) -> str:
+    """Format scan results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["port", "open"])
+    for detail in data.get("details", []):
+        writer.writerow([detail["port"], "true" if detail["open"] else "false"])
+    return output.getvalue()
+
+
+def format_service_report_csv(data: Dict[str, object]) -> str:
+    """Format service detection results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["port", "service", "banner"])
+    for result in data.get("results", []):
+        writer.writerow([result["port"], result.get("service", ""), result.get("banner", "")])
+    return output.getvalue()
