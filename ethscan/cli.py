@@ -121,6 +121,12 @@ from ethscan.cidr import (
     format_cidr_report_markdown,
     run_cidr,
 )
+from ethscan.subtake import (
+    format_subtake_report_json,
+    format_subtake_report_markdown,
+    run_subtake,
+)
+from ethscan.subdomains import load_subdomain_wordlist
 from ethscan.headers import (
     format_headers_report_json,
     format_headers_report_markdown,
@@ -484,6 +490,80 @@ def subdomains(
         output = format_subdomains_report_json(results)
     else:
         output = format_subdomains_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target domain or URL (e.g. example.com or https://example.com)",
+)
+@click.option(
+    "--wordlist",
+    "wordlist_path",
+    type=click.Path(exists=True, readable=True),
+    help="Path to wordlist file (one subdomain per line). Uses built-in default if omitted.",
+)
+@click.option(
+    "--resolver",
+    help="Custom DNS resolver IP address (requires dnspython)",
+)
+@click.option("--timeout", default=2.0, type=float, help="DNS resolution timeout in seconds")
+@click.option(
+    "--workers",
+    default=50,
+    type=int,
+    help="Maximum concurrent DNS resolution workers",
+)
+@click.option("--http-timeout", default=5.0, type=float, help="HTTP request timeout for fingerprinting in seconds")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def subtake(
+    target: str,
+    wordlist_path: Optional[str],
+    resolver: Optional[str],
+    timeout: float,
+    workers: int,
+    http_timeout: float,
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Detect subdomain takeover vulnerabilities for TARGET."""
+    subdomains_list = (
+        load_subdomain_wordlist(wordlist_path) if wordlist_path else None
+    )
+
+    results = run_subtake(
+        target,
+        subdomains=subdomains_list,
+        timeout=timeout,
+        max_workers=workers,
+        resolver=resolver,
+        http_timeout=http_timeout,
+    )
+
+    if fmt == "json":
+        output = format_subtake_report_json(results)
+    else:
+        output = format_subtake_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

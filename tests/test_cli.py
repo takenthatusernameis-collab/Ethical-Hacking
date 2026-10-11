@@ -925,6 +925,190 @@ def test_subdomains_max_depth_option(monkeypatch) -> None:
     assert called_args["max_depth"] == 5
 
 
+def test_subtake_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["subtake", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--wordlist" in result.output
+    assert "--resolver" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+    assert "--http-timeout" in result.output
+
+
+def test_cli_help_lists_subtake() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "subtake" in result.output
+
+
+def test_subtake_offline_target_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["subtake", "--target", "nonexistent.invalid.domain.tld", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "nonexistent.invalid.domain.tld" in result.output
+    assert "vulnerable_count" in result.output
+
+
+def test_subtake_offline_target_markdown() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "subtake",
+            "--target",
+            "nonexistent.invalid.domain.tld",
+            "--format",
+            "markdown",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Subdomain Takeover Report" in result.output
+
+
+def test_subtake_wordlist_option(tmp_path) -> None:
+    wordlist_file = tmp_path / "subs.txt"
+    wordlist_file.write_text("www\nmail\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "subtake",
+            "--target",
+            "nonexistent.invalid.domain.tld",
+            "--wordlist",
+            str(wordlist_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "www" in result.output
+    assert "mail" in result.output
+
+
+def test_subtake_resolver_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_subtake(
+        target,
+        subdomains=None,
+        timeout=2.0,
+        max_workers=50,
+        resolver=None,
+        http_timeout=5.0,
+    ):
+        called_args["resolver"] = resolver
+        called_args["target"] = target
+        return {
+            "target": target,
+            "domain": "example.com",
+            "subdomains_tested": 2,
+            "vulnerable_count": 0,
+            "vulnerable": [],
+            "all_results": [
+                {"subdomain": "www", "hostname": "www.example.com", "cname": None, "a_records": [], "aaaa_records": [], "vulnerable": False, "takeover": None},
+                {"subdomain": "mail", "hostname": "mail.example.com", "cname": None, "a_records": [], "aaaa_records": [], "vulnerable": False, "takeover": None},
+            ],
+            "resolver": resolver,
+            "dnspython_available": False,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_subtake", mock_run_subtake)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "subtake",
+            "--target",
+            "example.com",
+            "--resolver",
+            "8.8.8.8",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["resolver"] == "8.8.8.8"
+
+
+def test_subtake_out_option(tmp_path) -> None:
+    out_file = tmp_path / "report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "subtake",
+            "--target",
+            "nonexistent.invalid.domain.tld",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "nonexistent.invalid.domain.tld" in content
+
+
+def test_subtake_http_timeout_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_subtake(
+        target,
+        subdomains=None,
+        timeout=2.0,
+        max_workers=50,
+        resolver=None,
+        http_timeout=5.0,
+    ):
+        called_args["http_timeout"] = http_timeout
+        called_args["target"] = target
+        return {
+            "target": target,
+            "domain": "example.com",
+            "subdomains_tested": 1,
+            "vulnerable_count": 0,
+            "vulnerable": [],
+            "all_results": [
+                {"subdomain": "www", "hostname": "www.example.com", "cname": None, "a_records": [], "aaaa_records": [], "vulnerable": False, "takeover": None},
+            ],
+            "resolver": None,
+            "dnspython_available": False,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_subtake", mock_run_subtake)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "subtake",
+            "--target",
+            "example.com",
+            "--http-timeout",
+            "10.0",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["http_timeout"] == 10.0
+
+
 def test_whois_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["whois", "--help"])

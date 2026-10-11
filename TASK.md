@@ -689,10 +689,52 @@ Added a `--ports` option to the `cve` command to run live service detection on a
 - `vuln` now supports `--target`, `--ports`, `--services-file`, `--tls-file`, `--ssl-file`, `--severity`, `--min-severity`, `--format`, `--out` for built-in vulnerability checks.
 - Tests: 1015 passing (1 skipped).
 
+## Completed: `subtake` command (Subdomain Takeover Detection)
+
+The `subtake` command detects subdomain takeover vulnerabilities by enumerating subdomains, resolving their CNAME/A/AAAA records, and checking if they point to known vulnerable cloud services (AWS S3, GitHub Pages, Heroku, Azure, Shopify, etc.) where the target resource no longer exists. It performs HTTP fingerprinting to confirm takeover potential.
+
+### Added Files
+- `ethscan/subtake.py` — Subdomain takeover detection module with:
+  - `DEFAULT_SUBDOMAINS` — built-in list of 26 common subdomain labels
+  - `TAKEOVER_SIGNATURES` — database of 35+ vulnerable cloud services with CNAME patterns and fingerprint strings
+  - `_normalize_domain()` — extracts bare domain from URL/bare targets
+  - `resolve_cname()` / `resolve_a_records()` / `resolve_aaaa_records()` — DNS resolution (stdlib + optional dnspython with custom resolver)
+  - `check_takeover_signature()` — matches CNAME against known vulnerable service patterns
+  - `check_http_fingerprint()` — HTTP GET request to confirm takeover fingerprint in response body
+  - `run_subtake()` — public entry point: normalizes target, concurrently resolves subdomains, checks CNAME against signatures, confirms via HTTP fingerprinting
+  - `format_subtake_report_json()` / `format_subtake_report_markdown()` — output formatters (markdown includes summary, vulnerable subdomains table with service/fingerprint/HTTP confirmation, all results table)
+- `tests/test_subtake.py` — 28 unit tests: domain normalization, takeover signature matching (S3, GitHub Pages, Heroku, Azure, Shopify, case-insensitive), run_subtake (offline target, resolver, default list, URL target, vulnerable S3/GitHub Pages/Heroku detection, no HTTP confirmation), formatters (JSON, markdown with/without vulnerable/resolver/pipe escaping)
+
+### Modified Files
+- `ethscan/cli.py` — registered `subtake` command with `--target`, `--wordlist`, `--resolver`, `--timeout`, `--workers`, `--http-timeout`, `--format`, `--out`; imports `run_subtake` and formatters from `ethscan.subtake`, `load_subdomain_wordlist` from `ethscan.subdomains`
+- `tests/test_cli.py` — 8 CLI integration tests: `subtake` help, top-level help listing, offline json/markdown output, `--wordlist` option, `--resolver` option, `--out` option, `--http-timeout` option
+
+### Verification
+- `python -m pytest -q` -> 1051 passed, 1 skipped (1015 baseline + 36 new: 28 unit + 8 CLI)
+- `python -m ethscan --help` -> lists `subtake` among the 26 commands
+- `python -m ethscan subtake --help` -> shows all expected options
+- End-to-end: `python -m ethscan subtake --target example.com --wordlist subs.txt --timeout 1.0 --format json` resolves subdomains, detects CNAME records, checks against 35+ service signatures
+- End-to-end: `python -m ethscan subtake --target nonexistent.invalid.domain.tld --format markdown` produces markdown report with Vulnerable Subdomains and All Results tables
+
+## Current state
+- All 26 commands implemented (including `subtake`).
+- `scan` and `service` now support `--profile fast|normal|full` option.
+- `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
+- `subdomains` now supports `--recursive` and `--max-depth` for recursive subdomain enumeration.
+- `dnsbrute` now supports `--recursive` and `--max-depth` for recursive zone transfers.
+- `whois` now supports `--recursive/--no-recursive` and `--max-depth` for recursive WHOIS queries.
+- `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
+- `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
+- `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out` for CT log subdomain discovery.
+- `report` now supports `--format json|markdown` and `--out` for combined scan+audit reports (json and markdown).
+- `cve` now supports `--target`, `--services-file`, `--ports`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--severity`, `--min-severity`, `--format`, `--out` for NVD/CVE API vulnerability lookups.
+- `vuln` now supports `--target`, `--ports`, `--services-file`, `--tls-file`, `--ssl-file`, `--severity`, `--min-severity`, `--format`, `--out` for built-in vulnerability checks.
+- Tests: 1051 passing (1 skipped).
+
 ## Suggested next task
 
-**Add a `subtake` command** for subdomain takeover detection: enumerate subdomains, resolve their CNAME/A records, and check if they point to known vulnerable cloud services (AWS S3, GitHub Pages, Heroku, Azure, Shopify, etc.) where the target resource no longer exists. Output JSON/Markdown with vulnerable subdomains, service fingerprints, and takeover evidence.
+**Add a configuration file (`ethscan.yaml`)** to persist default options across commands (profiles, timeouts, wordlists, output format, cache settings).
 
 Alternative: Add a `--json` output mode to the `audit` command for machine-readable password audit results (currently only echoes human-readable lines).
 
-Alternative: Add a configuration file (`ethscan.yaml`) to persist default options across commands (profiles, timeouts, wordlists, output format, cache settings).
+Alternative: Add a `--recursive` option to the `whois` command for recursive WHOIS queries across registrar tiers.
