@@ -1,4 +1,5 @@
 name: Kilo
+# Recovery controller syntax is checked by the dedicated Kilo workflow audit.
 
 on:
   schedule:
