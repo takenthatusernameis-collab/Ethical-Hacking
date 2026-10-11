@@ -549,28 +549,31 @@ The `ping` command performs ICMP echo request probes with per-probe RTT and TTL 
 - End-to-end: `python -m ethscan ping --target example.com --count 1 --timeout 1.0 --format json` -> resolves IP, reports CONNECTED with RTT ~9ms.
 - Both JSON and Markdown output formats display correctly with probe tables and notes.
 
+## Completed: `mac` command (MAC address vendor lookup)
+
+The `mac` command resolves a MAC address to its vendor via OUI lookup using a public OUI database API (api.macvendors.com). It uses stdlib-only HTTP (`urllib`) with filesystem caching and offline fallback. It supports IP addresses, hostnames, and URLs as targets — hostnames/IPs are resolved to a bare MAC address string before the vendor lookup.
+
+### Added Functionality
+- `ethscan/mac.py` — already implemented with:
+  - `_normalize_target()` — extracts a bare MAC address from URL/hostname/MAC targets
+  - `_resolve_host()` — resolves hostname to an IPv4 address (stdlib `socket`)
+  - `_load_cache()` / `_save_cache()` / `_is_cache_valid()` — filesystem cache management with TTL
+  - `_fetch_mac_data()` — fetches MAC vendor data from public OUI API (urllib, stdlib only, custom `--api-url` support)
+  - `_get_cached_or_fetch()` — orchestrates cache lookup, API fetch, and offline fallback to stale cache
+  - `_extract_oui()` — extracts the 24-bit OUI prefix (first 8 hex chars) from a MAC address
+  - `_is_mac_address()` — validates whether a value looks like a MAC address
+  - `run_mac()` — public entry point: normalizes target, resolves hostnames, performs cached/offline-aware OUI lookup
+  - `format_mac_report_json()` / `format_mac_report_markdown()` — output formatters (markdown includes target, MAC, OUI, timeout, cache/fallback flags, vendor data or error, notes)
+- `ethscan/cli.py` — registered `mac` command with `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out`
+- `tests/test_mac.py` — 53 unit tests: target normalization (bare MAC, dashes, whitespace, URL, hostname, IP), host resolution (IP, localhost, invalid), cache operations (missing, invalid JSON, valid, non-dict, save), cache validity (valid, expired, missing timestamp), `_fetch_mac_data` (success, network error, timeout, URL error, custom API URL), `_get_cached_or_fetch` (cache hit, cache miss fetch, fetch fails no cache, fetch fails offline fallback, cache disabled, cache disabled fetch fails), `_extract_oui` (colon, dash, dot, plain formats), `_is_mac_address` (true/dashes/plain, false short/non-hex/hostname), `run_mac` (offline target, hostname unresolvable, success, URL target, cached result, custom API URL, offline fallback note), both formatters (JSON, markdown success/offline/cached/offline-fallback/error/notes/empty-vendor).
+- `tests/test_cli.py` — 11 CLI integration tests: `mac` help, top-level help listing, success JSON output, success Markdown output, unresolvable hostname JSON, `--out` (JSON and Markdown), `--no-cache`, `--no-offline-fallback`, `--api-url`, `--timeout`.
+- `README.md` — added MAC address vendor lookup (`mac`) to the features list.
+
+### Verification
+- `python -m pytest -q` -> 924 passed, 1 skipped (860 baseline + 64 new: 53 unit + 11 CLI).
+- `python -m ethscan --help` -> lists `mac` among the 23 commands.
+- `python -m ethscan mac --help` -> shows all expected options (`--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out`).
+
 ## Suggested next task
 
-**Add a `mac` command** that resolves a MAC address to its vendor via OUI lookup (stdlib-only HTTP with caching and offline fallback).
-
-Alternative: Add a `resolve` command for forward/reverse DNS resolution (A, AAAA, PTR, CNAME records; dnspython optional with stdlib `socket` fallback).
-
-## Requirements
-- Pick one of the suggested features and implement it following the existing module conventions.
-- Add a new module under `ethscan/` with `run_*`, `format_*_report_json`, `format_*_report_markdown` (for new commands) or extend existing module (for new options).
-- Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
-- Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
-- Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
-
-## Current state
-- All 22 commands implemented (including `ping`).
-- `scan` and `service` now support `--profile fast|normal|full` option.
-- `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
-- `subdomains` now supports `--recursive` and `--max-depth` for recursive subdomain enumeration.
-- `dnsbrute` now supports `--recursive` and `--max-depth` for recursive zone transfers.
-- `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
-- `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
-- `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out` for CT log subdomain discovery.
-- `report` now supports `--output` (alias for `--out`) for writing the combined scan+audit report to a file (json or markdown).
-- `ping` now supports `--target`, `--count`, `--timeout`, `--ttl`, `--tcp-port`, `--format`, `--out` for host discovery with ICMP/TCP fallback.
-- Tests: 860 passing (1 skipped).
+**Add a `resolve` command** for forward/reverse DNS resolution (A, AAAA, PTR, CNAME records; dnspython optional with stdlib `socket` fallback).

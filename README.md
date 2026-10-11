@@ -27,6 +27,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - Consolidated reconnaissance: `recon` command running multiple modules (subdomains, dns, whois, geo, trace) in sequence with a unified report (implemented)
 - Certificate Transparency log search: `cert` command to discover subdomains via CT logs (crt.sh-compatible APIs) with caching and offline fallback (implemented)
 - Host discovery: `ping` command for ICMP echo requests with per-probe RTT/TTL reporting and TCP connect fallback for non-root environments (implemented)
+- MAC address vendor lookup: `mac` command for OUI-based vendor identification via public API with caching and offline fallback (implemented)
 
 ## Requirements
 

@@ -7103,3 +7103,279 @@ def test_cert_url_target(monkeypatch) -> None:
     result = runner.invoke(cli, ["cert", "--target", "https://example.com/path"])
     assert result.exit_code == 0
     assert called_args["target"] == "https://example.com/path"
+
+
+# ---------------------------------------------------------------------------
+# mac command CLI tests
+# ---------------------------------------------------------------------------
+
+
+def test_mac_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["mac", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--timeout" in result.output
+    assert "--no-cache" in result.output
+    assert "--no-offline-fallback" in result.output
+    assert "--api-url" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_mac() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "mac" in result.output
+
+
+def test_mac_success_json(monkeypatch) -> None:
+    def mock_run_mac(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+        return {
+            "target": target,
+            "mac": "00:1a:2b:3c:4d:5e",
+            "oui": "001a2b3c",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "mac_data": {
+                "mac": "00:1a:2b:3c:4d:5e",
+                "vendor": "Cisco Systems",
+                "cached": False,
+            },
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_mac", mock_run_mac)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["mac", "--target", "00:1A:2B:3C:4D:5E", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    assert "Cisco Systems" in result.output
+    assert "00:1a:2b:3c:4d:5e" in result.output
+    assert "cached" in result.output
+    parsed = json.loads(result.output)
+    assert parsed["mac_data"]["vendor"] == "Cisco Systems"
+
+
+def test_mac_success_markdown(monkeypatch) -> None:
+    def mock_run_mac(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+        return {
+            "target": target,
+            "mac": "00:1a:2b:3c:4d:5e",
+            "oui": "001a2b3c",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "mac_data": {
+                "mac": "00:1a:2b:3c:4d:5e",
+                "vendor": "Cisco Systems",
+                "cached": False,
+            },
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_mac", mock_run_mac)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["mac", "--target", "00:1A:2B:3C:4D:5E", "--format", "markdown"],
+    )
+    assert result.exit_code == 0
+    assert "MAC Vendor Lookup Report" in result.output
+    assert "Cisco Systems" in result.output
+    assert "00:1a:2b:3c:4d:5e" in result.output
+
+
+def test_mac_unresolvable_hostname_json(monkeypatch) -> None:
+    def mock_run_mac(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+        return {
+            "target": target,
+            "mac": None,
+            "oui": None,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "mac_data": None,
+            "notes": ["Could not resolve host 'nonexistent.invalid.domain.tld' to a MAC address"],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_mac", mock_run_mac)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["mac", "--target", "nonexistent.invalid.domain.tld", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    assert "Could not resolve" in result.output
+
+
+def test_mac_out_option_json(tmp_path, monkeypatch) -> None:
+    def mock_run_mac(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+        return {
+            "target": target,
+            "mac": "00:1a:2b:3c:4d:5e",
+            "oui": "001a2b3c",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "mac_data": {
+                "mac": "00:1a:2b:3c:4d:5e",
+                "vendor": "Cisco Systems",
+                "cached": False,
+            },
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_mac", mock_run_mac)
+
+    out_file = tmp_path / "mac_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["mac", "--target", "00:1A:2B:3C:4D:5E", "--out", str(out_file)],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "Cisco Systems" in content
+    parsed = json.loads(content)
+    assert parsed["mac_data"]["vendor"] == "Cisco Systems"
+
+
+def test_mac_out_option_markdown(tmp_path, monkeypatch) -> None:
+    def mock_run_mac(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+        return {
+            "target": target,
+            "mac": "00:1a:2b:3c:4d:5e",
+            "oui": "001a2b3c",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "mac_data": {
+                "mac": "00:1a:2b:3c:4d:5e",
+                "vendor": "Cisco Systems",
+                "cached": False,
+            },
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_mac", mock_run_mac)
+
+    out_file = tmp_path / "mac_report.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["mac", "--target", "00:1A:2B:3C:4D:5E", "--format", "markdown", "--out", str(out_file)],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "MAC Vendor Lookup Report" in content
+    assert "Cisco Systems" in content
+
+
+def test_mac_no_cache_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_mac(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+        called_args["use_cache"] = use_cache
+        return {
+            "target": target,
+            "mac": "00:1a:2b:3c:4d:5e",
+            "oui": "001a2b3c",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "mac_data": {"vendor": "Cisco", "cached": False},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_mac", mock_run_mac)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["mac", "--target", "00:1A:2B:3C:4D:5E", "--no-cache"])
+    assert result.exit_code == 0
+    assert called_args["use_cache"] is False
+
+
+def test_mac_no_offline_fallback_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_mac(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+        called_args["offline_fallback"] = offline_fallback
+        return {
+            "target": target,
+            "mac": "00:1a:2b:3c:4d:5e",
+            "oui": "001a2b3c",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "mac_data": {"vendor": "Cisco", "cached": False},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_mac", mock_run_mac)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["mac", "--target", "00:1A:2B:3C:4D:5E", "--no-offline-fallback"])
+    assert result.exit_code == 0
+    assert called_args["offline_fallback"] is False
+
+
+def test_mac_api_url_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_mac(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+        called_args["api_url"] = api_url
+        return {
+            "target": target,
+            "mac": "00:1a:2b:3c:4d:5e",
+            "oui": "001a2b3c",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "mac_data": {"vendor": "Cisco", "cached": False},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_mac", mock_run_mac)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["mac", "--target", "00:1A:2B:3C:4D:5E", "--api-url", "https://custom.example.com"])
+    assert result.exit_code == 0
+    assert called_args["api_url"] == "https://custom.example.com"
+
+
+def test_mac_timeout_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_mac(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+        called_args["timeout"] = timeout
+        return {
+            "target": target,
+            "mac": "00:1a:2b:3c:4d:5e",
+            "oui": "001a2b3c",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "mac_data": {"vendor": "Cisco", "cached": False},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_mac", mock_run_mac)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["mac", "--target", "00:1A:2B:3C:4D:5E", "--timeout", "10.0"])
+    assert result.exit_code == 0
+    assert called_args["timeout"] == 10.0
