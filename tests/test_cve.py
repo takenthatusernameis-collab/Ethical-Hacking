@@ -573,3 +573,141 @@ def test_format_cve_report_json_includes_ports() -> None:
     output = format_cve_report_json(data)
     parsed = json.loads(output)
     assert parsed["ports"] == [22, 80]
+
+
+def test_run_cve_min_severity_drops_lower(tmp_path, monkeypatch) -> None:
+    services_file = tmp_path / "services.json"
+    services_file.write_text(
+        json.dumps(
+            {
+                "target": "example.com",
+                "host": "example.com",
+                "timeout": 3.0,
+                "ports_scanned": 1,
+                "services_found": 1,
+                "results": [
+                    {"port": 22, "banner": "SSH-2.0-OpenSSH_7.2p2", "service": "OpenSSH"}
+                ],
+            }
+        )
+    )
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+
+    result = run_cve(
+        "example.com",
+        services_file=str(services_file),
+        timeout=0.5,
+        use_cache=False,
+        min_severity="high",
+    )
+    assert result["min_severity_filter"] == "high"
+    # OpenSSH 7.2p2 only matches medium findings, so all are dropped
+    assert result["cve_count"] == 0
+
+
+def test_run_cve_min_severity_none_keeps_all(tmp_path, monkeypatch) -> None:
+    services_file = tmp_path / "services.json"
+    services_file.write_text(
+        json.dumps(
+            {
+                "target": "example.com",
+                "host": "example.com",
+                "timeout": 3.0,
+                "ports_scanned": 1,
+                "services_found": 1,
+                "results": [
+                    {"port": 22, "banner": "SSH-2.0-OpenSSH_7.2p2", "service": "OpenSSH"}
+                ],
+            }
+        )
+    )
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+
+    result = run_cve(
+        "example.com",
+        services_file=str(services_file),
+        timeout=0.5,
+        use_cache=False,
+    )
+    assert result["min_severity_filter"] is None
+    assert result["cve_count"] >= 1
+
+
+def test_run_cve_min_severity_low_keeps_all(tmp_path, monkeypatch) -> None:
+    services_file = tmp_path / "services.json"
+    services_file.write_text(
+        json.dumps(
+            {
+                "target": "example.com",
+                "host": "example.com",
+                "timeout": 3.0,
+                "ports_scanned": 1,
+                "services_found": 1,
+                "results": [
+                    {"port": 22, "banner": "SSH-2.0-OpenSSH_7.2p2", "service": "OpenSSH"}
+                ],
+            }
+        )
+    )
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+
+    result = run_cve(
+        "example.com",
+        services_file=str(services_file),
+        timeout=0.5,
+        use_cache=False,
+        min_severity="low",
+    )
+    assert result["min_severity_filter"] == "low"
+    assert result["cve_count"] >= 1
+
+
+def test_run_cve_min_severity_critical_drops_all(tmp_path, monkeypatch) -> None:
+    services_file = tmp_path / "services.json"
+    services_file.write_text(
+        json.dumps(
+            {
+                "target": "example.com",
+                "host": "example.com",
+                "timeout": 3.0,
+                "ports_scanned": 1,
+                "services_found": 1,
+                "results": [
+                    {"port": 22, "banner": "SSH-2.0-OpenSSH_7.2p2", "service": "OpenSSH"}
+                ],
+            }
+        )
+    )
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+
+    result = run_cve(
+        "example.com",
+        services_file=str(services_file),
+        timeout=0.5,
+        use_cache=False,
+        min_severity="critical",
+    )
+    assert result["min_severity_filter"] == "critical"
+    assert result["cve_count"] == 0
+
+
+def test_format_cve_report_markdown_with_min_severity() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "timeout": 0.5,
+        "use_cache": True,
+        "offline_fallback": True,
+        "api_url": None,
+        "severity_filter": None,
+        "min_severity_filter": "high",
+        "ports": None,
+        "services_checked": 1,
+        "cve_entries": [],
+        "cve_count": 0,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+        "notes": [],
+    }
+    output = format_cve_report_markdown(data)
+    assert "Min Severity" in output
+    assert "high" in output

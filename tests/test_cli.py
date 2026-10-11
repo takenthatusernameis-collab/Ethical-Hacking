@@ -7231,7 +7231,7 @@ def test_cve_no_cache_option(monkeypatch) -> None:
     called_args = {}
 
     def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
-                     offline_fallback=True, api_url=None, severity=None, ports=None):
+                     offline_fallback=True, api_url=None, severity=None, min_severity=None, ports=None):
         called_args["use_cache"] = use_cache
         called_args["target"] = target
         return {
@@ -7264,7 +7264,7 @@ def test_cve_no_offline_fallback_option(monkeypatch) -> None:
     called_args = {}
 
     def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
-                     offline_fallback=True, api_url=None, severity=None, ports=None):
+                     offline_fallback=True, api_url=None, severity=None, min_severity=None, ports=None):
         called_args["offline_fallback"] = offline_fallback
         called_args["target"] = target
         return {
@@ -7298,7 +7298,7 @@ def test_cve_api_url_option(monkeypatch) -> None:
     called_args = {}
 
     def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
-                     offline_fallback=True, api_url=None, severity=None, ports=None):
+                     offline_fallback=True, api_url=None, severity=None, min_severity=None, ports=None):
         called_args["api_url"] = api_url
         called_args["target"] = target
         return {
@@ -7332,7 +7332,7 @@ def test_cve_severity_option(monkeypatch) -> None:
     called_args = {}
 
     def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
-                     offline_fallback=True, api_url=None, severity=None, ports=None):
+                     offline_fallback=True, api_url=None, severity=None, min_severity=None, ports=None):
         called_args["severity"] = severity
         called_args["target"] = target
         return {
@@ -7364,7 +7364,7 @@ def test_cve_severity_option(monkeypatch) -> None:
 
 def test_cve_out_option_json(tmp_path, monkeypatch) -> None:
     def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
-                     offline_fallback=True, api_url=None, severity=None, ports=None):
+                     offline_fallback=True, api_url=None, severity=None, min_severity=None, ports=None):
         return {
             "target": target,
             "host": target,
@@ -7398,7 +7398,7 @@ def test_cve_out_option_json(tmp_path, monkeypatch) -> None:
 
 def test_cve_out_option_markdown(tmp_path, monkeypatch) -> None:
     def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
-                     offline_fallback=True, api_url=None, severity=None, ports=None):
+                     offline_fallback=True, api_url=None, severity=None, min_severity=None, ports=None):
         return {
             "target": target,
             "host": target,
@@ -7459,6 +7459,7 @@ def test_cve_ports_option(monkeypatch) -> None:
         offline_fallback=True,
         api_url=None,
         severity=None,
+        min_severity=None,
         ports=None,
     ):
         called_args["ports"] = ports
@@ -7501,6 +7502,7 @@ def test_cve_ports_option_with_ranges(monkeypatch) -> None:
         offline_fallback=True,
         api_url=None,
         severity=None,
+        min_severity=None,
         ports=None,
     ):
         called_args["ports"] = ports
@@ -7543,6 +7545,7 @@ def test_cve_ports_option_disabled_when_services_file(monkeypatch) -> None:
         offline_fallback=True,
         api_url=None,
         severity=None,
+        min_severity=None,
         ports=None,
     ):
         called_args["ports"] = ports
@@ -7604,6 +7607,103 @@ def test_cve_ports_option_disabled_when_services_file(monkeypatch) -> None:
 
     import os
     os.unlink(services_file)
+
+
+def test_cve_min_severity_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cve(
+        target,
+        services_file=None,
+        timeout=10.0,
+        use_cache=True,
+        offline_fallback=True,
+        api_url=None,
+        severity=None,
+        min_severity=None,
+        ports=None,
+    ):
+        called_args["min_severity"] = min_severity
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "min_severity_filter": min_severity,
+            "ports": ports,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["cve", "--target", "example.com", "--min-severity", "high", "--timeout", "0.5"]
+    )
+    assert result.exit_code == 0
+    assert called_args["min_severity"] == "high"
+
+
+def test_cve_min_severity_disabled_by_default(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cve(
+        target,
+        services_file=None,
+        timeout=10.0,
+        use_cache=True,
+        offline_fallback=True,
+        api_url=None,
+        severity=None,
+        min_severity=None,
+        ports=None,
+    ):
+        called_args["min_severity"] = min_severity
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "min_severity_filter": min_severity,
+            "ports": ports,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["cve", "--target", "example.com", "--timeout", "0.5"]
+    )
+    assert result.exit_code == 0
+    assert called_args["min_severity"] is None
+
+
+def test_cve_help_shows_min_severity() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cve", "--help"])
+    assert result.exit_code == 0
+    assert "--min-severity" in result.output
+    assert "critical" in result.output
+    assert "high" in result.output
+    assert "medium" in result.output
+    assert "low" in result.output
 
 
 def test_cidr_help() -> None:

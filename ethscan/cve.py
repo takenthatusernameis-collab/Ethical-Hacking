@@ -190,6 +190,21 @@ def _extract_cve_summary(cve_data: Dict[str, object]) -> Dict[str, object]:
     }
 
 
+_SEVERITY_RANK: Dict[str, int] = {
+    name: idx for idx, name in enumerate(reversed(SEVERITIES))
+}
+
+
+def _severity_rank(level: Optional[str]) -> Optional[int]:
+    """Return the numeric rank for a severity label, or None if unknown.
+
+    Higher rank means higher severity: critical=3, high=2, medium=1, low=0.
+    """
+    if not level:
+        return None
+    return _SEVERITY_RANK.get(str(level).lower())
+
+
 def run_cve(
     target: str,
     services_file: Optional[str] = None,
@@ -198,6 +213,7 @@ def run_cve(
     offline_fallback: bool = True,
     api_url: Optional[str] = None,
     severity: Optional[str] = None,
+    min_severity: Optional[str] = None,
     ports: Optional[List[int]] = None,
 ) -> Dict[str, object]:
     """Query the NVD/CVE API for known vulnerabilities affecting TARGET's services.
@@ -212,6 +228,8 @@ def run_cve(
         api_url: Optional custom NVD API base URL.
         severity: Restrict findings to a single severity level
             (critical/high/medium/low). If None, all severities are reported.
+        min_severity: Drop findings below this severity threshold
+            (critical/high/medium/low). If None, no lower bound is applied.
         ports: Optional list of ports to scan for live service detection.
             If None, uses default common ports.
 
@@ -293,6 +311,19 @@ def run_cve(
                 filtered.append(entry)
         cve_entries = filtered
 
+    if min_severity:
+        min_rank = _severity_rank(min_severity)
+        if min_rank is not None:
+            filtered_min: List[Dict[str, object]] = []
+            for entry in cve_entries:
+                finding = entry.get("finding") or {}
+                cve = entry.get("cve") or {}
+                level = finding.get("severity") or cve.get("severity")
+                rank = _severity_rank(level)
+                if rank is not None and rank >= min_rank:
+                    filtered_min.append(entry)
+            cve_entries = filtered_min
+
     severity_counts: Dict[str, int] = {name: 0 for name in SEVERITIES}
     for entry in cve_entries:
         finding = entry.get("finding") or {}
@@ -317,6 +348,7 @@ def run_cve(
         "offline_fallback": offline_fallback,
         "api_url": api_url,
         "severity_filter": severity,
+        "min_severity_filter": min_severity,
         "ports": ports,
         "services_checked": services_checked,
         "cve_entries": cve_entries,
@@ -376,6 +408,8 @@ def format_cve_report_markdown(data: Dict[str, object]) -> str:
         lines.append(f"- **API URL:** {data['api_url']}")
     if data.get("severity_filter"):
         lines.append(f"- **Severity Filter:** {data['severity_filter']}")
+    if data.get("min_severity_filter"):
+        lines.append(f"- **Min Severity:** {data['min_severity_filter']}")
     if data.get("ports"):
         ports_str = ", ".join(str(p) for p in data["ports"])
         lines.append(f"- **Ports Scanned:** {ports_str}")

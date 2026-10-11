@@ -1798,6 +1798,12 @@ def cert(
     help="Only report findings with the given severity.",
 )
 @click.option(
+    "--min-severity",
+    "min_severity",
+    type=click.Choice(["low", "medium", "high", "critical"]),
+    help="Drop findings below this severity threshold (e.g. --min-severity high).",
+)
+@click.option(
     "--format",
     "fmt",
     type=click.Choice(["json", "markdown"]),
@@ -1819,6 +1825,7 @@ def cve(
     no_offline_fallback: bool,
     api_url: Optional[str],
     severity: Optional[str],
+    min_severity: Optional[str],
     fmt: str,
     out_path: Optional[str],
 ) -> None:
@@ -1841,6 +1848,7 @@ def cve(
         offline_fallback=not no_offline_fallback,
         api_url=api_url,
         severity=severity,
+        min_severity=min_severity,
         ports=port_list,
     )
 
