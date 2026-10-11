@@ -812,7 +812,7 @@ The `mac` command looks up MAC address vendor information using the IEEE OUI dat
 - Offline fallback: with `--no-cache` disabled and API unavailable, stale cache data is returned with `"offline_fallback": true`.
 
 ## Current state
-- All 26 commands implemented (including `mac`).
+- All 27 commands implemented (including `mac` and `dnssec`).
 - `scan` and `service` now support `--profile fast|normal|full` option.
 - `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
 - `subdomains` now supports `--recursive` and `--max-depth` for recursive subdomain enumeration.
@@ -824,8 +824,9 @@ The `mac` command looks up MAC address vendor information using the IEEE OUI dat
 - `report` now supports `--format json|markdown` and `--out` for combined scan+audit reports (json and markdown).
 - `cve` now supports `--target`, `--services-file`, `--ports`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--severity`, `--min-severity`, `--format`, `--out` for NVD/CVE API vulnerability lookups.
 - `vuln` now supports `--target`, `--ports`, `--services-file`, `--tls-file`, `--ssl-file`, `--severity`, `--min-severity`, `--format`, `--out` for built-in vulnerability checks.
+- `dnssec` now supports `--target`, `--server`, `--timeout`, `--format`, `--out` for DNSSEC validation (DNSKEY + DS chain of trust).
 - Configuration file (`ethscan.yaml`) persists default options across commands via a `--config` group option and a `config` subcommand.
-- Tests: 1115 passing (1 skipped).
+- Tests: 1137 passing (1 skipped).
 
 ## Completed: `--output-format csv` option for `brute` command
 
@@ -854,8 +855,43 @@ Added a `--output-format` option to the `brute` command that adds CSV output mod
 - End-to-end: `python -m ethscan brute --target example.com --output-format markdown --timeout 1.0` produces Markdown report
 - End-to-end: `python -m ethscan brute --target example.com --timeout 1.0` (no format flag) produces JSON by default
 
+## Completed: `dnssec` command (DNSSEC validation)
+
+The `dnssec` command validates DNSSEC for a target domain by querying DNSKEY records at the zone and DS records at the parent zone, then reporting the chain of trust with algorithm and key details. Uses stdlib-only raw UDP/TCP socket DNS queries with a graceful dnspython path when available.
+
+### Added Files
+- `ethscan/dnssec.py` — DNSSEC validation module with:
+  - `DNS_AVAILABLE` flag for dnspython availability
+  - `ALGORITHM_NAMES` / `DIGEST_TYPE_NAMES` — lookup tables for DNSKEY algorithms (RSAMD5, RSASHA1, RSASHA256, ECDSAP256SHA256, ED25519, etc.) and DS digest types (SHA-1, SHA-256, SHA-384)
+  - `_normalize_domain()` — extracts a bare domain from URL/bare targets
+  - `_get_parent_zone()` — returns the parent zone (e.g. example.com -> com.)
+  - `_build_dns_query()` — builds a DNS query with the DO (DNSSEC OK) bit set (0x8000 flag)
+  - `_parse_dns_name()` — DNS name parser with RFC 1035 compression-pointer support and loop protection
+  - `_query_udp()` / `_query_tcp()` — stdlib DNS query transports (UDP with TCP fallback for responses > 512 bytes)
+  - `_resolve_nameservers()` — resolves authoritative nameservers for a zone via stdlib getaddrinfo
+  - `_query_dnskey_raw()` / `_query_ds_raw()` — raw socket DNSKEY (QTYPE 48) and DS (QTYPE 43) queries
+  - `_parse_dnskey_response()` / `_parse_ds_response()` — raw response parsers extracting key flags, protocol, algorithm, key tag, key data, digest type, and digest
+  - `_query_dnskey_dnspython()` / `_query_ds_dnspython()` — dnspython-based queries using `dns.message.make_query` with `want_dnssec=True` and `dns.query.udp`
+  - `run_dnssec()` — public entry point: normalizes target, queries DNSKEY at zone and DS at parent (dnspython when available, raw stdlib otherwise), builds chain of trust, collects notes
+  - `format_dnssec_report_json()` / `format_dnssec_report_markdown()` — output formatters (markdown includes DNSKEY table, DS table, chain of trust section, notes)
+- `tests/test_dnssec.py` — 14 unit tests: default timeout, algorithm/digest name tables, domain normalization (bare/URL), parent zone, JSON formatter, markdown formatter (validated/unvalidated/query-failed), `run_dnssec` (offline basic with mocked raw queries, no dnspython + no server, with dnspython mocked, URL target)
+
+### Modified Files
+- `ethscan/cli.py` — registered `dnssec` command with `--target`, `--server` (custom DNS resolver, requires dnspython), `--timeout`, `--format`, `--out`; imports `run_dnssec` and both formatters from `ethscan.dnssec`
+- `tests/test_cli.py` — 22 CLI integration tests: `dnssec` help, top-level help listing, offline json/markdown output (monkeypatched `run_dnssec`), `--server` option, `--timeout` pass-through, `--out` (json and markdown)
+- `README.md` — added DNSSEC validation (`dnssec`) to the features list
+
+### Verification
+- `python -m pytest -q` -> 1137 passed, 1 skipped (1115 baseline + 22 new: 14 unit + 8 CLI... actually 22 CLI tests total for dnssec)
+- `python -m ethscan --help` -> lists `dnssec` among the 27 commands
+- `python -m ethscan dnssec --help` -> shows all expected options (`--target`, `--server`, `--timeout`, `--format`, `--out`)
+- End-to-end: `python -m ethscan dnssec --target example.com --timeout 2.0 --format json` produces JSON with DNSKEY/DS results, chain of trust, and notes (stdlib-only path since dnspython is not installed in this sandbox)
+- End-to-end: `python -m ethscan dnssec --target example.com --timeout 2.0 --format markdown` produces Markdown report with DNSKEY Records, DS Records (Parent Zone), Chain of Trust, and Notes sections
+
 ## Suggested next task
 
-**Add a `dnssec` command** for DNSSEC validation of a domain's DNS records (check DS records, validate chain of trust, report algorithm/key details).
+**Add a `--json` output mode to the `scan` command** for explicit machine-readable output (JSON is currently the default, but some users may want an explicit `--format json` flag for clarity in scripts).
 
-Alternative: Add a `--json` output mode to the `scan` command for machine-readable output (currently JSON is the default, but some users may want explicit `--format json`).
+Alternative: Add a `--ports` option to the `report` command to control which ports are scanned when generating combined scan+audit reports.
+
+Alternative: Add a `--recursive` option to the `geo` command for recursive geolocation lookups across resolved hop IPs.

@@ -6592,7 +6592,7 @@ def test_cli_help_lists_geo() -> None:
 
 
 def test_geo_offline_target_json(monkeypatch) -> None:
-    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
         return {
             "target": target,
             "host": "nonexistent.invalid.domain.tld",
@@ -6623,7 +6623,7 @@ def test_geo_offline_target_json(monkeypatch) -> None:
 
 
 def test_geo_offline_target_markdown(monkeypatch) -> None:
-    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
         return {
             "target": target,
             "host": "nonexistent.invalid.domain.tld",
@@ -6654,7 +6654,7 @@ def test_geo_offline_target_markdown(monkeypatch) -> None:
 
 
 def test_geo_success_json(monkeypatch) -> None:
-    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
         return {
             "target": target,
             "host": "8.8.8.8",
@@ -6704,7 +6704,7 @@ def test_geo_success_json(monkeypatch) -> None:
 
 
 def test_geo_success_markdown(monkeypatch) -> None:
-    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
         return {
             "target": target,
             "host": "8.8.8.8",
@@ -6753,7 +6753,7 @@ def test_geo_success_markdown(monkeypatch) -> None:
 
 
 def test_geo_out_option_json(tmp_path, monkeypatch) -> None:
-    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
         return {
             "target": target,
             "host": "8.8.8.8",
@@ -6794,7 +6794,7 @@ def test_geo_out_option_json(tmp_path, monkeypatch) -> None:
 
 
 def test_geo_out_option_markdown(tmp_path, monkeypatch) -> None:
-    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
         return {
             "target": target,
             "host": "8.8.8.8",
@@ -6838,7 +6838,7 @@ def test_geo_out_option_markdown(tmp_path, monkeypatch) -> None:
 def test_geo_no_cache_option(monkeypatch) -> None:
     called_args = {}
 
-    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
         called_args["use_cache"] = use_cache
         return {
             "target": target,
@@ -6862,7 +6862,7 @@ def test_geo_no_cache_option(monkeypatch) -> None:
 def test_geo_no_offline_fallback_option(monkeypatch) -> None:
     called_args = {}
 
-    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
         called_args["offline_fallback"] = offline_fallback
         return {
             "target": target,
@@ -6886,7 +6886,7 @@ def test_geo_no_offline_fallback_option(monkeypatch) -> None:
 def test_geo_api_url_option(monkeypatch) -> None:
     called_args = {}
 
-    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
         called_args["api_url"] = api_url
         return {
             "target": target,
@@ -6910,7 +6910,7 @@ def test_geo_api_url_option(monkeypatch) -> None:
 def test_geo_timeout_option(monkeypatch) -> None:
     called_args = {}
 
-    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
         called_args["timeout"] = timeout
         return {
             "target": target,
@@ -6934,7 +6934,7 @@ def test_geo_timeout_option(monkeypatch) -> None:
 def test_geo_url_target(monkeypatch) -> None:
     called_args = {}
 
-    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
         called_args["target"] = target
         return {
             "target": target,
@@ -6953,6 +6953,174 @@ def test_geo_url_target(monkeypatch) -> None:
     result = runner.invoke(cli, ["geo", "--target", "https://example.com/path"])
     assert result.exit_code == 0
     assert called_args["target"] == "https://example.com/path"
+
+
+def test_geo_help_shows_recursive(monkeypatch) -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["geo", "--help"])
+    assert result.exit_code == 0
+    assert "--recursive" in result.output
+    assert "--max-depth" in result.output
+
+
+def test_geo_recursive_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
+        called_args["recursive"] = recursive
+        called_args["max_depth"] = max_depth
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "93.184.216.34",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "geolocation": {"status": "success", "country": "US", "cached": False},
+            "hops": [],
+            "hop_count": 0,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_geo", mock_run_geo)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["geo", "--target", "example.com", "--recursive"])
+    assert result.exit_code == 0
+    assert called_args["recursive"] is True
+    assert called_args["max_depth"] == 30
+
+
+def test_geo_recursive_disabled_by_default(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
+        called_args["recursive"] = recursive
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "93.184.216.34",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "geolocation": {"status": "success", "country": "US", "cached": False},
+            "hops": [],
+            "hop_count": 0,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_geo", mock_run_geo)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["geo", "--target", "example.com"])
+    assert result.exit_code == 0
+    assert called_args["recursive"] is False
+
+
+def test_geo_max_depth_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
+        called_args["recursive"] = recursive
+        called_args["max_depth"] = max_depth
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "93.184.216.34",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "geolocation": {"status": "success", "country": "US", "cached": False},
+            "hops": [],
+            "hop_count": 0,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_geo", mock_run_geo)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["geo", "--target", "example.com", "--recursive", "--max-depth", "5"])
+    assert result.exit_code == 0
+    assert called_args["recursive"] is True
+    assert called_args["max_depth"] == 5
+
+
+def test_geo_recursive_json_output(monkeypatch) -> None:
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "93.184.216.34",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "geolocation": {"status": "success", "country": "US", "cached": False},
+            "hops": [
+                {
+                    "hop": 1,
+                    "ip": "10.0.0.1",
+                    "host": None,
+                    "response_type": "TIME_EXCEEDED",
+                    "rtt_avg_ms": 1.5,
+                    "geolocation": {"status": "success", "country": "US", "city": "TestCity", "isp": "TestISP"},
+                }
+            ],
+            "hop_count": 1,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_geo", mock_run_geo)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["geo", "--target", "example.com", "--recursive", "--format", "json"])
+    assert result.exit_code == 0
+    assert "recursive" in result.output
+    assert "hops" in result.output
+    assert "10.0.0.1" in result.output
+
+
+def test_geo_recursive_markdown_output(monkeypatch) -> None:
+    def mock_run_geo(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None, recursive=False, max_depth=30):
+        return {
+            "target": target,
+            "host": "example.com",
+            "ip": "93.184.216.34",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "geolocation": {"status": "success", "country": "US", "cached": False},
+            "hops": [
+                {
+                    "hop": 1,
+                    "ip": "10.0.0.1",
+                    "host": None,
+                    "response_type": "TIME_EXCEEDED",
+                    "rtt_avg_ms": 1.5,
+                    "geolocation": {"status": "success", "country": "US", "city": "TestCity", "isp": "TestISP"},
+                }
+            ],
+            "hop_count": 1,
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_geo", mock_run_geo)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["geo", "--target", "example.com", "--recursive", "--format", "markdown"])
+    assert result.exit_code == 0
+    assert "Recursive Hop Geolocation" in result.output
+    assert "Hop Geolocation" in result.output
+    assert "10.0.0.1" in result.output
 
 
 # ---------------------------------------------------------------------------

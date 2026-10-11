@@ -1684,6 +1684,17 @@ def wifi(interface: Optional[str], fmt: str, out_path: Optional[str]) -> None:
     help="Custom geolocation API base URL (must support ip-api.com query format)",
 )
 @click.option(
+    "--recursive/--no-recursive",
+    default=False,
+    help="Enable recursive hop geolocation: run a traceroute to the target and geolocate each discovered hop IP.",
+)
+@click.option(
+    "--max-depth",
+    default=30,
+    type=int,
+    help="Maximum number of traceroute hops when --recursive is enabled (default: 30, max: 128).",
+)
+@click.option(
     "--format",
     "fmt",
     type=click.Choice(["json", "markdown"]),
@@ -1702,6 +1713,8 @@ def geo(
     no_cache: bool,
     no_offline_fallback: bool,
     api_url: Optional[str],
+    recursive: bool,
+    max_depth: int,
     fmt: str,
     out_path: Optional[str],
 ) -> None:
@@ -1712,6 +1725,8 @@ def geo(
         use_cache=not no_cache,
         offline_fallback=not no_offline_fallback,
         api_url=api_url,
+        recursive=recursive,
+        max_depth=max_depth,
     )
 
     if fmt == "json":

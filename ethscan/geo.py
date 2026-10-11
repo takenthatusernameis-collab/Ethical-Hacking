@@ -11,13 +11,14 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 DEFAULT_API_URL = "http://ip-api.com/json/"
 DEFAULT_TIMEOUT = 5.0
 CACHE_DIR = Path.home() / ".cache" / "ethscan"
 CACHE_FILE = CACHE_DIR / "geo_cache.json"
 CACHE_TTL = 86400
+DEFAULT_MAX_DEPTH = 30
 
 FIELDS = [
     "query",
@@ -142,6 +143,8 @@ def run_geo(
     use_cache: bool = True,
     offline_fallback: bool = True,
     api_url: Optional[str] = None,
+    recursive: bool = False,
+    max_depth: int = DEFAULT_MAX_DEPTH,
 ) -> Dict[str, object]:
     """Run IP geolocation lookup against target.
 
@@ -151,9 +154,11 @@ def run_geo(
         use_cache: Whether to use local filesystem cache.
         offline_fallback: Whether to use stale cache when API is unavailable.
         api_url: Optional custom API base URL (must support same query format as ip-api.com).
+        recursive: If True, run a traceroute to the target and geolocate each discovered hop IP.
+        max_depth: Maximum number of traceroute hops when recursive is enabled (default 30, capped at 128).
 
     Returns:
-        Structured results dict with geolocation data and metadata.
+        Structured results dict with geolocation data, metadata, and optional per-hop geolocation.
     """
     global DEFAULT_API_URL
     original_api = DEFAULT_API_URL
@@ -174,7 +179,11 @@ def run_geo(
             "timeout": timeout,
             "use_cache": use_cache,
             "offline_fallback": offline_fallback,
+            "recursive": recursive,
+            "max_depth": max_depth,
             "geolocation": None,
+            "hops": [],
+            "hop_count": 0,
             "notes": notes,
         }
 
@@ -185,6 +194,42 @@ def run_geo(
     if geo_data.get("offline_fallback"):
         notes.append("API unavailable; used stale cached data (offline fallback)")
 
+    hops: List[Dict[str, object]] = []
+    hop_count = 0
+
+    if recursive:
+        try:
+            from ethscan.trace import run_trace
+
+            trace_result = run_trace(
+                target,
+                timeout=timeout,
+                max_hops=max_depth,
+            )
+            seen_ips: set = set()
+            for hop in trace_result.get("hops", []):
+                hop_ip = hop.get("ip")
+                if not hop_ip or hop_ip in seen_ips:
+                    continue
+                seen_ips.add(hop_ip)
+                hop_geo = _get_cached_or_fetch(hop_ip, timeout, use_cache, offline_fallback)
+                hops.append(
+                    {
+                        "hop": hop.get("hop"),
+                        "ip": hop_ip,
+                        "host": hop.get("host"),
+                        "response_type": hop.get("response_type"),
+                        "rtt_avg_ms": hop.get("rtt_avg_ms"),
+                        "geolocation": hop_geo,
+                    }
+                )
+            hop_count = len(hops)
+            if trace_result.get("notes"):
+                for trace_note in trace_result["notes"]:
+                    notes.append(f"traceroute: {trace_note}")
+        except Exception as exc:
+            notes.append(f"recursive hop geolocation failed: {exc}")
+
     result = {
         "target": target,
         "host": host,
@@ -192,7 +237,11 @@ def run_geo(
         "timeout": timeout,
         "use_cache": use_cache,
         "offline_fallback": offline_fallback,
+        "recursive": recursive,
+        "max_depth": max_depth,
         "geolocation": geo_data,
+        "hops": hops,
+        "hop_count": hop_count,
         "notes": notes,
     }
 
@@ -205,6 +254,11 @@ def format_geo_report_json(data: Dict[str, object]) -> str:
     return json.dumps(data, indent=2, default=str)
 
 
+def _markdown_escape(text: object) -> str:
+    """Escape pipe characters and newlines for Markdown table cells."""
+    return str(text).replace("|", "\\|").replace("\n", " ")
+
+
 def format_geo_report_markdown(data: Dict[str, object]) -> str:
     """Format geolocation results as Markdown."""
     lines = ["# ethscan IP Geolocation Report", ""]
@@ -215,6 +269,10 @@ def format_geo_report_markdown(data: Dict[str, object]) -> str:
     lines.append(f"- **Timeout:** {data['timeout']}s")
     lines.append(f"- **Cache Enabled:** {'Yes' if data['use_cache'] else 'No'}")
     lines.append(f"- **Offline Fallback:** {'Yes' if data['offline_fallback'] else 'No'}")
+    if data.get("recursive"):
+        lines.append(
+            f"- **Recursive Hop Geolocation:** Yes (max depth: {data.get('max_depth', 30)})"
+        )
     lines.append("")
 
     geo = data.get("geolocation")
@@ -252,6 +310,28 @@ def format_geo_report_markdown(data: Dict[str, object]) -> str:
     else:
         lines.append("*No geolocation data available.*")
     lines.append("")
+
+    hops = data.get("hops") or []
+    if data.get("recursive") and hops:
+        lines.append("## Hop Geolocation")
+        lines.append("| Hop | IP | Host | Response | RTT Avg (ms) | Country | City | ISP |")
+        lines.append("|-----|----|------|----------|--------------|---------|------|-----|")
+        for hop in hops:
+            hop_geo = hop.get("geolocation") or {}
+            country = hop_geo.get("country", "")
+            city = hop_geo.get("city", "")
+            isp = hop_geo.get("isp", "")
+            lines.append(
+                f"| {_markdown_escape(hop.get('hop'))} | "
+                f"{_markdown_escape(hop.get('ip'))} | "
+                f"{_markdown_escape(hop.get('host'))} | "
+                f"{_markdown_escape(hop.get('response_type'))} | "
+                f"{_markdown_escape(hop.get('rtt_avg_ms'))} | "
+                f"{_markdown_escape(country)} | "
+                f"{_markdown_escape(city)} | "
+                f"{_markdown_escape(isp)} |"
+            )
+        lines.append("")
 
     notes = data.get("notes") or []
     if notes:
