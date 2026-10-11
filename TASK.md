@@ -477,11 +477,11 @@ The `cert` command searches Certificate Transparency (CT) logs via public CT log
 
 ## Suggested next task
 
-**Add a `--output` option to the `report` command** to write the combined scan+audit report to a file (json and markdown), consistent with all other commands that support `--out`.
+**Add a `headers` shorthand command** that runs just the `web` check with `--checks headers` for quick security header checks, consistent with the existing command structure.
 
-Alternative: Add a `headers` shorthand command that runs just the `web` check with `--checks headers` for quick security header checks.
+Alternative: Add a `--ports` option to the `cve` command to run live service detection on a custom port set before querying the NVD/CVE API.
 
-Alternative: Add a `cve` command that queries the NVD/CVE API for known vulnerabilities in detected service versions (using `service` output via `--services-file`).
+Alternative: Add a `--min-severity` option to the `cve` command to filter findings below a given severity threshold.
 
 ## Requirements
 - Pick one of the suggested features and implement it following the existing module conventions.
@@ -491,7 +491,7 @@ Alternative: Add a `cve` command that queries the NVD/CVE API for known vulnerab
 - Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
 
 ## Current state
-- All 21 commands implemented (including `cert`).
+- All 22 commands implemented (including `cert` and `cve`).
 - `scan` and `service` now support `--profile fast|normal|full` option.
 - `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
 - `subdomains` now supports `--recursive` and `--max-depth` for recursive subdomain enumeration.
@@ -499,4 +499,6 @@ Alternative: Add a `cve` command that queries the NVD/CVE API for known vulnerab
 - `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
 - `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
 - `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out` for CT log subdomain discovery.
-- Tests: 727 passing (1 skipped).
+- `report` now supports `--format json|markdown` and `--out` for combined scan+audit reports (json and markdown).
+- `cve` now supports `--target`, `--services-file`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--severity`, `--format`, `--out` for NVD/CVE API vulnerability lookups.
+- Tests: 781 passing (1 skipped).

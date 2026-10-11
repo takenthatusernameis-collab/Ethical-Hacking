@@ -25,6 +25,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - IP geolocation: `geo` command for IP-to-location lookup using a public API with caching and offline fallback (implemented)
 - Consolidated reconnaissance: `recon` command running multiple modules (subdomains, dns, whois, geo, trace) in sequence with a unified report (implemented)
 - Certificate Transparency log search: `cert` command to discover subdomains via CT logs (crt.sh-compatible APIs) with caching and offline fallback (implemented)
+- CVE lookup: `cve` command to query the NVD/CVE API for known vulnerabilities affecting detected service versions, with a built-in CVE/weakness database cross-reference, caching, offline fallback, JSON/Markdown output, and `--out` (implemented)
 
 ## Requirements
 

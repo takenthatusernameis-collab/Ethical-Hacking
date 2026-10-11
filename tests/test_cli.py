@@ -6444,3 +6444,332 @@ def test_cert_url_target(monkeypatch) -> None:
     result = runner.invoke(cli, ["cert", "--target", "https://example.com/path"])
     assert result.exit_code == 0
     assert called_args["target"] == "https://example.com/path"
+
+
+def test_cve_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cve", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--services-file" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cve_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cve", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--services-file" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_cve() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "cve" in result.output
+
+
+def test_cve_offline_target_json(monkeypatch) -> None:
+    def mock_run_service(host, ports=None, timeout=3.0, max_workers=50):
+        return {
+            "target": host,
+            "host": host,
+            "timeout": timeout,
+            "ports_scanned": 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.service.run_service", mock_run_service)
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["cve", "--target", "nonexistent.invalid.domain.tld", "--timeout", "0.5"]
+    )
+    assert result.exit_code == 0
+    assert "cve_entries" in result.output
+    assert "services_checked" in result.output
+
+
+def test_cve_offline_target_markdown(monkeypatch) -> None:
+    def mock_run_service(host, ports=None, timeout=3.0, max_workers=50):
+        return {
+            "target": host,
+            "host": host,
+            "timeout": timeout,
+            "ports_scanned": 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.service.run_service", mock_run_service)
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "cve",
+            "--target",
+            "nonexistent.invalid.domain.tld",
+            "--format",
+            "markdown",
+            "--timeout",
+            "0.5",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "ethscan CVE Report" in result.output
+    assert "Severity Summary" in result.output
+
+
+def test_cve_services_file_option(tmp_path, monkeypatch) -> None:
+    services_file = tmp_path / "services.json"
+    services_file.write_text(
+        json.dumps(
+            {
+                "target": "example.com",
+                "host": "example.com",
+                "timeout": 3.0,
+                "ports_scanned": 1,
+                "services_found": 1,
+                "results": [
+                    {"port": 22, "banner": "SSH-2.0-OpenSSH_7.2p2", "service": "OpenSSH"}
+                ],
+            }
+        )
+    )
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "cve",
+            "--target",
+            "example.com",
+            "--services-file",
+            str(services_file),
+            "--timeout",
+            "0.5",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "CVE-2016-6210" in result.output
+    assert "OpenSSH" in result.output
+
+
+def test_cve_no_cache_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
+                     offline_fallback=True, api_url=None, severity=None):
+        called_args["use_cache"] = use_cache
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["cve", "--target", "example.com", "--no-cache", "--timeout", "0.5"]
+    )
+    assert result.exit_code == 0
+    assert called_args["use_cache"] is False
+
+
+def test_cve_no_offline_fallback_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
+                     offline_fallback=True, api_url=None, severity=None):
+        called_args["offline_fallback"] = offline_fallback
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cve", "--target", "example.com", "--no-offline-fallback", "--timeout", "0.5"],
+    )
+    assert result.exit_code == 0
+    assert called_args["offline_fallback"] is False
+
+
+def test_cve_api_url_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
+                     offline_fallback=True, api_url=None, severity=None):
+        called_args["api_url"] = api_url
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cve", "--target", "example.com", "--api-url", "https://cve.example.com/", "--timeout", "0.5"],
+    )
+    assert result.exit_code == 0
+    assert called_args["api_url"] == "https://cve.example.com/"
+
+
+def test_cve_severity_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
+                     offline_fallback=True, api_url=None, severity=None):
+        called_args["severity"] = severity
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cve", "--target", "example.com", "--severity", "high", "--timeout", "0.5"],
+    )
+    assert result.exit_code == 0
+    assert called_args["severity"] == "high"
+
+
+def test_cve_out_option_json(tmp_path, monkeypatch) -> None:
+    def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
+                     offline_fallback=True, api_url=None, severity=None):
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    out_file = tmp_path / "cve_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cve", "--target", "example.com", "--out", str(out_file), "--timeout", "0.5"],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "cve_entries" in content
+
+
+def test_cve_out_option_markdown(tmp_path, monkeypatch) -> None:
+    def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
+                     offline_fallback=True, api_url=None, severity=None):
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    out_file = tmp_path / "cve_report.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "cve",
+            "--target",
+            "example.com",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "0.5",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "ethscan CVE Report" in content
