@@ -769,16 +769,27 @@ Added an optional YAML configuration file that persists default options across c
 - Configuration file (`ethscan.yaml`) persists default options across commands via a `--config` group option and a `config` subcommand.
 - Tests: 1090 passing (1 skipped).
 
+## Completed: `--format json|markdown` and `--out` options for `scan` and `service` commands
+
+Added machine-readable JSON and Markdown output modes to both `scan` and `service` commands. Both commands now support `--format json|markdown` (default: json) and `--out` like all other commands.
+
+### Verification
+- `python -m pytest -q` -> 1090 passed, 1 skipped
+- `python -m ethscan scan --help` -> shows `--format` and `--out` options
+- `python -m ethscan service --help` -> shows `--format` and `--out` options
+- End-to-end: `python -m ethscan scan --target 127.0.0.1 --profile fast --format json` produces valid JSON with port details
+- End-to-end: `python -m ethscan service --target 127.0.0.1 --profile fast --format markdown` produces Markdown report with service table
+
 ## Suggested next task
 
-**Add `--format json|markdown` and `--out` options to the `scan` and `service` commands** so their results are machine-readable like every other command. Currently both commands only echo human-readable lines (`Scanning ...`, `Open ports: ...`).
+**Add a `mac` command** for MAC address vendor lookup (OUI database). The command should:
+- Accept a MAC address or list of MAC addresses as input
+- Look up the vendor/organization from the IEEE OUI database
+- Support offline mode with a bundled OUI database file
+- Support online lookup via a public API (e.g., macvendors.com) with caching
+- Output JSON/Markdown with MAC, vendor, and optional address info
+- Include `--format`, `--out`, `--offline`, `--api-url` options
 
-### Requirements
-- Extend `ethscan/scanner.py` (or add formatters in a new module) with `format_scan_report_json()` / `format_scan_report_markdown()` and `format_service_report_json()` / `format_service_report_markdown()` that render the existing `scan_ports` / `run_service` results.
-- Register `--format` (default `json`) and `--out` on both commands in `ethscan/cli.py`; keep the human-readable echo when no format is requested (or default to JSON for machine-readability).
-- Add unit tests in `tests/test_scanner.py` for the new formatters and CLI integration tests in `tests/test_cli.py` for the new options.
-- Use stdlib only.
+Alternative: Add a `--output-format` option to the `brute` command for structured output of brute-force results (currently only JSON/Markdown via formatters, but could add CSV for credential dumps).
 
-Alternative: Add a `--json` output mode to the `audit` command for machine-readable password audit results (currently only echoes human-readable lines).
-
-Alternative: Add a `--recursive` option to the `whois` command for recursive WHOIS queries across registrar tiers.
+Alternative: Add a `dnssec` command for DNSSEC validation of a domain's DNS records (check DS records, validate chain of trust, report algorithm/key details).
