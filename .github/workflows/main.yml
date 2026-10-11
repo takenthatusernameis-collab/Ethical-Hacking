@@ -31,7 +31,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Kilo uses only the repository-scoped GITHUB_TOKEN; no custom cross-repository token is supplied.
+          # Kilo uses only the repository-scoped GITHUB_TOKEN. Workflow definitions are maintainer-managed because this token cannot grant workflows permission.
 
           export HOME="$RUNNER_TEMP/kilo-home"
           mkdir -p "$HOME/.config/kilo"
@@ -81,6 +81,10 @@ jobs:
               break
             fi
 
+            # Snapshot the workflow tree for this agent session. The standard
+            # GITHUB_TOKEN cannot push commits that add/change Actions workflows.
+            WORKFLOW_BASE_SHA="$(git rev-parse HEAD)"
+
             set +e
             timeout \
               --signal=TERM \
@@ -102,9 +106,16 @@ jobs:
               consecutive_failures=0
             fi
 
+            # Keep Actions workflow definitions maintainer-managed. Restore tracked
+            # workflow files to the revision at session start and remove agent-created
+            # workflow files before creating the checkpoint commit.
+            git restore --source="$WORKFLOW_BASE_SHA" --staged --worktree -- .github/workflows
+            git clean -fd -- .github/workflows
+
             git add -A
 
-            # Repair generated trailing whitespace before enforcing the staged-diff check.
+            # Repair generated trailing whitespace and extra blank lines at EOF
+            # before enforcing the staged-diff check.
             if ! git diff --cached --check; then
               echo "::warning::Normalizing trailing spaces and tabs in changed text files."
               python - <<'PY'
@@ -129,6 +140,8 @@ jobs:
                   continue
 
               cleaned = re.sub(rb"[ \t]+(?=\r?$)", b"", content, flags=re.MULTILINE)
+              # Collapse trailing empty/whitespace-only lines to a single final newline.
+              cleaned = re.sub(rb"(?:[ \\t]*\\r?\\n)+\\Z", b"\\n", cleaned)
               if cleaned != content:
                   path.write_bytes(cleaned)
           PY
