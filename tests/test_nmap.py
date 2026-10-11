@@ -11,6 +11,7 @@ from ethscan.nmap import (
     run_nmap,
     format_nmap_report_json,
     format_nmap_report_markdown,
+    format_nmap_report_csv,
 )
 
 
@@ -270,3 +271,86 @@ def test_run_nmap_severity_counts():
             assert sev in severity_counts
     finally:
         Path(temp_path).unlink()
+
+
+def test_format_nmap_report_csv():
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as f:
+        f.write(SAMPLE_NMAP_XML)
+        temp_path = f.name
+
+    try:
+        results = run_nmap(temp_path)
+        output = format_nmap_report_csv(results)
+        lines = output.strip().split("\n")
+        header = lines[0]
+        assert "host" in header
+        assert "addr" in header
+        assert "port" in header
+        assert "state" in header
+        assert "service" in header
+        assert "product" in header
+        assert "version" in header
+        assert "cve_id" in header
+        assert "severity" in header
+        assert "score" in header
+        assert "title" in header
+        # One row per finding plus header
+        assert len(lines) == results["finding_count"] + 1
+        # Verify a known finding is present
+        assert "CVE-2016-6210" in output
+        assert "VSFTPD-2.3.4-BACKDOOR" in output
+    finally:
+        Path(temp_path).unlink()
+
+
+def test_format_nmap_report_csv_no_findings():
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as f:
+        f.write(EMPTY_NMAP_XML)
+        temp_path = f.name
+
+    try:
+        results = run_nmap(temp_path)
+        output = format_nmap_report_csv(results)
+        lines = output.strip().split("\n")
+        # Header only, no finding rows
+        assert len(lines) == 1
+        assert "cve_id" in lines[0]
+    finally:
+        Path(temp_path).unlink()
+
+
+def test_format_nmap_report_csv_missing_optional_fields():
+    data = {
+        "findings": [
+            {
+                "id": "TEST-CVE",
+                "kind": "service",
+                "title": "Test Finding",
+                "severity": "high",
+                "description": "A test",
+                "product": "TestProd",
+                "version": "1.0",
+                "port": 22,
+                "host": "10.0.0.1",
+                "hostnames": [],
+                "state": "open",
+                "service_name": "ssh",
+            },
+            {
+                "id": "MINIMAL-FINDING",
+                "kind": "service",
+                "title": "No extra fields",
+                "severity": "low",
+                "description": "minimal",
+            },
+        ]
+    }
+    output = format_nmap_report_csv(data)
+    lines = output.strip().split("\n")
+    assert len(lines) == 3  # header + 2 findings
+    # Minimal finding should not crash; missing fields become empty
+    assert "MINIMAL-FINDING" in lines[2]
+    # First finding row should have addr 10.0.0.1, port 22, state open, service ssh
+    assert "10.0.0.1" in lines[1]
+    assert "ssh" in lines[1]
+    assert "open" in lines[1]

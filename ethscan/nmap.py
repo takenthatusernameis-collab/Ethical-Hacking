@@ -4,6 +4,9 @@ Parses Nmap XML scan output and cross-references detected service versions
 against the built-in vulnerability database.
 """
 
+import csv
+import io
+import json
 import xml.etree.ElementTree as ET
 from typing import Dict, List, Optional
 
@@ -194,6 +197,8 @@ def run_nmap(
             # Add host context to findings
             for finding in findings:
                 finding["host"] = host_addr
+                finding["service_name"] = port_info["service_name"]
+                finding["state"] = port_info["state"]
                 if hostnames:
                     finding["hostnames"] = hostnames
 
@@ -229,7 +234,6 @@ def run_nmap(
 
 def format_nmap_report_json(data: Dict[str, object]) -> str:
     """Format Nmap parser results as JSON."""
-    import json
     return json.dumps(data, indent=2, default=str)
 
 
@@ -328,3 +332,50 @@ def format_nmap_report_markdown(data: Dict[str, object]) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+def format_nmap_report_csv(data: Dict[str, object]) -> str:
+    """Format Nmap parser results as CSV.
+
+    Produces a header row followed by one row per matched CVE finding with
+    columns: host, addr, port, state, service, product, version, cve_id,
+    severity, score, title.
+    """
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "host",
+            "addr",
+            "port",
+            "state",
+            "service",
+            "product",
+            "version",
+            "cve_id",
+            "severity",
+            "score",
+            "title",
+        ]
+    )
+    for finding in data.get("findings") or []:
+        hostnames = finding.get("hostnames") or []
+        host = ", ".join(str(name) for name in hostnames)
+        if not host:
+            host = str(finding.get("host") or "")
+        addr = str(finding.get("host") or "")
+        port = finding.get("port", "")
+        state = str(finding.get("state", "open") or "open")
+        service = str(finding.get("service_name") or "")
+        product = str(finding.get("product") or "")
+        version = str(finding.get("version") or "")
+        cve_id = str(finding.get("id") or "")
+        severity = str(finding.get("severity") or "").upper()
+        score = finding.get("score", "")
+        if score is None:
+            score = ""
+        title = str(finding.get("title") or "")
+        writer.writerow(
+            [host, addr, port, state, service, product, version, cve_id, severity, score, title]
+        )
+    return output.getvalue().rstrip("\r\n")

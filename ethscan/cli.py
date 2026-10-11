@@ -193,6 +193,7 @@ from ethscan.radix import (
     run_radix,
 )
 from ethscan.nmap import (
+    format_nmap_report_csv,
     format_nmap_report_json,
     format_nmap_report_markdown,
     run_nmap,
@@ -3119,11 +3120,18 @@ def validate(
     help="Path to Nmap XML output file (-oX).",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format: json, markdown, or csv.",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    help="Deprecated alias for --output-format.",
 )
 @click.option(
     "--out",
@@ -3131,14 +3139,24 @@ def validate(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def nmap(input_file: str, fmt: str, out_path: Optional[str]) -> None:
+def nmap(
+    input_file: str,
+    output_fmt: Optional[str],
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
     """Parse Nmap XML scan output and cross-reference services against vulnerability database."""
     results = run_nmap(input_file)
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_nmap_report_json(results)
-    else:
+    elif chosen_format == "markdown":
         output = format_nmap_report_markdown(results)
+    else:
+        output = format_nmap_report_csv(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

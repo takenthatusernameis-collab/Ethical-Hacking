@@ -14078,6 +14078,82 @@ def test_nmap_default_format_is_json(tmp_path) -> None:
     assert parsed["input_file"] == str(xml_file)
 
 
+def test_nmap_help_shows_output_format() -> None:
+    """Test that nmap help shows --output-format option."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["nmap", "--help"])
+    assert result.exit_code == 0
+    assert "--output-format" in result.output
+    assert "csv" in result.output
+
+
+def test_nmap_output_format_csv(tmp_path) -> None:
+    """Test nmap command with --output-format csv."""
+    xml_file = tmp_path / "scan.xml"
+    xml_file.write_text(SAMPLE_NMAP_XML, encoding="utf-8")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["nmap", "--input-file", str(xml_file), "--output-format", "csv"]
+    )
+    assert result.exit_code == 0
+    assert "host,addr,port,state,service,product,version,cve_id,severity,score,title" in result.output
+    assert "CVE-2016-6210" in result.output
+    assert "VSFTPD-2.3.4-BACKDOOR" in result.output
+
+
+def test_nmap_out_option_csv(tmp_path) -> None:
+    """Test nmap command with --output-format csv --out writes CSV to file."""
+    xml_file = tmp_path / "scan.xml"
+    xml_file.write_text(SAMPLE_NMAP_XML, encoding="utf-8")
+    out_file = tmp_path / "report.csv"
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "nmap",
+            "--input-file",
+            str(xml_file),
+            "--output-format",
+            "csv",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert out_file.exists()
+    content = out_file.read_text(encoding="utf-8")
+    assert "cve_id" in content
+    assert "CVE-2016-6210" in content
+    assert "Report written to" in result.output
+
+
+def test_nmap_format_csv_alias(tmp_path) -> None:
+    """Test that deprecated --format csv still works."""
+    xml_file = tmp_path / "scan.xml"
+    xml_file.write_text(SAMPLE_NMAP_XML, encoding="utf-8")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["nmap", "--input-file", str(xml_file), "--format", "csv"]
+    )
+    assert result.exit_code == 0
+    assert "host,addr,port" in result.output
+
+
+def test_nmap_output_format_default_is_json(tmp_path) -> None:
+    """Test that without --output-format, default is JSON."""
+    xml_file = tmp_path / "scan.xml"
+    xml_file.write_text(SAMPLE_NMAP_XML, encoding="utf-8")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["nmap", "--input-file", str(xml_file)])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["input_file"] == str(xml_file)
+
+
 def test_stale_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["stale", "--help"])
