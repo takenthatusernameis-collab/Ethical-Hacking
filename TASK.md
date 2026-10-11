@@ -1207,13 +1207,52 @@ Alternative: Add a `--format json|markdown` option to the `report` command for m
 - Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
 - Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
 
+## Completed: `--min-length` option for `audit` command
+
+Added a `--min-length` option to the `audit` command that flags passwords shorter than a custom length threshold (in addition to the built-in heuristics). The minimum length check is reflected in the `too_short` field in both JSON and Markdown output, and the score is capped at 10.0 for passwords that are too short.
+
+### Added Functionality
+- `ethscan/passwords.py`:
+  - Updated `evaluate_password()` to accept optional `min_length` parameter
+  - Added `too_short` boolean field to evaluation results
+  - Applied score penalty (capped at 10.0) for passwords below the minimum length
+  - Updated `audit_passwords()` to pass `min_length` to `evaluate_password()`
+  - Updated `format_audit_report_json()` to include `min_length` in the report and `too_short` in each result
+  - Updated `format_audit_report_markdown()` to display "Min Length" summary line and "Too Short" column in the table
+- `ethscan/cli.py`:
+  - Added `--min-length` option to the `audit` command
+  - Passes `min_length` to `audit_passwords()` and formatters
+
+### Modified Files
+- `ethscan/passwords.py` — added min_length parameter and too_short field
+- `ethscan/cli.py` — added `--min-length` option and pass-through
+- `tests/test_passwords.py` — 5 new unit tests:
+  - `test_evaluate_password_min_length_too_short` — verifies too_short=True and very weak verdict
+  - `test_evaluate_password_min_length_ok` — verifies too_short=False for long passwords
+  - `test_evaluate_password_min_length_none` — verifies too_short=False when min_length not specified
+  - `test_audit_passwords_with_min_length` — tests audit_passwords with min_length
+  - `test_format_audit_report_json_with_min_length` — tests JSON formatter with min_length
+  - `test_format_audit_report_markdown_with_min_length` — tests Markdown formatter with min_length
+- `tests/test_cli.py` — 6 new CLI integration tests:
+  - `test_audit_help_shows_min_length` — verifies help shows --min-length option
+  - `test_audit_min_length_option_json` — tests CLI min_length option with JSON output
+  - `test_audit_min_length_option_markdown` — tests CLI min_length option with Markdown output
+  - `test_audit_min_length_with_out_option` — tests --out with min_length
+  - `test_audit_min_length_disabled_by_default` — verifies min_length defaults to None
+
+### Verification
+- `python -m pytest -q` -> 1480 passed, 1 skipped (1440 baseline + 40 new: 5 unit + 6 CLI + existing tests still pass)
+- `python -m ethscan audit --help` -> shows `--min-length` option
+- End-to-end JSON: `echo -e "short\nlongenoughpassword\n" | python -m ethscan audit --min-length 10 --format json` produces JSON with `too_short: true` for "short" and `too_short: false` for "longenoughpassword", `min_length: 10`
+- End-to-end Markdown: same input with `--format markdown` produces table with "Too Short" column and "Min Length: 10" summary
+
 ## Current state
 - All 28 commands implemented and wired up (including `hash` with `--file`, `--check`, salt, and pepper).
-- `hash` now supports `--password`, `--file`, `--algorithm [md5|sha1|sha256|sha512|ntlm|md4]`, `--salt`, `--pepper` (HMAC, combinable as `HMAC(pepper, salt+password)`), `--check DIGEST` (with salt/pepper support for verifying salted/peppered digests), `--format`, `--out` for password hash generation and verification.
+- `hash` now supports `--password`, `--file`, `--algorithm [md5|sha1|sha256|sha512|ntlm|md4]`, `--salt`, `--pepper` (HMAC, combinable as `HMAC(pepper, salt+password)`), `--iterations`, `--check DIGEST` (with salt/pepper/iterations support), `--format`, `--out` for password hash generation and verification.
 - `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv`.
 - `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, `--max-depth`.
 - `whois` now supports `--recursive/--no-recursive` and `--max-depth`.
-- `audit` now supports `--format json|markdown` and `--out`.
+- `audit` now supports `--format json|markdown`, `--out`, and `--min-length` for custom minimum password length threshold.
 - `cert`, `report`, `cve` (with `--min-severity` and `--ports`), `vuln` (with `--min-severity`), `dnssec`, `geo`, `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon` all implemented with JSON/Markdown output.
 - Configuration file (`ethscan.yaml`) persists default options across commands.
-- Tests: 1440 passing (1 skipped).
+- Tests: 1480 passing (1 skipped).

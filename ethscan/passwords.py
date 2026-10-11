@@ -2,7 +2,7 @@
 
 import json
 import math
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 # Common passwords sourced from well-known weak-password lists (offline).
 COMMON_PASSWORDS = {
@@ -68,21 +68,24 @@ def has_repeated_patterns(password: str) -> bool:
     return False
 
 
-def evaluate_password(password: str) -> Dict[str, object]:
+def evaluate_password(password: str, min_length: Optional[int] = None) -> Dict[str, object]:
     """Evaluate a single password and return a structured report.
 
     Args:
         password: The password to evaluate.
+        min_length: Optional minimum length threshold. Passwords shorter than
+            this will be flagged as too short.
 
     Returns:
         A dict with keys ``length``, ``entropy``, ``common``, ``patterns``,
-        ``score`` (0-100) and ``verdict`` (one of ``strong``, ``fair``,
-        ``weak``, ``very weak``).
+        ``score`` (0-100), ``verdict`` (one of ``strong``, ``fair``,
+        ``weak``, ``very weak``), and ``too_short`` (bool).
     """
     length = len(password)
     entropy = estimate_entropy(password)
     common = is_common_password(password)
     patterns = has_repeated_patterns(password)
+    too_short = min_length is not None and length < min_length
 
     # Start from a base score driven by entropy, then apply penalties.
     score = min(100.0, entropy * 2.5)
@@ -92,6 +95,8 @@ def evaluate_password(password: str) -> Dict[str, object]:
         score = min(score, score - 15.0 if score > 15 else 0.0)
     if length < 8:
         score = min(score, 30.0)
+    if too_short:
+        score = min(score, 10.0)
 
     if score >= 80:
         verdict = "strong"
@@ -107,29 +112,34 @@ def evaluate_password(password: str) -> Dict[str, object]:
         "entropy": round(entropy, 2),
         "common": common,
         "patterns": patterns,
+        "too_short": too_short,
         "score": round(score, 1),
         "verdict": verdict,
     }
 
 
-def audit_passwords(passwords: List[str]) -> List[Tuple[str, Dict[str, object]]]:
+def audit_passwords(passwords: List[str], min_length: Optional[int] = None) -> List[Tuple[str, Dict[str, object]]]:
     """Audit a list of passwords.
 
     Args:
         passwords: Passwords to evaluate.
+        min_length: Optional minimum length threshold.
 
     Returns:
         A list of ``(password, evaluation)`` tuples in the original order.
     """
-    return [(pwd, evaluate_password(pwd)) for pwd in passwords]
+    return [(pwd, evaluate_password(pwd, min_length=min_length)) for pwd in passwords]
 
 
 def format_audit_report_json(
-    passwords: List[str], results: List[Tuple[str, Dict[str, object]]]
+    passwords: List[str],
+    results: List[Tuple[str, Dict[str, object]]],
+    min_length: Optional[int] = None,
 ) -> str:
     """Render password audit results as a JSON string."""
     report = {
         "passwords_audited": len(passwords),
+        "min_length": min_length,
         "results": [
             {
                 "password": pwd,
@@ -137,6 +147,7 @@ def format_audit_report_json(
                 "entropy": eval_data["entropy"],
                 "common": eval_data["common"],
                 "patterns": eval_data["patterns"],
+                "too_short": eval_data.get("too_short", False),
                 "score": eval_data["score"],
                 "verdict": eval_data["verdict"],
             }
@@ -147,22 +158,28 @@ def format_audit_report_json(
 
 
 def format_audit_report_markdown(
-    passwords: List[str], results: List[Tuple[str, Dict[str, object]]]
+    passwords: List[str],
+    results: List[Tuple[str, Dict[str, object]]],
+    min_length: Optional[int] = None,
 ) -> str:
     """Render password audit results as a Markdown string."""
     lines = ["# Password Audit Report", ""]
     lines.append(f"- **Passwords Audited:** {len(passwords)}")
+    if min_length is not None:
+        lines.append(f"- **Min Length:** {min_length}")
     lines.append("")
 
     if results:
-        lines.append("| Password | Length | Entropy | Common | Patterns | Score | Verdict |")
-        lines.append("|----------|--------|---------|--------|----------|-------|---------|")
+        lines.append("| Password | Length | Entropy | Common | Patterns | Too Short | Score | Verdict |")
+        lines.append("|----------|--------|---------|--------|----------|-----------|-------|---------|")
         for pwd, eval_data in results:
             escaped_pwd = pwd.replace("|", "\\|")
+            too_short = "Yes" if eval_data.get("too_short", False) else "No"
             lines.append(
                 f"| {escaped_pwd} | {eval_data['length']} | {eval_data['entropy']} | "
                 f"{'Yes' if eval_data['common'] else 'No'} | "
                 f"{'Yes' if eval_data['patterns'] else 'No'} | "
+                f"{too_short} | "
                 f"{eval_data['score']} | {eval_data['verdict']} |"
             )
     else:

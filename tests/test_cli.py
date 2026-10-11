@@ -179,6 +179,108 @@ def test_audit_stdin_markdown() -> None:
     assert "password" in result.output
 
 
+def test_audit_help_shows_min_length() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["audit", "--help"])
+    assert result.exit_code == 0
+    assert "--min-length" in result.output
+
+
+def test_audit_min_length_option_json(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("short\nlongenoughpassword\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--min-length",
+            "10",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "passwords_audited" in result.output
+    assert "min_length" in result.output
+    assert "too_short" in result.output
+    assert "short" in result.output
+    assert "longenoughpassword" in result.output
+
+
+def test_audit_min_length_option_markdown(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("short\nlongenoughpassword\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--min-length",
+            "10",
+            "--format",
+            "markdown",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Password Audit Report" in result.output
+    assert "Min Length" in result.output
+    assert "10" in result.output
+    assert "Too Short" in result.output
+    assert "Yes" in result.output
+    assert "No" in result.output
+
+
+def test_audit_min_length_with_out_option(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("short\nlongenoughpassword\n")
+    out_file = tmp_path / "audit_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--min-length",
+            "10",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "min_length" in content
+    assert "too_short" in content
+
+
+def test_audit_min_length_disabled_by_default(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("short\nlongenoughpassword\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "audit",
+            "--file",
+            str(password_file),
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    # min_length should not be in output when not specified
+    # (or could be present with null value)
+    data = json.loads(result.output)
+    assert data.get("min_length") is None
+
+
 def test_report_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["report", "--help"])

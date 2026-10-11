@@ -1,5 +1,7 @@
 """Tests for the ethscan password auditing module."""
 
+import json
+
 import pytest
 
 from ethscan.passwords import (
@@ -59,6 +61,26 @@ def test_evaluate_password_short() -> None:
     assert result["verdict"] in ("weak", "very weak")
 
 
+def test_evaluate_password_min_length_too_short() -> None:
+    result = evaluate_password("short", min_length=10)
+    assert result["too_short"] is True
+    assert result["length"] == 5
+    assert result["verdict"] == "very weak"
+
+
+def test_evaluate_password_min_length_ok() -> None:
+    result = evaluate_password("longenoughpassword", min_length=10)
+    assert result["too_short"] is False
+    assert result["length"] == 18
+    assert result["verdict"] in ("strong", "fair")
+
+
+def test_evaluate_password_min_length_none() -> None:
+    result = evaluate_password("short")
+    assert "too_short" in result
+    assert result["too_short"] is False
+
+
 def test_audit_passwords_returns_pairs() -> None:
     results = audit_passwords(["password", "correct-Horse-battery-staple-9x!"])
     assert len(results) == 2
@@ -66,6 +88,13 @@ def test_audit_passwords_returns_pairs() -> None:
         assert isinstance(password, str)
         assert "score" in evaluation
         assert "verdict" in evaluation
+
+
+def test_audit_passwords_with_min_length() -> None:
+    results = audit_passwords(["short", "longenoughpassword"], min_length=10)
+    assert len(results) == 2
+    assert results[0][1]["too_short"] is True
+    assert results[1][1]["too_short"] is False
 
 
 def test_format_audit_report_json_basic() -> None:
@@ -77,6 +106,16 @@ def test_format_audit_report_json_basic() -> None:
     assert "correct-Horse-battery-staple-9x!" in output
     assert "score" in output
     assert "verdict" in output
+
+
+def test_format_audit_report_json_with_min_length() -> None:
+    passwords = ["short", "longenoughpassword"]
+    results = audit_passwords(passwords, min_length=10)
+    output = format_audit_report_json(passwords, results, min_length=10)
+    data = json.loads(output)
+    assert data["min_length"] == 10
+    assert data["results"][0]["too_short"] is True
+    assert data["results"][1]["too_short"] is False
 
 
 def test_format_audit_report_json_empty() -> None:
@@ -95,6 +134,17 @@ def test_format_audit_report_markdown_basic() -> None:
     assert "correct-Horse-battery-staple-9x!" in output
     assert "Score" in output
     assert "Verdict" in output
+
+
+def test_format_audit_report_markdown_with_min_length() -> None:
+    passwords = ["short", "longenoughpassword"]
+    results = audit_passwords(passwords, min_length=10)
+    output = format_audit_report_markdown(passwords, results, min_length=10)
+    assert "Min Length" in output
+    assert "10" in output
+    assert "Too Short" in output
+    assert "Yes" in output
+    assert "No" in output
 
 
 def test_format_audit_report_markdown_empty() -> None:

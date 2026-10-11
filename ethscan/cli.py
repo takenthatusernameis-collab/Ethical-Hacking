@@ -287,6 +287,12 @@ def scan(target: str, ports: str, profile: Optional[str], timeout: float, worker
     help="Path to a file containing one password per line. If omitted, reads stdin.",
 )
 @click.option(
+    "--min-length",
+    "min_length",
+    type=int,
+    help="Flag passwords shorter than this length as too short.",
+)
+@click.option(
     "--format",
     "fmt",
     type=click.Choice(["json", "markdown"]),
@@ -299,7 +305,7 @@ def scan(target: str, ports: str, profile: Optional[str], timeout: float, worker
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def audit(file: str, fmt: str, out_path: str) -> None:
+def audit(file: str, min_length: Optional[int], fmt: str, out_path: str) -> None:
     """Audit passwords for strength and common weaknesses."""
     if file:
         with open(file, "r", encoding="utf-8") as handle:
@@ -311,12 +317,12 @@ def audit(file: str, fmt: str, out_path: str) -> None:
         click.echo("No passwords provided.")
         return
 
-    results = audit_passwords(passwords)
+    results = audit_passwords(passwords, min_length=min_length)
 
     if fmt == "json":
-        output = format_audit_report_json(passwords, results)
+        output = format_audit_report_json(passwords, results, min_length=min_length)
     else:
-        output = format_audit_report_markdown(passwords, results)
+        output = format_audit_report_markdown(passwords, results, min_length=min_length)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
