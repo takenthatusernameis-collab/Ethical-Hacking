@@ -125,6 +125,7 @@ from ethscan.cidr import (
 from ethscan.hash import (
     format_hash_report_json,
     format_hash_report_markdown,
+    load_passwords_from_file,
     run_hash,
 )
 from ethscan.dnssec import (
@@ -141,11 +142,6 @@ from ethscan.mac import (
     format_mac_report_json,
     format_mac_report_markdown,
     run_mac,
-)
-from ethscan.hash import (
-    format_hash_report_json,
-    format_hash_report_markdown,
-    run_hash,
 )
 from ethscan.subdomains import load_subdomain_wordlist
 from ethscan.headers import (
@@ -2247,7 +2243,12 @@ def cidr(cidr: str, contains: Optional[str], diff: Optional[str], fmt: str, out_
     "--password",
     "passwords",
     multiple=True,
-    help="Password to hash (repeatable). If omitted, reads one password per line from stdin.",
+    help="Password to hash (repeatable). If omitted, reads from --file or stdin.",
+)
+@click.option(
+    "--file",
+    "password_file",
+    help="Path to a file containing one password per line. Takes precedence over stdin.",
 )
 @click.option(
     "--algorithm",
@@ -2268,9 +2269,11 @@ def cidr(cidr: str, contains: Optional[str], diff: Optional[str], fmt: str, out_
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def hash_cmd(passwords, algorithm, fmt, out_path) -> None:
+def hash_cmd(passwords, password_file, algorithm, fmt, out_path) -> None:
     """Generate cryptographic hashes for passwords (MD5, SHA-1, SHA-256, SHA-512, NTLM, MD4)."""
     password_list = list(passwords)
+    if not password_list and password_file:
+        password_list = load_passwords_from_file(password_file)
     if not password_list:
         password_list = [line.strip() for line in click.get_text_stream("stdin") if line.strip()]
 

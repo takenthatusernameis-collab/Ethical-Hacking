@@ -122,6 +122,19 @@ def _normalize_passwords(passwords: List[str]) -> List[str]:
     return [pwd.strip() for pwd in passwords if pwd.strip()]
 
 
+def load_passwords_from_file(path: str) -> List[str]:
+    """Load passwords from a file, one password per line.
+
+    Args:
+        path: Path to the password file.
+
+    Returns:
+        List of passwords (lines stripped, empty lines skipped).
+    """
+    with open(path, "r", encoding="utf-8") as handle:
+        return [line.strip() for line in handle if line.strip()]
+
+
 def run_hash(
     passwords: List[str],
     algorithm: str = "md5",

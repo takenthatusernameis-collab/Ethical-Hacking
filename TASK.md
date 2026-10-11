@@ -1065,3 +1065,67 @@ The `hash` command generates cryptographic hashes for passwords using the stdlib
 Alternative: Add a `--check` option to the `hash` command that compares a plaintext password against a known hash (e.g. verify a stored MD5/SHA-256 digest).
 
 Alternative: Add a `--pepper`/`--salt` option to the `hash` command for salted hash generation (e.g. HMAC-SHA-256 with a user-provided salt).
+
+## Completed: `--file` option for `hash` command
+
+Added a `--file` option to the `hash` command to read passwords from a file (one password per line), mirroring the `audit` command's `--file` input mode for batch hashing workflows. Input precedence: `--password` flags > `--file` > stdin.
+
+### Added Functionality
+- `ethscan/hash.py`:
+  - Added `load_passwords_from_file()` helper: reads a UTF-8 file, strips each line, skips empty lines (follows the `load_subdomain_wordlist` convention; unlike subdomain wordlists, `#` lines are preserved since they may be valid passwords).
+- `ethscan/cli.py`:
+  - Added `--file PATH` option to the `hash` command (`password_file` dest).
+  - Input precedence: `--password` flags win over `--file`; `--file` wins over stdin.
+  - Updated `--password` help text ("If omitted, reads from --file or stdin.").
+  - Removed a stale duplicate `from ethscan.hash import ...` block (the second identical import at former lines 145-149).
+
+### Modified Files
+- `ethscan/hash.py` — added `load_passwords_from_file()` helper
+- `ethscan/cli.py` — added `--file` option and precedence logic; removed duplicate hash import block
+- `tests/test_hash.py` — 5 new unit tests: `test_load_passwords_from_file_basic`, `test_load_passwords_from_file_strips_and_skips_empty`, `test_load_passwords_from_file_empty_file`, `test_load_passwords_from_file_missing_raises`, `test_load_passwords_from_file_preserves_special_characters`
+- `tests/test_cli.py` — 8 new CLI integration tests: `test_hash_help_shows_file_option`, `test_hash_file_option`, `test_hash_file_option_markdown`, `test_hash_file_skips_empty_lines_and_strips`, `test_hash_file_with_out_option`, `test_hash_password_flags_take_precedence_over_file`, `test_hash_file_takes_precedence_over_stdin`, `test_hash_file_missing_file_fails`
+- `tests/test_cli.py` — fixed 11 pre-existing failing `cve` tests whose `mock_run_cve` signatures were stale (missing `service_timeout`, `workers`, and `profile` parameters that the `cve` command passes after the `--ports`/`--profile` additions)
+- `README.md` — updated hash feature description to mention `--password` flags and `--file` batch input
+
+### Verification
+- `python -m pytest -q` -> 1371 passed, 1 skipped (1359 collected before: 1347 passed + 11 failed; the 11 pre-existing cve mock failures are now fixed, plus 13 new tests: 5 unit + 8 CLI)
+- `python -m ethscan hash --help` -> shows `--file TEXT` option
+- End-to-end: `python -m ethscan hash --file passwords.txt --algorithm sha256 --format json` hashes each non-empty line (whitespace stripped)
+- End-to-end: `python -m ethscan hash --password explicit --file passwords.txt --format json` -> only `explicit` is hashed (`--password` flags win)
+- End-to-end: `echo fromstdin | python -m ethscan hash --file passwords.txt --format json` -> only file contents are hashed (`--file` wins over stdin)
+- End-to-end: `python -m ethscan hash --file missing.txt --format json` -> non-zero exit with FileNotFoundError
+
+## Suggested next task
+
+**Add a `--check` option to the `hash` command** that compares a plaintext password against a known hash (e.g. verify a stored MD5/SHA-256 digest), reporting match/mismatch with the algorithm inferred or specified via `--algorithm`.
+
+Alternative: Add a `--pepper`/`--salt` option to the `hash` command for salted hash generation (e.g. HMAC-SHA-256 with a user-provided salt).
+
+Alternative: Add a `--min-length` option to the `audit` command to flag passwords below a custom length threshold in addition to the built-in heuristics.
+
+## Requirements
+- Pick one of the suggested features and implement it following the existing module conventions.
+- Add a new module under `ethscan/` with `run_*`, `format_*_report_json`, `format_*_report_markdown` (for new commands) or extend existing module (for new options).
+- Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
+- Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
+- Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
+
+## Current state
+- All 27 commands implemented (including `dnssec`, `mac`, `cert`, `subtake`, `hash`).
+- `scan` and `service` now support `--profile fast|normal|full` option.
+- `scan` and `service` now support `--output-format csv` for spreadsheet-compatible output.
+- `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
+- `subdomains` now supports `--recursive` and `--max-depth` for recursive subdomain enumeration.
+- `dnsbrute` now supports `--recursive` and `--max-depth` for recursive zone transfers.
+- `whois` now supports `--recursive/--no-recursive` and `--max-depth` for recursive WHOIS queries.
+- `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
+- `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
+- `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out` for CT log subdomain discovery.
+- `report` now supports `--format json|markdown` and `--out` for combined scan+audit reports (json and markdown).
+- `cve` now supports `--target`, `--services-file`, `--ports`, `--profile`, `--timeout`, `--service-timeout`, `--workers`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--severity`, `--min-severity`, `--format`, `--out` for NVD/CVE API vulnerability lookups.
+- `vuln` now supports `--target`, `--ports`, `--services-file`, `--tls-file`, `--ssl-file`, `--severity`, `--min-severity`, `--format`, `--out` for built-in vulnerability checks.
+- `dnssec` now supports `--target`, `--server`, `--timeout`, `--format`, `--out` for DNSSEC validation (DNSKEY + DS chain of trust).
+- `geo` now supports `--recursive` and `--max-depth` for recursive hop geolocation.
+- `hash` now supports `--password`, `--file` (one password per line), `--algorithm [md5|sha1|sha256|sha512|ntlm|md4]`, `--format`, `--out` for password hash generation.
+- Configuration file (`ethscan.yaml`) persists default options across commands via a `--config` group option and a `config` subcommand.
+- Tests: 1371 passing (1 skipped).

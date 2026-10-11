@@ -17,6 +17,7 @@ from ethscan.hash import (
     _supported_algorithms,
     format_hash_report_json,
     format_hash_report_markdown,
+    load_passwords_from_file,
     run_hash,
 )
 
@@ -88,6 +89,43 @@ def test_normalize_passwords_strips_whitespace() -> None:
 
 def test_normalize_passwords_drops_empty() -> None:
     assert _normalize_passwords(["", "x", ""]) == ["x"]
+
+
+# ---------------------------------------------------------------------------
+# Password file loading
+# ---------------------------------------------------------------------------
+
+
+def test_load_passwords_from_file_basic(tmp_path) -> None:
+    path = tmp_path / "passwords.txt"
+    path.write_text("password\n123456\n", encoding="utf-8")
+    assert load_passwords_from_file(str(path)) == ["password", "123456"]
+
+
+def test_load_passwords_from_file_strips_and_skips_empty(tmp_path) -> None:
+    path = tmp_path / "passwords.txt"
+    path.write_text("  password  \n\n   \nsecret\n", encoding="utf-8")
+    assert load_passwords_from_file(str(path)) == ["password", "secret"]
+
+
+def test_load_passwords_from_file_empty_file(tmp_path) -> None:
+    path = tmp_path / "empty.txt"
+    path.write_text("", encoding="utf-8")
+    assert load_passwords_from_file(str(path)) == []
+
+
+def test_load_passwords_from_file_missing_raises(tmp_path) -> None:
+    import pytest
+
+    missing = tmp_path / "does-not-exist.txt"
+    with pytest.raises(FileNotFoundError):
+        load_passwords_from_file(str(missing))
+
+
+def test_load_passwords_from_file_preserves_special_characters(tmp_path) -> None:
+    path = tmp_path / "passwords.txt"
+    path.write_text("p@ss|word\n#notacomment\n", encoding="utf-8")
+    assert load_passwords_from_file(str(path)) == ["p@ss|word", "#notacomment"]
 
 
 # ---------------------------------------------------------------------------

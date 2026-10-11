@@ -8285,8 +8285,9 @@ def test_cve_services_file_option(tmp_path, monkeypatch) -> None:
 def test_cve_no_cache_option(monkeypatch) -> None:
     called_args = {}
 
-    def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
-                     offline_fallback=True, api_url=None, severity=None, min_severity=None, ports=None):
+    def mock_run_cve(target, services_file=None, timeout=10.0, service_timeout=3.0,
+                     workers=50, use_cache=True, offline_fallback=True, api_url=None,
+                     severity=None, min_severity=None, ports=None, profile=None):
         called_args["use_cache"] = use_cache
         called_args["target"] = target
         return {
@@ -8318,8 +8319,9 @@ def test_cve_no_cache_option(monkeypatch) -> None:
 def test_cve_no_offline_fallback_option(monkeypatch) -> None:
     called_args = {}
 
-    def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
-                     offline_fallback=True, api_url=None, severity=None, min_severity=None, ports=None):
+    def mock_run_cve(target, services_file=None, timeout=10.0, service_timeout=3.0,
+                     workers=50, use_cache=True, offline_fallback=True, api_url=None,
+                     severity=None, min_severity=None, ports=None, profile=None):
         called_args["offline_fallback"] = offline_fallback
         called_args["target"] = target
         return {
@@ -8352,8 +8354,9 @@ def test_cve_no_offline_fallback_option(monkeypatch) -> None:
 def test_cve_api_url_option(monkeypatch) -> None:
     called_args = {}
 
-    def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
-                     offline_fallback=True, api_url=None, severity=None, min_severity=None, ports=None):
+    def mock_run_cve(target, services_file=None, timeout=10.0, service_timeout=3.0,
+                     workers=50, use_cache=True, offline_fallback=True, api_url=None,
+                     severity=None, min_severity=None, ports=None, profile=None):
         called_args["api_url"] = api_url
         called_args["target"] = target
         return {
@@ -8386,8 +8389,9 @@ def test_cve_api_url_option(monkeypatch) -> None:
 def test_cve_severity_option(monkeypatch) -> None:
     called_args = {}
 
-    def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
-                     offline_fallback=True, api_url=None, severity=None, min_severity=None, ports=None):
+    def mock_run_cve(target, services_file=None, timeout=10.0, service_timeout=3.0,
+                     workers=50, use_cache=True, offline_fallback=True, api_url=None,
+                     severity=None, min_severity=None, ports=None, profile=None):
         called_args["severity"] = severity
         called_args["target"] = target
         return {
@@ -8418,8 +8422,9 @@ def test_cve_severity_option(monkeypatch) -> None:
 
 
 def test_cve_out_option_json(tmp_path, monkeypatch) -> None:
-    def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
-                     offline_fallback=True, api_url=None, severity=None, min_severity=None, ports=None):
+    def mock_run_cve(target, services_file=None, timeout=10.0, service_timeout=3.0,
+                     workers=50, use_cache=True, offline_fallback=True, api_url=None,
+                     severity=None, min_severity=None, ports=None, profile=None):
         return {
             "target": target,
             "host": target,
@@ -8452,8 +8457,9 @@ def test_cve_out_option_json(tmp_path, monkeypatch) -> None:
 
 
 def test_cve_out_option_markdown(tmp_path, monkeypatch) -> None:
-    def mock_run_cve(target, services_file=None, timeout=10.0, use_cache=True,
-                     offline_fallback=True, api_url=None, severity=None, min_severity=None, ports=None):
+    def mock_run_cve(target, services_file=None, timeout=10.0, service_timeout=3.0,
+                     workers=50, use_cache=True, offline_fallback=True, api_url=None,
+                     severity=None, min_severity=None, ports=None, profile=None):
         return {
             "target": target,
             "host": target,
@@ -8510,12 +8516,15 @@ def test_cve_ports_option(monkeypatch) -> None:
         target,
         services_file=None,
         timeout=10.0,
+        service_timeout=3.0,
+        workers=50,
         use_cache=True,
         offline_fallback=True,
         api_url=None,
         severity=None,
         min_severity=None,
         ports=None,
+        profile=None,
     ):
         called_args["ports"] = ports
         called_args["target"] = target
@@ -8553,12 +8562,15 @@ def test_cve_ports_option_with_ranges(monkeypatch) -> None:
         target,
         services_file=None,
         timeout=10.0,
+        service_timeout=3.0,
+        workers=50,
         use_cache=True,
         offline_fallback=True,
         api_url=None,
         severity=None,
         min_severity=None,
         ports=None,
+        profile=None,
     ):
         called_args["ports"] = ports
         called_args["target"] = target
@@ -8596,12 +8608,15 @@ def test_cve_ports_option_disabled_when_services_file(monkeypatch) -> None:
         target,
         services_file=None,
         timeout=10.0,
+        service_timeout=3.0,
+        workers=50,
         use_cache=True,
         offline_fallback=True,
         api_url=None,
         severity=None,
         min_severity=None,
         ports=None,
+        profile=None,
     ):
         called_args["ports"] = ports
         called_args["services_file"] = services_file
@@ -8671,12 +8686,15 @@ def test_cve_min_severity_option(monkeypatch) -> None:
         target,
         services_file=None,
         timeout=10.0,
+        service_timeout=3.0,
+        workers=50,
         use_cache=True,
         offline_fallback=True,
         api_url=None,
         severity=None,
         min_severity=None,
         ports=None,
+        profile=None,
     ):
         called_args["min_severity"] = min_severity
         called_args["target"] = target
@@ -8714,12 +8732,15 @@ def test_cve_min_severity_disabled_by_default(monkeypatch) -> None:
         target,
         services_file=None,
         timeout=10.0,
+        service_timeout=3.0,
+        workers=50,
         use_cache=True,
         offline_fallback=True,
         api_url=None,
         severity=None,
         min_severity=None,
         ports=None,
+        profile=None,
     ):
         called_args["min_severity"] = min_severity
         called_args["target"] = target
@@ -9966,3 +9987,102 @@ def test_hash_pipe_escape_in_markdown() -> None:
     )
     assert result.exit_code == 0
     assert "pass\\|word" in result.output
+
+
+def test_hash_help_shows_file_option() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["hash", "--help"])
+    assert result.exit_code == 0
+    assert "--file" in result.output
+
+
+def test_hash_file_option(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n123456\n", encoding="utf-8")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["hash", "--file", str(password_file), "--algorithm", "md5", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    assert "passwords_hashed" in result.output
+    assert "5f4dcc3b5aa765d61d8327deb882cf99" in result.output
+    assert "e10adc3949ba59abbe56e057f20f883e" in result.output
+
+
+def test_hash_file_option_markdown(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n", encoding="utf-8")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["hash", "--file", str(password_file), "--algorithm", "sha256", "--format", "markdown"],
+    )
+    assert result.exit_code == 0
+    assert "Password Hash Report" in result.output
+    assert "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8" in result.output
+
+
+def test_hash_file_skips_empty_lines_and_strips(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("  password  \n\n   \n", encoding="utf-8")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["hash", "--file", str(password_file), "--algorithm", "md5", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    assert '"passwords_hashed": 1' in result.output
+
+
+def test_hash_file_with_out_option(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n", encoding="utf-8")
+    out_file = tmp_path / "hash.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["hash", "--file", str(password_file), "--algorithm", "md5", "--format", "json", "--out", str(out_file)],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    assert "5f4dcc3b5aa765d61d8327deb882cf99" in out_file.read_text()
+
+
+def test_hash_password_flags_take_precedence_over_file(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("fromfile\n", encoding="utf-8")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["hash", "--password", "fromflag", "--file", str(password_file), "--algorithm", "md5", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    assert '"passwords_hashed": 1' in result.output
+    assert "fromflag" in result.output
+    assert "fromfile" not in result.output
+
+
+def test_hash_file_takes_precedence_over_stdin(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("fromfile\n", encoding="utf-8")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["hash", "--file", str(password_file), "--algorithm", "md5", "--format", "json"],
+        input="fromstdin\n",
+    )
+    assert result.exit_code == 0
+    assert '"passwords_hashed": 1' in result.output
+    assert "fromfile" in result.output
+    assert "fromstdin" not in result.output
+
+
+def test_hash_file_missing_file_fails(tmp_path) -> None:
+    missing = tmp_path / "does-not-exist.txt"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["hash", "--file", str(missing), "--algorithm", "md5", "--format", "json"],
+    )
+    assert result.exit_code != 0
+    assert isinstance(result.exception, FileNotFoundError)
