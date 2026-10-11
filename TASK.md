@@ -648,3 +648,51 @@ Added a `--min-severity` option to the `vuln` command that filters vulnerability
 - `python -m ethscan --help` -> lists `vuln` among the 25 commands
 - `python -m ethscan vuln --help` -> shows `--min-severity` option with low/medium/high/critical choices
 - End-to-end: `python -m ethscan vuln --target example.com --services-file services.json --min-severity high --format json` produces JSON with only high/critical findings (medium OpenSSH findings dropped, critical vsFTPd backdoor retained)
+
+## Completed: `--ports` option for `cve` command
+
+Added a `--ports` option to the `cve` command to run live service detection on a custom port set before querying the NVD/CVE API. This allows users to specify which ports to scan for service detection when no `--services-file` is provided.
+
+### Added Functionality
+- `ethscan/cve.py`:
+  - `run_cve()` already accepted `ports` parameter and passed it to `run_service()` for live detection
+- `ethscan/cli.py`:
+  - Added `--ports` option (comma-separated list/ranges) to the `cve` command
+  - Parses port list using `parse_port_range()` from `ethscan.scanner`
+  - Only applies when `--services-file` is not provided (live detection mode)
+
+### Modified Files
+- `ethscan/cli.py` — added `--ports` option and pass-through to `run_cve()`
+- `tests/test_cli.py` — 4 new CLI integration tests:
+  - `test_cve_help_shows_ports` — verifies help shows `--ports` option
+  - `test_cve_ports_option` — tests CLI ports option passes parameters correctly
+  - `test_cve_ports_option_with_ranges` — tests ports option with ranges (e.g., '80,443,8000-9000')
+  - `test_cve_ports_option_disabled_when_services_file` — verifies ports ignored when services_file provided
+
+### Verification
+- `python -m pytest -q` -> 1015 passed, 1 skipped (1011 baseline + 4 new CLI tests)
+- `python -m ethscan cve --help` -> shows `--ports` option with comma-separated list/ranges help text
+- End-to-end: `python -m ethscan cve --target example.com --ports 22,80,443 --format json` runs live service detection on specified ports
+
+## Current state
+- All 25 commands implemented and wired up (`headers`, `ping`, `cidr` now functional via CLI).
+- `scan` and `service` now support `--profile fast|normal|full` option.
+- `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
+- `subdomains` now supports `--recursive` and `--max-depth` for recursive subdomain enumeration.
+- `dnsbrute` now supports `--recursive` and `--max-depth` for recursive zone transfers.
+- `whois` now supports `--recursive/--no-recursive` and `--max-depth` for recursive WHOIS queries.
+- `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
+- `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
+- `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out` for CT log subdomain discovery.
+- `report` now supports `--format json|markdown` and `--out` for combined scan+audit reports (json and markdown).
+- `cve` now supports `--target`, `--services-file`, `--ports`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--severity`, `--min-severity`, `--format`, `--out` for NVD/CVE API vulnerability lookups.
+- `vuln` now supports `--target`, `--ports`, `--services-file`, `--tls-file`, `--ssl-file`, `--severity`, `--min-severity`, `--format`, `--out` for built-in vulnerability checks.
+- Tests: 1015 passing (1 skipped).
+
+## Suggested next task
+
+**Add a `subtake` command** for subdomain takeover detection: enumerate subdomains, resolve their CNAME/A records, and check if they point to known vulnerable cloud services (AWS S3, GitHub Pages, Heroku, Azure, Shopify, etc.) where the target resource no longer exists. Output JSON/Markdown with vulnerable subdomains, service fingerprints, and takeover evidence.
+
+Alternative: Add a `--json` output mode to the `audit` command for machine-readable password audit results (currently only echoes human-readable lines).
+
+Alternative: Add a configuration file (`ethscan.yaml`) to persist default options across commands (profiles, timeouts, wordlists, output format, cache settings).
