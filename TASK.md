@@ -999,6 +999,6 @@ Added a `completion` command that generates shell completion scripts for bash, z
 
 ## Suggested next task
 
-**Add a `--json` output mode to the `report` command** for explicit machine-readable output (the `report` command uses inline JSON serialization but some users may want an explicit `--format json` flag for clarity in scripts, similar to other commands).
+**Add a `--rate-limit` option to network commands** (`scan`, `service`, `fuzz`, `web`, `headers`, `trace`, `ping`, `osdetect`, `subdomains`, `dnsbrute`, `subtake`, `dnssec`, `ssl`, `tls`, `geo`, `cert`, `cve`, `vuln`, `urlcheck`, `recon`, `whois`, `resolve`, `dns`) to control requests per second and avoid triggering rate limits or IDS alerts. The option should accept a float (requests per second; 0 or negative = unlimited), be added as a global `--rate-limit` group option (like `--config`), and throttle concurrent workers via a token-bucket or sleep-based limiter in each module's run path. Default should be 0 (unlimited) to preserve existing behavior. Add unit tests for the limiter logic and CLI integration tests verifying the option passes through.
 
-Alternative: Add a `--rate-limit` option to network commands (`scan`, `service`, `fuzz`, `web`, etc.) to control requests per second and avoid triggering rate limits or IDS alerts.
+Alternative: Add a `--json` output mode to the `report` command for explicit machine-readable output (the `report` command uses inline JSON serialization but some users may want an explicit `--format json` flag for clarity in scripts, similar to other commands).
