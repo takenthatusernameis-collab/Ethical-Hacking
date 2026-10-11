@@ -14,6 +14,7 @@ from ethscan.cve import (
     _normalize_host,
     _resolve_host,
     _save_cache,
+    format_cve_report_csv,
     format_cve_report_json,
     format_cve_report_markdown,
     run_cve,
@@ -711,3 +712,134 @@ def test_format_cve_report_markdown_with_min_severity() -> None:
     output = format_cve_report_markdown(data)
     assert "Min Severity" in output
     assert "high" in output
+
+
+def test_format_cve_report_csv_basic() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "timeout": 0.5,
+        "use_cache": True,
+        "offline_fallback": True,
+        "api_url": None,
+        "severity_filter": None,
+        "min_severity_filter": None,
+        "ports": None,
+        "services_checked": 1,
+        "cve_entries": [
+            {
+                "source": "builtin",
+                "port": 22,
+                "product": "OpenSSH",
+                "version": "7.2p2",
+                "finding": {
+                    "id": "CVE-2016-6210",
+                    "kind": "service",
+                    "title": "OpenSSH user enumeration",
+                    "severity": "medium",
+                    "description": "Timing attack",
+                    "product": "OpenSSH",
+                    "version": "7.2p2",
+                    "port": 22,
+                },
+            },
+            {
+                "source": "nvd",
+                "port": 22,
+                "product": "OpenSSH",
+                "version": "7.2p2",
+                "cve_id": "CVE-2016-6210",
+                "cve": {
+                    "id": "CVE-2016-6210",
+                    "description": "Test description",
+                    "severity": "MEDIUM",
+                    "score": 5.9,
+                    "published": "2017-02-13",
+                    "last_modified": "2026-06-17",
+                    "references": ["http://example.com"],
+                },
+                "cached": False,
+                "offline_fallback": False,
+            },
+        ],
+        "cve_count": 2,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 2, "low": 0},
+        "notes": [],
+    }
+    output = format_cve_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "source,port,product,version,cve_id,severity,score,title,description,references,cached,offline_fallback"
+    # builtin row
+    builtin_row = lines[1]
+    assert "builtin" in builtin_row
+    assert "CVE-2016-6210" in builtin_row
+    assert "MEDIUM" in builtin_row
+    assert "OpenSSH user enumeration" in builtin_row
+    # nvd row
+    nvd_row = lines[2]
+    assert "nvd" in nvd_row
+    assert "5.9" in nvd_row
+    assert "http://example.com" in nvd_row
+    assert "false" in nvd_row
+
+
+def test_format_cve_report_csv_no_findings() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "timeout": 0.5,
+        "use_cache": True,
+        "offline_fallback": True,
+        "api_url": None,
+        "severity_filter": None,
+        "min_severity_filter": None,
+        "ports": None,
+        "services_checked": 0,
+        "cve_entries": [],
+        "cve_count": 0,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+        "notes": ["No CVEs matched"],
+    }
+    output = format_cve_report_csv(data)
+    lines = output.splitlines()
+    assert len(lines) == 1
+    assert lines[0] == "source,port,product,version,cve_id,severity,score,title,description,references,cached,offline_fallback"
+
+
+def test_format_cve_report_csv_missing_optional_fields() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "timeout": 0.5,
+        "use_cache": True,
+        "offline_fallback": True,
+        "api_url": None,
+        "severity_filter": None,
+        "min_severity_filter": None,
+        "ports": None,
+        "services_checked": 1,
+        "cve_entries": [
+            {
+                "source": "builtin",
+                "port": None,
+                "product": "",
+                "version": "",
+                "finding": {
+                    "id": "CVE-X",
+                    "kind": "protocol",
+                    "title": "Weak protocol",
+                    "severity": "low",
+                    "description": "desc",
+                },
+            }
+        ],
+        "cve_count": 1,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 1},
+        "notes": [],
+    }
+    output = format_cve_report_csv(data)
+    lines = output.splitlines()
+    assert len(lines) == 2
+    assert "CVE-X" in lines[1]
+    assert "LOW" in lines[1]
+    assert "builtin" in lines[1]
