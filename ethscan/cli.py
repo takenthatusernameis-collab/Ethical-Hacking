@@ -2208,6 +2208,11 @@ def cidr(cidr: str, contains: Optional[str], fmt: str, out_path: Optional[str]) 
     help="Comma-separated list of CIDR networks (e.g. '192.168.1.0/24,10.0.0.0/8,192.168.2.0/23').",
 )
 @click.option(
+    "--diff",
+    "diff_option",
+    help="Comma-separated list of CIDR networks for set difference (addresses in --cidrs but not in --diff).",
+)
+@click.option(
     "--no-merge",
     "no_merge",
     is_flag=True,
@@ -2238,6 +2243,7 @@ def cidr(cidr: str, contains: Optional[str], fmt: str, out_path: Optional[str]) 
 )
 def radix(
     cidrs_option: str,
+    diff_option: Optional[str],
     no_merge: bool,
     max_depth: int,
     contains: Optional[str],
@@ -2249,13 +2255,26 @@ def radix(
     Merges overlapping and adjacent (supernettable) networks and renders
     the resulting aggregate ranges as a hierarchical binary radix tree.
     Fully offline and stdlib-only.
+
+    Use --diff to compute the set difference between two CIDR sets
+    (addresses in --cidrs but not in --diff).
     """
     cidrs = [c.strip() for c in cidrs_option.split(",") if c.strip()]
     if not cidrs:
         click.echo("Error: at least one CIDR network is required.", err=True)
         raise SystemExit(1)
 
-    results = run_radix(cidrs, merge=not no_merge, max_depth=max_depth, contains=contains)
+    diff_cidrs = None
+    if diff_option is not None:
+        diff_cidrs = [c.strip() for c in diff_option.split(",") if c.strip()]
+
+    results = run_radix(
+        cidrs,
+        merge=not no_merge,
+        max_depth=max_depth,
+        contains=contains,
+        diff=diff_cidrs,
+    )
 
     if fmt == "json":
         output = format_radix_report_json(results)

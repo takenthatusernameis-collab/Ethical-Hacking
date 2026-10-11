@@ -471,3 +471,144 @@ def test_format_radix_report_json_contains() -> None:
     parsed = json.loads(output)
     assert parsed["contains"]["in_network"] is True
     assert parsed["contains"]["matched_network"] == "10.0.0.0/8"
+
+
+# ---------------------------------------------------------------------------
+# Set difference (diff)
+# ---------------------------------------------------------------------------
+
+
+def test_subtract_networks_basic() -> None:
+    from ethscan.radix import _subtract_networks, _parse_networks
+
+    minuend = _parse_networks(["192.168.1.0/24"])
+    subtrahend = _parse_networks(["192.168.1.128/25"])
+    result = _subtract_networks(minuend, subtrahend)
+    assert len(result) == 1
+    assert str(result[0]) == "192.168.1.0/25"
+
+
+def test_subtract_networks_disjoint() -> None:
+    from ethscan.radix import _subtract_networks, _parse_networks
+
+    minuend = _parse_networks(["192.168.1.0/24"])
+    subtrahend = _parse_networks(["10.0.0.0/8"])
+    result = _subtract_networks(minuend, subtrahend)
+    assert len(result) == 1
+    assert str(result[0]) == "192.168.1.0/24"
+
+
+def test_subtract_networks_full_overlap() -> None:
+    from ethscan.radix import _subtract_networks, _parse_networks
+
+    minuend = _parse_networks(["192.168.1.0/24"])
+    subtrahend = _parse_networks(["192.168.1.0/24"])
+    result = _subtract_networks(minuend, subtrahend)
+    assert len(result) == 0
+
+
+def test_subtract_networks_multiple() -> None:
+    from ethscan.radix import _subtract_networks, _parse_networks
+
+    minuend = _parse_networks(["192.168.0.0/16"])
+    subtrahend = _parse_networks(["192.168.1.0/24", "192.168.2.0/24"])
+    result = _subtract_networks(minuend, subtrahend)
+    # Should get the remaining /16 minus the two /24s
+    assert len(result) >= 1
+
+
+def test_subtract_networks_empty_minuend() -> None:
+    from ethscan.radix import _subtract_networks
+
+    result = _subtract_networks([], [ipaddress.ip_network("192.168.1.0/24")])
+    assert result == []
+
+
+def test_subtract_networks_empty_subtrahend() -> None:
+    from ethscan.radix import _subtract_networks
+
+    minuend = [ipaddress.ip_network("192.168.1.0/24")]
+    result = _subtract_networks(minuend, [])
+    assert len(result) == 1
+    assert str(result[0]) == "192.168.1.0/24"
+
+
+def test_subtract_networks_ipv6() -> None:
+    from ethscan.radix import _subtract_networks, _parse_networks
+
+    minuend = _parse_networks(["2001:db8::/32"])
+    subtrahend = _parse_networks(["2001:db8:1::/48"])
+    result = _subtract_networks(minuend, subtrahend)
+    assert len(result) >= 1
+
+
+def test_run_radix_diff_basic() -> None:
+    data = run_radix(["192.168.1.0/24"], diff=["192.168.1.128/25"])
+    assert "diff" in data
+    assert data["diff"]["difference_network_count"] == 1
+    assert "192.168.1.0/25" in data["diff"]["difference"]
+    assert data["diff"]["total_diff_addresses"] == 128
+
+
+def test_run_radix_diff_disjoint() -> None:
+    data = run_radix(["192.168.1.0/24"], diff=["10.0.0.0/8"])
+    assert data["diff"]["difference_network_count"] == 1
+    assert data["diff"]["difference"][0] == "192.168.1.0/24"
+    assert data["diff"]["total_diff_addresses"] == 256
+
+
+def test_run_radix_diff_full_overlap() -> None:
+    data = run_radix(["192.168.1.0/24"], diff=["192.168.1.0/24"])
+    assert data["diff"]["difference_network_count"] == 0
+    assert data["diff"]["difference"] == []
+    assert data["diff"]["total_diff_addresses"] == 0
+
+
+def test_run_radix_diff_multiple() -> None:
+    data = run_radix(["192.168.0.0/16"], diff=["192.168.1.0/24", "192.168.2.0/24"])
+    assert data["diff"]["difference_network_count"] >= 1
+    assert data["diff"]["total_diff_addresses"] == 65536 - 256 - 256
+
+
+def test_run_radix_diff_no_diff_field() -> None:
+    data = run_radix(["192.168.1.0/24"])
+    assert "diff" not in data
+
+
+def test_run_radix_diff_merge_disabled() -> None:
+    data = run_radix(
+        ["192.168.1.0/24", "192.168.2.0/24"],
+        merge=False,
+        diff=["192.168.1.0/24"],
+    )
+    assert data["diff"]["difference_network_count"] == 1
+    assert "192.168.2.0/24" in data["diff"]["difference"]
+
+
+def test_run_radix_diff_ipv6() -> None:
+    data = run_radix(["2001:db8::/32"], diff=["2001:db8:1::/48"])
+    assert data["diff"]["difference_network_count"] >= 1
+
+
+def test_format_radix_report_markdown_diff() -> None:
+    data = run_radix(["192.168.1.0/24"], diff=["192.168.1.128/25"])
+    output = format_radix_report_markdown(data)
+    assert "## Set Difference (In First, Not In Second)" in output
+    assert "Difference Networks" in output
+    assert "192.168.1.0/25" in output
+
+
+def test_format_radix_report_markdown_diff_empty() -> None:
+    data = run_radix(["192.168.1.0/24"], diff=["192.168.1.0/24"])
+    output = format_radix_report_markdown(data)
+    assert "## Set Difference (In First, Not In Second)" in output
+    assert "**Difference Networks:** 0" in output
+
+
+def test_format_radix_report_json_diff() -> None:
+    data = run_radix(["192.168.1.0/24"], diff=["192.168.1.128/25"])
+    output = format_radix_report_json(data)
+    parsed = json.loads(output)
+    assert "diff" in parsed
+    assert parsed["diff"]["difference_network_count"] == 1
+    assert "192.168.1.0/25" in parsed["diff"]["difference"]

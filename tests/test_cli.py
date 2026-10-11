@@ -10228,3 +10228,136 @@ def test_radix_contains_out_option_markdown(tmp_path) -> None:
     content = out_file.read_text()
     assert "## Membership Test" in content
     assert "10.5.5.5" in content
+
+
+def test_radix_help_shows_diff() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["radix", "--help"])
+    assert result.exit_code == 0
+    assert "--diff" in result.output
+
+
+def test_radix_diff_basic_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "radix",
+            "--cidrs",
+            "192.168.1.0/24",
+            "--diff",
+            "192.168.1.128/25",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "192.168.1.0/25" in result.output
+    assert "difference_network_count" in result.output
+
+
+def test_radix_diff_disjoint_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "radix",
+            "--cidrs",
+            "192.168.1.0/24",
+            "--diff",
+            "10.0.0.0/8",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "192.168.1.0/24" in result.output
+    assert "difference_network_count" in result.output
+
+
+def test_radix_diff_full_overlap_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "radix",
+            "--cidrs",
+            "192.168.1.0/24",
+            "--diff",
+            "192.168.1.0/24",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "difference_network_count" in result.output
+    assert "0" in result.output
+
+
+def test_radix_diff_markdown() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "radix",
+            "--cidrs",
+            "192.168.1.0/24",
+            "--diff",
+            "192.168.1.128/25",
+            "--format",
+            "markdown",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "## Set Difference (In First, Not In Second)" in result.output
+    assert "192.168.1.0/25" in result.output
+
+
+def test_radix_diff_out_option_json(tmp_path) -> None:
+    out_file = tmp_path / "radix_diff.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "radix",
+            "--cidrs",
+            "192.168.1.0/24",
+            "--diff",
+            "192.168.1.128/25",
+            "--format",
+            "json",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "192.168.1.0/25" in content
+    assert "difference_network_count" in content
+
+
+def test_radix_diff_out_option_markdown(tmp_path) -> None:
+    out_file = tmp_path / "radix_diff.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "radix",
+            "--cidrs",
+            "192.168.1.0/24",
+            "--diff",
+            "192.168.1.128/25",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "## Set Difference (In First, Not In Second)" in content
+    assert "192.168.1.0/25" in content
