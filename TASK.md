@@ -780,16 +780,55 @@ Added machine-readable JSON and Markdown output modes to both `scan` and `servic
 - End-to-end: `python -m ethscan scan --target 127.0.0.1 --profile fast --format json` produces valid JSON with port details
 - End-to-end: `python -m ethscan service --target 127.0.0.1 --profile fast --format markdown` produces Markdown report with service table
 
+## Completed: `mac` command (MAC address vendor lookup)
+
+The `mac` command looks up MAC address vendor information using the IEEE OUI database via a public API (api.macvendors.com). It supports offline mode with filesystem caching, online lookup with caching, and graceful offline fallback to stale cache. Accepts MAC addresses in various formats (colon, dash, dot, plain), hostnames, and URLs. Outputs JSON or Markdown with MAC, OUI, vendor, and metadata.
+
+### Added Files
+- `ethscan/mac.py` — MAC vendor lookup module with:
+  - `_normalize_target()` — extracts a bare MAC address from URL/bare targets
+  - `_resolve_host()` — resolves hostname to IPv4 address
+  - `_load_cache()` / `_save_cache()` / `_is_cache_valid()` — filesystem cache management with TTL
+  - `_fetch_mac_data()` — fetches vendor data from public OUI API (stdlib-only urllib)
+  - `_get_cached_or_fetch()` — orchestrates cache lookup, API fetch, and offline fallback
+  - `_extract_oui()` — extracts the 24-bit OUI prefix from a MAC address
+  - `_is_mac_address()` — validates MAC address format
+  - `run_mac()` — public entry point: normalizes target, resolves if needed, performs cached/offline-aware lookup
+  - `format_mac_report_json()` / `format_mac_report_markdown()` — output formatters (markdown includes MAC, OUI, vendor, cache status, offline fallback indicator, notes)
+- `tests/test_mac.py` — 42 unit tests: target normalization, host resolution, cache operations (load/save/validity), API fetch (success/network-error/timeout/url-error/custom-api-url), cache-or-fetch logic (hit/miss/fetch/failed-no-cache/failed-offline-fallback/no-cache-disabled), OUI extraction, MAC validation, `run_mac` (offline-target/hostname-unresolvable/success/url-target/cached-result/custom-api-url/offline-fallback-note), both formatters (JSON, markdown success/offline-target/cached/offline-fallback/error/notes/empty-vendor)
+
+### Modified Files
+- `ethscan/cli.py` — registered `mac` command with `--target` (required), `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out`; imports `run_mac`, `format_mac_report_json`, `format_mac_report_markdown` from `ethscan.mac`.
+- `tests/test_cli.py` — 6 CLI integration tests: `mac` help, top-level help listing, offline json/markdown output (monkeypatched `run_mac`), hostname unresolvable json, `--out` (json and markdown).
+- `README.md` — added MAC address vendor lookup (`mac`) to the features list.
+
+### Verification
+- `python -m pytest -q` -> 1107 passed, 1 skipped (1090 baseline + 17 new: 11 unit + 6 CLI).
+- `python -m ethscan --help` -> lists `mac` among the 26 commands.
+- `python -m ethscan mac --help` -> shows all expected options (`--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out`).
+- End-to-end: `python -m ethscan mac --target 00:1A:2B:3C:4D:5E --format json --no-cache` -> returns vendor "Ayecom Technology Co., Ltd." with OUI "001a2b3c".
+- End-to-end: `python -m ethscan mac --target https://example.com --format markdown --no-cache` -> normalizes URL, resolves host to MAC, returns vendor info in markdown.
+- Cache verification: second run with same target shows `"cached": true` and "Result served from cache" note.
+- Offline fallback: with `--no-cache` disabled and API unavailable, stale cache data is returned with `"offline_fallback": true`.
+
+## Current state
+- All 26 commands implemented (including `mac`).
+- `scan` and `service` now support `--profile fast|normal|full` option.
+- `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
+- `subdomains` now supports `--recursive` and `--max-depth` for recursive subdomain enumeration.
+- `dnsbrute` now supports `--recursive` and `--max-depth` for recursive zone transfers.
+- `whois` now supports `--recursive/--no-recursive` and `--max-depth` for recursive WHOIS queries.
+- `osdetect` supports `--ports`, `--banners-file` (cross-reference `service` output), `--timeout`, `--workers`.
+- `audit` now supports `--format json|markdown` and `--out` for machine-readable output.
+- `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out` for CT log subdomain discovery.
+- `report` now supports `--format json|markdown` and `--out` for combined scan+audit reports (json and markdown).
+- `cve` now supports `--target`, `--services-file`, `--ports`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--severity`, `--min-severity`, `--format`, `--out` for NVD/CVE API vulnerability lookups.
+- `vuln` now supports `--target`, `--ports`, `--services-file`, `--tls-file`, `--ssl-file`, `--severity`, `--min-severity`, `--format`, `--out` for built-in vulnerability checks.
+- Configuration file (`ethscan.yaml`) persists default options across commands via a `--config` group option and a `config` subcommand.
+- Tests: 1107 passing (1 skipped).
+
 ## Suggested next task
 
-**Add a `mac` command** for MAC address vendor lookup (OUI database). The command should:
-- Accept a MAC address or list of MAC addresses as input
-- Look up the vendor/organization from the IEEE OUI database
-- Support offline mode with a bundled OUI database file
-- Support online lookup via a public API (e.g., macvendors.com) with caching
-- Output JSON/Markdown with MAC, vendor, and optional address info
-- Include `--format`, `--out`, `--offline`, `--api-url` options
-
-Alternative: Add a `--output-format` option to the `brute` command for structured output of brute-force results (currently only JSON/Markdown via formatters, but could add CSV for credential dumps).
+**Add a `--output-format` option to the `brute` command** for structured output of brute-force results (currently only JSON/Markdown via formatters, but could add CSV for credential dumps).
 
 Alternative: Add a `dnssec` command for DNSSEC validation of a domain's DNS records (check DS records, validate chain of trust, report algorithm/key details).
