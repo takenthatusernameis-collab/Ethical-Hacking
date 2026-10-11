@@ -5,6 +5,8 @@ TLS/SSL data (from ``tls``/``ssl`` command output) against a small built-in
 CVE/weakness database and reports matches.
 """
 
+import hashlib
+import hmac
 import json
 import re
 from typing import Dict, List, Optional, Tuple
@@ -269,6 +271,128 @@ CERTIFICATE_VULNS = [
 ]
 
 VULN_DB = SERVICE_VULNS + PROTOCOL_VULNS + CIPHER_VULNS + CERTIFICATE_VULNS
+
+# Algorithms supported for HMAC (peppered hashing), mirroring passwords.py.
+# Maps canonical key -> hashlib algorithm name.
+_HASHLIB_ALGORITHMS = {
+    "md5": "md5",
+    "sha1": "sha1",
+    "sha256": "sha256",
+    "sha512": "sha512",
+}
+
+
+def _hashlib_name(algorithm: str) -> Optional[str]:
+    """Return the hashlib algorithm name for a canonical key, or None."""
+    return _HASHLIB_ALGORITHMS.get(algorithm)
+
+
+def _compute_peppered_hash(text: str, algorithm: str, pepper: str) -> str:
+    """Compute an HMAC keyed hash of ``text`` using the pepper as the key.
+
+    Only algorithms backed by a direct hashlib name (md5, sha1, sha256,
+    sha512) can be used for HMAC.
+
+    Args:
+        text: Plaintext input (the HMAC message).
+        algorithm: Canonical algorithm key.
+        pepper: Secret pepper value (the HMAC key).
+
+    Returns:
+        Hex digest of ``HMAC(pepper, text, algorithm)``.
+
+    Raises:
+        ValueError: If the algorithm cannot be expressed as a hashlib name.
+    """
+    name = _hashlib_name(algorithm)
+    if name is None:
+        raise ValueError(
+            f"Algorithm '{algorithm}' does not support HMAC (peppered hashing)."
+        )
+    return hmac.new(
+        pepper.encode("utf-8"),
+        text.encode("utf-8"),
+        name,
+    ).hexdigest()
+
+
+def _compute_password_hash(
+    text: str,
+    algorithm: str,
+    salt: Optional[str] = None,
+    pepper: Optional[str] = None,
+) -> str:
+    """Compute a (optionally salted/peppered) hash for a text input.
+
+    - ``salt`` is prepended to the text before hashing (a classic salted
+      hash), e.g. ``hash(salt + text)``.
+    - ``pepper`` is used as the HMAC key, with the text (or ``salt +
+      text`` when both are supplied) as the message.
+    - When both are supplied the salt is folded into the HMAC message and the
+      pepper is the HMAC key: ``HMAC(pepper, salt + text, algorithm)``.
+    - When neither ``salt`` nor ``pepper`` is supplied this behaves identically
+      to a standard hash.
+
+    Args:
+        text: Plaintext input.
+        algorithm: Canonical algorithm key (md5, sha1, sha256, sha512).
+        salt: Optional salt string prepended to the input.
+        pepper: Optional pepper string used as the HMAC key.
+
+    Returns:
+        Hex digest string.
+
+    Raises:
+        ValueError: If the algorithm is unsupported or does not support HMAC
+            when a pepper is supplied.
+    """
+    if salt and pepper:
+        name = _hashlib_name(algorithm)
+        if name is None:
+            raise ValueError(
+                f"Algorithm '{algorithm}' does not support HMAC (peppered hashing)."
+            )
+        return hmac.new(
+            pepper.encode("utf-8"),
+            (salt + text).encode("utf-8"),
+            name,
+        ).hexdigest()
+    if salt:
+        return hashlib.new(algorithm, (salt + text).encode("utf-8")).hexdigest()
+    if pepper:
+        return _compute_peppered_hash(text, algorithm, pepper)
+    return hashlib.new(algorithm, text.encode("utf-8")).hexdigest()
+
+
+def _apply_salt_pepper_to_banner(
+    banner: str,
+    salt: Optional[str],
+    pepper: Optional[str],
+    algorithm: str,
+) -> str:
+    """Apply a salt/pepper transformation to a service banner before matching.
+
+    This mirrors the salted/peppered evaluation pattern used by the ``audit``
+    and ``hash`` commands: the salt is prepended to the banner and/or the
+    pepper is used as an HMAC key, so that vulnerability signatures can be
+    cross-referenced against salted/peppered banner representations.
+
+    Args:
+        banner: Raw service banner text.
+        salt: Optional salt prepended to the banner.
+        pepper: Optional pepper used as the HMAC key.
+        algorithm: Hash algorithm to use for salted/peppered evaluation.
+
+    Returns:
+        The (possibly transformed) banner string.
+    """
+    if not salt and not pepper:
+        return banner
+    try:
+        return _compute_password_hash(banner, algorithm, salt=salt, pepper=pepper)
+    except ValueError:
+        return banner
+
 
 _SEVERITY_RANK: Dict[str, int] = {
     name: idx for idx, name in enumerate(reversed(SEVERITIES))
@@ -550,6 +674,9 @@ def run_vuln(
     min_severity: Optional[str] = None,
     recursive: bool = False,
     max_depth: int = DEFAULT_RECURSIVE_DEPTH,
+    salt: Optional[str] = None,
+    pepper: Optional[str] = None,
+    algorithm: str = "sha256",
 ) -> Dict[str, object]:
     """Check a target for known service, protocol, and certificate vulnerabilities.
 
@@ -570,6 +697,12 @@ def run_vuln(
             (critical/high/medium/low). If None, no lower bound is applied.
         recursive: Enable recursive scanning of hosts discovered in service banners.
         max_depth: Maximum recursion depth for recursive scanning (default: 2).
+        salt: Optional salt prepended to each banner before matching, allowing
+            salted vulnerability signature cross-referencing.
+        pepper: Optional pepper used as the HMAC key for peppered banner
+            matching (requires a hashlib-backed algorithm).
+        algorithm: Hash algorithm to use for salted/peppered banner matching
+            (default: sha256).
 
     Returns:
         Structured results with matched findings, counts, and notes.
@@ -617,7 +750,13 @@ def run_vuln(
             banner = entry.get("banner") or ""
             if banner:
                 banners.append(banner)
-            product, version = parse_banner(banner)
+            # Apply salt/pepper transformation to the banner before matching,
+            # mirroring the salted/peppered evaluation pattern used by the
+            # ``audit`` and ``hash`` commands.
+            match_banner = _apply_salt_pepper_to_banner(
+                banner, salt, pepper, algorithm
+            )
+            product, version = parse_banner(match_banner)
             findings.extend(
                 match_service_vulns(product, version, port=entry.get("port"))
             )
@@ -742,6 +881,9 @@ def run_vuln(
         "max_depth": max_depth if recursive else 0,
         "recursive_hosts_scanned": recursive_hosts_scanned,
         "recursive_findings": recursive_findings,
+        "salt": bool(salt),
+        "pepper": bool(pepper),
+        "algorithm": algorithm,
     }
 
 
@@ -799,6 +941,12 @@ def format_vuln_report_markdown(data: Dict[str, object]) -> str:
         lines.append(f"- **Severity Filter:** {data['severity_filter']}")
     if data.get("min_severity_filter"):
         lines.append(f"- **Min Severity:** {data['min_severity_filter']}")
+    if data.get("salt"):
+        lines.append("- **Salt:** applied (prepended to each banner)")
+    if data.get("pepper"):
+        lines.append("- **Pepper:** applied (HMAC key for each banner)")
+    if data.get("salt") or data.get("pepper"):
+        lines.append(f"- **Algorithm:** {data.get('algorithm', 'sha256')}")
     if data.get("recursive"):
         lines.append(f"- **Recursive:** Yes")
         lines.append(f"- **Max Depth:** {data.get('max_depth', 0)}")
