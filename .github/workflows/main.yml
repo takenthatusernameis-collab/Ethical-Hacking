@@ -117,7 +117,7 @@ jobs:
             # Repair generated trailing whitespace and extra blank lines at EOF
             # before enforcing the staged-diff check.
             if ! git diff --cached --check; then
-              echo "::warning::Normalizing trailing spaces and tabs in changed text files."
+              echo "::warning::Normalizing trailing whitespace and blank lines at EOF in changed text files."
               python - <<'PY'
           import os
           import re
