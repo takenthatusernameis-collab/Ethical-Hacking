@@ -6,6 +6,7 @@ from ethscan.cidr import (
     _contains_ip,
     _format_network_info,
     _normalize_cidr,
+    _subtract_networks,
     format_cidr_report_json,
     format_cidr_report_markdown,
     run_cidr,
@@ -322,3 +323,138 @@ def test_format_cidr_report_markdown_pipe_escaping() -> None:
     output = format_cidr_report_markdown(data)
     # Pipe should be escaped
     assert "255\\|255\\|255\\|0" in output
+
+
+# ---------------------------------------------------------------------------
+# Set difference (_subtract_networks)
+# ---------------------------------------------------------------------------
+
+
+def test_subtract_networks_empty_minuend() -> None:
+    import ipaddress
+
+    assert _subtract_networks([], [ipaddress.ip_network("192.168.1.0/24")]) == []
+
+
+def test_subtract_networks_empty_subtrahend() -> None:
+    import ipaddress
+
+    m = [ipaddress.ip_network("192.168.1.0/24")]
+    result = _subtract_networks(m, [])
+    assert [str(n) for n in result] == ["192.168.1.0/24"]
+
+
+def test_subtract_networks_no_overlap() -> None:
+    import ipaddress
+
+    m = [ipaddress.ip_network("192.168.1.0/24")]
+    s = [ipaddress.ip_network("10.0.0.0/8")]
+    result = _subtract_networks(m, s)
+    assert [str(n) for n in result] == ["192.168.1.0/24"]
+
+
+def test_subtract_networks_full_overlap() -> None:
+    import ipaddress
+
+    m = [ipaddress.ip_network("192.168.1.0/24")]
+    s = [ipaddress.ip_network("192.168.1.0/24")]
+    result = _subtract_networks(m, s)
+    assert result == []
+
+
+def test_subtract_networks_partial_overlap() -> None:
+    import ipaddress
+
+    m = [ipaddress.ip_network("192.168.1.0/24")]
+    s = [ipaddress.ip_network("192.168.1.128/25")]
+    result = _subtract_networks(m, s)
+    assert [str(n) for n in result] == ["192.168.1.0/25"]
+
+
+def test_subtract_networks_ipv6_no_overlap() -> None:
+    import ipaddress
+
+    m = [ipaddress.ip_network("2001:db8::/32")]
+    s = [ipaddress.ip_network("2001:db9::/32")]
+    result = _subtract_networks(m, s)
+    assert [str(n) for n in result] == ["2001:db8::/32"]
+
+
+# ---------------------------------------------------------------------------
+# run_cidr diff
+# ---------------------------------------------------------------------------
+
+
+def test_run_cidr_diff_none_by_default() -> None:
+    result = run_cidr("192.168.1.0/24")
+    assert "diff" not in result
+
+
+def test_run_cidr_diff_no_overlap() -> None:
+    result = run_cidr("192.168.1.0/24", diff="10.0.0.0/8")
+    assert result["diff"]["diff_cidr"] == "10.0.0.0/8"
+    assert result["diff"]["difference"] == ["192.168.1.0/24"]
+    assert result["diff"]["difference_network_count"] == 1
+    assert result["diff"]["total_diff_addresses"] == 256
+
+
+def test_run_cidr_diff_full_overlap() -> None:
+    result = run_cidr("192.168.1.0/24", diff="192.168.1.0/24")
+    assert result["diff"]["difference"] == []
+    assert result["diff"]["difference_network_count"] == 0
+    assert result["diff"]["total_diff_addresses"] == 0
+
+
+def test_run_cidr_diff_partial_overlap() -> None:
+    result = run_cidr("192.168.1.0/24", diff="192.168.1.128/25")
+    assert result["diff"]["difference"] == ["192.168.1.0/25"]
+    assert result["diff"]["total_diff_addresses"] == 128
+
+
+def test_run_cidr_diff_strips_whitespace() -> None:
+    result = run_cidr("192.168.1.0/24", diff="  10.0.0.0/8  ")
+    assert result["diff"]["diff_cidr"] == "10.0.0.0/8"
+
+
+def test_run_cidr_diff_ipv6() -> None:
+    result = run_cidr("2001:db8::/32", diff="2001:db9::/32")
+    assert result["diff"]["difference"] == ["2001:db8::/32"]
+
+
+def test_run_cidr_diff_with_contains() -> None:
+    result = run_cidr("192.168.1.0/24", contains="192.168.1.50", diff="10.0.0.0/8")
+    assert result["contains"]["in_network"] is True
+    assert result["diff"]["difference"] == ["192.168.1.0/24"]
+
+
+# ---------------------------------------------------------------------------
+# JSON formatter with diff
+# ---------------------------------------------------------------------------
+
+
+def test_format_cidr_report_json_with_diff() -> None:
+    data = run_cidr("192.168.1.0/24", diff="192.168.1.128/25")
+    output = format_cidr_report_json(data)
+    parsed = json.loads(output)
+    assert parsed["diff"]["difference"] == ["192.168.1.0/25"]
+    assert parsed["diff"]["total_diff_addresses"] == 128
+
+
+# ---------------------------------------------------------------------------
+# Markdown formatter with diff
+# ---------------------------------------------------------------------------
+
+
+def test_format_cidr_report_markdown_with_diff() -> None:
+    data = run_cidr("192.168.1.0/24", diff="10.0.0.0/8")
+    output = format_cidr_report_markdown(data)
+    assert "Set Difference" in output
+    assert "10.0.0.0/8" in output
+    assert "192.168.1.0/24" in output
+
+
+def test_format_cidr_report_markdown_with_diff_full_overlap() -> None:
+    data = run_cidr("192.168.1.0/24", diff="192.168.1.0/24")
+    output = format_cidr_report_markdown(data)
+    assert "Set Difference" in output
+    assert "**Difference Networks:** 0" in output

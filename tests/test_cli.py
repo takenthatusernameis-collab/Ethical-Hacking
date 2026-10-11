@@ -8768,6 +8768,7 @@ def test_cidr_help() -> None:
     assert result.exit_code == 0
     assert "--cidr" in result.output
     assert "--contains" in result.output
+    assert "--diff" in result.output
     assert "--format" in result.output
     assert "--out" in result.output
 
@@ -9740,6 +9741,7 @@ def test_cidr_help() -> None:
     assert result.exit_code == 0
     assert "--cidr" in result.output
     assert "--contains" in result.output
+    assert "--diff" in result.output
     assert "--format" in result.output
     assert "--out" in result.output
 
@@ -9830,6 +9832,114 @@ def test_cidr_out_option_markdown(tmp_path) -> None:
     assert out_file.exists()
     content = out_file.read_text()
     assert "CIDR Network Calculator Report" in content
+
+
+def test_cidr_diff_option_no_overlap_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cidr", "--cidr", "192.168.1.0/24", "--diff", "10.0.0.0/8", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["diff"]["difference"] == ["192.168.1.0/24"]
+    assert parsed["diff"]["total_diff_addresses"] == 256
+
+
+def test_cidr_diff_option_full_overlap_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cidr", "--cidr", "192.168.1.0/24", "--diff", "192.168.1.0/24", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["diff"]["difference"] == []
+    assert parsed["diff"]["total_diff_addresses"] == 0
+
+
+def test_cidr_diff_option_partial_overlap_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cidr", "--cidr", "192.168.1.0/24", "--diff", "192.168.1.128/25", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["diff"]["difference"] == ["192.168.1.0/25"]
+    assert parsed["diff"]["total_diff_addresses"] == 128
+
+
+def test_cidr_diff_option_markdown() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cidr", "--cidr", "192.168.1.0/24", "--diff", "10.0.0.0/8", "--format", "markdown"],
+    )
+    assert result.exit_code == 0
+    assert "Set Difference" in result.output
+    assert "10.0.0.0/8" in result.output
+    assert "192.168.1.0/24" in result.output
+
+
+def test_cidr_diff_option_ipv6() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cidr", "--cidr", "2001:db8::/32", "--diff", "2001:db9::/32", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["diff"]["difference"] == ["2001:db8::/32"]
+
+
+def test_cidr_diff_option_out_json(tmp_path) -> None:
+    out_file = tmp_path / "cidr_diff.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "cidr",
+            "--cidr",
+            "192.168.1.0/24",
+            "--diff",
+            "192.168.1.128/25",
+            "--format",
+            "json",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    parsed = json.loads(content)
+    assert parsed["diff"]["difference"] == ["192.168.1.0/25"]
+
+
+def test_cidr_diff_option_out_markdown(tmp_path) -> None:
+    out_file = tmp_path / "cidr_diff.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "cidr",
+            "--cidr",
+            "192.168.1.0/24",
+            "--diff",
+            "10.0.0.0/8",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "Set Difference" in content
 
 
 # hash command tests

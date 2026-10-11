@@ -2171,6 +2171,10 @@ def cve(
     help="Optional IP address to test for network membership.",
 )
 @click.option(
+    "--diff",
+    help="Optional CIDR to compute set difference against (addresses in --cidr but not in --diff).",
+)
+@click.option(
     "--format",
     "fmt",
     type=click.Choice(["json", "markdown"]),
@@ -2183,9 +2187,9 @@ def cve(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def cidr(cidr: str, contains: Optional[str], fmt: str, out_path: Optional[str]) -> None:
+def cidr(cidr: str, contains: Optional[str], diff: Optional[str], fmt: str, out_path: Optional[str]) -> None:
     """Compute network calculations for a CIDR (offline)."""
-    results = run_cidr(cidr, contains=contains)
+    results = run_cidr(cidr, contains=contains, diff=diff)
 
     if fmt == "json":
         output = format_cidr_report_json(results)

@@ -1181,6 +1181,34 @@ Added a `--diff` option to the `radix` command that computes the set difference 
 - `python -m ethscan radix --help` -> shows `--diff` option
 - End-to-end: `python -m ethscan radix --cidrs "192.168.1.0/24,192.168.2.0/23,10.0.0.0/8" --diff "192.168.1.0/24,10.0.0.0/8" --format json` produces JSON with difference networks showing `192.168.2.0/23`
 
+## Completed: `--diff` option for `cidr` command
+
+Added a `--diff` option to the `cidr` command that computes the set difference between two CIDR networks (addresses in `--cidr` but not in `--diff`), mirroring the `radix --diff` feature.
+
+### Added Functionality
+- `ethscan/cidr.py`:
+  - Added `_subtract_networks()` helper — subtracts one list of networks from another using `ipaddress.collapse_addresses()` and `address_exclude()` for proper network subtraction logic
+  - Updated `run_cidr()` to accept `diff` (Optional[str]) parameter
+  - Added diff computation logic: normalizes diff CIDR, subtracts from the primary network
+  - Updated return dictionary to include `diff` dict with `diff_cidr`, `difference` (list of CIDR strings), `difference_network_count`, and `total_diff_addresses` fields
+  - Updated `format_cidr_report_markdown()` to display a "## Set Difference (In First, Not In Second)" section with diff CIDR, difference networks count, total difference addresses, and a difference networks table
+- `ethscan/cli.py`:
+  - Added `--diff` option to the `cidr` command
+  - Passes `diff` to `run_cidr()`
+
+### Modified Files
+- `ethscan/cidr.py` — added `_subtract_networks`, updated `run_cidr` and markdown formatter
+- `ethscan/cli.py` — added `--diff` option and pass-through
+- `tests/test_cidr.py` — 14 new unit tests: `_subtract_networks` (empty minuend, empty subtrahend, no overlap, full overlap, partial overlap, IPv6), `run_cidr` diff (none by default, no overlap, full overlap, partial overlap, strips whitespace, IPv6, with contains), JSON formatter with diff, markdown formatter with diff (basic and full overlap)
+- `tests/test_cli.py` — 9 new CLI integration tests: help shows `--diff`, diff no overlap JSON, diff full overlap JSON, diff partial overlap JSON, diff markdown, diff IPv6, diff `--out` JSON, diff `--out` markdown
+
+### Verification
+- `python -m pytest -q` -> 1365 passed, 1 skipped (1342 baseline + 23 new: 14 unit + 9 CLI)
+- `python -m ethscan cidr --help` -> shows `--diff` option
+- End-to-end: `python -m ethscan cidr --cidr 192.168.1.0/24 --diff 10.0.0.0/8 --format json` produces JSON with `difference: ["192.168.1.0/24"]` and `total_diff_addresses: 256`
+- End-to-end: `python -m ethscan cidr --cidr 192.168.1.0/24 --diff 192.168.1.128/25 --format markdown` produces Markdown with "## Set Difference" section and difference table showing `192.168.1.0/25`
+- Edge cases: full overlap returns empty difference with 0 addresses; IPv6 diff works; whitespace in `--diff` is stripped
+
 ## Current state
 - All 31 commands implemented and wired up (`jwt`, `completion`, `config`, `cidr`, `radix`, `mac`, `dnssec`, `hash`, `subtake`, `cert`, `recon`, `geo`, `trace`, `wifi`, `osdetect`, `urlcheck`, `vuln`, `cve`, `dnsbrute`, `subdomains`, `whois`, `dns`, `resolve`, `ssl`, `tls`, `service`, `scan`, `brute`, `web`, `headers`, `ping`, `audit`, `report`).
 - `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv` options.
@@ -1189,6 +1217,7 @@ Added a `--diff` option to the `radix` command that computes the set difference 
 - `geo` now supports `--recursive` and `--max-depth`.
 - `dnsbrute` now supports `--recursive` and `--max-depth` for recursive zone transfers.
 - `radix` now supports `--cidrs`, `--no-merge`, `--max-depth`, `--contains`, `--diff`, `--format`, `--out` for CIDR radix tree visualization.
+- `cidr` now supports `--cidr`, `--contains`, `--diff`, `--format`, `--out` for CIDR network calculations with optional set difference.
 - `osdetect` supports `--ports`, `--banners-file`, `--timeout`, `--workers`.
 - `audit` now supports `--format json|markdown` and `--out`.
 - `cert` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out`.
@@ -1199,17 +1228,14 @@ Added a `--diff` option to the `radix` command that computes the set difference 
 - `brute` now supports `--output-format csv` (with deprecated `--format` alias).
 - `mac` now supports `--target`, `--timeout`, `--no-cache`, `--no-offline-fallback`, `--api-url`, `--format`, `--out`.
 - `hash` now supports `--file`, `--algorithm`, `--format`, `--out`.
-- `cidr` now supports `--cidr`, `--contains`, `--format`, `--out`.
 - `jwt` now supports `--token`, `--format`, `--out`.
 - `completion` now supports `--shell`, `--prog-name`, `--format`, `--out`.
 - `config` now supports `--config`, `--init`, `--format`, `--out`.
 - Configuration file (`ethscan.yaml`) persists default options across commands via a `--config` group option and a `config` subcommand.
-- Tests: 1342 passing (1 skipped).
+- Tests: 1365 passing (1 skipped).
 
 ## Suggested next task
 
-**Add a `--diff` option to the `cidr` command** for set difference calculations between two CIDR networks (similar to `radix --diff` but for single networks).
+**Add a `--profile fast|normal|full` option to the `cve` command** to map to predefined port sets (similar to `scan`/`service`).
 
 Alternative: Add a `--recursive` option to the `geo` command for recursive geolocation lookups across resolved hop IPs.
-
-Alternative: Add a `--profile fast|normal|full` option to the `cve` command to map to predefined port sets (similar to `scan`/`service`).
