@@ -1095,13 +1095,37 @@ Added a `--file` option to the `hash` command to read passwords from a file (one
 - End-to-end: `echo fromstdin | python -m ethscan hash --file passwords.txt --format json` -> only file contents are hashed (`--file` wins over stdin)
 - End-to-end: `python -m ethscan hash --file missing.txt --format json` -> non-zero exit with FileNotFoundError
 
+## Completed: `--check` option for `hash` command
+
+Added a `--check DIGEST` option to the `hash` command that compares a plaintext password against a known hash digest, reporting MATCH/MISMATCH/UNKNOWN. The algorithm is inferred from the digest length when `--algorithm` is omitted (preferring MD5 when multiple algorithms share a length, e.g. MD5/NTLM/MD4 at 32 chars), or can be specified explicitly via `--algorithm`.
+
+### Added Functionality
+- `ethscan/hash.py`:
+  - `_DIGEST_LENGTHS` — canonical hex digest lengths per algorithm (md5/sha1/sha256/sha512/ntlm/md4), used to infer the algorithm from an unknown digest.
+  - `_infer_algorithm(digest)` — infers the canonical algorithm key from a hex digest's length; returns `None` when no match (e.g. `deadbeef`).
+  - `run_check(password, digest, algorithm=None)` — public entry point: normalizes/explicitly infers the algorithm, computes the hash, compares case-insensitively, and returns a structured result with `password`, `digest`, `algorithm`, `computed`, `match`, `error` fields. Gracefully reports errors (unsupported algorithm, uninferable length) instead of raising.
+  - `format_check_report_json(data)` / `format_check_report_markdown(data)` — output formatters (markdown includes MATCH/MISMATCH/UNKNOWN result and an Error section when present, with pipe escaping).
+
+### Modified Files
+- `ethscan/cli.py` — added `--check DIGEST` option to the `hash` command; in check mode the first password is compared against the supplied digest using `run_check` and the check formatters are used.
+- `tests/test_hash.py` — 17 new unit tests: `run_check` (md5 match/mismatch, sha256 match, explicit algorithm, case-insensitive digest, sha1/sha512 inference, unknown-length error, unsupported-algorithm error, md4-when-unavailable), both formatters (JSON basic/mismatch/error, markdown match/mismatch/error/pipe-escape/no-algorithm).
+- `tests/test_cli.py` — 11 new CLI integration tests: `hash` help listing `--check`, check match/mismatch JSON, check match/mismatch markdown, sha256 explicit algorithm, sha1 inference, unknown-length error, `--out` option, pipe escaping in markdown, no-passwords.
+- `README.md` — added password hash checking (`hash --check`) to the features list.
+
+### Verification
+- `python -m pytest -q` -> 1400 passed, 1 skipped (1371 baseline + 29 new: 17 unit + 12 CLI).
+- `python -m ethscan hash --help` -> lists `--check TEXT` option.
+- End-to-end: `python -m ethscan hash --password password --check 5f4dcc3b5aa765d61d8327deb882cf99 --format json` -> `match: true`, algorithm `md5`.
+- End-to-end: `python -m ethscan hash --password wrong --check 5f4dcc3b5aa765d61d8327deb882cf99 --format markdown` -> MISMATCH with computed digest.
+- End-to-end: `python -m ethscan hash --password password --check deadbeef --format json` -> `match: null` with error "Could not infer algorithm from digest length 8; specify --algorithm explicitly."
+
 ## Suggested next task
 
-**Add a `--check` option to the `hash` command** that compares a plaintext password against a known hash (e.g. verify a stored MD5/SHA-256 digest), reporting match/mismatch with the algorithm inferred or specified via `--algorithm`.
-
-Alternative: Add a `--pepper`/`--salt` option to the `hash` command for salted hash generation (e.g. HMAC-SHA-256 with a user-provided salt).
+**Add a `--pepper`/`--salt` option to the `hash` command** for salted hash generation (e.g. HMAC-SHA-256 with a user-provided salt).
 
 Alternative: Add a `--min-length` option to the `audit` command to flag passwords below a custom length threshold in addition to the built-in heuristics.
+
+Alternative: Add a `--iterations` option to the `hash` command for iterated hash generation (e.g. PBKDF2-HMAC-SHA256 with a configurable iteration count).
 
 ## Requirements
 - Pick one of the suggested features and implement it following the existing module conventions.
@@ -1126,6 +1150,6 @@ Alternative: Add a `--min-length` option to the `audit` command to flag password
 - `vuln` now supports `--target`, `--ports`, `--services-file`, `--tls-file`, `--ssl-file`, `--severity`, `--min-severity`, `--format`, `--out` for built-in vulnerability checks.
 - `dnssec` now supports `--target`, `--server`, `--timeout`, `--format`, `--out` for DNSSEC validation (DNSKEY + DS chain of trust).
 - `geo` now supports `--recursive` and `--max-depth` for recursive hop geolocation.
-- `hash` now supports `--password`, `--file` (one password per line), `--algorithm [md5|sha1|sha256|sha512|ntlm|md4]`, `--format`, `--out` for password hash generation.
-- Configuration file (`ethscan.yaml`) persists default options across commands via a `--config` group option and a `config` subcommand.
-- Tests: 1371 passing (1 skipped).
+- `hash` now supports `--password`, `--file` (one password per line), `--algorithm [md5|sha1|sha256|sha512|ntlm|md4]`, `--check DIGEST` (compare plaintext against a known hash, algorithm inferred from digest length or explicit `--algorithm`), `--format`, `--out` for password hash generation and verification.
+ - Configuration file (`ethscan.yaml`) persists default options across commands via a `--config` group option and a `config` subcommand.
+ - Tests: 1400 passing (1 skipped).

@@ -351,3 +351,152 @@ def test_format_hash_report_markdown_multiple_algorithms() -> None:
     output = format_hash_report_markdown(data)
     assert "sha256" in output
     assert "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8" in output
+
+
+# ---------------------------------------------------------------------------
+# Password check (run_check)
+# ---------------------------------------------------------------------------
+
+
+def test_run_check_md5_match() -> None:
+    result = run_check("password", "5f4dcc3b5aa765d61d8327deb882cf99")
+    assert result["match"] is True
+    assert result["algorithm"] == "md5"
+    assert result["computed"] == "5f4dcc3b5aa765d61d8327deb882cf99"
+    assert result["error"] is None
+    assert result["password"] == "password"
+
+
+def test_run_check_md5_mismatch() -> None:
+    result = run_check("wrongpass", "5f4dcc3b5aa765d61d8327deb882cf99")
+    assert result["match"] is False
+    assert result["computed"] != "5f4dcc3b5aa765d61d8327deb882cf99"
+
+
+def test_run_check_sha256_match() -> None:
+    result = run_check(
+        "password",
+        "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8",
+    )
+    assert result["match"] is True
+    assert result["algorithm"] == "sha256"
+
+
+def test_run_check_explicit_algorithm() -> None:
+    result = run_check(
+        "password",
+        "5f4dcc3b5aa765d61d8327deb882cf99",
+        algorithm="md5",
+    )
+    assert result["match"] is True
+    assert result["algorithm"] == "md5"
+
+
+def test_run_check_case_insensitive_digest() -> None:
+    result = run_check("password", "5F4DCC3B5AA765D61D8327DEB882CF99")
+    assert result["match"] is True
+
+
+def test_run_check_infers_sha1_from_length() -> None:
+    result = run_check("password", "5baa61e4c9b93f3f0682250b6cf8331b7ee68fd8")
+    assert result["match"] is True
+    assert result["algorithm"] == "sha1"
+
+
+def test_run_check_infers_sha512_from_length() -> None:
+    sha512 = (
+        "b109f3bbbc244eb82441917ed06d618b9008dd09b3befd1b5e07394c706a8bb98"
+        "0b1d7785e5976ec049b46df5f1326af5a2ea6d103fd07c95385ffab0cacbc86"
+    )
+    result = run_check("password", sha512)
+    assert result["match"] is True
+    assert result["algorithm"] == "sha512"
+
+
+def test_run_check_unknown_length_error() -> None:
+    result = run_check("password", "deadbeef")
+    assert result["match"] is None
+    assert result["error"] is not None
+    assert "Could not infer algorithm" in result["error"]
+
+
+def test_run_check_unsupported_algorithm_error() -> None:
+    result = run_check("password", "5f4dcc3b5aa765d61d8327deb882cf99", algorithm="ripemd160")
+    assert result["match"] is None
+    assert result["error"] is not None
+
+
+def test_run_check_md4_explicit_when_unavailable() -> None:
+    # 32-char digest with explicit md4 algorithm
+    result = run_check(
+        "password",
+        "5f4dcc3b5aa765d61d8327deb882cf99",
+        algorithm="md4",
+    )
+    if not MD4_AVAILABLE:
+        assert result["match"] is None
+        assert result["error"] is not None
+    else:
+        assert result["algorithm"] == "md4"
+
+
+# ---------------------------------------------------------------------------
+# Check formatters
+# ---------------------------------------------------------------------------
+
+
+def test_format_check_report_json_basic() -> None:
+    result = run_check("password", "5f4dcc3b5aa765d61d8327deb882cf99")
+    output = format_check_report_json(result)
+    parsed = json.loads(output)
+    assert parsed["match"] is True
+    assert parsed["algorithm"] == "md5"
+
+
+def test_format_check_report_json_mismatch() -> None:
+    result = run_check("wrongpass", "5f4dcc3b5aa765d61d8327deb882cf99")
+    output = format_check_report_json(result)
+    parsed = json.loads(output)
+    assert parsed["match"] is False
+
+
+def test_format_check_report_json_error() -> None:
+    result = run_check("password", "deadbeef")
+    output = format_check_report_json(result)
+    parsed = json.loads(output)
+    assert parsed["match"] is None
+    assert parsed["error"] is not None
+
+
+def test_format_check_report_markdown_match() -> None:
+    result = run_check("password", "5f4dcc3b5aa765d61d8327deb882cf99")
+    output = format_check_report_markdown(result)
+    assert "Password Check Report" in output
+    assert "MATCH" in output
+    assert "md5" in output
+
+
+def test_format_check_report_markdown_mismatch() -> None:
+    result = run_check("wrongpass", "5f4dcc3b5aa765d61d8327deb882cf99")
+    output = format_check_report_markdown(result)
+    assert "MISMATCH" in output
+
+
+def test_format_check_report_markdown_error() -> None:
+    result = run_check("password", "deadbeef")
+    output = format_check_report_markdown(result)
+    assert "UNKNOWN" in output
+    assert "Error" in output
+
+
+def test_format_check_report_markdown_pipe_escape() -> None:
+    result = run_check("pass|word", "5f4dcc3b5aa765d61d8327deb882cf99")
+    output = format_check_report_markdown(result)
+    assert "pass\\|word" in output
+
+
+def test_format_check_report_markdown_no_algorithm() -> None:
+    result = run_check("password", "deadbeef")
+    output = format_check_report_markdown(result)
+    # algorithm is None -> no Algorithm line
+    assert "**Algorithm:**" not in output

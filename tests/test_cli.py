@@ -10086,3 +10086,161 @@ def test_hash_file_missing_file_fails(tmp_path) -> None:
     )
     assert result.exit_code != 0
     assert isinstance(result.exception, FileNotFoundError)
+
+
+# ---------------------------------------------------------------------------
+# hash --check
+# ---------------------------------------------------------------------------
+
+
+def test_hash_check_help_shows_check_option() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["hash", "--help"])
+    assert result.exit_code == 0
+    assert "--check" in result.output
+
+
+def test_hash_check_match_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["hash", "--password", "password", "--check", "5f4dcc3b5aa765d61d8327deb882cf99", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["match"] is True
+    assert parsed["algorithm"] == "md5"
+    assert parsed["computed"] == "5f4dcc3b5aa765d61d8327deb882cf99"
+    assert parsed["error"] is None
+
+
+def test_hash_check_mismatch_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["hash", "--password", "wrongpass", "--check", "5f4dcc3b5aa765d61d8327deb882cf99", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["match"] is False
+    assert parsed["computed"] != "5f4dcc3b5aa765d61d8327deb882cf99"
+
+
+def test_hash_check_match_markdown() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["hash", "--password", "password", "--check", "5f4dcc3b5aa765d61d8327deb882cf99", "--format", "markdown"],
+    )
+    assert result.exit_code == 0
+    assert "Password Check Report" in result.output
+    assert "MATCH" in result.output
+
+
+def test_hash_check_mismatch_markdown() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["hash", "--password", "wrongpass", "--check", "5f4dcc3b5aa765d61d8327deb882cf99", "--format", "markdown"],
+    )
+    assert result.exit_code == 0
+    assert "MISMATCH" in result.output
+
+
+def test_hash_check_sha256_explicit_algorithm() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--password",
+            "password",
+            "--check",
+            "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8",
+            "--algorithm",
+            "sha256",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["match"] is True
+    assert parsed["algorithm"] == "sha256"
+
+
+def test_hash_check_infers_algorithm_from_length() -> None:
+    # 40-char digest infers sha1
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--password",
+            "password",
+            "--check",
+            "5baa61e4c9b93f3f0682250b6cf8331b7ee68fd8",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["match"] is True
+    assert parsed["algorithm"] == "sha1"
+
+
+def test_hash_check_unknown_length_error() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["hash", "--password", "password", "--check", "deadbeef", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["match"] is None
+    assert parsed["error"] is not None
+    assert "Could not infer algorithm" in parsed["error"]
+
+
+def test_hash_check_with_out_option(tmp_path) -> None:
+    out_file = tmp_path / "check.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--password",
+            "password",
+            "--check",
+            "5f4dcc3b5aa765d61d8327deb882cf99",
+            "--format",
+            "json",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    parsed = json.loads(out_file.read_text())
+    assert parsed["match"] is True
+
+
+def test_hash_check_pipe_escape_in_markdown() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["hash", "--password", "pass|word", "--check", "5f4dcc3b5aa765d61d8327deb882cf99", "--format", "markdown"],
+    )
+    assert result.exit_code == 0
+    assert "pass\\|word" in result.output
+
+
+def test_hash_check_no_passwords() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["hash", "--check", "5f4dcc3b5aa765d61d8327deb882cf99", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    assert "No passwords provided" in result.output
