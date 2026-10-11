@@ -1873,3 +1873,61 @@ Alternative: Add a dedicated `nmap` parser command (`nmap`) that parses an Nmap 
 - Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
 - Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
 - Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
+
+## Completed: `--output-format csv` output for `vuln` command
+
+Added machine-readable CSV output to the `vuln` command, parallel to the `--output-format [json|markdown|csv]` option already available on the `scan`, `service`, `audit`, `report`, and `brute` commands.
+
+### Added Functionality
+- `ethscan/vuln.py`:
+  - Added `import csv` and `import io` imports.
+  - `format_vuln_report_csv(data)` — emits a header row (`id,type,severity,product,version,port,title,description`) followed by one row per finding, with graceful handling of missing optional fields (product, version, port) for non-service finding kinds (protocol, cipher, certificate).
+- `ethscan/cli.py`:
+  - Added `format_vuln_report_csv` to the `ethscan.vuln` import block.
+  - Added `--output-format [json|markdown|csv]` option (default `None`) to the `vuln` command, following the standard `--output-format`/`--format` precedence pattern used by `scan`/`service`/`report`/`brute`.
+  - Changed `--format` choices from `["json", "markdown"]` to `["json", "markdown", "csv"]` (deprecated alias).
+  - Updated the `vuln()` function signature to accept `output_fmt` and route to the CSV formatter when `chosen_format == "csv"`.
+
+### Modified Files
+- `ethscan/vuln.py` — added `csv`/`io` imports and `format_vuln_report_csv()` function.
+- `ethscan/cli.py` — imported `format_vuln_report_csv`, added `--output-format` option to `vuln` command, updated `--format` choices, updated function signature and output dispatch.
+- `tests/test_vuln.py` — 3 new unit tests:
+  - `test_format_vuln_report_csv` — verifies header columns, finding rows for service and protocol kinds.
+  - `test_format_vuln_report_csv_no_findings` — verifies header-only output when no findings.
+  - `test_format_vuln_report_csv_missing_optional_fields` — verifies graceful handling of missing product/version/port.
+- `tests/test_cli.py` — 4 new CLI integration tests:
+  - `test_vuln_help_shows_output_format` — help shows `--output-format` and `csv`.
+  - `test_vuln_output_format_csv` — `--output-format csv` produces correct CSV with findings.
+  - `test_vuln_format_csv_alias` — `--format csv` (deprecated alias) produces correct CSV (header-only when no findings).
+  - `test_vuln_out_option_csv` — `--output-format csv --out` writes CSV to file.
+
+### Verification
+- `python -m pytest -q` -> 1705 passed, 1 skipped (1698 baseline + 7 new: 3 unit + 4 CLI).
+- `python -m ethscan vuln --help` -> shows `--output-format [json|markdown|csv]` and `--format [json|markdown|csv]` (deprecated alias).
+- End-to-end: `python -m ethscan vuln --target nonexistent.invalid.domain.tld --output-format csv --timeout 1.0` -> produces header-only CSV (`id,type,severity,product,version,port,title,description`) with no finding rows (no matches).
+
+## Suggested next task
+
+**Add a dedicated `nmap` parser command** (`nmap`) that parses an Nmap XML scan file and cross-references detected service versions against the built-in `vuln` CVE/weakness database (reusing `match_service_vulns` from `ethscan/vuln.py`). The command should accept `--input-file` (Nmap XML path), `--format [json|markdown]`, `--out`, and produce a consolidated report of detected services and matched vulnerabilities.
+
+Alternative: Add a `--recursive` option to the `whois` command for recursive WHOIS queries that follow referral servers extracted from each response across registrar tiers (building on the existing `--recursive/--no-recursive` and `--max-depth` that are already implemented — this would extend the recursion to follow cross-registrar referrals automatically).
+
+Alternative: Add a `stale` command to detect stale DNS records (A/AAAA/CNAME records pointing to deallocated or unresolvable IP addresses / dead cloud resources) using stdlib-only DNS resolution, with configurable timeout and concurrency.
+
+## Requirements
+- Pick one of the suggested features and implement it following the existing module conventions.
+- Add a new module under `ethscan/` with `run_*`, `format_*_report_json`, `format_*_report_markdown` (for new commands) or extend an existing module (for new options).
+- Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
+- Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
+- Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
+
+## Current state
+- All 30 commands implemented and wired up (including `radix` with `--cidr-file`).
+- `vuln` now supports `--output-format [json|markdown|csv]` and `--format [json|markdown|csv]` (deprecated alias) for machine-readable CSV export of vulnerability findings.
+- `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv`.
+- `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, `--max-depth`.
+- `whois` now supports `--recursive/--no-recursive`, `--max-depth`, `--format json|markdown`, and `--out`.
+- `audit` now supports `--format json|markdown`, `--out`, `--min-length`, `--output-format csv`, `--sort`, and `--salt`/`--pepper`/`--algorithm`.
+- `report`, `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `dnssec`, `geo` (with `--recursive`, `--max-depth`), `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon`, `resolve`, `validate`, `radix` (with `--cidr-file`) all implemented with JSON/Markdown output.
+- Configuration file (`ethscan.yaml`) persists default options across commands.
+- Tests: 1705 passing (1 skipped).

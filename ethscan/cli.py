@@ -80,6 +80,7 @@ from ethscan.service import (
     run_service,
 )
 from ethscan.vuln import (
+    format_vuln_report_csv,
     format_vuln_report_json,
     format_vuln_report_markdown,
     run_vuln,
@@ -1422,11 +1423,18 @@ def service(target: str, ports: Optional[str], profile: Optional[str], timeout: 
 @click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
 @click.option("--workers", default=50, type=int, help="Maximum concurrent workers")
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format: json, markdown, or csv.",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    help="Deprecated alias for --output-format.",
 )
 @click.option(
     "--out",
@@ -1435,23 +1443,24 @@ def service(target: str, ports: Optional[str], profile: Optional[str], timeout: 
     help="Output file path (default: stdout)",
 )
 def vuln(
-    target: str,
-    ports: Optional[str],
-    services_file: Optional[str],
-    tls_file: Optional[str],
-    ssl_file: Optional[str],
-    severity: Optional[str],
-    min_severity: Optional[str],
-    recursive: bool,
-    max_depth: int,
-    salt: Optional[str],
-    pepper: Optional[str],
-    algorithm: str,
-    timeout: float,
-    workers: int,
-    fmt: str,
-    out_path: Optional[str],
-) -> None:
+        target: str,
+        ports: Optional[str],
+        services_file: Optional[str],
+        tls_file: Optional[str],
+        ssl_file: Optional[str],
+        severity: Optional[str],
+        min_severity: Optional[str],
+        recursive: bool,
+        max_depth: int,
+        salt: Optional[str],
+        pepper: Optional[str],
+        algorithm: str,
+        timeout: float,
+        workers: int,
+        output_fmt: Optional[str],
+        fmt: str,
+        out_path: Optional[str],
+    ) -> None:
     """Check TARGET for known service, protocol, and certificate vulnerabilities."""
     services = None
     if services_file:
@@ -1490,10 +1499,15 @@ def vuln(
         algorithm=algorithm,
     )
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_vuln_report_json(results)
-    else:
+    elif chosen_format == "markdown":
         output = format_vuln_report_markdown(results)
+    else:
+        output = format_vuln_report_csv(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

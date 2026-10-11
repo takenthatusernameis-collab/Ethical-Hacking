@@ -13,6 +13,7 @@ from ethscan.vuln import (
     VULN_DB,
     _normalize_host,
     _severity_rank,
+    format_vuln_report_csv,
     format_vuln_report_json,
     format_vuln_report_markdown,
     match_certificate_vulns,
@@ -1087,3 +1088,102 @@ def test_format_vuln_report_json_includes_salt_pepper() -> None:
     assert parsed["salt"] is True
     assert parsed["pepper"] is True
     assert parsed["algorithm"] == "sha256"
+
+
+def test_format_vuln_report_csv() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "services_checked": 1,
+        "tls_checked": False,
+        "certificate_checked": False,
+        "finding_count": 2,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 1, "low": 1},
+        "findings": [
+            {
+                "id": "CVE-2018-15473",
+                "kind": "service",
+                "title": "OpenSSH user enumeration",
+                "severity": "medium",
+                "description": "OpenSSH before 7.7 allows user enumeration.",
+                "product": "OpenSSH",
+                "version": "7.2p2",
+                "port": 22,
+            },
+            {
+                "id": "CVE-2014-3566",
+                "kind": "protocol",
+                "title": "SSLv3 is vulnerable to POODLE",
+                "severity": "high",
+                "description": "SSLv3 supports CBC-mode ciphers.",
+                "protocol": "SSLv3",
+            },
+        ],
+        "notes": [],
+    }
+    output = format_vuln_report_csv(data)
+    lines = output.strip().split("\n")
+    header = lines[0]
+    assert "id,type,severity,product,version,port,title,description" in header
+    # First finding row (service kind - has product/version/port)
+    row1 = lines[1]
+    assert "CVE-2018-15473" in row1
+    assert "service" in row1
+    assert "medium" in row1
+    assert "OpenSSH" in row1
+    assert "7.2p2" in row1
+    assert "22" in row1
+    # Second finding row (protocol kind - no product/version/port)
+    row2 = lines[2]
+    assert "CVE-2014-3566" in row2
+    assert "protocol" in row2
+    assert "high" in row2
+    assert "SSLv3 is vulnerable to POODLE" in row2
+
+
+def test_format_vuln_report_csv_no_findings() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "services_checked": 0,
+        "tls_checked": False,
+        "certificate_checked": False,
+        "finding_count": 0,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+        "findings": [],
+        "notes": [],
+    }
+    output = format_vuln_report_csv(data)
+    lines = output.strip().split("\n")
+    assert lines[0] == "id,type,severity,product,version,port,title,description"
+    assert len(lines) == 1  # header only, no finding rows
+
+
+def test_format_vuln_report_csv_missing_optional_fields() -> None:
+    """CSV formatter handles findings with missing optional fields gracefully."""
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "services_checked": 0,
+        "tls_checked": False,
+        "certificate_checked": False,
+        "finding_count": 1,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+        "findings": [
+            {
+                "id": "TEST-1",
+                "kind": "cipher",
+                "title": "Weak cipher",
+                "severity": "high",
+                "description": "Weak cipher detected",
+            },
+        ],
+        "notes": [],
+    }
+    output = format_vuln_report_csv(data)
+    lines = output.strip().split("\n")
+    assert len(lines) == 2  # header + 1 finding
+    row = lines[1]
+    assert "TEST-1" in row
+    assert "cipher" in row
+    assert "high" in row

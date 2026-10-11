@@ -13249,3 +13249,207 @@ def test_radix_cidr_file_help() -> None:
     result = runner.invoke(cli, ["radix", "--help"])
     assert result.exit_code == 0
     assert "--cidr-file" in result.output
+
+
+def test_vuln_help_shows_output_format() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["vuln", "--help"])
+    assert result.exit_code == 0
+    assert "--output-format" in result.output
+    assert "csv" in result.output
+
+
+def test_vuln_output_format_csv(monkeypatch) -> None:
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+        min_severity=None,
+        recursive=False,
+        max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
+        output_fmt=None,
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports": ports,
+            "services_checked": 1,
+            "tls_checked": False,
+            "certificate_checked": False,
+            "severity_filter": severity,
+            "min_severity_filter": min_severity,
+            "findings": [
+                {
+                    "id": "CVE-2018-15473",
+                    "kind": "service",
+                    "title": "OpenSSH user enumeration via malformed userauth request",
+                    "severity": "medium",
+                    "description": "OpenSSH before 7.7 allows user enumeration.",
+                    "product": "OpenSSH",
+                    "version": "7.2p2",
+                    "port": 22,
+                }
+            ],
+            "finding_count": 1,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 1, "low": 0},
+            "notes": [],
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hosts_scanned": [],
+            "recursive_findings": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["vuln", "--target", "example.com", "--output-format", "csv", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    header_line = result.output.split("\n")[0]
+    assert "id" in header_line
+    assert "type" in header_line
+    assert "severity" in header_line
+    assert "product" in header_line
+    assert "version" in header_line
+    assert "port" in header_line
+    assert "title" in header_line
+    assert "description" in header_line
+    assert "CVE-2018-15473" in result.output
+    assert "service" in result.output
+    assert "medium" in result.output
+    assert "OpenSSH" in result.output
+
+
+def test_vuln_format_csv_alias(monkeypatch) -> None:
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+        min_severity=None,
+        recursive=False,
+        max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports": ports,
+            "services_checked": 0,
+            "tls_checked": False,
+            "certificate_checked": False,
+            "severity_filter": severity,
+            "min_severity_filter": min_severity,
+            "findings": [],
+            "finding_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": ["No known vulnerabilities matched"],
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hosts_scanned": [],
+            "recursive_findings": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["vuln", "--target", "example.com", "--format", "csv", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    header_line = result.output.split("\n")[0]
+    assert "id,type,severity,product,version,port,title,description" in header_line
+
+
+def test_vuln_out_option_csv(tmp_path, monkeypatch) -> None:
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+        min_severity=None,
+        recursive=False,
+        max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
+    ):
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports": ports,
+            "services_checked": 1,
+            "tls_checked": False,
+            "certificate_checked": False,
+            "severity_filter": severity,
+            "min_severity_filter": min_severity,
+            "findings": [
+                {
+                    "id": "VSFTPD-2.3.4-BACKDOOR",
+                    "kind": "service",
+                    "title": "vsftpd 2.3.4 backdoor",
+                    "severity": "critical",
+                    "description": "vsftpd 2.3.4 backdoor command execution.",
+                    "product": "vsftpd",
+                    "version": "2.3.4",
+                    "port": 21,
+                }
+            ],
+            "finding_count": 1,
+            "severity_counts": {"critical": 1, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hosts_scanned": [],
+            "recursive_findings": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+    out_file = tmp_path / "report.csv"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--output-format",
+            "csv",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    content = out_file.read_text(encoding="utf-8")
+    assert "id,type,severity,product,version,port,title,description" in content
+    assert "VSFTPD-2.3.4-BACKDOOR" in content
+    assert "critical" in content
+    assert "vsftpd" in content
+    assert "Report written to" in result.output

@@ -5,8 +5,10 @@ TLS/SSL data (from ``tls``/``ssl`` command output) against a small built-in
 CVE/weakness database and reports matches.
 """
 
+import csv
 import hashlib
 import hmac
+import io
 import json
 import re
 from typing import Dict, List, Optional, Tuple
@@ -857,6 +859,42 @@ def run_vuln(
 def format_vuln_report_json(data: Dict[str, object]) -> str:
     """Format vulnerability check results as JSON."""
     return json.dumps(data, indent=2, default=str)
+
+
+def format_vuln_report_csv(data: Dict[str, object]) -> str:
+    """Format vulnerability check results as CSV.
+
+    Emits a header row followed by one row per finding with columns:
+    id, type, severity, product, version, port, title, description.
+    """
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "id",
+            "type",
+            "severity",
+            "product",
+            "version",
+            "port",
+            "title",
+            "description",
+        ]
+    )
+    for finding in data.get("findings") or []:
+        writer.writerow(
+            [
+                finding.get("id", ""),
+                finding.get("kind", ""),
+                finding.get("severity", ""),
+                finding.get("product") or "",
+                finding.get("version") or "",
+                finding.get("port") or "",
+                finding.get("title", ""),
+                finding.get("description", ""),
+            ]
+        )
+    return output.getvalue()
 
 
 def _finding_detail(finding: Dict[str, object]) -> str:
