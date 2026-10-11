@@ -5,8 +5,10 @@ import socket
 import pytest
 
 from ethscan.whois import (
+    DEFAULT_RECURSIVE_DEPTH,
     DEFAULT_WHOIS_SERVER,
     DEFAULT_TIMEOUT,
+    extract_referral_server,
     format_whois_report_json,
     format_whois_report_markdown,
     parse_whois,

@@ -946,7 +946,8 @@ def test_cli_help_lists_whois() -> None:
 
 
 def test_whois_offline_target_json(monkeypatch) -> None:
-    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0):
+    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0,
+                       recursive=False, max_depth=2):
         return {
             "target": target,
             "server": server,
@@ -961,6 +962,9 @@ def test_whois_offline_target_json(monkeypatch) -> None:
                 "status_codes": [],
                 "raw": "Registrar: Test Registrar\n",
             },
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hops": [],
         }
 
     monkeypatch.setattr("ethscan.cli.run_whois", mock_run_whois)
@@ -976,7 +980,8 @@ def test_whois_offline_target_json(monkeypatch) -> None:
 
 
 def test_whois_offline_target_markdown(monkeypatch) -> None:
-    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0):
+    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0,
+                       recursive=False, max_depth=2):
         return {
             "target": target,
             "server": server,
@@ -991,6 +996,9 @@ def test_whois_offline_target_markdown(monkeypatch) -> None:
                 "status_codes": [],
                 "raw": "Registrar: Test Registrar\n",
             },
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hops": [],
         }
 
     monkeypatch.setattr("ethscan.cli.run_whois", mock_run_whois)
@@ -1015,7 +1023,8 @@ def test_whois_offline_target_markdown(monkeypatch) -> None:
 def test_whois_server_option(monkeypatch) -> None:
     called_args = {}
 
-    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0):
+    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0,
+                       recursive=False, max_depth=2):
         called_args["server"] = server
         called_args["target"] = target
         return {
@@ -1032,6 +1041,9 @@ def test_whois_server_option(monkeypatch) -> None:
                 "status_codes": [],
                 "raw": "",
             },
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hops": [],
         }
 
     monkeypatch.setattr("ethscan.cli.run_whois", mock_run_whois)
@@ -1054,7 +1066,8 @@ def test_whois_server_option(monkeypatch) -> None:
 
 
 def test_whois_out_option(tmp_path, monkeypatch) -> None:
-    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0):
+    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0,
+                       recursive=False, max_depth=2):
         return {
             "target": target,
             "server": server,
@@ -1069,6 +1082,9 @@ def test_whois_out_option(tmp_path, monkeypatch) -> None:
                 "status_codes": [],
                 "raw": "test",
             },
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hops": [],
         }
 
     monkeypatch.setattr("ethscan.cli.run_whois", mock_run_whois)
@@ -1092,6 +1108,128 @@ def test_whois_out_option(tmp_path, monkeypatch) -> None:
     assert out_file.exists()
     content = out_file.read_text()
     assert "example.com" in content
+
+
+def test_whois_help_shows_recursive() -> None:
+    """Test that whois help shows --recursive/--no-recursive and --max-depth."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["whois", "--help"])
+    assert result.exit_code == 0
+    assert "--recursive" in result.output
+    assert "--no-recursive" in result.output
+    assert "--max-depth" in result.output
+
+
+def test_whois_recursive_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0,
+                       recursive=False, max_depth=2):
+        called_args["recursive"] = recursive
+        called_args["max_depth"] = max_depth
+        called_args["target"] = target
+        return {
+            "target": target,
+            "server": server,
+            "port": port,
+            "raw": "",
+            "parsed": {
+                "registrar": None,
+                "creation_date": None,
+                "expiration_date": None,
+                "nameservers": [],
+                "registrant_org": None,
+                "status_codes": [],
+                "raw": "",
+            },
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hops": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_whois", mock_run_whois)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["whois", "--target", "example.com", "--recursive", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert called_args["recursive"] is True
+    assert called_args["max_depth"] == 2
+
+
+def test_whois_recursive_disabled_by_default(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0,
+                       recursive=False, max_depth=2):
+        called_args["recursive"] = recursive
+        return {
+            "target": target,
+            "server": server,
+            "port": port,
+            "raw": "",
+            "parsed": {
+                "registrar": None,
+                "creation_date": None,
+                "expiration_date": None,
+                "nameservers": [],
+                "registrant_org": None,
+                "status_codes": [],
+                "raw": "",
+            },
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hops": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_whois", mock_run_whois)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["whois", "--target", "example.com", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert called_args["recursive"] is False
+
+
+def test_whois_max_depth_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0,
+                       recursive=False, max_depth=2):
+        called_args["max_depth"] = max_depth
+        return {
+            "target": target,
+            "server": server,
+            "port": port,
+            "raw": "",
+            "parsed": {
+                "registrar": None,
+                "creation_date": None,
+                "expiration_date": None,
+                "nameservers": [],
+                "registrant_org": None,
+                "status_codes": [],
+                "raw": "",
+            },
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hops": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_whois", mock_run_whois)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["whois", "--target", "example.com", "--recursive", "--max-depth", "4",
+         "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert called_args["max_depth"] == 4
 
 
 def test_dns_help() -> None:

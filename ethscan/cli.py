@@ -503,6 +503,18 @@ def subdomains(
 @click.option("--port", default=43, type=int, help="WHOIS server port (default: 43)")
 @click.option("--timeout", default=5.0, type=float, help="Connection timeout in seconds")
 @click.option(
+    "--recursive/--no-recursive",
+    default=False,
+    help="Enable recursive WHOIS queries: follow referral servers extracted from "
+    "each response (e.g. from whois.iana.org to the registrar's WHOIS server).",
+)
+@click.option(
+    "--max-depth",
+    default=2,
+    type=int,
+    help="Maximum recursive hops when --recursive is enabled (default: 2).",
+)
+@click.option(
     "--format",
     "fmt",
     type=click.Choice(["json", "markdown"]),
@@ -520,11 +532,20 @@ def whois(
     server: str,
     port: int,
     timeout: float,
+    recursive: bool,
+    max_depth: int,
     fmt: str,
     out_path: str,
 ) -> None:
     """Run a WHOIS lookup for TARGET."""
-    results = run_whois(target, server=server, port=port, timeout=timeout)
+    results = run_whois(
+        target,
+        server=server,
+        port=port,
+        timeout=timeout,
+        recursive=recursive,
+        max_depth=max_depth,
+    )
 
     if fmt == "json":
         output = format_whois_report_json(results)
