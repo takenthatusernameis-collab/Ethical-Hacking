@@ -1421,10 +1421,10 @@ Alternative: Add a `--sort` option to the `audit` command for sorting password r
 - Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
 
 ## Current state
-- All 28 commands implemented and wired up (including `hash` with `--file`, `--check`, salt, and pepper).
+- All 29 commands implemented and wired up (including `hash` with `--file`, `--check`, salt, and pepper, and `validate`).
 - `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv`.
 - `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, `--max-depth`.
-- `whois` now supports `--recursive/--no-recursive` and `--max-depth`.
+- `whois` now supports `--recursive/--no-recursive`, `--max-depth`, `--format json|markdown`, and `--out` for machine-readable WHOIS results.
 - `audit` now supports `--format json|markdown`, `--out`, `--min-length`, `--output-format csv` for spreadsheet-compatible password audit dumps, and `--sort [score|verdict|length]` with `--sort-desc/--sort-asc` (reorder audit rows; defaults to `None`/`True`).
 - `report` now supports `--target`, `--ports`, `--profile`, `--timeout`, `--workers`, `--audit-file`, `--min-length` (pass-through to the embedded audit), `--open-only/--no-open-only` (filter scan results to open ports only), `--sort {score|verdict|length}` with `--sort-desc/--sort-asc` (reorder audit rows; scan results stay in port order), `--output-format [json|markdown|csv]` (with `--format` as deprecated alias), and `--out`; report logic lives in `ethscan/report.py` (`run_report`, `format_report_json`, `format_report_markdown`, `format_report_csv`).
 - `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `vuln` (with `--min-severity`), `dnssec`, `geo`, `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon` all implemented with JSON/Markdown output.
@@ -1545,13 +1545,21 @@ Added a `--sort` option to the standalone `audit` command that reorders password
 - End-to-end (Markdown): `--sort length --sort-asc --format markdown` -> shows `**Sorted By:** length (Ascending)` and rows ordered by length ascending (6, 8, 32).
 - Backward compatibility: without `--sort`, audit rows remain in original order and no `Sorted By:` line is rendered.
 
+## Completed: `--format json|markdown` and `--out` options for `whois` command
+
+The `whois` command already supports machine-readable JSON and Markdown output with the `--format` option (choices: json, markdown, default: json) and `--out` for file output. This was implemented alongside the recursive WHOIS queries feature.
+
+### Verification
+- `python -m ethscan whois --help` -> shows `--format [json|markdown]` and `--out` options.
+- `python -m pytest -q` -> 1647 passed, 1 skipped (all whois tests pass).
+- End-to-end: `python -m ethscan whois --target example.com --format json` produces valid JSON with parsed fields.
+- End-to-end: `python -m ethscan whois --target example.com --format markdown` produces Markdown report with parsed fields table.
+
 ## Suggested next task
 
-**Add a `--json` output mode to the `whois` command** for machine-readable WHOIS results (the `whois` command currently only echoes human-readable lines; add `--format json|markdown` and `--out` like other commands).
+**Add a `--recursive` option to the `vuln` command** to recursively follow discovered service banners across a network (e.g., scan discovered hosts for additional services/vulnerabilities).
 
-Alternative: Add a `--recursive` option to the `vuln` command to recursively follow discovered service banners across a network.
-
-Alternative: Add a `--pepper`/`--salt` option to the `audit` command for salted password auditing (e.g. flag common passwords even when salted).
+Alternative: Add a `--pepper`/`--salt` option to the `audit` command for salted password auditing (e.g. flag common passwords even when salted) — note: `hash` command already supports salt/pepper.
 
 ## Requirements
 - Pick one of the suggested features and implement it following the existing module conventions.
