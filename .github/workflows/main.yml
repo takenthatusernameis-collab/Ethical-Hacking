@@ -141,7 +141,7 @@ jobs:
 
               cleaned = re.sub(rb"[ \t]+(?=\r?$)", b"", content, flags=re.MULTILINE)
               # Collapse trailing empty/whitespace-only lines to a single final newline.
-              cleaned = re.sub(rb"(?:[ \\t]*\\r?\\n)+\\Z", b"\\n", cleaned)
+              cleaned = re.sub(rb"(?:[ \t]*\r?\n)+\Z", b"\n", cleaned)
               if cleaned != content:
                   path.write_bytes(cleaned)
           PY
