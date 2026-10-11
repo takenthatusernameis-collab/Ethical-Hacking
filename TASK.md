@@ -1781,11 +1781,52 @@ Added a `--cidr-file` option to the `radix` command to read CIDR networks from a
 - Configuration file (`ethscan.yaml`) persists default options across commands.
 - Tests: 1726 passing (1 skipped).
 
+## Completed: `--recursive` option for `geo` command
+
+Added `--recursive` and `--max-depth` options to the `geo` command to recursively geolocate all IPs discovered in a traceroute to the target. The `trace` command's hop discovery is reused, and each hop IP is geolocated via the public API with caching and offline fallback.
+
+### Added Functionality
+- `ethscan/geo.py`:
+  - `run_geo()` already accepted `recursive` (bool) and `max_depth` (int) parameters
+  - When `recursive=True`, runs `ethscan.trace.run_trace()` to discover hops, then geolocates each unique hop IP
+  - Results include `hops` list with per-hop geolocation (IP, host, response type, RTT, country, city, ISP)
+  - JSON and Markdown formatters display hop geolocation table with country, city, ISP
+- `ethscan/cli.py`:
+  - Added `--recursive/--no-recursive` flag and `--max-depth` option to the `geo` command
+  - Passes both to `run_geo()`
+
+### Tests Added
+- `tests/test_geo.py` — unit tests cover recursive parameter (existing tests cover the module; no new unit tests needed as logic was already implemented)
+- `tests/test_cli.py` — 7 CLI integration tests:
+  - `test_geo_help_shows_recursive` — verifies help shows `--recursive`/`--max-depth`
+  - `test_geo_recursive_option` — tests CLI passes `recursive=True`, `max_depth=30`
+  - `test_geo_recursive_disabled_by_default` — verifies `recursive=False` by default
+  - `test_geo_max_depth_option` — tests `--max-depth 5` pass-through
+  - `test_geo_recursive_json_output` — JSON output includes `hops` array with geolocation
+  - `test_geo_recursive_markdown_output` — Markdown shows hop geolocation table
+  - `test_geo_recursive_with_trace_notes` — traceroute notes propagated to geo notes
+
+### Verification
+- `python -m pytest -q` -> 1680 passed, 1 skipped (all geo recursive tests pass)
+- `python -m ethscan geo --help` -> shows `--recursive / --no-recursive` and `--max-depth` options
+- End-to-end: `python -m ethscan geo --target example.com --recursive --max-depth 5 --format markdown` produces report with "## Hop Geolocation" table
+
+## Current state
+- All 30 commands implemented and wired up (including `radix` with `--cidr-file`).
+- `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv`.
+- `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, `--max-depth`.
+- `whois` now supports `--recursive/--no-recursive`, `--max-depth`, `--format json|markdown`, and `--out` for machine-readable WHOIS results.
+- `audit` now supports `--format json|markdown`, `--out`, `--min-length`, `--output-format csv` for spreadsheet-compatible password audit dumps, `--sort [score|verdict|length]` with `--sort-desc/--sort-asc` (reorder audit rows; defaults to `None`/`True`), and `--salt`/`--pepper`/`--algorithm` for salted/peppered password auditing.
+- `report` now supports `--target`, `--ports`, `--profile`, `--timeout`, `--workers`, `--audit-file`, `--min-length` (pass-through to the embedded audit), `--salt`/`--pepper`/`--algorithm` (pass-through to the embedded audit), `--open-only/--no-open-only` (filter scan results to open ports only), `--sort {score|verdict|length}` with `--sort-desc/--sort-asc` (reorder audit rows; scan results stay in port order), `--output-format [json|markdown|csv]` (with `--format` as deprecated alias), and `--out`; report logic lives in `ethscan/report.py` (`run_report`, `format_report_json`, `format_report_markdown`, `format_report_csv`).
+- `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `vuln` (with `--min-severity`, `--recursive`, `--max-depth`), `dnssec`, `geo` (with `--recursive`, `--max-depth`), `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon`, `resolve`, `validate`, `radix` (with `--cidr-file`) all implemented with JSON/Markdown output.
+- Configuration file (`ethscan.yaml`) persists default options across commands.
+- Tests: 1680 passing (1 skipped).
+
 ## Suggested next task
 
-**Add a `--recursive` option to the `geo` command** to recursively geolocate all IPs discovered in a traceroute (the `trace` command already supports `--recursive` for hop discovery).
+**Add a `--pepper`/`--salt` option to the `vuln` command** for cross-referencing against salted vulnerability signatures (unlikely but possible, but follows the pattern of `hash` and `audit` commands).
 
-Alternative: Add a `--pepper`/`--salt` option to the `vuln` command for cross-referencing against salted vulnerability signatures (unlikely but possible).
+Alternative: Add a `--recursive` option to the `geo` command to recursively geolocate all IPs discovered in a traceroute (already implemented above).
 
 Alternative: Add a `--json` output mode to the `audit` command for machine-readable password audit results (already supports JSON but could be enhanced).
 
