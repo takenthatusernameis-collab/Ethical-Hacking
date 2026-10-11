@@ -1378,7 +1378,44 @@ Alternative: Add a `validate` command that validates and expands port specificat
 - `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, `--max-depth`.
 - `whois` now supports `--recursive/--no-recursive` and `--max-depth`.
 - `audit` now supports `--format json|markdown`, `--out`, `--min-length`, and `--output-format csv` for spreadsheet-compatible password audit dumps.
-- `report` now supports `--target`, `--ports`, `--profile`, `--timeout`, `--workers`, `--audit-file`, `--min-length` (pass-through to the embedded audit), `--output-format [json|markdown|csv]` (with `--format` as deprecated alias), and `--out`; report logic lives in `ethscan/report.py` (`run_report`, `format_report_json`, `format_report_markdown`, `format_report_csv`).
+- `report` now supports `--target`, `--ports`, `--profile`, `--timeout`, `--workers`, `--audit-file`, `--min-length` (pass-through to the embedded audit), `--open-only/--no-open-only` (filter scan results to open ports only), `--output-format [json|markdown|csv]` (with `--format` as deprecated alias), and `--out`; report logic lives in `ethscan/report.py` (`run_report`, `format_report_json`, `format_report_markdown`, `format_report_csv`).
 - `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `vuln` (with `--min-severity`), `dnssec`, `geo`, `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon` all implemented with JSON/Markdown output.
 - Configuration file (`ethscan.yaml`) persists default options across commands.
-- Tests: 1535 passing (1 skipped).
+- Tests: 1545 passing (1 skipped).
+
+## Completed: `--open-only` option for `report` command
+
+Added a `--open-only/--no-open-only` option to the `report` command that filters the embedded port scan results to open ports only in JSON, Markdown, and CSV output. This is useful for large scans where closed-port rows dominate the report.
+
+The filtering is applied in `run_report()` (which already had the `open_only` parameter and logic in `ethscan/report.py`), ensuring consistent behavior across all output formats. The CLI option is now wired up to pass `open_only` through to `run_report()`, and the Markdown formatter displays an `Open Only:` summary line.
+
+### Modified Files
+- `ethscan/cli.py` — added `--open-only/--no-open-only` flag (default False) to the `report` command; passes `open_only` to `run_report()`.
+- `ethscan/report.py` — no code changes (the `open_only` parameter was already implemented in `run_report`, `scan_details` filtering, and the return dict); updated `format_report_markdown()` to render an `**Open Only:** Yes/No` summary line.
+- `tests/test_report.py` — 6 new unit tests: `test_run_report_open_only_filters_closed_ports` (monkeypatched scan_ports, verifies closed ports filtered), `test_run_report_open_only_default_false` (verifies default), `test_format_report_json_open_only` (JSON includes filtered details + open_only flag), `test_format_report_markdown_open_only` (markdown shows open-only flag and no closed ports), `test_format_report_markdown_open_only_false` (markdown shows all ports when disabled), `test_format_report_csv_open_only` (CSV only emits open-port scan rows).
+- `tests/test_cli.py` — 5 new CLI integration tests: `test_report_help_shows_open_only` (help shows option), `test_report_open_only_option_json` (JSON output filtered, parameter pass-through via mock), `test_report_open_only_option_markdown` (markdown filtered, "Open Only: Yes" shown), `test_report_open_only_option_csv` (CSV only open rows), `test_report_open_only_disabled_by_default` (default is False, all ports shown).
+- `README.md` — updated report feature description to mention `--open-only`.
+
+### Verification
+- `python -m pytest -q` -> 1545 passed, 1 skipped (1535 baseline + 11 new: 6 unit + 5 CLI).
+- `python -m ethscan report --help` -> shows `--open-only / --no-open-only` option.
+- End-to-end (JSON): `python -m ethscan report --target 127.0.0.1 --ports 80,443,22 --open-only --timeout 0.5 --format json` -> `details` contains only port 22 (the open port), `open_only: true`.
+- End-to-end (Markdown): `--open-only --format markdown` -> shows `**Open Only:** Yes`, only open-port rows in the table, no closed-port rows.
+- End-to-end (CSV): `--open-only --output-format csv` -> CSV scan rows only for open ports.
+- End-to-end (`--no-open-only`): all ports shown in output with `open_only: false`.
+- Backward compatibility: without `--open-only`, report behaves exactly as before (all ports shown, no "Open Only" line change to existing behavior).
+
+## Suggested next task
+
+**Add a `--sort` option to the `report` command** to sort the audit (password) results by score, verdict, or length — ascending or descending. The scan results remain in port order; only the audit table/CSV rows are reordered. Accept `--sort {score|verdict|length} [--sort-asc|--sort-desc]` (default: `score`, descending), with corresponding unit tests in `tests/test_report.py` and CLI tests in `tests/test_cli.py`.
+
+Alternative: Add a `validate` command that validates and expands port specifications (comma-separated lists/ranges) and CIDR inputs offline, reusing `parse_port_range` and the stdlib `ipaddress` module, with JSON/Markdown output.
+
+Alternative: Add a `--sort` option to the `audit` command for sorting password results by score, verdict, or length.
+
+## Requirements
+- Pick one of the suggested features and implement it following the existing module conventions.
+- Add a new module under `ethscan/` with `run_*`, `format_*_report_json`, `format_*_report_markdown` (for new commands) or extend existing module (for new options).
+- Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
+- Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
+- Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).

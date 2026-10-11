@@ -592,3 +592,105 @@ def test_run_report_profile_with_audit_file(tmp_path) -> None:
     )
     assert data["scan"]["profile"] == "fast"
     assert data["audit"]["passwords_audited"] == 1
+
+
+def test_run_report_open_only_filters_closed_ports(monkeypatch) -> None:
+    from ethscan import report as report_module
+
+    def fake_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        return [(p, p in (80, 443)) for p in ports]
+
+    monkeypatch.setattr(report_module, "scan_ports", fake_scan_ports)
+    data = run_report("127.0.0.1", "80,443,22,3306", timeout=0.1, workers=10, open_only=True)
+    assert data["scan"]["open_only"] is True
+    assert len(data["scan"]["details"]) == 2
+    assert all(d["open"] is True for d in data["scan"]["details"])
+    details_ports = [d["port"] for d in data["scan"]["details"]]
+    assert 80 in details_ports
+    assert 443 in details_ports
+    assert 22 not in details_ports
+    assert 3306 not in details_ports
+
+
+def test_run_report_open_only_default_false(monkeypatch) -> None:
+    from ethscan import report as report_module
+
+    def fake_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        return [(p, p in (80,)) for p in ports]
+
+    monkeypatch.setattr(report_module, "scan_ports", fake_scan_ports)
+    data = run_report("127.0.0.1", "80,443", timeout=0.1, workers=10)
+    assert data["scan"]["open_only"] is False
+    assert len(data["scan"]["details"]) == 2
+
+
+def test_format_report_json_open_only() -> None:
+    data = {
+        "scan": {
+            "target": "h",
+            "ports_scanned": 1,
+            "open_ports": [80],
+            "details": [{"port": 80, "open": True}],
+            "open_only": True,
+        },
+        "audit": {"passwords_audited": 0, "results": []},
+    }
+    parsed = json.loads(format_report_json(data))
+    assert parsed["scan"]["open_only"] is True
+    assert len(parsed["scan"]["details"]) == 1
+    assert all(d["open"] is True for d in parsed["scan"]["details"])
+
+
+def test_format_report_markdown_open_only() -> None:
+    data = {
+        "scan": {
+            "target": "h",
+            "ports_scanned": 2,
+            "open_ports": [80],
+            "details": [{"port": 80, "open": True}],
+            "open_only": True,
+        },
+        "audit": {"passwords_audited": 0, "results": []},
+    }
+    output = format_report_markdown(data)
+    assert "**Open Only:** Yes" in output
+    assert "| 80 | Open |" in output
+    assert "443" not in output
+
+
+def test_format_report_markdown_open_only_false() -> None:
+    data = {
+        "scan": {
+            "target": "h",
+            "ports_scanned": 2,
+            "open_ports": [80],
+            "details": [
+                {"port": 80, "open": True},
+                {"port": 443, "open": False},
+            ],
+            "open_only": False,
+        },
+        "audit": {"passwords_audited": 0, "results": []},
+    }
+    output = format_report_markdown(data)
+    assert "**Open Only:** No" in output
+    assert "| 80 | Open |" in output
+    assert "| 443 | Closed |" in output
+
+
+def test_format_report_csv_open_only() -> None:
+    data = {
+        "scan": {
+            "target": "h",
+            "ports_scanned": 2,
+            "open_ports": [80],
+            "details": [{"port": 80, "open": True}],
+            "open_only": True,
+        },
+        "audit": {"passwords_audited": 0, "results": []},
+    }
+    rows = list(csv.reader(io.StringIO(format_report_csv(data))))
+    assert len(rows) == 2
+    assert rows[1][0] == "scan"
+    assert rows[1][1] == "80"
+    assert rows[1][2] == "true"

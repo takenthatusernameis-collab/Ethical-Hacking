@@ -431,6 +431,12 @@ def hash(file: str, algorithms: tuple, fmt: str, out_path: str) -> None:
     help="Flag passwords shorter than this length as too short (passed to the embedded audit).",
 )
 @click.option(
+    "--open-only/--no-open-only",
+    "open_only",
+    default=False,
+    help="Filter scan results to open ports only (JSON, Markdown, and CSV output).",
+)
+@click.option(
     "--output-format",
     "output_fmt",
     type=click.Choice(["json", "markdown", "csv"]),
@@ -459,6 +465,7 @@ def report(
     workers: int,
     audit_file: str,
     min_length: Optional[int],
+    open_only: bool,
     output_fmt: Optional[str],
     fmt: str,
     out_path: str,
@@ -472,6 +479,7 @@ def report(
         audit_file=audit_file,
         min_length=min_length,
         profile=profile,
+        open_only=open_only,
     )
 
     # --output-format takes precedence over the deprecated --format alias

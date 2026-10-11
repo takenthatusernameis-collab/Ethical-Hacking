@@ -160,6 +160,7 @@ def format_report_markdown(data: Dict[str, Any]) -> str:
     lines.append(
         f"- **Open Ports:** {', '.join(map(str, scan['open_ports'])) if scan['open_ports'] else 'None'}"
     )
+    lines.append(f"- **Open Only:** {'Yes' if scan.get('open_only') else 'No'}")
     lines.append("")
     lines.append("| Port | Status |")
     lines.append("|------|--------|")

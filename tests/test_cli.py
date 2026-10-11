@@ -1062,7 +1062,171 @@ def test_report_min_length_disabled_by_default(tmp_path) -> None:
     assert data["audit"]["min_length"] is None
 
 
-def test_web_help() -> None:
+def test_report_help_shows_open_only() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["report", "--help"])
+    assert result.exit_code == 0
+    assert "--open-only" in result.output
+
+
+def test_report_open_only_option_json(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_report(*args, **kwargs):
+        called_args.update(kwargs)
+        return {
+            "scan": {
+                "target": "127.0.0.1",
+                "profile": None,
+                "ports_scanned": 3,
+                "open_ports": [80],
+                "details": [
+                    {"port": 80, "open": True},
+                ],
+                "open_only": True,
+            },
+            "audit": {"passwords_audited": 0, "results": []},
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_report", mock_run_report)
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--ports",
+            "80,443,22",
+            "--open-only",
+            "--format",
+            "json",
+            "--timeout",
+            "0.5",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["open_only"] is True
+    data = json.loads(result.output)
+    assert data["scan"]["open_only"] is True
+    assert len(data["scan"]["details"]) == 1
+    assert data["scan"]["details"][0]["port"] == 80
+    assert data["scan"]["details"][0]["open"] is True
+
+
+def test_report_open_only_option_markdown(monkeypatch) -> None:
+    def mock_run_report(*args, **kwargs):
+        return {
+            "scan": {
+                "target": "127.0.0.1",
+                "profile": None,
+                "ports_scanned": 2,
+                "open_ports": [80],
+                "details": [
+                    {"port": 80, "open": True},
+                ],
+                "open_only": True,
+            },
+            "audit": {"passwords_audited": 0, "results": []},
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_report", mock_run_report)
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--ports",
+            "80,443",
+            "--open-only",
+            "--format",
+            "markdown",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "**Open Only:** Yes" in result.output
+    assert "| 80 | Open |" in result.output
+    assert "443" not in result.output
+
+
+def test_report_open_only_option_csv(monkeypatch) -> None:
+    def mock_run_report(*args, **kwargs):
+        return {
+            "scan": {
+                "target": "127.0.0.1",
+                "profile": None,
+                "ports_scanned": 2,
+                "open_ports": [80],
+                "details": [
+                    {"port": 80, "open": True},
+                ],
+                "open_only": True,
+            },
+            "audit": {"passwords_audited": 0, "results": []},
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_report", mock_run_report)
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--ports",
+            "80,443",
+            "--open-only",
+            "--output-format",
+            "csv",
+        ],
+    )
+    assert result.exit_code == 0
+    lines = result.output.strip().split("\n")
+    assert lines[0] == "section,port,open,password,length,entropy,common,patterns,too_short,score,verdict"
+    assert "scan,80,true" in lines[1]
+    assert len(lines) == 2
+
+
+def test_report_open_only_disabled_by_default(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_report(*args, **kwargs):
+        called_args.update(kwargs)
+        return {
+            "scan": {
+                "target": "127.0.0.1",
+                "profile": None,
+                "ports_scanned": 2,
+                "open_ports": [80],
+                "details": [
+                    {"port": 80, "open": True},
+                    {"port": 443, "open": False},
+                ],
+                "open_only": False,
+            },
+            "audit": {"passwords_audited": 0, "results": []},
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_report", mock_run_report)
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--ports",
+            "80,443",
+            "--format",
+            "json",
+            "--timeout",
+            "0.5",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["open_only"] is False
     runner = CliRunner()
     result = runner.invoke(cli, ["web", "--help"])
     assert result.exit_code == 0
