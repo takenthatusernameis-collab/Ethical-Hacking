@@ -1,0 +1,341 @@
+"""Radix tree visualization module for ethscan.
+
+Builds a binary radix tree (Patricia trie) over a set of CIDR networks,
+merging overlapping and adjacent (supernettable) networks into compact
+aggregate ranges. Fully offline and stdlib-only (uses the ``ipaddress``
+module).
+"""
+
+import ipaddress
+from typing import Dict, List, Optional, Tuple, Union
+
+
+def _normalize_cidr(value: str) -> str:
+    """Normalize a CIDR string, ensuring a network address.
+
+    Bare IPs are treated as /32 (IPv4) or /128 (IPv6).
+    """
+    value = value.strip()
+    if not value:
+        raise ValueError("Empty CIDR value")
+    if "/" not in value:
+        value = value + ("/32" if "." in value else "/128")
+    network = ipaddress.ip_network(value, strict=False)
+    return str(network)
+
+
+def _is_ipv4(network: ipaddress._BaseNetwork) -> bool:
+    """Return True if the network is IPv4."""
+    return network.version == 4
+
+
+def _parse_networks(values: List[str]) -> List[ipaddress._BaseNetwork]:
+    """Parse and normalize a list of CIDR strings into network objects."""
+    networks: List[ipaddress._BaseNetwork] = []
+    for raw in values:
+        normalized = _normalize_cidr(raw)
+        networks.append(ipaddress.ip_network(normalized, strict=False))
+    return networks
+
+
+def _nth_bit(addr, bit_index: int, is_v4: bool) -> int:
+    """Return the value (0/1) of the bit at the given index (MSB = 0)."""
+    max_bits = 32 if is_v4 else 128
+    if bit_index >= max_bits:
+        return 0
+    return (int(addr) >> (max_bits - 1 - bit_index)) & 1
+
+
+def _common_prefix_length(networks: List[ipaddress._BaseNetwork]) -> int:
+    """Return the longest common prefix length shared by all networks."""
+    if not networks:
+        return 0
+    if len(networks) == 1:
+        return networks[0].prefixlen
+    ref = networks[0]
+    is_v4 = ref.version == 4
+    max_bits = 32 if is_v4 else 128
+    for bit in range(max_bits):
+        ref_bit = _nth_bit(ref.network_address, bit, is_v4)
+        for net in networks[1:]:
+            if _nth_bit(net.network_address, bit, is_v4) != ref_bit:
+                return bit
+    return min(n.prefixlen for n in networks)
+
+
+def _merge_networks(networks: List[ipaddress._BaseNetwork]) -> List[ipaddress._BaseNetwork]:
+    """Merge overlapping and adjacent (supernettable) networks.
+
+    Networks that overlap or can be combined into a single supernet are
+    collapsed. The result is a minimal, non-overlapping set of aggregate
+    networks sorted by address range.
+    """
+    if not networks:
+        return []
+    sorted_nets = sorted(networks, key=lambda n: (n.network_address, -n.prefixlen))
+    merged: List[ipaddress._BaseNetwork] = []
+    for net in sorted_nets:
+        if not merged:
+            merged.append(net)
+            continue
+        last = merged[-1]
+        if net.version != last.version:
+            merged.append(net)
+            continue
+        try:
+            collapsed = list(ipaddress.collapse_addresses([last, net]))
+        except Exception:
+            collapsed = None
+        if collapsed and len(collapsed) == 1:
+            merged[-1] = collapsed[0]
+        elif last.overlaps(net):
+            if last.num_addresses >= net.num_addresses:
+                merged[-1] = last
+            else:
+                merged[-1] = net
+        else:
+            merged.append(net)
+    merged = sorted(merged, key=lambda n: n.network_address)
+    return merged
+
+
+def _common_prefix_of_pair(start, end, is_v4: bool) -> int:
+    """Return the prefix length covering the range from start to end."""
+    max_bits = 32 if is_v4 else 128
+    span = int(end) - int(start) + 1
+    # Find smallest prefix length that covers the span.
+    needed_bits = 0
+    while (1 << needed_bits) < span:
+        needed_bits += 1
+    return max(0, max_bits - needed_bits)
+
+
+def _build_radix_node(
+    networks: List[ipaddress._BaseNetwork],
+    depth: int = 0,
+    max_depth: int = 64,
+) -> Optional[Dict[str, object]]:
+    """Recursively build a radix tree node for a list of networks.
+
+    Returns a dict with keys:
+        prefix, start_address, end_address, total_addresses, networks,
+        children, depth
+    or None when the input list is empty.
+    """
+    if not networks or depth > max_depth:
+        return None
+
+    is_v4 = networks[0].version == 4
+    max_bits = 32 if is_v4 else 128
+
+    prefix_len = _common_prefix_length(networks)
+
+    # Keep each network as-is; the common prefix is used only to compute the
+    # node's aggregate range and to partition children by the next bit.
+    deduped: List[ipaddress._BaseNetwork] = []
+    seen = set()
+    for net in networks:
+        key = (str(net.network_address), net.prefixlen)
+        if key not in seen:
+            seen.add(key)
+            deduped.append(net)
+
+    start = min(n.network_address for n in deduped)
+    end = max(n.broadcast_address for n in deduped)
+    total = int(end) - int(start) + 1
+
+    # Compute the proper supernet prefix for the aggregate range by finding
+    # the common prefix between start and end.
+    range_prefix = _common_prefix_of_pair(start, end, is_v4)
+    try:
+        supernet = ipaddress.ip_network(f"{start}/{range_prefix}", strict=False)
+        prefix_str = str(supernet)
+    except ValueError:
+        prefix_str = f"{start}/{range_prefix}"
+
+    node: Dict[str, object] = {
+        "prefix": prefix_str,
+        "start_address": str(start),
+        "end_address": str(end),
+        "total_addresses": total,
+        "networks": [str(n) for n in sorted(deduped, key=lambda n: n.network_address)],
+        "children": [],
+        "depth": depth,
+    }
+
+    # Recurse into children when there are multiple distinct networks and we
+    # have not reached the host prefix. Partition by the next bit after the
+    # common prefix.
+    if len(deduped) > 1 and prefix_len < max_bits:
+        left_nets: List[ipaddress._BaseNetwork] = []
+        right_nets: List[ipaddress._BaseNetwork] = []
+        for net in networks:
+            bit = _nth_bit(net.network_address, prefix_len, is_v4)
+            if bit == 0:
+                left_nets.append(net)
+            else:
+                right_nets.append(net)
+        left_node = _build_radix_node(left_nets, depth + 1, max_depth)
+        right_node = _build_radix_node(right_nets, depth + 1, max_depth)
+        if left_node is not None:
+            node["children"].append({"side": "left (0)", "node": left_node})
+        if right_node is not None:
+            node["children"].append({"side": "right (1)", "node": right_node})
+
+    return node
+
+
+def _format_network_info(network: ipaddress._BaseNetwork) -> Dict[str, object]:
+    """Build structured network info dict for a single network."""
+    is_v4 = _is_ipv4(network)
+    if is_v4:
+        netmask = str(network.netmask)
+        broadcast = str(network.broadcast_address) if network.broadcast_address else None
+        wildcard = str(network.hostmask)
+        if network.num_addresses > 2:
+            first_host = str(network[1])
+            last_host = str(network[-2])
+        elif network.num_addresses == 2:
+            first_host = str(network[1])
+            last_host = str(network[1])
+        else:
+            first_host = str(network.network_address)
+            last_host = str(network.network_address)
+        usable_hosts = max(0, network.num_addresses - 2)
+    else:
+        netmask = str(network.netmask)
+        broadcast = None
+        wildcard = str(network.hostmask)
+        if network.num_addresses > 2:
+            first_host = str(network[1])
+            last_host = str(network[-2])
+        elif network.num_addresses == 2:
+            first_host = str(network[1])
+            last_host = str(network[1])
+        else:
+            first_host = str(network.network_address)
+            last_host = str(network.network_address)
+        usable_hosts = max(0, network.num_addresses - 2)
+
+    return {
+        "network_address": str(network.network_address),
+        "netmask": netmask,
+        "broadcast_address": broadcast,
+        "wildcard_mask": wildcard,
+        "first_host": first_host,
+        "last_host": last_host,
+        "usable_host_count": usable_hosts,
+        "total_addresses": network.num_addresses,
+        "prefixlen": network.prefixlen,
+    }
+
+
+def run_radix(
+    cidrs: List[str],
+    merge: bool = True,
+    max_depth: int = 64,
+) -> Dict[str, object]:
+    """Build a radix tree visualization over a set of CIDR networks.
+
+    Args:
+        cidrs: List of CIDR strings (e.g. ``["192.168.1.0/24", "10.0.0.0/8"]``).
+        merge: When True, merge overlapping and supernettable networks first.
+        max_depth: Maximum recursion depth for the radix tree (default 64).
+
+    Returns:
+        Structured results with parsed networks, merged networks, radix tree
+        node, and summary counts.
+    """
+    parsed = _parse_networks(cidrs)
+
+    if merge:
+        merged = _merge_networks(parsed)
+    else:
+        merged = sorted(parsed, key=lambda n: n.network_address)
+
+    root = _build_radix_node(merged, depth=0, max_depth=max_depth)
+
+    total_input_addresses = sum(n.num_addresses for n in parsed)
+    total_merged_addresses = sum(n.num_addresses for n in merged)
+    compression_ratio = (
+        round(total_input_addresses / total_merged_addresses, 4)
+        if total_merged_addresses > 0
+        else 0.0
+    )
+
+    return {
+        "cidrs": cidrs,
+        "network_count": len(parsed),
+        "merged_network_count": len(merged),
+        "merged": [str(n) for n in merged],
+        "total_input_addresses": total_input_addresses,
+        "total_merged_addresses": total_merged_addresses,
+        "compression_ratio": compression_ratio,
+        "merge_enabled": merge,
+        "max_depth": max_depth,
+        "radix_tree": root,
+    }
+
+
+def format_radix_report_json(data: Dict[str, object]) -> str:
+    """Format radix results as JSON."""
+    import json
+    return json.dumps(data, indent=2, default=str)
+
+
+def _escape(value: str) -> str:
+    """Escape pipe characters for Markdown output."""
+    return value.replace("|", "\\|")
+
+
+def _render_node_md(node: Dict[str, object], lines: List[str], depth: int = 0) -> None:
+    """Recursively render a radix node as Markdown lines."""
+    indent = "  " * depth
+    prefix = node.get("prefix", "")
+    start = node.get("start_address", "")
+    end = node.get("end_address", "")
+    total = node.get("total_addresses", 0)
+    networks = node.get("networks", []) or []
+    lines.append(f"{indent}- **{prefix}** | {start} - {end} | {total} addresses | {len(networks)} net(s)")
+    for child in node.get("children", []) or []:
+        side = child.get("side", "")
+        child_node = child.get("node")
+        if child_node is not None:
+            lines.append(f"{indent}  - {side}:")
+            _render_node_md(child_node, lines, depth + 2)
+
+
+def format_radix_report_markdown(data: Dict[str, object]) -> str:
+    """Format radix results as Markdown."""
+    lines = ["# ethscan Radix Tree Report", ""]
+    lines.append(f"- **Networks Provided:** {data['network_count']}")
+    lines.append(f"- **Merged Networks:** {data['merged_network_count']}")
+    lines.append(f"- **Total Input Addresses:** {data['total_input_addresses']}")
+    lines.append(f"- **Total Merged Addresses:** {data['total_merged_addresses']}")
+    lines.append(f"- **Compression Ratio:** {data['compression_ratio']}")
+    lines.append(f"- **Merge Enabled:** {data['merge_enabled']}")
+    lines.append("")
+
+    lines.append("## Merged Networks")
+    lines.append("| Network | Address Range | Total Addresses |")
+    lines.append("|---------|---------------|-----------------|")
+    for net_str in data.get("merged", []) or []:
+        try:
+            network = ipaddress.ip_network(net_str, strict=False)
+            start = str(network.network_address)
+            end = str(network.broadcast_address) if network.version == 4 else str(network[-1])
+            total = network.num_addresses
+        except ValueError:
+            start = end = ""
+            total = "?"
+        lines.append(f"| {_escape(net_str)} | {_escape(start)} - {_escape(end)} | {total} |")
+    lines.append("")
+
+    root = data.get("radix_tree")
+    if root is not None:
+        lines.append("## Radix Tree")
+        lines.append("")
+        _render_node_md(root, lines)
+        lines.append("")
+
+    return "\n".join(lines)

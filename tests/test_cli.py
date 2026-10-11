@@ -10016,3 +10016,92 @@ def test_hash_out_option_markdown(tmp_path, monkeypatch) -> None:
     assert out_file.exists()
     content = out_file.read_text()
     assert "Password Hash Report" in content
+
+# ---------------------------------------------------------------------------
+# radix CLI tests
+# ---------------------------------------------------------------------------
+
+
+def test_radix_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["radix", "--help"])
+    assert result.exit_code == 0
+    assert "--cidrs" in result.output
+    assert "--no-merge" in result.output
+    assert "--max-depth" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+
+
+def test_radix_top_level_help_lists_command() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "radix" in result.output
+
+
+def test_radix_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["radix", "--cidrs", "192.168.1.0/24,192.168.2.0/23", "--format", "json"])
+    assert result.exit_code == 0
+    assert "192.168.1.0/24" in result.output
+    assert "radix_tree" in result.output
+    assert "merged_network_count" in result.output
+
+
+def test_radix_markdown() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["radix", "--cidrs", "192.168.1.0/24,192.168.2.0/23", "--format", "markdown"])
+    assert result.exit_code == 0
+    assert "Radix Tree Report" in result.output
+    assert "192.168.1.0/24" in result.output
+    assert "Radix Tree" in result.output
+
+
+def test_radix_no_merge() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["radix", "--cidrs", "192.168.1.0/24,192.168.2.0/24", "--no-merge", "--format", "json"])
+    assert result.exit_code == 0
+    assert "false" in result.output.lower()
+
+
+def test_radix_max_depth() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["radix", "--cidrs", "192.168.1.0/24,192.168.2.0/24", "--max-depth", "1", "--format", "json"])
+    assert result.exit_code == 0
+    assert "1" in result.output
+
+
+def test_radix_out_option_json(tmp_path) -> None:
+    out_file = tmp_path / "radix.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["radix", "--cidrs", "192.168.1.0/24,192.168.2.0/23", "--format", "json", "--out", str(out_file)],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "192.168.1.0/24" in content
+
+
+def test_radix_out_option_markdown(tmp_path) -> None:
+    out_file = tmp_path / "radix.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["radix", "--cidrs", "192.168.1.0/24,192.168.2.0/23", "--format", "markdown", "--out", str(out_file)],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "Radix Tree Report" in content
+
+
+def test_radix_overlapping_merges() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["radix", "--cidrs", "192.168.1.0/24,192.168.1.128/25", "--format", "json"])
+    assert result.exit_code == 0
+    assert "192.168.1.0/24" in result.output

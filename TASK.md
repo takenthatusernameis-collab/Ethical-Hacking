@@ -1016,7 +1016,7 @@ Alternative: Add a `--recursive` option to the `whois` command for recursive WHO
 - Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
 
 ## Current state
-- All 29 commands implemented (including `hash`).
+- All 30 commands implemented (including `hash` and `radix`).
 - `scan` and `service` now support `--profile fast|normal|full` option.
 - `scan` and `service` now support `--output-format csv` for spreadsheet-compatible output.
 - `subdomains` and `dnsbrute` now support `--resolver` option for custom DNS resolver selection.
@@ -1031,5 +1031,43 @@ Alternative: Add a `--recursive` option to the `whois` command for recursive WHO
 - `vuln` now supports `--target`, `--ports`, `--services-file`, `--tls-file`, `--ssl-file`, `--severity`, `--min-severity`, `--format`, `--out` for built-in vulnerability checks.
 - `dnssec` now supports `--target`, `--server`, `--timeout`, `--format`, `--out` for DNSSEC validation (DNSKEY + DS chain of trust).
 - `geo` now supports `--recursive` and `--max-depth` for recursive hop geolocation.
+- `radix` now supports `--cidrs`, `--no-merge`, `--max-depth`, `--format`, `--out` for CIDR radix tree visualization (merging overlapping/supernettable networks).
 - Configuration file (`ethscan.yaml`) persists default options across commands via a `--config` group option and a `config` subcommand.
-- Tests: 1262 passing (1 skipped).
+- Tests: 1316 passing (1 skipped).
+
+## Suggested next task
+
+**Add a `--contains` option to the `radix` command** to test whether a given IP address falls within any of the merged aggregate networks in the radix tree.
+
+Alternative: Add a `--diff` option to the `radix` command that shows the address ranges covered by one set of CIDRs but not another (set difference visualization).
+
+Alternative: Add a `--json` output mode to the `report` command for explicit machine-readable output (the `report` command uses inline JSON serialization but some users may want an explicit `--format json` flag for clarity in scripts, similar to other commands).
+
+## Completed: `radix` command (CIDR radix tree visualization)
+
+The `radix` command builds a binary radix tree (Patricia trie) over a set of CIDR networks, merging overlapping and adjacent (supernettable) networks into compact aggregate ranges and rendering the result as a hierarchical tree. Fully offline and stdlib-only (uses the `ipaddress` module).
+
+### Added Files
+- `ethscan/radix.py` — CIDR radix tree module with:
+  - `_normalize_cidr()` — normalizes CIDR notation or bare IP (bare IP → /32 or /128)
+  - `_nth_bit()` — returns the value (0/1) of a bit at a given index (MSB = 0)
+  - `_common_prefix_length()` — longest common prefix length shared by a list of networks
+  - `_common_prefix_of_pair()` — prefix length covering the range from start to end address
+  - `_merge_networks()` — merges overlapping and adjacent (supernettable) networks into a minimal non-overlapping set, sorted by address range
+  - `_build_radix_node()` — recursively builds a radix tree node with prefix, start/end address, total addresses, contained networks, and children partitioned by the next bit
+  - `run_radix()` — public entry point: parses CIDRs, optionally merges them, builds the radix tree, and computes summary statistics (network count, merged count, input/merged address totals, compression ratio)
+  - `format_radix_report_json()` / `format_radix_report_markdown()` — output formatters (markdown includes summary, merged networks table, and recursively rendered radix tree with left/right child branches)
+- `tests/test_radix.py` — 45 unit tests: CIDR normalization (IPv4/IPv6/bare/empty/whitespace), bit helpers (MSB/LSB/out-of-range/IPv6), common prefix length (single/empty/shared/adjacent/disjoint), common prefix of pair (IPv4/IPv6/large), network merging (empty/single/overlapping/adjacent-supernet/disjoint/sorted), run_radix (basic/merge-disabled/overlapping-merges/compression-ratio/ipv6/single/radix-tree-structure/leaf/max-depth/empty/invalid-cidr/input-addresses), both formatters (JSON, markdown single/merge-disabled/pipe-escaping/empty-merged)
+
+### Modified Files
+- `ethscan/cli.py` — registered `radix` command with `--cidrs` (comma-separated list, required), `--no-merge` flag, `--max-depth`, `--format`, `--out`; imports `run_radix`, `format_radix_report_json`, `format_radix_report_markdown` from `ethscan.radix`
+- `tests/test_cli.py` — 9 CLI integration tests: `radix` help, top-level help listing, JSON output, Markdown output, `--no-merge`, `--max-depth`, `--out` (json and markdown), overlapping networks merge
+- `README.md` — added radix tree visualization (`radix`) to the features list
+
+### Verification
+- `python -m pytest -q` -> all tests pass (45 unit + 9 CLI = 54 new)
+- `python -m ethscan --help` -> lists `radix` among the commands
+- `python -m ethscan radix --help` -> shows all expected options (`--cidrs`, `--no-merge`, `--max-depth`, `--format`, `--out`)
+- End-to-end: `python -m ethscan radix --cidrs "192.168.1.0/24,192.168.2.0/23,10.0.0.0/8" --format markdown` produces a Markdown report with merged networks table and hierarchical radix tree
+- End-to-end: `python -m ethscan radix --cidrs "192.168.1.0/24,192.168.1.128/25" --format json` merges overlapping networks into `192.168.1.0/24`
+- End-to-end: `python -m ethscan radix --cidrs "192.168.1.0/24,192.168.2.0/24" --no-merge --format json` keeps both networks unmerged

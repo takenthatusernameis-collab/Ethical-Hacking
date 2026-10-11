@@ -122,6 +122,11 @@ from ethscan.cidr import (
     format_cidr_report_markdown,
     run_cidr,
 )
+from ethscan.radix import (
+    format_radix_report_json,
+    format_radix_report_markdown,
+    run_radix,
+)
 from ethscan.dnssec import (
     format_dnssec_report_json,
     format_dnssec_report_markdown,
@@ -2181,6 +2186,71 @@ def cidr(cidr: str, contains: Optional[str], fmt: str, out_path: Optional[str]) 
         output = format_cidr_report_json(results)
     else:
         output = format_cidr_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--cidrs",
+    "cidrs_option",
+    required=True,
+    help="Comma-separated list of CIDR networks (e.g. '192.168.1.0/24,10.0.0.0/8,192.168.2.0/23').",
+)
+@click.option(
+    "--no-merge",
+    "no_merge",
+    is_flag=True,
+    help="Disable merging of overlapping/supernettable networks before building the tree.",
+)
+@click.option(
+    "--max-depth",
+    default=64,
+    type=int,
+    help="Maximum recursion depth for the radix tree (default: 64).",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown"]),
+    default="json",
+    help="Output format (json or markdown)",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def radix(
+    cidrs_option: str,
+    no_merge: bool,
+    max_depth: int,
+    fmt: str,
+    out_path: Optional[str],
+) -> None:
+    """Build a radix tree visualization over a set of CIDR networks.
+
+    Merges overlapping and adjacent (supernettable) networks and renders
+    the resulting aggregate ranges as a hierarchical binary radix tree.
+    Fully offline and stdlib-only.
+    """
+    cidrs = [c.strip() for c in cidrs_option.split(",") if c.strip()]
+    if not cidrs:
+        click.echo("Error: at least one CIDR network is required.", err=True)
+        raise SystemExit(1)
+
+    results = run_radix(cidrs, merge=not no_merge, max_depth=max_depth)
+
+    if fmt == "json":
+        output = format_radix_report_json(results)
+    else:
+        output = format_radix_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

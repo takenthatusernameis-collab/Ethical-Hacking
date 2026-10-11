@@ -10,6 +10,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - **Security headers check: `headers` command for quick security header analysis** (implemented)
 - **ICMP ping: `ping` command for host discovery with ICMP echo requests and TCP connect fallback** (implemented)
 - **CIDR network calculator: `cidr` command for offline network calculations (network address, netmask, broadcast, host range, membership test)** (implemented)
+- **Radix tree visualization: `radix` command for merging overlapping/supernettable CIDR blocks and rendering a hierarchical binary radix tree** (implemented)
 - HTTP fuzzing (implemented)
 - Subdomain enumeration (implemented)
 - DNS record enumeration (implemented)
