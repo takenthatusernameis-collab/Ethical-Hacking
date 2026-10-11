@@ -4,7 +4,7 @@ import csv
 import io
 import json
 import math
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 # Common passwords sourced from well-known weak-password lists (offline).
 COMMON_PASSWORDS = {
@@ -120,28 +120,75 @@ def evaluate_password(password: str, min_length: Optional[int] = None) -> Dict[s
     }
 
 
-def audit_passwords(passwords: List[str], min_length: Optional[int] = None) -> List[Tuple[str, Dict[str, object]]]:
+VALID_SORT_KEYS = ("score", "verdict", "length")
+
+
+def _sort_audit_pairs(
+    results: List[Tuple[str, Dict[str, object]]],
+    sort_by: Optional[str],
+    sort_desc: bool,
+) -> List[Tuple[str, Dict[str, object]]]:
+    """Return a sorted copy of the audit result pairs.
+
+    Args:
+        results: List of ``(password, evaluation)`` tuples.
+        sort_by: Field to sort by ('score', 'verdict', or 'length'); None keeps order.
+        sort_desc: When True, sort descending.
+
+    Returns:
+        A new list sorted in place-safe order. Invalid sort keys preserve the
+        original order.
+    """
+    if sort_by not in VALID_SORT_KEYS:
+        return list(results)
+
+    def sort_key(item: Tuple[str, Dict[str, object]]) -> Any:
+        _, eval_data = item
+        value = eval_data.get(sort_by)
+        if sort_by == "verdict":
+            # Verdicts are strings; sort alphabetically (case-insensitive).
+            return str(value).lower()
+        return value
+
+    return sorted(results, key=sort_key, reverse=sort_desc)
+
+
+def audit_passwords(
+    passwords: List[str],
+    min_length: Optional[int] = None,
+    sort_by: Optional[str] = None,
+    sort_desc: bool = True,
+) -> List[Tuple[str, Dict[str, object]]]:
     """Audit a list of passwords.
 
     Args:
         passwords: Passwords to evaluate.
         min_length: Optional minimum length threshold.
+        sort_by: Optional sort field ('score', 'verdict', or 'length'); None
+            keeps the original order.
+        sort_desc: When True (default), sort descending.
 
     Returns:
-        A list of ``(password, evaluation)`` tuples in the original order.
+        A list of ``(password, evaluation)`` tuples, sorted when ``sort_by`` is
+        provided.
     """
-    return [(pwd, evaluate_password(pwd, min_length=min_length)) for pwd in passwords]
+    results = [(pwd, evaluate_password(pwd, min_length=min_length)) for pwd in passwords]
+    return _sort_audit_pairs(results, sort_by, sort_desc)
 
 
 def format_audit_report_json(
     passwords: List[str],
     results: List[Tuple[str, Dict[str, object]]],
     min_length: Optional[int] = None,
+    sort_by: Optional[str] = None,
+    sort_desc: bool = True,
 ) -> str:
     """Render password audit results as a JSON string."""
     report = {
         "passwords_audited": len(passwords),
         "min_length": min_length,
+        "sort_by": sort_by,
+        "sort_desc": sort_desc,
         "results": [
             {
                 "password": pwd,
@@ -163,12 +210,17 @@ def format_audit_report_markdown(
     passwords: List[str],
     results: List[Tuple[str, Dict[str, object]]],
     min_length: Optional[int] = None,
+    sort_by: Optional[str] = None,
+    sort_desc: bool = True,
 ) -> str:
     """Render password audit results as a Markdown string."""
     lines = ["# Password Audit Report", ""]
     lines.append(f"- **Passwords Audited:** {len(passwords)}")
     if min_length is not None:
         lines.append(f"- **Min Length:** {min_length}")
+    if sort_by:
+        direction = "Descending" if sort_desc else "Ascending"
+        lines.append(f"- **Sorted By:** {sort_by} ({direction})")
     lines.append("")
 
     if results:
