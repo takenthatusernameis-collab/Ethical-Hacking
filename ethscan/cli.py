@@ -1772,6 +1772,11 @@ def cert(
     type=click.Path(exists=True, readable=True),
     help="JSON file with 'service' command output (skips live detection).",
 )
+@click.option(
+    "--ports",
+    help="Ports to scan for live service detection: comma-separated list/ranges "
+    "(e.g., '21,22,80'). Defaults to common ports.",
+)
 @click.option("--timeout", default=10.0, type=float, help="API request timeout in seconds")
 @click.option(
     "--no-cache",
@@ -1808,6 +1813,7 @@ def cert(
 def cve(
     target: str,
     services_file: Optional[str],
+    ports: Optional[str],
     timeout: float,
     no_cache: bool,
     no_offline_fallback: bool,
@@ -1822,6 +1828,11 @@ def cve(
         with open(services_file, "r", encoding="utf-8") as handle:
             services = json.load(handle)
 
+    port_list = None
+    if ports and not services_file:
+        from ethscan.scanner import parse_port_range
+        port_list = parse_port_range(ports)
+
     results = run_cve(
         target,
         services_file=services_file,
@@ -1830,6 +1841,7 @@ def cve(
         offline_fallback=not no_offline_fallback,
         api_url=api_url,
         severity=severity,
+        ports=port_list,
     )
 
     if fmt == "json":

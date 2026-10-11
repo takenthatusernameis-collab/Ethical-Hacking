@@ -198,6 +198,7 @@ def run_cve(
     offline_fallback: bool = True,
     api_url: Optional[str] = None,
     severity: Optional[str] = None,
+    ports: Optional[List[int]] = None,
 ) -> Dict[str, object]:
     """Query the NVD/CVE API for known vulnerabilities affecting TARGET's services.
 
@@ -207,10 +208,12 @@ def run_cve(
             omitted, live service detection is run against the target.
         timeout: API request timeout in seconds.
         use_cache: Whether to use local filesystem cache.
-        offline_fallback: Whether to use stale cache when API is unavailable.
+        offline_fallback: Whether to use stale cache when API is unreachable.
         api_url: Optional custom NVD API base URL.
         severity: Restrict findings to a single severity level
             (critical/high/medium/low). If None, all severities are reported.
+        ports: Optional list of ports to scan for live service detection.
+            If None, uses default common ports.
 
     Returns:
         Structured results with per-service CVE lookups, counts, and notes.
@@ -235,7 +238,7 @@ def run_cve(
     if services is None:
         from ethscan.service import run_service
 
-        services = run_service(host, timeout=timeout)
+        services = run_service(host, ports=ports, timeout=timeout)
 
     cve_entries: List[Dict[str, object]] = []
     services_checked = 0
@@ -314,6 +317,7 @@ def run_cve(
         "offline_fallback": offline_fallback,
         "api_url": api_url,
         "severity_filter": severity,
+        "ports": ports,
         "services_checked": services_checked,
         "cve_entries": cve_entries,
         "cve_count": len(cve_entries),
@@ -372,6 +376,9 @@ def format_cve_report_markdown(data: Dict[str, object]) -> str:
         lines.append(f"- **API URL:** {data['api_url']}")
     if data.get("severity_filter"):
         lines.append(f"- **Severity Filter:** {data['severity_filter']}")
+    if data.get("ports"):
+        ports_str = ", ".join(str(p) for p in data["ports"])
+        lines.append(f"- **Ports Scanned:** {ports_str}")
     lines.append("")
 
     severity_counts = data.get("severity_counts") or {}

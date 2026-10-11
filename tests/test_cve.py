@@ -463,3 +463,113 @@ def test_format_cve_report_markdown_nvd_entry() -> None:
     assert "CVE-2016-6210" in output
     assert "CVSS Score" in output
     assert "http://example.com" in output
+
+
+def test_run_cve_with_ports_parameter(monkeypatch) -> None:
+    called_ports = {}
+
+    def mock_run_service(host, ports=None, timeout=3.0, max_workers=50):
+        called_ports["ports"] = ports
+        return {
+            "target": host,
+            "host": host,
+            "timeout": timeout,
+            "ports_scanned": 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.service.run_service", mock_run_service)
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+
+    result = run_cve(
+        "example.com", timeout=0.5, use_cache=False, ports=[22, 80, 443]
+    )
+    assert result["ports"] == [22, 80, 443]
+    assert called_ports["ports"] == [22, 80, 443]
+
+
+def test_run_cve_without_ports_parameter(monkeypatch) -> None:
+    called_ports = {}
+
+    def mock_run_service(host, ports=None, timeout=3.0, max_workers=50):
+        called_ports["ports"] = ports
+        return {
+            "target": host,
+            "host": host,
+            "timeout": timeout,
+            "ports_scanned": 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.service.run_service", mock_run_service)
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+
+    result = run_cve("example.com", timeout=0.5, use_cache=False)
+    assert result["ports"] is None
+    assert called_ports["ports"] is None
+
+
+def test_format_cve_report_markdown_with_ports() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "timeout": 0.5,
+        "use_cache": True,
+        "offline_fallback": True,
+        "api_url": None,
+        "severity_filter": None,
+        "ports": [22, 80, 443],
+        "services_checked": 1,
+        "cve_entries": [],
+        "cve_count": 0,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+        "notes": [],
+    }
+    output = format_cve_report_markdown(data)
+    assert "Ports Scanned" in output
+    assert "22" in output
+    assert "80" in output
+    assert "443" in output
+
+
+def test_format_cve_report_markdown_without_ports() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "timeout": 0.5,
+        "use_cache": True,
+        "offline_fallback": True,
+        "api_url": None,
+        "severity_filter": None,
+        "ports": None,
+        "services_checked": 1,
+        "cve_entries": [],
+        "cve_count": 0,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+        "notes": [],
+    }
+    output = format_cve_report_markdown(data)
+    assert "Ports Scanned" not in output
+
+
+def test_format_cve_report_json_includes_ports() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "timeout": 0.5,
+        "use_cache": True,
+        "offline_fallback": True,
+        "api_url": None,
+        "severity_filter": None,
+        "ports": [22, 80],
+        "services_checked": 1,
+        "cve_entries": [],
+        "cve_count": 0,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+        "notes": [],
+    }
+    output = format_cve_report_json(data)
+    parsed = json.loads(output)
+    assert parsed["ports"] == [22, 80]
