@@ -10244,3 +10244,219 @@ def test_hash_check_no_passwords() -> None:
     )
     assert result.exit_code == 0
     assert "No passwords provided" in result.output
+
+
+def test_hash_salt_option() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["hash", "--password", "password", "--salt", "saltvalue", "--algorithm", "md5", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    assert "e137588f7bb4aa4f0c24592088b82f31" in result.output
+    assert '"salt": true' in result.output
+    assert '"pepper": false' in result.output
+
+
+def test_hash_salt_option_markdown() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["hash", "--password", "password", "--salt", "saltvalue", "--algorithm", "sha256", "--format", "markdown"],
+    )
+    assert result.exit_code == 0
+    assert "Salt" in result.output
+    assert "4a4c50688190ef1dc9aced9babc7bf4ff520ee712d249b98e3725da81479a7c1" in result.output
+
+
+def test_hash_pepper_option() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["hash", "--password", "password", "--pepper", "secretpepper", "--algorithm", "sha256", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    assert "e8bb12880be0eb5b568514ffa2acaa9b74648dadcebe545a07585fee8ea552ad" in result.output
+    assert '"pepper": true' in result.output
+
+
+def test_hash_pepper_option_markdown() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["hash", "--password", "password", "--pepper", "secretpepper", "--algorithm", "sha256", "--format", "markdown"],
+    )
+    assert result.exit_code == 0
+    assert "Pepper" in result.output
+    assert "e8bb12880be0eb5b568514ffa2acaa9b74648dadcebe545a07585fee8ea552ad" in result.output
+
+
+def test_hash_salt_and_pepper_combined() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--password",
+            "password",
+            "--salt",
+            "saltvalue",
+            "--pepper",
+            "secretpepper",
+            "--algorithm",
+            "sha256",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert (
+        "862e3f4b4c304c5da6c560833847a8434f110c55c23dfba9bff2982238c8fc59"
+        in result.output
+    )
+    assert '"salt": true' in result.output
+    assert '"pepper": true' in result.output
+
+
+def test_hash_salt_with_file_option(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("password\n", encoding="utf-8")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["hash", "--file", str(password_file), "--salt", "s", "--algorithm", "sha256", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    assert '"salt": true' in result.output
+    assert result.output.count('"passwords_hashed": 1') == 1
+
+
+def test_hash_salt_and_pepper_with_out_option(tmp_path) -> None:
+    out_file = tmp_path / "hash.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--password",
+            "password",
+            "--salt",
+            "saltvalue",
+            "--pepper",
+            "secretpepper",
+            "--algorithm",
+            "sha256",
+            "--format",
+            "json",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert (
+        "862e3f4b4c304c5da6c560833847a8434f110c55c23dfba9bff2982238c8fc59"
+        in content
+    )
+
+
+def test_hash_check_with_salt_match() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--password",
+            "password",
+            "--salt",
+            "saltvalue",
+            "--check",
+            "e137588f7bb4aa4f0c24592088b82f31",
+            "--algorithm",
+            "md5",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert '"match": true' in result.output
+    assert '"salt": true' in result.output
+
+
+def test_hash_check_with_pepper_match() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--password",
+            "password",
+            "--pepper",
+            "secretpepper",
+            "--check",
+            "e8bb12880be0eb5b568514ffa2acaa9b74648dadcebe545a07585fee8ea552ad",
+            "--algorithm",
+            "sha256",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert '"match": true' in result.output
+    assert '"pepper": true' in result.output
+
+
+def test_hash_check_with_pepper_mismatch() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--password",
+            "wrongpass",
+            "--pepper",
+            "secretpepper",
+            "--check",
+            "e8bb12880be0eb5b568514ffa2acaa9b74648dadcebe545a07585fee8ea552ad",
+            "--algorithm",
+            "sha256",
+            "--format",
+            "markdown",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "MISMATCH" in result.output
+    assert "Pepper" in result.output
+
+
+def test_hash_check_ntlm_with_pepper_error() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--password",
+            "password",
+            "--pepper",
+            "p",
+            "--algorithm",
+            "ntlm",
+            "--check",
+            "5f4dcc3b5aa765d61d8327deb882cf99",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert '"match": null' in result.output
+    assert "error" in result.output
+
+
+def test_hash_help_shows_salt_pepper() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["hash", "--help"])
+    assert result.exit_code == 0
+    assert "--salt" in result.output
+    assert "--pepper" in result.output

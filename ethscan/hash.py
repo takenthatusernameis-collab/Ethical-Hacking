@@ -6,6 +6,7 @@ via OpenSSL). Fully offline and stdlib-only.
 """
 
 import hashlib
+import hmac
 from typing import Dict, List, Optional
 
 # Algorithms supported natively by hashlib on this platform.
@@ -106,6 +107,83 @@ def _compute_hash(password: str, algorithm: str) -> str:
     raise ValueError(f"Unsupported algorithm: {algorithm}")
 
 
+def _compute_peppered_hash(password: str, algorithm: str, pepper: str) -> str:
+    """Compute an HMAC keyed hash of the password using the pepper as the key.
+
+    Only algorithms backed by a direct hashlib name (md5, sha1, sha256,
+    sha512, md4) can be used for HMAC. NTLM has no hashlib name and is
+    therefore unsupported for peppered hashing.
+
+    Args:
+        password: Plaintext password (the HMAC message).
+        algorithm: Canonical algorithm key.
+        pepper: Secret pepper value (the HMAC key).
+
+    Returns:
+        Hex digest of ``HMAC(pepper, password, algorithm)``.
+
+    Raises:
+        ValueError: If the algorithm cannot be expressed as a hashlib name.
+    """
+    name = _hashlib_name(algorithm)
+    if name is None:
+        raise ValueError(
+            f"Algorithm '{algorithm}' does not support HMAC (peppered hashing)."
+        )
+    return hmac.new(
+        pepper.encode("utf-8"),
+        password.encode("utf-8"),
+        name,
+    ).hexdigest()
+
+
+def _compute_password_hash(
+    password: str,
+    algorithm: str,
+    salt: Optional[str] = None,
+    pepper: Optional[str] = None,
+) -> str:
+    """Compute a (optionally salted/peppered) hash for a single password.
+
+    - ``salt`` is prepended to the password before hashing (a classic salted
+      hash), e.g. ``hash(salt + password)``.
+    - ``pepper`` is used as the HMAC key, with the password (or ``salt +
+      password`` when both are supplied) as the message.
+    - When both are supplied the salt is folded into the HMAC message and the
+      pepper is the HMAC key: ``HMAC(pepper, salt + password, algorithm)``.
+    - When neither is supplied this behaves identically to ``_compute_hash``.
+
+    Args:
+        password: Plaintext password.
+        algorithm: Canonical algorithm key.
+        salt: Optional salt string prepended to the password.
+        pepper: Optional pepper string used as the HMAC key.
+
+    Returns:
+        Hex digest string.
+
+    Raises:
+        ValueError: If the algorithm is unsupported or does not support HMAC
+            when a pepper is supplied.
+    """
+    if salt and pepper:
+        name = _hashlib_name(algorithm)
+        if name is None:
+            raise ValueError(
+                f"Algorithm '{algorithm}' does not support HMAC (peppered hashing)."
+            )
+        return hmac.new(
+            pepper.encode("utf-8"),
+            (salt + password).encode("utf-8"),
+            name,
+        ).hexdigest()
+    if salt:
+        return _compute_hash(salt + password, algorithm)
+    if pepper:
+        return _compute_peppered_hash(password, algorithm, pepper)
+    return _compute_hash(password, algorithm)
+
+
 def _hashlib_name(algorithm: str) -> Optional[str]:
     """Return the hashlib algorithm name for a canonical key, or None."""
     return _HASHLIB_ALGORITHMS.get(algorithm)
@@ -180,6 +258,8 @@ def run_check(
     password: str,
     digest: str,
     algorithm: Optional[str] = None,
+    salt: Optional[str] = None,
+    pepper: Optional[str] = None,
 ) -> Dict[str, object]:
     """Compare a plaintext password against a known hash digest.
 
@@ -188,10 +268,14 @@ def run_check(
         digest: Expected hex digest to compare against.
         algorithm: Optional algorithm key (md5, sha1, sha256, sha512, ntlm,
             md4). When omitted, inferred from the digest length.
+        salt: Optional salt prepended to the password before hashing (needed to
+            verify a salted digest).
+        pepper: Optional pepper used as the HMAC key (needed to verify a
+            peppered digest).
 
     Returns:
         Structured result with ``password``, ``digest``, ``algorithm``,
-        ``computed``, ``match``, ``error`` fields.
+        ``salt``, ``pepper``, ``computed``, ``match``, ``error`` fields.
     """
     error: Optional[str] = None
     chosen_algorithm: Optional[str] = None
@@ -210,7 +294,9 @@ def run_check(
                 "specify --algorithm explicitly."
             )
         else:
-            computed = _compute_hash(password, chosen_algorithm)
+            computed = _compute_password_hash(
+                password, chosen_algorithm, salt=salt, pepper=pepper
+            )
             match = computed.lower() == digest.strip().lower()
     except ValueError as exc:
         error = str(exc)
@@ -219,6 +305,8 @@ def run_check(
         "password": password,
         "digest": digest,
         "algorithm": chosen_algorithm,
+        "salt": bool(salt),
+        "pepper": bool(pepper),
         "computed": computed,
         "match": match,
         "error": error,
@@ -228,15 +316,21 @@ def run_check(
 def run_hash(
     passwords: List[str],
     algorithm: str = "md5",
+    salt: Optional[str] = None,
+    pepper: Optional[str] = None,
 ) -> Dict[str, object]:
     """Generate hashes for a list of passwords.
 
     Args:
         passwords: Passwords to hash.
         algorithm: Algorithm key (md5, sha1, sha256, sha512, ntlm, md4).
+        salt: Optional salt prepended to each password before hashing.
+        pepper: Optional pepper used as the HMAC key (with ``salt +
+            password`` as the message when salt is also supplied).
 
     Returns:
-        Structured results with the algorithm, per-password hashes, and notes.
+        Structured results with the algorithm, salt/pepper indicators,
+        per-password hashes, and notes.
     """
     # Allow md4/ntlm even when MD4 is unavailable so callers get graceful
     # per-password errors instead of an exception from run_hash itself.
@@ -257,7 +351,9 @@ def run_hash(
     results: List[Dict[str, object]] = []
     for pwd in password_list:
         try:
-            digest = _compute_hash(pwd, normalized)
+            digest = _compute_password_hash(
+                pwd, normalized, salt=salt, pepper=pepper
+            )
             error = None
         except ValueError as exc:
             digest = None
@@ -266,12 +362,21 @@ def run_hash(
             {
                 "password": pwd,
                 "algorithm": normalized,
+                "salt": bool(salt),
+                "pepper": bool(pepper),
                 "hash": digest,
                 "error": error,
             }
         )
 
     notes: List[str] = []
+    if salt:
+        notes.append("Salt applied: prepended to each password before hashing.")
+    if pepper:
+        notes.append(
+            "Pepper applied: used as the HMAC key over the password (or "
+            "salt+password when salt is also supplied)."
+        )
     if normalized == "md4" and not MD4_AVAILABLE:
         notes.append("MD4 is unavailable on this OpenSSL build; use another algorithm.")
     if normalized == "ntlm" and not MD4_AVAILABLE:
@@ -279,6 +384,8 @@ def run_hash(
 
     return {
         "algorithm": normalized,
+        "salt": bool(salt),
+        "pepper": bool(pepper),
         "passwords_hashed": len(password_list),
         "results": results,
         "notes": notes,
@@ -309,6 +416,10 @@ def format_hash_report_markdown(data: Dict[str, object]) -> str:
     lines = ["# ethscan Password Hash Report", ""]
     lines.append(f"- **Algorithm:** {data['algorithm']}")
     lines.append(f"- **Passwords Hashed:** {data['passwords_hashed']}")
+    if data.get("salt"):
+        lines.append("- **Salt:** applied (prepended to password)")
+    if data.get("pepper"):
+        lines.append("- **Pepper:** applied (HMAC key)")
     lines.append("")
 
     results = data.get("results") or []
@@ -343,6 +454,10 @@ def format_check_report_markdown(data: Dict[str, object]) -> str:
     algorithm = data.get("algorithm")
     if algorithm:
         lines.append(f"- **Algorithm:** {algorithm}")
+    if data.get("salt"):
+        lines.append("- **Salt:** applied (prepended to password)")
+    if data.get("pepper"):
+        lines.append("- **Pepper:** applied (HMAC key)")
     computed = data.get("computed")
     if computed is not None:
         lines.append(f"- **Computed:** `{_escape(str(computed))}`")

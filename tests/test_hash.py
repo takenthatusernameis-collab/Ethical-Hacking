@@ -8,6 +8,8 @@ from ethscan.hash import (
     _compute_md4,
     _compute_md5,
     _compute_ntlm,
+    _compute_password_hash,
+    _compute_peppered_hash,
     _compute_sha1,
     _compute_sha256,
     _compute_sha512,
@@ -500,3 +502,228 @@ def test_format_check_report_markdown_no_algorithm() -> None:
     output = format_check_report_markdown(result)
     # algorithm is None -> no Algorithm line
     assert "**Algorithm:**" not in output
+
+
+# ---------------------------------------------------------------------------
+# Salt / pepper (salted & peppered hashing)
+# ---------------------------------------------------------------------------
+
+
+def test_compute_peppered_hash_known_value() -> None:
+    import hmac
+
+    expected = hmac.new(b"secretpepper", b"password", "sha256").hexdigest()
+    assert _compute_peppered_hash("password", "sha256", "secretpepper") == expected
+
+
+def test_compute_peppered_hash_matches_inline() -> None:
+    assert (
+        _compute_peppered_hash("password", "sha256", "secretpepper")
+        == "e8bb12880be0eb5b568514ffa2acaa9b74648dadcebe545a07585fee8ea552ad"
+    )
+
+
+def test_compute_peppered_hash_unsupported_algorithm() -> None:
+    try:
+        _compute_peppered_hash("password", "ntlm", "pepper")
+        assert False, "Expected ValueError"
+    except ValueError:
+        pass
+
+
+def test_compute_password_hash_no_salt_no_pepper() -> None:
+    assert _compute_password_hash("password", "md5") == _compute_md5("password")
+
+
+def test_compute_password_hash_salt_prepends() -> None:
+    # salt+password via standard hash
+    assert _compute_password_hash("password", "md5", salt="saltvalue") == (
+        "e137588f7bb4aa4f0c24592088b82f31"
+    )
+
+
+def test_compute_password_hash_pepper_is_hmac() -> None:
+    assert _compute_password_hash("password", "sha256", pepper="secretpepper") == (
+        "e8bb12880be0eb5b568514ffa2acaa9b74648dadcebe545a07585fee8ea552ad"
+    )
+
+
+def test_compute_password_hash_salt_and_pepper_combined() -> None:
+    # HMAC(pepper, salt+password, sha256)
+    assert _compute_password_hash("password", "sha256", salt="saltvalue", pepper="secretpepper") == (
+        "862e3f4b4c304c5da6c560833847a8434f110c55c23dfba9bff2982238c8fc59"
+    )
+
+
+def test_compute_password_hash_pepper_unsupported_raises() -> None:
+    try:
+        _compute_password_hash("password", "ntlm", pepper="pepper")
+        assert False, "Expected ValueError"
+    except ValueError:
+        pass
+
+
+def test_run_hash_with_salt() -> None:
+    result = run_hash(["password"], "md5", salt="saltvalue")
+    assert result["salt"] is True
+    assert result["pepper"] is False
+    assert result["results"][0]["salt"] is True
+    assert result["results"][0]["pepper"] is False
+    assert result["results"][0]["hash"] == "e137588f7bb4aa4f0c24592088b82f31"
+    assert any("Salt applied" in n for n in result["notes"])
+
+
+def test_run_hash_with_pepper() -> None:
+    result = run_hash(["password"], "sha256", pepper="secretpepper")
+    assert result["salt"] is False
+    assert result["pepper"] is True
+    assert result["results"][0]["hash"] == "e8bb12880be0eb5b568514ffa2acaa9b74648dadcebe545a07585fee8ea552ad"
+    assert any("Pepper applied" in n for n in result["notes"])
+
+
+def test_run_hash_with_salt_and_pepper() -> None:
+    result = run_hash(["password"], "sha256", salt="saltvalue", pepper="secretpepper")
+    assert result["salt"] is True
+    assert result["pepper"] is True
+    assert result["results"][0]["hash"] == "862e3f4b4c304c5da6c560833847a8434f110c55c23dfba9bff2982238c8fc59"
+    assert len(result["notes"]) == 2
+
+
+def test_run_hash_salt_changes_hash_from_unsalted() -> None:
+    unsalted = run_hash(["password"], "md5")["results"][0]["hash"]
+    salted = run_hash(["password"], "md5", salt="saltvalue")["results"][0]["hash"]
+    assert unsalted != salted
+
+
+def test_run_hash_pepper_not_in_salt_only_mode() -> None:
+    result = run_hash(["password"], "sha256", salt="saltvalue")
+    assert result["pepper"] is False
+    assert result["results"][0]["pepper"] is False
+
+
+def test_run_hash_pepper_not_in_pepper_only_mode() -> None:
+    result = run_hash(["password"], "sha256", pepper="secretpepper")
+    assert result["salt"] is False
+    assert result["results"][0]["salt"] is False
+
+
+def test_run_hash_ntlm_with_pepper_graceful_error() -> None:
+    result = run_hash(["password"], "ntlm", pepper="pepper")
+    assert result["results"][0]["error"] is not None
+    assert result["results"][0]["hash"] is None
+
+
+def test_run_hash_md5_pepper_known_value() -> None:
+    assert run_hash(["password"], "md5", pepper="secretpepper")["results"][0]["hash"] == (
+        "6f356fbe1394b2277fac9a919342967d"
+    )
+
+
+def test_run_hash_salt_multiple_passwords() -> None:
+    result = run_hash(["password", "123456"], "sha256", salt="s")
+    assert result["passwords_hashed"] == 2
+    assert result["salt"] is True
+    assert result["results"][0]["salt"] is True
+    assert result["results"][1]["salt"] is True
+
+
+def test_format_hash_report_json_includes_salt_pepper() -> None:
+    data = run_hash(["password"], "sha256", salt="s", pepper="p")
+    parsed = json.loads(format_hash_report_json(data))
+    assert parsed["salt"] is True
+    assert parsed["pepper"] is True
+    assert parsed["results"][0]["salt"] is True
+    assert parsed["results"][0]["pepper"] is True
+
+
+def test_format_hash_report_markdown_shows_salt_and_pepper() -> None:
+    data = run_hash(["password"], "sha256", salt="s", pepper="p")
+    output = format_hash_report_markdown(data)
+    assert "Salt" in output
+    assert "Pepper" in output
+
+
+def test_format_hash_report_markdown_no_salt_no_pepper_lines() -> None:
+    data = run_hash(["password"], "md5")
+    output = format_hash_report_markdown(data)
+    assert "**Salt:**" not in output
+    assert "**Pepper:**" not in output
+
+
+# ---------------------------------------------------------------------------
+# run_check with salt / pepper
+# ---------------------------------------------------------------------------
+
+
+def test_run_check_with_salt_match() -> None:
+    digest = "e137588f7bb4aa4f0c24592088b82f31"
+    result = run_check("password", digest, algorithm="md5", salt="saltvalue")
+    assert result["match"] is True
+    assert result["salt"] is True
+    assert result["pepper"] is False
+
+
+def test_run_check_with_salt_mismatch() -> None:
+    digest = "e137588f7bb4aa4f0c24592088b82f31"
+    result = run_check("wrongpass", digest, algorithm="md5", salt="saltvalue")
+    assert result["match"] is False
+
+
+def test_run_check_with_pepper_match() -> None:
+    digest = "e8bb12880be0eb5b568514ffa2acaa9b74648dadcebe545a07585fee8ea552ad"
+    result = run_check(
+        "password", digest, algorithm="sha256", pepper="secretpepper"
+    )
+    assert result["match"] is True
+    assert result["pepper"] is True
+    assert result["salt"] is False
+
+
+def test_run_check_with_salt_and_pepper_match() -> None:
+    digest = "862e3f4b4c304c5da6c560833847a8434f110c55c23dfba9bff2982238c8fc59"
+    result = run_check(
+        "password",
+        digest,
+        algorithm="sha256",
+        salt="saltvalue",
+        pepper="secretpepper",
+    )
+    assert result["match"] is True
+    assert result["salt"] is True
+    assert result["pepper"] is True
+
+
+def test_run_check_pepper_unsupported_algorithm_error() -> None:
+    result = run_check("password", "5f4dcc3b5aa765d61d8327deb882cf99", algorithm="ntlm", pepper="p")
+    assert result["match"] is None
+    assert result["error"] is not None
+
+
+def test_format_check_report_json_includes_salt_pepper() -> None:
+    digest = "e137588f7bb4aa4f0c24592088b82f31"
+    result = run_check("password", digest, algorithm="md5", salt="saltvalue")
+    parsed = json.loads(format_check_report_json(result))
+    assert parsed["salt"] is True
+    assert parsed["pepper"] is False
+
+
+def test_format_check_report_markdown_shows_salt_and_pepper() -> None:
+    digest = "862e3f4b4c304c5da6c560833847a8434f110c55c23dfba9bff2982238c8fc59"
+    result = run_check(
+        "password",
+        digest,
+        algorithm="sha256",
+        salt="saltvalue",
+        pepper="secretpepper",
+    )
+    output = format_check_report_markdown(result)
+    assert "Salt" in output
+    assert "Pepper" in output
+    assert "MATCH" in output
+
+
+def test_format_check_report_markdown_no_salt_no_pepper_lines() -> None:
+    result = run_check("password", "5f4dcc3b5aa765d61d8327deb882cf99")
+    output = format_check_report_markdown(result)
+    assert "**Salt:**" not in output
+    assert "**Pepper:**" not in output

@@ -2260,6 +2260,21 @@ def cidr(cidr: str, contains: Optional[str], diff: Optional[str], fmt: str, out_
     help="Hash algorithm (default: md5). In --check mode, infers from digest length when omitted.",
 )
 @click.option(
+    "--salt",
+    "salt",
+    default=None,
+    help="Optional salt prepended to each password before hashing "
+    "(also used in --check mode to recompute a salted digest for comparison).",
+)
+@click.option(
+    "--pepper",
+    "pepper",
+    default=None,
+    help="Optional pepper used as the HMAC key (salt+password is the HMAC "
+    "message when --salt is also supplied). Only valid for hashlib-backed "
+    "algorithms (md5, sha1, sha256, sha512, md4).",
+)
+@click.option(
     "--check",
     "check_digest",
     help="Compare the plaintext password against this hex digest instead of hashing. "
@@ -2278,7 +2293,7 @@ def cidr(cidr: str, contains: Optional[str], diff: Optional[str], fmt: str, out_
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def hash_cmd(passwords, password_file, algorithm, check_digest, fmt, out_path) -> None:
+def hash_cmd(passwords, password_file, algorithm, salt, pepper, check_digest, fmt, out_path) -> None:
     """Generate cryptographic hashes for passwords (MD5, SHA-1, SHA-256, SHA-512, NTLM, MD4)."""
     password_list = list(passwords)
     if not password_list and password_file:
@@ -2293,13 +2308,17 @@ def hash_cmd(passwords, password_file, algorithm, check_digest, fmt, out_path) -
     if check_digest:
         # Check mode: compare the first password against the supplied digest.
         password = password_list[0]
-        result = run_check(password, check_digest, algorithm=algorithm)
+        result = run_check(
+            password, check_digest, algorithm=algorithm, salt=salt, pepper=pepper
+        )
         if fmt == "json":
             output = format_check_report_json(result)
         else:
             output = format_check_report_markdown(result)
     else:
-        results = run_hash(password_list, algorithm=algorithm or "md5")
+        results = run_hash(
+            password_list, algorithm=algorithm or "md5", salt=salt, pepper=pepper
+        )
         if fmt == "json":
             output = format_hash_report_json(results)
         else:

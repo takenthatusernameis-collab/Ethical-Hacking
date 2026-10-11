@@ -1152,4 +1152,68 @@ Alternative: Add a `--iterations` option to the `hash` command for iterated hash
 - `geo` now supports `--recursive` and `--max-depth` for recursive hop geolocation.
 - `hash` now supports `--password`, `--file` (one password per line), `--algorithm [md5|sha1|sha256|sha512|ntlm|md4]`, `--check DIGEST` (compare plaintext against a known hash, algorithm inferred from digest length or explicit `--algorithm`), `--format`, `--out` for password hash generation and verification.
  - Configuration file (`ethscan.yaml`) persists default options across commands via a `--config` group option and a `config` subcommand.
- - Tests: 1400 passing (1 skipped).
+  - Tests: 1400 passing (1 skipped).
+
+## Completed: `--pepper`/`--salt` option for `hash` command
+
+Added `--salt` and `--pepper` options to the `hash` command for salted/peppered hash generation, following standard password-security practice. Works in both hashing and `--check` modes. Stdlib-only (`hmac` module).
+
+### Design
+- `--salt SALT`: the salt is prepended to each password before hashing (`hash(salt + password)`), the classic salted-hash construction (defends against rainbow tables). Works for all algorithms including NTLM/MD4.
+- `--pepper PEPPER`: the pepper is used as the HMAC key over the password (`HMAC(pepper, password, algo)`). Only valid for hashlib-backed algorithms (md5, sha1, sha256, sha512, md4); NTLM has no hashlib name and is rejected with a graceful per-password error rather than a crash.
+- Combined (`--salt` + `--pepper`): `HMAC(pepper, salt + password, algo)`, applying both defenses in one output.
+- In `--check` mode, the same salt/pepper are used to recompute the digest for MATCH/MISMATCH comparison, enabling verification of salted/peppered digests.
+- Salt/pepper are not echoed back in results (only `salt`/`pepper` boolean flags) to avoid leaking the pepper secret; explanatory notes describe what was applied.
+
+### Added Functionality
+- `ethscan/hash.py`:
+  - Added `import hmac`.
+  - `_compute_peppered_hash(password, algorithm, pepper)` — HMAC keyed hash using the pepper as the key; raises `ValueError` for algorithms without a hashlib name (NTLM).
+  - `_compute_password_hash(password, algorithm, salt=None, pepper=None)` — combining dispatcher: salt+pepper -> `HMAC(pepper, salt+password, algo)`; salt only -> `hash(salt+password)`; pepper only -> `HMAC(pepper, password, algo)`; neither -> standard `_compute_hash`.
+  - `run_hash()` now accepts `salt`/`pepper`; records `salt`/`pepper` booleans per-result and at the top level; adds explanatory notes; uses `_compute_password_hash`.
+  - `run_check()` now accepts `salt`/`pepper`; records booleans; uses `_compute_password_hash` so salted/peppered digests can be verified.
+  - `format_hash_report_markdown()` and `format_check_report_markdown()` now render `**Salt:**`/`**Pepper:**` lines when applied. JSON formatters include the new `salt`/`pepper` fields automatically.
+- `ethscan/cli.py`:
+  - Added `--salt` and `--pepper` options (default `None`) to the `hash` command; passes both to `run_hash` and `run_check`.
+
+### Modified Files
+- `ethscan/hash.py` — salt/pepper support and formatters.
+- `ethscan/cli.py` — `--salt`/`--pepper` options and pass-through.
+- `tests/test_hash.py` — 28 new unit tests: peppered-HMAC known values, salt prepend, salt+pepper combined (HMAC(salt+password)), unsupported-algorithm/unsupported-NTLM-pepper errors, `run_hash` (salt/pepper/combined/multi-password/NTLM-pepper-graceful), JSON/markdown formatters (salt+pepper lines, no-salt/no-pepper lines), `run_check` (salt/pepper/combined match/mismatch/unsupported error), check formatters.
+- `tests/test_cli.py` — 12 new CLI integration tests: help shows `--salt`/`--pepper`, salt JSON/markdown, pepper JSON/markdown, salt+pepper combined JSON, salt with `--file`, salt+pepper with `--out`, check-with-salt match, check-with-pepper match, check-with-pepper mismatch markdown, check NTLM+pepper error.
+- `README.md` — added salted/peppered hashing to the features list.
+
+### Verification
+- `python -m pytest -q` -> 1440 passed, 1 skipped (1400 baseline + 28 unit + 12 CLI).
+- `python -m ethscan hash --help` -> shows `--salt` and `--pepper` options.
+- End-to-end: `python -m ethscan hash --password password --salt saltvalue --algorithm md5 --format json` -> `e137588f7bb4aa4f0c24592088b82f31` (matches `md5("saltvalue"+"password")`).
+- End-to-end: `python -m ethscan hash --password password --pepper secretpepper --algorithm sha256 --format json` -> `e8bb12880be0eb5b568514ffa2acaa9b74648dadcebe545a07585fee8ea552ad` (matches `HMAC-SHA256("secretpepper", "password")`).
+- End-to-end: `python -m ethscan hash --password password --salt saltvalue --pepper secretpepper --algorithm sha256 --format json` -> `862e3f4b4c304c5da6c560833847a8434f110c55c23dfba9bff2982238c8fc59`.
+- End-to-end: `python -m ethscan hash --password password --salt saltvalue --check e137588f7bb4aa4f0c24592088b82f31 --algorithm md5 --format json` -> `"match": true`.
+- Graceful: `python -m ethscan hash --password password --pepper p --algorithm ntlm --format json` -> per-password error, no crash.
+
+## Suggested next task
+
+**Add a `--iterations` option to the `hash` command** for iterated key-derivation (PBKDF2-HMAC-SHA256 with a configurable iteration count and optional `--salt`). This naturally extends the new salt/pepper work: when `--iterations N` is supplied, use `hashlib.pbkdf2_hmac(algorithm, password, salt, N)` (requiring `--salt`) instead of the single-pass hash, producing a stronger password-derived hash suitable for offline brute-force comparison. Output the iteration count and salt in the report so results are reproducible/verifiable.
+
+Alternative: Add a `--min-length` option to the `audit` command to flag passwords below a custom length threshold (in addition to the built-in heuristics), with JSON/Markdown reporting of short passwords.
+
+Alternative: Add a `--format json|markdown` option to the `report` command for machine-readable combined scan+audit reports (it currently only produces a human-readable summary).
+
+## Requirements
+- Pick one of the suggested features and implement it following the existing module conventions.
+- Add a new module under `ethscan/` with `run_*`, `format_*_report_json`, `format_*_report_markdown` (for new commands) or extend existing module (for new options).
+- Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
+- Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
+- Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
+
+## Current state
+- All 28 commands implemented and wired up (including `hash` with `--file`, `--check`, salt, and pepper).
+- `hash` now supports `--password`, `--file`, `--algorithm [md5|sha1|sha256|sha512|ntlm|md4]`, `--salt`, `--pepper` (HMAC, combinable as `HMAC(pepper, salt+password)`), `--check DIGEST` (with salt/pepper support for verifying salted/peppered digests), `--format`, `--out` for password hash generation and verification.
+- `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv`.
+- `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, `--max-depth`.
+- `whois` now supports `--recursive/--no-recursive` and `--max-depth`.
+- `audit` now supports `--format json|markdown` and `--out`.
+- `cert`, `report`, `cve` (with `--min-severity` and `--ports`), `vuln` (with `--min-severity`), `dnssec`, `geo`, `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon` all implemented with JSON/Markdown output.
+- Configuration file (`ethscan.yaml`) persists default options across commands.
+- Tests: 1440 passing (1 skipped).
