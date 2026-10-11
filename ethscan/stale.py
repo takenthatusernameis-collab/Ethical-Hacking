@@ -1,0 +1,1 @@
+"""Stale DNS record detection module for ethscan."""
