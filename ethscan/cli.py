@@ -184,6 +184,11 @@ from ethscan.validate import (
     format_validate_report_markdown,
     run_validate,
 )
+from ethscan.radix import (
+    format_radix_report_json,
+    format_radix_report_markdown,
+    run_radix,
+)
 
 
 @click.group()

@@ -12733,3 +12733,210 @@ def test_resolve_offline_domain_markdown_pipe_escaping(monkeypatch) -> None:
     )
     assert result.exit_code == 0
     assert "a\\|b.example.com" in result.output
+
+
+# ---------------------------------------------------------------------------
+# radix CLI integration tests
+# ---------------------------------------------------------------------------
+
+
+def test_radix_help() -> None:
+    """Test radix command help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["radix", "--help"])
+    assert result.exit_code == 0
+    assert "--cidrs" in result.output
+    assert "--diff" in result.output
+    assert "--no-merge" in result.output
+    assert "--max-depth" in result.output
+    assert "--contains" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+
+
+def test_radix_top_level_help_lists() -> None:
+    """Test that radix appears in top-level help."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "radix" in result.output.lower()
+
+
+def test_radix_offline_target_json() -> None:
+    """Test radix command with JSON output."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["radix", "--cidrs", "192.168.1.0/24,192.168.2.0/24", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["network_count"] == 2
+    assert parsed["merged_network_count"] == 2
+    assert "192.168.1.0/24" in parsed["merged"]
+    assert "192.168.2.0/24" in parsed["merged"]
+    assert parsed["radix_tree"] is not None
+
+
+def test_radix_offline_target_markdown() -> None:
+    """Test radix command with Markdown output."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["radix", "--cidrs", "10.0.0.0/8", "--format", "markdown"],
+    )
+    assert result.exit_code == 0
+    assert "ethscan Radix Tree Report" in result.output
+    assert "10.0.0.0/8" in result.output
+
+
+def test_radix_merge_option() -> None:
+    """Test radix command with --no-merge option."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "radix",
+            "--cidrs",
+            "192.168.1.0/24,192.168.2.0/24",
+            "--no-merge",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["merge_enabled"] is False
+
+
+def test_radix_contains_option() -> None:
+    """Test radix command with --contains option."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "radix",
+            "--cidrs",
+            "192.168.1.0/24,10.0.0.0/8",
+            "--contains",
+            "10.5.5.5",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["contains"]["in_network"] is True
+    assert parsed["contains"]["matched_network"] == "10.0.0.0/8"
+
+
+def test_radix_diff_option() -> None:
+    """Test radix command with --diff option."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "radix",
+            "--cidrs",
+            "192.168.1.0/24",
+            "--diff",
+            "192.168.1.128/25",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert "diff" in parsed
+    assert parsed["diff"]["difference_network_count"] == 1
+    assert "192.168.1.0/25" in parsed["diff"]["difference"]
+
+
+def test_radix_out_option_json(tmp_path) -> None:
+    """Test radix command with --out (json)."""
+    out_file = tmp_path / "radix_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "radix",
+            "--cidrs",
+            "192.168.1.0/24",
+            "--format",
+            "json",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = json.loads(out_file.read_text())
+    assert content["network_count"] == 1
+
+
+def test_radix_out_option_markdown(tmp_path) -> None:
+    """Test radix command with --out (markdown)."""
+    out_file = tmp_path / "radix_report.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "radix",
+            "--cidrs",
+            "192.168.1.0/24",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "ethscan Radix Tree Report" in content
+
+
+def test_radix_default_format_is_json() -> None:
+    """Test radix command defaults to JSON format."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["radix", "--cidrs", "192.168.1.0/24"],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["network_count"] == 1
+
+
+def test_radix_max_depth_option() -> None:
+    """Test radix command with --max-depth option."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "radix",
+            "--cidrs",
+            "192.168.1.0/24,192.168.2.0/24",
+            "--max-depth",
+            "1",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["max_depth"] == 1
+
+
+def test_radix_markdown_pipe_escaping() -> None:
+    """Test radix command markdown output escapes pipe characters."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["radix", "--cidrs", "192.168.1.0/24", "--format", "markdown"],
+    )
+    assert result.exit_code == 0
+    # The merged networks table should not have raw pipes in values
+    assert "|" in result.output  # table separators

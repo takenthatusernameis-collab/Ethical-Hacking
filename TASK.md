@@ -1712,3 +1712,56 @@ Alternative: Add a `--recursive` option to the `geo` command to recursively geol
 - Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
 - Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
 - Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
+
+## Completed: `radix` command (CIDR radix tree visualization)
+
+The `radix` command visualizes CIDR blocks as a radix tree (Patricia trie), merging overlapping and adjacent (supernettable) networks into compact aggregate ranges. It supports IP membership testing (`--contains`), set difference (`--diff`), and configurable tree depth (`--max-depth`). Fully offline and stdlib-only.
+
+### Module
+- `ethscan/radix.py` — Radix tree module with:
+  - `_normalize_cidr()` — normalizes CIDR strings, treating bare IPs as /32 or /128
+  - `_merge_networks()` — merges overlapping and supernettable networks using `ipaddress.collapse_addresses`
+  - `_build_radix_node()` — recursively builds a binary radix tree partitioning by bit
+  - `_subtract_networks()` — computes set difference between two network sets
+  - `run_radix()` — public entry point: parses CIDRs, merges, builds tree, optional contains/diff
+  - `format_radix_report_json()` / `format_radix_report_markdown()` — output formatters (markdown includes summary, merged network table, ASCII radix tree, membership test, diff)
+
+### Modified Files
+- `ethscan/cli.py` — registered `radix` command with `--cidrs` (comma-separated CIDRs), `--diff` (comma-separated CIDRs for set difference), `--no-merge`, `--max-depth`, `--contains`, `--format`, `--out`; imports `run_radix`, `format_radix_report_json`, `format_radix_report_markdown` from `ethscan.radix`
+- `tests/test_cli.py` — 12 CLI integration tests: `radix` help, top-level help listing, offline JSON/Markdown output, `--no-merge`, `--contains`, `--diff`, `--out` (json and markdown), default format is JSON, `--max-depth`, markdown pipe escaping
+- `README.md` — already includes `radix` in the features list
+
+### Verification
+- `python -m pytest -q` -> 1719 passed, 1 skipped (1707 baseline + 12 new CLI tests)
+- `python -m ethscan --help` -> lists `radix` among the 30 commands
+- `python -m ethscan radix --help` -> shows all expected options (`--cidrs`, `--diff`, `--no-merge`, `--max-depth`, `--contains`, `--format`, `--out`)
+- End-to-end: `python -m ethscan radix --cidrs "192.168.1.0/24,192.168.2.0/24,10.0.0.0/8" --format json` produces JSON with merged networks, radix tree, and compression statistics
+- End-to-end: `python -m ethscan radix --cidrs "192.168.0.0/24,192.168.1.0/24" --format markdown` renders merged network table and ASCII radix tree showing supernet 192.168.0.0/23
+- End-to-end: `python -m ethscan radix --cidrs "192.168.1.0/24" --diff "192.168.1.128/25" --format json` computes set difference (192.168.1.0/25)
+- End-to-end: `python -m ethscan radix --cidrs "10.0.0.0/8,192.168.1.0/24" --contains "10.5.5.5" --format json` reports membership with matched network
+
+## Current state
+- All 30 commands implemented and wired up (including `radix`).
+- `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv`.
+- `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, `--max-depth`.
+- `whois` now supports `--recursive/--no-recursive`, `--max-depth`, `--format json|markdown`, and `--out` for machine-readable WHOIS results.
+- `audit` now supports `--format json|markdown`, `--out`, `--min-length`, `--output-format csv` for spreadsheet-compatible password audit dumps, `--sort [score|verdict|length]` with `--sort-desc/--sort-asc` (reorder audit rows; defaults to `None`/`True`), and `--salt`/`--pepper`/`--algorithm` for salted/peppered password auditing.
+- `report` now supports `--target`, `--ports`, `--profile`, `--timeout`, `--workers`, `--audit-file`, `--min-length` (pass-through to the embedded audit), `--salt`/`--pepper`/`--algorithm` (pass-through to the embedded audit), `--open-only/--no-open-only` (filter scan results to open ports only), `--sort {score|verdict|length}` with `--sort-desc/--sort-asc` (reorder audit rows; scan results stay in port order), `--output-format [json|markdown|csv]` (with `--format` as deprecated alias), and `--out`; report logic lives in `ethscan/report.py` (`run_report`, `format_report_json`, `format_report_markdown`, `format_report_csv`).
+- `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `vuln` (with `--min-severity`, `--recursive`, `--max-depth`), `dnssec`, `geo` (with `--recursive`, `--max-depth`), `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon`, `resolve`, `validate`, `radix` all implemented with JSON/Markdown output.
+- Configuration file (`ethscan.yaml`) persists default options across commands.
+- Tests: 1719 passing (1 skipped).
+
+## Suggested next task
+
+**Add a `--recursive` option to the `geo` command** to recursively geolocate all IPs discovered in a traceroute (the `trace` command already supports `--recursive` for hop discovery).
+
+Alternative: Add a `--cidr-file` option to the `radix` command to read CIDR blocks from a file (one per line).
+
+Alternative: Add a `--pepper`/`--salt` option to the `vuln` command for cross-referencing against salted vulnerability signatures (unlikely but possible).
+
+## Requirements
+- Pick one of the suggested features and implement it following the existing module conventions.
+- Add a new module under `ethscan/` with `run_*`, `format_*_report_json`, `format_*_report_markdown` (for new commands) or extend an existing module (for new options).
+- Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
+- Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
+- Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
