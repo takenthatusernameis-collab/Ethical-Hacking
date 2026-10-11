@@ -948,6 +948,120 @@ def test_report_profile_disabled_by_default(tmp_path) -> None:
     assert data["scan"]["profile"] is None
 
 
+def test_report_help_shows_min_length() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["report", "--help"])
+    assert result.exit_code == 0
+    assert "--min-length" in result.output
+
+
+def test_report_min_length_option_json(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("short\nlongenoughpassword\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--ports",
+            "80",
+            "--audit-file",
+            str(password_file),
+            "--min-length",
+            "10",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["audit"]["min_length"] == 10
+    assert "too_short" in result.output
+    assert data["audit"]["results"][0]["too_short"] is True
+    assert data["audit"]["results"][1]["too_short"] is False
+
+
+def test_report_min_length_option_markdown(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("short\nlongenoughpassword\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--ports",
+            "80",
+            "--audit-file",
+            str(password_file),
+            "--min-length",
+            "10",
+            "--format",
+            "markdown",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Min Length" in result.output
+    assert "Too Short" in result.output
+    assert "short" in result.output
+    assert "longenoughpassword" in result.output
+
+
+def test_report_min_length_with_out_option(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("short\nlongenoughpassword\n")
+    out_file = tmp_path / "report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--ports",
+            "80",
+            "--audit-file",
+            str(password_file),
+            "--min-length",
+            "10",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "min_length" in content
+    assert "too_short" in content
+
+
+def test_report_min_length_disabled_by_default(tmp_path) -> None:
+    password_file = tmp_path / "passwords.txt"
+    password_file.write_text("short\nlongenoughpassword\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "report",
+            "--target",
+            "127.0.0.1",
+            "--ports",
+            "80",
+            "--audit-file",
+            str(password_file),
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["audit"]["min_length"] is None
+
+
 def test_web_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["web", "--help"])

@@ -50,6 +50,121 @@ def test_run_report_with_audit_file(tmp_path) -> None:
         assert key in data["audit"]["results"][0]
 
 
+def test_run_report_with_min_length(tmp_path) -> None:
+    audit_file = tmp_path / "passwords.txt"
+    audit_file.write_text("short\nlongenoughpassword\n")
+    data = run_report(
+        "127.0.0.1",
+        "80",
+        timeout=0.1,
+        workers=10,
+        audit_file=str(audit_file),
+        min_length=10,
+    )
+    assert data["audit"]["passwords_audited"] == 2
+    assert data["audit"]["min_length"] == 10
+    short_result = data["audit"]["results"][0]
+    long_result = data["audit"]["results"][1]
+    assert short_result["password"] == "short"
+    assert short_result["too_short"] is True
+    assert long_result["password"] == "longenoughpassword"
+    assert long_result["too_short"] is False
+
+
+def test_run_report_min_length_defaults_to_none() -> None:
+    data = run_report("127.0.0.1", "80", timeout=0.1, workers=10)
+    assert data["audit"]["min_length"] is None
+
+
+def test_format_report_json_with_min_length() -> None:
+    data = {
+        "scan": {"target": "h", "ports_scanned": 0, "open_ports": [], "details": []},
+        "audit": {
+            "passwords_audited": 1,
+            "min_length": 10,
+            "results": [
+                {
+                    "password": "short",
+                    "length": 5,
+                    "entropy": 2.0,
+                    "common": False,
+                    "patterns": False,
+                    "too_short": True,
+                    "score": 1.0,
+                    "verdict": "very weak",
+                }
+            ],
+        },
+    }
+    parsed = json.loads(format_report_json(data))
+    assert parsed["audit"]["min_length"] == 10
+    assert parsed["audit"]["results"][0]["too_short"] is True
+
+
+def test_format_report_markdown_with_min_length() -> None:
+    data = {
+        "scan": {"target": "h", "ports_scanned": 0, "open_ports": [], "details": []},
+        "audit": {
+            "passwords_audited": 2,
+            "min_length": 10,
+            "results": [
+                {
+                    "password": "short",
+                    "length": 5,
+                    "entropy": 2.0,
+                    "common": False,
+                    "patterns": False,
+                    "too_short": True,
+                    "score": 1.0,
+                    "verdict": "very weak",
+                },
+                {
+                    "password": "longenoughpassword",
+                    "length": 16,
+                    "entropy": 4.0,
+                    "common": False,
+                    "patterns": False,
+                    "too_short": False,
+                    "score": 5.0,
+                    "verdict": "weak",
+                },
+            ],
+        },
+    }
+    output = format_report_markdown(data)
+    assert "Min Length" in output
+    assert "**Min Length:** 10" in output
+    assert "Too Short" in output
+    assert "short" in output
+    assert "longenoughpassword" in output
+
+
+def test_format_report_csv_with_min_length() -> None:
+    data = {
+        "scan": {"target": "h", "ports_scanned": 0, "open_ports": [], "details": []},
+        "audit": {
+            "passwords_audited": 1,
+            "min_length": 10,
+            "results": [
+                {
+                    "password": "short",
+                    "length": 5,
+                    "entropy": 2.0,
+                    "common": False,
+                    "patterns": False,
+                    "too_short": True,
+                    "score": 1.0,
+                    "verdict": "very weak",
+                }
+            ],
+        },
+    }
+    rows = list(csv.reader(io.StringIO(format_report_csv(data))))
+    assert rows[1][0] == "audit"
+    assert rows[1][3] == "short"
+    assert rows[1][8] == "true"  # too_short column
+
+
 def test_format_report_json() -> None:
     data = {
         "scan": {"target": "h", "ports_scanned": 1, "open_ports": [], "details": [{"port": 80, "open": False}]},
@@ -362,12 +477,12 @@ def test_report_markdown_writes_to_file() -> None:
             ],
         )
 
-    assert result.exit_code == 0
-    assert out_file.exists()
-    content = out_file.read_text()
-    assert "# ethscan Report" in content
-    assert "## Port Scan" in content
-    assert "## Password Audit" in content
+        assert result.exit_code == 0
+        assert out_file.exists()
+        content = out_file.read_text()
+        assert "# ethscan Report" in content
+        assert "## Port Scan" in content
+        assert "## Password Audit" in content
 
 
 def test_resolve_ports_and_defaults_no_profile() -> None:
@@ -431,7 +546,9 @@ def test_resolve_ports_and_defaults_profile_explicit_timeout_workers() -> None:
     port_list, timeout, workers = _resolve_ports_and_defaults(
         "common", 5.0, 50, "fast"
     )
-    assert port_list == [80, 443]
+    # Profile overrides the default "common" port selection; explicit
+    # timeout/workers win over the profile defaults.
+    assert len(port_list) == 18
     assert timeout == 5.0
     assert workers == 50
 

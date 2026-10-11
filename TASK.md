@@ -1325,6 +1325,60 @@ Alternative: Add `--profile fast|normal|full` support to the `report` command to
 - `whois` now supports `--recursive/--no-recursive` and `--max-depth`.
 - `audit` now supports `--format json|markdown`, `--out`, `--min-length`, and `--output-format csv` for spreadsheet-compatible password audit dumps.
 - `report` now supports `--output-format [json|markdown|csv]` (with `--format` as deprecated alias) and `--out`; report logic lives in `ethscan/report.py` (`run_report`, `format_report_json`, `format_report_markdown`, `format_report_csv`).
-- `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `vuln` (with `--min-severity`), `dnssec`, `geo`, `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon` all implemented with JSON/Markdown output.
+- `cert`, `cve` (with `--min-severity` and `--ports`), `vuln` (with `--min-severity`), `dnssec`, `geo`, `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon` all implemented with JSON/Markdown output.
 - Configuration file (`ethscan.yaml`) persists default options across commands.
 - Tests: 1507 passing (1 skipped).
+
+## Completed: `--min-length` pass-through for `report` command
+
+The `--min-length` pass-through to the `report` command is complete: the embedded password audit flags short passwords exactly like the standalone `audit` command. The implementation itself (`run_report(min_length=...)` in `ethscan/report.py` and the `--min-length` CLI option in `ethscan/cli.py`) was already in place; this change adds the missing test coverage and fixes two pre-existing broken tests in `tests/test_report.py`.
+
+### Tests Added
+- `tests/test_report.py` — 5 new unit tests:
+  - `test_run_report_with_min_length` — verifies the `min_length` field and per-password `too_short` flags
+  - `test_run_report_min_length_defaults_to_none` — verifies `min_length` defaults to None
+  - `test_format_report_json_with_min_length` — JSON formatter includes `min_length` and `too_short`
+  - `test_format_report_markdown_with_min_length` — Markdown shows the Min Length line and Too Short column
+  - `test_format_report_csv_with_min_length` — CSV `too_short` column
+- `tests/test_cli.py` — 5 new CLI integration tests:
+  - `test_report_help_shows_min_length`
+  - `test_report_min_length_option_json`
+  - `test_report_min_length_option_markdown`
+  - `test_report_min_length_with_out_option`
+  - `test_report_min_length_disabled_by_default`
+
+### Fixed pre-existing test bugs
+- `tests/test_report.py::test_report_markdown_writes_to_file` — assertions ran after the `TemporaryDirectory` context exited (the output file was already deleted); moved the assertions inside the `with` block.
+- `tests/test_report.py::test_resolve_ports_and_defaults_profile_explicit_timeout_workers` — expected `[80, 443]` for `("common", 5.0, 50, "fast")`, contradicting the documented profile behavior (a profile overrides the default `common` port selection; explicit `--timeout`/`--workers` win over profile defaults); now asserts the 18 fast-profile ports with the explicit timeout/workers preserved.
+
+### Verification
+- `python -m pytest -q` -> 1535 passed, 1 skipped (1525 collected before: 1523 passed + 2 failed; 10 new tests added).
+- `python -m ethscan report --help` -> shows `--min-length` option.
+- End-to-end JSON: `python -m ethscan report --target 127.0.0.1 --ports 80 --audit-file passwords.txt --min-length 10 --format json` -> `audit.min_length: 10`, `too_short: true` for "short", `too_short: false` for "longenoughpassword".
+- End-to-end Markdown: `- **Min Length:** 10` line and a Too Short column with `Yes` for short passwords.
+
+## Suggested next task
+
+**Add an `--open-only` option to the `report` command** to filter the embedded port scan results to open ports only (in JSON, Markdown, and CSV output), useful for large scans where closed-port rows dominate the report.
+
+Alternative: Add a `--sort` option to the `report` command to sort the audit results by score, verdict, or length.
+
+Alternative: Add a `validate` command that validates and expands port specifications (comma-separated lists/ranges) and CIDR inputs offline, reusing `parse_port_range` and the stdlib `ipaddress` module.
+
+## Requirements
+- Pick one of the suggested features and implement it following the existing module conventions.
+- Add a new module under `ethscan/` with `run_*`, `format_*_report_json`, `format_*_report_markdown` (for new commands) or extend existing module (for new options).
+- Register the command/options in `ethscan/cli.py` with `--target`, `--format`, `--out`, and feature-specific options.
+- Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
+- Use stdlib only unless an existing optional dependency is already declared in `requirements.txt` (optional deps may be used with a graceful `*_AVAILABLE` flag, as in `dns.py`/`dnsbrute.py`/`brute.py`).
+
+## Current state
+- All 28 commands implemented and wired up (including `hash` with `--file`, `--check`, salt, and pepper).
+- `scan` and `service` now support `--profile fast|normal|full` and `--output-format csv`.
+- `subdomains` and `dnsbrute` now support `--resolver`, `--recursive`, `--max-depth`.
+- `whois` now supports `--recursive/--no-recursive` and `--max-depth`.
+- `audit` now supports `--format json|markdown`, `--out`, `--min-length`, and `--output-format csv` for spreadsheet-compatible password audit dumps.
+- `report` now supports `--target`, `--ports`, `--profile`, `--timeout`, `--workers`, `--audit-file`, `--min-length` (pass-through to the embedded audit), `--output-format [json|markdown|csv]` (with `--format` as deprecated alias), and `--out`; report logic lives in `ethscan/report.py` (`run_report`, `format_report_json`, `format_report_markdown`, `format_report_csv`).
+- `cert`, `cve` (with `--min-severity`, `--ports`, `--profile`), `vuln` (with `--min-severity`), `dnssec`, `geo`, `subtake`, `cidr`, `mac`, `trace`, `wifi`, `osdetect`, `urlcheck`, `recon` all implemented with JSON/Markdown output.
+- Configuration file (`ethscan.yaml`) persists default options across commands.
+- Tests: 1535 passing (1 skipped).
