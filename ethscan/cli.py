@@ -200,6 +200,7 @@ from ethscan.nmap import (
     run_nmap,
 )
 from ethscan.stale import (
+    format_stale_report_csv,
     format_stale_report_json,
     format_stale_report_markdown,
     run_stale,
@@ -3204,11 +3205,18 @@ def nmap(
     help="Maximum concurrent workers for resolution.",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv). Overrides --format.",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -3221,6 +3229,7 @@ def stale(
     target_file: Optional[str],
     timeout: float,
     workers: int,
+    output_fmt: Optional[str],
     fmt: str,
     out_path: Optional[str],
 ) -> None:
@@ -3234,7 +3243,10 @@ def stale(
 
     results = run_stale(all_targets, timeout=timeout, max_workers=workers)
 
-    if fmt == "json":
+    chosen_format = output_fmt if output_fmt is not None else fmt
+    if chosen_format == "csv":
+        output = format_stale_report_csv(results)
+    elif chosen_format == "json":
         output = format_stale_report_json(results)
     else:
         output = format_stale_report_markdown(results)

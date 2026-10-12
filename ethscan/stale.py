@@ -1,5 +1,8 @@
 """Stale DNS record detection module for ethscan."""
 
+import csv
+import io
+import json
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Set, Tuple
@@ -217,3 +220,25 @@ def format_stale_report_markdown(data: Dict[str, object]) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+def format_stale_report_csv(data: Dict[str, object]) -> str:
+    """Format stale detection results as CSV.
+
+    Emits a header row followed by one row per domain with columns:
+    domain, A_records, AAAA_records, CNAME, stale, stale_reasons.
+    """
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["domain", "A_records", "AAAA_records", "CNAME", "stale", "stale_reasons"])
+
+    results = data.get("results", []) or []
+    for entry in results:
+        a_str = ", ".join(entry.get("A", []) or [])
+        aaaa_str = ", ".join(entry.get("AAAA", []) or [])
+        cname_str = entry.get("CNAME") or ""
+        stale_str = "true" if entry.get("stale") else "false"
+        reasons_str = "; ".join(entry.get("stale_reasons", []) or [])
+        writer.writerow([entry.get("domain", ""), a_str, aaaa_str, cname_str, stale_str, reasons_str])
+
+    return output.getvalue().rstrip("\r\n")

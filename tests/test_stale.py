@@ -16,6 +16,7 @@ from ethscan.stale import (
     run_stale,
     format_stale_report_json,
     format_stale_report_markdown,
+    format_stale_report_csv,
 )
 
 
@@ -283,3 +284,71 @@ class TestFormatters:
         output = format_stale_report_markdown(data)
         assert "**Stale Records:** 0" in output
         assert "**Fresh Records:** 1" in output
+
+
+class TestCSVFormatter:
+    def test_csv_format_basic(self):
+        data = {
+            "results": [
+                {
+                    "domain": "example.com",
+                    "A": ["192.168.1.1"],
+                    "AAAA": ["2001:db8::1"],
+                    "CNAME": "real.example.com",
+                    "stale": True,
+                    "stale_reasons": ["IP 192.168.1.1 unreachable on common ports"],
+                }
+            ]
+        }
+        output = format_stale_report_csv(data)
+        lines = output.strip().splitlines()
+        assert lines[0] == "domain,A_records,AAAA_records,CNAME,stale,stale_reasons"
+        assert "example.com" in lines[1]
+        assert "192.168.1.1" in lines[1]
+        assert "2001:db8::1" in lines[1]
+        assert "real.example.com" in lines[1]
+        assert "true" in lines[1]
+        assert "IP 192.168.1.1 unreachable on common ports" in lines[1]
+
+    def test_csv_format_empty(self):
+        data = {"results": []}
+        output = format_stale_report_csv(data)
+        assert output == "domain,A_records,AAAA_records,CNAME,stale,stale_reasons"
+
+    def test_csv_format_missing_fields(self):
+        data = {
+            "results": [
+                {
+                    "domain": "example.com",
+                    "A": None,
+                    "AAAA": None,
+                    "CNAME": None,
+                    "stale": False,
+                    "stale_reasons": None,
+                }
+            ]
+        }
+        output = format_stale_report_csv(data)
+        lines = output.strip().splitlines()
+        assert lines[0] == "domain,A_records,AAAA_records,CNAME,stale,stale_reasons"
+        assert lines[1] == "example.com,,,,false,"
+
+    def test_csv_format_pipe_escaping(self):
+        data = {
+            "results": [
+                {
+                    "domain": "example|com",
+                    "A": ["1.1.1|1"],
+                    "AAAA": [],
+                    "CNAME": "cname|example.com",
+                    "stale": True,
+                    "stale_reasons": ["reason|1", "reason|2"],
+                }
+            ]
+        }
+        output = format_stale_report_csv(data)
+        lines = output.strip().splitlines()
+        assert "example|com" in lines[1]
+        assert "1.1.1|1" in lines[1]
+        assert "cname|example.com" in lines[1]
+        assert "reason|1; reason|2" in lines[1]
