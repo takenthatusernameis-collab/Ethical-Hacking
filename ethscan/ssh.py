@@ -522,3 +522,42 @@ def format_ssh_report_markdown(data: Dict[str, Any]) -> str:
         lines.append("")
 
     return "\n".join(lines)
+def format_ssh_report_csv(data: Dict[str, object]) -> str:
+    """Format SSH security assessment results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "target",
+        "port",
+        "key_type",
+        "fingerprint",
+        "key_bits",
+        "finding",
+        "severity",
+    ])
+    target = data.get("target", "")
+    port = data.get("port") or ""
+    hk = data.get("host_key") or {}
+    findings = data.get("findings") or []
+    if findings:
+        for finding in findings:
+            writer.writerow([
+                target,
+                port,
+                hk.get("key_type", ""),
+                hk.get("fingerprint", ""),
+                hk.get("key_bits", "") if hk.get("key_bits") else "",
+                finding.get("description", ""),
+                finding.get("severity", ""),
+            ])
+    else:
+        writer.writerow([
+            target,
+            port,
+            hk.get("key_type", ""),
+            hk.get("fingerprint", ""),
+            hk.get("key_bits", "") if hk.get("key_bits") else "",
+            "",
+            "",
+        ])
+    return output.getvalue().rstrip("\r\n")

@@ -4,6 +4,8 @@ Performs IP geolocation using a public IP-to-location API with caching
 and offline fallback. Stdlib only.
 """
 
+import csv
+import io
 import json
 import os
 import socket
@@ -341,3 +343,41 @@ def format_geo_report_markdown(data: Dict[str, object]) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+def format_geo_report_csv(data: Dict[str, object]) -> str:
+    """Format geolocation results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "target",
+        "ip",
+        "country",
+        "region",
+        "city",
+        "lat",
+        "lon",
+        "isp",
+        "org",
+        "as_number",
+        "reverse_dns",
+        "cached",
+        "offline_fallback",
+    ])
+    geo = data.get("geolocation") or {}
+    writer.writerow([
+        data.get("target", ""),
+        data.get("ip") or geo.get("query") or "",
+        geo.get("country", ""),
+        geo.get("region") or geo.get("regionName") or "",
+        geo.get("city", ""),
+        geo.get("lat", ""),
+        geo.get("lon", ""),
+        geo.get("isp", ""),
+        geo.get("org", ""),
+        geo.get("as", ""),
+        geo.get("reverse", ""),
+        "true" if geo.get("cached") else "false",
+        "true" if geo.get("offline_fallback") else "false",
+    ])
+    return output.getvalue().rstrip("\r\n")

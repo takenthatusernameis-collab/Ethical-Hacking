@@ -107,6 +107,7 @@ from ethscan.wifi import (
     run_wifi,
 )
 from ethscan.geo import (
+    format_geo_report_csv,
     format_geo_report_json,
     format_geo_report_markdown,
     run_geo,
@@ -128,6 +129,7 @@ from ethscan.cve import (
     run_cve,
 )
 from ethscan.cidr import (
+    format_cidr_report_csv,
     format_cidr_report_json,
     format_cidr_report_markdown,
     run_cidr,
@@ -190,6 +192,7 @@ from ethscan.validate import (
     run_validate,
 )
 from ethscan.radix import (
+    format_radix_report_csv,
     format_radix_report_json,
     format_radix_report_markdown,
     run_radix,
@@ -210,11 +213,13 @@ from ethscan.stale import (
     DEFAULT_MAX_WORKERS,
 )
 from ethscan.ssh import (
+    format_ssh_report_csv,
     format_ssh_report_json,
     format_ssh_report_markdown,
     run_ssh,
 )
 from ethscan.s3 import (
+    format_s3_report_csv,
     format_s3_report_json,
     format_s3_report_markdown,
     run_s3,
@@ -466,11 +471,19 @@ def audit(
     help="Hash algorithm(s) to use. Can be specified multiple times. Default: all algorithms.",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -648,11 +661,19 @@ def report(
 )
 @click.option("--timeout", default=5.0, type=float, help="Request timeout in seconds")
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -695,11 +716,19 @@ def web(target: str, checks: str, timeout: float, fmt: str, out_path: str) -> No
 )
 @click.option("--timeout", default=5.0, type=float, help="Request timeout in seconds")
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -761,11 +790,19 @@ def fuzz(target: str, wordlist_path: str, timeout: float, fmt: str, out_path: st
     help="Maximum concurrent DNS resolution workers",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -863,8 +900,8 @@ def subtake(
     timeout: float,
     workers: int,
     http_timeout: float,
-    output_fmt: Optional[str],
     fmt: str,
+    output_fmt: Optional[str],
     out_path: Optional[str],
 ) -> None:
     """Detect subdomain takeover vulnerabilities for TARGET."""
@@ -921,11 +958,19 @@ def subtake(
     help="Maximum recursive hops when --recursive is enabled (default: 2).",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -970,11 +1015,19 @@ def whois(
 @click.option("--target", required=True, help="Target URL (e.g. https://example.com)")
 @click.option("--timeout", default=5.0, type=float, help="Request timeout in seconds")
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -1088,11 +1141,19 @@ def dns(
 )
 @click.option("--timeout", default=2.0, type=float, help="Resolution timeout in seconds")
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -1106,6 +1167,7 @@ def resolve(
     server: Optional[str],
     timeout: float,
     fmt: str,
+    output_fmt: Optional[str],
     out_path: Optional[str],
 ) -> None:
     """Perform forward/reverse DNS resolution for TARGET."""
@@ -1175,11 +1237,19 @@ def resolve(
     help="Maximum concurrent DNS resolution workers",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -1197,6 +1267,7 @@ def dnsbrute(
     timeout: float,
     workers: int,
     fmt: str,
+    output_fmt: Optional[str],
     out_path: Optional[str],
 ) -> None:
     """Attempt AXFR zone transfer and brute-force subdomains for TARGET."""
@@ -1236,11 +1307,19 @@ def dnsbrute(
 @click.option("--port", default=443, type=int, help="TLS port (default: 443)")
 @click.option("--timeout", default=5.0, type=float, help="Connection timeout in seconds")
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -1281,11 +1360,19 @@ def ssl(target: str, port: int, timeout: float, fmt: str, out_path: str) -> None
 @click.option("--timeout", default=5.0, type=float, help="Connection timeout in seconds")
 @click.option("--workers", default=10, type=int, help="Maximum concurrent probe workers")
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -1301,6 +1388,7 @@ def tls(
     timeout: float,
     workers: int,
     fmt: str,
+    output_fmt: Optional[str],
     out_path: Optional[str],
 ) -> None:
     """Enumerate supported TLS protocol versions and cipher suites for TARGET."""
@@ -1512,8 +1600,8 @@ def vuln(
     algorithm: str,
     timeout: float,
     workers: int,
-    output_fmt: Optional[str],
     fmt: str,
+    output_fmt: Optional[str],
     out_path: Optional[str],
 ) -> None:
     """Check TARGET for known service, protocol, and certificate vulnerabilities."""
@@ -1594,11 +1682,19 @@ def vuln(
 @click.option("--timeout", default=5.0, type=float, help="Request timeout in seconds")
 @click.option("--workers", default=10, type=int, help="Maximum concurrent workers for fuzzing")
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -1615,6 +1711,7 @@ def urlcheck(
     timeout: float,
     workers: int,
     fmt: str,
+    output_fmt: Optional[str],
     out_path: Optional[str],
 ) -> None:
     """Run consolidated web assessment (headers, info disclosure, SSL, fuzzing, cert inspection)."""
@@ -1711,8 +1808,8 @@ def brute(
     pass_file: Optional[str],
     timeout: float,
     workers: int,
-    output_fmt: Optional[str],
     fmt: str,
+    output_fmt: Optional[str],
     out_path: Optional[str],
 ) -> None:
     """Brute-force FTP or SSH login credentials against TARGET."""
@@ -1766,11 +1863,19 @@ def brute(
 @click.option("--timeout", default=5.0, type=float, help="Connection timeout in seconds")
 @click.option("--workers", default=10, type=int, help="Maximum concurrent probe workers")
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -1785,6 +1890,7 @@ def osdetect(
     timeout: float,
     workers: int,
     fmt: str,
+    output_fmt: Optional[str],
     out_path: Optional[str],
 ) -> None:
     """Fingerprint the target operating system using TCP/IP stack behavior."""
@@ -1859,11 +1965,19 @@ def osdetect(
     help="Maximum recursion depth for recursive tracing (default: 2)",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -1880,6 +1994,7 @@ def trace(
     recursive: bool,
     max_depth: int,
     fmt: str,
+    output_fmt: Optional[str],
     out_path: Optional[str],
 ) -> None:
     """Run TCP traceroute against TARGET using TTL-incremented SYN probes."""
@@ -1937,11 +2052,19 @@ def trace(
     help="Target TCP port for connect-based fallback when ICMP is unavailable (default: 80)",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -1956,6 +2079,7 @@ def ping(
     ttl: int,
     tcp_port: int,
     fmt: str,
+    output_fmt: Optional[str],
     out_path: Optional[str],
 ) -> None:
     """Run ICMP ping (or TCP connect fallback) against TARGET for host discovery."""
@@ -1986,11 +2110,19 @@ def ping(
     help="Specific wireless interface to scan (e.g., wlan0). If omitted, scans all available interfaces.",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -2048,11 +2180,19 @@ def wifi(interface: Optional[str], fmt: str, out_path: Optional[str]) -> None:
     help="Maximum number of traceroute hops when --recursive is enabled (default: 30, max: 128).",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -2069,6 +2209,7 @@ def geo(
     recursive: bool,
     max_depth: int,
     fmt: str,
+    output_fmt: Optional[str],
     out_path: Optional[str],
 ) -> None:
     """Look up IP geolocation for TARGET using a public API with caching."""
@@ -2082,8 +2223,11 @@ def geo(
         max_depth=max_depth,
     )
 
-    if fmt == "json":
+    chosen_format = output_fmt if output_fmt is not None else fmt
+    if chosen_format == "json":
         output = format_geo_report_json(results)
+    elif chosen_format == "csv":
+        output = format_geo_report_csv(results)
     else:
         output = format_geo_report_markdown(results)
 
@@ -2169,11 +2313,19 @@ def geo(
     help="Custom DNS resolver IP address for subdomains (requires dnspython)",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -2199,6 +2351,7 @@ def recon(
     workers: int,
     resolver: Optional[str],
     fmt: str,
+    output_fmt: Optional[str],
     out_path: Optional[str],
 ) -> None:
     """Run multiple reconnaissance modules against TARGET and produce a consolidated report."""
@@ -2268,11 +2421,19 @@ def recon(
     help="Custom Certificate Transparency API base URL (crt.sh-compatible JSON output)",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -2287,6 +2448,7 @@ def cert(
     no_offline_fallback: bool,
     api_url: Optional[str],
     fmt: str,
+    output_fmt: Optional[str],
     out_path: Optional[str],
 ) -> None:
     """Search Certificate Transparency logs for certificates issued to TARGET."""
@@ -2407,8 +2569,8 @@ def cve(
     api_url: Optional[str],
     severity: Optional[str],
     min_severity: Optional[str],
-    output_fmt: Optional[str],
     fmt: str,
+    output_fmt: Optional[str],
     out_path: Optional[str],
 ) -> None:
     """Query the NVD/CVE API for known vulnerabilities affecting TARGET's services."""
@@ -2482,11 +2644,19 @@ def cve(
     help="Optional CIDR to compute set difference against (addresses in --cidr but not in --diff).",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -2494,12 +2664,15 @@ def cve(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def cidr(cidr: str, contains: Optional[str], diff: Optional[str], fmt: str, out_path: Optional[str]) -> None:
+def cidr(cidr: str, contains: Optional[str], diff: Optional[str], fmt: str, output_fmt: Optional[str], out_path: Optional[str]) -> None:
     """Compute network calculations for a CIDR (offline)."""
     results = run_cidr(cidr, contains=contains, diff=diff)
 
-    if fmt == "json":
+    chosen_format = output_fmt if output_fmt is not None else fmt
+    if chosen_format == "json":
         output = format_cidr_report_json(results)
+    elif chosen_format == "csv":
+        output = format_cidr_report_csv(results)
     else:
         output = format_cidr_report_markdown(results)
 
@@ -2560,11 +2733,19 @@ def cidr(cidr: str, contains: Optional[str], diff: Optional[str], fmt: str, out_
     "Algorithm is inferred from the digest length when --algorithm is omitted.",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -2572,7 +2753,7 @@ def cidr(cidr: str, contains: Optional[str], diff: Optional[str], fmt: str, out_
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def hash_cmd(passwords, password_file, algorithm, salt, pepper, iterations, check_digest, fmt, out_path) -> None:
+def hash_cmd(passwords, password_file, algorithm, salt, pepper, iterations, check_digest, fmt, output_fmt, out_path) -> None:
     """Generate cryptographic hashes for passwords (MD5, SHA-1, SHA-256, SHA-512, NTLM, MD4)."""
     if iterations is not None and iterations <= 0:
         click.echo("Error: --iterations must be a positive integer.")
@@ -2661,11 +2842,19 @@ def hash_cmd(passwords, password_file, algorithm, salt, pepper, iterations, chec
     help="Optional IP address to test for membership in the merged networks.",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -2681,6 +2870,7 @@ def radix(
     max_depth: int,
     contains: Optional[str],
     fmt: str,
+    output_fmt: Optional[str],
     out_path: Optional[str],
 ) -> None:
     """Build a radix tree visualization over a set of CIDR networks.
@@ -2718,8 +2908,11 @@ def radix(
         diff=diff_cidrs,
     )
 
-    if fmt == "json":
+    chosen_format = output_fmt if output_fmt is not None else fmt
+    if chosen_format == "json":
         output = format_radix_report_json(results)
+    elif chosen_format == "csv":
+        output = format_radix_report_csv(results)
     else:
         output = format_radix_report_markdown(results)
 
@@ -2743,11 +2936,19 @@ def radix(
 )
 @click.option("--timeout", default=5.0, type=float, help="Query timeout in seconds")
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -2760,6 +2961,7 @@ def dnssec(
     server: Optional[str],
     timeout: float,
     fmt: str,
+    output_fmt: Optional[str],
     out_path: Optional[str],
 ) -> None:
     """Validate DNSSEC for TARGET domain."""
@@ -2809,11 +3011,19 @@ def dnssec(
     help="Custom OUI API base URL (must support api.macvendors.com query format)",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -2828,6 +3038,7 @@ def mac(
     no_offline_fallback: bool,
     api_url: Optional[str],
     fmt: str,
+    output_fmt: Optional[str],
     out_path: Optional[str],
 ) -> None:
     """Look up MAC address vendor using the OUI database (api.macvendors.com) with caching."""
@@ -2884,6 +3095,7 @@ def config(
     config_path: Optional[str],
     init_path: Optional[str],
     fmt: str,
+    output_fmt: Optional[str],
     out_path: Optional[str],
 ) -> None:
     """Inspect or initialize the ethscan configuration file."""
@@ -2989,11 +3201,19 @@ def config(
     help="JWT token to inspect (e.g. eyJhbGciOiJIUzI1NiJ9...). If omitted, reads from stdin.",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -3042,11 +3262,19 @@ def jwt(token: Optional[str], fmt: str, out_path: Optional[str]) -> None:
     help="Program name embedded in the completion script (default: ethscan).",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -3115,8 +3343,8 @@ def completion(shell: str, prog_name: str, fmt: str, out_path: Optional[str]) ->
 def validate(
     ports: Optional[str],
     cidrs: Optional[str],
-    output_fmt: Optional[str],
     fmt: str,
+    output_fmt: Optional[str],
     out_path: Optional[str],
 ) -> None:
     """Validate and expand port specifications and CIDR inputs (offline)."""
@@ -3168,8 +3396,8 @@ def validate(
 )
 def nmap(
     input_file: str,
-    output_fmt: Optional[str],
     fmt: str,
+    output_fmt: Optional[str],
     out_path: Optional[str],
 ) -> None:
     """Parse Nmap XML scan output and cross-reference services against vulnerability database."""
@@ -3243,8 +3471,8 @@ def stale(
     target_file: Optional[str],
     timeout: float,
     workers: int,
-    output_fmt: Optional[str],
     fmt: str,
+    output_fmt: Optional[str],
     out_path: Optional[str],
 ) -> None:
     """Detect stale DNS records (A/AAAA/CNAME) pointing to deallocated or unresolvable IPs."""
@@ -3287,11 +3515,19 @@ def stale(
 )
 @click.option("--timeout", default=10.0, type=float, help="Connection timeout in seconds")
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -3299,12 +3535,15 @@ def stale(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def ssh(target: str, port: Optional[int], timeout: float, fmt: str, out_path: Optional[str]) -> None:
+def ssh(target: str, port: Optional[int], timeout: float, fmt: str, output_fmt: Optional[str], out_path: Optional[str]) -> None:
     """Assess SSH server security: enumerate algorithms, check for weak/deprecated ciphers, MACs, KEX, and host keys."""
     results = run_ssh(target, port=port, timeout=timeout)
 
-    if fmt == "json":
+    chosen_format = output_fmt if output_fmt is not None else fmt
+    if chosen_format == "json":
         output = format_ssh_report_json(results)
+    elif chosen_format == "csv":
+        output = format_ssh_report_csv(results)
     else:
         output = format_ssh_report_markdown(results)
 
@@ -3349,11 +3588,19 @@ def ssh(target: str, port: Optional[int], timeout: float, fmt: str, out_path: Op
     help="Maximum concurrent HTTP probes (default: 20)",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -3368,6 +3615,7 @@ def s3(
     timeout: float,
     workers: int,
     fmt: str,
+    output_fmt: Optional[str],
     out_path: Optional[str],
 ) -> None:
     """Enumerate AWS S3 buckets for TARGET and detect publicly accessible ones."""
@@ -3381,8 +3629,11 @@ def s3(
         max_workers=workers,
     )
 
-    if fmt == "json":
+    chosen_format = output_fmt if output_fmt is not None else fmt
+    if chosen_format == "json":
         output = format_s3_report_json(results)
+    elif chosen_format == "csv":
+        output = format_s3_report_csv(results)
     else:
         output = format_s3_report_markdown(results)
 

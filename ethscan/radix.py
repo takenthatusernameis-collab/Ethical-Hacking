@@ -469,3 +469,21 @@ def format_radix_report_markdown(data: Dict[str, object]) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+def format_radix_report_csv(data: Dict[str, object]) -> str:
+    """Format radix tree results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "input_count",
+        "merged_count",
+        "contains_result",
+        "contains_ip",
+    ])
+    writer.writerow([
+        data.get("input_count", 0),
+        data.get("merged_count", 0),
+        "true" if data.get("contains_result") else "false",
+        data.get("contains_ip") or "",
+    ])
+    return output.getvalue().rstrip("\r\n")

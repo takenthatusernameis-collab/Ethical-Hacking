@@ -20,6 +20,7 @@ from ethscan.geo import (
     _fetch_geo_data,
     _get_cached_or_fetch,
     run_geo,
+    format_geo_report_csv,
     format_geo_report_json,
     format_geo_report_markdown,
 )
@@ -581,3 +582,116 @@ def test_format_geo_report_markdown_with_notes() -> None:
     output = format_geo_report_markdown(data)
     assert "Note 1" in output
     assert "Note 2" in output
+def test_format_geo_report_csv_basic() -> None:
+    data = {
+        "target": "8.8.8.8",
+        "host": "8.8.8.8",
+        "ip": "8.8.8.8",
+        "timeout": 5.0,
+        "use_cache": True,
+        "offline_fallback": True,
+        "geolocation": {
+            "status": "success",
+            "query": "8.8.8.8",
+            "country": "United States",
+            "region": "CA",
+            "city": "Mountain View",
+            "lat": 37.386,
+            "lon": -122.0838,
+            "isp": "Google LLC",
+            "org": "Google LLC",
+            "as": "AS15169 Google LLC",
+            "reverse": "dns.google",
+            "cached": False,
+            "offline_fallback": False,
+        },
+        "notes": [],
+    }
+    output = format_geo_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "target,ip,country,region,city,lat,lon,isp,org,as_number,reverse_dns,cached,offline_fallback"
+    assert "8.8.8.8" in lines[1]
+    assert "United States" in lines[1]
+    assert "Mountain View" in lines[1]
+    assert "false" in lines[1]
+
+
+def test_format_geo_report_csv_empty() -> None:
+    data = {
+        "target": "nonexistent.invalid.domain.tld",
+        "host": "nonexistent.invalid.domain.tld",
+        "ip": None,
+        "timeout": 5.0,
+        "use_cache": True,
+        "offline_fallback": True,
+        "geolocation": None,
+        "notes": ["Could not resolve host"],
+    }
+    output = format_geo_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "target,ip,country,region,city,lat,lon,isp,org,as_number,reverse_dns,cached,offline_fallback"
+    assert "nonexistent.invalid.domain.tld" in lines[1]
+
+
+def test_format_geo_report_csv_missing_fields() -> None:
+    data = {
+        "target": "1.1.1.1",
+        "host": "1.1.1.1",
+        "ip": "1.1.1.1",
+        "timeout": 5.0,
+        "use_cache": True,
+        "offline_fallback": True,
+        "geolocation": {
+            "status": "success",
+            "query": "1.1.1.1",
+            "cached": True,
+        },
+        "notes": [],
+    }
+    output = format_geo_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "target,ip,country,region,city,lat,lon,isp,org,as_number,reverse_dns,cached,offline_fallback"
+    assert "1.1.1.1" in lines[1]
+    assert "true" in lines[1]
+
+
+def test_format_geo_report_csv_field_escaping() -> None:
+    data = {
+        "target": "1.2.3.4",
+        "host": "1.2.3.4",
+        "ip": "1.2.3.4",
+        "timeout": 5.0,
+        "use_cache": True,
+        "offline_fallback": True,
+        "geolocation": {
+            "status": "success",
+            "query": "1.2.3.4",
+            "org": 'Org, Inc',
+            "cached": False,
+            "offline_fallback": False,
+        },
+        "notes": [],
+    }
+    output = format_geo_report_csv(data)
+    assert '"Org, Inc"' in output
+
+
+def test_format_geo_report_csv_offline_fallback() -> None:
+    data = {
+        "target": "8.8.8.8",
+        "host": "8.8.8.8",
+        "ip": "8.8.8.8",
+        "timeout": 5.0,
+        "use_cache": True,
+        "offline_fallback": True,
+        "geolocation": {
+            "status": "success",
+            "query": "8.8.8.8",
+            "country": "United States",
+            "cached": True,
+            "offline_fallback": True,
+        },
+        "notes": [],
+    }
+    output = format_geo_report_csv(data)
+    assert "true" in output

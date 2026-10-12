@@ -5,6 +5,8 @@ module. Supports MD5, SHA-1, SHA-256, SHA-512, NTLM, and MD4 (when available
 via OpenSSL). Fully offline and stdlib-only.
 """
 
+import csv
+import io
 import hashlib
 import hmac
 from typing import Dict, List, Optional
@@ -572,3 +574,20 @@ def format_check_report_markdown(data: Dict[str, object]) -> str:
         lines.append(f"```\n{error}\n```")
     lines.append("")
     return "\n".join(lines)
+def format_hash_report_csv(data: Dict[str, object]) -> str:
+    """Format hash results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "algorithm",
+        "password",
+        "digest_hex",
+    ])
+    results = data.get("results") or []
+    for entry in results:
+        writer.writerow([
+            data.get("algorithm", ""),
+            entry.get("password", ""),
+            entry.get("digest", ""),
+        ])
+    return output.getvalue().rstrip("\r\n")

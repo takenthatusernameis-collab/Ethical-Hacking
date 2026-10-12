@@ -250,3 +250,41 @@ def format_cidr_report_markdown(data: Dict[str, object]) -> str:
         lines.append("")
 
     return "\n".join(lines)
+def format_cidr_report_csv(data: Dict[str, object]) -> str:
+    """Format CIDR calculation results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "cidr",
+        "network_address",
+        "broadcast_address",
+        "netmask",
+        "prefix_length",
+        "num_addresses",
+        "first_address",
+        "last_address",
+        "is_private",
+        "contains",
+        "contains_member",
+        "diff_count",
+        "diff_first",
+        "diff_last",
+    ])
+    diff = data.get("diff") or {}
+    writer.writerow([
+        data.get("cidr", ""),
+        data.get("network_address", ""),
+        data.get("broadcast_address", ""),
+        data.get("netmask", ""),
+        data.get("prefix_length", ""),
+        data.get("num_addresses", ""),
+        data.get("first_address", ""),
+        data.get("last_address", ""),
+        "true" if data.get("is_private") else "false",
+        data.get("contains", "") or "",
+        "true" if data.get("contains_member") else "",
+        diff.get("count", "") if diff else "",
+        diff.get("first", "") if diff else "",
+        diff.get("last", "") if diff else "",
+    ])
+    return output.getvalue().rstrip("\r\n")

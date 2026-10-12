@@ -418,3 +418,33 @@ def format_s3_report_markdown(data: Dict[str, object]) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+def format_s3_report_csv(data: Dict[str, object]) -> str:
+    """Format S3 enumeration results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "target",
+        "bucket",
+        "region",
+        "exists",
+        "public",
+        "status_code",
+        "dns_resolved",
+        "url",
+        "error",
+    ])
+    results = data.get("results") or []
+    for entry in results:
+        writer.writerow([
+            data.get("target", ""),
+            entry.get("bucket", ""),
+            entry.get("region", ""),
+            "true" if entry.get("exists") else "false",
+            "true" if entry.get("public") else "false",
+            entry.get("status_code") or "",
+            "true" if entry.get("dns_resolved") else "false",
+            entry.get("url", ""),
+            entry.get("error") or "",
+        ])
+    return output.getvalue().rstrip("\r\n")

@@ -15615,3 +15615,105 @@ def test_validate_output_format_default_is_json() -> None:
         json.loads(result.output)
     except Exception:
         assert False, "Default output should be valid JSON"
+def test_geo_help_shows_output_format():
+    runner = CliRunner()
+    result = runner.invoke(cli, ["geo", "--help"])
+    assert result.exit_code == 0
+    assert "--output-format" in result.output
+
+
+def test_geo_output_format_csv(monkeypatch):
+    runner = CliRunner()
+    mock_results = {
+        "target": "8.8.8.8",
+        "host": "8.8.8.8",
+        "ip": "8.8.8.8",
+        "timeout": 5.0,
+        "use_cache": True,
+        "offline_fallback": True,
+        "geolocation": {
+            "status": "success",
+            "query": "8.8.8.8",
+            "country": "United States",
+            "cached": False,
+            "offline_fallback": False,
+        },
+        "notes": [],
+    }
+    monkeypatch.setattr("ethscan.cli.run_geo", lambda *args, **kwargs: mock_results)
+    result = runner.invoke(cli, ["geo", "--target", "8.8.8.8", "--output-format", "csv"])
+    assert result.exit_code == 0
+    assert "target,ip,country" in result.output
+
+
+def test_geo_output_format_csv_out(tmp_path, monkeypatch):
+    runner = CliRunner()
+    mock_results = {
+        "target": "8.8.8.8",
+        "host": "8.8.8.8",
+        "ip": "8.8.8.8",
+        "timeout": 5.0,
+        "use_cache": True,
+        "offline_fallback": True,
+        "geolocation": {
+            "status": "success",
+            "query": "8.8.8.8",
+            "country": "United States",
+            "cached": False,
+            "offline_fallback": False,
+        },
+        "notes": [],
+    }
+    monkeypatch.setattr("ethscan.cli.run_geo", lambda *args, **kwargs: mock_results)
+    out_file = tmp_path / "geo.csv"
+    result = runner.invoke(cli, ["geo", "--target", "8.8.8.8", "--output-format", "csv", "--out", str(out_file)])
+    assert result.exit_code == 0
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "target,ip,country" in content
+
+
+def test_geo_format_csv_alias(monkeypatch):
+    runner = CliRunner()
+    mock_results = {
+        "target": "8.8.8.8",
+        "host": "8.8.8.8",
+        "ip": "8.8.8.8",
+        "timeout": 5.0,
+        "use_cache": True,
+        "offline_fallback": True,
+        "geolocation": None,
+        "notes": [],
+    }
+    monkeypatch.setattr("ethscan.cli.run_geo", lambda *args, **kwargs: mock_results)
+    result = runner.invoke(cli, ["geo", "--target", "8.8.8.8", "--format", "csv"])
+    assert result.exit_code == 0
+    assert "target,ip,country" in result.output
+
+
+def test_geo_output_format_default_is_json(monkeypatch):
+    runner = CliRunner()
+    mock_results = {
+        "target": "8.8.8.8",
+        "host": "8.8.8.8",
+        "ip": "8.8.8.8",
+        "geolocation": {"status": "success", "query": "8.8.8.8"},
+    }
+    monkeypatch.setattr("ethscan.cli.run_geo", lambda *args, **kwargs: mock_results)
+    result = runner.invoke(cli, ["geo", "--target", "8.8.8.8"])
+    assert result.exit_code == 0
+    assert '"target": "8.8.8.8"' in result.output
+
+
+def test_geo_output_format_precedence_over_format(monkeypatch):
+    runner = CliRunner()
+    mock_results = {
+        "target": "8.8.8.8",
+        "host": "8.8.8.8",
+        "ip": "8.8.8.8",
+        "geolocation": {"status": "success", "query": "8.8.8.8"},
+    }
+    monkeypatch.setattr("ethscan.cli.run_geo", lambda *args, **kwargs: mock_results)
+    result = runner.invoke(cli, ["geo", "--target", "8.8.8.8", "--format", "markdown", "--output-format", "csv"])
+    assert result.exit_code == 0
+    assert "target,ip,country" in result.output
