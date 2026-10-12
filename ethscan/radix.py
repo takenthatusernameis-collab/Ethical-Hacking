@@ -6,6 +6,8 @@ aggregate ranges. Fully offline and stdlib-only (uses the ``ipaddress``
 module).
 """
 
+import csv
+import io
 import ipaddress
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -474,16 +476,59 @@ def format_radix_report_csv(data: Dict[str, object]) -> str:
     """Format radix tree results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
-        "input_count",
-        "merged_count",
-        "contains_result",
-        "contains_ip",
-    ])
-    writer.writerow([
-        data.get("input_count", 0),
-        data.get("merged_count", 0),
-        "true" if data.get("contains_result") else "false",
-        data.get("contains_ip") or "",
-    ])
+
+    has_diff = "diff" in data
+    if has_diff:
+        writer.writerow([
+            "original_cidr",
+            "merged_cidr",
+            "compression_ratio",
+            "diff_cidr",
+        ])
+    else:
+        writer.writerow([
+            "original_cidr",
+            "merged_cidr",
+            "compression_ratio",
+        ])
+
+    cidrs = data.get("cidrs", [])
+    merged = data.get("merged", [])
+    compression_ratio = data.get("compression_ratio", 0.0)
+
+    # Build a mapping from original CIDR to merged CIDR
+    # For simplicity, if networks didn't merge, each maps to itself
+    # If they did merge, we need to find which merged network contains the original
+    import ipaddress
+    merged_networks = [ipaddress.ip_network(m) for m in merged]
+
+    for original in cidrs:
+        orig_net = ipaddress.ip_network(original)
+        matched_merged = original
+        for m_net in merged_networks:
+            if orig_net.subnet_of(m_net):
+                matched_merged = str(m_net)
+                break
+
+        if has_diff:
+            diff = data.get("diff", {})
+            diff_merged = diff.get("diff_merged", [])
+            diff_cidr = ""
+            for d in diff_merged:
+                if orig_net.subnet_of(ipaddress.ip_network(d)):
+                    diff_cidr = d
+                    break
+            writer.writerow([
+                original,
+                matched_merged,
+                compression_ratio,
+                diff_cidr,
+            ])
+        else:
+            writer.writerow([
+                original,
+                matched_merged,
+                compression_ratio,
+            ])
+
     return output.getvalue().rstrip("\r\n")

@@ -1,5 +1,7 @@
 """SSH security assessment module for ethscan."""
 
+import csv
+import io
 import json
 import socket
 import struct
@@ -525,39 +527,19 @@ def format_ssh_report_markdown(data: Dict[str, Any]) -> str:
 def format_ssh_report_csv(data: Dict[str, object]) -> str:
     """Format SSH security assessment results as CSV."""
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv.writer(output, quoting=csv.QUOTE_ALL)
     writer.writerow([
-        "target",
-        "port",
-        "key_type",
-        "fingerprint",
-        "key_bits",
-        "finding",
+        "type",
+        "algorithm",
         "severity",
+        "description",
     ])
-    target = data.get("target", "")
-    port = data.get("port") or ""
-    hk = data.get("host_key") or {}
     findings = data.get("findings") or []
-    if findings:
-        for finding in findings:
-            writer.writerow([
-                target,
-                port,
-                hk.get("key_type", ""),
-                hk.get("fingerprint", ""),
-                hk.get("key_bits", "") if hk.get("key_bits") else "",
-                finding.get("description", ""),
-                finding.get("severity", ""),
-            ])
-    else:
+    for finding in findings:
         writer.writerow([
-            target,
-            port,
-            hk.get("key_type", ""),
-            hk.get("fingerprint", ""),
-            hk.get("key_bits", "") if hk.get("key_bits") else "",
-            "",
-            "",
+            finding.get("type", ""),
+            finding.get("algorithm", ""),
+            finding.get("severity", ""),
+            finding.get("description", ""),
         ])
     return output.getvalue().rstrip("\r\n")

@@ -8,6 +8,7 @@ from ethscan.service import (
     DEFAULT_WORKERS,
     COMMON_SERVICE_PORTS,
     SERVICE_SIGNATURES,
+    format_service_report_csv,
     format_service_report_json,
     format_service_report_markdown,
     grab_banner,
@@ -176,3 +177,76 @@ def test_banner_truncation_in_markdown(monkeypatch) -> None:
 
     assert "..." in output
     assert len([line for line in output.split("\n") if "| 80 |" in line][0]) < 200
+
+
+# ---------------------------------------------------------------------------
+# CSV formatter
+# ---------------------------------------------------------------------------
+
+
+def test_format_service_report_csv_basic() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "timeout": 3.0,
+        "ports_scanned": 3,
+        "services_found": 2,
+        "results": [
+            {"port": 21, "banner": "220 FTP Server ready", "service": "FTP"},
+            {"port": 22, "banner": "SSH-2.0-OpenSSH_8.9", "service": "OpenSSH"},
+        ],
+    }
+    output = format_service_report_csv(data)
+
+    lines = output.strip().split("\n")
+    assert lines[0] == "port,service,banner"
+    assert "21,FTP,220 FTP Server ready" in lines[1]
+    assert "22,OpenSSH,SSH-2.0-OpenSSH_8.9" in lines[2]
+
+
+def test_format_service_report_csv_empty() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "timeout": 3.0,
+        "ports_scanned": 3,
+        "services_found": 0,
+        "results": [],
+    }
+    output = format_service_report_csv(data)
+
+    assert output.strip() == "port,service,banner"
+
+
+def test_format_service_report_csv_missing_optional_fields() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "timeout": 3.0,
+        "ports_scanned": 1,
+        "services_found": 1,
+        "results": [
+            {"port": 8080},  # missing service, banner
+        ],
+    }
+    output = format_service_report_csv(data)
+
+    lines = output.strip().split("\n")
+    assert "8080,," in lines[1]
+
+
+def test_format_service_report_csv_pipe_escaping() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "timeout": 3.0,
+        "ports_scanned": 1,
+        "services_found": 1,
+        "results": [
+            {"port": 80, "banner": "pipe|banner|msg", "service": "weird|service"},
+        ],
+    }
+    output = format_service_report_csv(data)
+
+    assert '"pipe|banner|msg"' in output
+    assert '"weird|service"' in output

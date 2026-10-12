@@ -611,15 +611,28 @@ def format_hash_report_csv(data: Dict[str, object]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
-        "algorithm",
         "password",
-        "digest_hex",
+        "digest",
+        "algorithm",
+        "salt",
+        "pepper",
+        "iterations",
+        "computed",
+        "match",
+        "error",
     ])
     results = data.get("results") or []
+    algorithm = data.get("algorithm", "")
     for entry in results:
         writer.writerow([
-            entry.get("algorithm") or data.get("algorithm", ""),
             entry.get("password", ""),
             entry.get("hash") or entry.get("digest") or "",
+            entry.get("algorithm") or algorithm,
+            "true" if entry.get("salt") else "false",
+            "true" if entry.get("pepper") else "false",
+            entry.get("iterations") if entry.get("iterations") is not None else "",
+            entry.get("computed") or "",
+            "true" if entry.get("match") is True else ("false" if entry.get("match") is False else ""),
+            entry.get("error") or "",
         ])
     return output.getvalue().rstrip("\r\n")

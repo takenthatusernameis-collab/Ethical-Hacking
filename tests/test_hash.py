@@ -19,8 +19,10 @@ from ethscan.hash import (
     _normalize_algorithm,
     _normalize_passwords,
     _supported_algorithms,
+    format_check_report_csv,
     format_check_report_json,
     format_check_report_markdown,
+    format_hash_report_csv,
     format_hash_report_json,
     format_hash_report_markdown,
     load_passwords_from_file,
@@ -1021,3 +1023,117 @@ def test_format_check_report_markdown_no_iterations_lines() -> None:
     output = format_check_report_markdown(result)
     assert "**Iterations:**" not in output
     assert "**Salt Value:**" not in output
+
+
+# ---------------------------------------------------------------------------
+# CSV formatter (hash mode)
+# ---------------------------------------------------------------------------
+
+
+def test_format_hash_report_csv_basic() -> None:
+    data = run_hash(["password"], "md5")
+    output = format_hash_report_csv(data)
+
+    lines = output.strip().split("\n")
+    assert lines[0] == "password,digest,algorithm,salt,pepper,iterations,computed,match,error"
+    assert "password" in lines[1]
+    assert "5f4dcc3b5aa765d61d8327deb882cf99" in lines[1]
+    assert "md5" in lines[1]
+    assert "false" in lines[1]  # salt=false
+    assert "false" in lines[1]  # pepper=false
+
+
+def test_format_hash_report_csv_multiple_passwords() -> None:
+    data = run_hash(["password", "123456"], "sha256")
+    output = format_hash_report_csv(data)
+
+    lines = output.strip().split("\n")
+    assert len(lines) == 3  # header + 2 rows
+    assert "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8" in lines[1]
+
+
+def test_format_hash_report_csv_empty() -> None:
+    data = run_hash([], "md5")
+    output = format_hash_report_csv(data)
+
+    assert output.strip() == "password,digest,algorithm,salt,pepper,iterations,computed,match,error"
+
+
+def test_format_hash_report_csv_with_salt_pepper() -> None:
+    data = run_hash(["password"], "sha256", salt="saltvalue", pepper="secretpepper")
+    output = format_hash_report_csv(data)
+
+    lines = output.strip().split("\n")
+    assert "true" in lines[1]  # salt=true
+    assert "true" in lines[1]  # pepper=true
+
+
+def test_format_hash_report_csv_with_iterations() -> None:
+    import hashlib
+
+    expected = hashlib.pbkdf2_hmac(
+        "sha256",
+        b"password",
+        b"saltvalue",
+        1000,
+    ).hex()
+    data = run_hash(["password"], "sha256", salt="saltvalue", iterations=1000)
+    output = format_hash_report_csv(data)
+
+    lines = output.strip().split("\n")
+    assert expected in lines[1]
+    assert "1000" in lines[1]
+
+
+def test_format_hash_report_csv_pipe_escaping() -> None:
+    data = run_hash(["pass|word"], "md5")
+    output = format_hash_report_csv(data)
+
+    # CSV should properly quote/escaping the pipe
+    assert "pass|word" in output
+    assert '"pass|word"' in output
+
+
+# ---------------------------------------------------------------------------
+# CSV formatter (check mode)
+# ---------------------------------------------------------------------------
+
+
+def test_format_check_report_csv_match() -> None:
+    result = run_check("password", "5f4dcc3b5aa765d61d8327deb882cf99")
+    output = format_check_report_csv(result)
+
+    lines = output.strip().split("\n")
+    assert lines[0] == "password,digest,algorithm,salt,pepper,iterations,computed,match,error"
+    assert "true" in lines[1]  # match=true
+
+
+def test_format_check_report_csv_mismatch() -> None:
+    result = run_check("wrongpass", "5f4dcc3b5aa765d61d8327deb882cf99")
+    output = format_check_report_csv(result)
+
+    assert "false" in output  # match=false
+
+
+def test_format_check_report_csv_error() -> None:
+    result = run_check("password", "deadbeef")
+    output = format_check_report_csv(result)
+
+    assert "Could not infer algorithm" in output
+    assert "" in output  # empty computed/error field handling
+
+
+def test_format_check_report_csv_with_salt_pepper() -> None:
+    digest = "e137588f7bb4aa4f0c24592088b82f31"
+    result = run_check("password", digest, algorithm="md5", salt="saltvalue")
+    output = format_check_report_csv(result)
+
+    assert "true" in output  # salt=true
+    assert "saltvalue" not in output  # salt value not echoed for security
+
+
+def test_format_check_report_csv_pipe_escaping() -> None:
+    result = run_check("pass|word", "5f4dcc3b5aa765d61d8327deb882cf99")
+    output = format_check_report_csv(result)
+
+    assert '"pass|word"' in output

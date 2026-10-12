@@ -18,6 +18,7 @@ from ethscan.ssh import (
     _extract_port,
     _normalize_host,
     _parse_kexinit,
+    format_ssh_report_csv,
     format_ssh_report_json,
     format_ssh_report_markdown,
     run_ssh,
@@ -319,3 +320,120 @@ def test_paramiko_available_flag() -> None:
 import struct
 import socket
 from typing import List
+
+
+# ---------------------------------------------------------------------------
+# CSV formatter
+# ---------------------------------------------------------------------------
+
+
+def test_format_ssh_report_csv_basic() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 22,
+        "timeout": 10.0,
+        "banner": "SSH-2.0-OpenSSH_8.9",
+        "paramiko_available": False,
+        "kex_algorithms": {
+            "supported": ["curve25519-sha256", "diffie-hellman-group1-sha1"],
+            "weak": ["diffie-hellman-group1-sha1"],
+            "strong": ["curve25519-sha256"],
+        },
+        "host_key_algorithms": {
+            "supported": ["ssh-ed25519", "ssh-rsa"],
+            "weak": ["ssh-rsa"],
+            "strong": ["ssh-ed25519"],
+        },
+        "encryption_algorithms": {
+            "supported": ["aes256-ctr", "aes128-cbc"],
+            "weak": ["aes128-cbc"],
+            "strong": ["aes256-ctr"],
+        },
+        "mac_algorithms": {
+            "supported": ["hmac-sha2-256", "hmac-sha1"],
+            "weak": ["hmac-sha1"],
+            "strong": ["hmac-sha2-256"],
+        },
+        "host_key": {"fingerprint": "aa:bb:cc", "key_type": "ssh-ed25519", "key_bits": 256},
+        "findings": [
+            {"type": "weak_kex", "algorithm": "diffie-hellman-group1-sha1", "severity": "medium", "description": "Weak key exchange algorithm supported: diffie-hellman-group1-sha1"},
+            {"type": "weak_host_key", "algorithm": "ssh-rsa", "severity": "high", "description": "Weak host key type supported: ssh-rsa"},
+        ],
+        "error": None,
+    }
+    output = format_ssh_report_csv(data)
+
+    lines = output.strip().split("\n")
+    assert lines[0] == "type,algorithm,severity,description"
+    assert "weak_kex,diffie-hellman-group1-sha1,medium,Weak key exchange algorithm supported: diffie-hellman-group1-sha1" in lines[1]
+    assert "weak_host_key,ssh-rsa,high,Weak host key type supported: ssh-rsa" in lines[2]
+
+
+def test_format_ssh_report_csv_empty() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 22,
+        "timeout": 10.0,
+        "banner": None,
+        "paramiko_available": False,
+        "kex_algorithms": {"supported": [], "weak": [], "strong": []},
+        "host_key_algorithms": {"supported": [], "weak": [], "strong": []},
+        "encryption_algorithms": {"supported": [], "weak": [], "strong": []},
+        "mac_algorithms": {"supported": [], "weak": [], "strong": []},
+        "host_key": None,
+        "findings": [],
+        "error": None,
+    }
+    output = format_ssh_report_csv(data)
+
+    assert output.strip() == "type,algorithm,severity,description"
+
+
+def test_format_ssh_report_csv_missing_fields() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 22,
+        "timeout": 10.0,
+        "banner": None,
+        "paramiko_available": False,
+        "kex_algorithms": {"supported": [], "weak": [], "strong": []},
+        "host_key_algorithms": {"supported": [], "weak": [], "strong": []},
+        "encryption_algorithms": {"supported": [], "weak": [], "strong": []},
+        "mac_algorithms": {"supported": [], "weak": [], "strong": []},
+        "host_key": None,
+        "findings": [
+            {"type": "weak_kex", "algorithm": "diffie-hellman-group1-sha1"}  # missing severity, description
+        ],
+        "error": None,
+    }
+    output = format_ssh_report_csv(data)
+
+    lines = output.strip().split("\n")
+    assert "weak_kex,diffie-hellman-group1-sha1,," in lines[1]
+
+
+def test_format_ssh_report_csv_pipe_escaping() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 22,
+        "timeout": 10.0,
+        "banner": None,
+        "paramiko_available": False,
+        "kex_algorithms": {"supported": [], "weak": [], "strong": []},
+        "host_key_algorithms": {"supported": [], "weak": [], "strong": []},
+        "encryption_algorithms": {"supported": [], "weak": [], "strong": []},
+        "mac_algorithms": {"supported": [], "weak": [], "strong": []},
+        "host_key": None,
+        "findings": [
+            {"type": "weak_kex", "algorithm": "pipe|algo", "severity": "high", "description": "pipe|desc"}
+        ],
+        "error": None,
+    }
+    output = format_ssh_report_csv(data)
+
+    assert '"pipe|algo"' in output
+    assert '"pipe|desc"' in output

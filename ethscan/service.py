@@ -1,5 +1,7 @@
 """Service/banner detection module for ethscan."""
 
+import csv
+import io
 import json
 import re
 import socket
@@ -237,3 +239,16 @@ def format_service_report_markdown(data: Dict[str, object]) -> str:
         lines.append("*No services detected.*")
 
     return "\n".join(lines)
+
+
+def format_service_report_csv(data: Dict[str, object]) -> str:
+    """Format service detection results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output, quoting=csv.QUOTE_ALL)
+    writer.writerow(["port", "service", "banner"])
+    for result in data.get("results", []):
+        port = result.get("port", "")
+        service = result.get("service", "")
+        banner = result.get("banner", "").replace("\n", " ").replace("\r", "")
+        writer.writerow([port, service, banner])
+    return output.getvalue().rstrip("\r\n")

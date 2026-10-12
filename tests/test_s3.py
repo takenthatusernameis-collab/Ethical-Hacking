@@ -16,6 +16,7 @@ from ethscan.s3 import (
     _normalize_target,
     _resolve_s3_endpoint,
     check_bucket_public,
+    format_s3_report_csv,
     format_s3_report_json,
     format_s3_report_markdown,
     run_s3,
@@ -606,3 +607,125 @@ def test_format_s3_report_markdown_all_regions() -> None:
     assert "**Region:** all" in output
     assert ", ".join(S3_REGIONS) in output
     assert "Checked 20 regions" in output
+
+
+# ---------------------------------------------------------------------------
+# CSV formatter
+# ---------------------------------------------------------------------------
+
+
+def test_format_s3_report_csv_basic() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "region": "us-east-1",
+        "timeout": 5.0,
+        "workers": 20,
+        "wordlist_used": False,
+        "candidates_tested": 2,
+        "regions_checked": ["us-east-1"],
+        "results": [
+            _make_check_result("example-com", "us-east-1", exists=True, public=True, status=200),
+            _make_check_result("dev-example-com", "us-east-1", exists=True, public=False, status=403),
+        ],
+        "public_buckets": [
+            _make_check_result("example-com", "us-east-1", exists=True, public=True, status=200)
+        ],
+        "private_buckets": [
+            _make_check_result("dev-example-com", "us-east-1", exists=True, public=False, status=403)
+        ],
+        "existing_buckets": [],
+        "notes": [],
+    }
+    output = format_s3_report_csv(data)
+
+    lines = output.strip().split("\n")
+    assert lines[0] == "target,domain,bucket,region,status_code,exists,public,error"
+    assert "example-com" in lines[1]
+    assert "200" in lines[1]
+    assert "True" in lines[1]  # public
+    assert "403" in lines[2]
+    assert "False" in lines[2]  # public
+
+
+def test_format_s3_report_csv_empty() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "region": "us-east-1",
+        "timeout": 5.0,
+        "workers": 20,
+        "wordlist_used": False,
+        "candidates_tested": 0,
+        "regions_checked": ["us-east-1"],
+        "results": [],
+        "public_buckets": [],
+        "private_buckets": [],
+        "existing_buckets": [],
+        "notes": [],
+    }
+    output = format_s3_report_csv(data)
+
+    assert output.strip() == "target,domain,bucket,region,status_code,exists,public,error"
+
+
+def test_format_s3_report_csv_missing_optional_fields() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "region": "us-east-1",
+        "timeout": 5.0,
+        "workers": 20,
+        "wordlist_used": False,
+        "candidates_tested": 1,
+        "regions_checked": ["us-east-1"],
+        "results": [
+            {
+                "bucket": "example-com",
+                "region": "us-east-1",
+                # missing dns_resolved, url, status_code, exists, public, error
+            }
+        ],
+        "public_buckets": [],
+        "private_buckets": [],
+        "existing_buckets": [],
+        "notes": [],
+    }
+    output = format_s3_report_csv(data)
+
+    lines = output.strip().split("\n")
+    assert "example-com" in lines[1]
+    assert ",,," in lines[1]  # empty optional fields
+
+
+def test_format_s3_report_csv_pipe_escaping() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "region": "us-east-1",
+        "timeout": 5.0,
+        "workers": 20,
+        "wordlist_used": False,
+        "candidates_tested": 1,
+        "regions_checked": ["us-east-1"],
+        "results": [
+            {
+                "bucket": "weird|bucket",
+                "region": "us-east-1",
+                "url": "https://weird|bucket.s3.amazonaws.com/",
+                "dns_resolved": None,
+                "status_code": 404,
+                "exists": False,
+                "public": False,
+                "error": "pipe|error|msg",
+            }
+        ],
+        "public_buckets": [],
+        "private_buckets": [],
+        "existing_buckets": [],
+        "notes": [],
+    }
+    output = format_s3_report_csv(data)
+
+    assert '"weird|bucket"' in output
+    assert '"pipe|error|msg"' in output

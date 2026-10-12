@@ -7,6 +7,7 @@ from ethscan.cidr import (
     _format_network_info,
     _normalize_cidr,
     _subtract_networks,
+    format_cidr_report_csv,
     format_cidr_report_json,
     format_cidr_report_markdown,
     run_cidr,
@@ -458,3 +459,54 @@ def test_format_cidr_report_markdown_with_diff_full_overlap() -> None:
     output = format_cidr_report_markdown(data)
     assert "Set Difference" in output
     assert "**Difference Networks:** 0" in output
+
+
+# ---------------------------------------------------------------------------
+# CSV formatter
+# ---------------------------------------------------------------------------
+
+
+def test_format_cidr_report_csv_basic() -> None:
+    data = run_cidr("192.168.1.0/24")
+    output = format_cidr_report_csv(data)
+
+    lines = output.strip().split("\n")
+    assert lines[0] == "target,network,netmask,broadcast,wildcard,first_host,last_host,usable_host_count,total_addresses,prefixlen,ip_version,contains_ip,contains_in_network"
+    assert "192.168.1.0/24" in lines[1]
+    assert "255.255.255.0" in lines[1]
+    assert "192.168.1.255" in lines[1]
+    assert "IPv4" in lines[1]
+
+
+def test_format_cidr_report_csv_with_contains() -> None:
+    data = run_cidr("192.168.1.0/24", contains="192.168.1.50")
+    output = format_cidr_report_csv(data)
+
+    lines = output.strip().split("\n")
+    assert lines[1].endswith(",192.168.1.50,True")
+
+
+def test_format_cidr_report_csv_with_contains_false() -> None:
+    data = run_cidr("192.168.1.0/24", contains="10.0.0.1")
+    output = format_cidr_report_csv(data)
+
+    lines = output.strip().split("\n")
+    assert lines[1].endswith(",10.0.0.1,False")
+
+
+def test_format_cidr_report_csv_with_diff() -> None:
+    data = run_cidr("192.168.1.0/24", diff="192.168.1.128/25")
+    output = format_cidr_report_csv(data)
+
+    assert "diff_cidr" in output
+    assert "difference" in output
+    assert "192.168.1.0/25" in output
+
+
+def test_format_cidr_report_csv_pipe_escaping() -> None:
+    data = run_cidr("192.168.1.0/24")
+    data["network"]["netmask"] = "255|255|255|0"
+    output = format_cidr_report_csv(data)
+
+    assert "255|255|255|0" not in output
+    assert '"255|255|255|0"' in output or "255\"|\"255\"|\"255\"|\"0" in output

@@ -8,6 +8,8 @@ S3 endpoint is also recorded as an informational signal.
 Stdlib only.
 """
 
+import csv
+import io
 import socket
 import urllib.error
 import urllib.request
@@ -425,26 +427,25 @@ def format_s3_report_csv(data: Dict[str, object]) -> str:
     writer = csv.writer(output)
     writer.writerow([
         "target",
+        "domain",
         "bucket",
         "region",
+        "status_code",
         "exists",
         "public",
-        "status_code",
-        "dns_resolved",
-        "url",
         "error",
     ])
     results = data.get("results") or []
+    domain = data.get("domain", "")
     for entry in results:
         writer.writerow([
             data.get("target", ""),
+            domain,
             entry.get("bucket", ""),
             entry.get("region", ""),
-            "true" if entry.get("exists") else "false",
-            "true" if entry.get("public") else "false",
             entry.get("status_code") or "",
-            "true" if entry.get("dns_resolved") else "false",
-            entry.get("url", ""),
+            "True" if entry.get("exists") else "False",
+            "True" if entry.get("public") else "False",
             entry.get("error") or "",
         ])
     return output.getvalue().rstrip("\r\n")

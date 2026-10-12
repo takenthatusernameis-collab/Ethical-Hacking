@@ -11488,6 +11488,83 @@ def test_cidr_out_option_markdown(tmp_path) -> None:
     assert "ethscan CIDR Network Calculator Report" in content
 
 
+def test_cidr_output_format_csv() -> None:
+    """Test cidr command with --output-format csv."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cidr", "--cidr", "192.168.1.0/24", "--output-format", "csv"],
+    )
+    assert result.exit_code == 0
+    assert "target,network,netmask,broadcast,wildcard,first_host,last_host,usable_host_count,total_addresses,prefixlen,ip_version" in result.output
+    assert "192.168.1.0/24" in result.output
+    assert "255.255.255.0" in result.output
+
+
+def test_cidr_output_format_csv_out(tmp_path) -> None:
+    """Test cidr command with --output-format csv --out."""
+    out_file = tmp_path / "cidr_report.csv"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "cidr",
+            "--cidr",
+            "192.168.1.0/24",
+            "--output-format",
+            "csv",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "target,network,netmask" in content
+    assert "192.168.1.0/24" in content
+
+
+def test_cidr_format_csv_alias() -> None:
+    """Test cidr command with deprecated --format csv alias."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cidr", "--cidr", "192.168.1.0/24", "--format", "csv"],
+    )
+    assert result.exit_code == 0
+    assert "target,network,netmask,broadcast,wildcard,first_host,last_host,usable_host_count,total_addresses,prefixlen,ip_version" in result.output
+
+
+def test_cidr_output_format_default_is_json() -> None:
+    """Test cidr command defaults to JSON when no format specified."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cidr", "--cidr", "192.168.1.0/24"])
+    assert result.exit_code == 0
+    assert '"cidr": "192.168.1.0/24"' in result.output
+    assert "target,network,netmask" not in result.output  # not CSV by default
+
+
+def test_cidr_output_format_precedence_over_format() -> None:
+    """Test --output-format takes precedence over --format."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "cidr",
+            "--cidr",
+            "192.168.1.0/24",
+            "--format",
+            "json",
+            "--output-format",
+            "csv",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "target,network,netmask" in result.output
+    assert '"cidr"' not in result.output
+
+
 def test_config_help() -> None:
     """Test config command help."""
     runner = CliRunner()
@@ -13867,6 +13944,61 @@ def test_radix_cidr_file_help() -> None:
     assert "--cidr-file" in result.output
 
 
+def test_radix_output_format_csv() -> None:
+    """Test radix command with --output-format csv."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["radix", "--cidrs", "192.168.1.0/24,192.168.2.0/24", "--output-format", "csv"],
+    )
+    assert result.exit_code == 0
+    assert "original_cidr,merged_cidr,compression_ratio" in result.output
+    assert "192.168.1.0/24" in result.output
+
+
+def test_radix_output_format_csv_out(tmp_path) -> None:
+    """Test radix command with --output-format csv --out."""
+    out_file = tmp_path / "radix_report.csv"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "radix",
+            "--cidrs",
+            "192.168.1.0/24",
+            "--output-format",
+            "csv",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "original_cidr,merged_cidr" in content
+
+
+def test_radix_format_csv_alias() -> None:
+    """Test radix command with deprecated --format csv alias."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["radix", "--cidrs", "192.168.1.0/24", "--format", "csv"],
+    )
+    assert result.exit_code == 0
+    assert "original_cidr,merged_cidr,compression_ratio" in result.output
+
+
+def test_radix_output_format_default_is_json() -> None:
+    """Test radix command defaults to JSON when no format specified."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["radix", "--cidrs", "192.168.1.0/24"])
+    assert result.exit_code == 0
+    assert '"network_count": 1' in result.output
+    assert "original_cidr,merged_cidr" not in result.output
+
+
 def test_vuln_help_shows_output_format() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["vuln", "--help"])
@@ -15182,6 +15314,136 @@ def test_ssh_default_format_is_json(monkeypatch) -> None:
     assert "curve25519-sha256" in parsed["kex_algorithms"]["supported"]
 
 
+def test_ssh_output_format_csv(monkeypatch) -> None:
+    def mock_run_ssh(target, port=22, timeout=10.0):
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": port,
+            "timeout": timeout,
+            "banner": "SSH-2.0-OpenSSH_8.9",
+            "paramiko_available": False,
+            "kex_algorithms": {
+                "supported": ["curve25519-sha256", "diffie-hellman-group1-sha1"],
+                "weak": ["diffie-hellman-group1-sha1"],
+                "strong": ["curve25519-sha256"],
+            },
+            "host_key_algorithms": {
+                "supported": ["ssh-ed25519", "ssh-rsa"],
+                "weak": ["ssh-rsa"],
+                "strong": ["ssh-ed25519"],
+            },
+            "encryption_algorithms": {
+                "supported": ["aes256-ctr", "aes128-cbc"],
+                "weak": ["aes128-cbc"],
+                "strong": ["aes256-ctr"],
+            },
+            "mac_algorithms": {
+                "supported": ["hmac-sha2-256", "hmac-sha1"],
+                "weak": ["hmac-sha1"],
+                "strong": ["hmac-sha2-256"],
+            },
+            "host_key": {"fingerprint": "aa:bb:cc", "key_type": "ssh-ed25519", "key_bits": 256},
+            "findings": [
+                {"type": "weak_kex", "algorithm": "diffie-hellman-group1-sha1", "severity": "medium", "description": "Weak key exchange algorithm supported: diffie-hellman-group1-sha1"},
+                {"type": "weak_host_key", "algorithm": "ssh-rsa", "severity": "high", "description": "Weak host key type supported: ssh-rsa"},
+            ],
+            "error": None,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_ssh", mock_run_ssh)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ssh", "--target", "example.com", "--output-format", "csv"])
+    assert result.exit_code == 0
+    assert "type,algorithm,severity,description" in result.output
+    assert "weak_kex,diffie-hellman-group1-sha1,medium" in result.output
+    assert "weak_host_key,ssh-rsa,high" in result.output
+
+
+def test_ssh_output_format_csv_out(tmp_path, monkeypatch) -> None:
+    def mock_run_ssh(target, port=22, timeout=10.0):
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": port,
+            "timeout": timeout,
+            "banner": "SSH-2.0-OpenSSH_8.9",
+            "paramiko_available": False,
+            "kex_algorithms": {
+                "supported": ["curve25519-sha256"],
+                "weak": [],
+                "strong": ["curve25519-sha256"],
+            },
+            "host_key_algorithms": {
+                "supported": ["ssh-ed25519"],
+                "weak": [],
+                "strong": ["ssh-ed25519"],
+            },
+            "encryption_algorithms": {
+                "supported": ["aes256-ctr"],
+                "weak": [],
+                "strong": ["aes256-ctr"],
+            },
+            "mac_algorithms": {
+                "supported": ["hmac-sha2-256"],
+                "weak": [],
+                "strong": ["hmac-sha2-256"],
+            },
+            "host_key": None,
+            "findings": [],
+            "error": None,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_ssh", mock_run_ssh)
+
+    out_file = tmp_path / "ssh_report.csv"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "ssh",
+            "--target",
+            "example.com",
+            "--output-format",
+            "csv",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written to" in result.output
+    assert out_file.exists()
+    content = out_file.read_text(encoding="utf-8")
+    assert "type,algorithm,severity,description" in content
+
+
+def test_ssh_format_csv_alias(monkeypatch) -> None:
+    def mock_run_ssh(target, port=22, timeout=10.0):
+        return {
+            "target": target,
+            "host": "example.com",
+            "port": port,
+            "timeout": timeout,
+            "banner": None,
+            "paramiko_available": False,
+            "kex_algorithms": {"supported": [], "weak": [], "strong": []},
+            "host_key_algorithms": {"supported": [], "weak": [], "strong": []},
+            "encryption_algorithms": {"supported": [], "weak": [], "strong": []},
+            "mac_algorithms": {"supported": [], "weak": [], "strong": []},
+            "host_key": None,
+            "findings": [],
+            "error": None,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_ssh", mock_run_ssh)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ssh", "--target", "example.com", "--format", "csv"])
+    assert result.exit_code == 0
+    assert "type,algorithm,severity,description" in result.output
+
+
 # ---------------------------------------------------------------------------
 # s3 command CLI integration tests
 # ---------------------------------------------------------------------------
@@ -15566,6 +15828,163 @@ def test_s3_default_format_is_json(monkeypatch) -> None:
     assert result.exit_code == 0
     parsed = json.loads(result.output)
     assert parsed["target"] == "example.com"
+
+
+def test_s3_output_format_csv(monkeypatch) -> None:
+    def mock_run_s3(
+        target, wordlist=None, region=None, timeout=5.0, max_workers=20
+    ):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "region": region or "us-east-1",
+            "timeout": timeout,
+            "workers": max_workers,
+            "wordlist_used": False,
+            "candidates_tested": 2,
+            "regions_checked": [region or "us-east-1"],
+            "results": [
+                {
+                    "bucket": "example-com",
+                    "region": "us-east-1",
+                    "url": "https://example-com.s3.amazonaws.com/",
+                    "dns_resolved": "1.2.3.4",
+                    "status_code": 200,
+                    "exists": True,
+                    "public": True,
+                    "error": None,
+                },
+                {
+                    "bucket": "dev-example-com",
+                    "region": "us-east-1",
+                    "url": "https://dev-example-com.s3.amazonaws.com/",
+                    "dns_resolved": "1.2.3.4",
+                    "status_code": 403,
+                    "exists": True,
+                    "public": False,
+                    "error": None,
+                },
+            ],
+            "public_buckets": [
+                {
+                    "bucket": "example-com",
+                    "region": "us-east-1",
+                    "url": "https://example-com.s3.amazonaws.com/",
+                    "dns_resolved": "1.2.3.4",
+                    "status_code": 200,
+                    "exists": True,
+                    "public": True,
+                    "error": None,
+                }
+            ],
+            "private_buckets": [
+                {
+                    "bucket": "dev-example-com",
+                    "region": "us-east-1",
+                    "url": "https://dev-example-com.s3.amazonaws.com/",
+                    "dns_resolved": "1.2.3.4",
+                    "status_code": 403,
+                    "exists": True,
+                    "public": False,
+                    "error": None,
+                }
+            ],
+            "existing_buckets": [],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_s3", mock_run_s3)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["s3", "--target", "example.com", "--output-format", "csv"])
+    assert result.exit_code == 0
+    assert "target,domain,bucket,region,status_code,exists,public,error" in result.output
+    assert "example-com" in result.output
+    assert "200" in result.output
+    assert "True" in result.output
+
+
+def test_s3_output_format_csv_out(tmp_path, monkeypatch) -> None:
+    def mock_run_s3(
+        target, wordlist=None, region=None, timeout=5.0, max_workers=20
+    ):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "region": region or "us-east-1",
+            "timeout": timeout,
+            "workers": max_workers,
+            "wordlist_used": False,
+            "candidates_tested": 1,
+            "regions_checked": [region or "us-east-1"],
+            "results": [
+                {
+                    "bucket": "example-com",
+                    "region": "us-east-1",
+                    "url": "https://example-com.s3.amazonaws.com/",
+                    "dns_resolved": "1.2.3.4",
+                    "status_code": 200,
+                    "exists": True,
+                    "public": True,
+                    "error": None,
+                }
+            ],
+            "public_buckets": [],
+            "private_buckets": [],
+            "existing_buckets": [],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_s3", mock_run_s3)
+
+    out_file = tmp_path / "s3_report.csv"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "s3",
+            "--target",
+            "example.com",
+            "--output-format",
+            "csv",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written to" in result.output
+    assert out_file.exists()
+    content = out_file.read_text(encoding="utf-8")
+    assert "target,domain,bucket,region,status_code,exists,public,error" in content
+
+
+def test_s3_format_csv_alias(monkeypatch) -> None:
+    def mock_run_s3(
+        target, wordlist=None, region=None, timeout=5.0, max_workers=20
+    ):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "region": region or "us-east-1",
+            "timeout": timeout,
+            "workers": max_workers,
+            "wordlist_used": False,
+            "candidates_tested": 0,
+            "regions_checked": [region or "us-east-1"],
+            "results": [],
+            "public_buckets": [],
+            "private_buckets": [],
+            "existing_buckets": [],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_s3", mock_run_s3)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["s3", "--target", "example.com", "--format", "csv"])
+    assert result.exit_code == 0
+    assert "target,domain,bucket,region,status_code,exists,public,error" in result.output
+
 
 def test_validate_help_shows_output_format() -> None:
     """Test that validate help shows --output-format option."""

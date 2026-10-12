@@ -12,6 +12,7 @@ from ethscan.radix import (
     _merge_networks,
     _nth_bit,
     _normalize_cidr,
+    format_radix_report_csv,
     format_radix_report_json,
     format_radix_report_markdown,
     run_radix,
@@ -652,3 +653,51 @@ def test_run_radix_from_file_only(tmp_path: Path) -> None:
     assert data["network_count"] == 2
     assert data["merged_network_count"] == 1
     assert data["merged"][0] == "192.168.0.0/23"
+
+
+# ---------------------------------------------------------------------------
+# CSV formatter
+# ---------------------------------------------------------------------------
+
+
+def test_format_radix_report_csv_basic() -> None:
+    data = run_radix(["192.168.1.0/24", "192.168.2.0/24"])
+    output = format_radix_report_csv(data)
+
+    lines = output.strip().split("\n")
+    assert lines[0] == "original_cidr,merged_cidr,compression_ratio"
+    assert "192.168.1.0/24" in lines[1]
+    assert "192.168.2.0/24" in lines[2]
+
+
+def test_format_radix_report_csv_empty() -> None:
+    data = run_radix([])
+    output = format_radix_report_csv(data)
+
+    assert output.strip() == "original_cidr,merged_cidr,compression_ratio"
+
+
+def test_format_radix_report_csv_merge_disabled() -> None:
+    data = run_radix(["192.168.1.0/24", "192.168.2.0/24"], merge=False)
+    output = format_radix_report_csv(data)
+
+    lines = output.strip().split("\n")
+    assert lines[0] == "original_cidr,merged_cidr,compression_ratio"
+    assert "192.168.1.0/24" in lines[1]
+    assert "192.168.2.0/24" in lines[2]
+
+
+def test_format_radix_report_csv_with_diff() -> None:
+    data = run_radix(["192.168.1.0/24"], diff=["192.168.1.128/25"])
+    output = format_radix_report_csv(data)
+
+    assert "diff_cidr" in output
+    assert "192.168.1.0/25" in output
+
+
+def test_format_radix_report_csv_pipe_escaping() -> None:
+    data = run_radix(["192.168.1.0/24"])
+    data["merged"] = ["192|168.1.0/24"]
+    output = format_radix_report_csv(data)
+
+    assert '"192|168.1.0/24"' in output
