@@ -8,6 +8,8 @@ Fully stdlib-only and offline.
 """
 
 import ipaddress
+import csv
+import io
 import json
 from typing import Dict, List, Optional
 
@@ -274,6 +276,39 @@ def _ports_to_ranges(ports: List[int]) -> str:
         ranges.append(f"{start}-{prev}")
     return ", ".join(ranges)
 
+
+
+
+def format_validate_report_csv(data: Dict[str, object]) -> str:
+    """Format validation results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["type", "spec", "valid", "detail"])
+    port_results = data.get("ports", []) or []
+    for r in port_results:
+        spec = str(r.get("spec", ""))
+        valid = "true" if r.get("valid") else "false"
+        if r.get("valid"):
+            ports = r.get("ports", [])
+            if ports:
+                detail = _ports_to_ranges(ports)
+            else:
+                detail = str(r.get("count", 0))
+        else:
+            detail = str(r.get("error") or "")
+        writer.writerow(["port", spec, valid, detail])
+    cidr_results = data.get("cidrs", []) or []
+    for r in cidr_results:
+        spec = str(r.get("spec", ""))
+        valid = "true" if r.get("valid") else "false"
+        if r.get("valid"):
+            network = r.get("network") or {}
+            canonical = network.get("canonical") or r.get("canonical") or spec
+            detail = str(canonical)
+        else:
+            detail = str(r.get("error") or "")
+        writer.writerow(["cidr", spec, valid, detail])
+    return output.getvalue().rstrip("\r\n")
 
 def format_validate_report_markdown(data: Dict[str, object]) -> str:
     """Format validation results as Markdown."""

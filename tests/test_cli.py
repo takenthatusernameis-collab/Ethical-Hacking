@@ -2,6 +2,8 @@
 
 import base64
 import json
+import os
+import tempfile
 
 from click.testing import CliRunner
 
@@ -15260,3 +15262,52 @@ def test_s3_default_format_is_json(monkeypatch) -> None:
     assert result.exit_code == 0
     parsed = json.loads(result.output)
     assert parsed["target"] == "example.com"
+
+def test_validate_help_shows_output_format() -> None:
+    """Test that validate help shows --output-format option."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["validate", "--help"])
+    assert result.exit_code == 0
+    assert "--output-format" in result.output
+
+
+def test_validate_output_format_csv() -> None:
+    """Test validate command with CSV output format."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["validate", "--ports", "80,443", "--output-format", "csv"])
+    assert result.exit_code == 0
+    assert "type,spec,valid,detail" in result.output
+    assert "port" in result.output
+
+
+def test_validate_out_option_csv() -> None:
+    """Test validate command writes CSV to file."""
+    runner = CliRunner()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        out_path = os.path.join(tmpdir, "validate.csv")
+        result = runner.invoke(cli, ["validate", "--ports", "80,443", "--output-format", "csv", "--out", out_path])
+        assert result.exit_code == 0
+        assert os.path.exists(out_path)
+        with open(out_path, "r", encoding="utf-8") as handle:
+            content_out = handle.read()
+        assert "type,spec,valid,detail" in content_out
+
+
+def test_validate_format_csv_alias() -> None:
+    """Test validate command with deprecated --format csv alias."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["validate", "--ports", "80,443", "--format", "csv"])
+    assert result.exit_code == 0
+    assert "type,spec,valid,detail" in result.output
+
+
+def test_validate_output_format_default_is_json() -> None:
+    """Test validate command defaults to JSON format."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["validate", "--ports", "80,443"])
+    assert result.exit_code == 0
+    # Should be valid JSON (default)
+    try:
+        json.loads(result.output)
+    except Exception:
+        assert False, "Default output should be valid JSON"

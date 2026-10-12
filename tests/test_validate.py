@@ -9,6 +9,7 @@ from ethscan.validate import (
     _ports_to_ranges,
     _validate_cidr,
     _validate_port_spec,
+    format_validate_report_csv,
     format_validate_report_json,
     format_validate_report_markdown,
     run_validate,
@@ -428,3 +429,40 @@ def test_format_validate_report_markdown_notes() -> None:
     data = run_validate(ports="80,443")
     output = format_validate_report_markdown(data)
     assert "## Notes" in output
+
+def test_format_validate_report_csv_basic() -> None:
+    data = run_validate(ports="80,443", cidrs="192.168.1.0/24")
+    output = format_validate_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "type,spec,valid,detail"
+    assert "port" in lines[1]
+    assert "80, 443" in lines[1]
+    assert "true" in lines[1]
+    assert "cidr" in lines[2]
+    assert "192.168.1.0/24" in lines[2]
+
+
+def test_format_validate_report_csv_empty() -> None:
+    data = run_validate()
+    output = format_validate_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "type,spec,valid,detail"
+    assert len(lines) == 1
+
+
+def test_format_validate_report_csv_field_escaping() -> None:
+    data = run_validate(ports="80,443,8080")
+    output = format_validate_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "type,spec,valid,detail"
+    assert lines[1].count(",") >= 3
+
+
+def test_format_validate_report_csv_invalid() -> None:
+    data = run_validate(ports="abc")
+    output = format_validate_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "type,spec,valid,detail"
+    assert lines[1].startswith("port,")
+    assert "false" in lines[1]
+    assert "Invalid" in lines[1]

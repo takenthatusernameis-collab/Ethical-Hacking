@@ -183,6 +183,7 @@ from ethscan.jwt import (
     run_jwt,
 )
 from ethscan.validate import (
+    format_validate_report_csv,
     format_validate_report_json,
     format_validate_report_markdown,
     run_validate,
@@ -3077,11 +3078,18 @@ def completion(shell: str, prog_name: str, fmt: str, out_path: Optional[str]) ->
     "(e.g. '192.168.1.0/24,10.0.0.0/8').",
 )
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv). Overrides --format.",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -3092,13 +3100,17 @@ def completion(shell: str, prog_name: str, fmt: str, out_path: Optional[str]) ->
 def validate(
     ports: Optional[str],
     cidrs: Optional[str],
+    output_fmt: Optional[str],
     fmt: str,
     out_path: Optional[str],
 ) -> None:
     """Validate and expand port specifications and CIDR inputs (offline)."""
+    chosen_format = output_fmt if output_fmt is not None else fmt
     results = run_validate(ports=ports, cidrs=cidrs)
 
-    if fmt == "json":
+    if chosen_format == "csv":
+        output = format_validate_report_csv(results)
+    elif chosen_format == "json":
         output = format_validate_report_json(results)
     else:
         output = format_validate_report_markdown(results)
