@@ -50,6 +50,7 @@ from ethscan.whois import (
     run_whois,
 )
 from ethscan.dns import (
+    format_dns_report_csv,
     format_dns_report_json,
     format_dns_report_markdown,
     run_dns,
@@ -1012,11 +1013,18 @@ def headers(target: str, timeout: float, fmt: str, out_path: str) -> None:
 )
 @click.option("--timeout", default=2.0, type=float, help="Resolution timeout in seconds")
 @click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv). Overrides --format.",
+)
+@click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format (json or markdown)",
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
     "--out",
@@ -1029,6 +1037,7 @@ def dns(
     record_types: str,
     server: str,
     timeout: float,
+    output_fmt: str,
     fmt: str,
     out_path: str,
 ) -> None:
@@ -1043,10 +1052,15 @@ def dns(
 
     results = run_dns(target, record_types=types_list, server=server, timeout=timeout)
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_dns_report_json(results)
-    else:
+    elif chosen_format == "markdown":
         output = format_dns_report_markdown(results)
+    else:
+        output = format_dns_report_csv(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

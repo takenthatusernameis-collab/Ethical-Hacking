@@ -5,6 +5,7 @@ import pytest
 from ethscan.dns import (
     DEFAULT_DNS_TYPES,
     DEFAULT_TIMEOUT,
+    format_dns_report_csv,
     format_dns_report_json,
     format_dns_report_markdown,
     resolve_a_records,
@@ -119,3 +120,85 @@ def test_resolve_a_records_offline() -> None:
 def test_resolve_aaaa_records_offline() -> None:
     results = resolve_aaaa_records("invalid.nonexistent.domain.tld", timeout=0.1)
     assert results == []
+
+
+def test_format_dns_report_csv_basic() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "record_types_queried": ["A", "AAAA"],
+        "records": {
+            "A": ["93.184.216.34"],
+            "AAAA": ["2606:2800:220:1:248:1893:25c8:1946"],
+        },
+        "dnspython_available": False,
+    }
+    output = format_dns_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "target,domain,record_type,record_value"
+    assert "example.com,example.com,A,93.184.216.34" in lines
+    assert "example.com,example.com,AAAA,2606:2800:220:1:248:1893:25c8:1946" in lines
+
+
+def test_format_dns_report_csv_empty() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "record_types_queried": ["A", "AAAA"],
+        "records": {
+            "A": [],
+            "AAAA": [],
+        },
+        "dnspython_available": False,
+    }
+    output = format_dns_report_csv(data)
+    assert output == "target,domain,record_type,record_value"
+
+
+def test_format_dns_report_csv_missing_fields() -> None:
+    data = {
+        "records": {},
+    }
+    output = format_dns_report_csv(data)
+    assert output == "target,domain,record_type,record_value"
+
+
+def test_format_dns_report_csv_pipe_escaping() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "record_types_queried": ["CNAME"],
+        "records": {
+            "CNAME": ["alias.example.com", "weird,record.example.com"],
+        },
+        "dnspython_available": False,
+    }
+    output = format_dns_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "target,domain,record_type,record_value"
+    assert "example.com,example.com,CNAME,alias.example.com" in lines
+    # The value containing a comma must be CSV-quoted.
+    assert any(line.endswith('"weird,record.example.com"') for line in lines)
+
+
+def test_format_dns_report_csv_multiple_types() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "record_types_queried": ["A", "MX", "NS"],
+        "records": {
+            "A": ["93.184.216.34", "93.184.216.35"],
+            "MX": ["mail.example.com"],
+            "NS": ["ns1.example.com", "ns2.example.com"],
+        },
+        "dnspython_available": False,
+    }
+    output = format_dns_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "target,domain,record_type,record_value"
+    assert len(lines) == 1 + 2 + 1 + 2
+    assert "example.com,example.com,A,93.184.216.34" in lines
+    assert "example.com,example.com,A,93.184.216.35" in lines
+    assert "example.com,example.com,MX,mail.example.com" in lines
+    assert "example.com,example.com,NS,ns1.example.com" in lines
+    assert "example.com,example.com,NS,ns2.example.com" in lines

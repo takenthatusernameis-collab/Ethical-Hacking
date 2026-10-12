@@ -1,5 +1,7 @@
 """DNS record enumeration module for ethscan."""
 
+import csv
+import io
 import socket
 from typing import Dict, List, Optional, Set
 
@@ -182,3 +184,23 @@ def format_dns_report_markdown(data: Dict[str, object]) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+def format_dns_report_csv(data: Dict[str, object]) -> str:
+    """Format DNS results as CSV.
+
+    Emits a header row (``target,domain,record_type,record_value``) followed
+    by one row per resolved record value, using stdlib ``csv.writer`` for
+    proper quoting/escaping of values containing commas or double-quotes.
+    """
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["target", "domain", "record_type", "record_value"])
+
+    records = data.get("records", {}) or {}
+    for rtype, values in records.items():
+        record_type = str(rtype)
+        for value in values or []:
+            writer.writerow([data.get("target", ""), data.get("domain", ""), record_type, str(value)])
+
+    return output.getvalue().rstrip("\r\n")

@@ -3138,6 +3138,156 @@ def test_dns_out_option(tmp_path, monkeypatch) -> None:
     assert "example.com" in content
 
 
+def test_dns_help_shows_output_format() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["dns", "--help"])
+    assert result.exit_code == 0
+    assert "--output-format" in result.output
+    assert "csv" in result.output
+
+
+def test_dns_output_format_csv(monkeypatch) -> None:
+    def mock_run_dns(target, record_types=None, server=None, timeout=2.0):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "record_types_queried": record_types or ["A", "AAAA"],
+            "records": {
+                "A": ["93.184.216.34"],
+                "AAAA": ["2606:2800:220:1:248:1893:25c8:1946"],
+            },
+            "dnspython_available": False,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_dns", mock_run_dns)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["dns", "--target", "example.com", "--output-format", "csv", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    lines = result.output.strip().splitlines()
+    assert lines[0] == "target,domain,record_type,record_value"
+    assert "example.com,example.com,A,93.184.216.34" in lines
+    assert "example.com,example.com,AAAA,2606:2800:220:1:248:1893:25c8:1946" in lines
+
+
+def test_dns_output_format_csv_out(tmp_path, monkeypatch) -> None:
+    def mock_run_dns(target, record_types=None, server=None, timeout=2.0):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "record_types_queried": record_types or ["A", "AAAA"],
+            "records": {"A": ["93.184.216.34"]},
+            "dnspython_available": False,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_dns", mock_run_dns)
+
+    out_file = tmp_path / "dns_report.csv"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "dns",
+            "--target",
+            "example.com",
+            "--output-format",
+            "csv",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    lines = content.strip().splitlines()
+    assert lines[0] == "target,domain,record_type,record_value"
+    assert "example.com,example.com,A,93.184.216.34" in lines
+
+
+def test_dns_format_csv_alias(monkeypatch) -> None:
+    def mock_run_dns(target, record_types=None, server=None, timeout=2.0):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "record_types_queried": record_types or ["A", "AAAA"],
+            "records": {"A": ["93.184.216.34"]},
+            "dnspython_available": False,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_dns", mock_run_dns)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["dns", "--target", "example.com", "--format", "csv", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    lines = result.output.strip().splitlines()
+    assert lines[0] == "target,domain,record_type,record_value"
+    assert "example.com,example.com,A,93.184.216.34" in lines
+
+
+def test_dns_output_format_default_is_json(monkeypatch) -> None:
+    def mock_run_dns(target, record_types=None, server=None, timeout=2.0):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "record_types_queried": record_types or ["A", "AAAA"],
+            "records": {"A": ["93.184.216.34"]},
+            "dnspython_available": False,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_dns", mock_run_dns)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["dns", "--target", "example.com", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    # Default is JSON, which does not start with the CSV header.
+    assert not result.output.strip().startswith("target,domain,record_type,record_value")
+    assert "93.184.216.34" in result.output
+
+
+def test_dns_output_format_precedence_over_format(monkeypatch) -> None:
+    def mock_run_dns(target, record_types=None, server=None, timeout=2.0):
+        return {
+            "target": target,
+            "domain": "example.com",
+            "record_types_queried": record_types or ["A", "AAAA"],
+            "records": {"A": ["93.184.216.34"]},
+            "dnspython_available": False,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_dns", mock_run_dns)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "dns",
+            "--target",
+            "example.com",
+            "--format",
+            "json",
+            "--output-format",
+            "csv",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    # --output-format wins even though --format json is also given.
+    assert result.output.strip().startswith("target,domain,record_type,record_value")
+
+
 def test_ssl_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["ssl", "--help"])
