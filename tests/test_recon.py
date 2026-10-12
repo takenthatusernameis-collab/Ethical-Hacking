@@ -1,5 +1,7 @@
 """Tests for the ethscan recon module."""
 
+import csv
+import io
 import json
 from unittest.mock import patch, MagicMock
 
@@ -7,6 +9,7 @@ from ethscan.recon import (
     DEFAULT_RECON_MODULES,
     _normalize_domain,
     run_recon,
+    format_recon_report_csv,
     format_recon_report_json,
     format_recon_report_markdown,
 )
@@ -556,3 +559,63 @@ def test_format_recon_report_markdown_empty_modules() -> None:
     output = format_recon_report_markdown(data)
     assert "ethscan Reconnaissance Report" in output
     assert "**Modules Run:** None" in output
+
+def test_format_recon_report_csv() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "modules_run": ["subdomains", "dns"],
+        "subdomains": {
+            "resolved": [
+                {"subdomain": "www", "hostname": "www.example.com", "ip": "1.2.3.4"},
+            ],
+        },
+        "dns": {"records": {"A": ["1.2.3.4", "5.6.7.8"]}},
+        "whois": None,
+        "geo": None,
+        "trace": None,
+        "notes": ["note one"],
+    }
+    output = format_recon_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0] == ["module", "field", "value"]
+    assert ["meta", "target", "example.com"] in reader
+    assert ["meta", "modules_run", "subdomains,dns"] in reader
+    assert ["subdomains", "www.example.com", "1.2.3.4"] in reader
+    assert ["dns", "A", "1.2.3.4"] in reader
+    assert ["dns", "A", "5.6.7.8"] in reader
+    assert ["notes", "", "note one"] in reader
+
+
+def test_format_recon_report_csv_empty() -> None:
+    data = {"target": "example.com", "domain": "example.com", "modules_run": [], "notes": []}
+    output = format_recon_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert ["meta", "target", "example.com"] in reader
+    assert ["meta", "modules_run", ""] in reader
+
+
+def test_format_recon_report_csv_whois_geo_trace() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "modules_run": ["whois", "geo", "trace"],
+        "whois": {
+            "parsed": {
+                "registrar": "RESERVED-Internet Assigned Numbers Authority",
+                "nameservers": ["ns.example.com"],
+                "status_codes": ["clientDeleteProhibited"],
+            },
+        },
+        "geo": {"geolocation": {"query": "1.2.3.4", "country": "United States", "city": "Ashburn"}},
+        "trace": {"hops": [{"hop": 1, "ip": "10.0.0.1"}]},
+        "notes": [],
+    }
+    output = format_recon_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert ["whois", "registrar", "RESERVED-Internet Assigned Numbers Authority"] in reader
+    assert ["whois", "nameserver", "ns.example.com"] in reader
+    assert ["whois", "status_code", "clientDeleteProhibited"] in reader
+    assert ["geo", "query", "1.2.3.4"] in reader
+    assert ["geo", "country", "United States"] in reader
+    assert ["trace", "hop_1", "10.0.0.1"] in reader

@@ -425,3 +425,30 @@ def format_ping_report_markdown(data: Dict[str, object]) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+def format_ping_report_csv(data: Dict[str, object]) -> str:
+    """Format ping results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "target",
+        "ip",
+        "sequence",
+        "rtt_ms",
+        "ttl",
+        "response_type",
+        "error",
+    ])
+    for probe in data.get("probes") or []:
+        rtt = probe.get("rtt_ms")
+        writer.writerow([
+            data.get("target", ""),
+            probe.get("ip") or "",
+            probe.get("sequence", ""),
+            rtt if rtt is not None else "",
+            probe.get("ttl", ""),
+            probe.get("response_type") or "",
+            probe.get("error") or "",
+        ])
+    return output.getvalue().rstrip("\r\n")

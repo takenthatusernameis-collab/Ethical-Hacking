@@ -1,4 +1,6 @@
 """Tests for the trace module."""
+import csv
+import io
 import json
 from unittest.mock import patch, MagicMock
 
@@ -215,3 +217,26 @@ def test_format_trace_report_markdown_recursive():
     assert "Recursive Trace 1" in md
     assert "1.1.1.1" in md
     assert "10.0.0.1" in md
+
+
+def test_format_trace_report_csv():
+    result = {
+        "target": "example.com",
+        "hops": [
+            {"hop": 1, "ttl": 1, "ip": "10.0.0.1", "host": "10.0.0.1", "response_type": "ICMP_TTL_EXCEEDED", "rtt_ms": 1.5, "rtt_avg_ms": 1.5, "reached_destination": False, "reached": False},
+            {"hop": 2, "ttl": 2, "ip": "93.184.215.14", "host": "93.184.215.14", "response_type": "REACHED", "rtt_ms": 10.0, "rtt_avg_ms": 10.0, "reached_destination": True, "reached": True},
+        ],
+    }
+    output = trace.format_trace_report_csv(result)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0] == ["target", "hop", "ip", "host", "response_type", "rtt_ms", "reached_destination"]
+    assert reader[1] == ["example.com", "1", "10.0.0.1", "10.0.0.1", "ICMP_TTL_EXCEEDED", "1.5", "false"]
+    assert reader[2] == ["example.com", "2", "93.184.215.14", "93.184.215.14", "REACHED", "10.0", "true"]
+
+
+def test_format_trace_report_csv_empty():
+    result = {"target": "example.com", "hops": []}
+    output = trace.format_trace_report_csv(result)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert len(reader) == 1
+    assert reader[0][0] == "target"

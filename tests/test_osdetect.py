@@ -1,5 +1,7 @@
 """Tests for the ethscan osdetect module."""
 
+import csv
+import io
 import json
 import threading
 from typing import List
@@ -16,6 +18,7 @@ from ethscan.osdetect import (
     _match_os_from_ttl,
     _normalize_host,
     _truncate,
+    format_osdetect_report_csv,
     format_osdetect_report_json,
     format_osdetect_report_markdown,
     probe_ack,
@@ -385,3 +388,29 @@ def test_format_osdetect_report_markdown_pipe_escape() -> None:
     }
     output = format_osdetect_report_markdown(data)
     assert "\\|" in output
+
+
+def test_format_osdetect_report_csv() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "probes": [
+            {"port": 80, "probe_type": "SYN", "connected": True, "response": "SYN-ACK", "flags_observed": "SYN-ACK", "error": None},
+            {"port": 22, "probe_type": "SYN", "connected": False, "response": "RST", "flags_observed": "RST", "error": "refused"},
+        ],
+        "inferred_os": ["Linux"],
+    }
+    output = format_osdetect_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0] == ["target", "host", "port", "probe_type", "connected", "response", "flags_observed", "error"]
+    assert reader[1] == ["example.com", "example.com", "80", "SYN", "true", "SYN-ACK", "SYN-ACK", ""]
+    assert reader[2] == ["example.com", "example.com", "22", "SYN", "false", "RST", "RST", "refused"]
+    assert reader[3] == ["example.com", "example.com", "", "inferred_os", "", "", "Linux", ""]
+
+
+def test_format_osdetect_report_csv_empty() -> None:
+    data = {"target": "example.com", "host": "example.com", "probes": [], "inferred_os": []}
+    output = format_osdetect_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert len(reader) == 1
+    assert reader[0][0] == "target"

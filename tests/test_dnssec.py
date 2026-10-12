@@ -1,5 +1,8 @@
 """Tests for the ethscan dnssec module."""
 
+import csv
+import io
+
 import pytest
 
 from ethscan.dnssec import (
@@ -7,6 +10,7 @@ from ethscan.dnssec import (
     ALGORITHM_NAMES,
     DIGEST_TYPE_NAMES,
     DNS_AVAILABLE,
+    format_dnssec_report_csv,
     format_dnssec_report_json,
     format_dnssec_report_markdown,
     run_dnssec,
@@ -235,3 +239,29 @@ def test_run_dnssec_url_target(monkeypatch) -> None:
     results = run_dnssec("https://example.com/path", timeout=1.0)
     assert results["target"] == "https://example.com/path"
     assert results["domain"] == "example.com"
+
+def test_format_dnssec_report_csv() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "validated": True,
+        "dnskey": {"success": True, "keys": [{"key_tag": 12345}]},
+        "ds": {"success": True, "records": [{"key_tag": 12345}]},
+    }
+    output = format_dnssec_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0] == ["target", "domain", "validated", "dnskey_success", "dnskey_count", "ds_success", "ds_count"]
+    assert reader[1] == ["example.com", "example.com", "true", "true", "1", "true", "1"]
+
+
+def test_format_dnssec_report_csv_unsigned() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "validated": False,
+        "dnskey": {"success": False, "keys": [], "error": "no response"},
+        "ds": {"success": False, "records": [], "error": "no response"},
+    }
+    output = format_dnssec_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[1] == ["example.com", "example.com", "false", "false", "0", "false", "0"]

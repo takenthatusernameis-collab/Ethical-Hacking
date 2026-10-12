@@ -268,3 +268,20 @@ def format_cert_report_markdown(data: Dict[str, object]) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+def format_cert_report_csv(data: Dict[str, object]) -> str:
+    """Format cert results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["target", "domain", "ip", "subdomain"])
+    target = data.get("target", "")
+    domain = data.get("domain", "")
+    ip = data.get("ip") or ""
+    subdomains = data.get("subdomains") or []
+    if subdomains:
+        for name in subdomains:
+            writer.writerow([target, domain, ip, name])
+    else:
+        writer.writerow([target, domain, ip, ""])
+    return output.getvalue().rstrip("\r\n")

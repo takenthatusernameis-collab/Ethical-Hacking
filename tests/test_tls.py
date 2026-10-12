@@ -1,5 +1,7 @@
 """Tests for the ethscan tls module."""
 
+import csv
+import io
 import ssl
 
 import pytest
@@ -14,6 +16,7 @@ from ethscan.tls import (
     _normalize_host,
     _resolve_version,
     enumerate_tls,
+    format_tls_report_csv,
     format_tls_report_json,
     format_tls_report_markdown,
     run_tls,
@@ -555,3 +558,32 @@ def test_enumerate_tls_result_ordering(monkeypatch) -> None:
         "AES128-GCM-SHA256",
         "AES256-GCM-SHA384",
     ]
+
+
+def test_format_tls_report_csv() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "versions": [
+            {"version": "TLSv1_2", "supported": True, "error": None, "negotiated_cipher": "AES128-GCM-SHA256", "negotiated_protocol": "TLSv1.2"},
+            {"version": "TLSv1", "supported": False, "error": "no cipher", "negotiated_cipher": None, "negotiated_protocol": None},
+        ],
+        "ciphers": [
+            {"cipher": "AES128-GCM-SHA256", "supported": True, "error": None, "negotiated_version": "TLSv1.2"},
+        ],
+    }
+    output = format_tls_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0] == ["target", "host", "port", "probe_type", "probe", "supported", "negotiated", "error"]
+    assert reader[1] == ["example.com", "example.com", "443", "version", "TLSv1_2", "true", "AES128-GCM-SHA256", ""]
+    assert reader[2] == ["example.com", "example.com", "443", "version", "TLSv1", "false", "", "no cipher"]
+    assert reader[3] == ["example.com", "example.com", "443", "cipher", "AES128-GCM-SHA256", "true", "TLSv1.2", ""]
+
+
+def test_format_tls_report_csv_empty() -> None:
+    data = {"target": "example.com", "host": "example.com", "port": 443, "versions": [], "ciphers": []}
+    output = format_tls_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert len(reader) == 1
+    assert reader[0][0] == "target"

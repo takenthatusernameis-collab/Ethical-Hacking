@@ -258,3 +258,29 @@ def format_mac_report_markdown(data: Dict[str, object]) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+def format_mac_report_csv(data: Dict[str, object]) -> str:
+    """Format MAC vendor results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "target",
+        "mac",
+        "oui",
+        "vendor",
+        "cached",
+        "offline_fallback",
+        "error",
+    ])
+    mac_data = data.get("mac_data") or {}
+    writer.writerow([
+        data.get("target", ""),
+        data.get("mac") or "",
+        data.get("oui") or "",
+        mac_data.get("vendor") or "",
+        "true" if mac_data.get("cached") else "false",
+        "true" if mac_data.get("offline_fallback") else "false",
+        mac_data.get("error") or "",
+    ])
+    return output.getvalue().rstrip("\r\n")

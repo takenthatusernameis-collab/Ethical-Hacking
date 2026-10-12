@@ -1,5 +1,7 @@
 """Tests for the ethscan ping module."""
 
+import csv
+import io
 import json
 import socket
 import struct
@@ -24,6 +26,7 @@ from ethscan.ping import (
     _parse_icmp_reply,
     _resolve_host,
     _try_create_raw_socket,
+    format_ping_report_csv,
     format_ping_report_json,
     format_ping_report_markdown,
     probe_icmp,
@@ -901,3 +904,25 @@ def test_format_ping_report_markdown_raw_socket_available() -> None:
     output = format_ping_report_markdown(data)
     assert "available" in output
     assert "fallback" not in output.lower() or "TCP connect fallback" not in output
+
+def test_format_ping_report_csv() -> None:
+    data = {
+        "target": "example.com",
+        "probes": [
+            {"ip": "1.2.3.4", "rtt_ms": 10.5, "ttl": 64, "sequence": 1, "response_type": "ECHO_REPLY", "error": None},
+            {"ip": None, "rtt_ms": 1.0, "ttl": 64, "sequence": 2, "response_type": "NO_RESPONSE", "error": "timeout"},
+        ],
+    }
+    output = format_ping_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0] == ["target", "ip", "sequence", "rtt_ms", "ttl", "response_type", "error"]
+    assert reader[1] == ["example.com", "1.2.3.4", "1", "10.5", "64", "ECHO_REPLY", ""]
+    assert reader[2] == ["example.com", "", "2", "1.0", "64", "NO_RESPONSE", "timeout"]
+
+
+def test_format_ping_report_csv_empty() -> None:
+    data = {"target": "example.com", "probes": []}
+    output = format_ping_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert len(reader) == 1
+    assert reader[0][0] == "target"

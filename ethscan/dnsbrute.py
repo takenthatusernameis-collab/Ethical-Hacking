@@ -610,3 +610,31 @@ def format_dnsbrute_report_markdown(data: Dict[str, object]) -> str:
     _format_records_table(lines, data["all_results"])
 
     return "\n".join(lines)
+
+
+def format_dnsbrute_report_csv(data: Dict[str, object]) -> str:
+    """Format dnsbrute results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "target",
+        "domain",
+        "subdomain",
+        "hostname",
+        "a_records",
+        "aaaa_records",
+        "resolved",
+    ])
+    for entry in data.get("all_results", []):
+        a_records = entry.get("a") or []
+        aaaa_records = entry.get("aaaa") or []
+        writer.writerow([
+            data.get("target", ""),
+            data.get("domain", ""),
+            entry.get("subdomain", ""),
+            entry.get("hostname", ""),
+            " ".join(str(ip) for ip in a_records),
+            " ".join(str(ip) for ip in aaaa_records),
+            "true" if (a_records or aaaa_records) else "false",
+        ])
+    return output.getvalue().rstrip("\r\n")

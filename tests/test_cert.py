@@ -1,5 +1,7 @@
 """Tests for the ethscan cert module."""
 
+import csv
+import io
 import json
 import time
 from pathlib import Path
@@ -20,6 +22,7 @@ from ethscan.cert import (
     _get_cached_or_fetch,
     _extract_subdomains,
     run_cert,
+    format_cert_report_csv,
     format_cert_report_json,
     format_cert_report_markdown,
 )
@@ -674,3 +677,30 @@ def test_format_cert_report_markdown_with_notes() -> None:
     output = format_cert_report_markdown(data)
     assert "Note 1" in output
     assert "Note 2" in output
+
+
+def test_format_cert_report_csv() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "ip": "1.2.3.4",
+        "subdomains": ["www.example.com", "api.example.com"],
+    }
+    output = format_cert_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0] == ["target", "domain", "ip", "subdomain"]
+    assert reader[1] == ["example.com", "example.com", "1.2.3.4", "www.example.com"]
+    assert reader[2] == ["example.com", "example.com", "1.2.3.4", "api.example.com"]
+
+
+def test_format_cert_report_csv_empty() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "ip": None,
+        "subdomains": [],
+    }
+    output = format_cert_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert len(reader) == 2  # header + one empty row
+    assert reader[1] == ["example.com", "example.com", "", ""]

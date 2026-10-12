@@ -489,3 +489,42 @@ def format_osdetect_report_markdown(data: Dict[str, object]) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+def format_osdetect_report_csv(data: Dict[str, object]) -> str:
+    """Format OS detection results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "target",
+        "host",
+        "port",
+        "probe_type",
+        "connected",
+        "response",
+        "flags_observed",
+        "error",
+    ])
+    for probe in data.get("probes") or []:
+        writer.writerow([
+            data.get("target", ""),
+            data.get("host", ""),
+            probe.get("port", ""),
+            probe.get("probe_type") or "",
+            "true" if probe.get("connected") else "false",
+            probe.get("response") or "",
+            probe.get("flags_observed") or "",
+            probe.get("error") or "",
+        ])
+    for os_name in data.get("inferred_os") or []:
+        writer.writerow([
+            data.get("target", ""),
+            data.get("host", ""),
+            "",
+            "inferred_os",
+            "",
+            "",
+            os_name,
+            "",
+        ])
+    return output.getvalue().rstrip("\r\n")

@@ -1,5 +1,7 @@
 """Tests for the ethscan mac module."""
 
+import csv
+import io
 import json
 import time
 from pathlib import Path
@@ -21,6 +23,7 @@ from ethscan.mac import (
     _extract_oui,
     _is_mac_address,
     run_mac,
+    format_mac_report_csv,
     format_mac_report_json,
     format_mac_report_markdown,
 )
@@ -647,3 +650,41 @@ def test_format_mac_report_markdown_empty_vendor() -> None:
     output = format_mac_report_markdown(data)
     assert "No MAC vendor data available" not in output or "*No MAC vendor data" not in output
     assert "MAC Vendor Data" in output
+
+
+def test_format_mac_report_csv() -> None:
+    data = {
+        "target": "00:1A:2B:3C:4D:5E",
+        "mac": "00:1a:2b:3c:4d:5e",
+        "oui": "001a2b3c",
+        "mac_data": {
+            "mac": "00:1a:2b:3c:4d:5e",
+            "vendor": "Ayecom Technology Co., Ltd.",
+            "cached": True,
+            "offline_fallback": False,
+            "error": None,
+        },
+    }
+    output = format_mac_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0] == ["target", "mac", "oui", "vendor", "cached", "offline_fallback", "error"]
+    assert reader[1] == ["00:1A:2B:3C:4D:5E", "00:1a:2b:3c:4d:5e", "001a2b3c", "Ayecom Technology Co., Ltd.", "true", "false", ""]
+
+
+def test_format_mac_report_csv_error() -> None:
+    data = {
+        "target": "00:1A:2B:3C:4D:5E",
+        "mac": "00:1a:2b:3c:4d:5e",
+        "oui": "001a2b3c",
+        "mac_data": {
+            "mac": "00:1a:2b:3c:4d:5e",
+            "vendor": None,
+            "error": "Failed to fetch MAC vendor data",
+            "cached": False,
+            "offline_fallback": False,
+        },
+    }
+    output = format_mac_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[1][3] == ""
+    assert reader[1][6] == "Failed to fetch MAC vendor data"

@@ -322,3 +322,60 @@ def format_recon_report_markdown(data: Dict[str, object]) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+def format_recon_report_csv(data: Dict[str, object]) -> str:
+    """Format recon results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["module", "field", "value"])
+
+    writer.writerow(["meta", "target", data.get("target", "")])
+    writer.writerow(["meta", "domain", data.get("domain", "")])
+    writer.writerow(
+        ["meta", "modules_run", ",".join(data.get("modules_run") or [])]
+    )
+
+    subdomains = data.get("subdomains")
+    if subdomains:
+        for entry in subdomains.get("resolved") or []:
+            writer.writerow(
+                ["subdomains", entry.get("hostname", ""), entry.get("ip") or ""]
+            )
+
+    dns = data.get("dns")
+    if dns:
+        for rtype, values in (dns.get("records") or {}).items():
+            for value in values or []:
+                writer.writerow(["dns", str(rtype), str(value)])
+
+    whois = data.get("whois")
+    if whois:
+        parsed = whois.get("parsed") or {}
+        for key in ("registrar", "creation_date", "expiration_date", "registrant_org"):
+            if parsed.get(key):
+                writer.writerow(["whois", key, str(parsed.get(key))])
+        for ns in parsed.get("nameservers") or []:
+            writer.writerow(["whois", "nameserver", str(ns)])
+        for status in parsed.get("status_codes") or []:
+            writer.writerow(["whois", "status_code", str(status)])
+
+    geo = data.get("geo")
+    if geo:
+        geo_data = geo.get("geolocation") or {}
+        for key in ("query", "country", "regionName", "city", "lat", "lon", "isp", "org", "as", "reverse"):
+            if geo_data.get(key) is not None and geo_data.get(key) != "":
+                writer.writerow(["geo", key, str(geo_data.get(key))])
+
+    trace = data.get("trace")
+    if trace:
+        for hop in trace.get("hops") or []:
+            hop_num = hop.get("hop", hop.get("ttl", ""))
+            writer.writerow(
+                ["trace", f"hop_{hop_num}", hop.get("ip") or ""]
+            )
+
+    for note in data.get("notes") or []:
+        writer.writerow(["notes", "", str(note)])
+
+    return output.getvalue().rstrip("\r\n")

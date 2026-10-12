@@ -242,3 +242,48 @@ def format_urlcheck_report_markdown(data: Dict[str, object]) -> str:
             lines.append("")
 
     return "\n".join(lines)
+
+
+def format_urlcheck_report_csv(data: Dict[str, object]) -> str:
+    """Format urlcheck results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["section", "key", "value"])
+
+    summary = data.get("summary") or {}
+    writer.writerow(["summary", "target", data.get("target", "")])
+    writer.writerow(["summary", "normalized_target", data.get("normalized_target", "")])
+    writer.writerow(["summary", "total_findings", summary.get("total_findings", 0)])
+    writer.writerow(
+        ["summary", "web_checks_run", ",".join(summary.get("web_checks_run", []))]
+    )
+    writer.writerow(["summary", "fuzz_enabled", "true" if summary.get("fuzz_enabled") else "false"])
+    writer.writerow(["summary", "ssl_checked", "true" if summary.get("ssl_checked") else "false"])
+
+    web = data.get("web") or {}
+    security_headers = web.get("security_headers") or {}
+    for header in security_headers.get("present", []):
+        writer.writerow(["web", "header_present", header])
+    for header in security_headers.get("missing", []):
+        writer.writerow(["web", "header_missing", header])
+    for finding in web.get("information_disclosure") or []:
+        writer.writerow(["web", "information_disclosure", finding.get("header", "")])
+
+    fuzz = data.get("fuzz")
+    if fuzz:
+        for finding in fuzz.get("findings") or []:
+            writer.writerow(
+                ["fuzz", "finding", f"{finding.get('path', '')} ({finding.get('status_code')})"]
+            )
+
+    ssl_data = data.get("ssl")
+    if ssl_data:
+        writer.writerow(["ssl", "valid", "true" if ssl_data.get("valid") else "false"])
+        cert = ssl_data.get("cert") or {}
+        for key in ("subject", "issuer", "signature_algorithm"):
+            if cert.get(key):
+                writer.writerow(["ssl", key, cert.get(key)])
+        if cert.get("key_size"):
+            writer.writerow(["ssl", "key_size", cert.get("key_size")])
+
+    return output.getvalue().rstrip("\r\n")

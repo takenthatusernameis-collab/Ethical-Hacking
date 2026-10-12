@@ -1,11 +1,15 @@
 """Tests for the ethscan fuzz module."""
 
+import csv
+import io
+
 import pytest
 
 from ethscan.fuzz import (
     DEFAULT_WORDLIST,
     _join_url,
     _normalize_base_url,
+    format_fuzz_report_csv,
     format_fuzz_report_json,
     format_fuzz_report_markdown,
     load_wordlist,
@@ -129,3 +133,52 @@ def test_format_fuzz_report_markdown_no_findings() -> None:
     assert "Findings (non-404): 0" in output or "Findings (non-404):** 0" in output
     assert "## Findings" not in output  # No findings section when empty
     assert "## All Results" in output
+
+def test_format_fuzz_report_csv() -> None:
+    data = {
+        "target": "https://example.com",
+        "base_url": "https://example.com",
+        "paths_tested": 2,
+        "findings": [{"path": "/admin", "status_code": 200, "error": None}],
+        "all_results": [
+            {"path": "/admin", "status_code": 200, "error": None},
+            {"path": "/login", "status_code": 404, "error": None},
+        ],
+    }
+    output = format_fuzz_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0] == ["target", "base_url", "path", "status_code", "error", "is_finding"]
+    assert reader[1] == ["https://example.com", "https://example.com", "/admin", "200", "", "true"]
+    assert reader[2] == ["https://example.com", "https://example.com", "/login", "404", "", "false"]
+
+
+def test_format_fuzz_report_csv_empty() -> None:
+    data = {
+        "target": "https://example.com",
+        "base_url": "https://example.com",
+        "paths_tested": 0,
+        "findings": [],
+        "all_results": [],
+    }
+    output = format_fuzz_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert len(reader) == 1
+    assert reader[0] == ["target", "base_url", "path", "status_code", "error", "is_finding"]
+
+
+def test_format_fuzz_report_csv_error_escaping() -> None:
+    data = {
+        "target": "https://example.com",
+        "base_url": "https://example.com",
+        "paths_tested": 1,
+        "findings": [],
+        "all_results": [
+            {"path": "/a,b", "status_code": None, "error": 'connection "refused"'},
+        ],
+    }
+    output = format_fuzz_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[1][2] == "/a,b"
+    assert reader[1][4] == 'connection "refused"'
+    assert reader[1][3] == ""
+    assert reader[1][5] == "false"

@@ -228,3 +228,19 @@ def format_resolve_report_markdown(data: Dict[str, object]) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+def format_resolve_report_csv(data: Dict[str, object]) -> str:
+    """Format resolve results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["target", "normalized", "record_type", "record_value"])
+    for rtype, values in (data.get("records") or {}).items():
+        for value in values or []:
+            writer.writerow([
+                data.get("target", ""),
+                data.get("normalized", ""),
+                str(rtype),
+                str(value),
+            ])
+    return output.getvalue().rstrip("\r\n")

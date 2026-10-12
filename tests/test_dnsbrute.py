@@ -1,5 +1,7 @@
 """Tests for the ethscan dnsbrute module."""
 
+import csv
+import io
 import socket
 import struct
 import threading
@@ -20,6 +22,7 @@ from ethscan.dnsbrute import (
     attempt_axfr,
     build_axfr_query,
     discover_nameservers,
+    format_dnsbrute_report_csv,
     format_dnsbrute_report_json,
     format_dnsbrute_report_markdown,
     parse_dns_response,
@@ -1187,3 +1190,40 @@ def test_format_dnsbrute_report_markdown_recursive() -> None:
     assert "ns1.sub.example.com" in output
     assert "depth: 2" in output
     assert "sub.example.com 300 IN A 1.2.3.4" in output
+
+
+def test_format_dnsbrute_report_csv() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "all_results": [
+            {"subdomain": "www", "hostname": "www.example.com", "a": ["1.2.3.4"], "aaaa": ["::1"]},
+            {"subdomain": "api", "hostname": "api.example.com", "a": [], "aaaa": []},
+        ],
+    }
+    output = format_dnsbrute_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0] == ["target", "domain", "subdomain", "hostname", "a_records", "aaaa_records", "resolved"]
+    assert reader[1] == ["example.com", "example.com", "www", "www.example.com", "1.2.3.4", "::1", "true"]
+    assert reader[2] == ["example.com", "example.com", "api", "api.example.com", "", "", "false"]
+
+
+def test_format_dnsbrute_report_csv_empty() -> None:
+    data = {"target": "example.com", "domain": "example.com", "all_results": []}
+    output = format_dnsbrute_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert len(reader) == 1
+    assert reader[0][0] == "target"
+
+
+def test_format_dnsbrute_report_csv_multi_ip() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "all_results": [
+            {"subdomain": "www", "hostname": "www.example.com", "a": ["1.1.1.1", "2.2.2.2"], "aaaa": []},
+        ],
+    }
+    output = format_dnsbrute_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[1][4] == "1.1.1.1 2.2.2.2"

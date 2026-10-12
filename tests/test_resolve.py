@@ -1,10 +1,14 @@
 """Tests for the ethscan resolve module."""
 
+import csv
+import io
+
 import pytest
 
 from ethscan.resolve import (
     DEFAULT_RECORD_TYPES,
     DEFAULT_TIMEOUT,
+    format_resolve_report_csv,
     format_resolve_report_json,
     format_resolve_report_markdown,
     run_resolve,
@@ -302,3 +306,46 @@ def test_run_resolve_offline_ip() -> None:
     results = run_resolve("192.0.2.1", timeout=0.1)
     assert results["is_ip"] is True
     assert results["records"]["PTR"] == []
+
+def test_format_resolve_report_csv() -> None:
+    data = {
+        "target": "example.com",
+        "normalized": "example.com",
+        "is_ip": False,
+        "record_types_queried": ["A", "AAAA"],
+        "records": {
+            "A": ["1.2.3.4", "5.6.7.8"],
+            "AAAA": ["::1"],
+        },
+        "dnspython_available": False,
+        "server": None,
+    }
+    output = format_resolve_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0] == ["target", "normalized", "record_type", "record_value"]
+    assert reader[1] == ["example.com", "example.com", "A", "1.2.3.4"]
+    assert reader[2] == ["example.com", "example.com", "A", "5.6.7.8"]
+    assert reader[3] == ["example.com", "example.com", "AAAA", "::1"]
+
+
+def test_format_resolve_report_csv_empty_records() -> None:
+    data = {
+        "target": "example.com",
+        "normalized": "example.com",
+        "records": {},
+    }
+    output = format_resolve_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert len(reader) == 1
+    assert reader[0] == ["target", "normalized", "record_type", "record_value"]
+
+
+def test_format_resolve_report_csv_comma_value() -> None:
+    data = {
+        "target": "example.com",
+        "normalized": "example.com",
+        "records": {"TXT": ['"v=spf1, include:example.com"']},
+    }
+    output = format_resolve_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[1][3] == '"v=spf1, include:example.com"'

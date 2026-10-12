@@ -364,3 +364,39 @@ def format_trace_report_markdown(result: Dict[str, Any]) -> str:
             lines.append("")
 
     return "\n".join(lines)
+
+
+def format_trace_report_csv(result: Dict[str, Any]) -> str:
+    """Format trace results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "target",
+        "hop",
+        "ip",
+        "host",
+        "response_type",
+        "rtt_ms",
+        "reached_destination",
+    ])
+
+    def _write_hops(target: Any, hops: List[Dict[str, Any]]) -> None:
+        for hop in hops:
+            hop_no = hop.get("hop", hop.get("ttl", ""))
+            rtt = hop.get("rtt_avg_ms")
+            if rtt is None:
+                rtt = hop.get("rtt_ms")
+            writer.writerow([
+                target,
+                hop_no,
+                hop.get("ip") or "",
+                hop.get("host") or "",
+                hop.get("response_type") or "",
+                rtt if rtt is not None else "",
+                "true" if (hop.get("reached_destination") or hop.get("reached")) else "false",
+            ])
+
+    _write_hops(result.get("target", ""), result.get("hops") or [])
+    for trace_res in result.get("recursive_traces", []) or []:
+        _write_hops(trace_res.get("target", ""), trace_res.get("hops") or [])
+    return output.getvalue().rstrip("\r\n")

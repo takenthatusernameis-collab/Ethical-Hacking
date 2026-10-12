@@ -574,6 +574,38 @@ def format_check_report_markdown(data: Dict[str, object]) -> str:
         lines.append(f"```\n{error}\n```")
     lines.append("")
     return "\n".join(lines)
+
+
+def format_check_report_csv(data: Dict[str, object]) -> str:
+    """Format a password check result as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "password",
+        "digest",
+        "algorithm",
+        "salt",
+        "pepper",
+        "iterations",
+        "computed",
+        "match",
+        "error",
+    ])
+    match = data.get("match")
+    writer.writerow([
+        data.get("password", ""),
+        data.get("digest", ""),
+        data.get("algorithm") or "",
+        "true" if data.get("salt") else "false",
+        "true" if data.get("pepper") else "false",
+        data.get("iterations") if data.get("iterations") is not None else "",
+        data.get("computed") or "",
+        "true" if match is True else ("false" if match is False else ""),
+        data.get("error") or "",
+    ])
+    return output.getvalue().rstrip("\r\n")
+
+
 def format_hash_report_csv(data: Dict[str, object]) -> str:
     """Format hash results as CSV."""
     output = io.StringIO()
@@ -586,8 +618,8 @@ def format_hash_report_csv(data: Dict[str, object]) -> str:
     results = data.get("results") or []
     for entry in results:
         writer.writerow([
-            data.get("algorithm", ""),
+            entry.get("algorithm") or data.get("algorithm", ""),
             entry.get("password", ""),
-            entry.get("digest", ""),
+            entry.get("hash") or entry.get("digest") or "",
         ])
     return output.getvalue().rstrip("\r\n")

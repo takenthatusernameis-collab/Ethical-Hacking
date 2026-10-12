@@ -1,8 +1,12 @@
 """Tests for the ethscan urlcheck module."""
 
+import csv
+import io
+
 import pytest
 
 from ethscan.urlcheck import (
+    format_urlcheck_report_csv,
     format_urlcheck_report_json,
     format_urlcheck_report_markdown,
     run_urlcheck,
@@ -354,3 +358,75 @@ def test_format_urlcheck_report_markdown_ssl_verification_error_with_cert() -> N
     assert "Test CA" in output
     assert "sha256WithRSAEncryption" in output
     assert "2048 bits" in output
+
+def test_format_urlcheck_report_csv() -> None:
+    data = {
+        "target": "https://example.com",
+        "normalized_target": "https://example.com",
+        "summary": {
+            "total_findings": 1,
+            "web_checks_run": ["headers"],
+            "fuzz_enabled": False,
+            "ssl_checked": False,
+        },
+        "web": {
+            "security_headers": {"present": ["X-Frame-Options"], "missing": ["CSP"]},
+            "information_disclosure": [],
+        },
+        "fuzz": None,
+        "ssl": None,
+    }
+    output = format_urlcheck_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0] == ["section", "key", "value"]
+    assert ["summary", "target", "https://example.com"] in reader
+    assert ["summary", "total_findings", "1"] in reader
+    assert ["web", "header_present", "X-Frame-Options"] in reader
+    assert ["web", "header_missing", "CSP"] in reader
+
+
+def test_format_urlcheck_report_csv_fuzz_ssl() -> None:
+    data = {
+        "target": "https://example.com",
+        "normalized_target": "https://example.com",
+        "summary": {
+            "total_findings": 0,
+            "web_checks_run": ["headers"],
+            "fuzz_enabled": True,
+            "ssl_checked": True,
+        },
+        "web": {"security_headers": {"present": [], "missing": []}},
+        "fuzz": {
+            "findings": [{"path": "/admin", "status_code": 200}],
+        },
+        "ssl": {
+            "valid": True,
+            "cert": {
+                "subject": "example.com",
+                "issuer": "Let's Encrypt",
+                "signature_algorithm": "sha256WithRSAEncryption",
+                "key_size": 2048,
+            },
+        },
+    }
+    output = format_urlcheck_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert ["summary", "fuzz_enabled", "true"] in reader
+    assert ["summary", "ssl_checked", "true"] in reader
+    assert ["fuzz", "finding", "/admin (200)"] in reader
+    assert ["ssl", "valid", "true"] in reader
+    assert ["ssl", "subject", "example.com"] in reader
+    assert ["ssl", "issuer", "Let's Encrypt"] in reader
+    assert ["ssl", "key_size", "2048"] in reader
+
+
+def test_format_urlcheck_report_csv_empty() -> None:
+    data = {
+        "target": "https://example.com",
+        "normalized_target": "https://example.com",
+        "summary": {"total_findings": 0, "web_checks_run": [], "fuzz_enabled": False, "ssl_checked": False},
+    }
+    output = format_urlcheck_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0] == ["section", "key", "value"]
+    assert ["summary", "total_findings", "0"] in reader

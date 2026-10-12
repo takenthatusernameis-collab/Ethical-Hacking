@@ -26,6 +26,7 @@ from ethscan.web import (
     run_web_checks,
 )
 from ethscan.fuzz import (
+    format_fuzz_report_csv,
     format_fuzz_report_json,
     format_fuzz_report_markdown,
     run_fuzz,
@@ -59,11 +60,13 @@ from ethscan.dns import (
     run_dns,
 )
 from ethscan.resolve import (
+    format_resolve_report_csv,
     format_resolve_report_json,
     format_resolve_report_markdown,
     run_resolve,
 )
 from ethscan.dnsbrute import (
+    format_dnsbrute_report_csv,
     format_dnsbrute_report_json,
     format_dnsbrute_report_markdown,
     run_dnsbrute,
@@ -75,6 +78,7 @@ from ethscan.ssl import (
     run_ssl,
 )
 from ethscan.tls import (
+    format_tls_report_csv,
     format_tls_report_json,
     format_tls_report_markdown,
     run_tls,
@@ -91,16 +95,19 @@ from ethscan.vuln import (
     run_vuln,
 )
 from ethscan.urlcheck import (
+    format_urlcheck_report_csv,
     format_urlcheck_report_json,
     format_urlcheck_report_markdown,
     run_urlcheck,
 )
 from ethscan.osdetect import (
+    format_osdetect_report_csv,
     format_osdetect_report_json,
     format_osdetect_report_markdown,
     run_osdetect,
 )
 from ethscan.trace import (
+    format_trace_report_csv,
     format_trace_report_json,
     format_trace_report_markdown,
     run_trace,
@@ -118,11 +125,13 @@ from ethscan.geo import (
     run_geo,
 )
 from ethscan.recon import (
+    format_recon_report_csv,
     format_recon_report_json,
     format_recon_report_markdown,
     run_recon,
 )
 from ethscan.cert import (
+    format_cert_report_csv,
     format_cert_report_json,
     format_cert_report_markdown,
     run_cert,
@@ -140,8 +149,10 @@ from ethscan.cidr import (
     run_cidr,
 )
 from ethscan.hash import (
+    format_check_report_csv,
     format_check_report_json,
     format_check_report_markdown,
+    format_hash_report_csv,
     format_hash_report_json,
     format_hash_report_markdown,
     load_passwords_from_file,
@@ -149,6 +160,7 @@ from ethscan.hash import (
     run_hash,
 )
 from ethscan.dnssec import (
+    format_dnssec_report_csv,
     format_dnssec_report_json,
     format_dnssec_report_markdown,
     run_dnssec,
@@ -160,6 +172,7 @@ from ethscan.subtake import (
     run_subtake,
 )
 from ethscan.mac import (
+    format_mac_report_csv,
     format_mac_report_json,
     format_mac_report_markdown,
     run_mac,
@@ -172,6 +185,7 @@ from ethscan.headers import (
     run_headers,
 )
 from ethscan.ping import (
+    format_ping_report_csv,
     format_ping_report_json,
     format_ping_report_markdown,
     run_ping,
@@ -500,7 +514,7 @@ def audit(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def hash(file: str, algorithms: tuple, fmt: str, out_path: str) -> None:
+def hash(file: str, algorithms: tuple, fmt: str, output_fmt: Optional[str], out_path: str) -> None:
     """Generate password hashes for password-audit workflows."""
     if file:
         with open(file, "r", encoding="utf-8") as handle:
@@ -515,8 +529,13 @@ def hash(file: str, algorithms: tuple, fmt: str, out_path: str) -> None:
     algo_list = list(algorithms) if algorithms else None
     results = run_hash(passwords, algorithms=algo_list)
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_hash_report_json(results)
+    elif chosen_format == "csv":
+        output = format_hash_report_csv(results)
     else:
         output = format_hash_report_markdown(results)
 
@@ -750,14 +769,19 @@ def web(target: str, checks: str, timeout: float, fmt: str, output_fmt: Optional
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def fuzz(target: str, wordlist_path: str, timeout: float, fmt: str, out_path: str) -> None:
+def fuzz(target: str, wordlist_path: str, timeout: float, fmt: str, output_fmt: Optional[str], out_path: str) -> None:
     """Run HTTP fuzzing against TARGET using a wordlist of paths."""
     wordlist = load_wordlist(wordlist_path) if wordlist_path else None
 
     results = run_fuzz(target, wordlist=wordlist, timeout=timeout)
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_fuzz_report_json(results)
+    elif chosen_format == "csv":
+        output = format_fuzz_report_csv(results)
     else:
         output = format_fuzz_report_markdown(results)
 
@@ -1214,8 +1238,13 @@ def resolve(
 
     results = run_resolve(target, record_types=types_list, server=server, timeout=timeout)
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_resolve_report_json(results)
+    elif chosen_format == "csv":
+        output = format_resolve_report_csv(results)
     else:
         output = format_resolve_report_markdown(results)
 
@@ -1320,8 +1349,13 @@ def dnsbrute(
         max_depth=max_depth,
     )
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_dnsbrute_report_json(results)
+    elif chosen_format == "csv":
+        output = format_dnsbrute_report_csv(results)
     else:
         output = format_dnsbrute_report_markdown(results)
 
@@ -1448,8 +1482,13 @@ def tls(
         click.echo(str(exc))
         return
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_tls_report_json(results)
+    elif chosen_format == "csv":
+        output = format_tls_report_csv(results)
     else:
         output = format_tls_report_markdown(results)
 
@@ -1771,8 +1810,13 @@ def urlcheck(
         workers=workers,
     )
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_urlcheck_report_json(results)
+    elif chosen_format == "csv":
+        output = format_urlcheck_report_csv(results)
     else:
         output = format_urlcheck_report_markdown(results)
 
@@ -1951,11 +1995,16 @@ def osdetect(
         ports=port_list,
         timeout=timeout,
         max_workers=workers,
-        banners=banners,
+         banners=banners,
     )
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_osdetect_report_json(results)
+    elif chosen_format == "csv":
+        output = format_osdetect_report_csv(results)
     else:
         output = format_osdetect_report_markdown(results)
 
@@ -2041,11 +2090,16 @@ def trace(
         timeout=timeout,
         probes_per_hop=probes_per_hop,
         recursive=recursive,
-        max_depth=max_depth,
+         max_depth=max_depth,
     )
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_trace_report_json(results)
+    elif chosen_format == "csv":
+        output = format_trace_report_csv(results)
     else:
         output = format_trace_report_markdown(results)
 
@@ -2124,11 +2178,16 @@ def ping(
         count=count,
         timeout=timeout,
         ttl=ttl,
-        port=tcp_port,
+         port=tcp_port,
     )
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_ping_report_json(results)
+    elif chosen_format == "csv":
+        output = format_ping_report_csv(results)
     else:
         output = format_ping_report_markdown(results)
 
@@ -2424,11 +2483,16 @@ def recon(
         trace_probes_per_hop=trace_probes_per_hop,
         timeout=timeout,
         max_workers=workers,
-        resolver=resolver,
+         resolver=resolver,
     )
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_recon_report_json(results)
+    elif chosen_format == "csv":
+        output = format_recon_report_csv(results)
     else:
         output = format_recon_report_markdown(results)
 
@@ -2501,8 +2565,13 @@ def cert(
         api_url=api_url,
     )
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_cert_report_json(results)
+    elif chosen_format == "csv":
+        output = format_cert_report_csv(results)
     else:
         output = format_cert_report_markdown(results)
 
@@ -2824,8 +2893,12 @@ def hash_cmd(passwords, password_file, algorithm, salt, pepper, iterations, chec
             pepper=pepper,
             iterations=iterations,
         )
-        if fmt == "json":
+        # --output-format takes precedence over the deprecated --format alias
+        chosen_format = output_fmt if output_fmt is not None else fmt
+        if chosen_format == "json":
             output = format_check_report_json(result)
+        elif chosen_format == "csv":
+            output = format_check_report_csv(result)
         else:
             output = format_check_report_markdown(result)
     else:
@@ -2836,8 +2909,12 @@ def hash_cmd(passwords, password_file, algorithm, salt, pepper, iterations, chec
             pepper=pepper,
             iterations=iterations,
         )
-        if fmt == "json":
+        # --output-format takes precedence over the deprecated --format alias
+        chosen_format = output_fmt if output_fmt is not None else fmt
+        if chosen_format == "json":
             output = format_hash_report_json(results)
+        elif chosen_format == "csv":
+            output = format_hash_report_csv(results)
         else:
             output = format_hash_report_markdown(results)
 
@@ -3012,8 +3089,13 @@ def dnssec(
         timeout=timeout,
     )
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_dnssec_report_json(results)
+    elif chosen_format == "csv":
+        output = format_dnssec_report_csv(results)
     else:
         output = format_dnssec_report_markdown(results)
 
@@ -3091,8 +3173,13 @@ def mac(
         api_url=api_url,
     )
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_mac_report_json(results)
+    elif chosen_format == "csv":
+        output = format_mac_report_csv(results)
     else:
         output = format_mac_report_markdown(results)
 

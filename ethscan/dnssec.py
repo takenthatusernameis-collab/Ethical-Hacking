@@ -607,3 +607,30 @@ def format_dnssec_report_markdown(data: Dict[str, object]) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+def format_dnssec_report_csv(data: Dict[str, object]) -> str:
+    """Format DNSSEC results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "target",
+        "domain",
+        "validated",
+        "dnskey_success",
+        "dnskey_count",
+        "ds_success",
+        "ds_count",
+    ])
+    dnskey = data.get("dnskey") or {}
+    ds = data.get("ds") or {}
+    writer.writerow([
+        data.get("target", ""),
+        data.get("domain", ""),
+        "true" if data.get("validated") else "false",
+        "true" if dnskey.get("success") else "false",
+        len(dnskey.get("keys") or []),
+        "true" if ds.get("success") else "false",
+        len(ds.get("records") or []),
+    ])
+    return output.getvalue().rstrip("\r\n")

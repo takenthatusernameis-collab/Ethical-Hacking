@@ -149,3 +149,22 @@ def format_fuzz_report_markdown(data: Dict[str, object]) -> str:
         lines.append(f"| {result['path']} | {code} | {error} |")
 
     return "\n".join(lines)
+
+
+def format_fuzz_report_csv(data: Dict[str, object]) -> str:
+    """Format fuzz results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["target", "base_url", "path", "status_code", "error", "is_finding"])
+    for result in data.get("all_results", []):
+        status_code = result.get("status_code")
+        is_finding = status_code is not None and status_code != 404
+        writer.writerow([
+            data.get("target", ""),
+            data.get("base_url", ""),
+            result.get("path", ""),
+            status_code if status_code is not None else "",
+            result.get("error") or "",
+            "true" if is_finding else "false",
+        ])
+    return output.getvalue().rstrip("\r\n")

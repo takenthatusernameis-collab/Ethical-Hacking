@@ -457,3 +457,45 @@ def format_tls_report_markdown(data: Dict[str, object]) -> str:
     lines.append("")
 
     return "\n".join(lines)
+
+
+def format_tls_report_csv(data: Dict[str, object]) -> str:
+    """Format TLS results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "target",
+        "host",
+        "port",
+        "probe_type",
+        "probe",
+        "supported",
+        "negotiated",
+        "error",
+    ])
+    target = data.get("target", "")
+    host = data.get("host", "")
+    port = data.get("port", "")
+    for result in data.get("versions") or []:
+        writer.writerow([
+            target,
+            host,
+            port,
+            "version",
+            result.get("version", ""),
+            "true" if result.get("supported") else "false",
+            result.get("negotiated_cipher") or result.get("negotiated_protocol") or "",
+            result.get("error") or "",
+        ])
+    for result in data.get("ciphers") or []:
+        writer.writerow([
+            target,
+            host,
+            port,
+            "cipher",
+            result.get("cipher", ""),
+            "true" if result.get("supported") else "false",
+            result.get("negotiated_version") or "",
+            result.get("error") or "",
+        ])
+    return output.getvalue().rstrip("\r\n")
