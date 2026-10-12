@@ -40,7 +40,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - **DNSSEC validation: `dnssec` command for DNSSEC validation of a domain's DNS records (check DS records, validate chain of trust, report algorithm/key details)** (implemented)
 - **Shell completion: `completion` command to generate bash/zsh/fish completion scripts for interactive tab completion of commands, options, and option values** (implemented)
 - **JWT inspection: `jwt` command to decode and analyze JWT tokens (header, claims, algorithm type, expiration/not-before/issued-at status, security findings like alg=none and expired tokens) without verifying the signature, with JSON/Markdown output** (implemented)
-- **Port & CIDR validation: `validate` command to validate and expand port specifications (comma-separated lists/ranges) and CIDR inputs offline, with JSON/Markdown output** (implemented)
+- **Port & CIDR validation: `validate` command to validate and expand port specifications (comma-separated lists/ranges) and CIDR inputs offline, with JSON, Markdown, or CSV output** (implemented)
 - **DNS resolution: `resolve` command for forward/reverse DNS resolution of a target (A, AAAA, CNAME, PTR record types), with optional custom resolver and JSON/Markdown output** (implemented)
 - **Nmap XML parser: `nmap` command to parse Nmap XML scan output (`-oX`) and cross-reference detected service versions against the built-in vulnerability database, producing a consolidated report of matched CVEs in JSON, Markdown, or CSV** (implemented)
 - **Stale DNS detection: `stale` command to detect stale DNS records (A/AAAA/CNAME) pointing to deallocated or unresolvable IPs/dead cloud resources, with configurable timeout, concurrency, and JSON/Markdown/CSV output** (implemented)

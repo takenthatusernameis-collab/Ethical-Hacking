@@ -2253,22 +2253,41 @@ Added machine-readable CSV export to the `nmap` command, parallel to the existin
 - End-to-end `--out`: `python -m ethscan nmap --input-file scan.xml --output-format csv --out report.csv` writes the CSV report to file.
 - Backward compatibility: deprecated `--format csv` produces identical output; default (no format flag) remains JSON.
 
+## Completed: `--output-format csv` output for `validate` command
+
+Added machine-readable CSV export to the `validate` command, parallel to the existing `--output-format [json|markdown|csv]` option already present on `scan`, `service`, `audit`, `report`, `brute`, `vuln`, `cve`, `subtake`, and `nmap`.
+
+### Added Functionality
+- `ethscan/validate.py`:
+  - `format_validate_report_csv(data)` — emits a header row (`type,spec,valid,detail`) followed by one row per validated spec: `port` rows carry the port spec string, validity flag, and the expanded port ranges (or error); `cidr` rows carry the CIDR spec string, validity flag, and the canonical network string (or error). Uses stdlib `csv.writer` for proper comma/quote escaping; returns `output.getvalue().rstrip("\r\n")`.
+- `ethscan/cli.py`:
+  - `--output-format [json|markdown|csv]` option (dest `output_fmt`, default `None`) was already registered on the `validate` command, with `--format` kept as a deprecated alias (dest `fmt`, default `json`, now allowing `csv`) and `chosen_format = output_fmt if output_fmt is not None else fmt` precedence logic routing to `format_validate_report_csv` when `chosen_format == "csv"`.
+  - No code changes were required — the CSV formatter and CLI wiring were already in place.
+
+### Verification
+- `python -m pytest -q` -> 1910 passed, 1 skipped (all validate CSV tests pass).
+- `python -m ethscan validate --help` -> shows `--output-format [json|markdown|csv]` and the deprecated `--format [json|markdown|csv]` alias.
+- End-to-end CSV: `python -m ethscan validate --ports "80,443,8000-8002" --output-format csv` -> `type,spec,valid,detail` header plus `port,"80,443,8000-8002",true,"80, 443, 8000-8002"` row.
+- End-to-end `--out`: `python -m ethscan validate --ports "80,443" --output-format csv --out /tmp/validate.csv` writes the CSV report to file.
+- Backward compatibility: deprecated `--format csv` produces identical output; default (no format flag) remains JSON.
+
 ## Current state
-- All 30 commands implemented and wired up.
-- `--output-format [json|markdown|csv]` (with `--format` deprecated alias) is now supported on: `scan`, `service`, `audit`, `report`, `brute`, `vuln`, `cve`, `subtake`, **and `nmap`**.
-- Configuration file (`ethscan.yaml`) persists default options across commands.
-- Tests: 1892 passing (1 skipped).
+- All 34 commands implemented and wired up (including `s3`).
+- `--output-format [json|markdown|csv]` (with `--format` deprecated alias) is now supported on: `scan`, `service`, `audit`, `report`, `brute`, `vuln`, `cve`, `subtake`, `nmap`, **and `validate`**.
+- `subtake` detects subdomain takeover via CNAME cross-reference against known vulnerable cloud services with optional HTTP fingerprint confirmation; supports `--resolver`, `--timeout`, `--workers`, `--http-timeout`, `--wordlist`, `--output-format [json|markdown|csv]`, and `--out`.
+- Configuration file (`ethscan.yaml`) persists default options across commands via a `--config` group option and a `config` subcommand.
+- Tests: 1910 passing (1 skipped).
 
 ## Suggested next task
 
-**Add `--output-format csv` output to the `validate` command** for spreadsheet-compatible port/CIDR validation results (header: `type,spec,valid,detail`).
+**Add `--output-format csv` output to the `stale` command** for spreadsheet-compatible stale-DNS results (header: `target,record_type,records,stale,reachable,reason`).
 
-Alternative: Add a `--output-format csv` option to the `stale` command for spreadsheet-compatible stale-DNS results.
+Alternative: Add `--output-format csv` to the `dns` command for spreadsheet-compatible DNS record exports.
 
-Alternative: Add a `--output-format csv` option to the `dns` command for spreadsheet-compatible DNS record exports.
+Alternative: Add a `--output-format csv` option to the `geo` command for spreadsheet-compatible geolocation results.
 
 ## Requirements
-- Extend an existing module (`ethscan/validate.py` or another) with a `format_*_report_csv()` function.
+- Extend an existing module (`ethscan/stale.py`, `ethscan/dns.py`, or `ethscan/geo.py`) with a `format_*_report_csv()` function.
 - Register the `--output-format [json|markdown|csv]` option in `ethscan/cli.py` (keeping `--format` as a deprecated alias that takes lower precedence), routing to the CSV formatter when `chosen_format == "csv"`.
 - Add unit tests in `tests/test_*.py` (CSV formatter: basic, empty, field escaping) and CLI integration tests in `tests/test_cli.py` (help shows `--output-format`, CSV output, CSV with `--out`, deprecated `--format csv` alias still works, default format unchanged).
 - Use stdlib only — `csv` and `io` modules for proper quoting/escaping.
