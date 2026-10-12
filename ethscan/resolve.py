@@ -1,5 +1,7 @@
 """DNS forward/reverse resolution module for ethscan."""
 
+import csv
+import io
 import ipaddress
 import socket
 from typing import Dict, List, Optional, Set, Union

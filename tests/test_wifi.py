@@ -12,6 +12,7 @@ from ethscan.wifi import (
     _run_iw_scan,
     _scan_interface,
     run_wifi,
+    format_wifi_report_csv,
     format_wifi_report_json,
     format_wifi_report_markdown,
 )
@@ -428,3 +429,95 @@ def test_format_wifi_report_markdown_missing_optional_fields() -> None:
     }
     output = format_wifi_report_markdown(results)
     assert "N/A" in output
+
+
+# ---------------------------------------------------------------------------
+# CSV formatter
+# ---------------------------------------------------------------------------
+
+
+def test_format_wifi_report_csv_basic() -> None:
+    data = {
+        "platform": "linux",
+        "platform_supported": True,
+        "interfaces": [
+            {"interface": "wlan0", "status": "UP", "link_quality": 70, "signal_level": -40, "noise_level": -90},
+        ],
+        "access_points": [
+            {
+                "interface": "wlan0",
+                "bssid": "00:11:22:33:44:55",
+                "ssid": "MyNetwork",
+                "channel": 6,
+                "frequency": 2.437,
+                "encryption": "WPA2",
+                "signal_dbm": -40,
+                "quality": 70,
+            },
+        ],
+    }
+    output = format_wifi_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+    assert "platform,linux" in lines
+    assert "platform_supported,true" in lines
+    assert "interface,status,link_quality,signal_level,noise_level" in lines
+    assert "wlan0,UP,70,-40,-90" in lines
+    assert "interface,bssid,ssid,channel,frequency_ghz,encryption,signal_dbm,quality" in lines
+    assert "wlan0,00:11:22:33:44:55,MyNetwork,6,2.437,WPA2,-40,70" in lines
+
+
+def test_format_wifi_report_csv_empty() -> None:
+    data = {"platform": "linux", "platform_supported": False}
+    output = format_wifi_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+    assert "platform,linux" in lines
+    assert "platform_supported,false" in lines
+
+
+def test_format_wifi_report_csv_missing_fields() -> None:
+    data = {}
+    output = format_wifi_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+
+
+def test_format_wifi_report_csv_hidden_ssid() -> None:
+    data = {
+        "platform": "linux",
+        "access_points": [
+            {
+                "interface": "wlan0",
+                "bssid": "00:11:22:33:44:55",
+                "ssid": None,
+                "channel": 1,
+                "frequency": 2.412,
+                "encryption": "open",
+                "signal_dbm": -50,
+                "quality": 50,
+            },
+        ],
+    }
+    output = format_wifi_report_csv(data)
+    assert "<hidden>" in output
+
+
+def test_format_wifi_report_csv_escaping() -> None:
+    data = {
+        "platform": "linux",
+        "access_points": [
+            {
+                "interface": "wlan0",
+                "bssid": "00:11:22:33:44:55",
+                "ssid": "Net,work",
+                "channel": 6,
+                "frequency": 2.437,
+                "encryption": "WPA2",
+                "signal_dbm": -40,
+                "quality": 70,
+            },
+        ],
+    }
+    output = format_wifi_report_csv(data)
+    assert '"Net,work"' in output

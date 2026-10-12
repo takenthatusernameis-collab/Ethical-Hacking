@@ -8,6 +8,7 @@ from ethscan.ssl import (
     _normalize_host,
     _parse_cert,
     _rdn_to_str,
+    format_ssl_report_csv,
     format_ssl_report_json,
     format_ssl_report_markdown,
     inspect_certificate,
@@ -213,3 +214,65 @@ def test_run_ssl_offline(monkeypatch) -> None:
     assert result["target"] == "https://example.com/path"
     assert result["port"] == 8443
     assert result["error"] == "connection refused"
+
+
+# ---------------------------------------------------------------------------
+# CSV formatter
+# ---------------------------------------------------------------------------
+
+
+def test_format_ssl_report_csv_basic() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "timeout": 5.0,
+        "error": None,
+        "chain_length": 2,
+        "valid": True,
+        "days_remaining": 100,
+        "cert": {
+            "subject": "CN=example.com",
+            "issuer": "Let's Encrypt",
+            "not_before": "2024-01-01",
+            "not_after": "2024-12-31",
+            "signature_algorithm": "sha256WithRSA",
+            "key_size": 2048,
+            "sans": ["example.com", "www.example.com"],
+        },
+    }
+    output = format_ssl_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+    assert "target,example.com" in lines
+    assert "valid,true" in lines
+    assert "subject,CN=example.com" in lines
+    assert "issuer,Let's Encrypt" in lines
+    assert "key_size,2048" in lines
+    assert "sans,example.com;www.example.com" in lines
+
+
+def test_format_ssl_report_csv_empty() -> None:
+    data = {"target": "example.com", "cert": None, "error": "connection refused"}
+    output = format_ssl_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+    assert "target,example.com" in lines
+    assert "error,connection refused" in lines
+
+
+def test_format_ssl_report_csv_missing_fields() -> None:
+    data = {}
+    output = format_ssl_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+
+
+def test_format_ssl_report_csv_escaping() -> None:
+    data = {
+        "target": "example.com",
+        "cert": {"subject": "CN=hello, world", "issuer": "Inc, LLC"},
+    }
+    output = format_ssl_report_csv(data)
+    assert '"CN=hello, world"' in output
+    assert '"Inc, LLC"' in output

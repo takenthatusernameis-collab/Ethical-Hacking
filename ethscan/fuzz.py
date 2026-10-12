@@ -1,5 +1,7 @@
 """HTTP fuzzing module for ethscan."""
 
+import csv
+import io
 import json
 import urllib.request
 import urllib.error

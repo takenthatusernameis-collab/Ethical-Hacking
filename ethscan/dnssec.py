@@ -1,5 +1,7 @@
 """DNSSEC validation module for ethscan."""
 
+import csv
+import io
 import socket
 import struct
 from typing import Dict, List, Optional, Tuple, Set

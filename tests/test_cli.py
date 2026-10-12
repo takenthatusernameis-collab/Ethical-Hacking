@@ -15717,3 +15717,484 @@ def test_geo_output_format_precedence_over_format(monkeypatch):
     result = runner.invoke(cli, ["geo", "--target", "8.8.8.8", "--format", "markdown", "--output-format", "csv"])
     assert result.exit_code == 0
     assert "target,ip,country" in result.output
+
+
+# ---------------------------------------------------------------------------
+# CSV integration tests for commands with --output-format csv support
+# ---------------------------------------------------------------------------
+
+
+def test_subdomains_output_format_csv(monkeypatch) -> None:
+    mock_results = {
+        "target": "example.com",
+        "domain": "example.com",
+        "all_results": [
+            {"subdomain": "www", "hostname": "www.example.com", "ip": "93.184.216.34"},
+        ],
+    }
+    monkeypatch.setattr("ethscan.cli.run_subdomains", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["subdomains", "--target", "example.com", "--output-format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "subdomain,hostname,ip,resolved" in result.output
+    assert "www,www.example.com,93.184.216.34,true" in result.output
+
+
+def test_subdomains_output_format_csv_out(tmp_path, monkeypatch) -> None:
+    mock_results = {
+        "target": "example.com",
+        "domain": "example.com",
+        "all_results": [
+            {"subdomain": "www", "hostname": "www.example.com", "ip": "93.184.216.34"},
+        ],
+    }
+    monkeypatch.setattr("ethscan.cli.run_subdomains", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    out_file = tmp_path / "subdomains.csv"
+    result = runner.invoke(
+        cli,
+        ["subdomains", "--target", "example.com", "--output-format", "csv", "--out", str(out_file), "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "subdomain,hostname,ip,resolved" in content
+
+
+def test_subdomains_format_csv_alias(monkeypatch) -> None:
+    mock_results = {
+        "target": "example.com",
+        "domain": "example.com",
+        "all_results": [
+            {"subdomain": "www", "hostname": "www.example.com", "ip": "93.184.216.34"},
+        ],
+    }
+    monkeypatch.setattr("ethscan.cli.run_subdomains", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["subdomains", "--target", "example.com", "--format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "subdomain,hostname,ip,resolved" in result.output
+
+
+def test_whois_output_format_csv(monkeypatch) -> None:
+    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0,
+                       recursive=False, max_depth=2):
+        return {
+            "target": target,
+            "server": server,
+            "port": port,
+            "parsed": {
+                "registrar": "Example Registrar",
+                "creation_date": "2020-01-01",
+            },
+            "recursive_hops": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_whois", mock_run_whois)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["whois", "--target", "example.com", "--output-format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "field,value" in result.output
+    assert "target,example.com" in result.output
+    assert "registrar,Example Registrar" in result.output
+
+
+def test_whois_output_format_csv_out(tmp_path, monkeypatch) -> None:
+    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0,
+                       recursive=False, max_depth=2):
+        return {
+            "target": target,
+            "server": server,
+            "port": port,
+            "parsed": {"registrar": "Example Registrar"},
+            "recursive_hops": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_whois", mock_run_whois)
+    runner = CliRunner()
+    out_file = tmp_path / "whois.csv"
+    result = runner.invoke(
+        cli,
+        ["whois", "--target", "example.com", "--output-format", "csv", "--out", str(out_file), "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    content = out_file.read_text()
+    assert "field,value" in content
+    assert "registrar,Example Registrar" in content
+
+
+def test_whois_format_csv_alias(monkeypatch) -> None:
+    def mock_run_whois(target, server="whois.iana.org", port=43, timeout=5.0,
+                       recursive=False, max_depth=2):
+        return {
+            "target": target,
+            "server": server,
+            "port": port,
+            "parsed": {"registrar": "Example Registrar"},
+            "recursive_hops": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_whois", mock_run_whois)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["whois", "--target", "example.com", "--format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "field,value" in result.output
+    assert "registrar,Example Registrar" in result.output
+
+
+def test_ssl_output_format_csv(monkeypatch) -> None:
+    mock_results = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "timeout": 5.0,
+        "error": None,
+        "chain_length": 2,
+        "valid": True,
+        "days_remaining": 365,
+        "cert": {
+            "subject": "CN=example.com",
+            "issuer": "Let's Encrypt",
+            "not_before": "2024-01-01",
+            "not_after": "2024-12-31",
+            "signature_algorithm": "sha256WithRSA",
+            "key_size": 2048,
+            "sans": ["example.com", "www.example.com"],
+        },
+    }
+    monkeypatch.setattr("ethscan.cli.run_ssl", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ssl", "--target", "example.com", "--output-format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "field,value" in result.output
+    assert "target,example.com" in result.output
+    assert "valid,true" in result.output
+    assert "subject,CN=example.com" in result.output
+
+
+def test_ssl_output_format_csv_out(tmp_path, monkeypatch) -> None:
+    mock_results = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "error": None,
+        "chain_length": 1,
+        "valid": True,
+        "cert": {"subject": "CN=example.com"},
+    }
+    monkeypatch.setattr("ethscan.cli.run_ssl", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    out_file = tmp_path / "ssl.csv"
+    result = runner.invoke(
+        cli,
+        ["ssl", "--target", "example.com", "--output-format", "csv", "--out", str(out_file), "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    content = out_file.read_text()
+    assert "field,value" in content
+    assert "valid,true" in content
+
+
+def test_ssl_format_csv_alias(monkeypatch) -> None:
+    mock_results = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "error": None,
+        "chain_length": 1,
+        "valid": True,
+        "cert": {"subject": "CN=example.com"},
+    }
+    monkeypatch.setattr("ethscan.cli.run_ssl", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ssl", "--target", "example.com", "--format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "field,value" in result.output
+    assert "valid,true" in result.output
+
+
+def test_headers_output_format_csv(monkeypatch) -> None:
+    mock_results = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "headers": {},
+        "security_headers": {
+            "present": ["X-Frame-Options"],
+            "missing": ["Content-Security-Policy"],
+            "present_count": 1,
+            "missing_count": 1,
+            "total": 2,
+        },
+    }
+    monkeypatch.setattr("ethscan.cli.run_headers", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["headers", "--target", "https://example.com", "--output-format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "field,value" in result.output
+    assert "X-Frame-Options,present" in result.output
+    assert "Content-Security-Policy,missing" in result.output
+
+
+def test_headers_output_format_csv_out(tmp_path, monkeypatch) -> None:
+    mock_results = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "headers": {},
+        "security_headers": {
+            "present": ["X-Frame-Options"],
+            "missing": [],
+            "present_count": 1,
+            "missing_count": 0,
+            "total": 1,
+        },
+    }
+    monkeypatch.setattr("ethscan.cli.run_headers", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    out_file = tmp_path / "headers.csv"
+    result = runner.invoke(
+        cli,
+        ["headers", "--target", "https://example.com", "--output-format", "csv", "--out", str(out_file), "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    content = out_file.read_text()
+    assert "X-Frame-Options,present" in content
+
+
+def test_headers_format_csv_alias(monkeypatch) -> None:
+    mock_results = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "headers": {},
+        "security_headers": {
+            "present": ["X-Frame-Options"],
+            "missing": [],
+            "present_count": 1,
+            "missing_count": 0,
+            "total": 1,
+        },
+    }
+    monkeypatch.setattr("ethscan.cli.run_headers", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["headers", "--target", "https://example.com", "--format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "X-Frame-Options,present" in result.output
+
+
+def test_web_output_format_csv(monkeypatch) -> None:
+    mock_results = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "security_headers": {
+            "present": ["X-Frame-Options"],
+            "missing": ["Content-Security-Policy"],
+        },
+        "information_disclosure": [
+            {"header": "Server", "value": "Apache", "description": "Server header exposed"},
+        ],
+        "ssl": {
+            "valid": True,
+            "subject": "CN=example.com",
+            "issuer": "Let's Encrypt",
+        },
+    }
+    monkeypatch.setattr("ethscan.cli.run_web_checks", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["web", "--target", "https://example.com", "--output-format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "field,value" in result.output
+    assert "X-Frame-Options,present" in result.output
+    assert "Server,Apache" in result.output
+    assert "subject,CN=example.com" in result.output
+
+
+def test_web_output_format_csv_out(tmp_path, monkeypatch) -> None:
+    mock_results = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "security_headers": {"present": ["X-Frame-Options"], "missing": []},
+    }
+    monkeypatch.setattr("ethscan.cli.run_web_checks", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    out_file = tmp_path / "web.csv"
+    result = runner.invoke(
+        cli,
+        ["web", "--target", "https://example.com", "--output-format", "csv", "--out", str(out_file), "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    content = out_file.read_text()
+    assert "field,value" in content
+    assert "X-Frame-Options,present" in content
+
+
+def test_web_format_csv_alias(monkeypatch) -> None:
+    mock_results = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "security_headers": {"present": ["X-Frame-Options"], "missing": []},
+    }
+    monkeypatch.setattr("ethscan.cli.run_web_checks", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["web", "--target", "https://example.com", "--format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "X-Frame-Options,present" in result.output
+
+
+def test_wifi_output_format_csv(monkeypatch) -> None:
+    mock_results = {
+        "platform": "Linux",
+        "platform_supported": True,
+        "interfaces": [
+            {"interface": "wlan0", "status": "UP", "link_quality": 70, "signal_level": -40, "noise_level": -90},
+        ],
+        "access_points": [
+            {"interface": "wlan0", "bssid": "00:11:22:33:44:55", "ssid": "TestNet", "channel": 6, "frequency": 2.437, "encryption": "WPA2", "signal_dbm": -40, "quality": 70},
+        ],
+        "notes": [],
+    }
+    monkeypatch.setattr("ethscan.cli.run_wifi", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["wifi", "--output-format", "csv"])
+    assert result.exit_code == 0
+    assert "field,value" in result.output
+    assert "platform,Linux" in result.output
+    assert "TestNet" in result.output
+
+
+def test_wifi_output_format_csv_out(tmp_path, monkeypatch) -> None:
+    mock_results = {
+        "platform": "Linux",
+        "platform_supported": True,
+        "interfaces": [],
+        "access_points": [],
+        "notes": [],
+    }
+    monkeypatch.setattr("ethscan.cli.run_wifi", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    out_file = tmp_path / "wifi.csv"
+    result = runner.invoke(
+        cli,
+        ["wifi", "--output-format", "csv", "--out", str(out_file)],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    content = out_file.read_text()
+    assert "platform,Linux" in content
+
+
+def test_wifi_format_csv_alias(monkeypatch) -> None:
+    mock_results = {
+        "platform": "Linux",
+        "platform_supported": True,
+        "interfaces": [],
+        "access_points": [],
+        "notes": [],
+    }
+    monkeypatch.setattr("ethscan.cli.run_wifi", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["wifi", "--format", "csv"])
+    assert result.exit_code == 0
+    assert "platform,Linux" in result.output
+
+
+def test_jwt_output_format_csv() -> None:
+    token = _make_jwt({"alg": "HS256"}, {"sub": "user1", "exp": 1800000000})
+    runner = CliRunner()
+    result = runner.invoke(cli, ["jwt", "--token", token, "--output-format", "csv"])
+    assert result.exit_code == 0
+    assert "field,value" in result.output
+    assert "valid_structure,true" in result.output
+    assert "algorithm,HS256" in result.output
+
+
+def test_jwt_output_format_csv_out(tmp_path) -> None:
+    token = _make_jwt({"alg": "HS256"}, {"sub": "user1", "exp": 1800000000})
+    runner = CliRunner()
+    out_file = tmp_path / "jwt.csv"
+    result = runner.invoke(cli, ["jwt", "--token", token, "--output-format", "csv", "--out", str(out_file)])
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    content = out_file.read_text()
+    assert "field,value" in content
+    assert "valid_structure,true" in content
+
+
+def test_jwt_format_csv_alias() -> None:
+    token = _make_jwt({"alg": "HS256"}, {"sub": "user1", "exp": 1800000000})
+    runner = CliRunner()
+    result = runner.invoke(cli, ["jwt", "--token", token, "--format", "csv"])
+    assert result.exit_code == 0
+    assert "field,value" in result.output
+    assert "algorithm,HS256" in result.output
+
+
+def test_config_output_format_csv() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["config", "--output-format", "csv"])
+    assert result.exit_code == 0
+    assert "section,option,value" in result.output
+
+
+def test_config_output_format_csv_out(tmp_path) -> None:
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("defaults:\n  timeout: 5.0\ncommands:\n  scan:\n    ports: common\n")
+    runner = CliRunner()
+    out_file = tmp_path / "config.csv"
+    result = runner.invoke(cli, ["--config", str(cfg), "config", "--output-format", "csv", "--out", str(out_file)])
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    content = out_file.read_text()
+    assert "section,option,value" in content
+    assert "defaults,timeout,5.0" in content
+
+
+def test_config_format_csv_alias(tmp_path) -> None:
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("defaults:\n  timeout: 5.0\n")
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--config", str(cfg), "config", "--format", "csv"])
+    assert result.exit_code == 0
+    assert "section,option,value" in result.output
+    assert "defaults,timeout,5.0" in result.output
+
+
+def test_completion_output_format_csv() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["completion", "--shell", "bash", "--output-format", "csv"])
+    assert result.exit_code == 0
+    assert "field,value" in result.output
+    assert "shell,bash" in result.output
+    assert "script" in result.output
+
+
+def test_completion_output_format_csv_out(tmp_path) -> None:
+    runner = CliRunner()
+    out_file = tmp_path / "completion.csv"
+    result = runner.invoke(cli, ["completion", "--shell", "bash", "--output-format", "csv", "--out", str(out_file)])
+    assert result.exit_code == 0
+    assert "Completion script written" in result.output
+    content = out_file.read_text()
+    assert "shell,bash" in content
+
+
+def test_completion_format_csv_alias() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["completion", "--shell", "bash", "--format", "csv"])
+    assert result.exit_code == 0
+    assert "shell,bash" in result.output

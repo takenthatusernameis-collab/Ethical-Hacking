@@ -1,5 +1,7 @@
 """TLS protocol/cipher enumeration module for ethscan."""
 
+import csv
+import io
 import json
 import socket
 import ssl

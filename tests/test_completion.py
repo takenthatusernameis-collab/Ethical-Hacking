@@ -12,6 +12,7 @@ from ethscan.completion import (
     available_shells,
     generate_completion_script,
     run_completion,
+    format_completion_report_csv,
     format_completion_report_json,
     format_completion_report_markdown,
 )
@@ -200,3 +201,52 @@ def test_format_completion_report_markdown_fish() -> None:
     output = format_completion_report_markdown(result)
     assert "fish" in output
     assert "function _ethscan_completion" in output
+
+
+# ---------------------------------------------------------------------------
+# CSV formatter
+# ---------------------------------------------------------------------------
+
+
+def test_format_completion_report_csv_basic() -> None:
+    result = {
+        "shell": "bash",
+        "prog_name": "ethscan",
+        "script": "# bash completion\ncomplete -o default -F _ethscan_completion ethscan",
+    }
+    output = format_completion_report_csv(result)
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+    assert "shell,bash" in lines
+    assert "prog_name,ethscan" in lines
+    assert lines[4] == "script"
+    assert "# bash completion" in lines[5]
+    assert "complete -o default -F _ethscan_completion ethscan" in lines[6]
+
+
+def test_format_completion_report_csv_empty() -> None:
+    result = {"shell": "bash", "prog_name": "ethscan", "script": ""}
+    output = format_completion_report_csv(result)
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+    assert "shell,bash" in lines
+    assert "prog_name,ethscan" in lines
+
+
+def test_format_completion_report_csv_missing_fields() -> None:
+    result = {}
+    output = format_completion_report_csv(result)
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+    assert "shell," in lines
+    assert "prog_name," in lines
+
+
+def test_format_completion_report_csv_escaping() -> None:
+    result = {
+        "shell": "bash",
+        "prog_name": "ethscan",
+        "script": "line,with,commas\nsecond,line",
+    }
+    output = format_completion_report_csv(result)
+    assert '"line,with,commas"' in output

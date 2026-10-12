@@ -5,6 +5,8 @@ domain, extracting associated subdomains. Stdlib only with filesystem caching
 and offline fallback.
 """
 
+import csv
+import io
 import json
 import os
 import socket

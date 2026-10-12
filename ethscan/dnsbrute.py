@@ -1,5 +1,7 @@
 """DNS brute force module for ethscan (AXFR attempt + subdomain brute force)."""
 
+import csv
+import io
 import socket
 import struct
 from concurrent.futures import ThreadPoolExecutor, as_completed

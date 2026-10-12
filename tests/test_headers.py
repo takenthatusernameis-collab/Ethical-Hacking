@@ -7,6 +7,7 @@ import pytest
 
 from ethscan.headers import (
     run_headers,
+    format_headers_report_csv,
     format_headers_report_json,
     format_headers_report_markdown,
 )
@@ -202,3 +203,77 @@ def test_format_headers_report_markdown_http():
 
     assert "**HTTPS:** No" in output
     assert "X-Frame-Options" in output
+
+
+# ---------------------------------------------------------------------------
+# CSV formatter
+# ---------------------------------------------------------------------------
+
+
+def test_format_headers_report_csv_basic() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "security_headers": {
+            "present_count": 2,
+            "missing_count": 1,
+            "total": 3,
+            "present": ["X-Frame-Options", "X-Content-Type-Options"],
+            "missing": ["Content-Security-Policy"],
+        },
+    }
+    output = format_headers_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+    assert "target,example.com" in lines
+    assert "https,true" in lines
+    assert "present_count,2" in lines
+    assert "header,status" in lines
+    assert "X-Frame-Options,present" in lines
+    assert "Content-Security-Policy,missing" in lines
+
+
+def test_format_headers_report_csv_empty() -> None:
+    data = {
+        "target": "example.com",
+        "security_headers": {
+            "present_count": 0,
+            "missing_count": 0,
+            "total": 0,
+            "present": [],
+            "missing": ["X-Frame-Options", "Strict-Transport-Security"],
+        },
+    }
+    output = format_headers_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+    assert "X-Frame-Options,missing" in lines
+
+
+def test_format_headers_report_csv_missing_fields() -> None:
+    data = {
+        "security_headers": {
+            "present": ["X-Frame-Options"],
+            "missing": [],
+        },
+    }
+    output = format_headers_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+    assert "target," in lines
+    assert "X-Frame-Options,present" in lines
+
+
+def test_format_headers_report_csv_escaping() -> None:
+    data = {
+        "target": "example.com",
+        "security_headers": {
+            "present": ["X-Custom,Header"],
+            "missing": ["Header,With,Comma"],
+        },
+    }
+    output = format_headers_report_csv(data)
+    assert '"X-Custom,Header",present' in output
+    assert '"Header,With,Comma",missing' in output

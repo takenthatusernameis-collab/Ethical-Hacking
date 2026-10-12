@@ -6,6 +6,8 @@ Combines:
 - ssl: SSL/TLS certificate inspection
 """
 
+import csv
+import io
 import json
 from typing import Dict, List, Optional, Tuple
 

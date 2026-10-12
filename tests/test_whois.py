@@ -9,6 +9,7 @@ from ethscan.whois import (
     DEFAULT_WHOIS_SERVER,
     DEFAULT_TIMEOUT,
     extract_referral_server,
+    format_whois_report_csv,
     format_whois_report_json,
     format_whois_report_markdown,
     parse_whois,
@@ -162,3 +163,87 @@ def test_run_whois_offline(monkeypatch) -> None:
 def test_query_whois_invalid_target() -> None:
     with pytest.raises((socket.gaierror, socket.timeout, ConnectionRefusedError, OSError)):
         query_whois("invalid.tld", server="127.0.0.1", port=43, timeout=0.1)
+
+
+# ---------------------------------------------------------------------------
+# CSV formatter
+# ---------------------------------------------------------------------------
+
+
+def test_format_whois_report_csv_basic() -> None:
+    data = {
+        "target": "example.com",
+        "server": "whois.iana.org",
+        "port": 43,
+        "parsed": {
+            "registrar": "Example Registrar",
+            "creation_date": "1995-08-14",
+            "expiration_date": "2025-08-13",
+            "registrant_org": "Example Org",
+            "nameservers": ["ns1.example.com", "ns2.example.com"],
+            "status_codes": ["ok"],
+        },
+    }
+    output = format_whois_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+    assert "target,example.com" in lines
+    assert "server,whois.iana.org" in lines
+    assert "port,43" in lines
+    assert "registrar,Example Registrar" in lines
+    assert "nameservers,ns1.example.com;ns2.example.com" in lines
+    assert "status_codes,ok" in lines
+
+
+def test_format_whois_report_csv_empty() -> None:
+    data = {"target": "example.com"}
+    output = format_whois_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+    assert "target,example.com" in lines
+    assert "registrar," in lines
+
+
+def test_format_whois_report_csv_missing_fields() -> None:
+    data = {}
+    output = format_whois_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+    assert "target," in lines
+
+
+def test_format_whois_report_csv_recursive_hops() -> None:
+    data = {
+        "target": "example.com",
+        "parsed": {"registrar": "Registrar A"},
+        "recursive_hops": [
+            {
+                "depth": 1,
+                "server": "whois.registrar.net",
+                "port": 43,
+                "parsed": {
+                    "registrar": "Registrar B",
+                    "nameservers": ["ns1.registrar.net"],
+                },
+                "referral_server": "whois.registrar.net",
+            },
+        ],
+    }
+    output = format_whois_report_csv(data)
+    lines = output.splitlines()
+    assert "registrar,Registrar A" in lines
+    assert any("recursive_hop_depth" in line for line in lines)
+    assert any("1,whois.registrar.net,43,Registrar B" in line for line in lines)
+
+
+def test_format_whois_report_csv_escaping() -> None:
+    data = {
+        "target": "example.com",
+        "parsed": {
+            "registrar": "Registrar, Inc.",
+            "registrant_org": 'Org "quoted"',
+        },
+    }
+    output = format_whois_report_csv(data)
+    assert '"Registrar, Inc."' in output
+    assert '"Org ""quoted"""' in output

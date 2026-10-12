@@ -13,6 +13,7 @@ from ethscan.config import (
     build_default_map,
     dump_default_config,
     find_config_file,
+    format_config_report_csv,
     load_config,
     validate_config,
 )
@@ -195,3 +196,53 @@ def test_dump_default_config_has_comments() -> None:
     sample = dump_default_config()
     assert "# Global defaults" in sample
     assert "# Per-command overrides" in sample
+
+
+# ---------------------------------------------------------------------------
+# CSV formatter
+# ---------------------------------------------------------------------------
+
+
+def test_format_config_report_csv_basic() -> None:
+    config = {
+        "_path": "/etc/ethscan.yaml",
+        "_parse_error": None,
+        "defaults": {"timeout": 3.0, "workers": 50},
+        "commands": {
+            "scan": {"timeout": 5.0},
+            "subdomains": {"workers": 100},
+        },
+    }
+    output = format_config_report_csv(config)
+    lines = output.splitlines()
+    assert lines[0] == "section,option,value"
+    assert "config,path,/etc/ethscan.yaml" in lines
+    assert "defaults,timeout,3.0" in lines
+    assert "defaults,workers,50" in lines
+    assert "commands.scan,timeout,5.0" in lines
+    assert "commands.subdomains,workers,100" in lines
+
+
+def test_format_config_report_csv_empty() -> None:
+    config = {}
+    output = format_config_report_csv(config)
+    lines = output.splitlines()
+    assert lines[0] == "section,option,value"
+    assert len(lines) == 1
+
+
+def test_format_config_report_csv_missing_fields() -> None:
+    config = {"_path": "/cfg.yaml"}
+    output = format_config_report_csv(config)
+    lines = output.splitlines()
+    assert lines[0] == "section,option,value"
+    assert "config,path,/cfg.yaml" in lines
+
+
+def test_format_config_report_csv_escaping() -> None:
+    config = {
+        "defaults": {"note": "Hello, World"},
+        "commands": {"scan": {"comment": "value, with, commas"}},
+    }
+    output = format_config_report_csv(config)
+    assert '"Hello, World"' in output

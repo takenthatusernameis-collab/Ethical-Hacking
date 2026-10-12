@@ -4,6 +4,8 @@ Runs multiple reconnaissance modules (subdomains, dns, whois, geo, trace)
 in sequence and produces a consolidated report.
 """
 
+import csv
+import io
 import json
 from typing import Dict, List, Optional
 

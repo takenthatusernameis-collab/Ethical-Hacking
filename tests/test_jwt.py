@@ -8,6 +8,7 @@ from ethscan.jwt import (
     KNOWN_ALGORITHMS,
     LONG_LIVED_THRESHOLD_SECONDS,
     STANDARD_CLAIMS,
+    format_jwt_report_csv,
     format_jwt_report_json,
     format_jwt_report_markdown,
     parse_jwt,
@@ -335,3 +336,60 @@ def test_run_jwt_default_now() -> None:
     )
     data = run_jwt(token)
     assert data["exp_status"] == "valid"
+
+
+# ---------------------------------------------------------------------------
+# CSV formatter
+# ---------------------------------------------------------------------------
+
+
+def test_format_jwt_report_csv_basic() -> None:
+    data = {
+        "valid_structure": True,
+        "segment_count": 3,
+        "has_signature": True,
+        "token_length": 100,
+        "algorithm": "HS256",
+        "algorithm_type": "HMAC",
+        "token_type": "JWT",
+        "standard_claims": {"iss": "example.com", "sub": "user123"},
+        "other_claim": {"role": "admin"},
+        "findings": ["Algorithm 'none' detected"],
+    }
+    output = format_jwt_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+    assert "valid_structure,true" in lines
+    assert "algorithm,HS256" in lines
+    assert "iss,example.com" in lines
+    assert "sub,user123" in lines
+    assert "finding" in lines
+    assert "Algorithm 'none' detected" in lines
+
+
+def test_format_jwt_report_csv_empty() -> None:
+    data = {"valid_structure": False, "segment_count": 1, "token_length": 5}
+    output = format_jwt_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+    assert "valid_structure,false" in lines
+    assert "segment_count,1" in lines
+
+
+def test_format_jwt_report_csv_missing_fields() -> None:
+    data = {}
+    output = format_jwt_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+    assert "valid_structure,false" in lines
+
+
+def test_format_jwt_report_csv_escaping() -> None:
+    data = {
+        "valid_structure": True,
+        "standard_claims": {"iss": "Hello, World"},
+        "findings": ["Issue with, comma"],
+    }
+    output = format_jwt_report_csv(data)
+    assert '"Hello, World"' in output
+    assert '"Issue with, comma"' in output

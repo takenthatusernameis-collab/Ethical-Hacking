@@ -7,6 +7,7 @@ from ethscan.subdomains import (
     DEFAULT_RECURSIVE_DEPTH,
     DNS_AVAILABLE,
     _normalize_domain,
+    format_subdomains_report_csv,
     format_subdomains_report_json,
     format_subdomains_report_markdown,
     load_subdomain_wordlist,
@@ -380,3 +381,54 @@ def test_format_subdomains_report_markdown_recursive_no_results_at_depth() -> No
     assert "## Recursive Enumeration (Per Depth)" in output
     assert "### Depth 1" in output
     assert "*No subdomains resolved at this depth.*" in output
+
+
+# ---------------------------------------------------------------------------
+# CSV formatter
+# ---------------------------------------------------------------------------
+
+
+def test_format_subdomains_report_csv_basic() -> None:
+    data = {
+        "all_results": [
+            {"subdomain": "www", "hostname": "www.example.com", "ip": "93.184.216.34"},
+            {"subdomain": "api", "hostname": "api.example.com", "ip": "93.184.216.34"},
+        ]
+    }
+    output = format_subdomains_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "subdomain,hostname,ip,resolved"
+    assert "www,www.example.com,93.184.216.34,true" in lines
+    assert "api,api.example.com,93.184.216.34,true" in lines
+
+
+def test_format_subdomains_report_csv_empty() -> None:
+    data = {"all_results": []}
+    output = format_subdomains_report_csv(data)
+    assert output == "subdomain,hostname,ip,resolved"
+
+
+def test_format_subdomains_report_csv_missing_fields() -> None:
+    data = {
+        "all_results": [
+            {"subdomain": "www"},
+            {"hostname": "api.example.com"},
+        ]
+    }
+    output = format_subdomains_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "subdomain,hostname,ip,resolved"
+    assert "www,,,false" in lines
+    assert ",api.example.com,,false" in lines
+
+
+def test_format_subdomains_report_csv_escaping() -> None:
+    data = {
+        "all_results": [
+            {"subdomain": "weird,name", "hostname": "host,example.com", "ip": "1.2.3.4"},
+        ]
+    }
+    output = format_subdomains_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "subdomain,hostname,ip,resolved"
+    assert any(line.startswith('"weird,name"') for line in lines[1:])

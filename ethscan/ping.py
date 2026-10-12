@@ -5,6 +5,8 @@ TCP-ping fallback (connect-based latency measurement on a configurable port)
 when raw ICMP sockets are unavailable (non-root).
 """
 
+import csv
+import io
 import json
 import socket
 import struct

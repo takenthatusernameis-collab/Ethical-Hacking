@@ -7,6 +7,7 @@ from ethscan.web import (
     check_security_headers,
     check_ssl_configuration,
     fetch_headers,
+    format_web_report_csv,
     format_web_report_json,
     format_web_report_markdown,
     run_web_checks,
@@ -133,3 +134,76 @@ def test_format_web_report_markdown() -> None:
 def test_fetch_headers_offline() -> None:
     headers = fetch_headers("http://nonexistent.invalid.domain.tld", timeout=1.0)
     assert headers == {}
+
+
+# ---------------------------------------------------------------------------
+# CSV formatter
+# ---------------------------------------------------------------------------
+
+
+def test_format_web_report_csv_basic() -> None:
+    data = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "security_headers": {
+            "present": ["X-Frame-Options"],
+            "missing": ["Content-Security-Policy"],
+        },
+        "information_disclosure": [
+            {"header": "Server", "value": "Apache", "description": "Server header exposed"},
+        ],
+        "ssl": {
+            "valid": True,
+            "error": None,
+            "subject": "CN=example.com",
+            "issuer": "Let's Encrypt",
+            "not_after": "2024-12-31",
+            "days_remaining": 100,
+            "chain_length": 2,
+        },
+    }
+    output = format_web_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+    assert "target,https://example.com" in lines
+    assert "https,true" in lines
+    assert "security_header,status" in lines
+    assert "X-Frame-Options,present" in lines
+    assert "Content-Security-Policy,missing" in lines
+    assert "disclosure_header,value,description" in lines
+    assert "Server,Apache,Server header exposed" in lines
+    assert "ssl_field,value" in lines
+    assert "subject,CN=example.com" in lines
+
+
+def test_format_web_report_csv_empty() -> None:
+    data = {"target": "https://example.com", "host": "example.com", "port": 443, "secure": False}
+    output = format_web_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+    assert "target,https://example.com" in lines
+    assert "https,false" in lines
+
+
+def test_format_web_report_csv_missing_fields() -> None:
+    data = {"target": "https://example.com", "host": "example.com", "port": 443, "secure": True}
+    output = format_web_report_csv(data)
+    assert "security_header,status" not in output
+    assert "disclosure_header,value,description" not in output
+
+
+def test_format_web_report_csv_escaping() -> None:
+    data = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "information_disclosure": [
+            {"header": "X-Powered-By", "value": "ASP.NET, Version=4.0", "description": "Framework, version"},
+        ],
+    }
+    output = format_web_report_csv(data)
+    assert '"ASP.NET, Version=4.0"' in output
+    assert '"Framework, version"' in output

@@ -5,6 +5,8 @@ database API (api.macvendors.com) with filesystem caching and offline
 fallback. Stdlib only.
 """
 
+import csv
+import io
 import json
 import os
 import time

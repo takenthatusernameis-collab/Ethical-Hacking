@@ -1,5 +1,7 @@
 """OS fingerprinting module for ethscan."""
 
+import csv
+import io
 import json
 import os
 import re
