@@ -6,6 +6,8 @@ click's built-in shell completion machinery. The scripts wrap the
 names, option names, and option values.
 """
 
+import csv
+import io
 from typing import Any, Dict, Optional, Tuple
 
 import click
@@ -131,3 +133,20 @@ def format_completion_report_markdown(result: Dict[str, Any]) -> str:
         "",
     ]
     return "\n".join(lines)
+
+
+def format_completion_report_csv(result: Dict[str, Any]) -> str:
+    """Format completion report as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow(["field", "value"])
+    writer.writerow(["shell", result.get("shell", "")])
+    writer.writerow(["prog_name", result.get("prog_name", "")])
+    writer.writerow([])
+    writer.writerow(["script"])
+    script = result.get("script", "")
+    for line in script.splitlines():
+        writer.writerow([line])
+
+    return output.getvalue().rstrip("\r\n")

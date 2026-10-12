@@ -5,6 +5,8 @@ Stdlib only; fully offline.
 """
 
 import base64
+import csv
+import io
 import json
 import time
 from typing import Dict, List, Optional
@@ -284,3 +286,47 @@ def format_jwt_report_markdown(data: Dict[str, object]) -> str:
     lines.append("")
 
     return "\n".join(lines)
+
+
+def format_jwt_report_csv(data: Dict[str, object]) -> str:
+    """Format JWT inspection results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow(["field", "value"])
+    writer.writerow(["valid_structure", "true" if data.get("valid_structure") else "false"])
+    writer.writerow(["segment_count", data.get("segment_count", 0)])
+    writer.writerow(["has_signature", "true" if data.get("has_signature") else "false"])
+    writer.writerow(["token_length", data.get("token_length", 0)])
+    writer.writerow(["algorithm", data.get("algorithm") or ""])
+    writer.writerow(["algorithm_type", data.get("algorithm_type") or ""])
+    writer.writerow(["token_type", data.get("token_type") or ""])
+
+    if data.get("error"):
+        writer.writerow(["error", data.get("error")])
+
+    # Standard claims
+    standard_claims = data.get("standard_claims") or {}
+    if standard_claims:
+        writer.writerow([])
+        writer.writerow(["standard_claim", "value"])
+        for key, value in sorted(standard_claims.items()):
+            writer.writerow([key, value])
+
+    # Other claims
+    other_claims = data.get("other_claims") or {}
+    if other_claims:
+        writer.writerow([])
+        writer.writerow(["other_claim", "value"])
+        for key, value in sorted(other_claims.items()):
+            writer.writerow([key, value])
+
+    # Findings
+    findings = data.get("findings") or []
+    if findings:
+        writer.writerow([])
+        writer.writerow(["finding"])
+        for finding in findings:
+            writer.writerow([finding])
+
+    return output.getvalue().rstrip("\r\n")

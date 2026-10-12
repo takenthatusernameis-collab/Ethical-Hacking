@@ -28,6 +28,8 @@ take precedence over config values. The config is purely optional and the
 toolkit works unchanged when no config file is present.
 """
 
+import csv
+import io
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -247,3 +249,35 @@ commands:
     resolver: 8.8.8.8
 """
     return sample
+
+
+def format_config_report_csv(config: Dict[str, Any]) -> str:
+    """Format config as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow(["section", "option", "value"])
+
+    # Config file path
+    path = config.get("_path")
+    if path:
+        writer.writerow(["config", "path", path])
+
+    # Parse error
+    parse_error = config.get("_parse_error")
+    if parse_error:
+        writer.writerow(["config", "parse_error", parse_error])
+
+    # Global defaults
+    defaults = config.get("defaults") or {}
+    for key, value in sorted(defaults.items()):
+        writer.writerow(["defaults", key, value])
+
+    # Per-command overrides
+    commands = config.get("commands") or {}
+    for cmd, opts in sorted(commands.items()):
+        if isinstance(opts, dict):
+            for key, value in sorted(opts.items()):
+                writer.writerow([f"commands.{cmd}", key, value])
+
+    return output.getvalue().rstrip("\r\n")

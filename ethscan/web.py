@@ -1,5 +1,7 @@
 """Web application security checks for ethscan."""
 
+import csv
+import io
 import ssl
 import socket
 import json
@@ -264,3 +266,44 @@ def format_web_report_markdown(data: Dict[str, object]) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+def format_web_report_csv(data: Dict[str, object]) -> str:
+    """Format web check results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["field", "value"])
+    writer.writerow(["target", data.get("target", "")])
+    writer.writerow(["host", data.get("host", "")])
+    writer.writerow(["port", data.get("port", "")])
+    writer.writerow(["https", "true" if data.get("secure") else "false"])
+
+    if "security_headers" in data:
+        sh = data["security_headers"]
+        writer.writerow([])
+        writer.writerow(["security_header", "status"])
+        for header in sh.get("present", []):
+            writer.writerow([header, "present"])
+        for header in sh.get("missing", []):
+            writer.writerow([header, "missing"])
+
+    if "information_disclosure" in data:
+        findings = data["information_disclosure"]
+        writer.writerow([])
+        writer.writerow(["disclosure_header", "value", "description"])
+        for finding in findings:
+            writer.writerow([finding.get("header", ""), finding.get("value", ""), finding.get("description", "")])
+
+    if "ssl" in data:
+        ssl_info = data["ssl"]
+        writer.writerow([])
+        writer.writerow(["ssl_field", "value"])
+        writer.writerow(["valid", "true" if ssl_info.get("valid") else "false"])
+        writer.writerow(["error", ssl_info.get("error") or ""])
+        writer.writerow(["subject", ssl_info.get("subject") or ""])
+        writer.writerow(["issuer", ssl_info.get("issuer") or ""])
+        writer.writerow(["not_after", ssl_info.get("not_after") or ""])
+        writer.writerow(["days_remaining", ssl_info.get("days_remaining") or ""])
+        writer.writerow(["chain_length", ssl_info.get("chain_length", 0)])
+
+    return output.getvalue().rstrip("\r\n")

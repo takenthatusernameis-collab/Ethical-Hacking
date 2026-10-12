@@ -1,5 +1,7 @@
 """Subdomain enumeration module for ethscan."""
 
+import csv
+import io
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Tuple, Set
@@ -303,3 +305,18 @@ def format_subdomains_report_markdown(data: Dict[str, object]) -> str:
             lines.append("")
 
     return "\n".join(lines)
+
+
+def format_subdomains_report_csv(data: Dict[str, object]) -> str:
+    """Format subdomain results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["subdomain", "hostname", "ip", "resolved"])
+    for entry in data.get("all_results", []):
+        writer.writerow([
+            entry.get("subdomain", ""),
+            entry.get("hostname", ""),
+            entry.get("ip") or "",
+            "true" if entry.get("ip") else "false",
+        ])
+    return output.getvalue().rstrip("\r\n")

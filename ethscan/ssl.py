@@ -1,5 +1,7 @@
 """SSL/TLS certificate inspection module for ethscan."""
 
+import csv
+import io
 import json
 import socket
 import ssl
@@ -290,3 +292,27 @@ def format_ssl_report_markdown(data: dict) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+def format_ssl_report_csv(data: dict) -> str:
+    """Format SSL results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    cert = data.get("cert") or {}
+    writer.writerow(["field", "value"])
+    writer.writerow(["target", data.get("target", "")])
+    writer.writerow(["host", data.get("host", "")])
+    writer.writerow(["port", data.get("port", "")])
+    writer.writerow(["timeout", data.get("timeout", "")])
+    writer.writerow(["error", data.get("error") or ""])
+    writer.writerow(["chain_length", data.get("chain_length", 0)])
+    writer.writerow(["valid", "true" if data.get("valid") else "false"])
+    writer.writerow(["days_remaining", data.get("days_remaining") or ""])
+    writer.writerow(["subject", cert.get("subject") or ""])
+    writer.writerow(["issuer", cert.get("issuer") or ""])
+    writer.writerow(["not_before", cert.get("not_before") or ""])
+    writer.writerow(["not_after", cert.get("not_after") or ""])
+    writer.writerow(["signature_algorithm", cert.get("signature_algorithm") or ""])
+    writer.writerow(["key_size", cert.get("key_size") or ""])
+    writer.writerow(["sans", ";".join(cert.get("sans") or [])])
+    return output.getvalue().rstrip("\r\n")

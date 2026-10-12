@@ -1,5 +1,7 @@
 """WHOIS lookup module for ethscan."""
 
+import csv
+import io
 import re
 import socket
 from typing import Dict, List, Optional
@@ -311,3 +313,39 @@ def format_whois_report_markdown(data: Dict[str, object]) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+def format_whois_report_csv(data: Dict[str, object]) -> str:
+    """Format WHOIS results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    parsed = data.get("parsed", {})
+    writer.writerow(["field", "value"])
+    writer.writerow(["target", data.get("target", "")])
+    writer.writerow(["server", data.get("server", "")])
+    writer.writerow(["port", data.get("port", "")])
+    writer.writerow(["registrar", parsed.get("registrar") or ""])
+    writer.writerow(["creation_date", parsed.get("creation_date") or ""])
+    writer.writerow(["expiration_date", parsed.get("expiration_date") or ""])
+    writer.writerow(["registrant_org", parsed.get("registrant_org") or ""])
+    writer.writerow(["nameservers", ";".join(parsed.get("nameservers") or [])])
+    writer.writerow(["status_codes", ";".join(parsed.get("status_codes") or [])])
+
+    recursive_hops = data.get("recursive_hops") or []
+    if recursive_hops:
+        writer.writerow([])
+        writer.writerow(["recursive_hop_depth", "server", "port", "registrar", "creation_date", "expiration_date", "registrant_org", "referral_server", "error"])
+        for hop in recursive_hops:
+            hop_parsed = hop.get("parsed") or {}
+            writer.writerow([
+                hop.get("depth", ""),
+                hop.get("server", ""),
+                hop.get("port", ""),
+                hop_parsed.get("registrar") or "",
+                hop_parsed.get("creation_date") or "",
+                hop_parsed.get("expiration_date") or "",
+                hop_parsed.get("registrant_org") or "",
+                hop.get("referral_server") or "",
+                hop.get("error") or "",
+            ])
+    return output.getvalue().rstrip("\r\n")

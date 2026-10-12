@@ -20,6 +20,7 @@ from ethscan.report import (
 )
 from ethscan.scanner import get_common_ports, parse_port_range, scan_ports, get_profile_ports, get_profile_defaults, format_scan_report_json, format_scan_report_markdown, format_scan_report_csv, format_service_report_csv
 from ethscan.web import (
+    format_web_report_csv,
     format_web_report_json,
     format_web_report_markdown,
     run_web_checks,
@@ -39,12 +40,14 @@ from ethscan.brute import (
 )
 from ethscan.brute import load_wordlist as load_cred_wordlist
 from ethscan.subdomains import (
+    format_subdomains_report_csv,
     format_subdomains_report_json,
     format_subdomains_report_markdown,
     run_subdomains,
     load_subdomain_wordlist,
 )
 from ethscan.whois import (
+    format_whois_report_csv,
     format_whois_report_json,
     format_whois_report_markdown,
     run_whois,
@@ -66,6 +69,7 @@ from ethscan.dnsbrute import (
     run_dnsbrute,
 )
 from ethscan.ssl import (
+    format_ssl_report_csv,
     format_ssl_report_json,
     format_ssl_report_markdown,
     run_ssl,
@@ -102,6 +106,7 @@ from ethscan.trace import (
     run_trace,
 )
 from ethscan.wifi import (
+    format_wifi_report_csv,
     format_wifi_report_json,
     format_wifi_report_markdown,
     run_wifi,
@@ -161,6 +166,7 @@ from ethscan.mac import (
 )
 from ethscan.subdomains import load_subdomain_wordlist
 from ethscan.headers import (
+    format_headers_report_csv,
     format_headers_report_json,
     format_headers_report_markdown,
     run_headers,
@@ -172,15 +178,18 @@ from ethscan.ping import (
 )
 from ethscan.config import (
     build_default_map,
+    format_config_report_csv,
     load_config,
     validate_config,
 )
 from ethscan.completion import (
+    format_completion_report_csv,
     format_completion_report_json,
     format_completion_report_markdown,
     run_completion,
 )
 from ethscan.jwt import (
+    format_jwt_report_csv,
     format_jwt_report_json,
     format_jwt_report_markdown,
     run_jwt,
@@ -681,7 +690,7 @@ def report(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def web(target: str, checks: str, timeout: float, fmt: str, out_path: str) -> None:
+def web(target: str, checks: str, timeout: float, fmt: str, output_fmt: Optional[str], out_path: str) -> None:
     """Run web application security checks against TARGET."""
     check_list = [c.strip() for c in checks.split(",") if c.strip()]
     valid = {"headers", "info_disclosure", "ssl"}
@@ -693,8 +702,13 @@ def web(target: str, checks: str, timeout: float, fmt: str, out_path: str) -> No
 
     results = run_web_checks(target, check_list, timeout=timeout)
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_web_report_json(results)
+    elif chosen_format == "csv":
+        output = format_web_report_csv(results)
     else:
         output = format_web_report_markdown(results)
 
@@ -819,6 +833,7 @@ def subdomains(
     timeout: float,
     workers: int,
     fmt: str,
+    output_fmt: Optional[str],
     out_path: str,
 ) -> None:
     """Enumerate subdomains for TARGET."""
@@ -836,8 +851,13 @@ def subdomains(
         max_depth=max_depth,
     )
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_subdomains_report_json(results)
+    elif chosen_format == "csv":
+        output = format_subdomains_report_csv(results)
     else:
         output = format_subdomains_report_markdown(results)
 
@@ -986,6 +1006,7 @@ def whois(
     recursive: bool,
     max_depth: int,
     fmt: str,
+    output_fmt: Optional[str],
     out_path: str,
 ) -> None:
     """Run a WHOIS lookup for TARGET."""
@@ -998,8 +1019,13 @@ def whois(
         max_depth=max_depth,
     )
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_whois_report_json(results)
+    elif chosen_format == "csv":
+        output = format_whois_report_csv(results)
     else:
         output = format_whois_report_markdown(results)
 
@@ -1035,12 +1061,17 @@ def whois(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def headers(target: str, timeout: float, fmt: str, out_path: str) -> None:
+def headers(target: str, timeout: float, fmt: str, output_fmt: Optional[str], out_path: str) -> None:
     """Run security headers check against TARGET."""
     results = run_headers(target, timeout=timeout)
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_headers_report_json(results)
+    elif chosen_format == "csv":
+        output = format_headers_report_csv(results)
     else:
         output = format_headers_report_markdown(results)
 
@@ -1327,12 +1358,17 @@ def dnsbrute(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def ssl(target: str, port: int, timeout: float, fmt: str, out_path: str) -> None:
+def ssl(target: str, port: int, timeout: float, fmt: str, output_fmt: Optional[str], out_path: str) -> None:
     """Inspect the SSL/TLS certificate for TARGET."""
     results = run_ssl(target, port=port, timeout=timeout)
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_ssl_report_json(results)
+    elif chosen_format == "csv":
+        output = format_ssl_report_csv(results)
     else:
         output = format_ssl_report_markdown(results)
 
@@ -2130,12 +2166,17 @@ def ping(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def wifi(interface: Optional[str], fmt: str, out_path: Optional[str]) -> None:
+def wifi(interface: Optional[str], fmt: str, output_fmt: Optional[str], out_path: Optional[str]) -> None:
     """Scan for nearby Wi-Fi access points (Linux only)."""
     results = run_wifi(interface=interface)
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_wifi_report_json(results)
+    elif chosen_format == "csv":
+        output = format_wifi_report_csv(results)
     else:
         output = format_wifi_report_markdown(results)
 
@@ -3079,9 +3120,16 @@ def mac(
 @click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json", "markdown"]),
+    type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    help="Output format for the loaded config (json or markdown)",
+    help="Output format for the loaded config (json, markdown, or csv)",
+)
+@click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
 )
 @click.option(
     "--out",
@@ -3123,7 +3171,10 @@ def config(
     path = loaded.get("_path")
     parse_error = loaded.get("_parse_error")
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         payload: Dict[str, Any] = {
             "config_file": path,
             "defaults": loaded.get("defaults") or {},
@@ -3132,6 +3183,8 @@ def config(
         if isinstance(parse_error, str):
             payload["parse_error"] = parse_error
         output = json.dumps(payload, indent=2, default=str)
+    elif chosen_format == "csv":
+        output = format_config_report_csv(loaded)
     else:
         lines = ["# ethscan Configuration", ""]
         if path:
@@ -3221,7 +3274,7 @@ def config(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def jwt(token: Optional[str], fmt: str, out_path: Optional[str]) -> None:
+def jwt(token: Optional[str], fmt: str, output_fmt: Optional[str], out_path: Optional[str]) -> None:
     """Inspect a JWT (JSON Web Token) without verifying the signature."""
     if token:
         token = token.strip()
@@ -3235,8 +3288,13 @@ def jwt(token: Optional[str], fmt: str, out_path: Optional[str]) -> None:
 
     results = run_jwt(token)
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_jwt_report_json(results)
+    elif chosen_format == "csv":
+        output = format_jwt_report_csv(results)
     else:
         output = format_jwt_report_markdown(results)
 
@@ -3282,7 +3340,7 @@ def jwt(token: Optional[str], fmt: str, out_path: Optional[str]) -> None:
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def completion(shell: str, prog_name: str, fmt: str, out_path: Optional[str]) -> None:
+def completion(shell: str, prog_name: str, fmt: str, output_fmt: Optional[str], out_path: Optional[str]) -> None:
     """Generate a shell completion script for ethscan.
 
     Supported shells: bash, zsh, fish. Save the output and source it
@@ -3295,8 +3353,13 @@ def completion(shell: str, prog_name: str, fmt: str, out_path: Optional[str]) ->
         click.echo(str(exc), err=True)
         raise SystemExit(1)
 
-    if fmt == "json":
+    # --output-format takes precedence over the deprecated --format alias
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
         output = format_completion_report_json(results)
+    elif chosen_format == "csv":
+        output = format_completion_report_csv(results)
     else:
         output = format_completion_report_markdown(results)
 

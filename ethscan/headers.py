@@ -1,5 +1,7 @@
 """Security headers check for ethscan."""
 
+import csv
+import io
 import json
 import urllib.request
 import urllib.error
@@ -63,3 +65,25 @@ def format_headers_report_markdown(data: Dict[str, object]) -> str:
     lines.append("")
 
     return "\n".join(lines)
+
+
+def format_headers_report_csv(data: Dict[str, object]) -> str:
+    """Format security headers check results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    sh = data["security_headers"]
+    writer.writerow(["field", "value"])
+    writer.writerow(["target", data.get("target", "")])
+    writer.writerow(["host", data.get("host", "")])
+    writer.writerow(["port", data.get("port", "")])
+    writer.writerow(["https", "true" if data.get("secure") else "false"])
+    writer.writerow(["present_count", sh.get("present_count", 0)])
+    writer.writerow(["missing_count", sh.get("missing_count", 0)])
+    writer.writerow(["total", sh.get("total", 0)])
+    writer.writerow([])
+    writer.writerow(["header", "status"])
+    for header in sh.get("present", []):
+        writer.writerow([header, "present"])
+    for header in sh.get("missing", []):
+        writer.writerow([header, "missing"])
+    return output.getvalue().rstrip("\r\n")

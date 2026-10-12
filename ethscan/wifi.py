@@ -5,6 +5,8 @@ On Linux, parses /proc/net/wireless and uses iwlist/iw scan output (shell out wi
 graceful fallback when tools unavailable). On other platforms, reports platform not supported.
 """
 
+import csv
+import io
 import json
 import platform
 import re
@@ -327,3 +329,55 @@ def format_wifi_report_markdown(results: Dict) -> str:
             lines.append(f"- {note}")
 
     return "\n".join(lines)
+
+
+def format_wifi_report_csv(results: Dict) -> str:
+    """Format Wi-Fi scan results as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Platform info
+    writer.writerow(["field", "value"])
+    writer.writerow(["platform", results.get("platform", "")])
+    writer.writerow(["platform_supported", "true" if results.get("platform_supported") else "false"])
+
+    # Interfaces
+    writer.writerow([])
+    writer.writerow(["interface", "status", "link_quality", "signal_level", "noise_level"])
+    for iface in results.get("interfaces", []):
+        writer.writerow([
+            iface.get("interface", ""),
+            iface.get("status", ""),
+            iface.get("link_quality", ""),
+            iface.get("signal_level", ""),
+            iface.get("noise_level", ""),
+        ])
+
+    # Access Points
+    writer.writerow([])
+    writer.writerow(["interface", "bssid", "ssid", "channel", "frequency_ghz", "encryption", "signal_dbm", "quality"])
+    for ap in results.get("access_points", []):
+        ssid = ap.get("ssid", "") if ap.get("ssid") else "<hidden>"
+        freq = f"{ap['frequency']:.3f}" if ap.get("frequency") else "N/A"
+        channel = str(ap.get("channel")) if ap.get("channel") else "N/A"
+        signal = str(ap.get("signal_dbm")) if ap.get("signal_dbm") is not None else "N/A"
+        quality = ap.get("quality", "") if ap.get("quality") else "N/A"
+        writer.writerow([
+            ap.get("interface", ""),
+            ap.get("bssid", ""),
+            ssid,
+            channel,
+            freq,
+            ap.get("encryption", ""),
+            signal,
+            quality,
+        ])
+
+    # Notes
+    if results.get("notes"):
+        writer.writerow([])
+        writer.writerow(["note"])
+        for note in results["notes"]:
+            writer.writerow([note])
+
+    return output.getvalue().rstrip("\r\n")
