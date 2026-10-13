@@ -17825,3 +17825,178 @@ def test_ntp_offline_timeout() -> None:
     parsed = json.loads(result.output)
     assert parsed["error"] is not None
     assert "time request failed" in parsed["error"]
+
+
+# ---------------------------------------------------------------------------
+# SNMP CLI tests
+# ---------------------------------------------------------------------------
+
+
+def test_snmp_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["snmp", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--port" in result.output
+    assert "--communities" in result.output
+    assert "--timeout" in result.output
+    assert "--output-format" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+
+
+def test_snmp_top_level_help_lists_command() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "snmp" in result.output
+
+
+def test_snmp_output_format_csv(monkeypatch) -> None:
+    mock_results = {
+        "target": "snmp.example.com",
+        "host": "snmp.example.com",
+        "port": 161,
+        "snmp_version": "v2c",
+        "communities": [
+            {"community": "public", "valid": True, "version": "v2c", "error": None},
+        ],
+        "valid_communities": ["public"],
+        "sysDescr": "Linux router 5.4.0",
+        "sysObjectID": "1.3.6.1.4.1.9.1.1",
+        "sysUpTime": 123456780,
+        "sysName": "router-01",
+        "error": None,
+    }
+    monkeypatch.setattr("ethscan.cli.run_snmp", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["snmp", "--target", "snmp.example.com", "--output-format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "target,host,port,snmp_version,sys_descr" in result.output
+    assert "snmp.example.com" in result.output
+    assert "Linux router 5.4.0" in result.output
+
+
+def test_snmp_output_format_csv_out(tmp_path, monkeypatch) -> None:
+    mock_results = {
+        "target": "snmp.example.com",
+        "host": "snmp.example.com",
+        "port": 161,
+        "snmp_version": "v2c",
+        "communities": [
+            {"community": "public", "valid": True, "version": "v2c", "error": None},
+        ],
+        "valid_communities": ["public"],
+        "sysDescr": "Linux router 5.4.0",
+        "sysObjectID": "1.3.6.1.4.1.9.1.1",
+        "sysUpTime": 123456780,
+        "sysName": "router-01",
+        "error": None,
+    }
+    monkeypatch.setattr("ethscan.cli.run_snmp", lambda *a, **k: mock_results)
+    out_file = tmp_path / "snmp_report.csv"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["snmp", "--target", "snmp.example.com", "--output-format", "csv", "--out", str(out_file), "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    content = out_file.read_text()
+    assert "target,host,port,snmp_version,sys_descr" in content
+    assert "snmp.example.com" in content
+
+
+def test_snmp_format_csv_alias(monkeypatch) -> None:
+    mock_results = {
+        "target": "snmp.example.com",
+        "host": "snmp.example.com",
+        "port": 161,
+        "snmp_version": "v2c",
+        "communities": [
+            {"community": "public", "valid": True, "version": "v2c", "error": None},
+        ],
+        "valid_communities": ["public"],
+        "sysDescr": "Linux router 5.4.0",
+        "sysObjectID": "1.3.6.1.4.1.9.1.1",
+        "sysUpTime": 123456780,
+        "sysName": "router-01",
+        "error": None,
+    }
+    monkeypatch.setattr("ethscan.cli.run_snmp", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["snmp", "--target", "snmp.example.com", "--format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "target,host,port,snmp_version,sys_descr" in result.output
+
+
+def test_snmp_output_format_default_is_json(monkeypatch) -> None:
+    mock_results = {"target": "snmp.example.com", "host": "snmp.example.com", "port": 161, "error": None}
+    monkeypatch.setattr("ethscan.cli.run_snmp", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["snmp", "--target", "snmp.example.com", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["host"] == "snmp.example.com"
+
+
+def test_snmp_output_format_markdown(monkeypatch) -> None:
+    mock_results = {
+        "target": "snmp.example.com",
+        "host": "snmp.example.com",
+        "port": 161,
+        "snmp_version": "v2c",
+        "communities": [
+            {"community": "public", "valid": True, "version": "v2c", "error": None},
+            {"community": "private", "valid": False, "version": None, "error": "v1 request failed: timeout"},
+        ],
+        "valid_communities": ["public"],
+        "sysDescr": "Linux router 5.4.0",
+        "sysObjectID": "1.3.6.1.4.1.9.1.1",
+        "sysUpTime": 123456780,
+        "sysName": "router-01",
+        "error": None,
+    }
+    monkeypatch.setattr("ethscan.cli.run_snmp", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["snmp", "--target", "snmp.example.com", "--output-format", "markdown", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "# ethscan SNMP Report" in result.output
+    assert "snmp.example.com" in result.output
+    assert "Community Probes" in result.output
+    assert "**sysDescr:** Linux router 5.4.0" in result.output
+    assert "Misconfiguration" in result.output
+
+
+def test_snmp_communities_option(monkeypatch) -> None:
+    captured = {}
+
+    def fake_run(*args, **kwargs):
+        captured.update(kwargs)
+        return {"target": "snmp.example.com", "host": "snmp.example.com", "port": 161, "error": None}
+
+    monkeypatch.setattr("ethscan.cli.run_snmp", fake_run)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["snmp", "--target", "snmp.example.com", "--communities", "public, secret ", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert captured["communities"] == ["public", "secret"]
+
+
+def test_snmp_port_option(monkeypatch) -> None:
+    captured = {}
+
+    def fake_run(*args, **kwargs):
+        captured.update(kwargs)
+        return {"target": "snmp.example.com", "host": "snmp.example.com", "port": kwargs.get("port", 161), "error": None}
+
+    monkeypatch.setattr("ethscan.cli.run_snmp", fake_run)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["snmp", "--target", "snmp.example.com", "--port", "1161", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert captured["port"] == 1161
+
+
+def test_snmp_offline_timeout() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["snmp", "--target", "127.0.0.1:1", "--timeout", "0.2"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["error"] is not None
+    assert "request failed" in parsed["error"]

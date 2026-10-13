@@ -265,6 +265,12 @@ from ethscan.ntp import (
     format_ntp_report_markdown,
     run_ntp,
 )
+from ethscan.snmp import (
+    format_snmp_report_csv,
+    format_snmp_report_json,
+    format_snmp_report_markdown,
+    run_snmp,
+)
 
 
 @click.group()
@@ -4045,6 +4051,83 @@ def ntp(
         output = format_ntp_report_csv(results)
     else:
         output = format_ntp_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target SNMP device, host, host:port, or URL (e.g. snmp.example.com or snmp://snmp.example.com:161)",
+)
+@click.option(
+    "--port",
+    type=int,
+    default=None,
+    help="SNMP port (overrides any port parsed from --target; default 161).",
+)
+@click.option(
+    "--communities",
+    default=None,
+    help="Comma-separated community strings to probe (default: public,private,default,'').",
+)
+@click.option("--timeout", default=3.0, type=float, help="Per-request timeout in seconds")
+@click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default="json",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def snmp(
+    target: str,
+    port: Optional[int],
+    communities: Optional[str],
+    timeout: float,
+    fmt: str,
+    output_fmt: Optional[str],
+    out_path: Optional[str],
+) -> None:
+    """Run SNMP reconnaissance (community probing + system info) for TARGET."""
+    community_list = None
+    if communities is not None:
+        community_list = [part.strip() for part in communities.split(",")]
+
+    results = run_snmp(
+        target,
+        port=port,
+        timeout=timeout,
+        communities=community_list,
+    )
+
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
+        output = format_snmp_report_json(results)
+    elif chosen_format == "csv":
+        output = format_snmp_report_csv(results)
+    else:
+        output = format_snmp_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
