@@ -271,6 +271,12 @@ from ethscan.snmp import (
     format_snmp_report_markdown,
     run_snmp,
 )
+from ethscan.netbios import (
+    format_netbios_report_csv,
+    format_netbios_report_json,
+    format_netbios_report_markdown,
+    run_netbios,
+)
 
 
 @click.group()
@@ -4128,6 +4134,92 @@ def snmp(
         output = format_snmp_report_csv(results)
     else:
         output = format_snmp_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target NetBIOS host, host:port, or URL (e.g. 192.168.1.100 or netbios://192.168.1.100:137)",
+)
+@click.option(
+    "--port",
+    type=int,
+    default=None,
+    help="NetBIOS Name Service port (overrides any port parsed from --target; default 137).",
+)
+@click.option(
+    "--name",
+    default="*",
+    help="NetBIOS name to query (default '*' to enumerate all registered names).",
+)
+@click.option(
+    "--suffix",
+    default=None,
+    type=int,
+    help="Service suffix byte (hex or decimal) for the queried name (default 0).",
+)
+@click.option("--timeout", default=3.0, type=float, help="Per-request timeout in seconds")
+@click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default="json",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def netbios(
+    target: str,
+    port: Optional[int],
+    name: str,
+    suffix: Optional[int],
+    timeout: float,
+    fmt: str,
+    output_fmt: Optional[str],
+    out_path: Optional[str],
+) -> None:
+    """Run NetBIOS (NBNS) NODE STATUS reconnaissance (names, flags, MAC)."""
+    if suffix is None:
+        suffix_value = 0x00
+    else:
+        suffix_value = suffix
+
+    results = run_netbios(
+        target,
+        port=port,
+        timeout=timeout,
+        name=name,
+        suffix=suffix_value,
+    )
+
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
+        output = format_netbios_report_json(results)
+    elif chosen_format == "csv":
+        output = format_netbios_report_csv(results)
+    else:
+        output = format_netbios_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

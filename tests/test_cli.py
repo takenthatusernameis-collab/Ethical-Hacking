@@ -18000,3 +18000,204 @@ def test_snmp_offline_timeout() -> None:
     parsed = json.loads(result.output)
     assert parsed["error"] is not None
     assert "request failed" in parsed["error"]
+
+
+# ---------------------------------------------------------------------------
+# NetBIOS CLI tests
+# ---------------------------------------------------------------------------
+
+
+def test_netbios_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["netbios", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--port" in result.output
+    assert "--name" in result.output
+    assert "--suffix" in result.output
+    assert "--timeout" in result.output
+    assert "--output-format" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+
+
+def test_netbios_top_level_help_lists_command() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "netbios" in result.output
+
+
+def test_netbios_output_format_csv(monkeypatch) -> None:
+    mock_results = {
+        "target": "192.168.1.100",
+        "host": "192.168.1.100",
+        "port": 137,
+        "queried_name": "*",
+        "queried_suffix": 0,
+        "mac": "aa:bb:cc:dd:ee:ff",
+        "names": [
+            {"name": "MYHOST", "suffix": 0, "suffix_hex": "0x00",
+             "service_type": "Workstation service",
+             "flags": {"group": False, "active": True}},
+        ],
+        "num_names": 1,
+        "is_server": False,
+        "hostname": "MYHOST",
+        "is_domain_member": False,
+        "transaction_id": 0,
+        "error": None,
+    }
+    monkeypatch.setattr("ethscan.cli.run_netbios", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["netbios", "--target", "192.168.1.100", "--output-format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "target,host,port,mac,names,num_names" in result.output
+    assert "192.168.1.100" in result.output
+    assert "aa:bb:cc:dd:ee:ff" in result.output
+    assert "MYHOST" in result.output
+
+
+def test_netbios_output_format_csv_out(tmp_path, monkeypatch) -> None:
+    mock_results = {
+        "target": "192.168.1.100",
+        "host": "192.168.1.100",
+        "port": 137,
+        "queried_name": "*",
+        "queried_suffix": 0,
+        "mac": "aa:bb:cc:dd:ee:ff",
+        "names": [],
+        "num_names": 0,
+        "is_server": False,
+        "hostname": None,
+        "is_domain_member": False,
+        "transaction_id": 0,
+        "error": None,
+    }
+    monkeypatch.setattr("ethscan.cli.run_netbios", lambda *a, **k: mock_results)
+    out_file = tmp_path / "netbios_report.csv"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["netbios", "--target", "192.168.1.100", "--output-format", "csv", "--out", str(out_file), "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    content = out_file.read_text()
+    assert "target,host,port,mac,names,num_names" in content
+    assert "192.168.1.100" in content
+
+
+def test_netbios_format_csv_alias(monkeypatch) -> None:
+    mock_results = {
+        "target": "192.168.1.100",
+        "host": "192.168.1.100",
+        "port": 137,
+        "queried_name": "*",
+        "queried_suffix": 0,
+        "mac": None,
+        "names": [],
+        "num_names": 0,
+        "is_server": False,
+        "hostname": None,
+        "is_domain_member": False,
+        "transaction_id": 0,
+        "error": None,
+    }
+    monkeypatch.setattr("ethscan.cli.run_netbios", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["netbios", "--target", "192.168.1.100", "--format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "target,host,port,mac,names,num_names" in result.output
+
+
+def test_netbios_output_format_default_is_json(monkeypatch) -> None:
+    mock_results = {"target": "192.168.1.100", "host": "192.168.1.100", "port": 137, "error": None}
+    monkeypatch.setattr("ethscan.cli.run_netbios", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["netbios", "--target", "192.168.1.100", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["host"] == "192.168.1.100"
+
+
+def test_netbios_output_format_markdown(monkeypatch) -> None:
+    mock_results = {
+        "target": "192.168.1.100",
+        "host": "192.168.1.100",
+        "port": 137,
+        "queried_name": "*",
+        "queried_suffix": 0,
+        "mac": "aa:bb:cc:dd:ee:ff",
+        "names": [
+            {"name": "MYHOST", "suffix": 0, "suffix_hex": "0x00",
+             "service_type": "Workstation service",
+             "flags": {"group": False, "active": True}},
+            {"name": "MYHOST", "suffix": 32, "suffix_hex": "0x20",
+             "service_type": "File server service",
+             "flags": {"group": False, "active": True}},
+        ],
+        "num_names": 2,
+        "is_server": True,
+        "hostname": "MYHOST",
+        "is_domain_member": False,
+        "transaction_id": 0,
+        "error": None,
+    }
+    monkeypatch.setattr("ethscan.cli.run_netbios", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["netbios", "--target", "192.168.1.100", "--output-format", "markdown", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "# ethscan NetBIOS Report" in result.output
+    assert "192.168.1.100" in result.output
+    assert "## Names" in result.output
+    assert "File server service" in result.output
+    assert "Server:** YES" in result.output
+
+
+def test_netbios_name_option(monkeypatch) -> None:
+    captured = {}
+
+    def fake_run(*args, **kwargs):
+        captured.update(kwargs)
+        return {"target": "192.168.1.100", "host": "192.168.1.100", "port": 137, "error": None}
+
+    monkeypatch.setattr("ethscan.cli.run_netbios", fake_run)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["netbios", "--target", "192.168.1.100", "--name", "WORKSTATION", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert captured["name"] == "WORKSTATION"
+
+
+def test_netbios_suffix_option(monkeypatch) -> None:
+    captured = {}
+
+    def fake_run(*args, **kwargs):
+        captured.update(kwargs)
+        return {"target": "192.168.1.100", "host": "192.168.1.100", "port": 137, "error": None}
+
+    monkeypatch.setattr("ethscan.cli.run_netbios", fake_run)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["netbios", "--target", "192.168.1.100", "--suffix", "20", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert captured["suffix"] == 20
+
+
+def test_netbios_port_option(monkeypatch) -> None:
+    captured = {}
+
+    def fake_run(*args, **kwargs):
+        captured.update(kwargs)
+        return {"target": "192.168.1.100", "host": "192.168.1.100", "port": kwargs.get("port", 137), "error": None}
+
+    monkeypatch.setattr("ethscan.cli.run_netbios", fake_run)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["netbios", "--target", "192.168.1.100", "--port", "138", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert captured["port"] == 138
+
+
+def test_netbios_offline_timeout() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["netbios", "--target", "127.0.0.1:1", "--timeout", "0.2"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["error"] is not None
+    assert "request failed" in parsed["error"]
