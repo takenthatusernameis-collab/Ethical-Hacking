@@ -17465,3 +17465,155 @@ def test_smtp_offline_connection_refused() -> None:
     parsed = json.loads(result.output)
     assert parsed["connected"] is False
     assert parsed["error"] is not None
+
+
+# ---------------------------------------------------------------------------
+# ftp command
+# ---------------------------------------------------------------------------
+
+
+def test_ftp_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ftp", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--port" in result.output
+    assert "--no-anonymous-check" in result.output
+    assert "--timeout" in result.output
+    assert "--output-format" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+
+
+def test_ftp_top_level_help_lists_command() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "ftp" in result.output
+
+
+def test_ftp_output_format_csv(monkeypatch) -> None:
+    mock_results = {
+        "target": "ftp.example.com",
+        "host": "ftp.example.com",
+        "port": 21,
+        "connected": True,
+        "banner": "220 (vsFTPd 3.0.3)",
+        "welcome_message": "220 (vsFTPd 3.0.3)",
+        "anonymous_login": True,
+        "anonymous_message": "anonymous login successful",
+        "check_anonymous": True,
+        "error": None,
+    }
+    monkeypatch.setattr("ethscan.cli.run_ftp", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ftp", "--target", "ftp.example.com", "--output-format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "target,host,port,banner,anonymous_login,anonymous_message,error" in result.output
+    assert "ftp.example.com" in result.output
+    assert "true" in result.output
+
+
+def test_ftp_output_format_csv_out(tmp_path, monkeypatch) -> None:
+    mock_results = {
+        "target": "ftp.example.com",
+        "host": "ftp.example.com",
+        "port": 21,
+        "banner": "220 (vsFTPd 3.0.3)",
+        "anonymous_login": True,
+        "anonymous_message": "anonymous login successful",
+        "error": None,
+    }
+    monkeypatch.setattr("ethscan.cli.run_ftp", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    out_file = tmp_path / "ftp.csv"
+    result = runner.invoke(cli, ["ftp", "--target", "ftp.example.com", "--output-format", "csv", "--out", str(out_file), "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    content = out_file.read_text()
+    assert "target,host,port,banner,anonymous_login,anonymous_message,error" in content
+    assert "ftp.example.com" in content
+
+
+def test_ftp_format_csv_alias(monkeypatch) -> None:
+    mock_results = {
+        "target": "ftp.example.com",
+        "host": "ftp.example.com",
+        "port": 21,
+        "banner": "220 (vsFTPd 3.0.3)",
+        "anonymous_login": True,
+        "anonymous_message": "anonymous login successful",
+        "error": None,
+    }
+    monkeypatch.setattr("ethscan.cli.run_ftp", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ftp", "--target", "ftp.example.com", "--format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "target,host,port,banner,anonymous_login,anonymous_message,error" in result.output
+
+
+def test_ftp_output_format_default_is_json(monkeypatch) -> None:
+    mock_results = {"target": "ftp.example.com", "host": "ftp.example.com", "port": 21, "connected": True}
+    monkeypatch.setattr("ethscan.cli.run_ftp", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ftp", "--target", "ftp.example.com", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["host"] == "ftp.example.com"
+
+
+def test_ftp_output_format_markdown(monkeypatch) -> None:
+    mock_results = {
+        "target": "ftp.example.com",
+        "host": "ftp.example.com",
+        "port": 21,
+        "connected": True,
+        "banner": "220 (vsFTPd 3.0.3)",
+        "welcome_message": "220 (vsFTPd 3.0.3)",
+        "anonymous_login": True,
+        "anonymous_message": "anonymous login successful",
+        "error": None,
+    }
+    monkeypatch.setattr("ethscan.cli.run_ftp", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ftp", "--target", "ftp.example.com", "--output-format", "markdown", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "# ethscan FTP Report" in result.output
+    assert "ftp.example.com" in result.output
+
+
+def test_ftp_no_anonymous_check_flag(monkeypatch) -> None:
+    captured = {}
+
+    def fake_run(*args, **kwargs):
+        captured.update(kwargs)
+        return {"target": "ftp.example.com", "host": "ftp.example.com", "port": 21, "connected": True, "error": None}
+
+    monkeypatch.setattr("ethscan.cli.run_ftp", fake_run)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ftp", "--target", "ftp.example.com", "--no-anonymous-check", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert captured["check_anonymous"] is False
+
+
+def test_ftp_port_option(monkeypatch) -> None:
+    captured = {}
+
+    def fake_run(*args, **kwargs):
+        captured.update(kwargs)
+        return {"target": "ftp.example.com", "host": "ftp.example.com", "port": kwargs.get("port", 21), "connected": True, "error": None}
+
+    monkeypatch.setattr("ethscan.cli.run_ftp", fake_run)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ftp", "--target", "ftp.example.com", "--port", "2121", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert captured["port"] == 2121
+
+
+def test_ftp_offline_connection_refused() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ftp", "--target", "127.0.0.1:1", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["connected"] is False
+    assert parsed["error"] is not None

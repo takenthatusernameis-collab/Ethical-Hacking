@@ -2,87 +2,86 @@
 
 ## What the previous (assigned) task was
 
-The prior agent completed the `--output-format csv` work for all commands and left an
-"audit to confirm none are missed" suggested next task. This session **executed and verified**
-that audit, then implemented a new high-value command.
+The prior agent completed the `smtp` command (SMTP reconnaissance) and left a
+suggested next task of implementing an `ftp` command. This session **executed
+and verified** the `ftp` command end-to-end.
 
-## CSV `--output-format` audit — COMPLETED & VERIFIED
+## `ftp` command — COMPLETED & VERIFIED
 
-Ran an AST-based audit of every `@cli.command()` block in `ethscan/cli.py`:
-
-- **40 commands** (every `@cli.command` except the `cli` Click group itself) now carry
-  both `--output-format` (dest `output_fmt`, default `None`) and `--format` (dest `fmt`,
-  deprecated alias, choices `["json","markdown","csv"]`), with the standard precedence
-  `chosen_format = output_fmt if output_fmt is not None else fmt` routing.
-- **40 `format_*_report_csv()` functions** exist across the `ethscan/` modules (verified
-  by `grep -rn "def format_\w+_report_csv"`).
-- CLI integration tests in `tests/test_cli.py` exercise `--output-format csv`,
-  `--output-format csv --out`, and the deprecated `--format csv` alias for every command.
-
-**Conclusion:** the CSV work is fully complete. No command is missing `--output-format csv`.
-
-## New work completed this session — `smtp` command (SMTP reconnaissance)
-
-Added a stdlib-only SMTP reconnaissance command (previously a genuine gap: there was no
-standalone `smtp`/`ftp`/`imap` service-recon command).
+Implemented a stdlib-only (`ftplib`/`socket`) FTP reconnaissance command, the
+natural companion to `smtp`, filling the service-recon gap.
 
 ### Added
-- `ethscan/smtp.py`:
-  - `_normalize_target()` — parse `host`, `host:port`, and `smtp://host:port` targets (defaults to port 25).
-  - `_parse_smtp_response()` — parse SMTP multi-line responses into `(code, message, complete)`.
-  - `_read_response()` / `_send_command()` / `_connect()` — minimal stdlib SMTP I/O layer;
-    `_connect` takes an injectable `connector` (defaults to `socket.create_connection`) so
-    tests can drive a local fake SMTP server.
-  - `_classify_vrfy()` — map VRFY response codes (250/251/252/550/551) to `found`/description.
-  - `run_smtp(target, port=None, timeout, users, check_starttls, check_relay, ehlo_name, connector)` —
-    banner grab, EHLO capability discovery (reports STARTTLS advertisement), optional VRFY
-    user enumeration, optional open-relay probe (MAIL FROM→RCPT TO external domain), graceful
-    handling of connection failures/timeouts.
-  - `format_smtp_report_json()` / `format_smtp_report_markdown()` / `format_smtp_report_csv()`.
-- `ethscan/cli.py` — imported the three formatters + `run_smtp`; registered the `smtp` command
-  with `--target`, `--port`, `--users`, `--no-starttls-check`/`--no-relay-check`, `--timeout`,
+- `ethscan/ftp.py`:
+  - `_normalize_target()` — parse `host`, `host:port`, and `ftp://host:port`
+    targets (defaults to port 21).
+  - `_connect()` — minimal stdlib FTP connection layer using `ftplib.FTP`;
+    takes an injectable `connector` (defaults to `ftplib.FTP`) so tests can
+    drive a local fake FTP client.
+  - `run_ftp(target, port=None, timeout, check_anonymous=True, connector)` —
+    banner/greeting grab (via `getwelcome()`), optional anonymous-login probe
+    (`USER anonymous` / `PASS anonymous@`), graceful handling of connection
+    refusals/timeouts and banner-read failures.
+  - `format_ftp_report_json()` / `format_ftp_report_markdown()` /
+    `format_ftp_report_csv()` (header:
+    `target,host,port,banner,anonymous_login,anonymous_message,error`).
+- `ethscan/cli.py` — imported the three formatters + `run_ftp`; registered the
+  `ftp` command with `--target`, `--port`, `--no-anonymous-check`, `--timeout`,
   `--output-format [json|markdown|csv]`, deprecated `--format` alias, and `--out`.
-- `tests/test_smtp.py` — **28 unit tests**: target normalization, response parsing, VRFY
-  classification, `run_smtp` against a local `socketserver` fake SMTP server (full interaction,
-  connection refused, open-relay detected/blocked, STARTTLS disabled, VRFY found/not-permitted,
-  no-ADVERTISE, relay-skipped-when-ehlo-fails), `_send_command` against the fake server, and all
-  three formatters (basic, no-users open/closed relay, connection-failed markdown, CSV comma-escaping).
-- `tests/test_cli.py` — **11 CLI integration tests**: help text/options, top-level listing,
-  `--output-format csv`/csv-with-`--out`, deprecated `--format csv` alias, default=JSON,
-  markdown, `--users` pass-through, `--no-starttls-check`/`--no-relay-check` flags, `--port`,
-  and offline connection-refused graceful handling.
-- `README.md` — added the `smtp` command to the features list.
+- `tests/test_ftp.py` — **25 unit tests**: target normalization, `_connect`
+  (fake + real refused), `run_ftp` against a fake FTP client (full banner +
+  anonymous-allowed, anonymous-denied, no-anonymous-check, connection refused,
+  connection timeout, banner-read-failed, port override, real connection-
+  refused), and all three formatters (JSON/Markdown/CSV incl. denied state,
+  not-checked state, connection-failed markdown, CSV comma-escaping).
+- `tests/test_cli.py` — **10 CLI integration tests**: help text/options,
+  top-level listing, `--output-format csv`, csv-with-`--out`, deprecated
+  `--format csv` alias, default=JSON, markdown, `--no-anonymous-check` flag,
+  `--port`, and offline connection-refused graceful handling.
+- `README.md` — added the `ftp` command to the features list.
 
 ### Verification
-- `python -m pytest -q` → **2157 passed, 1 skipped** (2118 baseline → +39 smtp tests; the
-  1 skip is the pre-existing dnspython-dependent test).
-- End-to-end CLI smoke test against a local fake SMTP server confirmed correct JSON, CSV,
-  and Markdown output, correct STARTTLS-capability detection, VRFY user enumeration, and
-  open-relay detection; `--out <file>` writes CSV correctly; an unreachable target
-  (`127.0.0.1:1`) returns exit 0 with a JSON error (`"connection failed: ..."`), no crash.
-- `python -m ethscan --help` lists `smtp` among the commands.
+- `python -m pytest -q` → **2192 passed, 1 skipped** (2157 baseline → +35 ftp
+  tests; the 1 skip is the pre-existing dnspython-dependent test).
+- End-to-end CLI smoke test against a local socketserver fake FTP server (real
+  `ftplib` wire path) confirmed correct banner capture, anonymous-login success,
+  and exit 0 with no crash; `--output-format csv`/`json`/`markdown` all route
+  correctly; an unreachable target (`127.0.0.1:1`) returns exit 0 with a JSON
+  error (`"connection failed: ..."`), no crash.
+- `python -m ethscan ftp --help` lists all options; `python -m ethscan --help`
+  lists `ftp` among the commands.
 
 ## Suggested next task
 
-Implement an **`ftp` command** (FTP service reconnaissance: banner grab + anonymous-login check)
-as the natural companion to the new `smtp` command, filling the remaining service-recon gap.
+Implement an **`ntp` command** (NTP reconnaissance / amplification probe) using
+stdlib `socket` + `struct` — send an NTP monoclist / control-mode query over UDP
+to detect vulnerable/reflector NTP servers and report the response (stratum,
+refid, root delay, peer count). This fills the remaining lightweight service-
+recon gap alongside `smtp`/`ftp`.
 
-Requirements:
-- Add `ethscan/ftp.py` using stdlib `ftplib` only (no new dependencies).
-- `run_ftp(target, port=21, timeout, check_anonymous=True)`:
-  normalize host:port, connect, capture the server banner/greeting, attempt anonymous
-  login (`USER anonymous` / `PASS anonymous@`), report banner, anonymous_login_allowed
-  (bool), welcome_message, and any error. Keep all network I/O behind an injectable
-  connector for testing.
-- Add `format_ftp_report_json`, `format_ftp_report_markdown`, `format_ftp_report_csv`
-  (header: `target,host,port,banner,anonymous_login,anonymous_message,error`).
-- Register `ftp` in `ethscan/cli.py` with `--target`, `--port`, `--no-anonymous-check`,
-  `--timeout`, `--output-format [json|markdown|csv]`, deprecated `--format` alias, `--out`.
-- Add `tests/test_ftp.py` (unit tests incl. a local fake FTP server + formatter CSV/JSON/markdown
-  cases) and CLI integration tests in `tests/test_cli.py` (help, csv/markdown/json, --out,
-  alias, default-format, offline connection-refused).
+Requirements (mirror the smtp/ftp patterns above):
+- Add `ethscan/ntp.py` using stdlib `socket` + `struct` only (no new deps).
+  `run_ntp(target, port=123, timeout, ...)`: normalize host[:port], build a
+  minimal NTP monoclist packet, send over UDP, parse the response (leap,
+  stratum, refid, root delay/dispersion, reference identifier) and report
+  `reflector`/`amplifier` heuristics; keep all network I/O behind an injectable
+  `connector` for testing; graceful timeout/error handling.
+- Add `format_ntp_report_json`, `format_ntp_report_markdown`,
+  `format_ntp_report_csv`.
+- Register `ntp` in `ethscan/cli.py` with `--target`, `--port`, `--timeout`,
+  `--output-format [json|markdown|csv]`, deprecated `--format` alias, and `--out`.
+- Add `tests/test_ntp.py` (unit tests incl. a local UDP fake + formatter
+  JSON/Markdown/CSV cases) and CLI integration tests in `tests/test_cli.py`
+  (help, csv/markdown/json, --out, alias, default-format, offline timeout).
 - Update `README.md` features list.
 
-Alternative next task (if anonymous FTP is deemed too small): implement an **`ntp` command**
-(NTP reconnaissance/amplification probe) using stdlib `socket` + `struct` — send an NTP
-monolist/control-mode query over UDP to detect vulnerable/reflector NTP servers.
+## Session handoff notes
+- What changed: `ethscan/ftp.py` (new), `tests/test_ftp.py` (new), additions to
+  `ethscan/cli.py` (import + `ftp` command), additions to `tests/test_cli.py`
+  (10 ftp CLI tests), `README.md` (ftp feature line). No commits made.
+- What was verified: full suite green (2192 passed, 1 skipped); CLI smoke tests
+  for all three output formats + offline connection-refused; real-ftplib end-to-
+  end against a local fake FTP server.
+- What remains unresolved: nothing blocking for the `ftp` work; the `ntp`
+  command remains as the proposed next task (no prior attempt).
+- Approaches that failed: none.
