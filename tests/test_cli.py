@@ -18677,3 +18677,170 @@ def test_ldap_markdown_output(monkeypatch) -> None:
     assert result.exit_code == 0
     assert "# ethscan LDAP Reconnaissance Report" in result.output
     assert "## Anonymous Bind" in result.output
+
+
+def _memcached_mock_results(target):
+    return {
+        "target": target,
+        "host": "example.com",
+        "port": 11211,
+        "accessible": True,
+        "version": "1.6.14",
+        "stats": {
+            "pid": "12345",
+            "uptime": "3600",
+            "bytes": "1024",
+            "curr_connections": "10",
+            "cmd_get": "100",
+            "cmd_set": "50",
+            "get_hits": "80",
+            "get_misses": "20",
+            "evictions": "0",
+        },
+        "findings": [],
+        "error": None,
+    }
+
+
+def test_memcached_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["memcached", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--port" in result.output
+    assert "--timeout" in result.output
+    assert "--probes" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+    assert "csv" in result.output
+
+
+def test_memcached_top_level_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "memcached" in result.output
+
+
+def test_memcached_output_format_csv(monkeypatch) -> None:
+    def mock_run_memcached(target, port=None, timeout=3.0, probes=None, connector=None):
+        return _memcached_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_memcached", mock_run_memcached)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["memcached", "--target", "example.com", "--output-format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    lines = result.output.strip().split("\n")
+    assert "target,host,port,accessible,version,uptime,bytes,curr_connections,cmd_get,cmd_set,get_hits,get_misses,evictions,findings,error" == lines[0].rstrip("\r")
+    assert "example.com" in lines[1]
+    assert "1.6.14" in lines[1]
+
+
+def test_memcached_output_format_csv_out(tmp_path, monkeypatch) -> None:
+    def mock_run_memcached(target, port=None, timeout=3.0, probes=None, connector=None):
+        return _memcached_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_memcached", mock_run_memcached)
+    out_file = tmp_path / "memcached_report.csv"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["memcached", "--target", "example.com", "--out", str(out_file), "--output-format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "target,host,port,accessible,version,uptime,bytes,curr_connections,cmd_get,cmd_set,get_hits,get_misses,evictions,findings,error" in content
+    assert "example.com" in content
+    assert "1.6.14" in content
+
+
+def test_memcached_format_csv_alias(monkeypatch) -> None:
+    def mock_run_memcached(target, port=None, timeout=3.0, probes=None, connector=None):
+        return _memcached_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_memcached", mock_run_memcached)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["memcached", "--target", "example.com", "--format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    lines = result.output.strip().split("\n")
+    assert "target,host,port,accessible,version,uptime,bytes,curr_connections,cmd_get,cmd_set,get_hits,get_misses,evictions,findings,error" == lines[0].rstrip("\r")
+
+
+def test_memcached_default_is_json(monkeypatch) -> None:
+    def mock_run_memcached(target, port=None, timeout=3.0, probes=None, connector=None):
+        return _memcached_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_memcached", mock_run_memcached)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["memcached", "--target", "example.com", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "version" in result.output
+    assert "1.6.14" in result.output
+    assert "example.com" in result.output
+    assert "accessible" in result.output
+
+
+def test_memcached_output_format_precedence(monkeypatch) -> None:
+    def mock_run_memcached(target, port=None, timeout=3.0, probes=None, connector=None):
+        return _memcached_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_memcached", mock_run_memcached)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["memcached", "--target", "example.com", "--output-format", "json", "--format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "version" in result.output
+    assert "1.6.14" in result.output
+    assert "target,host,port" not in result.output
+
+
+def test_memcached_port_passed_through(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_memcached(target, port=None, timeout=3.0, probes=None, connector=None):
+        called_args["target"] = target
+        called_args["port"] = port
+        called_args["timeout"] = timeout
+        called_args["probes"] = probes
+        return _memcached_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_memcached", mock_run_memcached)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["memcached", "--target", "example.com", "--port", "11212", "--timeout", "2.0"])
+    assert result.exit_code == 0
+    assert called_args["port"] == 11212
+    assert called_args["timeout"] == 2.0
+
+
+def test_memcached_probes_passed_through(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_memcached(target, port=None, timeout=3.0, probes=None, connector=None):
+        called_args["probes"] = probes
+        return _memcached_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_memcached", mock_run_memcached)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["memcached", "--target", "example.com", "--probes", "version"])
+    assert result.exit_code == 0
+    assert called_args["probes"] == ["version"]
+
+    called_args.clear()
+    result = runner.invoke(cli, ["memcached", "--target", "example.com", "--probes", "version,stats"])
+    assert result.exit_code == 0
+    assert called_args["probes"] == ["version", "stats"]
+
+
+def test_memcached_markdown_output(monkeypatch) -> None:
+    def mock_run_memcached(target, port=None, timeout=3.0, probes=None, connector=None):
+        return _memcached_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_memcached", mock_run_memcached)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["memcached", "--target", "example.com", "--output-format", "markdown", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "# ethscan Memcached Reconnaissance Report" in result.output
+    assert "**Target:** example.com" in result.output
+    assert "**Memcached Version:** 1.6.14" in result.output
+    assert "pid" in result.output
+    assert "uptime" in result.output
