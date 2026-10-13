@@ -259,6 +259,12 @@ from ethscan.smtp import (
     format_smtp_report_markdown,
     run_smtp,
 )
+from ethscan.ntp import (
+    format_ntp_report_csv,
+    format_ntp_report_json,
+    format_ntp_report_markdown,
+    run_ntp,
+)
 
 
 @click.group()
@@ -3964,6 +3970,81 @@ def ftp(
         output = format_ftp_report_csv(results)
     else:
         output = format_ftp_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target NTP server, host, host:port, or URL (e.g. ntp.example.com or ntp://ntp.example.com:123)",
+)
+@click.option(
+    "--port",
+    type=int,
+    default=None,
+    help="NTP port (overrides any port parsed from --target; default 123).",
+)
+@click.option(
+    "--no-monlist-check",
+    "check_monlist",
+    flag_value=False,
+    default=True,
+    help="Skip the monlist amplification check.",
+)
+@click.option("--timeout", default=3.0, type=float, help="Per-request timeout in seconds")
+@click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default="json",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def ntp(
+    target: str,
+    port: Optional[int],
+    check_monlist: bool,
+    timeout: float,
+    fmt: str,
+    output_fmt: Optional[str],
+    out_path: Optional[str],
+) -> None:
+    """Run NTP reconnaissance (time response + monlist amplification check) for TARGET."""
+    results = run_ntp(
+        target,
+        port=port,
+        timeout=timeout,
+        check_monlist=check_monlist,
+    )
+
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
+        output = format_ntp_report_json(results)
+    elif chosen_format == "csv":
+        output = format_ntp_report_csv(results)
+    else:
+        output = format_ntp_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

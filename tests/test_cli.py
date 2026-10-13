@@ -17617,3 +17617,211 @@ def test_ftp_offline_connection_refused() -> None:
     parsed = json.loads(result.output)
     assert parsed["connected"] is False
     assert parsed["error"] is not None
+
+
+# ---------------------------------------------------------------------------
+# NTP CLI tests
+# ---------------------------------------------------------------------------
+
+
+def test_ntp_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ntp", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--port" in result.output
+    assert "--no-monlist-check" in result.output
+    assert "--timeout" in result.output
+    assert "--output-format" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+
+
+def test_ntp_top_level_help_lists_command() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "ntp" in result.output
+
+
+def test_ntp_output_format_csv(monkeypatch) -> None:
+    mock_results = {
+        "target": "ntp.example.com",
+        "host": "ntp.example.com",
+        "port": 123,
+        "time_response": {
+            "stratum": 2,
+            "reference_id": "0x0a0b0c0d",
+            "root_delay_ms": 250.0,
+            "root_dispersion_ms": 125.0,
+        },
+        "monlist_response": {
+            "peer_count": 3,
+            "error": None,
+        },
+        "is_reflector": True,
+        "amplification_factor": 24.5,
+        "error": None,
+    }
+    monkeypatch.setattr("ethscan.cli.run_ntp", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ntp", "--target", "ntp.example.com", "--output-format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "target,host,port,stratum,refid" in result.output
+    assert "ntp.example.com" in result.output
+    assert "2" in result.output
+
+
+def test_ntp_output_format_csv_out(tmp_path, monkeypatch) -> None:
+    mock_results = {
+        "target": "ntp.example.com",
+        "host": "ntp.example.com",
+        "port": 123,
+        "time_response": {
+            "stratum": 2,
+            "reference_id": "0x0a0b0c0d",
+            "root_delay_ms": 250.0,
+            "root_dispersion_ms": 125.0,
+        },
+        "monlist_response": {
+            "peer_count": 3,
+            "error": None,
+        },
+        "is_reflector": True,
+        "amplification_factor": 24.5,
+        "error": None,
+    }
+    monkeypatch.setattr("ethscan.cli.run_ntp", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    out_file = tmp_path / "ntp.csv"
+    result = runner.invoke(cli, ["ntp", "--target", "ntp.example.com", "--output-format", "csv", "--out", str(out_file), "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    content = out_file.read_text()
+    assert "target,host,port,stratum,refid" in content
+    assert "ntp.example.com" in content
+
+
+def test_ntp_format_csv_alias(monkeypatch) -> None:
+    mock_results = {
+        "target": "ntp.example.com",
+        "host": "ntp.example.com",
+        "port": 123,
+        "time_response": {
+            "stratum": 2,
+            "reference_id": "0x0a0b0c0d",
+            "root_delay_ms": 250.0,
+            "root_dispersion_ms": 125.0,
+        },
+        "monlist_response": {
+            "peer_count": 0,
+            "error": None,
+        },
+        "is_reflector": False,
+        "amplification_factor": None,
+        "error": None,
+    }
+    monkeypatch.setattr("ethscan.cli.run_ntp", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ntp", "--target", "ntp.example.com", "--format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "target,host,port,stratum,refid" in result.output
+
+
+def test_ntp_output_format_default_is_json(monkeypatch) -> None:
+    mock_results = {"target": "ntp.example.com", "host": "ntp.example.com", "port": 123, "error": None}
+    monkeypatch.setattr("ethscan.cli.run_ntp", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ntp", "--target", "ntp.example.com", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["host"] == "ntp.example.com"
+
+
+def test_ntp_output_format_markdown(monkeypatch) -> None:
+    mock_results = {
+        "target": "ntp.example.com",
+        "host": "ntp.example.com",
+        "port": 123,
+        "time_response": {
+            "leap_indicator": "no warning",
+            "version": 4,
+            "mode": 4,
+            "stratum": 2,
+            "poll": 4,
+            "precision": -20,
+            "root_delay_ms": 250.0,
+            "root_dispersion_ms": 125.0,
+            "reference_id": "0x0a0b0c0d",
+            "reference_timestamp": None,
+            "originate_timestamp": None,
+            "receive_timestamp": None,
+            "transmit_timestamp": None,
+        },
+        "monlist_response": {
+            "leap_indicator": 0,
+            "version": 4,
+            "mode": 7,
+            "response_bit": 1,
+            "implementation": 42,
+            "request_code": 0,
+            "sequence": 1,
+            "status": 0,
+            "association_id": 0,
+            "offset": 0,
+            "count": 3,
+            "peer_count": 3,
+            "peers": [
+                {"address": "127.0.0.1", "port": 1234, "mode": 3, "version": 4},
+            ],
+            "error": None,
+        },
+        "is_reflector": True,
+        "amplification_factor": 24.5,
+        "error": None,
+    }
+    monkeypatch.setattr("ethscan.cli.run_ntp", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ntp", "--target", "ntp.example.com", "--output-format", "markdown", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "# ethscan NTP Report" in result.output
+    assert "ntp.example.com" in result.output
+    assert "Monlist Response" in result.output
+    assert "Peer Count:** 3" in result.output
+
+
+def test_ntp_no_monlist_check_flag(monkeypatch) -> None:
+    captured = {}
+
+    def fake_run(*args, **kwargs):
+        captured.update(kwargs)
+        return {"target": "ntp.example.com", "host": "ntp.example.com", "port": 123, "error": None}
+
+    monkeypatch.setattr("ethscan.cli.run_ntp", fake_run)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ntp", "--target", "ntp.example.com", "--no-monlist-check", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert captured["check_monlist"] is False
+
+
+def test_ntp_port_option(monkeypatch) -> None:
+    captured = {}
+
+    def fake_run(*args, **kwargs):
+        captured.update(kwargs)
+        return {"target": "ntp.example.com", "host": "ntp.example.com", "port": kwargs.get("port", 123), "error": None}
+
+    monkeypatch.setattr("ethscan.cli.run_ntp", fake_run)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ntp", "--target", "ntp.example.com", "--port", "12300", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert captured["port"] == 12300
+
+
+def test_ntp_offline_timeout() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ntp", "--target", "127.0.0.1:1", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["error"] is not None
+    assert "time request failed" in parsed["error"]
