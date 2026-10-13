@@ -24,11 +24,20 @@ Note: SMB1 is disabled by default on modern Windows hosts and many modern Samba
 installations. In that case the server refuses/resets the connection and the
 probe reports ``accessible=False`` with a descriptive error. Use ``--port 445``
 (the default) for direct SMB over TCP.
+
+When invoked with the ``smb2`` option the module additionally performs an
+SMB2/SMB3 ``SMB2_NEGOTIATE`` request (``\\xfeSMB``) and decodes the negotiated
+dialect (SMB 2.0.2 / 2.1 / 3.0 / 3.0.2 / 3.1.1), the server's security-mode
+signing bits, ServerGuid, capabilities, and -- for SMB 3.1.1 -- the negotiate
+context list (preauth integrity hash algorithm and encryption ciphers). This is
+what reveals the dialect on modern hosts with SMB1 disabled. No authentication
+exchange is performed; every network access flows through ``_send_recv``.
 """
 
 import csv
 import io
 import json
+import os
 import socket
 import struct
 from typing import Any, Dict, List, Optional, Tuple
@@ -57,6 +66,94 @@ DEFAULT_DIALECTS: Tuple[str, ...] = ("NT LM 0.12", "Samba", "Core", "CorePlus")
 
 # Length of the SMB1 header (signature + command + status + flags + ids).
 _SMB1_HEADER_LEN = 32
+
+# ---------------------------------------------------------------------------
+# SMB2/SMB3 protocol constants
+# ---------------------------------------------------------------------------
+#
+# The SMB2 dialect identifiers, security-mode bits, capability flags, and
+# negotiate-context types are defined by [MS-SMB2]. The values below mirror
+# impacket's smb3structs so the byte layout matches real client traffic.
+
+# SMB2 dialects offered to the server (preference order). ``DialectRevision``
+# in a NEGOTIATE response is one of these.
+SMB2_DIALECT_002 = 0x0202   # SMB 2.0.2
+SMB2_DIALECT_21 = 0x0210    # SMB 2.1
+SMB2_DIALECT_30 = 0x0300    # SMB 3.0
+SMB2_DIALECT_302 = 0x0302   # SMB 3.0.2
+SMB2_DIALECT_311 = 0x0311   # SMB 3.1.1
+SMB2_DIALECT_WILDCARD = 0x02FF
+
+DEFAULT_SMB2_DIALECTS: Tuple[int, ...] = (
+    SMB2_DIALECT_002,
+    SMB2_DIALECT_21,
+    SMB2_DIALECT_30,
+    SMB2_DIALECT_302,
+    SMB2_DIALECT_311,
+)
+
+# SMB2_NEGOTIATE request message's SecurityMode bit fields (MS-SMB2 2.2.3).
+SMB2_SIGNING_ENABLED = 0x0001
+SMB2_SIGNING_REQUIRED = 0x0002
+
+# Client/server capabilities advertised in an SMB2 NEGOTIATE
+# (MS-SMB2 2.2.3 / 2.2.5).
+SMB2_CAP_DFS = 0x00000001
+SMB2_CAP_LEASING = 0x00000002
+SMB2_CAP_LARGE_MTU = 0x00000004
+SMB2_CAP_MULTI_CHANNEL = 0x00000008
+SMB2_CAP_PERSISTENT_HANDLES = 0x00000010
+SMB2_CAP_DIRECTORY_LEASING = 0x00000020
+SMB2_CAP_ENCRYPTION = 0x00000040
+
+# SMB2 negotiate-context types (MS-SMB2 2.2.3.1).
+SMB2_PREAUTH_INTEGRITY = 0x0001
+SMB2_ENCRYPTION_CAP = 0x0002
+
+# Preauth integrity hash algorithms (MS-SMB2 2.2.3.3.1).
+SMB2_HASH_SHA512 = 0x0001
+SMB2_HASH_SHA256 = 0x0002  # reserved, included for completeness
+
+# Encryption ciphers (MS-SMB2 2.2.3.2.2).
+SMB2_CIPHER_AES128_CCM = 0x0001
+SMB2_CIPHER_AES128_GCM = 0x0002
+
+# Length of the SMB2 header (the fixed 64-byte envelope).
+_SMB2_HEADER_LEN = 64
+
+_SMB2_DIALECT_NAMES: Dict[int, str] = {
+    SMB2_DIALECT_002: "SMB 2.0.2",
+    SMB2_DIALECT_21: "SMB 2.1",
+    SMB2_DIALECT_30: "SMB 3.0",
+    SMB2_DIALECT_302: "SMB 3.0.2",
+    SMB2_DIALECT_311: "SMB 3.1.1",
+    SMB2_DIALECT_WILDCARD: "SMB 2.x (wildcard)",
+}
+
+_SMB2_CAPABILITY_FLAGS: List[Tuple[int, str]] = [
+    (SMB2_CAP_DFS, "dfs"),
+    (SMB2_CAP_LEASING, "leasing"),
+    (SMB2_CAP_LARGE_MTU, "large_mtu"),
+    (SMB2_CAP_MULTI_CHANNEL, "multi_channel"),
+    (SMB2_CAP_PERSISTENT_HANDLES, "persistent_handles"),
+    (SMB2_CAP_DIRECTORY_LEASING, "directory_leasing"),
+    (SMB2_CAP_ENCRYPTION, "encryption"),
+]
+
+_SMB2_NEGOTIATE_CONTEXT_NAMES: Dict[int, str] = {
+    SMB2_PREAUTH_INTEGRITY: "preauth_integrity",
+    SMB2_ENCRYPTION_CAP: "encryption",
+}
+
+_SMB2_HASH_ALGORITHM_NAMES: Dict[int, str] = {
+    SMB2_HASH_SHA512: "SHA-512",
+    SMB2_HASH_SHA256: "SHA-256",
+}
+
+_SMB2_CIPHER_NAMES: Dict[int, str] = {
+    SMB2_CIPHER_AES128_CCM: "AES-128-CCM",
+    SMB2_CIPHER_AES128_GCM: "AES-128-GCM",
+}
 
 
 def _normalize_target(target: str) -> Tuple[str, int]:
@@ -291,19 +388,361 @@ def _build_banner(parsed: Dict[str, Any]) -> Optional[str]:
     return "SMB1 negotiate OK; " + ", ".join(parts)
 
 
+# ---------------------------------------------------------------------------
+# SMB2/SMB3 negotiate probe (MS-SMB2 2.2.3 / 2.2.5)
+# ---------------------------------------------------------------------------
+
+
+def _build_smb2_preauth_integrity_context(salt: bytes) -> bytes:
+    """Build an SMB2_PREAUTH_INTEGRITY_CAPABILITIES negotiate context.
+
+    Required by [MS-SMB2] whenever the client offers dialect 0x0311 in its
+    dialect list. The context advertises the hash algorithm(s) and salt the
+    client will use for the preauthentication integrity hash; for a stateless
+    recon probe the salt is never consumed, so any non-empty value is fine.
+    """
+    data = bytearray()
+    data += struct.pack("<H", 1)                       # HashAlgorithmCount
+    data += struct.pack("<H", len(salt))               # SaltLength
+    data += struct.pack("<H", SMB2_HASH_SHA512)        # HashAlgorithms[0]
+    data += salt
+    body = bytearray()
+    body += struct.pack("<H", SMB2_PREAUTH_INTEGRITY)   # ContextType
+    body += struct.pack("<H", len(data))               # DataLength
+    body += b"\x00" * 4                                 # Reserved
+    body += data
+    return bytes(body)
+
+
+def _build_smb2_negotiate_request(
+    dialects: Tuple[int, ...] = DEFAULT_SMB2_DIALECTS,
+    security_mode: int = SMB2_SIGNING_ENABLED,
+    capabilities: int = 0,
+    client_guid: bytes = b"\x00" * 16,
+    preauth_salt: Optional[bytes] = None,
+) -> bytes:
+    """Build a raw SMB2 ``SMB2_NEGOTIATE`` request.
+
+    Layout (all little-endian):
+      * 64-byte SMB2 header: protocol id ``\\xfeSMB``, StructureSize 64,
+        Command ``SMB2_NEGOTIATE`` (0), zeroed control fields.
+      * 36-byte ``SMB2_NEGOTIATE_REQUEST`` fixed body: StructureSize (36),
+        DialectCount, SecurityMode, Reserved, Capabilities, ClientGuid, and
+        the NegotiateContextOffset/Count/Reserved2 triple (8 bytes).
+      * Dialect list (``DialectCount * 2`` bytes).
+      * For SMB 3.1.1, an 8-byte aligned ``SMB2_PREAUTH_INTEGRITY``
+        negotiate context.
+    """
+    dialect_list = list(dialects)
+    dialect_count = len(dialect_list)
+    needs_preauth = SMB2_DIALECT_311 in dialect_list
+
+    buf = bytearray()
+    # --- SMB2 header (64 bytes) ---
+    buf += SMB2_MAGIC
+    buf += struct.pack("<H", 64)                       # StructureSize
+    buf += struct.pack("<H", 0)                        # CreditCharge (negotiate: 0)
+    buf += b"\x00\x00\x00\x00"                         # Status / ChannelSequence
+    buf += struct.pack("<H", 0)                        # Command (SMB2_NEGOTIATE)
+    buf += struct.pack("<H", 0)                        # CreditRequest
+    buf += struct.pack("<I", 0)                        # Flags
+    buf += struct.pack("<I", 0)                        # NextCommand
+    buf += struct.pack("<Q", 0)                        # MessageId
+    buf += b"\x00" * 4                                 # ProcessId / Reserved
+    buf += b"\x00" * 4                                 # TreeId
+    buf += b"\x00" * 8                                 # SessionId
+    buf += b"\x00" * 16                                # Signature
+    assert len(buf) == _SMB2_HEADER_LEN
+
+    # --- SMB2_NEGOTIATE_REQUEST body ---
+    body = bytearray()
+    body += struct.pack("<H", 36)                     # StructureSize
+    body += struct.pack("<H", dialect_count)          # DialectCount
+    body += struct.pack("<H", security_mode)          # SecurityMode
+    body += b"\x00\x00"                               # Reserved
+    body += struct.pack("<I", capabilities)           # Capabilities
+    body += client_guid                               # ClientGuid (16)
+    ctx_field_off = len(body)                          # body offset 28
+    body += b"\x00" * 8                                # NegotiateContextOffset/Count/Reserved2
+    body += b"".join(struct.pack("<H", d) for d in dialect_list)
+
+    dialects_end = len(buf) + len(body)
+    pad = (8 - (dialects_end % 8)) % 8
+    body += b"\x00" * pad
+
+    if needs_preauth:
+        salt = preauth_salt if preauth_salt is not None else os.urandom(32)
+        context_data = _build_smb2_preauth_integrity_context(salt)
+        context_offset = dialects_end + pad            # from SMB2 header start
+        body[ctx_field_off:ctx_field_off + 4] = struct.pack("<I", context_offset)
+        body[ctx_field_off + 4:ctx_field_off + 6] = struct.pack("<H", 1)
+        body[ctx_field_off + 6:ctx_field_off + 8] = b"\x00\x00"
+        body += context_data
+        body += b"\x00" * ((8 - (len(context_data) % 8)) % 8)
+
+    buf += body
+    return bytes(buf)
+
+
+def _parse_smb2_negotiate_contexts(data: bytes, ctx_offset: int) -> List[Dict[str, Any]]:
+    """Parse the SMB2 negotiate-context list referenced by ``ctx_offset``.
+
+    ``ctx_offset`` is measured from the start of the SMB2 header (i.e. byte 0
+    of ``data``). Each context is 8-byte aligned. Unknown context types are
+    preserved with their raw hex so nothing is silently dropped.
+    """
+    contexts: List[Dict[str, Any]] = []
+    pos = ctx_offset
+    while pos + 8 <= len(data):
+        ctx_type = struct.unpack("<H", data[pos:pos + 2])[0]
+        data_len = struct.unpack("<H", data[pos + 2:pos + 4])[0]
+        ctx_data = data[pos + 8:pos + 8 + data_len]
+        entry: Dict[str, Any] = {
+            "type": ctx_type,
+            "type_name": _SMB2_NEGOTIATE_CONTEXT_NAMES.get(ctx_type),
+            "detail": None,
+        }
+        if ctx_type == SMB2_PREAUTH_INTEGRITY:
+            entry["detail"] = _parse_preauth_integrity_context(ctx_data)
+        elif ctx_type == SMB2_ENCRYPTION_CAP:
+            entry["detail"] = _parse_encryption_capabilities(ctx_data)
+        contexts.append(entry)
+        pos += 8 + data_len
+        pos += (8 - (data_len % 8)) % 8
+    return contexts
+
+
+def _parse_preauth_integrity_context(ctx_data: bytes) -> Dict[str, Any]:
+    """Decode an SMB2_PREAUTH_INTEGRITY_CAPABILITIES sub-structure."""
+    if len(ctx_data) < 4:
+        return {}
+    hash_count = struct.unpack("<H", ctx_data[0:2])[0]
+    salt_length = struct.unpack("<H", ctx_data[2:4])[0]
+    algos: List[Any] = []
+    off = 4
+    available = (len(ctx_data) - 4) // 2
+    for _ in range(min(hash_count, available)):
+        algos.append(_SMB2_HASH_ALGORITHM_NAMES.get(struct.unpack("<H", ctx_data[off:off + 2])[0]))
+        off += 2
+    return {"hash_algorithms": algos, "salt_length": salt_length}
+
+
+def _parse_encryption_capabilities(ctx_data: bytes) -> Dict[str, Any]:
+    """Decode an SMB2_ENCRYPTION_CAPABILITIES sub-structure."""
+    if len(ctx_data) < 2:
+        return {}
+    cipher_count = struct.unpack("<H", ctx_data[0:2])[0]
+    ciphers: List[Any] = []
+    off = 2
+    available = (len(ctx_data) - 2) // 2
+    for _ in range(min(cipher_count, available)):
+        ciphers.append(_SMB2_CIPHER_NAMES.get(struct.unpack("<H", ctx_data[off:off + 2])[0]))
+        off += 2
+    return {"ciphers": ciphers}
+
+
+def _decode_smb2_capabilities(capabilities: int) -> List[str]:
+    return [name for bit, name in _SMB2_CAPABILITY_FLAGS if capabilities & bit]
+
+
+def _parse_smb2_response(
+    data: Optional[bytes],
+    dialects: Tuple[int, ...] = DEFAULT_SMB2_DIALECTS,
+) -> Dict[str, Any]:
+    """Parse an SMB2 ``SMB2_NEGOTIATE`` response.
+
+    Returns negotiated dialect/security info. A non-SMB2 or truncated response
+    is reported via the ``error`` field instead of raising.
+    """
+    result: Dict[str, Any] = {
+        "protocol": None,
+        "command": None,
+        "status": None,
+        "structure_size": None,
+        "security_mode": 0,
+        "signing_enabled": False,
+        "signing_required": False,
+        "dialect_revision": None,
+        "dialect": None,
+        "server_guid": None,
+        "capabilities": 0,
+        "capability_flags": [],
+        "max_transact_size": None,
+        "max_read_size": None,
+        "max_write_size": None,
+        "negotiate_context_count": 0,
+        "negotiate_contexts": [],
+        "raw_preview": "",
+        "error": None,
+    }
+
+    if not data:
+        result["error"] = "no response received"
+        return result
+
+    result["raw_preview"] = data[:48].hex()
+
+    if len(data) < _SMB2_HEADER_LEN + 64:
+        result["error"] = "response too short to be an SMB2 message"
+        return result
+
+    signature = data[0:4]
+    if signature == SMB1_MAGIC:
+        result["error"] = "SMB1 response received for an SMB2 negotiate (not decoded)"
+        return result
+    if signature != SMB2_MAGIC:
+        result["error"] = "response is not an SMB2 message"
+        return result
+
+    result["protocol"] = "SMB2"
+    result["command"] = struct.unpack("<H", data[12:14])[0]
+    result["status"] = struct.unpack("<I", data[8:12])[0]
+
+    body = data[_SMB2_HEADER_LEN:]
+    structure_size = struct.unpack("<H", body[0:2])[0]
+    result["structure_size"] = structure_size
+    if structure_size != 65:
+        result["error"] = f"unexpected SMB2 negotiate structure size {structure_size}"
+        return result
+
+    security_mode = struct.unpack("<H", body[2:4])[0]
+    result["security_mode"] = security_mode
+    result["signing_enabled"] = bool(security_mode & SMB2_SIGNING_ENABLED)
+    result["signing_required"] = bool(security_mode & SMB2_SIGNING_REQUIRED)
+
+    dialect_revision = struct.unpack("<H", body[4:6])[0]
+    result["dialect_revision"] = dialect_revision
+    result["dialect"] = _SMB2_DIALECT_NAMES.get(dialect_revision, f"unknown (0x{dialect_revision:04x})")
+
+    result["server_guid"] = body[8:24].hex()
+
+    capabilities = struct.unpack("<I", body[24:28])[0]
+    result["capabilities"] = capabilities
+    result["capability_flags"] = _decode_smb2_capabilities(capabilities)
+
+    result["max_transact_size"] = struct.unpack("<I", body[28:32])[0]
+    result["max_read_size"] = struct.unpack("<I", body[32:36])[0]
+    result["max_write_size"] = struct.unpack("<I", body[36:40])[0]
+
+    neg_ctx_count = struct.unpack("<H", body[6:8])[0]
+    result["negotiate_context_count"] = neg_ctx_count
+    neg_ctx_off = struct.unpack("<I", body[60:64])[0]
+    if neg_ctx_off and neg_ctx_count and neg_ctx_off + 8 <= len(data):
+        result["negotiate_contexts"] = _parse_smb2_negotiate_contexts(data, neg_ctx_off)
+
+    return result
+
+
+def _build_smb2_banner(parsed: Dict[str, Any]) -> Optional[str]:
+    """Build a short human-readable banner from a parsed SMB2 response."""
+    if parsed.get("protocol") != "SMB2":
+        return None
+    dialect = parsed.get("dialect") or "unknown"
+    parts = [f"dialect={dialect}"]
+    if parsed.get("signing_required"):
+        signing = "required"
+    elif parsed.get("signing_enabled"):
+        signing = "enabled"
+    else:
+        signing = "disabled"
+    parts.append(f"signing={signing}")
+    caps = parsed.get("capability_flags") or []
+    if caps:
+        parts.append("caps=" + ",".join(caps))
+    if parsed.get("server_guid"):
+        parts.append("guid present")
+    return "SMB2 negotiate OK; " + ", ".join(parts)
+
+
+def run_smb2(
+    target: str,
+    port: Optional[int] = None,
+    timeout: float = DEFAULT_TIMEOUT,
+    dialects: Tuple[int, ...] = DEFAULT_SMB2_DIALECTS,
+    connector=None,
+) -> Dict[str, Any]:
+    """Run an SMB2/SMB3 ``SMB2_NEGOTIATE`` probe against ``target``.
+
+    Performs a single dialect-negotiation round and decodes the negotiated
+    SMB dialect/version plus security capabilities. ``target`` is a host,
+    ``host:port``, or ``smb://host:port``; ``port`` overrides the parsed port
+    (default 445); ``connector`` injects a fake transport for testing.
+    """
+    host, parsed_port = _normalize_target(target)
+    server_port = port if port is not None else parsed_port
+
+    results: Dict[str, Any] = {
+        "target": target,
+        "host": host,
+        "port": server_port,
+        "accessible": False,
+        "protocol": "SMB2",
+        "dialect_revision": None,
+        "dialect": None,
+        "security_mode": 0,
+        "signing_enabled": False,
+        "signing_required": False,
+        "server_guid": None,
+        "capabilities": 0,
+        "capability_flags": [],
+        "max_transact_size": None,
+        "max_read_size": None,
+        "max_write_size": None,
+        "negotiate_context_count": 0,
+        "negotiate_contexts": [],
+        "banner": None,
+        "raw_preview": "",
+        "notes": [],
+        "error": None,
+    }
+
+    request = _build_smb2_negotiate_request(dialects=tuple(dialects))
+    data, err = _send_recv(host, server_port, request, timeout, connector=connector)
+
+    if err:
+        results["error"] = f"SMB2 negotiate request failed: {err}"
+        return results
+    if not data:
+        results["error"] = "SMB2 negotiate request failed: no response"
+        return results
+
+    parsed = _parse_smb2_response(data, dialects=tuple(dialects))
+    results.update({k: parsed[k] for k in parsed})
+    if parsed.get("error"):
+        results["error"] = parsed["error"]
+        return results
+
+    results["accessible"] = True
+    results["banner"] = _build_smb2_banner(parsed)
+
+    revision = parsed.get("dialect_revision")
+    if revision == SMB2_DIALECT_002:
+        results["notes"].append("dialect SMB 2.0.2 is the original SMB2 specification")
+    if parsed.get("signing_required"):
+        results["notes"].append("message signing is required by the server")
+    elif parsed.get("signing_enabled"):
+        results["notes"].append("message signing is supported but not enforced")
+    return results
+
+
 def run_smb(
     target: str,
     port: Optional[int] = None,
     timeout: float = DEFAULT_TIMEOUT,
     dialects: Optional[Tuple[str, ...]] = None,
+    smb2: bool = False,
+    smb2_dialects: Optional[Tuple[int, ...]] = None,
     connector=None,
 ) -> Dict[str, Any]:
-    """Run an SMB1 negotiate probe against ``target``.
+    """Run SMB reconnaissance probes against ``target``.
 
-    Parameters mirror the CLI: ``target`` is a host, ``host:port``, or
-    ``smb://host:port``; ``port`` overrides the parsed/default port (445);
-    ``timeout`` bounds the TCP exchange; ``connector`` injects a fake transport
-    for testing.
+    Always performs the SMB1 ``SMB_COM_NEGOTIATE`` probe described above. When
+    ``smb2`` is true an additional SMB2/SMB3 ``SMB2_NEGOTIATE`` probe is run and
+    its results are attached under the ``smb2`` key (this is what reaches modern
+    hosts with SMB1 disabled). ``target`` is a host, ``host:port``, or
+    ``smb://host:port``; ``port`` overrides the parsed port (445); ``timeout``
+    bounds each TCP exchange; ``connector`` injects a fake transport for
+    testing.
     """
     host, parsed_port = _normalize_target(target)
     server_port = port if port is not None else parsed_port
@@ -329,12 +768,35 @@ def run_smb(
         "error": None,
     }
 
+    if smb2:
+        smb2_dial = tuple(smb2_dialects) if smb2_dialects else DEFAULT_SMB2_DIALECTS
+        results["smb2"] = run_smb2(
+            target,
+            port=server_port,
+            timeout=timeout,
+            dialects=smb2_dial,
+            connector=connector,
+        )
+
     request = _build_smb1_negotiate_request(dial)
     data, err = _send_recv(host, server_port, request, timeout, connector=connector)
 
     if err:
         results["error"] = f"negotiate request failed: {err}"
         return results
+    if not data:
+        results["error"] = "negotiate request failed: no response"
+        return results
+
+    parsed = _parse_smb_response(data, dial)
+    results.update({k: parsed[k] for k in parsed})
+    if parsed.get("error"):
+        results["error"] = parsed["error"]
+        return results
+
+    results["accessible"] = True
+    results["banner"] = _build_banner(parsed)
+    return results
     if not data:
         results["error"] = "negotiate request failed: no response"
         return results
@@ -382,6 +844,37 @@ def format_smb_report_markdown(results: Dict[str, Any]) -> str:
             lines.append(f"- **Server Challenge:** {results.get('challenge')}")
         if results.get("banner"):
             lines.append(f"- **Banner:** {results.get('banner')}")
+        lines.append("")
+
+    smb2_results = results.get("smb2")
+    if smb2_results:
+        lines.append("## SMB2 Negotiation")
+        lines.append(f"- **Accessible:** {'Yes' if smb2_results.get('accessible') else 'No'}")
+        if smb2_results.get("error"):
+            lines.append(f"- **Error:** {smb2_results.get('error')}")
+        if smb2_results.get("accessible"):
+            lines.append(f"- **Dialect:** {smb2_results.get('dialect') or 'n/a'}")
+            lines.append(f"- **Dialect Revision:** {smb2_results.get('dialect_revision')}")
+            lines.append(f"- **Security Mode:** 0x{smb2_results.get('security_mode', 0):02x}")
+            lines.append(f"- **Signing Required:** {'Yes' if smb2_results.get('signing_required') else 'No'}")
+            lines.append(f"- **Signing Enabled:** {'Yes' if smb2_results.get('signing_enabled') else 'No'}")
+            if smb2_results.get("server_guid"):
+                lines.append(f"- **Server GUID:** {smb2_results.get('server_guid')}")
+            caps = smb2_results.get("capability_flags") or []
+            lines.append(f"- **Capabilities:** {', '.join(caps) if caps else 'none'}")
+            if smb2_results.get("negotiate_context_count"):
+                lines.append(f"- **Negotiate Contexts:** {smb2_results.get('negotiate_context_count')}")
+                for ctx in smb2_results.get("negotiate_contexts") or []:
+                    name = ctx.get("type_name") or f"0x{ctx.get('type', 0):04x}"
+                    detail = ctx.get("detail")
+                    if detail:
+                        lines.append(f"  - **{name}:** {detail}")
+                    else:
+                        lines.append(f"  - **{name}**")
+            if smb2_results.get("banner"):
+                lines.append(f"- **Banner:** {smb2_results.get('banner')}")
+            for note in smb2_results.get("notes") or []:
+                lines.append(f"- **Note:** {note}")
         lines.append("")
 
     raw = results.get("raw_preview")
@@ -445,11 +938,30 @@ __all__ = [
     "SMB_COM_NEGOTIATE",
     "SMB1_MAGIC",
     "SMB2_MAGIC",
+    "DEFAULT_SMB2_DIALECTS",
+    "SMB2_DIALECT_002",
+    "SMB2_DIALECT_21",
+    "SMB2_DIALECT_30",
+    "SMB2_DIALECT_302",
+    "SMB2_DIALECT_311",
+    "SMB2_SIGNING_ENABLED",
+    "SMB2_SIGNING_REQUIRED",
+    "SMB2_PREAUTH_INTEGRITY",
+    "SMB2_ENCRYPTION_CAP",
+    "SMB2_HASH_SHA512",
+    "SMB2_CIPHER_AES128_CCM",
+    "SMB2_CIPHER_AES128_GCM",
     "_build_smb1_negotiate_request",
+    "_build_smb2_negotiate_request",
+    "_build_smb2_preauth_integrity_context",
     "_normalize_target",
     "_parse_smb_response",
+    "_parse_smb2_response",
+    "_parse_smb2_negotiate_contexts",
+    "_build_smb2_banner",
     "_send_recv",
     "run_smb",
+    "run_smb2",
     "format_smb_report_csv",
     "format_smb_report_json",
     "format_smb_report_markdown",
