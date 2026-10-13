@@ -19129,6 +19129,28 @@ def _postgresql_mock_results(target):
         "error": None,
     }
 
+def _mssql_mock_results(target):
+    return {
+        "target": target,
+        "host": "example.com",
+        "port": 1433,
+        "accessible": True,
+        "prelogin": {
+            "version": "16.0.0",
+            "encryption": "REQUIRED",
+            "instance_name": "MSSQLSERVER",
+            "thread_id": 1234,
+        },
+        "version": "16.0.0",
+        "findings": [
+            "MSSQL server version: 16.0.0",
+            "Encryption: REQUIRED",
+            "Instance name: MSSQLSERVER",
+            "Thread ID (SPID): 1234",
+        ],
+        "error": None,
+    }
+
 
 def test_postgresql_help() -> None:
     runner = CliRunner()
@@ -19241,3 +19263,128 @@ def test_postgresql_probes_pass_through(monkeypatch) -> None:
     result = runner.invoke(cli, ["postgresql", "--target", "example.com", "--probes", "startup", "--timeout", "1.0"])
     assert result.exit_code == 0
     assert captured["probes"] == ["startup"]
+
+
+def test_mssql_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["mssql", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--port" in result.output
+    assert "--timeout" in result.output
+    assert "--probes" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+    assert "csv" in result.output
+
+
+def test_mssql_top_level_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "mssql" in result.output
+
+
+def test_mssql_output_format_json(monkeypatch) -> None:
+    def mock_run_mssql(target, port=None, timeout=3.0, probes=None, connector=None):
+        return _mssql_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_mssql", mock_run_mssql)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["mssql", "--target", "example.com"])
+    assert result.exit_code == 0
+    assert result.output.startswith("{")
+    assert '"target": "example.com"' in result.output
+    assert '"host": "example.com"' in result.output
+    assert '"port": 1433' in result.output
+    assert '"accessible": true' in result.output
+    assert '"version": "16.0.0"' in result.output
+    assert '"encryption": "REQUIRED"' in result.output
+    assert '"instance_name": "MSSQLSERVER"' in result.output
+    assert '"thread_id": 1234' in result.output
+
+
+def test_mssql_output_format_csv(monkeypatch) -> None:
+    def mock_run_mssql(target, port=None, timeout=3.0, probes=None, connector=None):
+        return _mssql_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_mssql", mock_run_mssql)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["mssql", "--target", "example.com", "--output-format", "csv"])
+    assert result.exit_code == 0
+    lines = result.output.strip().split("\n")
+    assert "target,host,port,accessible,version,encryption,instance_name,thread_id,findings,error" == lines[0].rstrip("\r")
+    assert "example.com" in lines[1]
+    assert "16.0.0" in lines[1]
+
+
+def test_mssql_output_format_markdown(monkeypatch) -> None:
+    def mock_run_mssql(target, port=None, timeout=3.0, probes=None, connector=None):
+        return _mssql_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_mssql", mock_run_mssql)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["mssql", "--target", "example.com", "--output-format", "markdown"])
+    assert result.exit_code == 0
+    assert "# MSSQL Reconnaissance Report" in result.output
+    assert "**Target:** example.com" in result.output
+    assert "**Host:** example.com" in result.output
+    assert "**Port:** 1433" in result.output
+    assert "**Accessible:** Yes" in result.output
+    assert "**Server Version:** 16.0.0" in result.output
+    assert "## PRELOGIN Response" in result.output
+    assert "- **version:** 16.0.0" in result.output
+    assert "- **encryption:** REQUIRED" in result.output
+    assert "- **instance_name:** MSSQLSERVER" in result.output
+    assert "- **thread_id:** 1234" in result.output
+    assert "## Findings" in result.output
+    assert "- MSSQL server version: 16.0.0" in result.output
+    assert "- Encryption: REQUIRED" in result.output
+    assert "- Instance name: MSSQLSERVER" in result.output
+    assert "- Thread ID (SPID): 1234" in result.output
+
+
+def test_mssql_output_file(monkeypatch, tmpdir) -> None:
+    def mock_run_mssql(target, port=None, timeout=3.0, probes=None, connector=None):
+        return _mssql_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_mssql", mock_run_mssql)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["mssql", "--target", "example.com", "--out", str(tmpdir.join("output.txt"))])
+    assert result.exit_code == 0
+    assert "Report written to" in result.output
+    output_file = tmpdir.join("output.txt")
+    assert output_file.exists()
+    content = output_file.read()
+    assert content.startswith("{")
+    assert '"target": "example.com"' in content
+
+
+def test_mssql_port_pass_through(monkeypatch) -> None:
+    captured = {}
+
+    def mock_run_mssql(target, port=None, timeout=3.0, probes=None, connector=None):
+        captured["port"] = port
+        return _mssql_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_mssql", mock_run_mssql)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["mssql", "--target", "example.com", "--port", "1434"])
+    assert result.exit_code == 0
+    assert captured["port"] == 1434
+
+
+def test_mssql_probes_pass_through(monkeypatch) -> None:
+    captured = {}
+
+    def mock_run_mssql(target, port=None, timeout=3.0, probes=None, connector=None):
+        captured["probes"] = probes
+        return _mssql_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_mssql", mock_run_mssql)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["mssql", "--target", "example.com", "--probes", "prelogin"])
+    assert result.exit_code == 0
+    assert captured["probes"] == ["prelogin"]
