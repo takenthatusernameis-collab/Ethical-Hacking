@@ -11496,7 +11496,7 @@ def test_cidr_output_format_csv() -> None:
         ["cidr", "--cidr", "192.168.1.0/24", "--output-format", "csv"],
     )
     assert result.exit_code == 0
-    assert "target,network,netmask,broadcast,wildcard,first_host,last_host,usable_host_count,total_addresses,prefixlen,ip_version" in result.output
+    assert "cidr,network_address,broadcast_address,netmask,wildcard_mask,prefix_length,num_addresses,first_address,last_address,is_private,contains_ip,contains_in_network,diff_count,diff_first,diff_last" in result.output
     assert "192.168.1.0/24" in result.output
     assert "255.255.255.0" in result.output
 
@@ -11521,7 +11521,7 @@ def test_cidr_output_format_csv_out(tmp_path) -> None:
     assert "Report written" in result.output
     assert out_file.exists()
     content = out_file.read_text()
-    assert "target,network,netmask" in content
+    assert "cidr,network_address,broadcast_address" in content
     assert "192.168.1.0/24" in content
 
 
@@ -11533,7 +11533,7 @@ def test_cidr_format_csv_alias() -> None:
         ["cidr", "--cidr", "192.168.1.0/24", "--format", "csv"],
     )
     assert result.exit_code == 0
-    assert "target,network,netmask,broadcast,wildcard,first_host,last_host,usable_host_count,total_addresses,prefixlen,ip_version" in result.output
+    assert "cidr,network_address,broadcast_address,netmask,wildcard_mask,prefix_length,num_addresses,first_address,last_address,is_private,contains_ip,contains_in_network,diff_count,diff_first,diff_last" in result.output
 
 
 def test_cidr_output_format_default_is_json() -> None:
@@ -11561,7 +11561,7 @@ def test_cidr_output_format_precedence_over_format() -> None:
         ],
     )
     assert result.exit_code == 0
-    assert "target,network,netmask" in result.output
+    assert "cidr,network_address,broadcast_address" in result.output
     assert '"cidr"' not in result.output
 
 
@@ -17118,8 +17118,8 @@ def test_hash_output_format_csv_with_passwords(monkeypatch) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["hash", "--algorithm", "md5", "--output-format", "csv", "--file", "passwords.txt"])
     assert result.exit_code == 0
-    assert "algorithm,password,digest_hex" in result.output
-    assert "md5,password,5f4dcc3b5aa765d61d8327deb882cf99" in result.output
+    assert "password,digest,algorithm,salt,pepper,iterations,computed,match,error" in result.output
+    assert "password,5f4dcc3b5aa765d61d8327deb882cf99,md5" in result.output
 
 
 def test_hash_output_format_csv_out(tmp_path, monkeypatch) -> None:
@@ -17137,7 +17137,7 @@ def test_hash_output_format_csv_out(tmp_path, monkeypatch) -> None:
     assert result.exit_code == 0
     assert "Report written" in result.output
     content = out_file.read_text()
-    assert "algorithm,password,digest_hex" in content
+    assert "password,digest,algorithm,salt,pepper,iterations,computed,match,error" in content
 
 
 def test_hash_format_csv_alias(monkeypatch) -> None:
@@ -17152,7 +17152,7 @@ def test_hash_format_csv_alias(monkeypatch) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["hash", "--algorithm", "md5", "--format", "csv", "--file", "passwords.txt"])
     assert result.exit_code == 0
-    assert "algorithm,password,digest_hex" in result.output
+    assert "password,digest,algorithm,salt,pepper,iterations,computed,match,error" in result.output
 
 
 def test_hash_check_output_format_csv(monkeypatch) -> None:

@@ -7,6 +7,8 @@ IP version, and membership testing for a ``--contains`` IP.
 Fully stdlib-only and offline.
 """
 
+import csv
+import io
 import ipaddress
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -259,32 +261,36 @@ def format_cidr_report_csv(data: Dict[str, object]) -> str:
         "network_address",
         "broadcast_address",
         "netmask",
+        "wildcard_mask",
         "prefix_length",
         "num_addresses",
         "first_address",
         "last_address",
         "is_private",
-        "contains",
-        "contains_member",
+        "contains_ip",
+        "contains_in_network",
         "diff_count",
         "diff_first",
         "diff_last",
     ])
+    network = data.get("network") or {}
+    contains = data.get("contains") or {}
     diff = data.get("diff") or {}
     writer.writerow([
         data.get("cidr", ""),
-        data.get("network_address", ""),
-        data.get("broadcast_address", ""),
-        data.get("netmask", ""),
-        data.get("prefix_length", ""),
-        data.get("num_addresses", ""),
-        data.get("first_address", ""),
-        data.get("last_address", ""),
-        "true" if data.get("is_private") else "false",
-        data.get("contains", "") or "",
-        "true" if data.get("contains_member") else "",
-        diff.get("count", "") if diff else "",
-        diff.get("first", "") if diff else "",
-        diff.get("last", "") if diff else "",
+        network.get("network_address", ""),
+        network.get("broadcast_address", ""),
+        network.get("netmask", ""),
+        network.get("wildcard_mask", ""),
+        network.get("prefixlen", ""),
+        network.get("total_addresses", ""),
+        network.get("first_host", ""),
+        network.get("last_host", ""),
+        "true" if network.get("is_private") else "false",
+        contains.get("ip", "") if isinstance(contains, dict) else (contains or ""),
+        "true" if (isinstance(contains, dict) and contains.get("in_network")) else ("true" if contains else "false" if isinstance(contains, dict) else ""),
+        diff.get("difference_network_count", "") if diff else "",
+        diff.get("difference", [""])[0] if diff and diff.get("difference") else "",
+        diff.get("difference", [""])[-1] if diff and diff.get("difference") else "",
     ])
     return output.getvalue().rstrip("\r\n")

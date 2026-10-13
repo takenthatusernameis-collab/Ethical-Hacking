@@ -527,7 +527,7 @@ def format_ssh_report_markdown(data: Dict[str, Any]) -> str:
 def format_ssh_report_csv(data: Dict[str, object]) -> str:
     """Format SSH security assessment results as CSV."""
     output = io.StringIO()
-    writer = csv.writer(output, quoting=csv.QUOTE_ALL)
+    writer = csv.writer(output)
     writer.writerow([
         "type",
         "algorithm",

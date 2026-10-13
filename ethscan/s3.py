@@ -443,9 +443,9 @@ def format_s3_report_csv(data: Dict[str, object]) -> str:
             domain,
             entry.get("bucket", ""),
             entry.get("region", ""),
-            entry.get("status_code") or "",
-            "True" if entry.get("exists") else "False",
-            "True" if entry.get("public") else "False",
-            entry.get("error") or "",
+            entry.get("status_code", ""),
+            entry.get("exists", ""),
+            entry.get("public", ""),
+            entry.get("error", ""),
         ])
     return output.getvalue().rstrip("\r\n")

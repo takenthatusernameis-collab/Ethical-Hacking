@@ -244,7 +244,7 @@ def format_service_report_markdown(data: Dict[str, object]) -> str:
 def format_service_report_csv(data: Dict[str, object]) -> str:
     """Format service detection results as CSV."""
     output = io.StringIO()
-    writer = csv.writer(output, quoting=csv.QUOTE_ALL)
+    writer = csv.writer(output)
     writer.writerow(["port", "service", "banner"])
     for result in data.get("results", []):
         port = result.get("port", "")

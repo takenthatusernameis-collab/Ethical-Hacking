@@ -502,6 +502,14 @@ def format_radix_report_csv(data: Dict[str, object]) -> str:
     import ipaddress
     merged_networks = [ipaddress.ip_network(m) for m in merged]
 
+    # For diff, just use the first diff CIDR if available
+    diff_cidr = ""
+    if has_diff:
+        diff = data.get("diff", {})
+        diff_cidrs = diff.get("diff_cidrs", [])
+        if diff_cidrs:
+            diff_cidr = diff_cidrs[0]
+
     for original in cidrs:
         orig_net = ipaddress.ip_network(original)
         matched_merged = original
@@ -511,13 +519,6 @@ def format_radix_report_csv(data: Dict[str, object]) -> str:
                 break
 
         if has_diff:
-            diff = data.get("diff", {})
-            diff_merged = diff.get("diff_merged", [])
-            diff_cidr = ""
-            for d in diff_merged:
-                if orig_net.subnet_of(ipaddress.ip_network(d)):
-                    diff_cidr = d
-                    break
             writer.writerow([
                 original,
                 matched_merged,
