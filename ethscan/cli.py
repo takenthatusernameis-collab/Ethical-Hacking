@@ -284,6 +284,12 @@ from ethscan.redis import (
     format_redis_report_markdown,
     run_redis,
 )
+from ethscan.smb import (
+    format_smb_report_csv,
+    format_smb_report_json,
+    format_smb_report_markdown,
+    run_smb,
+)
 
 
 
@@ -4228,6 +4234,63 @@ def netbios(
         output = format_netbios_report_csv(results)
     else:
         output = format_netbios_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option("--target", required=True, help="Target host, host:port, or smb:// URL (e.g. smb://localhost:445)")
+@click.option("--port", default=None, type=int, help="SMB port (overrides parsed port; default 445)")
+@click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
+@click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default="json",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def smb(
+    target: str,
+    port: Optional[int],
+    timeout: float,
+    fmt: str,
+    output_fmt: Optional[str],
+    out_path: Optional[str],
+) -> None:
+    """Run SMB1 dialect negotiation reconnaissance (banner/dialect)."""
+    results = run_smb(
+        target,
+        port=port,
+        timeout=timeout,
+    )
+
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
+        output = format_smb_report_json(results)
+    elif chosen_format == "csv":
+        output = format_smb_report_csv(results)
+    else:
+        output = format_smb_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

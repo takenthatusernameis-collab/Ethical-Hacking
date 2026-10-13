@@ -18331,3 +18331,120 @@ def test_redis_output_format_precedence(monkeypatch) -> None:
     result = runner.invoke(cli, ["redis", "--target", "example.com", "--output-format", "csv", "--format", "json", "--timeout", "1.0"])
     assert result.exit_code == 0
     assert "target,host,port" in result.output
+
+
+def _smb_mock_results(target: str) -> dict:
+    return {
+        "target": target,
+        "host": "192.168.1.100",
+        "port": 445,
+        "accessible": True,
+        "protocol": "SMB1",
+        "dialect": "NT LM 0.12",
+        "dialect_index": 0,
+        "security_mode": 0x05,
+        "security_flags": ["nt_security", "signing_enabled"],
+        "requires_signing": False,
+        "signing_enabled": True,
+        "nt_security": True,
+        "ntlm": True,
+        "challenge": "aabbccddeeff0011",
+        "banner": "SMB1 negotiate OK; dialect=NT LM 0.12",
+        "raw_preview": "ff534d42",
+        "error": None,
+    }
+
+
+def test_smb_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["smb", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--output-format" in result.output
+    assert "--port" in result.output
+
+
+def test_smb_top_level_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "smb" in result.output
+
+
+def test_smb_output_format_csv(monkeypatch) -> None:
+    def mock_run_smb(target, port=None, timeout=3.0, dialects=None, connector=None):
+        return _smb_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_smb", mock_run_smb)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["smb", "--target", "example.com", "--output-format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "target,host,port,accessible" in result.output
+
+
+def test_smb_output_format_csv_out(tmp_path, monkeypatch) -> None:
+    def mock_run_smb(target, port=None, timeout=3.0, dialects=None, connector=None):
+        return _smb_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_smb", mock_run_smb)
+    runner = CliRunner()
+    out_file = tmp_path / "smb.csv"
+    result = runner.invoke(
+        cli,
+        ["smb", "--target", "example.com", "--output-format", "csv", "--out", str(out_file), "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    content = out_file.read_text()
+    assert "target,host,port" in content
+
+
+def test_smb_format_csv_alias(monkeypatch) -> None:
+    def mock_run_smb(target, port=None, timeout=3.0, dialects=None, connector=None):
+        return _smb_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_smb", mock_run_smb)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["smb", "--target", "example.com", "--format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "target,host,port" in result.output
+
+
+def test_smb_default_is_json(monkeypatch) -> None:
+    def mock_run_smb(target, port=None, timeout=3.0, dialects=None, connector=None):
+        return _smb_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_smb", mock_run_smb)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["smb", "--target", "example.com", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    try:
+        json.loads(result.output)
+    except Exception:
+        assert False, "Default should be JSON"
+
+
+def test_smb_output_format_precedence(monkeypatch) -> None:
+    def mock_run_smb(target, port=None, timeout=3.0, dialects=None, connector=None):
+        return _smb_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_smb", mock_run_smb)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["smb", "--target", "example.com", "--output-format", "csv", "--format", "json", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "target,host,port" in result.output
+
+
+def test_smb_port_passed_through(monkeypatch) -> None:
+    captured = {}
+
+    def mock_run_smb(target, port=None, timeout=3.0, dialects=None, connector=None):
+        captured["port"] = port
+        captured["target"] = target
+        return _smb_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_smb", mock_run_smb)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["smb", "--target", "example.com", "--port", "139", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert captured["port"] == 139

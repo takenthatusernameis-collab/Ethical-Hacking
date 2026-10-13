@@ -2,51 +2,65 @@
 
 ## What the previous (assigned) task was
 
-The prior agent completed the `netbios` command and suggested implementing a `redis` command next. This session **executed and verified** the `redis` command end-to-end.
+Implement an **`smb` command** (SMB/CIFS banner/dialect reconnaissance) using
+stdlib only, following the `netbios`/`redis` command patterns. This was the
+suggested next task after `redis` completion (see prior `NEXT_TASK.md`).
 
-## `redis` command — COMPLETED & VERIFIED
+## `smb` command — COMPLETED & VERIFIED
 
-Implemented a stdlib-only (`socket`) Redis reconnaissance command using RESP protocol, following the same patterns as `smtp`/`ftp`/`ntp`/`snmp`/`netbios`.
+Implemented a stdlib-only (`socket`/`struct`) SMB1 `SMB_COM_NEGOTIATE` recon
+probe that returns the negotiated dialect, SMB1 SecurityMode, message-signing
+policy, and the NTLM server challenge.
 
 ### Added
-- `ethscan/redis.py` (new module):
-  - `_normalize_target()` — parse `host`, `host:port`, `redis://host:port` forms; handle bracketed IPv6 and extract port correctly.
-  - `_build_resp_array(*args)` — build RESP array commands (`*N\r\n` + bulk strings `$len\r\narg\r\n`).
-  - `_parse_resp_simple_string`, `_parse_resp_bulk_string`, `_parse_resp` — parse RESP responses (+, -, :, $, *) with proper handling of null bulk strings and arrays.
-  - `_parse_info(data)` — parse Redis INFO bulk string into key-value dict.
-  - `_parse_config(data)` — parse `CONFIG GET *` array response into key-value dict.
-  - `_assess_dangerous(config)` — identify dangerous config findings (bind 0.0.0.0, no requirepass, writable dir/dbfilename).
-  - `_send_recv(host, port, request, timeout, connector)` — injectable TCP send/recv (defaults to real socket).
-  - `run_redis(target, port, timeout, probes, connector)` — runs probes in order: ping, info (tries `INFO server` then `INFO` if empty), config; returns structured results with `accessible`, `ping`, `info`, `config`, `dangerous_findings`, `error`.
-  - `format_redis_report_json`, `format_redis_report_markdown`, `format_redis_report_csv` — output formatters with consistent schema.
+- `ethscan/smb.py` (new module):
+  - `DEFAULT_PORT = 445`, `DEFAULT_TIMEOUT`, `DEFAULT_DIALECTS = ("NT LM 0.12", "Samba", "Core", "CorePlus")`.
+  - `_normalize_target()` — parse `host`, `host:port`, `smb://host:port` forms; bracketed IPv6; default port 445.
+  - `_build_smb1_negotiate_request(dialects)` — raw 32-byte little-endian SMB1 header (`\\xffSMB`, command `0x72`, WordCount=0) + dialect blob (`\\x02` + ASCII name + `\\x00` per dialect).
+  - `_parse_smb_response(data)` — parse SMB1 negotiate response: DialectIndex (LE `<H` @ offset 33), SecurityMode byte (@ offset 35), data section ByteCount + server challenge (first 8 bytes). Defensive against short/truncated/non-SMB/SMB2-magic responses via an `error` field (no exceptions).
+  - `_send_recv(host, port, request, timeout, connector)` — injectable TCP send/recv mirroring `redis`/`netbios`.
+  - `run_smb(target, port=None, timeout, dialects=None, connector=None)` — builds request, sends once, parses, returns a structured result dict (`accessible`, `protocol`, `dialect`, `dialect_index`, `security_mode`, `security_flags`, `user_security`, `challenge_response`, `signing_enabled`, `signing_required`, `challenge`, `banner`, `raw_preview`, `error`).
+  - `format_smb_report_json`, `format_smb_report_markdown`, `format_smb_report_csv` — consistent formatters matching the redis/markdown bullet style and CSV conventions.
+- `ethscan/cli.py` — imported `run_smb` + formatters and registered the `smb` command with `--target`, `--port`, `--timeout`, `--output-format [json|markdown|csv]`, deprecated `--format` alias (lower precedence), `--out`.
+- `tests/test_smb.py` (new, 41 unit tests) — target normalization, request builder structure/dialects, response parsing (full flags, all-signing-flags combo, dialect mapping, 0xFFFF no-dialect, unknown index, challenge extraction incl. NTLMSSP-after-challenge layout, SMB2-magic tolerance, non-SMB/empty/short/truncated), connector send/recv, `run_smb` (reachable, no-common-dialect, timeout, refused, no-response, non-SMB, port override, timeout passthrough, default/custom dialects), and JSON/Markdown/CSV formatters (accessible + inaccessible).
+- `tests/test_cli.py` — added 8 CLI integration tests for `smb` (help, top-level listing, CSV output, CSV with `--out`, deprecated `--format csv` alias, default JSON, `--output-format` precedence over `--format`, `--port` passthrough).
+- `README.md` — added SMB/CIFS reconnaissance feature description under Features.
 
-- `ethscan/cli.py` — added import from `ethscan.redis` and registered `redis` command with `--target`, `--port`, `--timeout`, `--probes`, `--output-format [json|markdown|csv]`, deprecated `--format` alias (lower precedence), `--out`.
-- `tests/test_redis.py` (new, 16 unit tests) — normalization, RESP builders/parsers, INFO/config parsing, connector send/recv, run paths (ping-only, all probes, error paths), formatters.
-- `tests/test_cli.py` — added 7 CLI integration tests for `redis` (help, top-level listing, CSV output, CSV with `--out`, deprecated `--format csv` alias, default JSON, precedence).
-- `README.md` — added Redis reconnaissance feature description.
+### SecurityMode bit decode (verified against nmap `smb-security-mode.nse` + impacket `smb.SMB` constants + MS-SMB 2.2.4.2)
+The SMB1 negotiate-response SecurityMode is a single byte (@ offset 35, LE header):
+- `0x01` user-level authentication supported (else share-level)
+- `0x02` challenge/response (NTLM) authentication supported
+- `0x04` message signing enabled (supported)
+- `0x08` message signing required
+- `DialectIndex == 0xFFFF` → no common dialect agreed.
 
 ### Verification
-- `python -m pytest -q` → **2421 passed, 1 skipped** (2398 baseline + 23 new: 16 unit + 7 CLI). No regressions.
-- CLI smoke tests: offline timeout paths produce correct JSON/Markdown/CSV with errors; `--format` alias and `--output-format` precedence work as expected; `--out` writes files correctly; URL forms (`host:port`, `redis://...`) normalize correctly.
-- End-to-end offline behavior: connection refused/timeout handled gracefully (exit 0, structured error in output) consistent with other recon commands.
-- Stdlib-only implementation, injectable connector for testing, follows existing module/formatter conventions.
+- `python -m pytest -q` → **2470 passed, 1 skipped** (pre-existing TLS skip), no regressions vs. the 2469-baseline+redis run. New: 41 unit tests + 8 CLI tests, all passing.
+- CLI smoke tests against a closed local port: graceful `accessible: false` with a structured error in JSON/Markdown/CSV; `--out` writes files; `--output-format`/`--format` precedence and `--port` work.
+- Stdlib-only (`socket`/`struct`); injectable connector; follows existing module/formatter conventions; minimal and reversible.
 
 ### Packet/Protocol references used
-- Redis RESP protocol (https://redis.io/docs/reference/protocol-spec/) — simple strings, bulk strings, arrays for commands like `*1\r\n$4\r\nPING\r\n`, `*2\r\n$4\r\nINFO\r\n$6\r\nserver\r\n`, `*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$1\r\n*\r\n`.
-- Redis INFO format (colon-separated key:value lines) and `CONFIG GET *` response structure (alternating keys/values in array).
+- SMB1 `SMB_COM_NEGOTIATE` (command `0x72`): 32-byte little-endian header (`\xffSMB` + command + status + flags + PIDHigh/PID/UID/MID/TID), WordCount, ByteCount, then dialect descriptors (`\x02` + name + `\x00`). Verified against impacket `smb.py` `NewSMBPacket`/`SMBExtended_Security_Parameters` (header field order/LE, DialectIndex `<H` @33, SecurityMode `<B` @35, WordCount 0x11) and MS-SMB 2.2.4.2.
+- SMB1 SecurityMode bit decode confirmed against nmap `scripts/smb-security-mode.nse` (`&1` user vs share, `&2` challenge/response, `&4`/`&8` signing enabled/required).
+- SMB2 magic `\xfeSMB` tolerated defensively (not produced by an SMB1 request).
+
+### Notes / known limitations
+- Scope is intentionally minimal: a single SMB1 negotiate probe. This reports SMB1 dialect + signing policy, but does **not** perform SMB2/3 negotiation, session setup, or share enumeration. Modern hosts with SMB1 disabled will report `accessible=false` with a connection error. A natural future enhancement is an SMB2/3 `SMB2_NEGOTIATE` request/response parser (dialect revision + version) for modern-server coverage.
 
 ## Suggested next task
 
-Implement an **`smb` command** (SMB/CIFS reconnaissance) — banner/grab + dialect negotiation basics + anonymous/share enumeration where feasible, using stdlib only. This is the natural next lightweight LAN service recon alongside `netbios`/`smb` context (NetBIOS over TCP/IP is often paired with SMB).
-
-Alternative: implement **`redis`** is done. Another option is **`mongodb`** (Wire protocol) or **`memcached`** (text protocol), but SMB is commonly paired with NetBIOS and fills a useful gap. SMB is more complex than the previous simple text/UDP protocols; however it is a bounded task if scoped to banner/dialect detection + safe anonymous checks.
+Implement an **`ldap` command** (LDAP reconnaissance) — a useful, bounded gap that
+pairs with the existing directory/protocol recon set (`dns`, `smtp`, `snmp`,
+`netbios`). LDAP banner/dialect grabbing + anonymous bind support detection is
+straightforward and consistent with the lightweight recon style.
 
 Requirements (mirror existing recon command patterns):
-- Add `ethscan/smb.py` using stdlib `socket`/`struct` only (no new deps). Implement minimal SMB1/negotiation probing sufficient for banner/dialect reporting; be defensive and time-bounded. `run_smb(target, port=445/139, timeout, ...)` with injectable `connector`, `_normalize_target()`, request builders/parsers, graceful timeout/error handling.
-- Add `format_smb_report_json`, `format_smb_report_markdown`, `format_smb_report_csv`.
+- Add `ethscan/ldap.py` using stdlib `socket`/`struct`/LDAP BER or plain text where possible (no new deps). Implement a minimal LDAP `BIND` probe / banner grab to detect anonymous bind support and the LDAP server identity, with `run_ldap(target, port=389/636, timeout)` + injectable `connector`, `_normalize_target()`, request builders/parsers, and graceful timeout/error handling.
+- Add `format_ldap_report_json`, `format_ldap_report_markdown`, `format_ldap_report_csv`.
 - Register command in `ethscan/cli.py` with `--target`, `--port`, `--timeout`, `--output-format [json|markdown|csv]`, deprecated `--format` alias, `--out`.
-- Add `tests/test_smb.py` (unit tests with fake connector, packet builders/parsers) and CLI integration tests in `tests/test_cli.py` following the same style as `netbios`/`redis` (including CSV output, alias, precedence, `--out`).
-- Update `README.md` with feature description.
-- Keep changes minimal and reversible; preserve existing architecture.
+- Add `tests/test_ldap.py` (fake connector, BER/reader unit tests) and CLI integration tests in `tests/test_cli.py` following the `netbios`/`redis`/`smb` style.
+- Update `README.md` with a feature description.
+- Keep changes minimal and reversible; preserve existing architecture and the working `smb`/`redis`/`netbios` baseline.
 
-Evidence: NetBIOS is implemented; Redis (the suggested prior next task) is now complete and verified (2421 passed, 1 skipped). SMB remains as a plausible next recon gap consistent with the feature set.
+Evidence: `smb` is complete and verified (2470 passed, 1 skipped). LDAP is a
+common adjacent recon target and fills the remaining directory-protocol gap.
