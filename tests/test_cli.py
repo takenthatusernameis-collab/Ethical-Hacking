@@ -18201,3 +18201,133 @@ def test_netbios_offline_timeout() -> None:
     parsed = json.loads(result.output)
     assert parsed["error"] is not None
     assert "request failed" in parsed["error"]
+
+
+
+def test_redis_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["redis", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--output-format" in result.output
+
+
+def test_redis_top_level_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "redis" in result.output
+
+
+def test_redis_output_format_csv(monkeypatch) -> None:
+    def mock_run_redis(target, port=None, timeout=3.0, probes=None, connector=None):
+        return {
+            "target": target,
+            "host": target,
+            "port": 6379,
+            "ping": "PONG",
+            "info": {"redis_version": "7.0.0", "role": "master"},
+            "config": {"bind": "127.0.0.1", "requirepass": ""},
+            "dangerous_findings": [],
+            "accessible": True,
+            "error": None,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_redis", mock_run_redis)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["redis", "--target", "example.com", "--output-format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "target,host,port,accessible" in result.output
+
+
+def test_redis_output_format_csv_out(tmp_path, monkeypatch) -> None:
+    def mock_run_redis(target, port=None, timeout=3.0, probes=None, connector=None):
+        return {
+            "target": target,
+            "host": target,
+            "port": 6379,
+            "ping": "PONG",
+            "info": {},
+            "config": {},
+            "dangerous_findings": [],
+            "accessible": True,
+            "error": None,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_redis", mock_run_redis)
+    runner = CliRunner()
+    out_file = tmp_path / "redis.csv"
+    result = runner.invoke(
+        cli,
+        ["redis", "--target", "example.com", "--output-format", "csv", "--out", str(out_file), "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    content = out_file.read_text()
+    assert "target,host,port" in content
+
+
+def test_redis_format_csv_alias(monkeypatch) -> None:
+    def mock_run_redis(target, port=None, timeout=3.0, probes=None, connector=None):
+        return {
+            "target": target,
+            "host": target,
+            "port": 6379,
+            "ping": "PONG",
+            "info": {},
+            "config": {},
+            "dangerous_findings": [],
+            "accessible": True,
+            "error": None,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_redis", mock_run_redis)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["redis", "--target", "example.com", "--format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "target,host,port" in result.output
+
+
+def test_redis_default_is_json(monkeypatch) -> None:
+    def mock_run_redis(target, port=None, timeout=3.0, probes=None, connector=None):
+        return {
+            "target": target,
+            "host": target,
+            "port": 6379,
+            "ping": "PONG",
+            "info": {},
+            "config": {},
+            "dangerous_findings": [],
+            "accessible": True,
+            "error": None,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_redis", mock_run_redis)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["redis", "--target", "example.com", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    try:
+        json.loads(result.output)
+    except Exception:
+        assert False, "Default should be JSON"
+
+
+def test_redis_output_format_precedence(monkeypatch) -> None:
+    def mock_run_redis(target, port=None, timeout=3.0, probes=None, connector=None):
+        return {
+            "target": target,
+            "host": target,
+            "port": 6379,
+            "ping": "PONG",
+            "info": {},
+            "config": {},
+            "dangerous_findings": [],
+            "accessible": True,
+            "error": None,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_redis", mock_run_redis)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["redis", "--target", "example.com", "--output-format", "csv", "--format", "json", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "target,host,port" in result.output

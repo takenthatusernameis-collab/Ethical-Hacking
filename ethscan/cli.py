@@ -277,6 +277,14 @@ from ethscan.netbios import (
     format_netbios_report_markdown,
     run_netbios,
 )
+from ethscan.redis import (
+    DEFAULT_PROBES,
+    format_redis_report_csv,
+    format_redis_report_json,
+    format_redis_report_markdown,
+    run_redis,
+)
+
 
 
 @click.group()
@@ -4231,3 +4239,66 @@ def netbios(
 
 if __name__ == "__main__":
     cli()
+@cli.command()
+@click.option("--target", required=True, help="Target host, host:port, or redis:// URL (e.g. redis://localhost:6379)")
+@click.option("--port", default=None, type=int, help="Redis port (overrides parsed port; default 6379)")
+@click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
+@click.option(
+    "--probes",
+    default=",".join(DEFAULT_PROBES),
+    help="Comma-separated list of probes to run: ping, info, config (default: ping,info,config)",
+)
+@click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default="json",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def redis(
+    target: str,
+    port: Optional[int],
+    timeout: float,
+    probes: str,
+    fmt: str,
+    output_fmt: Optional[str],
+    out_path: Optional[str],
+) -> None:
+    """Run Redis reconnaissance (ping, info, config)."""
+    probe_list = [p.strip().lower() for p in probes.split(",") if p.strip()] if probes else list(DEFAULT_PROBES)
+    results = run_redis(
+        target,
+        port=port,
+        timeout=timeout,
+        probes=probe_list,
+    )
+
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
+        output = format_redis_report_json(results)
+    elif chosen_format == "csv":
+        output = format_redis_report_csv(results)
+    else:
+        output = format_redis_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)

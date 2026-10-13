@@ -2,157 +2,51 @@
 
 ## What the previous (assigned) task was
 
-The prior agent completed the `snmp` command (stdlib-only SNMP recon via
-hand-rolled BER) and suggested implementing a `netbios` command next.
-This session **executed and verified** the `netbios` command end-to-end.
+The prior agent completed the `netbios` command and suggested implementing a `redis` command next. This session **executed and verified** the `redis` command end-to-end.
 
-## `netbios` command — COMPLETED & VERIFIED
+## `redis` command — COMPLETED & VERIFIED
 
-Implemented a stdlib-only (`socket` + raw RFC 1001/1002 NBNS packet
-encoding) NetBIOS Name Service reconnaissance command, the LAN-adjacent
-companion to `smtp`/`ftp`/`ntp`/`snmp`, filling the final lightweight
-network-service recon gap.
+Implemented a stdlib-only (`socket`) Redis reconnaissance command using RESP protocol, following the same patterns as `smtp`/`ftp`/`ntp`/`snmp`/`netbios`.
 
 ### Added
-- `ethscan/netbios.py` (new module):
-  - `_normalize_target()` — parse `host`, `host:port`, and
-    `netbios://host:port` targets (defaults to port 137) — same shape as
-    `snmp`/`ntp`/`ftp`.
-  - `_encode_name_chars()` / `_decode_name_chars()` — RFC 1001 §14.1
-    first-level NetBIOS name encoding (16-byte name+suffix → 32 ASCII chars
-    `A`-`P`).
-  - `_encode_qname()` — DNS-style first-level question name
-    (`length=0x20 + 32 chars + 0x00` root terminator).
-  - `_build_nbns_query(name, suffix, transaction_id)` — NBNS NODE STATUS
-    request (QTYPE `0x0021`/NBSTAT, QCLASS IN) packet builder for a target
-    NetBIOS name (default `"*"`).
-  - `_parse_dns_name()` — DNS-style name parser with RFC 1035
-    compression-pointer support and loop protection (max 16 jumps).
-  - `_parse_name_flags()` — decodes the 16-bit NODE_NAME_FLAGS field into
-    group/unique, owner node type (B/P/M-node), permanent/active, conflict,
-    and deregister booleans (matches dpkt `NS_NAME_*` bit positions).
-  - `_parse_nbtstat_rdata()` — parses NBSTAT RDATA: `NUM_NAMES(1)` +
-    18-byte name entries (15-byte raw name + 1 suffix + 2 NAME_FLAGS) +
-    6-byte `Unit ID` MAC, with suffix→service mapping and truncation checks.
-  - `_parse_nbns_response()` — parses a full NBNS message (header, flags,
-    RCODE, QDCOUNT, answers); locates the NBSTAT answer, extracts MAC and
-    the name table; raises `ValueError` on malformed/truncated packets.
-  - `_send_recv()` — send/receive UDP with injectable `connector` (same
-    pattern as `ntp`/`snmp`).
-  - `SUFFIX_SERVICE_TYPES` / `RCODE_NAMES` / `NAME_FLAGS_*` constants.
-  - `_derive_assessment()` — heuristics: `is_server` (a `<20>` File server
-    service name is present), `hostname` (unique `<00>` Workstation name),
-    `is_domain_member` (group `<00>` name present).
-  - `run_netbios(target, port, timeout, name, suffix, connector)` — sends a
-    NODE STATUS query, parses the response, reports `mac`, `names`,
-    `num_names`, `is_server`, `hostname`, `is_domain_member`,
-    `transaction_id`, and `error`; graceful timeout/parse-error/rcode/error
-    handling.
-  - `format_netbios_report_json` / `format_netbios_report_markdown`
-    (target/host/port/MAC/queried-name header, per-name table with pipe
-    escaping, server/hostname/domain assessment, error) /
-    `format_netbios_report_csv` (header:
-    `target,host,port,mac,names,num_names,is_server,is_domain_member,
-    hostname,error`).
-- `ethscan/cli.py` — registered the `netbios` command with `--target`,
-  `--port`, `--name`, `--suffix`, `--timeout`, `--output-format
-  [json|markdown|csv]`, deprecated `--format` alias, and `--out`.
-- `tests/test_netbios.py` — **58 unit tests** covering target normalization,
-  name encoding/decoding (round-trip, wildcard, padding, invalid chars),
-  query construction (header fields, QTYPE/QCLASS, default name), DNS name
-  parsing (first-level labels, compression pointer, loop protection,
-  truncation), name-flags decoding (group/unique, permanent/transient,
-  conflict/deregister, owner node types for B/P/M-node), NBSTAT RDATA
-  parsing (names+MAC, group names, truncated entries, unknown suffix,
-  missing MAC), full response parsing (full, rcode error, not-a-response,
-  truncated header/answer), `_send_recv` (connector pass-through/error/
-  argument capture), `run_netbios` (full interaction, timeout, connection
-  refused, parse failure, rcode error, not-a-response, no-server heuristic,
-  custom name/suffix, port override, URL target, name-table return), and all
-  three formatters (JSON/Markdown including no-names/escaping/error cases,
-  CSV with comma escaping and error aggregation).
-- `tests/test_cli.py` — **11 CLI integration tests** for `netbios`: help
-  text/options, top-level listing, `--output-format csv`, csv-with-`--out`,
-  deprecated `--format csv` alias, default=JSON, markdown, `--name`
-  pass-through, `--suffix` pass-through, `--port`, and offline timeout
-  graceful handling.
-- `README.md` — added the `netbios` command to the features list.
+- `ethscan/redis.py` (new module):
+  - `_normalize_target()` — parse `host`, `host:port`, `redis://host:port` forms; handle bracketed IPv6 and extract port correctly.
+  - `_build_resp_array(*args)` — build RESP array commands (`*N\r\n` + bulk strings `$len\r\narg\r\n`).
+  - `_parse_resp_simple_string`, `_parse_resp_bulk_string`, `_parse_resp` — parse RESP responses (+, -, :, $, *) with proper handling of null bulk strings and arrays.
+  - `_parse_info(data)` — parse Redis INFO bulk string into key-value dict.
+  - `_parse_config(data)` — parse `CONFIG GET *` array response into key-value dict.
+  - `_assess_dangerous(config)` — identify dangerous config findings (bind 0.0.0.0, no requirepass, writable dir/dbfilename).
+  - `_send_recv(host, port, request, timeout, connector)` — injectable TCP send/recv (defaults to real socket).
+  - `run_redis(target, port, timeout, probes, connector)` — runs probes in order: ping, info (tries `INFO server` then `INFO` if empty), config; returns structured results with `accessible`, `ping`, `info`, `config`, `dangerous_findings`, `error`.
+  - `format_redis_report_json`, `format_redis_report_markdown`, `format_redis_report_csv` — output formatters with consistent schema.
+
+- `ethscan/cli.py` — added import from `ethscan.redis` and registered `redis` command with `--target`, `--port`, `--timeout`, `--probes`, `--output-format [json|markdown|csv]`, deprecated `--format` alias (lower precedence), `--out`.
+- `tests/test_redis.py` (new, 16 unit tests) — normalization, RESP builders/parsers, INFO/config parsing, connector send/recv, run paths (ping-only, all probes, error paths), formatters.
+- `tests/test_cli.py` — added 7 CLI integration tests for `redis` (help, top-level listing, CSV output, CSV with `--out`, deprecated `--format csv` alias, default JSON, precedence).
+- `README.md` — added Redis reconnaissance feature description.
 
 ### Verification
-- `python -m pytest -q` → **2398 passed, 1 skipped** (2329 baseline →
-  +69 netbios tests: 58 unit + 11 CLI; the 1 skip is the pre-existing
-  dnspython-dependent test).
-- End-to-end CLI smoke test against a local `socket` fake UDP NBNS server
-  (real `socket` wire path) confirmed: 3 names decoded (MYHOST `<00>`
-  unique workstation, MYHOST `<20>` file server, WORKGROUP `<00>` group
-  domain), MAC `a0:b1:c2:d3:e4:f5`, `is_server=True`, `hostname=MYHOST`,
-  `is_domain_member=True`, exit 0.
-- `python -m ethscan netbios --help` lists all options; `python -m ethscan
-  --help` lists `netbios` alongside `ftp`, `smtp`, `ntp`, and `snmp`.
-- Offline timeout (`127.0.0.1:1`, `--timeout 0.2`) returns exit 0 with a
-  JSON/markdown/csv error (`node status request failed: timeout`), no crash;
-  `--output-format csv`/`json`/`markdown` and `--format csv` alias and
-  `--out` all route correctly.
+- `python -m pytest -q` → **2421 passed, 1 skipped** (2398 baseline + 23 new: 16 unit + 7 CLI). No regressions.
+- CLI smoke tests: offline timeout paths produce correct JSON/Markdown/CSV with errors; `--format` alias and `--output-format` precedence work as expected; `--out` writes files correctly; URL forms (`host:port`, `redis://...`) normalize correctly.
+- End-to-end offline behavior: connection refused/timeout handled gracefully (exit 0, structured error in output) consistent with other recon commands.
+- Stdlib-only implementation, injectable connector for testing, follows existing module/formatter conventions.
 
-### Packet-format references used
-- RFC 1002 §4.2.17/4.2.18 (NODE STATUS REQUEST/RESPONSE layout) and §4.2.18
-  NODE_NAME entry (NETBIOS FORMAT NAME 16 bytes + NAME_FLAGS 2 bytes) and
-  STATISTICS (UNIT_ID MAC first).
-- RFC 1001 §14.1 first-level name encoding.
-- Cross-checked the NBSTAT RDATA layout (NUM_NAMES + 18-byte name entries +
-  Unit-ID MAC) and NAME_FLAGS bit positions against scapy
-  `NBNSNodeStatusResponseService`/`NBNSNodeStatusResponse` and impacket
-  `NBNodeStatusResponse`/`NODE_NAME_ENTRY` from the live RFC text and library
-  source.
+### Packet/Protocol references used
+- Redis RESP protocol (https://redis.io/docs/reference/protocol-spec/) — simple strings, bulk strings, arrays for commands like `*1\r\n$4\r\nPING\r\n`, `*2\r\n$4\r\nINFO\r\n$6\r\nserver\r\n`, `*3\r\n$6\r\nCONFIG\r\n$3\r\nGET\r\n$1\r\n*\r\n`.
+- Redis INFO format (colon-separated key:value lines) and `CONFIG GET *` response structure (alternating keys/values in array).
 
 ## Suggested next task
 
-Implement a **`redis` command** (Redis reconnaissance) — inline RESP protocol
-over TCP 6379: send `PING`/`INFO server`/`CONFIG GET *` probes (configurable)
-to detect unauthenticated Redis instances; report server info (redis_version,
-os, arch, process_id), role, connected clients, and dangerous-config findings
-(bind to 0.0.0.0, no `requirepass`, writable `dir`). This is the last
-recon gap alongside `smtp`/`ftp`/`ntp`/`snmp`/`netbios`.
+Implement an **`smb` command** (SMB/CIFS reconnaissance) — banner/grab + dialect negotiation basics + anonymous/share enumeration where feasible, using stdlib only. This is the natural next lightweight LAN service recon alongside `netbios`/`smb` context (NetBIOS over TCP/IP is often paired with SMB).
 
-Alternative: an **`smb` command** (SMB/CIFS banner + dialect negotiation +
-anon-share enumeration) — heavier (SMB dialect negotiation is fiddly with
-hand-rolled NTLM/Negotiate), so prefer `redis` unless SMB is specifically
-requested.
+Alternative: implement **`redis`** is done. Another option is **`mongodb`** (Wire protocol) or **`memcached`** (text protocol), but SMB is commonly paired with NetBIOS and fills a useful gap. SMB is more complex than the previous simple text/UDP protocols; however it is a bounded task if scoped to banner/dialect detection + safe anonymous checks.
 
-Requirements (mirror the smtp/ftp/ntp/snmp/netbios patterns above):
-- Add `ethscan/<module>.py` using stdlib `socket`/`struct` only (no new
-  deps). `run_*(target, port=..., timeout, connector)` with
-  `_normalize_target()`, request builders, response parsers, injectable
-  `connector`, graceful timeout/error handling.
-- Add `format_*_report_json`, `format_*_report_markdown`,
-  `format_*_report_csv`.
-- Register the command in `ethscan/cli.py` with `--target`, `--port`,
-  feature-specific options, `--timeout`, `--output-format
-  [json|markdown|csv]`, deprecated `--format` alias, and `--out`.
-- Add `tests/test_<module>.py` (unit tests incl. packet/RESP builders, fake
-  connector/TCP cases, formatter JSON/Markdown/CSV cases) and CLI
-  integration tests in `tests/test_cli.py` (help, csv/markdown/json, `--out`,
-  alias, default-format, offline timeout).
-- Update `README.md` features list.
+Requirements (mirror existing recon command patterns):
+- Add `ethscan/smb.py` using stdlib `socket`/`struct` only (no new deps). Implement minimal SMB1/negotiation probing sufficient for banner/dialect reporting; be defensive and time-bounded. `run_smb(target, port=445/139, timeout, ...)` with injectable `connector`, `_normalize_target()`, request builders/parsers, graceful timeout/error handling.
+- Add `format_smb_report_json`, `format_smb_report_markdown`, `format_smb_report_csv`.
+- Register command in `ethscan/cli.py` with `--target`, `--port`, `--timeout`, `--output-format [json|markdown|csv]`, deprecated `--format` alias, `--out`.
+- Add `tests/test_smb.py` (unit tests with fake connector, packet builders/parsers) and CLI integration tests in `tests/test_cli.py` following the same style as `netbios`/`redis` (including CSV output, alias, precedence, `--out`).
+- Update `README.md` with feature description.
+- Keep changes minimal and reversible; preserve existing architecture.
 
-## Session handoff notes
-- What changed: `ethscan/netbios.py` (new — NBNS codec + recon + formatters),
-  `tests/test_netbios.py` (new — 58 tests), additions to
-  `ethscan/cli.py` (import + `netbios` command, +11 lines), additions to
-  `tests/test_cli.py` (11 netbios CLI tests), `README.md` (1 netbios feature
-  line). No commits made.
-- What was verified: full suite green (2398 passed, 1 skipped); real-socket
-  CLI smoke test against a local fake UDP NBNS server round-trips names,
-  suffixes, service types, MAC, and heuristics; offline timeout and all
-  output formats + `--format` alias + `--out` verified via CLI.
-- What remains unresolved: nothing blocking for `netbios`. The `redis`/`smb`
-  commands remain as proposed next tasks (no prior attempt).
-- Approaches that failed: none for netbios. Two test-fixture gaps were
-  corrected during the first test run — (1) `_build_nbstat_response` defaulted
-  to empty RDATA which made the "not-a-response" path raise a parse error
-  instead of the intended "not a response" message (fixed by defaulting the
-  fixture to a valid NBSTAT RDATA so the response-parsing path succeeds and
-  the `is_response` check is reached); (2) a one-line module bug reading
-  `message["is_response"]` instead of `message["flags"]["is_response"]`,
-  fixed by using the correct nested key. All corrections were targeted,
-  minimal diffs preserving the existing architecture.
+Evidence: NetBIOS is implemented; Redis (the suggested prior next task) is now complete and verified (2421 passed, 1 skipped). SMB remains as a plausible next recon gap consistent with the feature set.
