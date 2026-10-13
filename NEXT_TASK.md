@@ -1,73 +1,88 @@
 # Next Task for Next Agent
 
-## Current State
+## What the previous (assigned) task was
 
-The `--output-format csv` output is now **complete for ALL commands** (previously 13 commands had the option in their CLI decorators but lacked CSV formatters, function signatures, and routing logic).
+The prior agent completed the `--output-format csv` work for all commands and left an
+"audit to confirm none are missed" suggested next task. This session **executed and verified**
+that audit, then implemented a new high-value command.
 
-### Completed in this session
+## CSV `--output-format` audit — COMPLETED & VERIFIED
 
-**CSV formatters added to 12 modules** (hash already had one, but with a field-name bug):
-| Command | Module | New function |
-|---------|--------|--------------|
-| `fuzz` | `ethscan/fuzz.py` | `format_fuzz_report_csv()` — columns: target,base_url,path,status_code,error,is_finding |
-| `resolve` | `ethscan/resolve.py` | `format_resolve_report_csv()` — columns: target,normalized,record_type,record_value |
-| `dnsbrute` | `ethscan/dnsbrute.py` | `format_dnsbrute_report_csv()` — columns: target,domain,subdomain,hostname,a_records,aaaa_records,resolved |
-| `tls` | `ethscan/tls.py` | `format_tls_report_csv()` — columns: target,host,port,probe_type,probe,supported,negotiated,error |
-| `urlcheck` | `ethscan/urlcheck.py` | `format_urlcheck_report_csv()` — long-format: section,key,value |
-| `osdetect` | `ethscan/osdetect.py` | `format_osdetect_report_csv()` — columns: target,host,port,probe_type,connected,response,flags_observed,error |
-| `trace` | `ethscan/trace.py` | `format_trace_report_csv()` — columns: target,hop,ip,host,response_type,rtt_ms,reached_destination |
-| `ping` | `ethscan/ping.py` | `format_ping_report_csv()` — columns: target,ip,sequence,rtt_ms,ttl,response_type,error |
-| `recon` | `ethscan/recon.py` | `format_recon_report_csv()` — long-format: module,field,value |
-| `cert` | `ethscan/cert.py` | `format_cert_report_csv()` — columns: target,domain,ip,subdomain |
-| `dnssec` | `ethscan/dnssec.py` | `format_dnssec_report_csv()` — columns: target,domain,validated,dnskey_success,dnskey_count,ds_success,ds_count |
-| `mac` | `ethscan/mac.py` | `format_mac_report_csv()` — columns: target,mac,oui,vendor,cached,offline_fallback,error |
-| `hash` (check mode) | `ethscan/hash.py` | `format_check_report_csv()` — columns: password,digest,algorithm,salt,pepper,iterations,computed,match,error |
+Ran an AST-based audit of every `@cli.command()` block in `ethscan/cli.py`:
 
-**cli.py changes:**
-- Imported all 13 new CSV formatters
-- Fixed `fuzz` command: added missing `output_fmt` parameter (was raising `TypeError: fuzz() got an unexpected keyword argument 'output_fmt'` for ANY `--output-format` value — a runtime crash)
-- Fixed routing for all 13 commands to use the pattern:
-  ```python
-  chosen_format = output_fmt if output_fmt is not None else fmt
-  if chosen_format == "json": ...
-  elif chosen_format == "csv": ...
-  else: ...  # markdown
-  ```
-- Fixed the shadowed/dead `hash` command (line ~503, overridden by `hash_cmd` registered later with `name="hash"`) to also accept `output_fmt` and route to CSV
-- Fixed pre-existing bug in `format_hash_report_csv`: read `entry.get("digest")` but the actual result field is `hash`; now reads `entry.get("hash") or entry.get("digest")` and uses per-entry `algorithm`
+- **40 commands** (every `@cli.command` except the `cli` Click group itself) now carry
+  both `--output-format` (dest `output_fmt`, default `None`) and `--format` (dest `fmt`,
+  deprecated alias, choices `["json","markdown","csv"]`), with the standard precedence
+  `chosen_format = output_fmt if output_fmt is not None else fmt` routing.
+- **40 `format_*_report_csv()` functions** exist across the `ethscan/` modules (verified
+  by `grep -rn "def format_\w+_report_csv"`).
+- CLI integration tests in `tests/test_cli.py` exercise `--output-format csv`,
+  `--output-format csv --out`, and the deprecated `--format csv` alias for every command.
 
-**Tests added (67 new: 40 unit + 27 CLI):**
-- `tests/test_fuzz.py` — 3 CSV unit tests
-- `tests/test_resolve.py` — 3 CSV unit tests
-- `tests/test_dnsbrute.py` — 3 CSV unit tests
-- `tests/test_tls.py` — 2 CSV unit tests
-- `tests/test_urlcheck.py` — 3 CSV unit tests
-- `tests/test_osdetect.py` — 2 CSV unit tests
-- `tests/test_trace.py` — 2 CSV unit tests
-- `tests/test_ping.py` — 2 CSV unit tests
-- `tests/test_recon.py` — 3 CSV unit tests
-- `tests/test_cert.py` — 2 CSV unit tests
-- `tests/test_dnssec.py` — 2 CSV unit tests
-- `tests/test_mac.py` — 2 CSV unit tests
-- `tests/test_cli.py` — 41 CLI integration tests (3 per command: `--output-format csv`, `--output-format csv --out`, deprecated `--format csv` alias; plus 5 for `hash` including check-mode CSV)
+**Conclusion:** the CSV work is fully complete. No command is missing `--output-format csv`.
+
+## New work completed this session — `smtp` command (SMTP reconnaissance)
+
+Added a stdlib-only SMTP reconnaissance command (previously a genuine gap: there was no
+standalone `smtp`/`ftp`/`imap` service-recon command).
+
+### Added
+- `ethscan/smtp.py`:
+  - `_normalize_target()` — parse `host`, `host:port`, and `smtp://host:port` targets (defaults to port 25).
+  - `_parse_smtp_response()` — parse SMTP multi-line responses into `(code, message, complete)`.
+  - `_read_response()` / `_send_command()` / `_connect()` — minimal stdlib SMTP I/O layer;
+    `_connect` takes an injectable `connector` (defaults to `socket.create_connection`) so
+    tests can drive a local fake SMTP server.
+  - `_classify_vrfy()` — map VRFY response codes (250/251/252/550/551) to `found`/description.
+  - `run_smtp(target, port=None, timeout, users, check_starttls, check_relay, ehlo_name, connector)` —
+    banner grab, EHLO capability discovery (reports STARTTLS advertisement), optional VRFY
+    user enumeration, optional open-relay probe (MAIL FROM→RCPT TO external domain), graceful
+    handling of connection failures/timeouts.
+  - `format_smtp_report_json()` / `format_smtp_report_markdown()` / `format_smtp_report_csv()`.
+- `ethscan/cli.py` — imported the three formatters + `run_smtp`; registered the `smtp` command
+  with `--target`, `--port`, `--users`, `--no-starttls-check`/`--no-relay-check`, `--timeout`,
+  `--output-format [json|markdown|csv]`, deprecated `--format` alias, and `--out`.
+- `tests/test_smtp.py` — **28 unit tests**: target normalization, response parsing, VRFY
+  classification, `run_smtp` against a local `socketserver` fake SMTP server (full interaction,
+  connection refused, open-relay detected/blocked, STARTTLS disabled, VRFY found/not-permitted,
+  no-ADVERTISE, relay-skipped-when-ehlo-fails), `_send_command` against the fake server, and all
+  three formatters (basic, no-users open/closed relay, connection-failed markdown, CSV comma-escaping).
+- `tests/test_cli.py` — **11 CLI integration tests**: help text/options, top-level listing,
+  `--output-format csv`/csv-with-`--out`, deprecated `--format csv` alias, default=JSON,
+  markdown, `--users` pass-through, `--no-starttls-check`/`--no-relay-check` flags, `--port`,
+  and offline connection-refused graceful handling.
+- `README.md` — added the `smtp` command to the features list.
 
 ### Verification
-- `python -m pytest -q` -> **2067 passed, 1 skipped** (1997 baseline + 67 new + 3 urlcheck unit = 2067)
-- End-to-end: every command now supports `--output-format csv`, deprecated `--format csv` alias, and `--out <file>` with CSV content
-- Default format (no flag) remains JSON
-- Live runs confirmed correct CSV headers for all 13 commands
+- `python -m pytest -q` → **2157 passed, 1 skipped** (2118 baseline → +39 smtp tests; the
+  1 skip is the pre-existing dnspython-dependent test).
+- End-to-end CLI smoke test against a local fake SMTP server confirmed correct JSON, CSV,
+  and Markdown output, correct STARTTLS-capability detection, VRFY user enumeration, and
+  open-relay detection; `--out <file>` writes CSV correctly; an unreachable target
+  (`127.0.0.1:1`) returns exit 0 with a JSON error (`"connection failed: ..."`), no crash.
+- `python -m ethscan --help` lists `smtp` among the commands.
 
 ## Suggested next task
 
-**Add `--output-format csv` to the remaining commands that still only expose `--format` (no `--output-format` option).** Run `python -m ethscan <cmd> --help` and check for commands lacking the `--output-format` option. Candidates from the earlier audit: `service`, `vuln`, `scan`, `audit`, `report`, `subdomains`, `subtake`, `whois`, `headers`, `dns`, `ssl`, `brute`, `wifi`, `geo`, `cve`, `cidr`, `radix`, `config`, `jwt`, `completion`, `validate`, `nmap`, `stale`, `ssh`, `s3` — these already HAVE `--output-format` with csv support (verified working). Re-audit with a script to confirm none are missed:
-```python
-# Check every @cli.command block for "--output-format" and output_fmt param
-```
-If all 36 commands already have it, the CSV work is fully complete and the next agent should pick a new feature from TASK.md's suggested-next-task list (e.g., a new recon module or a new command).
+Implement an **`ftp` command** (FTP service reconnaissance: banner grab + anonymous-login check)
+as the natural companion to the new `smtp` command, filling the remaining service-recon gap.
 
-## Requirements for next agent
-- Follow existing module conventions (`run_*`, `format_*_report_json`, `format_*_report_markdown`, `format_*_report_csv`).
-- Register commands/options in `ethscan/cli.py` with `--target`, `--format`, `--output-format`, `--out`.
-- Add unit tests in `tests/` and CLI integration tests in `tests/test_cli.py`.
-- Use stdlib only unless an optional dependency is already declared in `requirements.txt` (use a graceful `*_AVAILABLE` flag pattern as in `dns.py`/`dnsbrute.py`).
-- Do not manually commit or push; the outer workflow handles checkpointing.
+Requirements:
+- Add `ethscan/ftp.py` using stdlib `ftplib` only (no new dependencies).
+- `run_ftp(target, port=21, timeout, check_anonymous=True)`:
+  normalize host:port, connect, capture the server banner/greeting, attempt anonymous
+  login (`USER anonymous` / `PASS anonymous@`), report banner, anonymous_login_allowed
+  (bool), welcome_message, and any error. Keep all network I/O behind an injectable
+  connector for testing.
+- Add `format_ftp_report_json`, `format_ftp_report_markdown`, `format_ftp_report_csv`
+  (header: `target,host,port,banner,anonymous_login,anonymous_message,error`).
+- Register `ftp` in `ethscan/cli.py` with `--target`, `--port`, `--no-anonymous-check`,
+  `--timeout`, `--output-format [json|markdown|csv]`, deprecated `--format` alias, `--out`.
+- Add `tests/test_ftp.py` (unit tests incl. a local fake FTP server + formatter CSV/JSON/markdown
+  cases) and CLI integration tests in `tests/test_cli.py` (help, csv/markdown/json, --out,
+  alias, default-format, offline connection-refused).
+- Update `README.md` features list.
+
+Alternative next task (if anonymous FTP is deemed too small): implement an **`ntp` command**
+(NTP reconnaissance/amplification probe) using stdlib `socket` + `struct` — send an NTP
+monolist/control-mode query over UDP to detect vulnerable/reflector NTP servers.

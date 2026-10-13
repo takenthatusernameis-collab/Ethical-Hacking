@@ -17288,3 +17288,180 @@ def test_mac_format_csv_alias(monkeypatch) -> None:
     result = runner.invoke(cli, ["mac", "--target", "00:1A:2B:3C:4D:5E", "--format", "csv", "--timeout", "1.0"])
     assert result.exit_code == 0
     assert "target,mac,oui,vendor,cached,offline_fallback,error" in result.output
+
+
+# ---------------------------------------------------------------------------
+# smtp command
+# ---------------------------------------------------------------------------
+
+
+def test_smtp_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["smtp", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--port" in result.output
+    assert "--users" in result.output
+    assert "--timeout" in result.output
+    assert "--output-format" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "--no-starttls-check" in result.output
+    assert "--no-relay-check" in result.output
+
+
+def test_smtp_top_level_help_lists_command() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "smtp" in result.output
+
+
+def test_smtp_output_format_csv(monkeypatch) -> None:
+    mock_results = {
+        "target": "mail.example.com",
+        "host": "mail.example.com",
+        "port": 25,
+        "connected": True,
+        "banner": "220 mail.example.com ESMTP",
+        "ehlo_success": True,
+        "starttls_advertised": True,
+        "starttls_checked": True,
+        "capabilities": ["STARTTLS", "AUTH"],
+        "users": [
+            {"user": "admin", "found": None, "description": "will accept", "code": 252, "error": None},
+        ],
+        "open_relay": False,
+        "error": None,
+    }
+    monkeypatch.setattr("ethscan.cli.run_smtp", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["smtp", "--target", "mail.example.com", "--output-format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "target,host,port,user,found,code,description" in result.output
+    assert "mail.example.com" in result.output
+    assert "admin" in result.output
+
+
+def test_smtp_output_format_csv_out(tmp_path, monkeypatch) -> None:
+    mock_results = {
+        "target": "mail.example.com",
+        "host": "mail.example.com",
+        "port": 25,
+        "users": [
+            {"user": "admin", "found": True, "description": "user known", "code": 250, "error": None},
+        ],
+    }
+    monkeypatch.setattr("ethscan.cli.run_smtp", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    out_file = tmp_path / "smtp.csv"
+    result = runner.invoke(cli, ["smtp", "--target", "mail.example.com", "--output-format", "csv", "--out", str(out_file), "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    content = out_file.read_text()
+    assert "target,host,port,user,found,code,description" in content
+    assert "admin" in content
+
+
+def test_smtp_format_csv_alias(monkeypatch) -> None:
+    mock_results = {"target": "mail.example.com", "host": "mail.example.com", "port": 25, "users": []}
+    monkeypatch.setattr("ethscan.cli.run_smtp", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["smtp", "--target", "mail.example.com", "--format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "target,host,port,user,found,code,description" in result.output
+
+
+def test_smtp_output_format_default_is_json(monkeypatch) -> None:
+    mock_results = {"target": "mail.example.com", "host": "mail.example.com", "port": 25, "connected": True}
+    monkeypatch.setattr("ethscan.cli.run_smtp", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["smtp", "--target", "mail.example.com", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["host"] == "mail.example.com"
+
+
+def test_smtp_output_format_markdown(monkeypatch) -> None:
+    mock_results = {
+        "target": "mail.example.com",
+        "host": "mail.example.com",
+        "port": 25,
+        "connected": True,
+        "banner": "220 mail.example.com ESMTP",
+        "ehlo_success": True,
+        "starttls_advertised": True,
+        "capabilities": ["STARTTLS"],
+        "users": [],
+        "open_relay": False,
+        "error": None,
+    }
+    monkeypatch.setattr("ethscan.cli.run_smtp", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["smtp", "--target", "mail.example.com", "--output-format", "markdown", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "# ethscan SMTP Report" in result.output
+    assert "mail.example.com" in result.output
+
+
+def test_smtp_output_format_csv_with_users_option(monkeypatch) -> None:
+    captured = {}
+
+    def fake_run(*args, **kwargs):
+        captured.update(kwargs)
+        return {
+            "target": "mail.example.com",
+            "host": "mail.example.com",
+            "port": 25,
+            "users": [
+                {"user": u, "found": None, "description": "will accept", "code": 252, "error": None}
+                for u in (kwargs.get("users") or [])
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_smtp", fake_run)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["smtp", "--target", "mail.example.com", "--users", "admin,root,guest", "--output-format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert captured["users"] == ["admin", "root", "guest"]
+    assert "admin" in result.output
+    assert "root" in result.output
+    assert "guest" in result.output
+
+
+def test_smtp_no_relay_check_flag(monkeypatch) -> None:
+    captured = {}
+
+    def fake_run(*args, **kwargs):
+        captured.update(kwargs)
+        return {"target": "mail.example.com", "host": "mail.example.com", "port": 25, "users": []}
+
+    monkeypatch.setattr("ethscan.cli.run_smtp", fake_run)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["smtp", "--target", "mail.example.com", "--no-relay-check", "--no-starttls-check", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert captured["check_relay"] is False
+    assert captured["check_starttls"] is False
+
+
+def test_smtp_port_option(monkeypatch) -> None:
+    captured = {}
+
+    def fake_run(*args, **kwargs):
+        captured.update(kwargs)
+        return {"target": "mail.example.com", "host": "mail.example.com", "port": kwargs.get("port", 25), "users": []}
+
+    monkeypatch.setattr("ethscan.cli.run_smtp", fake_run)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["smtp", "--target", "mail.example.com", "--port", "587", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert captured["port"] == 587
+
+
+def test_smtp_offline_connection_refused() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["smtp", "--target", "127.0.0.1:1", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["connected"] is False
+    assert parsed["error"] is not None

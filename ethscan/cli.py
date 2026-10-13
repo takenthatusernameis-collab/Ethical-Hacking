@@ -247,6 +247,12 @@ from ethscan.s3 import (
     format_s3_report_markdown,
     run_s3,
 )
+from ethscan.smtp import (
+    format_smtp_report_csv,
+    format_smtp_report_json,
+    format_smtp_report_markdown,
+    run_smtp,
+)
 
 
 @click.group()
@@ -3786,6 +3792,97 @@ def s3(
         output = format_s3_report_csv(results)
     else:
         output = format_s3_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option(
+    "--target",
+    required=True,
+    help="Target SMTP server, host, host:port, or URL (e.g. smtp.example.com or smtp://smtp.example.com:587)",
+)
+@click.option(
+    "--port",
+    type=int,
+    default=None,
+    help="SMTP port (overrides any port parsed from --target; default 25).",
+)
+@click.option(
+    "--users",
+    help="Comma-separated list of usernames to probe via VRFY (user enumeration).",
+)
+@click.option(
+    "--no-starttls-check",
+    "check_starttls",
+    flag_value=False,
+    default=True,
+    help="Skip the EHLO/STARTTLS capability check.",
+)
+@click.option(
+    "--no-relay-check",
+    "check_relay",
+    flag_value=False,
+    default=True,
+    help="Skip the open-relay probe.",
+)
+@click.option("--timeout", default=2.0, type=float, help="Per-read timeout in seconds")
+@click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default="json",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def smtp(
+    target: str,
+    port: Optional[int],
+    users: Optional[str],
+    check_starttls: bool,
+    check_relay: bool,
+    timeout: float,
+    fmt: str,
+    output_fmt: Optional[str],
+    out_path: Optional[str],
+) -> None:
+    """Run SMTP reconnaissance (banner, STARTTLS, VRFY user enumeration, open relay) for TARGET."""
+    users_list = [u.strip() for u in users.split(",") if u.strip()] if users else None
+    results = run_smtp(
+        target,
+        port=port,
+        timeout=timeout,
+        users=users_list,
+        check_starttls=check_starttls,
+        check_relay=check_relay,
+    )
+
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
+        output = format_smtp_report_json(results)
+    elif chosen_format == "csv":
+        output = format_smtp_report_csv(results)
+    else:
+        output = format_smtp_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
