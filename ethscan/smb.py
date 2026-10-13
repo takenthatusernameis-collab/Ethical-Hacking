@@ -768,6 +768,22 @@ def run_smb(
         "error": None,
     }
 
+    request = _build_smb1_negotiate_request(dial)
+    data, err = _send_recv(host, server_port, request, timeout, connector=connector)
+
+    if err:
+        results["error"] = f"negotiate request failed: {err}"
+    elif not data:
+        results["error"] = "negotiate request failed: no response"
+    else:
+        parsed = _parse_smb_response(data, dial)
+        results.update({k: parsed[k] for k in parsed})
+        if parsed.get("error"):
+            results["error"] = parsed["error"]
+        else:
+            results["accessible"] = True
+            results["banner"] = _build_banner(parsed)
+
     if smb2:
         smb2_dial = tuple(smb2_dialects) if smb2_dialects else DEFAULT_SMB2_DIALECTS
         results["smb2"] = run_smb2(
@@ -778,37 +794,6 @@ def run_smb(
             connector=connector,
         )
 
-    request = _build_smb1_negotiate_request(dial)
-    data, err = _send_recv(host, server_port, request, timeout, connector=connector)
-
-    if err:
-        results["error"] = f"negotiate request failed: {err}"
-        return results
-    if not data:
-        results["error"] = "negotiate request failed: no response"
-        return results
-
-    parsed = _parse_smb_response(data, dial)
-    results.update({k: parsed[k] for k in parsed})
-    if parsed.get("error"):
-        results["error"] = parsed["error"]
-        return results
-
-    results["accessible"] = True
-    results["banner"] = _build_banner(parsed)
-    return results
-    if not data:
-        results["error"] = "negotiate request failed: no response"
-        return results
-
-    parsed = _parse_smb_response(data, dial)
-    results.update({k: parsed[k] for k in parsed})
-    if parsed.get("error"):
-        results["error"] = parsed["error"]
-        return results
-
-    results["accessible"] = True
-    results["banner"] = _build_banner(parsed)
     return results
 
 

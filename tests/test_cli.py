@@ -18372,7 +18372,7 @@ def test_smb_top_level_help() -> None:
 
 
 def test_smb_output_format_csv(monkeypatch) -> None:
-    def mock_run_smb(target, port=None, timeout=3.0, dialects=None, connector=None):
+    def mock_run_smb(target, port=None, timeout=3.0, dialects=None, smb2=False, connector=None):
         return _smb_mock_results(target)
 
     monkeypatch.setattr("ethscan.cli.run_smb", mock_run_smb)
@@ -18383,7 +18383,7 @@ def test_smb_output_format_csv(monkeypatch) -> None:
 
 
 def test_smb_output_format_csv_out(tmp_path, monkeypatch) -> None:
-    def mock_run_smb(target, port=None, timeout=3.0, dialects=None, connector=None):
+    def mock_run_smb(target, port=None, timeout=3.0, dialects=None, smb2=False, connector=None):
         return _smb_mock_results(target)
 
     monkeypatch.setattr("ethscan.cli.run_smb", mock_run_smb)
@@ -18400,7 +18400,7 @@ def test_smb_output_format_csv_out(tmp_path, monkeypatch) -> None:
 
 
 def test_smb_format_csv_alias(monkeypatch) -> None:
-    def mock_run_smb(target, port=None, timeout=3.0, dialects=None, connector=None):
+    def mock_run_smb(target, port=None, timeout=3.0, dialects=None, smb2=False, connector=None):
         return _smb_mock_results(target)
 
     monkeypatch.setattr("ethscan.cli.run_smb", mock_run_smb)
@@ -18411,7 +18411,7 @@ def test_smb_format_csv_alias(monkeypatch) -> None:
 
 
 def test_smb_default_is_json(monkeypatch) -> None:
-    def mock_run_smb(target, port=None, timeout=3.0, dialects=None, connector=None):
+    def mock_run_smb(target, port=None, timeout=3.0, dialects=None, smb2=False, connector=None):
         return _smb_mock_results(target)
 
     monkeypatch.setattr("ethscan.cli.run_smb", mock_run_smb)
@@ -18425,7 +18425,7 @@ def test_smb_default_is_json(monkeypatch) -> None:
 
 
 def test_smb_output_format_precedence(monkeypatch) -> None:
-    def mock_run_smb(target, port=None, timeout=3.0, dialects=None, connector=None):
+    def mock_run_smb(target, port=None, timeout=3.0, dialects=None, smb2=False, connector=None):
         return _smb_mock_results(target)
 
     monkeypatch.setattr("ethscan.cli.run_smb", mock_run_smb)
@@ -18438,7 +18438,7 @@ def test_smb_output_format_precedence(monkeypatch) -> None:
 def test_smb_port_passed_through(monkeypatch) -> None:
     captured = {}
 
-    def mock_run_smb(target, port=None, timeout=3.0, dialects=None, connector=None):
+    def mock_run_smb(target, port=None, timeout=3.0, dialects=None, smb2=False, connector=None):
         captured["port"] = port
         captured["target"] = target
         return _smb_mock_results(target)
@@ -18448,6 +18448,56 @@ def test_smb_port_passed_through(monkeypatch) -> None:
     result = runner.invoke(cli, ["smb", "--target", "example.com", "--port", "139", "--timeout", "1.0"])
     assert result.exit_code == 0
     assert captured["port"] == 139
+
+
+def test_smb_help_shows_smb2() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["smb", "--help"])
+    assert result.exit_code == 0
+    assert "--smb2" in result.output
+    assert "--no-smb2" in result.output
+
+
+def test_smb_smb2_default_false(monkeypatch) -> None:
+    captured = {}
+
+    def mock_run_smb(target, port=None, timeout=3.0, dialects=None, smb2=False, connector=None):
+        captured["smb2"] = smb2
+        return _smb_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_smb", mock_run_smb)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["smb", "--target", "example.com", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert captured["smb2"] is False
+
+
+def test_smb_smb2_flag_passed_through(monkeypatch) -> None:
+    captured = {}
+
+    def mock_run_smb(target, port=None, timeout=3.0, dialects=None, smb2=False, connector=None):
+        captured["smb2"] = smb2
+        return _smb_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_smb", mock_run_smb)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["smb", "--target", "example.com", "--smb2", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert captured["smb2"] is True
+
+
+def test_smb_no_smb2_flag_passed_through(monkeypatch) -> None:
+    captured = {}
+
+    def mock_run_smb(target, port=None, timeout=3.0, dialects=None, smb2=False, connector=None):
+        captured["smb2"] = smb2
+        return _smb_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_smb", mock_run_smb)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["smb", "--target", "example.com", "--no-smb2", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert captured["smb2"] is False
 
 
 def _ldap_mock_results(target: str) -> dict:

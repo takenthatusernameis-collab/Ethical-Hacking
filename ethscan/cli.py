@@ -4254,6 +4254,12 @@ def netbios(
 @click.option("--port", default=None, type=int, help="SMB port (overrides parsed port; default 445)")
 @click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
 @click.option(
+    "--smb2/--no-smb2",
+    "smb2",
+    default=False,
+    help="Also run an SMB2/SMB3 SMB2_NEGOTIATE probe (reports the negotiated dialect on modern hosts with SMB1 disabled).",
+)
+@click.option(
     "--output-format",
     "output_fmt",
     type=click.Choice(["json", "markdown", "csv"]),
@@ -4278,15 +4284,17 @@ def smb(
     target: str,
     port: Optional[int],
     timeout: float,
+    smb2: bool,
     fmt: str,
     output_fmt: Optional[str],
     out_path: Optional[str],
 ) -> None:
-    """Run SMB1 dialect negotiation reconnaissance (banner/dialect)."""
+    """Run SMB dialect negotiation reconnaissance (SMB1 and optional SMB2/SMB3)."""
     results = run_smb(
         target,
         port=port,
         timeout=timeout,
+        smb2=smb2,
     )
 
     chosen_format = output_fmt if output_fmt is not None else fmt
