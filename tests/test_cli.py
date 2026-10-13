@@ -19107,3 +19107,137 @@ def test_mongodb_probes_pass_through(monkeypatch) -> None:
     result = runner.invoke(cli, ["mongodb", "--target", "example.com", "--probes", "buildInfo", "--timeout", "1.0"])
     assert result.exit_code == 0
     assert captured["probes"] == ["buildinfo"]
+
+
+def _postgresql_mock_results(target):
+    return {
+        "target": target,
+        "host": "example.com",
+        "port": 5432,
+        "accessible": True,
+        "startup": {
+            "server_version": "16.2",
+            "auth_type_code": 0,
+            "auth_type_name": "Ok",
+            "process_id": 1234,
+            "parameters": {"client_encoding": "UTF8"},
+            "errors": [],
+            "notices": [],
+        },
+        "version": "16.2",
+        "findings": ["PostgreSQL server version: 16.2"],
+        "error": None,
+    }
+
+
+def test_postgresql_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["postgresql", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--port" in result.output
+    assert "--timeout" in result.output
+    assert "--probes" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+    assert "csv" in result.output
+
+
+def test_postgresql_top_level_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "postgresql" in result.output
+
+
+def test_postgresql_output_format_csv(monkeypatch) -> None:
+    def mock_run_postgresql(target, port=None, timeout=3.0, probes=None, connector=None):
+        return _postgresql_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_postgresql", mock_run_postgresql)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["postgresql", "--target", "example.com", "--output-format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    lines = result.output.strip().split("\n")
+    assert "target,host,port,accessible,version,auth_type,process_id,findings,error" == lines[0].rstrip("\r")
+    assert "example.com" in lines[1]
+    assert "16.2" in lines[1]
+
+
+def test_postgresql_output_format_csv_out(tmp_path, monkeypatch) -> None:
+    def mock_run_postgresql(target, port=None, timeout=3.0, probes=None, connector=None):
+        return _postgresql_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_postgresql", mock_run_postgresql)
+    out_file = tmp_path / "postgresql_report.csv"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["postgresql", "--target", "example.com", "--out", str(out_file), "--output-format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.read_text().strip().startswith("target,host,port,accessible")
+
+
+def test_postgresql_output_format_markdown(monkeypatch) -> None:
+    def mock_run_postgresql(target, port=None, timeout=3.0, probes=None, connector=None):
+        return _postgresql_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_postgresql", mock_run_postgresql)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["postgresql", "--target", "example.com", "--output-format", "markdown", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "# PostgreSQL Reconnaissance Report" in result.output
+    assert "**Accessible:** Yes" in result.output
+    assert "16.2" in result.output
+
+
+def test_postgresql_output_format_json(monkeypatch) -> None:
+    def mock_run_postgresql(target, port=None, timeout=3.0, probes=None, connector=None):
+        return _postgresql_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_postgresql", mock_run_postgresql)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["postgresql", "--target", "example.com", "--output-format", "json", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert '"version": "16.2"' in result.output
+
+
+def test_postgresql_format_alias(monkeypatch) -> None:
+    def mock_run_postgresql(target, port=None, timeout=3.0, probes=None, connector=None):
+        return _postgresql_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_postgresql", mock_run_postgresql)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["postgresql", "--target", "example.com", "--format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    lines = result.output.strip().split("\n")
+    assert lines[0].rstrip("\r").startswith("target,host,port,accessible")
+
+
+def test_postgresql_port_pass_through(monkeypatch) -> None:
+    captured = {}
+
+    def mock_run_postgresql(target, port=None, timeout=3.0, probes=None, connector=None):
+        captured["port"] = port
+        return _postgresql_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_postgresql", mock_run_postgresql)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["postgresql", "--target", "example.com", "--port", "5433", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert captured["port"] == 5433
+
+
+def test_postgresql_probes_pass_through(monkeypatch) -> None:
+    captured = {}
+
+    def mock_run_postgresql(target, port=None, timeout=3.0, probes=None, connector=None):
+        captured["probes"] = probes
+        return _postgresql_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_postgresql", mock_run_postgresql)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["postgresql", "--target", "example.com", "--probes", "startup", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert captured["probes"] == ["startup"]

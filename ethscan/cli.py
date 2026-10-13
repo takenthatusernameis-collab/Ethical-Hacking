@@ -314,6 +314,12 @@ from ethscan.mongodb import (
     format_mongodb_report_markdown,
     run_mongodb,
 )
+from ethscan.postgresql import (
+    format_postgresql_report_csv,
+    format_postgresql_report_json,
+    format_postgresql_report_markdown,
+    run_postgresql,
+)
 
 
 
@@ -3714,6 +3720,71 @@ def mongodb(
         output = format_mongodb_report_csv(results)
     else:
         output = format_mongodb_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option("--target", required=True, help="Target host, host:port, or postgresql:// URL (e.g. postgresql://localhost:5432)")
+@click.option("--port", default=None, type=int, help="PostgreSQL port (overrides parsed port; default 5432)")
+@click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
+@click.option(
+    "--probes",
+    default="startup",
+    help="Comma-separated list of probes to run: startup (default: startup)",
+)
+@click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default="json",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def postgresql(
+    target: str,
+    port: Optional[int],
+    timeout: float,
+    probes: str,
+    fmt: str,
+    output_fmt: Optional[str],
+    out_path: Optional[str],
+) -> None:
+    """Run PostgreSQL reconnaissance (wire-protocol startup probe)."""
+    probe_list = [p.strip().lower() for p in probes.split(",") if p.strip()] if probes else None
+    results = run_postgresql(
+        target,
+        port=port,
+        timeout=timeout,
+        probes=probe_list,
+    )
+
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
+        output = format_postgresql_report_json(results)
+    elif chosen_format == "csv":
+        output = format_postgresql_report_csv(results)
+    else:
+        output = format_postgresql_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:
