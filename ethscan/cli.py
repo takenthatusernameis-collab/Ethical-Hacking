@@ -290,6 +290,12 @@ from ethscan.smb import (
     format_smb_report_markdown,
     run_smb,
 )
+from ethscan.ldap import (
+    format_ldap_report_csv,
+    format_ldap_report_json,
+    format_ldap_report_markdown,
+    run_ldap,
+)
 
 
 
@@ -4358,6 +4364,73 @@ def redis(
         output = format_redis_report_csv(results)
     else:
         output = format_redis_report_markdown(results)
+
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
+
+
+@cli.command()
+@click.option("--target", required=True, help="Target host, host:port, or ldap:// URL (e.g. ldap://localhost:389)")
+@click.option("--port", default=None, type=int, help="LDAP port (overrides parsed port; default 389)")
+@click.option(
+    "--ldap-version",
+    "ldap_version",
+    type=click.Choice(["2", "3"]),
+    default="3",
+    show_default=True,
+    help="LDAP protocol version used for the anonymous bind probe.",
+)
+@click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
+@click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv).",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default="json",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def ldap(
+    target: str,
+    port: Optional[int],
+    ldap_version: str,
+    timeout: float,
+    fmt: str,
+    output_fmt: Optional[str],
+    out_path: Optional[str],
+) -> None:
+    """Run LDAP anonymous bind and RootDSE reconnaissance."""
+    results = run_ldap(
+        target,
+        port=port,
+        timeout=timeout,
+        ldap_version=int(ldap_version),
+    )
+
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
+        output = format_ldap_report_json(results)
+    elif chosen_format == "csv":
+        output = format_ldap_report_csv(results)
+    else:
+        output = format_ldap_report_markdown(results)
 
     if out_path:
         with open(out_path, "w", encoding="utf-8") as handle:

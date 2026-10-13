@@ -2,65 +2,90 @@
 
 ## What the previous (assigned) task was
 
-Implement an **`smb` command** (SMB/CIFS banner/dialect reconnaissance) using
-stdlib only, following the `netbios`/`redis` command patterns. This was the
-suggested next task after `redis` completion (see prior `NEXT_TASK.md`).
+Implement an **`ldap` command** (LDAP reconnaissance) using stdlib
+only, following the `netbios`/`redis`/`smb` command patterns. This
+was the suggested next task after `smb` completion (see prior
+`NEXT_TASK.md`).
 
-## `smb` command — COMPLETED & VERIFIED
+## `ldap` command — COMPLETED & VERIFIED
 
-Implemented a stdlib-only (`socket`/`struct`) SMB1 `SMB_COM_NEGOTIATE` recon
-probe that returns the negotiated dialect, SMB1 SecurityMode, message-signing
-policy, and the NTLM server challenge.
+Implemented an RFC 4511 anonymous-bind probe plus a RootDSE search,
+both using hand-built BER (ASN.1) encodings with the stdlib only
+(`socket`, `ssl` for LDAPS).
 
 ### Added
-- `ethscan/smb.py` (new module):
-  - `DEFAULT_PORT = 445`, `DEFAULT_TIMEOUT`, `DEFAULT_DIALECTS = ("NT LM 0.12", "Samba", "Core", "CorePlus")`.
-  - `_normalize_target()` — parse `host`, `host:port`, `smb://host:port` forms; bracketed IPv6; default port 445.
-  - `_build_smb1_negotiate_request(dialects)` — raw 32-byte little-endian SMB1 header (`\\xffSMB`, command `0x72`, WordCount=0) + dialect blob (`\\x02` + ASCII name + `\\x00` per dialect).
-  - `_parse_smb_response(data)` — parse SMB1 negotiate response: DialectIndex (LE `<H` @ offset 33), SecurityMode byte (@ offset 35), data section ByteCount + server challenge (first 8 bytes). Defensive against short/truncated/non-SMB/SMB2-magic responses via an `error` field (no exceptions).
-  - `_send_recv(host, port, request, timeout, connector)` — injectable TCP send/recv mirroring `redis`/`netbios`.
-  - `run_smb(target, port=None, timeout, dialects=None, connector=None)` — builds request, sends once, parses, returns a structured result dict (`accessible`, `protocol`, `dialect`, `dialect_index`, `security_mode`, `security_flags`, `user_security`, `challenge_response`, `signing_enabled`, `signing_required`, `challenge`, `banner`, `raw_preview`, `error`).
-  - `format_smb_report_json`, `format_smb_report_markdown`, `format_smb_report_csv` — consistent formatters matching the redis/markdown bullet style and CSV conventions.
-- `ethscan/cli.py` — imported `run_smb` + formatters and registered the `smb` command with `--target`, `--port`, `--timeout`, `--output-format [json|markdown|csv]`, deprecated `--format` alias (lower precedence), `--out`.
-- `tests/test_smb.py` (new, 41 unit tests) — target normalization, request builder structure/dialects, response parsing (full flags, all-signing-flags combo, dialect mapping, 0xFFFF no-dialect, unknown index, challenge extraction incl. NTLMSSP-after-challenge layout, SMB2-magic tolerance, non-SMB/empty/short/truncated), connector send/recv, `run_smb` (reachable, no-common-dialect, timeout, refused, no-response, non-SMB, port override, timeout passthrough, default/custom dialects), and JSON/Markdown/CSV formatters (accessible + inaccessible).
-- `tests/test_cli.py` — added 8 CLI integration tests for `smb` (help, top-level listing, CSV output, CSV with `--out`, deprecated `--format csv` alias, default JSON, `--output-format` precedence over `--format`, `--port` passthrough).
-- `README.md` — added SMB/CIFS reconnaissance feature description under Features.
+- `ethscan/ldap.py` (new module):
+  - `DEFAULT_PORT = 389`, `DEFAULT_LDAPS_PORT = 636`, `DEFAULT_TIMEOUT = 3.0`, `DEFAULT_LDAP_VERSION = 3`.
+  - `_normalize_target()` — parses `host`, `host:port`, `ldap://host:port` and `ldaps://host:port` forms; bracketed IPv6; `ldaps://` defaults to port 636.
+  - `_int_bytes()` / `_ber_length()` / `_ber_tlv()` — minimal BER encoding helpers (definite-form lengths, sign-bit-safe INTEGERs).
+  - `_build_bind_request(version, message_id)` — anonymous BindRequest: LDAPMessage SEQUENCE { messageID INTEGER, BindRequest [APPLICATION 0] SEQUENCE { version INTEGER } }; name/authentication omitted per RFC 4511 anonymous bind.
+  - `_build_root_dse_search(message_id)` — SearchRequest [APPLICATION 3] with empty base DN (RootDSE), scope=baseObject, neverDerefAliases, zero limits, typesOnly=FALSE, present filter (`0x87` + "objectClass"), empty attribute list.
+  - `_read_length()` / `_read_tlv()` — defensive BER readers (raise ValueError on truncation; never escape to the caller).
+  - `_parse_result_content()` — shared BindResponse/SearchResultDone body: optional version INTEGER, resultCode ENUMERATED, matchedDN, diagnosticMessage, referral [3]; unknown elements ignored.
+  - `_parse_attribute()` / `_parse_search_entry()` — RootDSE attribute parsing (SEQUENCE { type OCTET STRING, SET OF OCTET STRING }).
+  - `_parse_ldap_message()` / `_parse_ldap_response()` — LDAPMessage envelope parser handling multiple messages per buffer (entry + done); malformed/non-LDAP input reported via the `error` field, never raises.
+  - `LDAP_RESULT_CODES` — common RFC 4511 result-code names (0 success … 80 other).
+  - `_send_recv(host, port, request, timeout, connector=None, use_tls=False)` — injectable TCP transport; `use_tls` wraps the socket with `ssl` (check_hostname/verify disabled, mirroring nmap's LDAP recon scripts).
+  - `run_ldap(target, port=None, timeout, ldap_version=3, connector=None)` — two probes, each on its own connection: (1) anonymous bind → `anonymous_bind` (resultCode 0), bind result code/name, matched DN, diagnostic message; (2) RootDSE search → `root_dse` attribute map (vendorName, vendorVersion, namingContexts, supportedLDAPVersion, supportedSASLMechanisms, …). Notes for invalidCredentials (49) and LDAPv3 protocolError (suggests `--ldap-version 2`). LDAPS implied by `ldaps://` scheme or port 636 (`protocol` field reports "LDAPS").
+  - `format_ldap_report_json`, `format_ldap_report_markdown`, `format_ldap_report_csv` — consistent with the smb/redis formatters (markdown has Anonymous Bind + Server Identity (RootDSE) sections incl. "Other RootDSE Attributes", notes, raw preview; CSV has 18 columns).
+- `ethscan/cli.py` — imported `run_ldap` + formatters; registered the `ldap` command with `--target`, `--port`, `--ldap-version [2|3]` (default 3), `--timeout`, `--output-format [json|markdown|csv]`, deprecated `--format` alias (lower precedence), `--out`.
+- `tests/test_ldap.py` (new, 84 unit tests) — target normalization (incl. ldaps:// → 636), BER helpers, bind-request/root-DSE-search builders (structure, version, message id, length consistency), BER reader (short/long form, truncation), response parsing (bind success/49/1/10/unknown-code, version, matchedDN, diagnostic, referral, search entry attributes, entry+done multi-message, empty/truncated/non-LDAP/unknown-op/malformed), `_send_recv` (connector passthrough/error, real refused socket, TLS-against-plain-listener), `run_ldap` (success+RootDSE, bind denied, protocol-error note, v2 no-note, timeout, refused, no-response, port override, version passthrough, send-then-search ordering, malformed bind, RootDSE error/no-response/access-denied/malformed, unresolvable host, ldaps/636 TLS detection), and all three formatters.
+- `tests/test_cli.py` — 12 CLI integration tests for `ldap` (help, top-level listing, CSV output, CSV with `--out`, deprecated `--format csv` alias, default JSON, `--output-format` precedence over `--format`, `--port`/`--ldap-version`/`--timeout` pass-through, markdown output).
+- `README.md` — added LDAP reconnaissance feature description under Features.
 
-### SecurityMode bit decode (verified against nmap `smb-security-mode.nse` + impacket `smb.SMB` constants + MS-SMB 2.2.4.2)
-The SMB1 negotiate-response SecurityMode is a single byte (@ offset 35, LE header):
-- `0x01` user-level authentication supported (else share-level)
-- `0x02` challenge/response (NTLM) authentication supported
-- `0x04` message signing enabled (supported)
-- `0x08` message signing required
-- `DialectIndex == 0xFFFF` → no common dialect agreed.
+### LDAP probe design (verified against RFC 4511)
+- Anonymous BindRequest: `30 08 02 01 01 60 03 02 01 03` (messageID 1, version 3). resultCode 0 → anonymous bind allowed; 49 invalidCredentials / 1 operationsError are the common "anonymous disabled" responses.
+- RootDSE search: base object "" (empty DN), scope baseObject, filter `(objectClass=*)` as a present filter (`0x87`), empty attribute list. The entry carries vendorName/vendorVersion/namingContexts/supportedLDAPVersion/supportedSASLMechanisms.
+- Each probe opens its own TCP connection (mirrors the redis per-request socket model), so servers that close the connection after a failed bind still get a clean RootDSE attempt.
 
 ### Verification
-- `python -m pytest -q` → **2470 passed, 1 skipped** (pre-existing TLS skip), no regressions vs. the 2469-baseline+redis run. New: 41 unit tests + 8 CLI tests, all passing.
-- CLI smoke tests against a closed local port: graceful `accessible: false` with a structured error in JSON/Markdown/CSV; `--out` writes files; `--output-format`/`--format` precedence and `--port` work.
-- Stdlib-only (`socket`/`struct`); injectable connector; follows existing module/formatter conventions; minimal and reversible.
-
-### Packet/Protocol references used
-- SMB1 `SMB_COM_NEGOTIATE` (command `0x72`): 32-byte little-endian header (`\xffSMB` + command + status + flags + PIDHigh/PID/UID/MID/TID), WordCount, ByteCount, then dialect descriptors (`\x02` + name + `\x00`). Verified against impacket `smb.py` `NewSMBPacket`/`SMBExtended_Security_Parameters` (header field order/LE, DialectIndex `<H` @33, SecurityMode `<B` @35, WordCount 0x11) and MS-SMB 2.2.4.2.
-- SMB1 SecurityMode bit decode confirmed against nmap `scripts/smb-security-mode.nse` (`&1` user vs share, `&2` challenge/response, `&4`/`&8` signing enabled/required).
-- SMB2 magic `\xfeSMB` tolerated defensively (not produced by an SMB1 request).
+- `python -m pytest -q` → **2566 passed, 1 skipped** (pre-existing TLS skip), up from the 2470-passed baseline. New: 84 unit tests + 12 CLI tests, all passing.
+- CLI smoke test against a closed local port: graceful `accessible: false` with `"bind request failed: [Errno 111] Connection refused"` in JSON/Markdown/CSV; `--out` writes files; `--output-format`/`--format` precedence and `--port`/`--ldap-version`/`--timeout` work.
+- End-to-end over real sockets (local fake LDAP server answering the bind with a successful BindResponse and the RootDSE search with an entry + SearchResultDone): anonymous bind detected, RootDSE attributes parsed (vendorName/namingContexts/supportedSASLMechanisms), banner built, JSON/Markdown/CSV and `--out` all verified.
+- Stdlib-only (`socket`/`ssl`/BER helpers); injectable connector; follows existing module/formatter conventions; minimal and reversible.
 
 ### Notes / known limitations
-- Scope is intentionally minimal: a single SMB1 negotiate probe. This reports SMB1 dialect + signing policy, but does **not** perform SMB2/3 negotiation, session setup, or share enumeration. Modern hosts with SMB1 disabled will report `accessible=false` with a connection error. A natural future enhancement is an SMB2/3 `SMB2_NEGOTIATE` request/response parser (dialect revision + version) for modern-server coverage.
+- Scope is intentionally minimal: anonymous bind + RootDSE. It does not perform authenticated binds, paged searches, or attribute-specific queries. LDAPS wraps with certificate verification disabled (recon probe, not PKI validation — same as nmap).
+- Each probe uses a fresh connection; servers that require a successful bind before serving searches will report the RootDSE error while still reporting bind status.
 
 ## Suggested next task
 
-Implement an **`ldap` command** (LDAP reconnaissance) — a useful, bounded gap that
-pairs with the existing directory/protocol recon set (`dns`, `smtp`, `snmp`,
-`netbios`). LDAP banner/dialect grabbing + anonymous bind support detection is
-straightforward and consistent with the lightweight recon style.
+**Extend `smb` with an SMB2/SMB3 `SMB2_NEGOTIATE` probe** — the prior
+`smb` handoff explicitly flagged this as the natural next enhancement:
+"Modern hosts with SMB1 disabled will report `accessible=false`… A
+natural future enhancement is an SMB2/3 `SMB2_NEGOTIATE`
+request/response parser (dialect revision + version) for
+modern-server coverage."
 
-Requirements (mirror existing recon command patterns):
-- Add `ethscan/ldap.py` using stdlib `socket`/`struct`/LDAP BER or plain text where possible (no new deps). Implement a minimal LDAP `BIND` probe / banner grab to detect anonymous bind support and the LDAP server identity, with `run_ldap(target, port=389/636, timeout)` + injectable `connector`, `_normalize_target()`, request builders/parsers, and graceful timeout/error handling.
-- Add `format_ldap_report_json`, `format_ldap_report_markdown`, `format_ldap_report_csv`.
-- Register command in `ethscan/cli.py` with `--target`, `--port`, `--timeout`, `--output-format [json|markdown|csv]`, deprecated `--format` alias, `--out`.
-- Add `tests/test_ldap.py` (fake connector, BER/reader unit tests) and CLI integration tests in `tests/test_cli.py` following the `netbios`/`redis`/`smb` style.
-- Update `README.md` with a feature description.
-- Keep changes minimal and reversible; preserve existing architecture and the working `smb`/`redis`/`netbios` baseline.
+Concretely: add an SMB2 negotiate request (protocol id `\xfeSMB`,
+StructureSize 25, DialectCount, dialects 0x0202/0x0210/0x0300/0x0302/
+0x0311, NegotiateContextCount for SMB 3.1.1) and parse the response
+(StructureSize 65, SecurityMode, DialectRevision `<H`, ServerGUID,
+Capabilities) to report the negotiated SMB dialect/version on modern
+servers. Wire it into `run_smb` as a follow-up probe when the SMB1
+negotiate fails or via a `--smb2` flag, with formatters and tests
+following the existing `tests/test_smb.py` conventions.
 
-Evidence: `smb` is complete and verified (2470 passed, 1 skipped). LDAP is a
-common adjacent recon target and fills the remaining directory-protocol gap.
+Alternative: add a `memcached` command (text-protocol `version`/`stats`
+probe over TCP 11211) or a `mysql` command (server handshake banner
+grab + version parse over TCP 3306), both following the
+`redis`/`smb`/`ldap` module conventions.
+
+## Requirements
+- Follow the existing module conventions: `run_*`, `format_*_report_json`,
+  `format_*_report_markdown` (+ `_csv` for protocol probes), injectable
+  `connector`, `_normalize_target()`, graceful timeout/error handling.
+- Register any new command/options in `ethscan/cli.py` with `--target`,
+  `--format`/`--output-format`, `--out`, and feature-specific options.
+- Add unit tests in `tests/` and CLI integration tests in
+  `tests/test_cli.py` (see `test_ldap.py` / the `test_*_ldap_*` CLI
+  tests for the current style).
+- Use stdlib only unless an existing optional dependency is already
+  declared in `requirements.txt`.
+- Keep changes minimal and reversible; preserve the working
+  `smb`/`ldap`/`redis` baseline (2566 passed, 1 skipped).
+
+## Current state
+- 26 commands implemented (including `ldap`).
+- Tests: 2566 passing, 1 skipped (pre-existing TLS skip).
+- Verified end-to-end over real sockets with a local fake LDAP server.

@@ -18448,3 +18448,182 @@ def test_smb_port_passed_through(monkeypatch) -> None:
     result = runner.invoke(cli, ["smb", "--target", "example.com", "--port", "139", "--timeout", "1.0"])
     assert result.exit_code == 0
     assert captured["port"] == 139
+
+
+def _ldap_mock_results(target: str) -> dict:
+    return {
+        "target": target,
+        "host": "192.168.1.100",
+        "port": 389,
+        "accessible": True,
+        "protocol": "LDAP",
+        "ldap_version": 3,
+        "message_id": 1,
+        "bind_result_code": 0,
+        "bind_result": "success",
+        "matched_dn": "",
+        "diagnostic_message": "",
+        "referral": None,
+        "anonymous_bind": True,
+        "root_dse": {
+            "namingContexts": ["dc=example,dc=com"],
+            "supportedLDAPVersion": ["3"],
+            "vendorName": ["OpenLDAP Project"],
+            "vendorVersion": ["2.6.4"],
+        },
+        "root_dse_error": None,
+        "banner": "LDAPv3; anonymous bind allowed",
+        "raw_preview": "3008020101",
+        "notes": [],
+        "error": None,
+    }
+
+
+def test_ldap_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ldap", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--output-format" in result.output
+    assert "--port" in result.output
+    assert "--ldap-version" in result.output
+
+
+def test_ldap_top_level_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "ldap" in result.output
+
+
+def test_ldap_output_format_csv(monkeypatch) -> None:
+    def mock_run_ldap(target, port=None, timeout=3.0, ldap_version=3, connector=None):
+        return _ldap_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_ldap", mock_run_ldap)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ldap", "--target", "example.com", "--output-format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "target,host,port" in result.output
+
+
+def test_ldap_output_format_csv_out(tmp_path, monkeypatch) -> None:
+    def mock_run_ldap(target, port=None, timeout=3.0, ldap_version=3, connector=None):
+        return _ldap_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_ldap", mock_run_ldap)
+    runner = CliRunner()
+    out_file = tmp_path / "ldap.csv"
+    result = runner.invoke(
+        cli,
+        ["ldap", "--target", "example.com", "--output-format", "csv", "--out", str(out_file), "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    content = out_file.read_text()
+    assert "target,host,port" in content
+
+
+def test_ldap_format_csv_alias(monkeypatch) -> None:
+    def mock_run_ldap(target, port=None, timeout=3.0, ldap_version=3, connector=None):
+        return _ldap_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_ldap", mock_run_ldap)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ldap", "--target", "example.com", "--format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "target,host,port" in result.output
+
+
+def test_ldap_default_is_json(monkeypatch) -> None:
+    def mock_run_ldap(target, port=None, timeout=3.0, ldap_version=3, connector=None):
+        return _ldap_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_ldap", mock_run_ldap)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ldap", "--target", "example.com", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    try:
+        json.loads(result.output)
+    except Exception:
+        assert False, "Default should be JSON"
+
+
+def test_ldap_output_format_precedence(monkeypatch) -> None:
+    def mock_run_ldap(target, port=None, timeout=3.0, ldap_version=3, connector=None):
+        return _ldap_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_ldap", mock_run_ldap)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ldap", "--target", "example.com", "--output-format", "csv", "--format", "json", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "target,host,port" in result.output
+
+
+def test_ldap_port_passed_through(monkeypatch) -> None:
+    captured = {}
+
+    def mock_run_ldap(target, port=None, timeout=3.0, ldap_version=3, connector=None):
+        captured["port"] = port
+        captured["target"] = target
+        return _ldap_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_ldap", mock_run_ldap)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ldap", "--target", "example.com", "--port", "10389", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert captured["port"] == 10389
+
+
+def test_ldap_ldap_version_passed_through(monkeypatch) -> None:
+    captured = {}
+
+    def mock_run_ldap(target, port=None, timeout=3.0, ldap_version=3, connector=None):
+        captured["ldap_version"] = ldap_version
+        return _ldap_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_ldap", mock_run_ldap)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ldap", "--target", "example.com", "--ldap-version", "2", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert captured["ldap_version"] == 2
+
+
+def test_ldap_ldap_version_default_is_3(monkeypatch) -> None:
+    captured = {}
+
+    def mock_run_ldap(target, port=None, timeout=3.0, ldap_version=3, connector=None):
+        captured["ldap_version"] = ldap_version
+        return _ldap_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_ldap", mock_run_ldap)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ldap", "--target", "example.com", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert captured["ldap_version"] == 3
+
+
+def test_ldap_timeout_passed_through(monkeypatch) -> None:
+    captured = {}
+
+    def mock_run_ldap(target, port=None, timeout=3.0, ldap_version=3, connector=None):
+        captured["timeout"] = timeout
+        return _ldap_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_ldap", mock_run_ldap)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ldap", "--target", "example.com", "--timeout", "1.5"])
+    assert result.exit_code == 0
+    assert captured["timeout"] == 1.5
+
+
+def test_ldap_markdown_output(monkeypatch) -> None:
+    def mock_run_ldap(target, port=None, timeout=3.0, ldap_version=3, connector=None):
+        return _ldap_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_ldap", mock_run_ldap)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ldap", "--target", "example.com", "--output-format", "markdown", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "# ethscan LDAP Reconnaissance Report" in result.output
+    assert "## Anonymous Bind" in result.output
