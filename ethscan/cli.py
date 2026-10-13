@@ -3398,10 +3398,9 @@ def config(
         except OSError as exc:
             click.echo(f"Error writing output: {exc}", err=True)
             raise SystemExit(1)
-        if out_path:
-            click.echo("Completion script written")
-        else:
-            click.echo(output)
+        click.echo(f"Report written to {out_path}")
+    else:
+        click.echo(output)
 
 
 @cli.command()
