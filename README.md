@@ -7,7 +7,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - Network reconnaissance and scanning utilities (implemented)
 - Password strength auditing with JSON/Markdown/CSV output (`audit`) (implemented)
 - **Password hash generation: `hash` command for MD5, SHA-1, SHA-256, SHA-512, NTLM, and MD4 hashing with `--algorithm` selection and JSON/Markdown output** (implemented)
-- Web application security checks (implemented)
+- **Web application security checks: `web` command to run web application security checks against a target URL; runs a configurable set of checks (`--checks` comma-separated: `headers`, `info_disclosure`, `ssl`) reporting security header presence/absence, information disclosure patterns (server version, powered-by, etc.), and optional SSL/TLS certificate inspection; supports `--target` (URL, required), `--checks`, `--timeout`, and JSON/Markdown/CSV output via `--output-format [json|markdown|csv]` / `--format` / `--out`** (implemented)
 - **Security headers check: `headers` command for quick security header analysis** (implemented)
 - **ICMP ping: `ping` command for host discovery with ICMP echo requests and TCP connect fallback** (implemented)
 - **CIDR network calculator: `cidr` command for offline network calculations (network address, netmask, broadcast, host range, membership test, and set difference via `--diff`)** (implemented)
@@ -15,7 +15,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - HTTP fuzzing (implemented)
 - Subdomain enumeration (implemented)
 - DNS record enumeration (implemented)
-- DNS brute force: AXFR zone transfer attempts + subdomain brute forcing (implemented)
+- **DNS brute force: `dnsbrute` command to attempt AXFR zone transfers against authoritative nameservers and brute-force subdomains for a target; attempts raw AXFR over TCP (default port 53) with optional dnspython fallback, discovers nameservers via NS lookup (requires dnspython) or accepts a comma-separated `--ns` list, concurrently brute-forces subdomain labels against a wordlist (built-in default or `--wordlist` file) reporting resolved A/AAAA records, and supports recursive AXFR (`--recursive`/`--no-recursive`, `--max-depth` default 2); supports `--target` (domain or URL), `--ns`, `--wordlist`, `--resolver` (custom DNS resolver, requires dnspython), `--recursive`/`--no-recursive`, `--max-depth`, `--timeout`, `--workers`, and JSON/Markdown/CSV output via `--output-format [json|markdown|csv]` / `--format` / `--out`** (implemented)
 - WHOIS lookup (implemented)
 - SSL/TLS certificate inspection (implemented)
 - TLS protocol/cipher enumeration (implemented)
@@ -65,6 +65,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 
 - **WHOIS lookup: `whois` command to query a WHOIS server (default: whois.iana.org, port 43) for a target domain or IP address and parse key registration fields (registrar, creation/expiry dates, nameservers, registrant organization, and status codes); follows referral servers recursively via `--recursive` / `--max-depth` (default: 2); supports `--target`, `--server` (default: whois.iana.org), `--port` (default: 43), `--timeout`, and JSON/Markdown/CSV output via `--output-format [json|markdown|csv]` / `--format` / `--out`** (implemented)
 - **SSL/TLS certificate inspection: `ssl` command to connect to a target over TLS (default port 443) and inspect the X.509 certificate; extracts subject, issuer, subject alternative names, validity dates, signature algorithm, key size, and chain length, and reports days remaining to expiry; supports `--target` (host or URL), `--port` (default 443), `--timeout`, and JSON/Markdown/CSV output via `--output-format [json|markdown|csv]` / `--format` / `--out`** (implemented)
+- **TLS protocol/cipher enumeration: `tls` command to enumerate supported TLS protocol versions and cipher suites for a target; runs per-version handshake probes with pinned min/max TLS version and per-cipher probes with a pinned OpenSSL cipher string, reporting the negotiated cipher/protocol and flagging obsolete versions (SSLv3, TLSv1.0, TLSv1.1); supports `--target` (host or URL), `--port` (default 443), `--versions` (comma-separated list to test), `--ciphers` (comma-separated list, defaults to a built-in common set), `--timeout`, `--workers`, and JSON/Markdown/CSV output via `--output-format [json|markdown|csv]` / `--format` / `--out`** (implemented)
 - **IP geolocation: `geo` command to look up the geographic location of a target IP address, hostname, or URL via a public API (default: ip-api.com) with filesystem caching and offline stale-cache fallback; supports recursive hop geolocation (traceroute + per-hop geolocation via `--recursive` / `--max-depth`), `--no-cache`, `--no-offline-fallback`, `--api-url`, `--timeout`, and JSON/Markdown/CSV output via `--output-format [json|markdown|csv]` / `--format` / `--out`** (implemented)
 
 

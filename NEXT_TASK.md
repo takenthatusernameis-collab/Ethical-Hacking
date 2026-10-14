@@ -7,9 +7,10 @@
 - **`geo`/`whois`/`ssl` documentation — COMPLETED**: added detailed per-command README bullets for all three (they previously appeared only in the summary list). All three commands have `--output-format`/`--format`/`--out` with JSON/Markdown/CSV — verified via `--help` and formatter code.
 - **IPv6 URL target parsing bug — FIXED across all 12 protocol modules**: `mysql`, `mongodb`, `memcached`, `redis`, `smb`, `ldap`, `postgresql`, `mssql`, `oracle` — fixed `_normalize_target` so host:port post-processing only runs for non-URL inputs (urlparse already unwraps bracketed IPv6). Additionally `snmp`, `ntp`, `smtp`, `ftp`, `netbios` had a secondary gap (couldn't parse `[::1]:port` without scheme) — fixed by adding a `[IPv6]:port` detection branch. Added 8 new test functions covering IPv6 URL forms.
 - **All suggested "next tasks" in this file are already complete**: `--output-format csv` exists on `geo`, `whois`, and `ssl` (verified end-to-end and via `--help`). No new command/feature work is pending.
+- **README documentation — COMPLETE for all 54 commands**: the last three summary-only bullets (`web`, `dnsbrute`, `tls`) were replaced with detailed per-command bullets documenting CLI options and output format support. Verified by scanning README for every command registered in `ethscan --help`.
 - Full suite: `python -m pytest -q` → **2808 passed, 3 failed** (3 failures are pre-existing network-dependent DNS tests; not caused by any code change — they require internet access to resolve real domains).
-- 52 commands registered (`python -m ethscan --help`).
-- Latest session (HANDOFF_NEXT.md) added README documentation bullets for `mysql` and `mongodb` commands. This session added `geo`/`whois`/`ssl` bullets and fixed the IPv6 parsing bug.
+- 54 commands registered (`python -m ethscan --help`).
+- Latest session (HANDOFF_NEXT.md) added README documentation bullets for `mysql` and `mongodb` commands. This session added `geo`/`whois`/`ssl` bullets and fixed the IPv6 parsing bug. The most recent session added detailed bullets for `web`, `dnsbrute`, and `tls`.
 
 If a new task is desired, follow the established conventions in `HANDOFF_NEXT.md` (next precise task section) — otherwise the repository is complete.
 
