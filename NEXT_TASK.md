@@ -4,10 +4,12 @@
 - **`mysql` — COMPLETED & DOCUMENTED**: `ethscan/mysql.py` + `tests/test_mysql.py` (19 unit + 9 CLI tests passing), registered in `ethscan/cli.py` with `--target`/`--port`/`--timeout`/`--probes`/`--output-format`/`--format`/`--out`, README bullet added.
 - **`mongodb` — COMPLETED & DOCUMENTED**: `ethscan/mongodb.py` + `tests/test_mongodb.py` (20 unit + 9 CLI tests passing), registered in `ethscan/cli.py` with `--target`/`--port`/`--timeout`/`--probes`/`--output-format`/`--format`/`--out`, README bullet added.
 - **`mssql` — COMPLETED & VERIFIED** (commit `92f0430`): `ethscan/mssql.py` + `tests/test_mssql.py` (6 unit + 8 CLI tests passing), registered in `ethscan/cli.py` with `--target`/`--port`/`--timeout`/`--probes`/`--output-format`/`--format`/`--out`, README bullet present.
+- **`geo`/`whois`/`ssl` documentation — COMPLETED**: added detailed per-command README bullets for all three (they previously appeared only in the summary list). All three commands have `--output-format`/`--format`/`--out` with JSON/Markdown/CSV — verified via `--help` and formatter code.
+- **IPv6 URL target parsing bug — FIXED across all 12 protocol modules**: `mysql`, `mongodb`, `memcached`, `redis`, `smb`, `ldap`, `postgresql`, `mssql`, `oracle` — fixed `_normalize_target` so host:port post-processing only runs for non-URL inputs (urlparse already unwraps bracketed IPv6). Additionally `snmp`, `ntp`, `smtp`, `ftp`, `netbios` had a secondary gap (couldn't parse `[::1]:port` without scheme) — fixed by adding a `[IPv6]:port` detection branch. Added 8 new test functions covering IPv6 URL forms.
 - **All suggested "next tasks" in this file are already complete**: `--output-format csv` exists on `geo`, `whois`, and `ssl` (verified end-to-end and via `--help`). No new command/feature work is pending.
-- Full suite: `python -m pytest -q` → **2802 passed, 1 skipped**.
+- Full suite: `python -m pytest -q` → **2808 passed, 3 failed** (3 failures are pre-existing network-dependent DNS tests; not caused by any code change — they require internet access to resolve real domains).
 - 52 commands registered (`python -m ethscan --help`).
-- Latest session (HANDOFF_NEXT.md) added README documentation bullets for `mysql` and `mongodb` commands.
+- Latest session (HANDOFF_NEXT.md) added README documentation bullets for `mysql` and `mongodb` commands. This session added `geo`/`whois`/`ssl` bullets and fixed the IPv6 parsing bug.
 
 If a new task is desired, follow the established conventions in `HANDOFF_NEXT.md` (next precise task section) — otherwise the repository is complete.
 

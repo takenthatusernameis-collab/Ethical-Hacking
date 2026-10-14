@@ -63,6 +63,10 @@ A modular, offline-first ethical hacking toolkit written in Python.
 
 - **Oracle reconnaissance: `oracle` command to probe Oracle TNS listeners over TCP 1521 by sending a TNS Connect request and parsing the server response; extracts `version` from the Accept packet -- no login is attempted; supports `--target` (host, host:port, or oracle:// / tns:// URL), `--port` (default 1521), `--probes` (default: version), `--timeout`, and JSON/Markdown/CSV output via `--output-format [json|markdown|csv]` / `--format` / `--out`** (implemented)
 
+- **WHOIS lookup: `whois` command to query a WHOIS server (default: whois.iana.org, port 43) for a target domain or IP address and parse key registration fields (registrar, creation/expiry dates, nameservers, registrant organization, and status codes); follows referral servers recursively via `--recursive` / `--max-depth` (default: 2); supports `--target`, `--server` (default: whois.iana.org), `--port` (default: 43), `--timeout`, and JSON/Markdown/CSV output via `--output-format [json|markdown|csv]` / `--format` / `--out`** (implemented)
+- **SSL/TLS certificate inspection: `ssl` command to connect to a target over TLS (default port 443) and inspect the X.509 certificate; extracts subject, issuer, subject alternative names, validity dates, signature algorithm, key size, and chain length, and reports days remaining to expiry; supports `--target` (host or URL), `--port` (default 443), `--timeout`, and JSON/Markdown/CSV output via `--output-format [json|markdown|csv]` / `--format` / `--out`** (implemented)
+- **IP geolocation: `geo` command to look up the geographic location of a target IP address, hostname, or URL via a public API (default: ip-api.com) with filesystem caching and offline stale-cache fallback; supports recursive hop geolocation (traceroute + per-hop geolocation via `--recursive` / `--max-depth`), `--no-cache`, `--no-offline-fallback`, `--api-url`, `--timeout`, and JSON/Markdown/CSV output via `--output-format [json|markdown|csv]` / `--format` / `--out`** (implemented)
+
 
 ## Configuration
 

@@ -42,26 +42,25 @@ def _normalize_target(target: str) -> Tuple[str, int]:
     else:
         host = normalized
         port = None
-
-    # Handle [IPv6]:port format
-    if host and host.startswith("[") and "]:" in host:
-        bracket_end = host.find("]:")
-        if bracket_end > 0:
-            port_part = host[bracket_end + 2:]
-            if port_part.isdigit():
-                host = host[1:bracket_end]
-                port = port or int(port_part)
-            else:
-                host = host[1:-1] if host.endswith("]") else host
-        elif host.endswith("]"):
+        # Handle [IPv6]:port format
+        if host and host.startswith("[") and "]:" in host:
+            bracket_end = host.find("]:")
+            if bracket_end > 0:
+                port_part = host[bracket_end + 2:]
+                if port_part.isdigit():
+                    host = host[1:bracket_end]
+                    port = port or int(port_part)
+                else:
+                    host = host[1:-1] if host.endswith("]") else host
+            elif host.endswith("]"):
+                host = host[1:-1]
+        elif host and ":" in host and "]" not in host:
+            base, _, rest = host.rpartition(":")
+            if rest.isdigit():
+                host = base
+                port = port or int(rest)
+        elif host and host.startswith("[") and host.endswith("]"):
             host = host[1:-1]
-    elif host and ":" in host and "]" not in host:
-        base, _, rest = host.rpartition(":")
-        if rest.isdigit():
-            host = base
-            port = port or int(rest)
-    elif host and host.startswith("[") and host.endswith("]"):
-        host = host[1:-1]
 
     if not host:
         raise ValueError(f"Could not parse host from target {target!r}")

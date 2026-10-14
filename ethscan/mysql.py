@@ -40,19 +40,18 @@ def _normalize_target(target: str) -> Tuple[str, int]:
         port = parsed.port
     else:
         host = normalized
-
-    if host and host.startswith("["):
-        close = host.find("]")
-        if close > 0:
-            maybe_port = host[close + 1:]
-            if maybe_port.startswith(":") and maybe_port[1:].isdigit():
-                port = port or int(maybe_port[1:])
-            host = host[1:close]
-    elif host and ":" in host and "]" not in host:
-        base, _, rest = host.rpartition(":")
-        if rest.isdigit():
-            host = base
-            port = port or int(rest)
+        if host and host.startswith("["):
+            close = host.find("]")
+            if close > 0:
+                maybe_port = host[close + 1:]
+                if maybe_port.startswith(":") and maybe_port[1:].isdigit():
+                    port = port or int(maybe_port[1:])
+                host = host[1:close]
+        elif host and ":" in host and "]" not in host:
+            base, _, rest = host.rpartition(":")
+            if rest.isdigit():
+                host = base
+                port = port or int(rest)
 
     if not host:
         raise ValueError(f"Could not parse host from target {target!r}")

@@ -27,6 +27,8 @@ def test_normalize_target_basic():
 def test_normalize_target_ipv6():
     assert _normalize_target("[::1]:27017") == ("::1", 27017)
     assert _normalize_target("[::1]") == ("::1", DEFAULT_PORT)
+    # URL form with IPv6
+    assert _normalize_target("mongodb://[::1]:27017") == ("::1", 27017)
 
 
 def test_normalize_target_invalid():

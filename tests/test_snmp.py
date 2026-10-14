@@ -131,6 +131,18 @@ def test_normalize_target_empty_raises() -> None:
         _normalize_target("   ")
 
 
+def test_normalize_target_ipv6_url() -> None:
+    host, port = _normalize_target("snmp://[::1]:161")
+    assert host == "::1"
+    assert port == 161
+    host, port = _normalize_target("[::1]:161")
+    assert host == "::1"
+    assert port == 161
+    host, port = _normalize_target("[::1]")
+    assert host == "::1"
+    assert port == DEFAULT_PORT
+
+
 # ---------------------------------------------------------------------------
 # BER encoding helpers
 # ---------------------------------------------------------------------------

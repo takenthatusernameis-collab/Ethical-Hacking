@@ -134,6 +134,18 @@ def test_normalize_target_empty_raises() -> None:
         _normalize_target("   ")
 
 
+def test_normalize_target_ipv6_url() -> None:
+    host, port = _normalize_target("netbios://[fd00::1]:137")
+    assert host == "fd00::1"
+    assert port == 137
+    host, port = _normalize_target("[fd00::1]:137")
+    assert host == "fd00::1"
+    assert port == 137
+    host, port = _normalize_target("[fd00::1]")
+    assert host == "fd00::1"
+    assert port == DEFAULT_PORT
+
+
 # ---------------------------------------------------------------------------
 # Name encoding / decoding (RFC 1001 first-level encoding)
 # ---------------------------------------------------------------------------

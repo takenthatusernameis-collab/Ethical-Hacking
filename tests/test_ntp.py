@@ -119,6 +119,18 @@ def test_normalize_target_empty_raises() -> None:
         _normalize_target("   ")
 
 
+def test_normalize_target_ipv6_url() -> None:
+    host, port = _normalize_target("ntp://[::1]:123")
+    assert host == "::1"
+    assert port == 123
+    host, port = _normalize_target("[::1]:123")
+    assert host == "::1"
+    assert port == 123
+    host, port = _normalize_target("[::1]")
+    assert host == "::1"
+    assert port == DEFAULT_PORT
+
+
 # ---------------------------------------------------------------------------
 # _build_time_request / _build_monlist_request
 # ---------------------------------------------------------------------------

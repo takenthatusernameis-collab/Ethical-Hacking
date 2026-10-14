@@ -29,6 +29,8 @@ def test_normalize_target_basic():
 def test_normalize_target_ipv6():
     assert _normalize_target("[::1]:11211") == ("::1", 11211)
     assert _normalize_target("[::1]") == ("::1", DEFAULT_PORT)
+    # URL form with IPv6
+    assert _normalize_target("memcached://[::1]:11211") == ("::1", 11211)
 
 
 def test_normalize_target_invalid():

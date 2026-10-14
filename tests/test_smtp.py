@@ -144,6 +144,18 @@ def test_normalize_target_empty_raises() -> None:
         _normalize_target("   ")
 
 
+def test_normalize_target_ipv6_url() -> None:
+    host, port = _normalize_target("smtp://[::1]:25")
+    assert host == "::1"
+    assert port == 25
+    host, port = _normalize_target("[::1]:25")
+    assert host == "::1"
+    assert port == 25
+    host, port = _normalize_target("[::1]")
+    assert host == "::1"
+    assert port == DEFAULT_PORT
+
+
 # ---------------------------------------------------------------------------
 # _parse_smtp_response
 # ---------------------------------------------------------------------------

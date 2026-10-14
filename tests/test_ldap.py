@@ -176,6 +176,12 @@ def test_normalize_target_ipv6_no_port() -> None:
     assert port == DEFAULT_PORT
 
 
+def test_normalize_target_ipv6_url_with_port() -> None:
+    host, port = _normalize_target("ldap://[fd00::1]:389")
+    assert host == "fd00::1"
+    assert port == 389
+
+
 def test_normalize_target_strips_whitespace() -> None:
     host, port = _normalize_target("  ldap://192.168.1.100  ")
     assert host == "192.168.1.100"

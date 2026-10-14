@@ -39,15 +39,21 @@ def _normalize_target(target: str) -> Tuple[str, int]:
     else:
         host = normalized
         port = None
-
-    # Strip an optional ``host:port`` suffix.
-    if host and ":" in host and "]" not in host:
-        base, _, rest = host.rpartition(":")
-        if rest.isdigit():
-            host = base
-            port = port or int(rest)
-    if host.startswith("[") and host.endswith("]"):
-        host = host[1:-1]
+        # Strip an optional ``host:port`` suffix.
+        if host and host.startswith("[") and "]:" in host:
+            bracket_end = host.find("]:")
+            if bracket_end > 0:
+                port_part = host[bracket_end + 2:]
+                if port_part.isdigit():
+                    host = host[1:bracket_end]
+                    port = port or int(port_part)
+        elif host and ":" in host and "]" not in host:
+            base, _, rest = host.rpartition(":")
+            if rest.isdigit():
+                host = base
+                port = port or int(rest)
+        elif host and host.startswith("[") and host.endswith("]"):
+            host = host[1:-1]
 
     if not host:
         raise ValueError(f"Could not parse host from target {target!r}")

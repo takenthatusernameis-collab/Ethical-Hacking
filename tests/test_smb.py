@@ -105,6 +105,12 @@ def test_normalize_target_ipv6_no_port() -> None:
     assert port == DEFAULT_PORT
 
 
+def test_normalize_target_ipv6_url_with_port() -> None:
+    host, port = _normalize_target("smb://[fd00::1]:445")
+    assert host == "fd00::1"
+    assert port == 445
+
+
 def test_normalize_target_empty_raises() -> None:
     with pytest.raises(ValueError):
         _normalize_target("   ")

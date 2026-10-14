@@ -31,6 +31,12 @@ def test_normalize_target_basic():
     assert _normalize_target("example.com") == ("example.com", DEFAULT_PORT)
 
 
+def test_normalize_target_ipv6():
+    assert _normalize_target("redis://[::1]:6379") == ("::1", 6379)
+    assert _normalize_target("[::1]:6379") == ("::1", 6379)
+    assert _normalize_target("[::1]") == ("::1", DEFAULT_PORT)
+
+
 def test_build_resp_array_ping():
     req = _build_resp_array("PING")
     assert req == b"*1\r\n$4\r\nPING\r\n"
