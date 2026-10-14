@@ -31,7 +31,14 @@ def _normalize_domain(target: str) -> str:
         normalized = "https://" + normalized
     from urllib.parse import urlparse
     parsed = urlparse(normalized)
-    return parsed.netloc.lower()
+    netloc = parsed.netloc.lower()
+    # urlparse preserves IPv6 brackets in netloc (e.g. "[::1]" or "[::1]:8080").
+    # Strip them so IPv6 literals are consistently represented bare and are
+    # correctly recognized as IP addresses by _is_ip_address(). Bare IPv6 inputs
+    # without brackets (e.g. "2001:db8::1") are passed through unchanged.
+    if netloc.startswith("[") and "]" in netloc:
+        netloc = netloc[1 : netloc.index("]")]
+    return netloc
 
 
 def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> List[str]:
