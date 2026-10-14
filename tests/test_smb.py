@@ -1258,3 +1258,23 @@ def test_format_smb_report_csv_unchanged_without_smb2() -> None:
         "banner",
         "error",
     ]
+
+
+def test_format_smb_report_csv_escapes_special_characters() -> None:
+    # Test that CSV formatter properly escapes special characters in banner and challenge
+    results = _accessible_results()
+    # Set banner to contain a comma and a double quote
+    banner_value = 'Server says "Hello, World!"'
+    results["banner"] = banner_value
+    # Set challenge to contain a comma (though challenge is hex, we test anyway)
+    challenge_value = "01,02"
+    results["challenge"] = challenge_value
+    output = format_smb_report_csv(results)
+    # Parse the CSV output
+    rows = list(csv.reader(io.StringIO(output)))
+    # Check that the row has the correct number of columns
+    assert len(rows[1]) == 16
+    # Check that the banner value is correctly preserved after CSV parsing
+    assert rows[1][14] == banner_value  # banner is at index 14
+    # Check that the challenge value is correctly preserved after CSV parsing
+    assert rows[1][13] == challenge_value  # challenge is at index 13
