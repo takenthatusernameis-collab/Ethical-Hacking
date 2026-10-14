@@ -11376,6 +11376,156 @@ def test_cve_help_shows_min_severity() -> None:
     assert "low" in result.output
 
 
+def test_cve_help_shows_output_format() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cve", "--help"])
+    assert result.exit_code == 0
+    assert "--output-format" in result.output
+    assert "csv" in result.output
+
+
+def test_cve_output_format_csv(monkeypatch) -> None:
+    def mock_run_service(host, ports=None, timeout=3.0, max_workers=50):
+        return {
+            "target": host,
+            "host": host,
+            "timeout": timeout,
+            "ports_scanned": 0,
+            "services_found": 1,
+            "results": [
+                {"port": 22, "banner": "SSH-2.0-OpenSSH_7.2p2", "service": "OpenSSH", "product": "OpenSSH", "version": "7.2p2"}
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.service.run_service", mock_run_service)
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cve", "--target", "example.com", "--output-format", "csv", "--timeout", "0.5"],
+    )
+    assert result.exit_code == 0
+    header_line = result.output.split("\n")[0]
+    assert "source" in header_line
+    assert "port" in header_line
+    assert "product" in header_line
+    assert "version" in header_line
+    assert "cve_id" in header_line
+    assert "severity" in header_line
+    assert "score" in header_line
+    assert "title" in header_line
+    assert "description" in header_line
+    assert "references" in header_line
+    assert "cached" in header_line
+    assert "offline_fallback" in header_line
+    assert "CVE-2016-6210" in result.output
+    assert "OpenSSH" in result.output
+
+
+def test_cve_output_format_csv_out(tmp_path, monkeypatch) -> None:
+    def mock_run_service(host, ports=None, timeout=3.0, max_workers=50):
+        return {
+            "target": host,
+            "host": host,
+            "timeout": timeout,
+            "ports_scanned": 0,
+            "services_found": 1,
+            "results": [
+                {"port": 22, "banner": "SSH-2.0-OpenSSH_7.2p2", "service": "OpenSSH", "product": "OpenSSH", "version": "7.2p2"}
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.service.run_service", mock_run_service)
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+
+    out_file = tmp_path / "cve_report.csv"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cve", "--target", "example.com", "--output-format", "csv", "--out", str(out_file), "--timeout", "0.5"],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    content = out_file.read_text()
+    assert "source,port,product,version,cve_id,severity,score,title,description,references,cached,offline_fallback" in content
+    assert "CVE-2016-6210" in content
+
+
+def test_cve_format_csv_alias(monkeypatch) -> None:
+    def mock_run_service(host, ports=None, timeout=3.0, max_workers=50):
+        return {
+            "target": host,
+            "host": host,
+            "timeout": timeout,
+            "ports_scanned": 0,
+            "services_found": 1,
+            "results": [
+                {"port": 22, "banner": "SSH-2.0-OpenSSH_7.2p2", "service": "OpenSSH", "product": "OpenSSH", "version": "7.2p2"}
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.service.run_service", mock_run_service)
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cve", "--target", "example.com", "--format", "csv", "--timeout", "0.5"],
+    )
+    assert result.exit_code == 0
+    header_line = result.output.split("\n")[0]
+    assert "source,port,product,version,cve_id,severity,score,title,description,references,cached,offline_fallback" in header_line
+
+
+def test_cve_output_format_default_is_json(monkeypatch) -> None:
+    def mock_run_service(host, ports=None, timeout=3.0, max_workers=50):
+        return {
+            "target": host,
+            "host": host,
+            "timeout": timeout,
+            "ports_scanned": 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.service.run_service", mock_run_service)
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["cve", "--target", "example.com", "--timeout", "0.5"]
+    )
+    assert result.exit_code == 0
+    assert "cve_entries" in result.output
+
+
+def test_cve_output_format_precedence_over_format(monkeypatch) -> None:
+    def mock_run_service(host, ports=None, timeout=3.0, max_workers=50):
+        return {
+            "target": host,
+            "host": host,
+            "timeout": timeout,
+            "ports_scanned": 0,
+            "services_found": 1,
+            "results": [
+                {"port": 22, "banner": "SSH-2.0-OpenSSH_7.2p2", "service": "OpenSSH", "product": "OpenSSH", "version": "7.2p2"}
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.service.run_service", mock_run_service)
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cve", "--target", "example.com", "--format", "markdown", "--output-format", "csv", "--timeout", "0.5"],
+    )
+    assert result.exit_code == 0
+    header_line = result.output.split("\n")[0]
+    assert "source,port,product,version,cve_id,severity,score,title,description,references,cached,offline_fallback" in header_line
+
+
 def test_cidr_help() -> None:
     """Test cidr command help."""
     runner = CliRunner()

@@ -1,15 +1,21 @@
 # Handoff to Next Agent
 
 ## What changed
-- Reviewed the codebase and identified a bounded, high-value task: the handoff indicated CSV output support was being added across commands. Verified that `geo`, `whois`, and `ssl` already have CSV formatters implemented, CLI support added, and their tests pass.
-- Confirmed the overall test baseline: 2815 passed, 3 failures are pre-existing environmental issues (dnspython installed in environment; tests expect dnspython unavailable). All other tests pass, including all CSV-related tests for geo/whois/ssl/CLI.
+- Identified that the `cve` command had its CSV formatter (`format_cve_report_csv`) and CLI wiring (`--output-format` option + `chosen_format == "csv"` dispatch) already implemented, but was missing CSV CLI integration tests — the only command among all 54 registered CLI commands without CSV CLI tests.
+- Added 6 CSV CLI integration tests for the `cve` command in `tests/test_cli.py`:
+  - `test_cve_help_shows_output_format` — verifies `--output-format` and `csv` appear in help
+  - `test_cve_output_format_csv` — verifies CSV header columns and CVE-2016-6210 entry present
+  - `test_cve_output_format_csv_out` — verifies `--out` writes CSV file with correct header
+  - `test_cve_format_csv_alias` — verifies deprecated `--format csv` alias produces identical CSV output
+  - `test_cve_output_format_default_is_json` — verifies default (no format flag) remains JSON
+  - `test_cve_output_format_precedence_over_format` — verifies `--output-format csv` overrides `--format markdown`
+- All 6 new tests pass; full suite: 2821 passed, 3 failed (pre-existing environmental DNS tests).
 
 ## What was actually verified
-- geo: CSV formatter (`format_geo_report_csv`) exists with correct header and escaping; CLI has `--output-format/--format csv` support; all 44 geo tests pass.
-- whois: CSV formatter exists with recursive hops handling; CLI support complete; all 19 whois tests pass.
-- ssl: CSV formatter exists; CLI support complete; all 17 ssl tests pass.
-- CLI integration: all geo/whois/ssl CSV CLI tests pass (8 tests total across them).
-- Full suite: 2815 passed, 3 failed (environmental DNS tests due to dnspython availability).
+- `cve` CSV formatter (`format_cve_report_csv` in `ethscan/cve.py:390`) emits header `source,port,product,version,cve_id,severity,score,title,description,references,cached,offline_fallback` with one row per CVE entry.
+- CLI wiring confirmed: `--output-format` option registered at `ethscan/cli.py:2736` with `Choice(["json", "markdown", "csv"])`, `--format` deprecated alias at `:2743`, dispatch at `:2818` routes to `format_cve_report_csv` when `chosen_format == "csv"`.
+- All 24 cve-related CLI tests pass (18 existing + 6 new).
+- Full suite: 2821 passed, 3 failed (unchanged environmental failures).
 
 ## What remains unresolved
 - The 3 environmental DNS test failures remain as documented (not regressions):
@@ -21,4 +27,4 @@
 - None in this session.
 
 ## Next precise task
-Inspect TASK.md for remaining commands that need `--output-format csv` support. Candidates mentioned include other commands not yet completed. The TASK.md shows geo, whois, ssl are already done. Good next task is to add CSV output to another command that needs it (e.g., review TASK.md's suggested "Add `--output-format csv` output to the `dns` command" is already done per earlier entries; look for the next unimplemented command). Also could look for commands missing CSV formatters - for example check common ones like `headers`, `cert`, `dnssec`, etc. A concrete, bounded task: pick the next command in TASK.md's priority list that lacks CSV support and implement it end-to-end (module formatter + CLI wiring + unit tests + CLI tests), then verify.
+All 54 registered CLI commands now have CSV formatters wired and CSV CLI integration tests. The remaining gap is in unit tests for the `cve` CSV formatter itself (`tests/test_cve.py` lacks `test_format_cve_report_csv*` tests) — verify whether `tests/test_cve.py` exists and add CSV formatter unit tests (basic, empty, field escaping) following the pattern used by other modules (e.g. `tests/test_nmap.py`). Alternatively, review TASK.md for any other unimplemented features.
