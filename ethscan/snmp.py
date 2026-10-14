@@ -617,38 +617,65 @@ def format_snmp_report_markdown(data: Dict[str, Any]) -> str:
 def format_snmp_report_csv(data: Dict[str, Any]) -> str:
     """Format SNMP reconnaissance results as CSV.
 
-    Emits a single summary row per target with the header
-    ``target,host,port,snmp_version,sys_descr,sys_object_id,sys_up_time_ms,sys_name,valid_communities,error``.
+    Emits a header row plus one row per probed community (including a
+    summary row). The ``record_type`` discriminator column distinguishes
+    them:
+
+    - ``summary`` row: target-level fields (system information and the
+      top-level error) are populated; community fields are empty.
+    - ``community`` row: the target context is repeated (so each row is
+      self-contained) and per-community fields (``community``,
+      ``community_valid``, ``community_version``, ``community_error``)
+      are populated; system fields are empty.
+
+    One row is emitted per entry in ``data["communities"]`` so every probed
+    community--valid or invalid, whether or not it produced an error--is
+    preserved. The previous single-row form collapsed all communities into a
+    comma-joined ``valid_communities`` string and a semicolon-joined
+    ``error`` string, dropping per-community structure, the v1/v2c version
+    per community, and the valid/error association per community.
+
+    Header: ``target,host,port,snmp_version,sys_descr,sys_object_id,sys_up_time_ms,sys_name,error,record_type,community,community_valid,community_version,community_error``.
     """
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
         "target", "host", "port", "snmp_version",
-        "sys_descr", "sys_object_id", "sys_up_time_ms", "sys_name",
-        "valid_communities", "error",
+        "sys_descr", "sys_object_id", "sys_up_time_ms", "sys_name", "error",
+        "record_type", "community", "community_valid",
+        "community_version", "community_error",
     ])
 
-    valid = data.get("valid_communities") or []
-    valid_str = ",".join(valid)
-    error_parts = []
-    for entry in data.get("communities") or []:
-        if entry.get("error"):
-            label = entry.get("community") or "(empty)"
-            error_parts.append(f"{label}: {entry['error']}")
-    if data.get("error"):
-        error_parts.append(data["error"])
-    error = "; ".join(error_parts)
+    # Target-level context, repeated on every row so each row is
+    # self-contained for downstream CSV consumers.
+    target = data.get("target", "")
+    host = data.get("host", "")
+    port = data.get("port", "") or ""
+    snmp_version = data.get("snmp_version", "") or ""
+    sys_descr = data.get("sysDescr", "") or ""
+    sys_object_id = data.get("sysObjectID", "") or ""
+    sys_up_time = data.get("sysUpTime", "") if data.get("sysUpTime") is not None else ""
+    sys_name = data.get("sysName", "") or ""
+    top_error = data.get("error") or ""
 
+    # Summary row: target-level fields filled, community fields empty.
     writer.writerow([
-        data.get("target", ""),
-        data.get("host", ""),
-        data.get("port", ""),
-        data.get("snmp_version", "") or "",
-        data.get("sysDescr", "") or "",
-        data.get("sysObjectID", "") or "",
-        data.get("sysUpTime", "") if data.get("sysUpTime") is not None else "",
-        data.get("sysName", "") or "",
-        valid_str,
-        error,
+        target, host, port, snmp_version,
+        sys_descr, sys_object_id, sys_up_time, sys_name, top_error,
+        "summary", "", "", "", "",
     ])
+
+    # One row per probed community (valid or invalid) so per-community
+    # structure, version and error are preserved rather than collapsed.
+    for entry in data.get("communities") or []:
+        community = entry.get("community") or ""
+        valid = "true" if entry.get("valid") else "false"
+        community_version = entry.get("version") or ""
+        community_error = entry.get("error") or ""
+        writer.writerow([
+            target, host, port, snmp_version,
+            "", "", "", "", "",
+            "community", community, valid, community_version, community_error,
+        ])
+
     return output.getvalue().rstrip("\r\n")

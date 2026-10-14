@@ -837,35 +837,105 @@ def test_format_snmp_report_csv() -> None:
     rows = list(csv.reader(io.StringIO(output)))
     assert rows[0] == [
         "target", "host", "port", "snmp_version",
-        "sys_descr", "sys_object_id", "sys_up_time_ms", "sys_name",
-        "valid_communities", "error",
+        "sys_descr", "sys_object_id", "sys_up_time_ms", "sys_name", "error",
+        "record_type", "community", "community_valid",
+        "community_version", "community_error",
     ]
-    assert rows[1][0] == "snmp.example.com"
-    assert rows[1][1] == "snmp.example.com"
-    assert rows[1][2] == "161"
-    assert rows[1][3] == "v2c"
-    assert rows[1][4] == "Linux router 5.4.0"
-    assert rows[1][5] == "1.3.6.1.4.1.9.1.1"
-    assert rows[1][6] == "123456780"
-    assert rows[1][7] == "router-01"
-    assert rows[1][8] == "public"
+    # Summary row: target-level fields populated, community fields empty.
+    summary = rows[1]
+    assert summary[9] == "summary"
+    assert summary[0] == "snmp.example.com"
+    assert summary[1] == "snmp.example.com"
+    assert summary[2] == "161"
+    assert summary[3] == "v2c"
+    assert summary[4] == "Linux router 5.4.0"
+    assert summary[5] == "1.3.6.1.4.1.9.1.1"
+    assert summary[6] == "123456780"
+    assert summary[7] == "router-01"
+    assert summary[8] == ""  # no top-level error
+    assert summary[10:] == ["", "", "", ""]
+
+    # One community row per probed community (previously collapsed).
+    community_rows = [r for r in rows[1:] if r[9] == "community"]
+    assert [r[10] for r in community_rows] == ["public", "private"]
+    public_row = community_rows[0]
+    assert public_row[9] == "community"
+    assert public_row[10] == "public"
+    assert public_row[11] == "true"
+    assert public_row[12] == "v2c"
+    assert public_row[13] == ""
+    private_row = community_rows[1]
+    assert private_row[10] == "private"
+    assert private_row[11] == "false"
+    assert private_row[12] == ""  # version not negotiated
+    assert private_row[13] == "v2c request failed: timeout"
+    # Target context is repeated on every community row.
+    assert all(r[0] == "snmp.example.com" and r[2] == "161" and r[3] == "v2c" for r in community_rows)
+    assert all(r[4:9] == ["", "", "", "", ""] for r in community_rows)
 
 
-def test_format_snmp_report_csv_escapes_communities() -> None:
+def test_format_snmp_report_csv_no_communities() -> None:
     results = _full_results()
+    results["communities"] = []
+    output = format_snmp_report_csv(results)
+    rows = list(csv.reader(io.StringIO(output)))
+    # Header + a single summary row; no community rows.
+    assert len(rows) == 2
+    assert rows[1][9] == "summary"
+    assert not any(r[9] == "community" for r in rows[1:])
+
+
+def test_format_snmp_report_csv_multiple_communities() -> None:
+    results = _full_results()
+    results["communities"] = [
+        {"community": "public", "valid": True, "version": "v2c", "error": None},
+        {"community": "private", "valid": False, "version": None,
+         "error": "v2c request failed: timeout"},
+        {"community": "", "valid": False, "version": None,
+         "error": "v1 request failed: connection refused"},
+    ]
+    results["valid_communities"] = ["public"]
+    output = format_snmp_report_csv(results)
+    rows = list(csv.reader(io.StringIO(output)))
+    community_rows = [r for r in rows[1:] if r[9] == "community"]
+    assert len(community_rows) == 3
+    assert [r[10] for r in community_rows] == ["public", "private", ""]
+    assert [r[11] for r in community_rows] == ["true", "false", "false"]
+    assert [r[12] for r in community_rows] == ["v2c", "", ""]
+    assert community_rows[2][10] == ""  # empty community string preserved as its own row
+    assert community_rows[2][13] == "v1 request failed: connection refused"
+
+
+def test_format_snmp_report_csv_one_row_per_community() -> None:
+    results = _full_results()
+    results["communities"] = [
+        {"community": "public", "valid": True, "version": "v2c", "error": None},
+        {"community": "private", "valid": True, "version": "v1", "error": None},
+    ]
     results["valid_communities"] = ["public", "private"]
     output = format_snmp_report_csv(results)
     rows = list(csv.reader(io.StringIO(output)))
-    assert rows[1][8] == "public,private"
+    community_rows = [r for r in rows[1:] if r[9] == "community"]
+    assert len(community_rows) == 2
+    assert [r[10] for r in community_rows] == ["public", "private"]
+    assert [r[11] for r in community_rows] == ["true", "true"]
+    assert [r[12] for r in community_rows] == ["v2c", "v1"]
 
 
-def test_format_snmp_report_csv_aggregates_errors() -> None:
+def test_format_snmp_report_csv_preserves_per_community_errors() -> None:
     results = _full_results()
     results["valid_communities"] = []
-    results["sysDescr"] = None
+    results["error"] = "all probes timed out"
     output = format_snmp_report_csv(results)
     rows = list(csv.reader(io.StringIO(output)))
-    assert "private: v2c request failed: timeout" in rows[1][9]
+    # Top-level error lives on the summary row (not aggregated into a cell).
+    assert rows[1][8] == "all probes timed out"
+    community_rows = [r for r in rows[1:] if r[9] == "community"]
+    assert len(community_rows) == 2
+    assert community_rows[0][10] == "public"
+    assert community_rows[0][13] == ""
+    assert community_rows[1][10] == "private"
+    assert community_rows[1][13] == "v2c request failed: timeout"
 
 
 def test_format_snmp_report_csv_commas_in_values() -> None:
