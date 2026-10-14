@@ -304,6 +304,20 @@ def test_run_resolve_url_target(monkeypatch) -> None:
     assert results["normalized"] == "example.com"
 
 
+def test_run_resolve_ipv6_url_target(monkeypatch) -> None:
+    def mock_resolve_ptr(ip, timeout=2.0, server=None):
+        return ["dns.google"]
+
+    monkeypatch.setattr("ethscan.resolve.resolve_ptr_records", mock_resolve_ptr)
+
+    results = run_resolve("https://[::1]/", timeout=1.0)
+    assert results["target"] == "https://[::1]/"
+    assert results["normalized"] == "::1"
+    assert results["is_ip"] is True
+    assert results["record_types_queried"] == ["PTR"]
+    assert results["records"]["PTR"] == ["dns.google"]
+
+
 def test_run_resolve_offline_domain() -> None:
     results = run_resolve("invalid.nonexistent.domain.tld", timeout=0.1)
     assert results["is_ip"] is False
