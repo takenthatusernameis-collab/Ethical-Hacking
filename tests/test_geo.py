@@ -700,3 +700,144 @@ def test_format_geo_report_csv_offline_fallback() -> None:
     }
     output = format_geo_report_csv(data)
     assert "true" in output
+
+
+def test_format_geo_report_csv_recursive_hops() -> None:
+    data = {
+        "target": "8.8.8.8",
+        "host": "8.8.8.8",
+        "ip": "8.8.8.8",
+        "timeout": 5.0,
+        "use_cache": True,
+        "offline_fallback": True,
+        "recursive": True,
+        "hops": [
+            {
+                "hop": 1,
+                "ip": "10.0.0.1",
+                "host": "router.local",
+                "response_type": "TTL",
+                "rtt_avg_ms": 1.5,
+                "geolocation": {
+                    "status": "success",
+                    "query": "10.0.0.1",
+                    "country": "United States",
+                    "region": "VA",
+                    "regionName": "Virginia",
+                    "city": "Ashburn",
+                    "isp": "ISP-A",
+                    "cached": False,
+                    "offline_fallback": False,
+                },
+            },
+            {
+                "hop": 2,
+                "ip": "10.0.0.2",
+                "host": None,
+                "response_type": "TTL",
+                "rtt_avg_ms": 2.5,
+                "geolocation": {
+                    "status": "success",
+                    "query": "10.0.0.2",
+                    "country": "Germany",
+                    "city": "Frankfurt",
+                    "org": "Org, Inc.",
+                    "cached": True,
+                    "offline_fallback": True,
+                },
+            },
+        ],
+        "geolocation": {
+            "status": "success",
+            "query": "8.8.8.8",
+            "country": "United States",
+            "cached": False,
+        },
+        "notes": [],
+    }
+    output = format_geo_report_csv(data)
+    import csv as _csv
+
+    rows = list(_csv.reader(output.splitlines()))
+    # header + primary result row + one row per hop
+    assert len(rows) == 4
+    assert rows[0] == [
+        "target",
+        "ip",
+        "country",
+        "region",
+        "city",
+        "lat",
+        "lon",
+        "isp",
+        "org",
+        "as_number",
+        "reverse_dns",
+        "cached",
+        "offline_fallback",
+    ]
+    # primary row is first
+    assert rows[1] == [
+        "8.8.8.8",
+        "8.8.8.8",
+        "United States",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "false",
+        "false",
+    ]
+    # hop rows preserve order and carry hop geo data
+    assert rows[2] == [
+        "8.8.8.8",
+        "10.0.0.1",
+        "United States",
+        "VA",
+        "Ashburn",
+        "",
+        "",
+        "ISP-A",
+        "",
+        "",
+        "",
+        "false",
+        "false",
+    ]
+    assert rows[3] == [
+        "8.8.8.8",
+        "10.0.0.2",
+        "Germany",
+        "",
+        "Frankfurt",
+        "",
+        "",
+        "",
+        "Org, Inc.",
+        "",
+        "",
+        "true",
+        "true",
+    ]
+
+
+def test_format_geo_report_csv_no_hops_is_single_row() -> None:
+    data = {
+        "target": "8.8.8.8",
+        "host": "8.8.8.8",
+        "ip": "8.8.8.8",
+        "geolocation": {
+            "status": "success",
+            "query": "8.8.8.8",
+            "country": "United States",
+            "cached": False,
+        },
+    }
+    output = format_geo_report_csv(data)
+    lines = output.splitlines()
+    assert len(lines) == 2
+    assert lines[0] == "target,ip,country,region,city,lat,lon,isp,org,as_number,reverse_dns,cached,offline_fallback"

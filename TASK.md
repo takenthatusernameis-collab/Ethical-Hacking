@@ -2340,3 +2340,25 @@ Alternative: Add `--output-format csv` to the `ssl` command for spreadsheet-comp
 - Register the `--output-format [json|markdown|csv]` option in `ethscan/cli.py` (keeping `--format` as a deprecated alias that takes lower precedence), routing to the CSV formatter when `chosen_format == "csv"`.
 - Add unit tests in `tests/test_*.py` (CSV formatter: basic, empty, field escaping) and CLI integration tests in `tests/test_cli.py` (help shows `--output-format`, CSV output, CSV with `--out`, deprecated `--format csv` alias still works, default format unchanged).
 - Use stdlib only — `csv` and `io` modules for proper quoting/escaping.
+
+## Completed: geo CSV recursive-hop rows (data-loss fix)
+
+The `geo` command's `--output-format csv` output was already implemented in the baseline (formatter in `ethscan/geo.py:348`, CLI wiring in `ethscan/cli.py`, tests in `tests/test_geo.py` and `tests/test_cli.py`). However, `format_geo_report_csv` silently dropped all recursive-hop geolocation data when `geo` was run with `--recursive`/`--max-depth`, whereas `format_geo_report_markdown` included a "Hop Geolocation" section. This was a real data-loss gap (not a regression).
+
+### Changes
+- `ethscan/geo.py`: refactored the row builder into a `_geo_csv_row(target, ip, geo)` helper and extended `format_geo_report_csv` to emit one CSV row per hop (same 13-column schema) after the primary result row when `data["hops"]` is present. Non-recursive runs emit exactly one data row (unchanged behavior); all pre-existing tests still pass.
+  - Note: the spec'd 13-column header cannot carry hop transport metadata (hop number, host, RTT, response type) that Markdown surfaces; only hop *geolocation* fields are preserved in CSV hop rows. Widening the schema is deferred as a separate design decision.
+- `tests/test_geo.py`: added `test_format_geo_report_csv_recursive_hops` (header + primary + per-hop rows, field ordering, cached/flag rendering, comma escaping in hop `org`) and `test_format_geo_report_csv_no_hops_is_single_row`.
+- `tests/test_cli.py`: added `test_geo_output_format_csv_recursive_hops` (end-to-end `geo --recursive --output-format csv`).
+
+### Verification
+- `python -m pytest tests/test_geo.py tests/test_cli.py -q` -> 852 passed.
+- `python -m pytest -q` -> 2828 passed, 1 skipped (no regressions; the 3 "environmental" DNS failures from the earlier handoff do not reproduce here).
+- Manual: `python -m ethscan geo --target 8.8.8.8 --output-format csv --recursive` now emits header + primary row + one hop row per hop with hop geolocation data preserved.
+
+## Handed off: dnsbrute CSV AXFR data-loss gap
+
+`ethscan/dnsbrute.py::format_dnsbrute_report_csv` (line 615) only iterates `data["all_results"]` (resolved subdomain probes) with columns `target,domain,subdomain,hostname,a_records,aaaa_records,resolved`. It omits ALL AXFR zone-transfer records (the result of `data["axfr"]` and `data["recursive_axfr"]`), which the markdown formatter renders as "## AXFR Attempts" / "## Recursive AXFR Attempts" sections. Since AXFR records are the command's primary output, this is a more severe instance of the same nested-data-dropped-from-CSV gap. The existing CSV columns do not fit record strings, so the next agent must choose a schema (e.g., widen the header with a `record` column, or emit a separate AXFR CSV block) before implementing. See `HANDOFF_NEXT.md` / `NEXT_TASK.md` for full evidence and scope.
+
+## Stale docs note
+`TASK.md`/`README.md` (project log) still describe the project as if `csv` output is missing on several commands; the actual codebase already supports `--output-format [json|markdown|csv]` on **all** commands. These docs are stale relative to the code and can be reconciled separately.

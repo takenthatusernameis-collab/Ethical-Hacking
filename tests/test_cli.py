@@ -16324,6 +16324,76 @@ def test_geo_output_format_csv_field_escaping(monkeypatch):
     assert '"Mountain, View"' in result.output
 
 
+def test_geo_output_format_csv_recursive_hops(monkeypatch) -> None:
+    runner = CliRunner()
+    mock_results = {
+        "target": "8.8.8.8",
+        "host": "8.8.8.8",
+        "ip": "8.8.8.8",
+        "timeout": 5.0,
+        "use_cache": True,
+        "offline_fallback": True,
+        "recursive": True,
+        "hops": [
+            {
+                "hop": 1,
+                "ip": "10.0.0.1",
+                "host": "router.local",
+                "response_type": "TTL",
+                "rtt_avg_ms": 1.5,
+                "geolocation": {
+                    "status": "success",
+                    "query": "10.0.0.1",
+                    "country": "United States",
+                    "city": "Ashburn",
+                    "isp": "ISP-A",
+                    "cached": False,
+                    "offline_fallback": False,
+                },
+            },
+            {
+                "hop": 2,
+                "ip": "10.0.0.2",
+                "host": None,
+                "response_type": "TTL",
+                "rtt_avg_ms": 2.5,
+                "geolocation": {
+                    "status": "success",
+                    "query": "10.0.0.2",
+                    "country": "Germany",
+                    "city": "Frankfurt",
+                    "cached": True,
+                    "offline_fallback": True,
+                },
+            },
+        ],
+        "geolocation": {
+            "status": "success",
+            "query": "8.8.8.8",
+            "country": "United States",
+            "cached": False,
+        },
+        "notes": [],
+    }
+    monkeypatch.setattr("ethscan.cli.run_geo", lambda *args, **kwargs: mock_results)
+    result = runner.invoke(cli, ["geo", "--target", "8.8.8.8", "--output-format", "csv", "--recursive"])
+    assert result.exit_code == 0
+    import csv as _csv
+
+    rows = list(_csv.reader(result.output.strip().splitlines()))
+    assert rows[0] == "target,ip,country,region,city,lat,lon,isp,org,as_number,reverse_dns,cached,offline_fallback".split(",")
+    # primary row + two hop rows
+    assert len(rows) == 4
+    assert rows[1] == ["8.8.8.8", "8.8.8.8", "United States", "", "", "", "", "", "", "", "", "false", "false"]
+    assert rows[2][1] == "10.0.0.1"
+    assert rows[2][4] == "Ashburn"
+    assert rows[2][12] == "false"
+    assert rows[3][1] == "10.0.0.2"
+    assert rows[3][2] == "Germany"
+    assert rows[3][4] == "Frankfurt"
+    assert rows[3][12] == "true"
+
+
 # ---------------------------------------------------------------------------
 # CSV integration tests for commands with --output-format csv support
 # ---------------------------------------------------------------------------

@@ -345,8 +345,34 @@ def format_geo_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
+def _geo_csv_row(target: str, ip: object, geo: Dict[str, object]) -> List[str]:
+    """Build a single CSV row for a geolocation result (primary target or hop)."""
+    return [
+        target,
+        ip or geo.get("query") or "",
+        geo.get("country", ""),
+        geo.get("region") or geo.get("regionName") or "",
+        geo.get("city", ""),
+        geo.get("lat", ""),
+        geo.get("lon", ""),
+        geo.get("isp", ""),
+        geo.get("org", ""),
+        geo.get("as", ""),
+        geo.get("reverse", ""),
+        "true" if geo.get("cached") else "false",
+        "true" if geo.get("offline_fallback") else "false",
+    ]
+
+
 def format_geo_report_csv(data: Dict[str, object]) -> str:
-    """Format geolocation results as CSV."""
+    """Format geolocation results as CSV.
+
+    Emits a header row followed by one row for the primary target's
+    geolocation result and, when recursive hop geolocation data is present,
+    one row per hop so that no hop result is silently dropped (mirroring the
+    Markdown formatter's hop section). Non-recursive runs emit a single data
+    row, preserving prior behavior.
+    """
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
@@ -364,20 +390,10 @@ def format_geo_report_csv(data: Dict[str, object]) -> str:
         "cached",
         "offline_fallback",
     ])
+    target = data.get("target", "")
     geo = data.get("geolocation") or {}
-    writer.writerow([
-        data.get("target", ""),
-        data.get("ip") or geo.get("query") or "",
-        geo.get("country", ""),
-        geo.get("region") or geo.get("regionName") or "",
-        geo.get("city", ""),
-        geo.get("lat", ""),
-        geo.get("lon", ""),
-        geo.get("isp", ""),
-        geo.get("org", ""),
-        geo.get("as", ""),
-        geo.get("reverse", ""),
-        "true" if geo.get("cached") else "false",
-        "true" if geo.get("offline_fallback") else "false",
-    ])
+    writer.writerow(_geo_csv_row(target, data.get("ip"), geo))
+    for hop in data.get("hops") or []:
+        hop_geo = hop.get("geolocation") or {}
+        writer.writerow(_geo_csv_row(target, hop.get("ip"), hop_geo))
     return output.getvalue().rstrip("\r\n")
