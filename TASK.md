@@ -17,6 +17,51 @@ The `resolve` command documentation and CLI integration tests have been complete
 - `dnsbrute` — DNS zone-transfer (AXFR) attempts against authoritative nameservers plus subdomain brute force (wordlist resolution with A/AAAA reporting)
 - `resolve` — forward/reverse DNS resolution (A, AAAA, CNAME, PTR record types) with optional custom resolver and JSON/Markdown output
 
+## Completed: CSV data-loss fixes for `dnssec`, `geo`, `ntp`, and `snmp` modules
+
+Fixed CSV output data-loss defects in four modules where the Markdown formatters rendered per-item tables but the CSV formatters collapsed them into single summary rows with joined strings, losing per-item associations and invalid items without error text.
+
+### `dnssec` (`ethscan/dnssec.py` / `tests/test_dnssec.py`)
+- `format_dnssec_report_csv` now emits a 14-column schema with `record_type` discriminator (`dnskey`, `ds`, `chain`, `status`)
+- One row per DNSKEY/DS/chain record + status rows; summary fields repeated on each row for self-containment
+- Docstring updated to describe multi-row behavior
+
+### `geo` (`ethscan/geo.py` / `tests/test_geo.py`)
+- `format_geo_report_csv` now emits a 17-column schema with `record_type` discriminator (`summary`, `hop`)
+- One row per traceroute hop with transport columns (`hop_proto`, `hop_port`, `hop_ttl`, `hop_rtt_ms`, `hop_reached`)
+- Summary row preserves top-level geolocation fields; hop rows repeat target context
+
+### `ntp` (`ethscan/ntp.py` / `tests/test_ntp.py`)
+- `format_ntp_report_csv` now emits a 10-column schema with `record_type` discriminator (`summary`, `peer`)
+- One row per NTP peer with peer-specific fields (`peer_stratum`, `peer_refid`, `peer_offset_ms`, `peer_jitter_ms`, `peer_delay_ms`, `peer_reach`)
+- Docstring updated: "Emits a header row plus one row per peer (including a summary row)."
+
+### `snmp` (`ethscan/snmp.py` / `tests/test_snmp.py`)
+- `format_snmp_report_csv` now emits a 14-column schema with `record_type` discriminator (`summary`, `community`)
+- Old `valid_communities` (comma-joined) and `error` (semicolon-joined) columns removed
+- Summary row (`record_type=summary`): target context + System Information + top-level error; community fields empty
+- Community rows (`record_type=community`): target context repeated + one row per community with `community`, `community_valid` (true/false), `community_version` (v1/v2c/""), `community_error`
+- Preserves every community probe including invalid ones without error text
+- Tests rewritten for new schema: 8 new tests covering per-community rows, error preservation, no-communities, multiple communities, comma escaping
+
+### Audit of all list-returning modules
+Cross-checked Markdown vs CSV for all list-returning modules. All now emit one CSV row per item per the `record_type`/one-row-per-item convention:
+- `headers` (present/missing security headers → one row each)
+- `fuzz` (`all_results` → one row each)
+- `vuln` (findings → one row each)
+- `wifi` (one row per AP)
+- `trace` (one row per hop + recursive hops)
+- `redis` (findings joined but servers are single target; not a per-item loss)
+- `cert` (one row per subdomain)
+- `subdomains` (one row per result)
+- `urlcheck` (section,key,value one row per item across web/ssl/fuzz)
+- `dns` (one row per record value)
+- `brute` (one row per credential)
+
+### Verification
+- `python -m pytest tests/test_dnssec.py tests/test_geo.py tests/test_ntp.py tests/test_snmp.py -q` → all pass
+- `python -m pytest -q` → **2842 passed, 1 skipped** (full suite; +2 vs. 2840 baseline from new tests)
+
 ## Implementation Summary
 
 ### Added Files
