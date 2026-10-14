@@ -843,3 +843,65 @@ def test_format_cve_report_csv_missing_optional_fields() -> None:
     assert "CVE-X" in lines[1]
     assert "LOW" in lines[1]
     assert "builtin" in lines[1]
+
+
+def test_format_cve_report_csv_escaping() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "timeout": 0.5,
+        "use_cache": True,
+        "offline_fallback": True,
+        "api_url": None,
+        "severity_filter": None,
+        "min_severity_filter": None,
+        "ports": None,
+        "services_checked": 1,
+        "cve_entries": [
+            {
+                "source": "builtin",
+                "port": 22,
+                "product": "OpenSSH",
+                "version": "7.2p2",
+                "finding": {
+                    "id": "CVE-2016-6210",
+                    "kind": "service",
+                    "title": "OpenSSH user enumeration, \"quoted\"",
+                    "severity": "medium",
+                    "description": "Timing attack\nwith newline",
+                    "product": "OpenSSH",
+                    "version": "7.2p2",
+                    "port": 22,
+                },
+            }
+        ],
+        "cve_count": 1,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 1, "low": 0},
+        "notes": [],
+    }
+    output = format_cve_report_csv(data)
+    # The CSV should quote the title and description because they contain special characters.
+    # Since csv.writer quotes fields containing special characters (like comma, quote, newline),
+    # we expect the title to be quoted because it contains a comma and a quote.
+    # The description contains a newline, so it should be quoted as well.
+    # We'll check that the output can be parsed correctly by a CSV reader.
+    import csv
+    import io
+    reader = csv.reader(io.StringIO(output))
+    rows = list(reader)
+    assert len(rows) == 2  # header + one data row
+    header = rows[0]
+    assert header == ["source", "port", "product", "version", "cve_id", "severity", "score", "title", "description", "references", "cached", "offline_fallback"]
+    row = rows[1]
+    assert row[0] == "builtin"
+    assert row[1] == "22"
+    assert row[2] == "OpenSSH"
+    assert row[3] == "7.2p2"
+    assert row[4] == "CVE-2016-6210"
+    assert row[5] == "MEDIUM"
+    assert row[6] == ""
+    assert row[7] == 'OpenSSH user enumeration, "quoted"'  # Note: the csv reader will have removed the outer quotes
+    assert row[8] == "Timing attack\nwith newline"
+    assert row[9] == ""
+    assert row[10] == ""
+    assert row[11] == ""
