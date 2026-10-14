@@ -17485,15 +17485,66 @@ def test_dnssec_output_format_csv(monkeypatch) -> None:
         "target": "example.com",
         "domain": "example.com",
         "validated": True,
-        "dnskey": {"success": True, "keys": [{"key_tag": 12345}]},
-        "ds": {"success": True, "records": [{"key_tag": 12345}]},
+        "dnskey": {
+            "success": True,
+            "keys": [
+                {
+                    "name": "example.com.",
+                    "flags": 257,
+                    "protocol": 3,
+                    "algorithm_name": "RSASHA256",
+                    "key_tag": 12345,
+                }
+            ],
+            "error": None,
+        },
+        "ds": {
+            "success": True,
+            "records": [
+                {
+                    "name": "example.com.",
+                    "key_tag": 12345,
+                    "algorithm_name": "RSASHA256",
+                    "digest_type_name": "SHA-256",
+                    "digest": "abcdef123456",
+                }
+            ],
+            "error": None,
+        },
     }
     monkeypatch.setattr("ethscan.cli.run_dnssec", lambda *a, **k: mock_results)
     runner = CliRunner()
     result = runner.invoke(cli, ["dnssec", "--target", "example.com", "--output-format", "csv", "--timeout", "1.0"])
     assert result.exit_code == 0
-    assert "target,domain,validated,dnskey_success,dnskey_count,ds_success,ds_count" in result.output
-    assert "example.com,example.com,true,true,1,true,1" in result.output
+    import csv as _csv
+
+    rows = list(_csv.reader(result.output.strip().splitlines()))
+    assert rows[0] == [
+        "target",
+        "domain",
+        "validated",
+        "record_type",
+        "name",
+        "flags",
+        "protocol",
+        "algorithm",
+        "key_tag",
+        "digest_type",
+        "digest",
+        "count",
+        "success",
+        "error",
+    ]
+    dnskey_row = rows[1]
+    assert dnskey_row[3] == "dnskey"
+    assert dnskey_row[4] == "example.com."
+    assert dnskey_row[8] == "12345"
+    ds_row = rows[2]
+    assert ds_row[3] == "ds"
+    assert ds_row[4] == "example.com."
+    assert ds_row[7] == "RSASHA256"
+    assert ds_row[9] == "SHA-256"
+    assert ds_row[10] == "abcdef123456"
 
 
 def test_dnssec_output_format_csv_out(tmp_path, monkeypatch) -> None:
@@ -17501,8 +17552,8 @@ def test_dnssec_output_format_csv_out(tmp_path, monkeypatch) -> None:
         "target": "example.com",
         "domain": "example.com",
         "validated": False,
-        "dnskey": {"success": False, "keys": []},
-        "ds": {"success": False, "records": []},
+        "dnskey": {"success": False, "keys": [], "error": "no response"},
+        "ds": {"success": False, "records": [], "error": "no response"},
     }
     monkeypatch.setattr("ethscan.cli.run_dnssec", lambda *a, **k: mock_results)
     runner = CliRunner()
@@ -17511,7 +17562,15 @@ def test_dnssec_output_format_csv_out(tmp_path, monkeypatch) -> None:
     assert result.exit_code == 0
     assert "Report written" in result.output
     content = out_file.read_text()
-    assert "target,domain,validated,dnskey_success,dnskey_count,ds_success,ds_count" in content
+    import csv as _csv
+
+    rows = list(_csv.reader(content.strip().splitlines()))
+    assert rows[0][3] == "record_type"
+    dnskey_status = rows[1]
+    assert dnskey_status[3] == "dnskey"
+    assert dnskey_status[11] == "0"
+    assert dnskey_status[12] == "false"
+    assert dnskey_status[13] == "no response"
 
 
 def test_dnssec_format_csv_alias(monkeypatch) -> None:
@@ -17519,14 +17578,14 @@ def test_dnssec_format_csv_alias(monkeypatch) -> None:
         "target": "example.com",
         "domain": "example.com",
         "validated": False,
-        "dnskey": {"success": False, "keys": []},
-        "ds": {"success": False, "records": []},
+        "dnskey": {"success": False, "keys": [], "error": "no response"},
+        "ds": {"success": False, "records": [], "error": "no response"},
     }
     monkeypatch.setattr("ethscan.cli.run_dnssec", lambda *a, **k: mock_results)
     runner = CliRunner()
     result = runner.invoke(cli, ["dnssec", "--target", "example.com", "--format", "csv", "--timeout", "1.0"])
     assert result.exit_code == 0
-    assert "target,domain,validated,dnskey_success,dnskey_count,ds_success,ds_count" in result.output
+    assert "target,domain,validated,record_type,name,flags,protocol,algorithm,key_tag,digest_type,digest,count,success,error" in result.output
 
 
 def test_mac_output_format_csv(monkeypatch) -> None:

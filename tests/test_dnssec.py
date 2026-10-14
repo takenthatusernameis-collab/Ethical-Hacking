@@ -245,13 +245,92 @@ def test_format_dnssec_report_csv() -> None:
         "target": "example.com",
         "domain": "example.com",
         "validated": True,
-        "dnskey": {"success": True, "keys": [{"key_tag": 12345}]},
-        "ds": {"success": True, "records": [{"key_tag": 12345}]},
+        "dnskey": {
+            "success": True,
+            "keys": [
+                {
+                    "name": "example.com.",
+                    "flags": 257,
+                    "protocol": 3,
+                    "algorithm": 8,
+                    "algorithm_name": "RSASHA256",
+                    "key_tag": 12345,
+                    "key_data": "abc123",
+                }
+            ],
+            "error": None,
+        },
+        "ds": {
+            "success": True,
+            "records": [
+                {
+                    "name": "example.com.",
+                    "key_tag": 12345,
+                    "algorithm": 8,
+                    "algorithm_name": "RSASHA256",
+                    "digest_type": 2,
+                    "digest_type_name": "SHA-256",
+                    "digest": "abcdef123456",
+                }
+            ],
+            "error": None,
+        },
+        "chain": [],
+        "dnspython_available": False,
     }
     output = format_dnssec_report_csv(data)
     reader = list(csv.reader(io.StringIO(output)))
-    assert reader[0] == ["target", "domain", "validated", "dnskey_success", "dnskey_count", "ds_success", "ds_count"]
-    assert reader[1] == ["example.com", "example.com", "true", "true", "1", "true", "1"]
+    assert reader[0] == [
+        "target",
+        "domain",
+        "validated",
+        "record_type",
+        "name",
+        "flags",
+        "protocol",
+        "algorithm",
+        "key_tag",
+        "digest_type",
+        "digest",
+        "count",
+        "success",
+        "error",
+    ]
+    # DNSKEY record row preserves flags, protocol, algorithm and key tag
+    assert reader[1] == [
+        "example.com",
+        "example.com",
+        "true",
+        "dnskey",
+        "example.com.",
+        "257",
+        "3",
+        "RSASHA256",
+        "12345",
+        "",
+        "",
+        "",
+        "",
+        "",
+    ]
+    # DS record row preserves key tag, algorithm, digest type and digest
+    assert reader[2] == [
+        "example.com",
+        "example.com",
+        "true",
+        "ds",
+        "example.com.",
+        "",
+        "",
+        "RSASHA256",
+        "12345",
+        "SHA-256",
+        "abcdef123456",
+        "",
+        "",
+        "",
+    ]
+    assert len(reader) == 3
 
 
 def test_format_dnssec_report_csv_unsigned() -> None:
@@ -264,4 +343,168 @@ def test_format_dnssec_report_csv_unsigned() -> None:
     }
     output = format_dnssec_report_csv(data)
     reader = list(csv.reader(io.StringIO(output)))
-    assert reader[1] == ["example.com", "example.com", "false", "false", "0", "false", "0"]
+    assert reader[0][3] == "record_type"
+    # Failed DNSKEY query still emits a status row carrying the error
+    assert reader[1] == [
+        "example.com",
+        "example.com",
+        "false",
+        "dnskey",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "0",
+        "false",
+        "no response",
+    ]
+    assert reader[2] == [
+        "example.com",
+        "example.com",
+        "false",
+        "ds",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "0",
+        "false",
+        "no response",
+    ]
+    assert len(reader) == 3
+
+
+def test_format_dnssec_report_csv_success_no_records() -> None:
+    """A successful query that returned no records emits a status row, not a blank."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "validated": False,
+        "dnskey": {"success": True, "keys": [], "error": None},
+        "ds": {"success": True, "records": [], "error": None},
+    }
+    output = format_dnssec_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    # dnskey status row: count 0, success true, no error (unsigned zone)
+    assert reader[1][3] == "dnskey"
+    assert reader[1][11] == "0"
+    assert reader[1][12] == "true"
+    assert reader[1][13] == ""
+    # ds status row
+    assert reader[2][3] == "ds"
+    assert reader[2][11] == "0"
+    assert reader[2][12] == "true"
+    assert reader[2][13] == ""
+    assert len(reader) == 3
+
+
+def test_format_dnssec_report_csv_chain_of_trust() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "validated": True,
+        "dnskey": {"success": True, "keys": [], "error": None},
+        "ds": {"success": True, "records": [], "error": None},
+        "chain": [
+            {
+                "zone": "example.com",
+                "dnskey": {"success": True, "keys": [{}], "error": None},
+            },
+            {
+                "zone": "com",
+                "ds": {"success": True, "records": [{}], "error": None},
+            },
+        ],
+        "dnspython_available": False,
+    }
+    output = format_dnssec_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    # header + dnskey status + ds status + 2 chain rows
+    assert len(reader) == 5
+    chain_rows = [r for r in reader[1:] if r[3] == "chain"]
+    assert len(chain_rows) == 2
+    assert chain_rows[0][4] == "example.com"
+    assert chain_rows[0][11] == "1"
+    assert chain_rows[0][12] == "true"
+    assert chain_rows[1][4] == "com"
+    assert chain_rows[1][11] == "1"
+    assert chain_rows[1][12] == "true"
+
+
+def test_format_dnssec_report_csv_multiple_records() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "validated": True,
+        "dnskey": {
+            "success": True,
+            "keys": [
+                {"name": "example.com.", "flags": 256, "protocol": 3, "algorithm_name": "RSASHA256", "key_tag": 1},
+                {"name": "example.com.", "flags": 257, "protocol": 3, "algorithm_name": "RSASHA256", "key_tag": 2},
+            ],
+            "error": None,
+        },
+        "ds": {
+            "success": True,
+            "records": [
+                {"name": "example.com.", "key_tag": 1, "algorithm_name": "RSASHA256", "digest_type_name": "SHA-256", "digest": "aaa"},
+                {"name": "example.com.", "key_tag": 2, "algorithm_name": "RSASHA256", "digest_type_name": "SHA-256", "digest": "bbb"},
+            ],
+            "error": None,
+        },
+    }
+    output = format_dnssec_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    # header + 2 dnskey rows + 2 ds rows
+    assert len(reader) == 5
+    assert [r[3] for r in reader[1:]] == ["dnskey", "dnskey", "ds", "ds"]
+    assert reader[1][8] == "1"
+    assert reader[2][8] == "2"
+    assert reader[3][10] == "aaa"
+    assert reader[4][10] == "bbb"
+
+
+def test_format_dnssec_report_csv_escaping() -> None:
+    """Record fields containing commas/quotes are properly escaped by csv.writer."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "validated": True,
+        "dnskey": {
+            "success": True,
+            "keys": [
+                {
+                    "name": 'ex,am"ple.com.',
+                    "flags": 257,
+                    "protocol": 3,
+                    "algorithm_name": "RSASHA256",
+                    "key_tag": 12345,
+                }
+            ],
+            "error": None,
+        },
+        "ds": {
+            "success": True,
+            "records": [
+                {
+                    "name": "example.com.",
+                    "key_tag": 12345,
+                    "algorithm_name": "RSASHA256",
+                    "digest_type_name": "SHA-256",
+                    "digest": 'ab,cd"ef',
+                }
+            ],
+            "error": None,
+        },
+    }
+    output = format_dnssec_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    # csv.reader un-escapes; verify round-trip preserves the original values
+    assert reader[1][4] == 'ex,am"ple.com.'
+    assert reader[2][10] == 'ab,cd"ef'

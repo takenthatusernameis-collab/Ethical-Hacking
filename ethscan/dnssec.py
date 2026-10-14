@@ -609,28 +609,161 @@ def format_dnssec_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_dnssec_report_csv(data: Dict[str, object]) -> str:
-    """Format DNSSEC results as CSV."""
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow([
+def _dnssec_csv_header() -> List[str]:
+    """Return the CSV header row for dnssec output."""
+    return [
         "target",
         "domain",
         "validated",
-        "dnskey_success",
-        "dnskey_count",
-        "ds_success",
-        "ds_count",
-    ])
+        "record_type",
+        "name",
+        "flags",
+        "protocol",
+        "algorithm",
+        "key_tag",
+        "digest_type",
+        "digest",
+        "count",
+        "success",
+        "error",
+    ]
+
+
+def _dnssec_row(
+    target: str,
+    domain: str,
+    validated: bool,
+    record_type: str,
+    name: str = "",
+    flags: str = "",
+    protocol: str = "",
+    algorithm: str = "",
+    key_tag: str = "",
+    digest_type: str = "",
+    digest: str = "",
+    count: str = "",
+    success: str = "",
+    error: str = "",
+) -> List[str]:
+    """Build a single CSV row for a DNSSEC record (key, DS record, or status)."""
+    return [
+        target,
+        domain,
+        "true" if validated else "false",
+        record_type,
+        name,
+        flags,
+        protocol,
+        algorithm,
+        key_tag,
+        digest_type,
+        digest,
+        count,
+        success,
+        error,
+    ]
+
+
+def _dnssec_status_row(
+    target: str,
+    domain: str,
+    validated: bool,
+    record_type: str,
+    name: str,
+    result: Dict[str, object],
+    item_key: str,
+) -> List[str]:
+    """Build a CSV status row summarizing a DNSKEY/DS query.
+
+    Captures the query success/error and record count so a failed or
+    record-less zone does not lose its diagnostic information, mirroring the
+    Markdown formatter's status lines.
+    """
+    items = result.get(item_key) or []
+    return _dnssec_row(
+        target,
+        domain,
+        validated,
+        record_type,
+        name=name,
+        count=str(len(items)),
+        success="true" if result.get("success") else "false",
+        error=str(result.get("error") or ""),
+    )
+
+
+def format_dnssec_report_csv(data: Dict[str, object]) -> str:
+    """Format DNSSEC results as CSV.
+
+    Emits a header row followed by one row per DNSKEY record, one row per DS
+    record, and one row per chain-of-trust delegation level, using stdlib
+    ``csv.writer`` for proper quoting/escaping of values containing commas or
+    double-quotes. ``record_type`` discriminates the row kind (``dnskey``,
+    ``ds``, ``chain``); non-applicable fields are left empty.
+
+    A failed or record-less DNSKEY/DS query still emits a single status row
+    (carrying ``count``, ``success`` and ``error``) so diagnostic information is
+    not silently dropped, mirroring the Markdown formatter's status lines.
+    """
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(_dnssec_csv_header())
+
+    target = data.get("target", "")
+    domain = data.get("domain", "")
+    validated = bool(data.get("validated"))
+
+    # DNSKEY records (mirrors the Markdown "DNSKEY Records" table)
     dnskey = data.get("dnskey") or {}
+    keys = dnskey.get("keys") or []
+    if keys:
+        for key in keys:
+            writer.writerow(_dnssec_row(
+                target,
+                domain,
+                validated,
+                "dnskey",
+                name=str(key.get("name", "")),
+                flags=str(key.get("flags", "")),
+                protocol=str(key.get("protocol", "")),
+                algorithm=str(key.get("algorithm_name") or key.get("algorithm", "")),
+                key_tag=str(key.get("key_tag", "")),
+            ))
+    else:
+        writer.writerow(_dnssec_status_row(
+            target, domain, validated, "dnskey", "", dnskey, "keys"
+        ))
+
+    # DS records (mirrors the Markdown "DS Records (Parent Zone)" table)
     ds = data.get("ds") or {}
-    writer.writerow([
-        data.get("target", ""),
-        data.get("domain", ""),
-        "true" if data.get("validated") else "false",
-        "true" if dnskey.get("success") else "false",
-        len(dnskey.get("keys") or []),
-        "true" if ds.get("success") else "false",
-        len(ds.get("records") or []),
-    ])
+    records = ds.get("records") or []
+    if records:
+        for record in records:
+            writer.writerow(_dnssec_row(
+                target,
+                domain,
+                validated,
+                "ds",
+                name=str(record.get("name", "")),
+                algorithm=str(record.get("algorithm_name") or record.get("algorithm", "")),
+                key_tag=str(record.get("key_tag", "")),
+                digest_type=str(record.get("digest_type_name") or record.get("digest_type", "")),
+                digest=str(record.get("digest", "")),
+            ))
+    else:
+        writer.writerow(_dnssec_status_row(
+            target, domain, validated, "ds", "", ds, "records"
+        ))
+
+    # Chain of trust (mirrors the Markdown "Chain of Trust" section)
+    for link in data.get("chain") or []:
+        zone = str(link.get("zone", ""))
+        for sub_key, item_key in (("dnskey", "keys"), ("ds", "records")):
+            sub = link.get(sub_key)
+            if not sub:
+                continue
+            writer.writerow(_dnssec_status_row(
+                target, domain, validated, "chain", zone, sub, item_key
+            ))
+
     return output.getvalue().rstrip("\r\n")
