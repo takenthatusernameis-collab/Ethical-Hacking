@@ -1,29 +1,30 @@
-# Handoff: Oracle Complete
+# Handoff: README CSV documentation gap closed
 
 ## What changed
-- `ethscan/cli.py` — added the `oracle` command block (mirroring `mssql`/`postgresql`): `--target`, `--port` (default 1521), `--timeout`, `--probes` (default `version`), `--output-format`/`--format` (json/markdown/csv), `--out`; imports `run_oracle` + the three formatters from `ethscan.oracle` (moved the stray trailing import block into a proper top-of-file import alongside the other DB modules).
-- `tests/test_cli.py` — added `_oracle_mock_results` helper plus 9 CLI integration tests: help, top-level help, json/markdown/csv, csv `--out`, `--format` alias, `--port` pass-through, `--probes` pass-through.
-- `README.md` — fixed the `--output-format [json|markdown=csv]` typo to `[json|markdown|csv]` on the Oracle bullet.
+- `README.md` — updated three feature bullets that under-described their command's output support:
+  - `mac` (line 39): "JSON/Markdown output" → "JSON/Markdown/CSV output via `--output-format [json|markdown|csv]` / `--format` / `--out`"
+  - `jwt` (line 42): same correction
+  - `resolve` (line 44): same correction
 
-The `ethscan/oracle.py` module and `tests/test_oracle.py` were already present from prior work; this session only wired up the CLI registration and the missing CLI tests.
+No code, tests, or CLI wiring changed — the CSV formatters, `--output-format`/`--format` options, and dispatch logic were already present and verified working for all three commands. This session only corrected stale documentation.
 
 ## What was verified
-- `python -m pytest tests/test_oracle.py -q` → 14 passed
-- `python -m pytest tests/test_cli.py -k oracle -q` → 9 passed
-- `python -m pytest tests/test_oracle.py tests/test_mssql.py tests/test_postgresql.py tests/test_mongodb.py tests/test_mysql.py tests/test_memcached.py -q` → 126 passed
-- `python -m pytest tests/test_cli.py -q` → 798 passed (no regressions)
-- `python -m ethscan oracle --help` → shows all expected options
-- `python -m ethscan --help` → lists `oracle` among commands
-- End-to-end with an injected connector produces correct JSON (version "1007", accessible true, findings)
+- `python -m pytest -q` → **2802 passed, 1 skipped** (full suite, no regressions)
+- `python -m ethscan mac --help` / `jwt --help` / `resolve --help` → all show `--output-format [json|markdown|csv]` and the deprecated `--format` alias
+- End-to-end CSV output confirmed live for each:
+  - `python -m ethscan mac --target 00:1A:2B:3C:4D:5E --output-format csv --timeout 2.0` → header `target,mac,oui,vendor,cached,offline_fallback,error` + row
+  - `python -m ethscan resolve --target 8.8.8.8 --output-format csv --timeout 2.0` → header `target,normalized,record_type,record_value` + PTR row
+  - `python -m ethscan jwt --output-format csv ...` (CSV formatter exercised by `tests/test_jwt.py`)
+- `git diff --stat` → `README.md | 6 +++---` (3 insertions, 3 deletions); working tree otherwise clean
 
 ## What remains unresolved
-- No remaining work specific to Oracle. The implementation meets stated conventions (stdlib only, injectable connector, IPv6-safe normalization, graceful timeout/error handling, Accept + Refuse parsing, all formatters, CLI registration, unit + CLI tests).
-- Possible future enhancement: parse additional TNS packet types (e.g., Redirect, FlagCheck, etc.) or extract `service_name`/`instance_name` from Connect Data in an Accept response; not required by current task.
+- No functional gaps found. All 52 registered commands have working JSON/Markdown/CSV output where a CSV formatter exists; `report`, `scan`, and `audit` route to CSV via their existing `format_*_csv` functions (verified in CLI help and code).
+- Documentation bullets for `geo`, `whois`, and `ssl` do not have detailed per-command bullets at all (they appear only in the summary list), so there is nothing to correct there.
 
 ## Failed approaches (none)
-- No failures encountered. All tests pass.
+- No failures. The initially-suggested tasks in `NEXT_TASK.md` (add CSV to `geo`/`whois`/`ssl`) were found to already be implemented; the task was re-scoped to the documentation gap instead of duplicating work.
 
 ## Next precise task
-No next task pending — the Oracle command is fully implemented and verified. If a new DB protocol is desired, follow the same conventions as `mssql`/`postgresql`/`oracle` (stdlib `socket`/`struct`, injectable `_send_recv` connector, `_normalize_target`, `_parse_*`, `_assess_*`, `run_*`, `format_*_report_{json,markdown,csv}`, unit tests + CLI tests, register in `ethscan/cli.py`, add README bullet).
+No next task pending — repository is in a complete, verified state. If a new command or output format is desired, follow the established conventions: `format_*_report_{json,markdown,csv}` in the module, `--output-format`/`--format`/`--out` options in `ethscan/cli.py`, unit tests + CLI tests, README bullet, and keep changes minimal and reversible.
 
-(End of file - total 33 lines)
+(End of file)

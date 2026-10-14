@@ -1,5 +1,14 @@
 # Next Task for Next Agent
 
+## Current state (verified 2026-10-14)
+- **`mssql` — COMPLETED & VERIFIED** (commit `92f0430`): `ethscan/mssql.py` + `tests/test_mssql.py` (6 unit + 8 CLI tests passing), registered in `ethscan/cli.py` with `--target`/`--port`/`--timeout`/`--probes`/`--output-format`/`--format`/`--out`, README bullet present.
+- **All suggested "next tasks" in this file are already complete**: `--output-format csv` exists on `geo`, `whois`, and `ssl` (verified end-to-end and via `--help`). No new command/feature work is pending.
+- Full suite: `python -m pytest -q` → **2802 passed, 1 skipped**.
+- 52 commands registered (`python -m ethscan --help`).
+- Latest session (HANDOFF_NEXT.md) closed a README documentation gap only: `mac`, `jwt`, and `resolve` bullets now correctly advertise CSV output.
+
+If a new task is desired, follow the established conventions in `HANDOFF_NEXT.md` (next precise task section) — otherwise the repository is complete.
+
 ## What the previous (assigned) task was
 
 **Add a `mysql` command** (server handshake banner grab + version parse over TCP 3306), following the same conventions as `redis`/`smb`/`ldap`/`memcached` modules.
@@ -44,9 +53,11 @@ Implementation mirrors `mysql`/`mongodb` module conventions (stdlib `socket` onl
 - 51 commands registered (was 50 before `postgresql`).
 - `mysql` + `memcached` + `mongodb` + `postgresql` + their CLI tests all passing.
 
-## Suggested next task
+## Suggested next task (SUPERSEDED — already complete)
 
-**Add an `mssql` command** (Microsoft SQL Server reconnaissance over TCP 1433), following the same conventions:
+**Add an `mssql` command** — This task was completed in commit `92f0430` and verified (6 unit + 8 CLI tests passing, registered in `ethscan/cli.py`, README bullet present). See the "Current state" section at the top of this file for the live status. Do not re-implement.
+
+### Requirements (historical, for reference)
 
 - Send a TDS `PRELOGIN` handshake and parse the server's `PRELOGIN` response to extract:
   - `version` (server version string / major.minor.build),
