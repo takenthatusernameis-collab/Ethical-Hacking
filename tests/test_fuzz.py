@@ -2,6 +2,8 @@
 
 import csv
 import io
+from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -182,3 +184,64 @@ def test_format_fuzz_report_csv_error_escaping() -> None:
     assert reader[1][4] == 'connection "refused"'
     assert reader[1][3] == ""
     assert reader[1][5] == "false"
+
+
+def test_run_fuzz_workers_single() -> None:
+    """Test run_fuzz with default single worker."""
+    results = run_fuzz("http://nonexistent.invalid.domain.tld", wordlist=["/admin", "/login", "/test"], timeout=1.0, workers=1)
+    assert results["paths_tested"] == 3
+    assert len(results["all_results"]) == 3
+    # Results should be in original order
+    paths = [r["path"] for r in results["all_results"]]
+    assert paths == ["/admin", "/login", "/test"]
+
+
+def test_run_fuzz_workers_multiple() -> None:
+    """Test run_fuzz with multiple workers."""
+    results = run_fuzz("http://nonexistent.invalid.domain.tld", wordlist=["/admin", "/login", "/test"], timeout=1.0, workers=3)
+    assert results["paths_tested"] == 3
+    assert len(results["all_results"]) == 3
+    # Results should be in original order despite concurrent execution
+    paths = [r["path"] for r in results["all_results"]]
+    assert paths == ["/admin", "/login", "/test"]
+
+
+def test_run_fuzz_workers_maintains_order() -> None:
+    """Test that results maintain original path order regardless of completion order."""
+    # Use a larger wordlist to increase chance of out-of-order completion
+    paths = [f"/path{i}" for i in range(20)]
+    results = run_fuzz("http://nonexistent.invalid.domain.tld", wordlist=paths, timeout=1.0, workers=10)
+    assert results["paths_tested"] == 20
+    assert len(results["all_results"]) == 20
+    result_paths = [r["path"] for r in results["all_results"]]
+    assert result_paths == paths  # Order preserved
+
+
+def test_run_fuzz_workers_zero_defaults_to_one(monkeypatch) -> None:
+    """Test that workers=0 is treated as 1 (no concurrency)."""
+    # Mock fuzz_path to track calls
+    call_count = {"count": 0}
+
+    def mock_fuzz_path(base_url, path, timeout):
+        call_count["count"] += 1
+        return {"path": path, "status_code": 404, "error": None}
+
+    with patch("ethscan.fuzz.fuzz_path", side_effect=mock_fuzz_path):
+        run_fuzz("https://example.com", wordlist=["/a", "/b"], workers=0)
+
+    # Should still process all paths (sequentially)
+    assert call_count["count"] == 2
+
+
+def test_run_fuzz_workers_negative_defaults_to_one(monkeypatch) -> None:
+    """Test that negative workers is treated as 1."""
+    call_count = {"count": 0}
+
+    def mock_fuzz_path(base_url, path, timeout):
+        call_count["count"] += 1
+        return {"path": path, "status_code": 404, "error": None}
+
+    with patch("ethscan.fuzz.fuzz_path", side_effect=mock_fuzz_path):
+        run_fuzz("https://example.com", wordlist=["/a", "/b"], workers=-5)
+
+    assert call_count["count"] == 2

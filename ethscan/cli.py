@@ -837,6 +837,12 @@ def web(target: str, checks: str, timeout: float, fmt: str, output_fmt: Optional
 )
 @click.option("--timeout", default=5.0, type=float, help="Request timeout in seconds")
 @click.option(
+    "--workers",
+    default=1,
+    type=int,
+    help="Number of concurrent workers (default: 1).",
+)
+@click.option(
     "--output-format",
     "output_fmt",
     type=click.Choice(["json", "markdown", "csv"]),
@@ -857,11 +863,19 @@ def web(target: str, checks: str, timeout: float, fmt: str, output_fmt: Optional
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def fuzz(target: str, wordlist_path: str, timeout: float, fmt: str, output_fmt: Optional[str], out_path: str) -> None:
+def fuzz(
+    target: str,
+    wordlist_path: str,
+    timeout: float,
+    workers: int,
+    fmt: str,
+    output_fmt: Optional[str],
+    out_path: str,
+) -> None:
     """Run HTTP fuzzing against TARGET using a wordlist of paths."""
     wordlist = load_wordlist(wordlist_path) if wordlist_path else None
 
-    results = run_fuzz(target, wordlist=wordlist, timeout=timeout)
+    results = run_fuzz(target, wordlist=wordlist, timeout=timeout, workers=workers)
 
     # --output-format takes precedence over the deprecated --format alias
     chosen_format = output_fmt if output_fmt is not None else fmt

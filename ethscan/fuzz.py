@@ -6,6 +6,7 @@ import json
 import urllib.request
 import urllib.error
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Tuple, Optional
 
 
@@ -86,6 +87,7 @@ def run_fuzz(
     target: str,
     wordlist: Optional[List[str]] = None,
     timeout: float = 5.0,
+    workers: int = 1,
 ) -> Dict[str, object]:
     """Run HTTP fuzzing against target.
 
@@ -93,6 +95,7 @@ def run_fuzz(
         target: Target URL (e.g., https://example.com).
         wordlist: List of paths to test. If None, uses DEFAULT_WORDLIST.
         timeout: Per-request timeout in seconds.
+        workers: Number of concurrent workers (default: 1).
 
     Returns:
         Structured results with target, base_url, and findings.
@@ -101,9 +104,23 @@ def run_fuzz(
     paths = wordlist if wordlist is not None else DEFAULT_WORDLIST
 
     results: List[Dict[str, object]] = []
-    for path in paths:
-        result = fuzz_path(base_url, path, timeout=timeout)
-        results.append(result)
+
+    if workers <= 1:
+        for path in paths:
+            result = fuzz_path(base_url, path, timeout=timeout)
+            results.append(result)
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            future_to_path = {
+                executor.submit(fuzz_path, base_url, path, timeout=timeout): path
+                for path in paths
+            }
+            for future in as_completed(future_to_path):
+                results.append(future.result())
+
+    # Sort results to maintain consistent order (by original path order)
+    path_to_index = {path: i for i, path in enumerate(paths)}
+    results.sort(key=lambda r: path_to_index.get(r.get("path", ""), 0))
 
     non_404 = [r for r in results if r.get("status_code") and r["status_code"] != 404]
 

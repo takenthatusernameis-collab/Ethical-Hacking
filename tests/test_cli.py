@@ -16963,6 +16963,60 @@ def test_fuzz_format_csv_alias(monkeypatch) -> None:
     assert "target,base_url,path,status_code,error,is_finding" in result.output
 
 
+def test_fuzz_workers_option(monkeypatch) -> None:
+    """Test that --workers option passes workers parameter to run_fuzz."""
+    captured = {}
+
+    def mock_run_fuzz(target, wordlist, timeout, workers):
+        captured["workers"] = workers
+        return {
+            "target": target,
+            "base_url": "https://example.com",
+            "paths_tested": 2,
+            "findings": [],
+            "all_results": [
+                {"path": "/admin", "status_code": 404, "error": None},
+                {"path": "/login", "status_code": 404, "error": None},
+            ],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_fuzz", mock_run_fuzz)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["fuzz", "--target", "https://example.com", "--workers", "10", "--output-format", "json"])
+    assert result.exit_code == 0
+    assert captured.get("workers") == 10
+
+
+def test_fuzz_workers_default(monkeypatch) -> None:
+    """Test that workers defaults to 1 when not specified."""
+    captured = {}
+
+    def mock_run_fuzz(target, wordlist, timeout, workers):
+        captured["workers"] = workers
+        return {
+            "target": target,
+            "base_url": "https://example.com",
+            "paths_tested": 1,
+            "findings": [],
+            "all_results": [{"path": "/admin", "status_code": 404, "error": None}],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_fuzz", mock_run_fuzz)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["fuzz", "--target", "https://example.com", "--output-format", "json"])
+    assert result.exit_code == 0
+    assert captured.get("workers") == 1
+
+
+def test_fuzz_help_shows_workers() -> None:
+    """Test that --workers appears in help output."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["fuzz", "--help"])
+    assert result.exit_code == 0
+    assert "--workers" in result.output
+    assert "concurrent workers" in result.output.lower()
+
+
 def test_resolve_output_format_csv(monkeypatch) -> None:
     mock_results = {
         "target": "example.com",
