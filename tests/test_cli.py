@@ -19152,6 +19152,18 @@ def _mssql_mock_results(target):
     }
 
 
+def _oracle_mock_results(target):
+    return {
+        "target": target,
+        "host": "example.com",
+        "port": 1521,
+        "accessible": True,
+        "version": "1007",
+        "findings": ["Oracle TNS server version: 1007"],
+        "error": None,
+    }
+
+
 def test_postgresql_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["postgresql", "--help"])
@@ -19388,3 +19400,129 @@ def test_mssql_probes_pass_through(monkeypatch) -> None:
     result = runner.invoke(cli, ["mssql", "--target", "example.com", "--probes", "prelogin"])
     assert result.exit_code == 0
     assert captured["probes"] == ["prelogin"]
+
+
+def test_oracle_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["oracle", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--port" in result.output
+    assert "--timeout" in result.output
+    assert "--probes" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+    assert "csv" in result.output
+
+
+def test_oracle_top_level_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "oracle" in result.output
+
+
+def test_oracle_output_format_json(monkeypatch) -> None:
+    def mock_run_oracle(target, port=None, timeout=3.0, probes=None, connector=None):
+        return _oracle_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_oracle", mock_run_oracle)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["oracle", "--target", "example.com"])
+    assert result.exit_code == 0
+    assert result.output.startswith("{")
+    assert '"target": "example.com"' in result.output
+    assert '"host": "example.com"' in result.output
+    assert '"port": 1521' in result.output
+    assert '"accessible": true' in result.output
+    assert '"version": "1007"' in result.output
+
+
+def test_oracle_output_format_csv(monkeypatch) -> None:
+    def mock_run_oracle(target, port=None, timeout=3.0, probes=None, connector=None):
+        return _oracle_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_oracle", mock_run_oracle)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["oracle", "--target", "example.com", "--output-format", "csv"])
+    assert result.exit_code == 0
+    lines = result.output.strip().split("\n")
+    assert "target,host,port,accessible,version,error" == lines[0].rstrip("\r")
+    assert "example.com" in lines[1]
+    assert "1007" in lines[1]
+
+
+def test_oracle_output_format_markdown(monkeypatch) -> None:
+    def mock_run_oracle(target, port=None, timeout=3.0, probes=None, connector=None):
+        return _oracle_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_oracle", mock_run_oracle)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["oracle", "--target", "example.com", "--output-format", "markdown"])
+    assert result.exit_code == 0
+    assert "# Oracle Reconnaissance Report" in result.output
+    assert "**Target:** example.com" in result.output
+    assert "**Host:** example.com" in result.output
+    assert "**Port:** 1521" in result.output
+    assert "**Accessible:** Yes" in result.output
+    assert "**Server Version:** 1007" in result.output
+    assert "## Findings" in result.output
+    assert "- Oracle TNS server version: 1007" in result.output
+
+
+def test_oracle_output_file(monkeypatch, tmpdir) -> None:
+    def mock_run_oracle(target, port=None, timeout=3.0, probes=None, connector=None):
+        return _oracle_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_oracle", mock_run_oracle)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["oracle", "--target", "example.com", "--out", str(tmpdir.join("output.txt"))])
+    assert result.exit_code == 0
+    assert "Report written to" in result.output
+    output_file = tmpdir.join("output.txt")
+    assert output_file.exists()
+    content = output_file.read()
+    assert content.startswith("{")
+    assert '"target": "example.com"' in content
+
+
+def test_oracle_format_alias(monkeypatch) -> None:
+    def mock_run_oracle(target, port=None, timeout=3.0, probes=None, connector=None):
+        return _oracle_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_oracle", mock_run_oracle)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["oracle", "--target", "example.com", "--format", "csv"])
+    assert result.exit_code == 0
+    lines = result.output.strip().split("\n")
+    assert "target,host,port,accessible,version,error" == lines[0].rstrip("\r")
+
+
+def test_oracle_port_pass_through(monkeypatch) -> None:
+    captured = {}
+
+    def mock_run_oracle(target, port=None, timeout=3.0, probes=None, connector=None):
+        captured["port"] = port
+        return _oracle_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_oracle", mock_run_oracle)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["oracle", "--target", "example.com", "--port", "1522"])
+    assert result.exit_code == 0
+    assert captured["port"] == 1522
+
+
+def test_oracle_probes_pass_through(monkeypatch) -> None:
+    captured = {}
+
+    def mock_run_oracle(target, port=None, timeout=3.0, probes=None, connector=None):
+        captured["probes"] = probes
+        return _oracle_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_oracle", mock_run_oracle)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["oracle", "--target", "example.com", "--probes", "version"])
+    assert result.exit_code == 0
+    assert captured["probes"] == ["version"]

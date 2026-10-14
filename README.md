@@ -59,7 +59,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 - **MSSQL reconnaissance: `mssql` command to probe MSSQL servers over TCP 1433 by sending a TDS PRELOGIN message and parsing the server response; extracts `version`, `encryption` support, `instance_name`, and `thread_id` (SPID) -- no login or password is sent; supports `--target` (host, host:port, or mssql:// / ms-sql:// URL), `--port` (default 1433), `--probes` (default: prelogin), `--timeout`, and JSON/Markdown/CSV output via `--output-format [json|markdown|csv]` / `--format` / `--out`** (implemented)
 
 
-- **Oracle reconnaissance: `oracle` command to probe Oracle TNS listeners over TCP 1521 by sending a TNS Connect request and parsing the server response; extracts `version` from the Accept packet -- no login is attempted; supports `--target` (host, host:port, or oracle:// / tns:// URL), `--port` (default 1521), `--probes` (default: version), `--timeout`, and JSON/Markdown/CSV output via `--output-format [json|markdown=csv]` / `--format` / `--out`** (implemented)
+- **Oracle reconnaissance: `oracle` command to probe Oracle TNS listeners over TCP 1521 by sending a TNS Connect request and parsing the server response; extracts `version` from the Accept packet -- no login is attempted; supports `--target` (host, host:port, or oracle:// / tns:// URL), `--port` (default 1521), `--probes` (default: version), `--timeout`, and JSON/Markdown/CSV output via `--output-format [json|markdown|csv]` / `--format` / `--out`** (implemented)
 
 
 ## Configuration
