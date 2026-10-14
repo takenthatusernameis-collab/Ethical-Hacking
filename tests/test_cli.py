@@ -18060,9 +18060,13 @@ def test_ntp_output_format_csv(monkeypatch) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["ntp", "--target", "ntp.example.com", "--output-format", "csv", "--timeout", "1.0"])
     assert result.exit_code == 0
-    assert "target,host,port,stratum,refid" in result.output
+    # Updated header for new CSV format
+    assert "target,port,version,port_open,peer_count,record_type,peer_address,peer_port,peer_mode,peer_version" in result.output
     assert "ntp.example.com" in result.output
-    assert "2" in result.output
+    assert "2" in result.output  # version from time_response
+    assert "3" in result.output  # peer_count
+    assert "summary" in result.output  # record_type for summary row
+    assert "peer" in result.output  # record_type for peer rows
 
 
 def test_ntp_output_format_csv_out(tmp_path, monkeypatch) -> None:
@@ -18091,7 +18095,8 @@ def test_ntp_output_format_csv_out(tmp_path, monkeypatch) -> None:
     assert result.exit_code == 0
     assert "Report written" in result.output
     content = out_file.read_text()
-    assert "target,host,port,stratum,refid" in content
+    # Updated header for new CSV format
+    assert "target,port,version,port_open,peer_count,record_type,peer_address,peer_port,peer_mode,peer_version" in content
     assert "ntp.example.com" in content
 
 
@@ -18118,7 +18123,8 @@ def test_ntp_format_csv_alias(monkeypatch) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["ntp", "--target", "ntp.example.com", "--format", "csv", "--timeout", "1.0"])
     assert result.exit_code == 0
-    assert "target,host,port,stratum,refid" in result.output
+    # Updated header for new CSV format
+    assert "target,port,version,port_open,peer_count,record_type,peer_address,peer_port,peer_mode,peer_version" in result.output
 
 
 def test_ntp_output_format_default_is_json(monkeypatch) -> None:

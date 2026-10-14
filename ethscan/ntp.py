@@ -409,49 +409,57 @@ def format_ntp_report_markdown(data: Dict[str, Any]) -> str:
 def format_ntp_report_csv(data: Dict[str, Any]) -> str:
     """Format NTP reconnaissance results as CSV.
 
-    Emits a single summary row per target with the header
-    ``target,host,port,stratum,refid,root_delay_ms,root_dispersion_ms,reflector,amplification_factor,peer_count,error``.
+    Emits a header row plus one row per peer (including a summary row).
+    Header: ``target,port,version,port_open,peer_count,record_type,peer_address,peer_port,peer_mode,peer_version``
+    - Summary row: record_type=summary (peer_* fields empty)
+    - Peer rows: record_type=peer (with peer data)
     """
     output = io.StringIO()
     writer = csv.writer(output)
+
+    # Unified header with record_type discriminator
     writer.writerow([
-        "target", "host", "port", "stratum", "refid",
-        "root_delay_ms", "root_dispersion_ms",
-        "reflector", "amplification_factor", "peer_count", "error"
+        "target", "port", "version", "port_open", "peer_count",
+        "record_type", "peer_address", "peer_port", "peer_mode", "peer_version"
     ])
 
     time_resp = data.get("time_response") or {}
     mon_resp = data.get("monlist_response") or {}
 
-    stratum = time_resp.get("stratum", "") if not time_resp.get("error") else ""
-    refid = time_resp.get("reference_id", "") if not time_resp.get("error") else ""
-    root_delay = time_resp.get("root_delay_ms", "") if not time_resp.get("error") else ""
-    root_disp = time_resp.get("root_dispersion_ms", "") if not time_resp.get("error") else ""
+    # Extract summary data
+    version = time_resp.get("version", "") if not time_resp.get("error") else ""
+    # Note: port_open is not available in current data structure, leaving empty
+    port_open = ""
+    peer_count = mon_resp.get("peer_count", 0) if not mon_resp.get("error") else 0
 
-    reflector = "true" if data.get("is_reflector") else "false"
-    amp_factor = data.get("amplification_factor", "")
-    peer_count = mon_resp.get("peer_count", "") if not mon_resp.get("error") else ""
-
-    error_parts = []
-    if time_resp.get("error"):
-        error_parts.append(f"time: {time_resp['error']}")
-    if mon_resp.get("error"):
-        error_parts.append(f"monlist: {mon_resp['error']}")
-    if data.get("error"):
-        error_parts.append(data["error"])
-    error = "; ".join(error_parts)
-
+    # Summary row
     writer.writerow([
         data.get("target", ""),
-        data.get("host", ""),
         data.get("port", ""),
-        stratum,
-        refid,
-        root_delay,
-        root_disp,
-        reflector,
-        amp_factor,
+        version,
+        port_open,
         peer_count,
-        error,
+        "summary",  # record_type
+        "",  # peer_address
+        "",  # peer_port
+        "",  # peer_mode
+        "",  # peer_version
     ])
+
+    # Peer rows (one per peer)
+    if not mon_resp.get("error") and mon_resp.get("peers"):
+        for peer in mon_resp.get("peers", []):
+            writer.writerow([
+                data.get("target", ""),
+                data.get("port", ""),
+                version,
+                port_open,
+                peer_count,
+                "peer",  # record_type
+                peer.get("address", ""),
+                peer.get("port", ""),
+                peer.get("mode", ""),
+                peer.get("version", ""),
+            ])
+
     return output.getvalue().rstrip("\r\n")
