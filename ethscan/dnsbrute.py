@@ -612,29 +612,110 @@ def format_dnsbrute_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_dnsbrute_report_csv(data: Dict[str, object]) -> str:
-    """Format dnsbrute results as CSV."""
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow([
+def _dnsbrute_csv_header() -> List[str]:
+    """Return the CSV header row for dnsbrute output."""
+    return [
         "target",
         "domain",
+        "record_type",
         "subdomain",
         "hostname",
         "a_records",
         "aaaa_records",
         "resolved",
-    ])
+        "nameserver",
+        "zone",
+        "depth",
+        "success",
+        "error",
+        "record",
+    ]
+
+
+def _dnsbrute_subdomain_row(
+    target: str, domain: str, entry: Dict[str, object]
+) -> List[str]:
+    """Build a CSV row for a subdomain brute-force result."""
+    a_records = entry.get("a") or []
+    aaaa_records = entry.get("aaaa") or []
+    return [
+        target,
+        domain,
+        "subdomain",
+        entry.get("subdomain", ""),
+        entry.get("hostname", ""),
+        " ".join(str(ip) for ip in a_records),
+        " ".join(str(ip) for ip in aaaa_records),
+        "true" if (a_records or aaaa_records) else "false",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+    ]
+
+
+def _dnsbrute_axfr_row(
+    target: str, domain: str, entry: Dict[str, object], record: str, record_type: str
+) -> List[str]:
+    """Build a CSV row for an AXFR record (initial or recursive)."""
+    return [
+        target,
+        domain,
+        record_type,
+        "",
+        "",
+        "",
+        "",
+        "",
+        entry.get("nameserver", ""),
+        entry.get("zone", domain),
+        str(entry.get("depth", 1)),
+        "true" if entry.get("success") else "false",
+        entry.get("error", ""),
+        record,
+    ]
+
+
+def format_dnsbrute_report_csv(data: Dict[str, object]) -> str:
+    """Format dnsbrute results as CSV.
+
+    Emits a header row followed by:
+    1. Subdomain brute-force results (record_type="subdomain")
+    2. AXFR zone-transfer records (record_type="axfr")
+    3. Recursive AXFR records (record_type="recursive_axfr")
+
+    All rows share the same schema; non-applicable fields are left empty.
+    """
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(_dnsbrute_csv_header())
+
+    target = data.get("target", "")
+    domain = data.get("domain", "")
+
+    # Subdomain brute-force results
     for entry in data.get("all_results", []):
-        a_records = entry.get("a") or []
-        aaaa_records = entry.get("aaaa") or []
-        writer.writerow([
-            data.get("target", ""),
-            data.get("domain", ""),
-            entry.get("subdomain", ""),
-            entry.get("hostname", ""),
-            " ".join(str(ip) for ip in a_records),
-            " ".join(str(ip) for ip in aaaa_records),
-            "true" if (a_records or aaaa_records) else "false",
-        ])
+        writer.writerow(_dnsbrute_subdomain_row(target, domain, entry))
+
+    # Initial AXFR attempts
+    for entry in data.get("axfr", []):
+        records = entry.get("records", [])
+        if records:
+            for record in records:
+                writer.writerow(_dnsbrute_axfr_row(target, domain, entry, record, "axfr"))
+        else:
+            # Emit a row even for failed/empty AXFR attempts to preserve metadata
+            writer.writerow(_dnsbrute_axfr_row(target, domain, entry, "", "axfr"))
+
+    # Recursive AXFR attempts
+    for entry in data.get("recursive_axfr", []):
+        records = entry.get("records", [])
+        if records:
+            for record in records:
+                writer.writerow(_dnsbrute_axfr_row(target, domain, entry, record, "recursive_axfr"))
+        else:
+            writer.writerow(_dnsbrute_axfr_row(target, domain, entry, "", "recursive_axfr"))
+
     return output.getvalue().rstrip("\r\n")

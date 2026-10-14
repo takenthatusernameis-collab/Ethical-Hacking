@@ -1203,9 +1203,9 @@ def test_format_dnsbrute_report_csv() -> None:
     }
     output = format_dnsbrute_report_csv(data)
     reader = list(csv.reader(io.StringIO(output)))
-    assert reader[0] == ["target", "domain", "subdomain", "hostname", "a_records", "aaaa_records", "resolved"]
-    assert reader[1] == ["example.com", "example.com", "www", "www.example.com", "1.2.3.4", "::1", "true"]
-    assert reader[2] == ["example.com", "example.com", "api", "api.example.com", "", "", "false"]
+    assert reader[0] == ["target", "domain", "record_type", "subdomain", "hostname", "a_records", "aaaa_records", "resolved", "nameserver", "zone", "depth", "success", "error", "record"]
+    assert reader[1] == ["example.com", "example.com", "subdomain", "www", "www.example.com", "1.2.3.4", "::1", "true", "", "", "", "", "", ""]
+    assert reader[2] == ["example.com", "example.com", "subdomain", "api", "api.example.com", "", "", "false", "", "", "", "", "", ""]
 
 
 def test_format_dnsbrute_report_csv_empty() -> None:
@@ -1214,6 +1214,7 @@ def test_format_dnsbrute_report_csv_empty() -> None:
     reader = list(csv.reader(io.StringIO(output)))
     assert len(reader) == 1
     assert reader[0][0] == "target"
+    assert reader[0] == ["target", "domain", "record_type", "subdomain", "hostname", "a_records", "aaaa_records", "resolved", "nameserver", "zone", "depth", "success", "error", "record"]
 
 
 def test_format_dnsbrute_report_csv_multi_ip() -> None:
@@ -1226,4 +1227,176 @@ def test_format_dnsbrute_report_csv_multi_ip() -> None:
     }
     output = format_dnsbrute_report_csv(data)
     reader = list(csv.reader(io.StringIO(output)))
-    assert reader[1][4] == "1.1.1.1 2.2.2.2"
+    assert reader[1][5] == "1.1.1.1 2.2.2.2"
+
+
+def test_format_dnsbrute_report_csv_axfr_records() -> None:
+    """Test CSV output includes AXFR zone-transfer records."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "all_results": [],
+        "axfr": [
+            {
+                "nameserver": "ns1.example.com",
+                "zone": "example.com",
+                "depth": 1,
+                "success": True,
+                "records_count": 2,
+                "records": [
+                    "example.com 300 IN SOA ns1.example.com. admin.example.com. 2023010101 7200 3600 1209600 3600",
+                    "example.com 300 IN NS ns1.example.com",
+                ],
+                "error": None,
+            },
+            {
+                "nameserver": "ns2.example.com",
+                "zone": "example.com",
+                "depth": 1,
+                "success": False,
+                "records_count": 0,
+                "records": [],
+                "error": "transfer refused (REFUSED)",
+            },
+        ],
+        "recursive_axfr": [],
+    }
+    output = format_dnsbrute_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+
+    # Header
+    assert reader[0] == [
+        "target",
+        "domain",
+        "record_type",
+        "subdomain",
+        "hostname",
+        "a_records",
+        "aaaa_records",
+        "resolved",
+        "nameserver",
+        "zone",
+        "depth",
+        "success",
+        "error",
+        "record",
+    ]
+
+    # First AXFR record (SOA)
+    assert reader[1][0] == "example.com"
+    assert reader[1][1] == "example.com"
+    assert reader[1][2] == "axfr"
+    assert reader[1][8] == "ns1.example.com"
+    assert reader[1][9] == "example.com"
+    assert reader[1][10] == "1"
+    assert reader[1][11] == "true"
+    assert reader[1][12] == ""
+    assert "SOA" in reader[1][13]
+    assert "ns1.example.com" in reader[1][13]
+
+    # Second AXFR record (NS)
+    assert reader[2][2] == "axfr"
+    assert reader[2][8] == "ns1.example.com"
+    assert "NS" in reader[2][13]
+
+    # Failed AXFR attempt (empty records but metadata preserved)
+    assert reader[3][2] == "axfr"
+    assert reader[3][8] == "ns2.example.com"
+    assert reader[3][11] == "false"
+    assert reader[3][12] == "transfer refused (REFUSED)"
+    assert reader[3][13] == ""
+
+
+def test_format_dnsbrute_report_csv_recursive_axfr() -> None:
+    """Test CSV output includes recursive AXFR records."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "all_results": [],
+        "axfr": [],
+        "recursive_axfr": [
+            {
+                "nameserver": "ns1.sub.example.com",
+                "zone": "example.com",
+                "depth": 2,
+                "success": True,
+                "records_count": 1,
+                "records": ["sub.example.com 300 IN A 1.2.3.4"],
+                "error": None,
+            }
+        ],
+    }
+    output = format_dnsbrute_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+
+    # Header + 1 recursive AXFR record
+    assert len(reader) == 2
+    assert reader[1][2] == "recursive_axfr"
+    assert reader[1][8] == "ns1.sub.example.com"
+    assert reader[1][9] == "example.com"
+    assert reader[1][10] == "2"
+    assert reader[1][11] == "true"
+    assert reader[1][13] == "sub.example.com 300 IN A 1.2.3.4"
+
+
+def test_format_dnsbrute_report_csv_axfr_escaping() -> None:
+    """Test CSV properly escapes commas and quotes in AXFR records."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "all_results": [],
+        "axfr": [
+            {
+                "nameserver": "ns1.example.com",
+                "zone": "example.com",
+                "depth": 1,
+                "success": True,
+                "records_count": 1,
+                "records": ['example.com 300 IN TXT "hello, world"', "example.com 300 IN MX 10 mail,backup.example.com"],
+                "error": None,
+            }
+        ],
+        "recursive_axfr": [],
+    }
+    output = format_dnsbrute_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+
+    # CSV writer should handle escaping
+    assert len(reader) == 3  # header + 2 records
+    assert "hello, world" in reader[1][13]
+    assert "mail,backup.example.com" in reader[2][13]
+
+
+def test_format_dnsbrute_report_csv_mixed_subdomain_and_axfr() -> None:
+    """Test CSV output with both subdomain results and AXFR records."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "all_results": [
+            {"subdomain": "www", "hostname": "www.example.com", "a": ["1.2.3.4"], "aaaa": []},
+        ],
+        "axfr": [
+            {
+                "nameserver": "ns1.example.com",
+                "zone": "example.com",
+                "depth": 1,
+                "success": True,
+                "records_count": 1,
+                "records": ["example.com 300 IN NS ns1.example.com"],
+                "error": None,
+            }
+        ],
+        "recursive_axfr": [],
+    }
+    output = format_dnsbrute_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+
+    assert len(reader) == 3  # header + subdomain + axfr
+    # First row: subdomain
+    assert reader[1][2] == "subdomain"
+    assert reader[1][3] == "www"
+    assert reader[1][5] == "1.2.3.4"
+    # Second row: AXFR
+    assert reader[2][2] == "axfr"
+    assert reader[2][8] == "ns1.example.com"
+    assert "NS" in reader[2][13]

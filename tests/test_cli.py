@@ -16992,8 +16992,8 @@ def test_dnsbrute_output_format_csv(monkeypatch) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["dnsbrute", "--target", "example.com", "--output-format", "csv", "--timeout", "1.0"])
     assert result.exit_code == 0
-    assert "target,domain,subdomain,hostname,a_records,aaaa_records,resolved" in result.output
-    assert "example.com,example.com,www,www.example.com,93.184.216.34,,true" in result.output
+    assert "target,domain,record_type,subdomain,hostname,a_records,aaaa_records,resolved,nameserver,zone,depth,success,error,record" in result.output
+    assert "example.com,example.com,subdomain,www,www.example.com,93.184.216.34,,true,,,,,," in result.output
 
 
 def test_dnsbrute_output_format_csv_out(tmp_path, monkeypatch) -> None:
@@ -17011,7 +17011,7 @@ def test_dnsbrute_output_format_csv_out(tmp_path, monkeypatch) -> None:
     assert result.exit_code == 0
     assert "Report written" in result.output
     content = out_file.read_text()
-    assert "target,domain,subdomain,hostname,a_records,aaaa_records,resolved" in content
+    assert "target,domain,record_type,subdomain,hostname,a_records,aaaa_records,resolved,nameserver,zone,depth,success,error,record" in content
 
 
 def test_dnsbrute_format_csv_alias(monkeypatch) -> None:
@@ -17026,7 +17026,55 @@ def test_dnsbrute_format_csv_alias(monkeypatch) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["dnsbrute", "--target", "example.com", "--format", "csv", "--timeout", "1.0"])
     assert result.exit_code == 0
-    assert "target,domain,subdomain,hostname,a_records,aaaa_records,resolved" in result.output
+    assert "target,domain,record_type,subdomain,hostname,a_records,aaaa_records,resolved,nameserver,zone,depth,success,error,record" in result.output
+
+
+def test_dnsbrute_output_format_csv_axfr_records(monkeypatch) -> None:
+    """Test CLI CSV output includes AXFR zone-transfer records."""
+    mock_results = {
+        "target": "example.com",
+        "domain": "example.com",
+        "all_results": [],
+        "axfr": [
+            {
+                "nameserver": "ns1.example.com",
+                "zone": "example.com",
+                "depth": 1,
+                "success": True,
+                "records_count": 1,
+                "records": ["example.com 300 IN NS ns1.example.com"],
+                "error": None,
+            }
+        ],
+        "recursive_axfr": [],
+    }
+    monkeypatch.setattr("ethscan.cli.run_dnsbrute", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["dnsbrute", "--target", "example.com", "--output-format", "csv", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    import csv as _csv
+    rows = list(_csv.reader(result.output.strip().splitlines()))
+    assert rows[0] == [
+        "target",
+        "domain",
+        "record_type",
+        "subdomain",
+        "hostname",
+        "a_records",
+        "aaaa_records",
+        "resolved",
+        "nameserver",
+        "zone",
+        "depth",
+        "success",
+        "error",
+        "record",
+    ]
+    # AXFR record row
+    assert rows[1][2] == "axfr"
+    assert rows[1][8] == "ns1.example.com"
+    assert rows[1][11] == "true"
+    assert "NS" in rows[1][13]
 
 
 def test_tls_output_format_csv(monkeypatch) -> None:
