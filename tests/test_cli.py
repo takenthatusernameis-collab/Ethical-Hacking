@@ -16288,6 +16288,42 @@ def test_geo_output_format_precedence_over_format(monkeypatch):
     assert "target,ip,country" in result.output
 
 
+def test_geo_output_format_csv_field_escaping(monkeypatch):
+    runner = CliRunner()
+    mock_results = {
+        "target": "8.8.8.8",
+        "host": "8.8.8.8",
+        "ip": "8.8.8.8",
+        "timeout": 5.0,
+        "use_cache": True,
+        "offline_fallback": True,
+        "geolocation": {
+            "status": "success",
+            "query": "8.8.8.8",
+            "country": "United, States",
+            "region": "VA",
+            "regionName": "Virginia",
+            "city": "Mountain, View",
+            "zip": "20149",
+            "lat": 39.03,
+            "lon": -77.5,
+            "timezone": "America/New_York",
+            "isp": "Google LLC",
+            "org": "Google Public DNS",
+            "as": "AS15169 Google LLC",
+            "reverse": "dns.google",
+            "cached": False,
+            "offline_fallback": False,
+        },
+        "notes": [],
+    }
+    monkeypatch.setattr("ethscan.cli.run_geo", lambda *args, **kwargs: mock_results)
+    result = runner.invoke(cli, ["geo", "--target", "8.8.8.8", "--output-format", "csv"])
+    assert result.exit_code == 0
+    assert '"United, States"' in result.output
+    assert '"Mountain, View"' in result.output
+
+
 # ---------------------------------------------------------------------------
 # CSV integration tests for commands with --output-format csv support
 # ---------------------------------------------------------------------------
