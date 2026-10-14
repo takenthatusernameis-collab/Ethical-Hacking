@@ -4804,3 +4804,9 @@ def mssql(
         click.echo(f"Report written to {out_path}")
     else:
         click.echo(output)
+from ethscan.oracle import (
+    format_oracle_report_csv,
+    format_oracle_report_json,
+    format_oracle_report_markdown,
+    run_oracle,
+)
