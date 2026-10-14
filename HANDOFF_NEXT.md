@@ -1,28 +1,24 @@
-# Handoff: State review and next task recommendation
+# Handoff to Next Agent
 
 ## What changed
-- Verified the state of the codebase after the IPv6 URL normalization fix (commits a9d83a6, 547e7aa). The implementation correctly strips IPv6 brackets from URLs in `ethscan/resolve.py` via `_normalize_target()`.
-- Confirmed the related IPv6 tests pass (resolve, s3, mac, and other modules with IPv6 normalization tests all pass).
+- Reviewed the codebase and identified a bounded, high-value task: the handoff indicated CSV output support was being added across commands. Verified that `geo`, `whois`, and `ssl` already have CSV formatters implemented, CLI support added, and their tests pass.
+- Confirmed the overall test baseline: 2815 passed, 3 failures are pre-existing environmental issues (dnspython installed in environment; tests expect dnspython unavailable). All other tests pass, including all CSV-related tests for geo/whois/ssl/CLI.
 
 ## What was actually verified
-- `tests/test_resolve.py::test_run_resolve_ipv6_url_target` passes.
-- `tests/test_resolve.py::test_normalize_target_ipv6_url` passes.
-- `tests/test_s3.py::test_normalize_target_ipv6_url` passes.
-- `tests/test_mac.py::test_normalize_target_ipv6_url` passes.
-- Full test suite: 2815 passed, 3 failed (same as documented baseline).
+- geo: CSV formatter (`format_geo_report_csv`) exists with correct header and escaping; CLI has `--output-format/--format csv` support; all 44 geo tests pass.
+- whois: CSV formatter exists with recursive hops handling; CLI support complete; all 19 whois tests pass.
+- ssl: CSV formatter exists; CLI support complete; all 17 ssl tests pass.
+- CLI integration: all geo/whois/ssl CSV CLI tests pass (8 tests total across them).
+- Full suite: 2815 passed, 3 failed (environmental DNS tests due to dnspython availability).
 
 ## What remains unresolved
-- Environmental DNS test failures (due to dnspython being installed in the environment while tests expect it unavailable):
-  - `tests/test_dns.py::test_run_dns_offline_basic` - expects `dnspython_available` False
-  - `tests/test_dnsbrute.py::test_run_dnsbrute_resolver_used_for_resolution` - expects dnspython-unavailable behavior in the specific test context
-  - `tests/test_resolve.py::test_run_resolve_domain_defaults` - expects `dnspython_available` False
-
-These are pre-existing environmental issues, not regressions from the IPv6 fix.
+- The 3 environmental DNS test failures remain as documented (not regressions):
+  - `tests/test_dns.py::test_run_dns_offline_basic` expects dnspython unavailable
+  - `tests/test_dnsbrute.py::test_run_dnsbrute_resolver_used_for_resolution` expects dnspython unavailable behavior
+  - `tests/test_resolve.py::test_run_resolve_domain_defaults` expects dnspython unavailable
 
 ## Failed approaches (already recorded)
 - None in this session.
 
 ## Next precise task
-The assigned IPv6 URL normalization task is complete. No further action is required for that issue. The next agent may:
-1. Conclude the session if no other work is needed, OR
-2. Inspect the repository for another bounded, high-value task. Given the codebase is in a stable state with only environmental test failures, a good next step would be to look for any other edge cases in IPv6 handling across modules or other small robustness improvements that can be implemented and verified in a short session.
+Inspect TASK.md for remaining commands that need `--output-format csv` support. Candidates mentioned include other commands not yet completed. The TASK.md shows geo, whois, ssl are already done. Good next task is to add CSV output to another command that needs it (e.g., review TASK.md's suggested "Add `--output-format csv` output to the `dns` command" is already done per earlier entries; look for the next unimplemented command). Also could look for commands missing CSV formatters - for example check common ones like `headers`, `cert`, `dnssec`, etc. A concrete, bounded task: pick the next command in TASK.md's priority list that lacks CSV support and implement it end-to-end (module formatter + CLI wiring + unit tests + CLI tests), then verify.
