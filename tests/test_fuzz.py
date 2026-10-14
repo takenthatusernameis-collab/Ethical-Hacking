@@ -2,6 +2,7 @@
 
 import csv
 import io
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock, patch
 
@@ -245,3 +246,33 @@ def test_run_fuzz_workers_negative_defaults_to_one(monkeypatch) -> None:
         run_fuzz("https://example.com", wordlist=["/a", "/b"], workers=-5)
 
     assert call_count["count"] == 2
+
+
+def test_run_fuzz_workers_actually_concurrent() -> None:
+    """Test that workers>1 dispatches fuzz_path calls to multiple threads."""
+    seen_threads = []
+
+    def mock_fuzz_path(base_url, path, timeout):
+        seen_threads.append(threading.get_ident())
+        return {"path": path, "status_code": 404, "error": None}
+
+    with patch("ethscan.fuzz.fuzz_path", side_effect=mock_fuzz_path):
+        run_fuzz("https://example.com", wordlist=[f"/p{i}" for i in range(10)], workers=4)
+
+    # With >1 worker the ThreadPoolExecutor must exercise more than one thread.
+    assert len(set(seen_threads)) >= 2
+
+
+def test_run_fuzz_workers_single_is_sequential(monkeypatch) -> None:
+    """Test that workers<=1 executes fuzz_path on a single thread (no pool)."""
+    seen_threads = []
+
+    def mock_fuzz_path(base_url, path, timeout):
+        seen_threads.append(threading.get_ident())
+        return {"path": path, "status_code": 404, "error": None}
+
+    with patch("ethscan.fuzz.fuzz_path", side_effect=mock_fuzz_path):
+        run_fuzz("https://example.com", wordlist=[f"/p{i}" for i in range(5)], workers=1)
+
+    # Sequential branch must use exactly one thread.
+    assert len(set(seen_threads)) == 1
