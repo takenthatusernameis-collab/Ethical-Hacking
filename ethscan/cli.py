@@ -18,7 +18,7 @@ from ethscan.report import (
     format_report_markdown,
     run_report,
 )
-from ethscan.scanner import get_common_ports, parse_port_range, scan_ports, get_profile_ports, get_profile_defaults, format_scan_report_json, format_scan_report_markdown, format_scan_report_csv, format_service_report_csv
+from ethscan.scanner import get_common_ports, parse_port_range, scan_ports, get_profile_ports, get_profile_defaults, format_scan_report_json, format_scan_report_markdown, format_scan_report_csv
 from ethscan.web import (
     format_web_report_csv,
     format_web_report_json,
@@ -84,6 +84,7 @@ from ethscan.tls import (
     run_tls,
 )
 from ethscan.service import (
+    format_service_report_csv,
     format_service_report_json,
     format_service_report_markdown,
     run_service,

@@ -1018,7 +1018,7 @@ def format_vuln_report_csv(data: Dict[str, object]) -> str:
                 finding.get("description", ""),
             ]
         )
-    return output.getvalue()
+    return output.getvalue().rstrip("\r\n")
 
 
 def _finding_detail(finding: Dict[str, object]) -> str:

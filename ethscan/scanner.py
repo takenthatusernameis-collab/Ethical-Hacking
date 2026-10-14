@@ -179,14 +179,4 @@ def format_scan_report_csv(data: Dict[str, object]) -> str:
     writer.writerow(["port", "open"])
     for detail in data.get("details", []):
         writer.writerow([detail["port"], "true" if detail["open"] else "false"])
-    return output.getvalue()
-
-
-def format_service_report_csv(data: Dict[str, object]) -> str:
-    """Format service detection results as CSV."""
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["port", "service", "banner"])
-    for result in data.get("results", []):
-        writer.writerow([result["port"], result.get("service", ""), result.get("banner", "")])
-    return output.getvalue()
+    return output.getvalue().rstrip("\r\n")

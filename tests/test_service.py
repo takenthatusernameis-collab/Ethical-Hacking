@@ -252,3 +252,26 @@ def test_format_service_report_csv_pipe_escaping() -> None:
     # With QUOTE_MINIMAL, pipe characters don't require quoting
     assert "pipe|banner|msg" in output
     assert "weird|service" in output
+
+
+def test_format_service_report_csv_strips_newlines_in_banners() -> None:
+    """Banner newlines are stripped so each result stays on one CSV row."""
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "timeout": 3.0,
+        "ports_scanned": 1,
+        "services_found": 1,
+        "results": [
+            {
+                "port": 22,
+                "service": "OpenSSH",
+                "banner": "SSH-2.0-OpenSSH_8.9\r\nOpenSSH_8.9 secondary line",
+            }
+        ],
+    }
+    output = format_service_report_csv(data)
+    # Header row + one data row => exactly one newline (the row separator).
+    # A banner newline that is NOT stripped would inject extra newlines.
+    assert output.count("\n") == 1
+    assert "\n" not in output.split("\n", 1)[1]

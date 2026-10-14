@@ -427,7 +427,7 @@ def format_cve_report_csv(data: Dict[str, object]) -> str:
 
         writer.writerow([source, port, product, version, cve_id, severity, score, title, description, refs, cached, offline_fallback])
 
-    return output.getvalue()
+    return output.getvalue().rstrip("\r\n")
 
 
 def _finding_detail(finding: Dict[str, object]) -> str:

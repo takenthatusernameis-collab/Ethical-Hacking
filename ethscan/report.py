@@ -310,4 +310,4 @@ def format_report_csv(data: Dict[str, Any]) -> str:
             ]
         )
 
-    return output.getvalue()
+    return output.getvalue().rstrip("\r\n")
