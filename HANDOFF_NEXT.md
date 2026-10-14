@@ -1,25 +1,21 @@
-# Handoff: README CSV documentation gap closed
+# Handoff: README documentation for mysql and mongodb commands added
 
 ## What changed
-- `README.md` — updated three feature bullets that under-described their command's output support:
-  - `mac` (line 39): "JSON/Markdown output" → "JSON/Markdown/CSV output via `--output-format [json|markdown|csv]` / `--format` / `--out`"
-  - `jwt` (line 42): same correction
-  - `resolve` (line 44): same correction
+- `README.md` — added two missing feature bullets for commands that were implemented but not documented:
+  - `mysql` (new line 58): MySQL/MariaDB handshake probe (Protocol::HandshakeV10) over TCP 3306; extracts server_version, protocol_version, thread_id, capabilities, charset, status, auth plugin; flags old versions (5.0/5.1/4.x) and MariaDB; supports `--target` (host, host:port, or mysql:// URL), `--port` (default 3306), `--probes` (default: handshake), `--timeout`, and JSON/Markdown/CSV output via `--output-format [json|markdown|csv]` / `--format` / `--out`
+  - `mongodb` (new line 59): MongoDB buildInfo probe via Wire Protocol (OP_QUERY) over TCP 27017; extracts version, sysInfo, modules, versionArray; flags old versions (2.0-2.6); supports `--target` (host, host:port, or mongodb:// URL), `--port` (default 27017), `--probes` (default: buildInfo), `--timeout`, and JSON/Markdown/CSV output via `--output-format [json|markdown|csv]` / `--format` / `--out`
 
-No code, tests, or CLI wiring changed — the CSV formatters, `--output-format`/`--format` options, and dispatch logic were already present and verified working for all three commands. This session only corrected stale documentation.
+No code, tests, or CLI wiring changed — both commands were already fully implemented, tested, and registered.
 
 ## What was verified
 - `python -m pytest -q` → **2802 passed, 1 skipped** (full suite, no regressions)
-- `python -m ethscan mac --help` / `jwt --help` / `resolve --help` → all show `--output-format [json|markdown|csv]` and the deprecated `--format` alias
-- End-to-end CSV output confirmed live for each:
-  - `python -m ethscan mac --target 00:1A:2B:3C:4D:5E --output-format csv --timeout 2.0` → header `target,mac,oui,vendor,cached,offline_fallback,error` + row
-  - `python -m ethscan resolve --target 8.8.8.8 --output-format csv --timeout 2.0` → header `target,normalized,record_type,record_value` + PTR row
-  - `python -m ethscan jwt --output-format csv ...` (CSV formatter exercised by `tests/test_jwt.py`)
-- `git diff --stat` → `README.md | 6 +++---` (3 insertions, 3 deletions); working tree otherwise clean
+- `python -m pytest tests/test_mysql.py tests/test_mongodb.py tests/test_cli.py -k "mysql or mongodb" -q` → **57 passed** (19 unit + 20 unit + 18 CLI)
+- `python -m ethscan mysql --help` / `mongodb --help` → both show `--output-format [json|markdown|csv]` and deprecated `--format` alias
+- `git diff --stat` → `README.md | 11 +++++++++++` (11 insertions); working tree otherwise clean
 
 ## What remains unresolved
+- Documentation bullets for `geo`, `whois`, and `ssl` do not have detailed per-command bullets at all (they appear only in the summary list).
 - No functional gaps found. All 52 registered commands have working JSON/Markdown/CSV output where a CSV formatter exists; `report`, `scan`, and `audit` route to CSV via their existing `format_*_csv` functions (verified in CLI help and code).
-- Documentation bullets for `geo`, `whois`, and `ssl` do not have detailed per-command bullets at all (they appear only in the summary list), so there is nothing to correct there.
 
 ## Failed approaches (none)
 - No failures. The initially-suggested tasks in `NEXT_TASK.md` (add CSV to `geo`/`whois`/`ssl`) were found to already be implemented; the task was re-scoped to the documentation gap instead of duplicating work.

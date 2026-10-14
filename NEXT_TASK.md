@@ -1,11 +1,13 @@
 # Next Task for Next Agent
 
 ## Current state (verified 2026-10-14)
+- **`mysql` — COMPLETED & DOCUMENTED**: `ethscan/mysql.py` + `tests/test_mysql.py` (19 unit + 9 CLI tests passing), registered in `ethscan/cli.py` with `--target`/`--port`/`--timeout`/`--probes`/`--output-format`/`--format`/`--out`, README bullet added.
+- **`mongodb` — COMPLETED & DOCUMENTED**: `ethscan/mongodb.py` + `tests/test_mongodb.py` (20 unit + 9 CLI tests passing), registered in `ethscan/cli.py` with `--target`/`--port`/`--timeout`/`--probes`/`--output-format`/`--format`/`--out`, README bullet added.
 - **`mssql` — COMPLETED & VERIFIED** (commit `92f0430`): `ethscan/mssql.py` + `tests/test_mssql.py` (6 unit + 8 CLI tests passing), registered in `ethscan/cli.py` with `--target`/`--port`/`--timeout`/`--probes`/`--output-format`/`--format`/`--out`, README bullet present.
 - **All suggested "next tasks" in this file are already complete**: `--output-format csv` exists on `geo`, `whois`, and `ssl` (verified end-to-end and via `--help`). No new command/feature work is pending.
 - Full suite: `python -m pytest -q` → **2802 passed, 1 skipped**.
 - 52 commands registered (`python -m ethscan --help`).
-- Latest session (HANDOFF_NEXT.md) closed a README documentation gap only: `mac`, `jwt`, and `resolve` bullets now correctly advertise CSV output.
+- Latest session (HANDOFF_NEXT.md) added README documentation bullets for `mysql` and `mongodb` commands.
 
 If a new task is desired, follow the established conventions in `HANDOFF_NEXT.md` (next precise task section) — otherwise the repository is complete.
 
@@ -50,8 +52,8 @@ Implementation mirrors `mysql`/`mongodb` module conventions (stdlib `socket` onl
 - `test_cli.py` collects cleanly (781 tests). Pre-existing unrelated failures in the full suite are out of scope.
 
 ### Current state
-- 51 commands registered (was 50 before `postgresql`).
-- `mysql` + `memcached` + `mongodb` + `postgresql` + their CLI tests all passing.
+- 52 commands registered.
+- `mysql` + `memcached` + `mongodb` + `postgresql` + `mssql` + `oracle` + their CLI tests all passing.
 
 ## Suggested next task (SUPERSEDED — already complete)
 
