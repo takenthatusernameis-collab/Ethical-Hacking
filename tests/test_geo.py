@@ -25,6 +25,26 @@ from ethscan.geo import (
     format_geo_report_markdown,
 )
 
+_GEO_CSV_HEADER = [
+    "target",
+    "ip",
+    "country",
+    "region",
+    "city",
+    "lat",
+    "lon",
+    "isp",
+    "org",
+    "as_number",
+    "reverse_dns",
+    "cached",
+    "offline_fallback",
+    "hop",
+    "host",
+    "response_type",
+    "rtt_avg_ms",
+]
+
 
 # ---------------------------------------------------------------------------
 # Host normalization
@@ -613,12 +633,30 @@ def test_format_geo_report_csv_basic() -> None:
         "notes": [],
     }
     output = format_geo_report_csv(data)
-    lines = output.splitlines()
-    assert lines[0] == "target,ip,country,region,city,lat,lon,isp,org,as_number,reverse_dns,cached,offline_fallback"
-    assert "8.8.8.8" in lines[1]
-    assert "United States" in lines[1]
-    assert "Mountain View" in lines[1]
-    assert "false" in lines[1]
+    import csv as _csv
+
+    rows = list(_csv.reader(output.splitlines()))
+    assert rows[0] == _GEO_CSV_HEADER
+    # primary row: 13 geo cols + 4 empty hop transport cols
+    assert rows[1] == [
+        "8.8.8.8",
+        "8.8.8.8",
+        "United States",
+        "CA",
+        "Mountain View",
+        "37.386",
+        "-122.0838",
+        "Google LLC",
+        "Google LLC",
+        "AS15169 Google LLC",
+        "dns.google",
+        "false",
+        "false",
+        "",
+        "",
+        "",
+        "",
+    ]
 
 
 def test_format_geo_report_csv_empty() -> None:
@@ -634,7 +672,7 @@ def test_format_geo_report_csv_empty() -> None:
     }
     output = format_geo_report_csv(data)
     lines = output.splitlines()
-    assert lines[0] == "target,ip,country,region,city,lat,lon,isp,org,as_number,reverse_dns,cached,offline_fallback"
+    assert lines[0] == ",".join(_GEO_CSV_HEADER)
     assert "nonexistent.invalid.domain.tld" in lines[1]
 
 
@@ -655,7 +693,7 @@ def test_format_geo_report_csv_missing_fields() -> None:
     }
     output = format_geo_report_csv(data)
     lines = output.splitlines()
-    assert lines[0] == "target,ip,country,region,city,lat,lon,isp,org,as_number,reverse_dns,cached,offline_fallback"
+    assert lines[0] == ",".join(_GEO_CSV_HEADER)
     assert "1.1.1.1" in lines[1]
     assert "true" in lines[1]
 
@@ -761,22 +799,8 @@ def test_format_geo_report_csv_recursive_hops() -> None:
     rows = list(_csv.reader(output.splitlines()))
     # header + primary result row + one row per hop
     assert len(rows) == 4
-    assert rows[0] == [
-        "target",
-        "ip",
-        "country",
-        "region",
-        "city",
-        "lat",
-        "lon",
-        "isp",
-        "org",
-        "as_number",
-        "reverse_dns",
-        "cached",
-        "offline_fallback",
-    ]
-    # primary row is first
+    assert rows[0] == _GEO_CSV_HEADER
+    # primary row: 13 geo cols + 4 empty hop transport cols
     assert rows[1] == [
         "8.8.8.8",
         "8.8.8.8",
@@ -791,8 +815,12 @@ def test_format_geo_report_csv_recursive_hops() -> None:
         "",
         "false",
         "false",
+        "",
+        "",
+        "",
+        "",
     ]
-    # hop rows preserve order and carry hop geo data
+    # hop rows preserve order and carry hop geo + hop transport metadata
     assert rows[2] == [
         "8.8.8.8",
         "10.0.0.1",
@@ -807,6 +835,10 @@ def test_format_geo_report_csv_recursive_hops() -> None:
         "",
         "false",
         "false",
+        "1",
+        "router.local",
+        "TTL",
+        "1.5",
     ]
     assert rows[3] == [
         "8.8.8.8",
@@ -822,7 +854,62 @@ def test_format_geo_report_csv_recursive_hops() -> None:
         "",
         "true",
         "true",
+        "2",
+        "",
+        "TTL",
+        "2.5",
     ]
+    # transport fields only populated on hop rows, empty on the primary row
+    assert rows[1][13:] == ["", "", "", ""]
+    assert rows[2][13:] == ["1", "router.local", "TTL", "1.5"]
+    assert rows[3][13:] == ["2", "", "TTL", "2.5"]
+
+
+def test_format_geo_report_csv_hop_transport_missing_fields() -> None:
+    """Hop transport columns are populated positionally and empty when absent."""
+    data = {
+        "target": "8.8.8.8",
+        "host": "8.8.8.8",
+        "ip": "8.8.8.8",
+        "recursive": True,
+        "hops": [
+            {
+                "hop": 1,
+                "ip": "10.0.0.1",
+                "host": None,
+                "response_type": None,
+                "rtt_avg_ms": None,
+                "geolocation": {
+                    "status": "success",
+                    "query": "10.0.0.1",
+                    "country": "United States",
+                    "cached": False,
+                },
+            },
+        ],
+        "geolocation": {
+            "status": "success",
+            "query": "8.8.8.8",
+            "country": "United States",
+            "cached": False,
+        },
+    }
+    output = format_geo_report_csv(data)
+    import csv as _csv
+
+    rows = list(_csv.reader(output.splitlines()))
+    idx = {name: i for i, name in enumerate(_GEO_CSV_HEADER)}
+    # primary row: transport columns empty
+    assert rows[1][idx["hop"]] == ""
+    assert rows[1][idx["host"]] == ""
+    assert rows[1][idx["response_type"]] == ""
+    assert rows[1][idx["rtt_avg_ms"]] == ""
+    # hop row: hop number present, absent optional fields rendered empty
+    assert rows[2][idx["hop"]] == "1"
+    assert rows[2][idx["host"]] == ""
+    assert rows[2][idx["response_type"]] == ""
+    assert rows[2][idx["rtt_avg_ms"]] == ""
+    assert rows[2][idx["ip"]] == "10.0.0.1"
 
 
 def test_format_geo_report_csv_no_hops_is_single_row() -> None:
@@ -840,4 +927,4 @@ def test_format_geo_report_csv_no_hops_is_single_row() -> None:
     output = format_geo_report_csv(data)
     lines = output.splitlines()
     assert len(lines) == 2
-    assert lines[0] == "target,ip,country,region,city,lat,lon,isp,org,as_number,reverse_dns,cached,offline_fallback"
+    assert lines[0] == ",".join(_GEO_CSV_HEADER)

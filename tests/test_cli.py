@@ -16381,17 +16381,47 @@ def test_geo_output_format_csv_recursive_hops(monkeypatch) -> None:
     import csv as _csv
 
     rows = list(_csv.reader(result.output.strip().splitlines()))
-    assert rows[0] == "target,ip,country,region,city,lat,lon,isp,org,as_number,reverse_dns,cached,offline_fallback".split(",")
+    assert rows[0] == "target,ip,country,region,city,lat,lon,isp,org,as_number,reverse_dns,cached,offline_fallback,hop,host,response_type,rtt_avg_ms".split(
+        ","
+    )
     # primary row + two hop rows
     assert len(rows) == 4
-    assert rows[1] == ["8.8.8.8", "8.8.8.8", "United States", "", "", "", "", "", "", "", "", "false", "false"]
+    # primary row: 13 geo cols + 4 empty hop transport cols
+    assert rows[1] == [
+        "8.8.8.8",
+        "8.8.8.8",
+        "United States",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "false",
+        "false",
+        "",
+        "",
+        "",
+        "",
+    ]
     assert rows[2][1] == "10.0.0.1"
     assert rows[2][4] == "Ashburn"
     assert rows[2][12] == "false"
+    # hop transport metadata now carried on hop rows
+    assert rows[2][13] == "1"
+    assert rows[2][14] == "router.local"
+    assert rows[2][15] == "TTL"
+    assert rows[2][16] == "1.5"
     assert rows[3][1] == "10.0.0.2"
     assert rows[3][2] == "Germany"
     assert rows[3][4] == "Frankfurt"
     assert rows[3][12] == "true"
+    assert rows[3][13] == "2"
+    assert rows[3][14] == ""
+    assert rows[3][15] == "TTL"
+    assert rows[3][16] == "2.5"
 
 
 # ---------------------------------------------------------------------------

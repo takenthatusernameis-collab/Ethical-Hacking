@@ -345,9 +345,46 @@ def format_geo_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def _geo_csv_row(target: str, ip: object, geo: Dict[str, object]) -> List[str]:
-    """Build a single CSV row for a geolocation result (primary target or hop)."""
+def _geo_csv_header() -> List[str]:
+    """Return the CSV header row for geo output.
+
+    The first 13 columns carry the primary target / hop geolocation fields
+    (matching the Markdown formatter's geolocation fields). The trailing four
+    columns surface hop transport metadata (hop number, host, response type,
+    RTT) that the Markdown formatter's hop table renders; they are left empty
+    on the primary target row and only populated on hop rows.
+    """
     return [
+        "target",
+        "ip",
+        "country",
+        "region",
+        "city",
+        "lat",
+        "lon",
+        "isp",
+        "org",
+        "as_number",
+        "reverse_dns",
+        "cached",
+        "offline_fallback",
+        "hop",
+        "host",
+        "response_type",
+        "rtt_avg_ms",
+    ]
+
+
+def _geo_csv_row(
+    target: str, ip: object, geo: Dict[str, object], hop: Optional[Dict[str, object]] = None
+) -> List[str]:
+    """Build a single CSV row for a geolocation result (primary target or hop).
+
+    When ``hop`` is provided the trailing hop transport columns
+    (hop/host/response_type/rtt_avg_ms) are populated from it; otherwise they
+    are left empty (primary target row).
+    """
+    row = [
         target,
         ip or geo.get("query") or "",
         geo.get("country", ""),
@@ -362,6 +399,16 @@ def _geo_csv_row(target: str, ip: object, geo: Dict[str, object]) -> List[str]:
         "true" if geo.get("cached") else "false",
         "true" if geo.get("offline_fallback") else "false",
     ]
+    if hop:
+        row.extend([
+            hop.get("hop") if hop.get("hop") is not None else "",
+            hop.get("host") or "",
+            hop.get("response_type") or "",
+            hop.get("rtt_avg_ms") if hop.get("rtt_avg_ms") is not None else "",
+        ])
+    else:
+        row.extend(["", "", "", ""])
+    return row
 
 
 def format_geo_report_csv(data: Dict[str, object]) -> str:
@@ -370,30 +417,19 @@ def format_geo_report_csv(data: Dict[str, object]) -> str:
     Emits a header row followed by one row for the primary target's
     geolocation result and, when recursive hop geolocation data is present,
     one row per hop so that no hop result is silently dropped (mirroring the
-    Markdown formatter's hop section). Non-recursive runs emit a single data
-    row, preserving prior behavior.
+    Markdown formatter's hop section). The header appends hop transport
+    metadata columns (hop/host/response_type/rtt_avg_ms) that the Markdown
+    formatter's hop table surfaces; the primary row leaves these empty while
+    hop rows populate them. Non-recursive runs emit a single data row,
+    preserving prior behavior.
     """
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
-        "target",
-        "ip",
-        "country",
-        "region",
-        "city",
-        "lat",
-        "lon",
-        "isp",
-        "org",
-        "as_number",
-        "reverse_dns",
-        "cached",
-        "offline_fallback",
-    ])
+    writer.writerow(_geo_csv_header())
     target = data.get("target", "")
     geo = data.get("geolocation") or {}
     writer.writerow(_geo_csv_row(target, data.get("ip"), geo))
     for hop in data.get("hops") or []:
         hop_geo = hop.get("geolocation") or {}
-        writer.writerow(_geo_csv_row(target, hop.get("ip"), hop_geo))
+        writer.writerow(_geo_csv_row(target, hop.get("ip"), hop_geo, hop))
     return output.getvalue().rstrip("\r\n")
