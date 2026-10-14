@@ -655,32 +655,104 @@ def format_netbios_report_markdown(data: Dict[str, Any]) -> str:
 def format_netbios_report_csv(data: Dict[str, Any]) -> str:
     """Format NetBIOS reconnaissance results as CSV.
 
-    Emits a single summary row per target with the header
-    ``target,host,port,mac,names,num_names,is_server,is_domain_member,hostname,error``.
+    Emits a header row plus one row per NetBIOS name entry (including a
+    summary row). The Markdown formatter renders a per-name ``Names`` table
+    (Name | Suffix | Service | Type | Flags); this CSV previously collapsed
+    that table into a single ``names`` column with ``"; "``-joined
+    ``name<suffix>`` strings, losing every per-name attribute (service type,
+    group/unique, owner node type, permanent/active, conflict/deregister) and
+    the association between a name and its flags.
+
+    Header (25 columns)::
+
+        target,host,port,mac,queried_name,queried_suffix,num_names,
+        record_type,name,suffix,suffix_hex,service_type,group,unique,
+        owner_node_type,permanent,transient,active,conflict,deregister,
+        raw,is_server,hostname,is_domain_member,error
+
+    - Summary row: ``record_type=summary``; target context + query + ``num_names``
+      + the table-level assessment (``is_server``/``hostname``/
+      ``is_domain_member``) + top-level ``error``; per-name fields empty.
+    - Name rows: ``record_type=name``; target context repeated (self-contained
+      rows) + one row per entry in ``data["names"]`` carrying ``name``,
+      ``suffix``, ``suffix_hex``, ``service_type`` and every decoded flag;
+      assessment fields empty (they are aggregate signals, not per-name).
     """
     output = io.StringIO()
     writer = csv.writer(output)
+
+    # Unified header with record_type discriminator.
     writer.writerow([
-        "target", "host", "port", "mac", "names", "num_names",
-        "is_server", "is_domain_member", "hostname", "error",
+        "target", "host", "port", "mac", "queried_name", "queried_suffix",
+        "num_names", "record_type", "name", "suffix", "suffix_hex",
+        "service_type", "group", "unique", "owner_node_type", "permanent",
+        "transient", "active", "conflict", "deregister", "raw",
+        "is_server", "hostname", "is_domain_member", "error",
     ])
 
     names = data.get("names") or []
-    name_strs = [
-        f"{e.get('name', '')}<{e.get('suffix_hex', '0x00')}>" for e in names
-    ]
-    names_field = "; ".join(name_strs)
+    num_names = data.get("num_names", len(names))
 
+    def _name_fields(entry: Dict[str, Any]) -> List[Any]:
+        flags = entry.get("flags") or {}
+        return [
+            entry.get("name", ""),
+            entry.get("suffix", ""),
+            entry.get("suffix_hex", ""),
+            entry.get("service_type", ""),
+            "true" if flags.get("group") else "false",
+            "true" if flags.get("unique") else "false",
+            flags.get("owner_node_type", ""),
+            "true" if flags.get("permanent") else "false",
+            "true" if flags.get("transient") else "false",
+            "true" if flags.get("active") else "false",
+            "true" if flags.get("conflict") else "false",
+            "true" if flags.get("deregister") else "false",
+            flags.get("raw", ""),
+        ]
+
+    # Summary row: target context + query + aggregate signals; name fields empty.
     writer.writerow([
         data.get("target", ""),
         data.get("host", ""),
         data.get("port", ""),
         data.get("mac", "") or "",
-        names_field,
-        data.get("num_names", 0),
+        data.get("queried_name", ""),
+        data.get("queried_suffix", ""),
+        num_names,
+        "summary",  # record_type
+        "",  # name
+        "",  # suffix
+        "",  # suffix_hex
+        "",  # service_type
+        "",  # group
+        "",  # unique
+        "",  # owner_node_type
+        "",  # permanent
+        "",  # transient
+        "",  # active
+        "",  # conflict
+        "",  # deregister
+        "",  # raw
         "true" if data.get("is_server") else "false",
-        "true" if data.get("is_domain_member") else "false",
         data.get("hostname", "") or "",
+        "true" if data.get("is_domain_member") else "false",
         data.get("error", "") or "",
     ])
+
+    # Name rows: one per NetBIOS name entry, target context repeated.
+    for entry in names:
+        writer.writerow([
+            data.get("target", ""),
+            data.get("host", ""),
+            data.get("port", ""),
+            data.get("mac", "") or "",
+            data.get("queried_name", ""),
+            data.get("queried_suffix", ""),
+            num_names,
+            "name",  # record_type
+            *_name_fields(entry),
+            "", "", "", "",  # assessment fields empty on name rows
+        ])
+
     return output.getvalue().rstrip("\r\n")

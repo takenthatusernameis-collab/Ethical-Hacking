@@ -686,28 +686,104 @@ def test_format_netbios_report_markdown_pipe_escaping() -> None:
     assert "aa\\|bb:cc" in output
 
 
+EXPECTED_HEADER = [
+    "target", "host", "port", "mac", "queried_name", "queried_suffix",
+    "num_names", "record_type", "name", "suffix", "suffix_hex",
+    "service_type", "group", "unique", "owner_node_type", "permanent",
+    "transient", "active", "conflict", "deregister", "raw",
+    "is_server", "hostname", "is_domain_member", "error",
+]
+
+
 def test_format_netbios_report_csv() -> None:
     output = format_netbios_report_csv(_full_results())
     rows = list(csv.reader(io.StringIO(output)))
-    assert rows[0] == [
-        "target", "host", "port", "mac", "names", "num_names",
-        "is_server", "is_domain_member", "hostname", "error",
-    ]
+    assert rows[0] == EXPECTED_HEADER
+    # Summary row first (record_type=summary), then one row per name entry.
+    assert rows[1][7] == "summary"
     assert rows[1][0] == "192.168.1.100"
     assert rows[1][3] == "aa:bb:cc:dd:ee:ff"
-    assert "0x00" in rows[1][4]
-    assert "0x20" in rows[1][4]
-    assert rows[1][5] == "2"
-    assert rows[1][6] == "true"
+    assert rows[1][5] == "0"
+    assert rows[1][6] == "2"
+    assert rows[1][21] == "true"  # is_server
+    assert rows[1][22] == "MYHOST"  # hostname
+    # Two name entries -> two additional rows (rows[2], rows[3]).
+    assert len(rows) == 4
+    assert rows[2][7] == "name"
+    assert rows[2][8] == "MYHOST"
+    assert rows[2][9] == "0"
+    assert rows[2][10] == "0x00"
+    assert rows[2][11] == "Workstation service"
+    assert rows[2][12] == "false"  # group
+    assert rows[2][13] == "true"   # unique
+    assert rows[2][14] == "B-node"
+    assert rows[2][15] == "false"  # permanent
+    assert rows[2][16] == "true"   # transient
+    assert rows[2][17] == "true"   # active
+    assert rows[2][18] == "false"  # conflict
+    assert rows[2][19] == "false"  # deregister
+    assert rows[2][20] == "1024"
+    assert rows[2][21] == ""       # is_server empty on name rows
+    assert rows[3][8] == "MYHOST"
+    assert rows[3][9] == "32"
+    assert rows[3][10] == "0x20"
+    assert rows[3][11] == "File server service"
+
+
+def test_format_netbios_report_csv_one_row_per_name() -> None:
+    # Markdown renders a per-name Names table; CSV must NOT collapse names into
+    # a single joined cell. Each name entry yields its own row.
+    results = _full_results()
+    results["names"].append({
+        "name": "WORKGROUP", "suffix": 0, "suffix_hex": "0x00",
+        "service_type": "Workstation service",
+        "flags": {"group": True, "unique": False, "owner_node_type": "P-node",
+                  "permanent": True, "transient": False, "active": True,
+                  "conflict": False, "deregister": False, "raw": 0x0200},
+    })
+    results["num_names"] = 3
+    output = format_netbios_report_csv(results)
+    rows = list(csv.reader(io.StringIO(output)))
+    assert rows[0] == EXPECTED_HEADER
+    assert rows[1][7] == "summary"
+    assert rows[1][6] == "3"
+    name_rows = [r for r in rows[1:] if r[7] == "name"]
+    assert len(name_rows) == 3
+    # Distinct names, not one joined cell.
+    assert {r[8] for r in name_rows} == {"MYHOST", "WORKGROUP"}
+    # The group name's group flag is true and unique is false.
+    wg = [r for r in name_rows if r[8] == "WORKGROUP"][0]
+    assert wg[12] == "true"   # group
+    assert wg[13] == "false"  # unique
+    assert wg[14] == "P-node"
+    assert wg[15] == "true"   # permanent
+
+
+def test_format_netbios_report_csv_no_names() -> None:
+    results = _full_results()
+    results["names"] = []
+    results["num_names"] = 0
+    results["is_server"] = False
+    results["hostname"] = None
+    output = format_netbios_report_csv(results)
+    rows = list(csv.reader(io.StringIO(output)))
+    assert rows[0] == EXPECTED_HEADER
+    assert len(rows) == 2  # header + single summary row
+    assert rows[1][7] == "summary"
+    assert rows[1][6] == "0"
+    assert rows[1][21] == "false"
+    assert rows[1][22] == ""
 
 
 def test_format_netbios_report_csv_commas_in_names() -> None:
-    # The names field uses '; ' as separator; ensure CSV quoting handles commas.
+    # Per-name rows are CSV-quoted; a comma in a name must not break parsing.
     results = _full_results()
     results["names"][0]["name"] = "HOST,INC"
     output = format_netbios_report_csv(results)
     rows = list(csv.reader(io.StringIO(output)))
-    assert rows[1][4].count(";") == 1
+    name_rows = [r for r in rows[1:] if r[7] == "name"]
+    assert len(name_rows) == 2
+    assert name_rows[0][8] == "HOST,INC"
 
 
 def test_format_netbios_report_csv_error_case() -> None:
@@ -719,5 +795,11 @@ def test_format_netbios_report_csv_error_case() -> None:
     results["mac"] = None
     output = format_netbios_report_csv(results)
     rows = list(csv.reader(io.StringIO(output)))
+    assert rows[0] == EXPECTED_HEADER
+    assert len(rows) == 2
+    assert rows[1][7] == "summary"
     assert rows[1][-1] == "timeout"
-    assert rows[1][6] == "false"
+    assert rows[1][21] == "false"
+    assert rows[1][22] == ""
+    assert rows[1][3] == ""  # mac empty when None
+    assert rows[1][3] == ""  # mac empty when None

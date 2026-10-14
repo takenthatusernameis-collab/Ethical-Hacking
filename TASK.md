@@ -44,6 +44,12 @@ Fixed CSV output data-loss defects in four modules where the Markdown formatters
 - Preserves every community probe including invalid ones without error text
 - Tests rewritten for new schema: 8 new tests covering per-community rows, error preservation, no-communities, multiple communities, comma escaping
 
+### `netbios` (`ethscan/netbios.py` / `tests/test_netbios.py`)
+- `format_netbios_report_csv` previously emitted a single summary row whose `names` column was a `"; "`-joined list of `name<suffix>` strings, dropping the Markdown "Names" table (Name | Suffix | Service | Type | Flags) entirely — losing every per-name attribute (service type, group/unique, owner node type, permanent/active, conflict/deregister) and the name↔flags association.
+- Now emits a 25-column schema with `record_type` discriminator (`summary`, `name`): summary row + one row per NetBIOS name entry, target context repeated on each row, per-name flags as their own columns (`group`, `unique`, `owner_node_type`, `permanent`, `transient`, `active`, `conflict`, `deregister`, `raw`), assessment fields (`is_server`/`hostname`/`is_domain_member`) on the summary row only.
+- Header prefix `target,host,port,mac,queried_name,queried_suffix,num_names` preserved, so existing CLI substring assertions still hold.
+- Tests rewritten: 61 passed (was 57); added `test_format_netbios_report_csv_one_row_per_name`, `test_format_netbios_report_csv_no_names`; updated `test_format_netbios_report_csv`/`_error_case`/`_commas_in_names` for the new schema; CLI CSV tests updated to the new header prefix.
+
 ### Audit of all list-returning modules
 Cross-checked Markdown vs CSV for all list-returning modules. All now emit one CSV row per item per the `record_type`/one-row-per-item convention:
 - `headers` (present/missing security headers → one row each)
@@ -57,10 +63,11 @@ Cross-checked Markdown vs CSV for all list-returning modules. All now emit one C
 - `urlcheck` (section,key,value one row per item across web/ssl/fuzz)
 - `dns` (one row per record value)
 - `brute` (one row per credential)
+- `netbios` (one row per NetBIOS name entry; fixed this session — was a joined-string collapse)
 
 ### Verification
-- `python -m pytest tests/test_dnssec.py tests/test_geo.py tests/test_ntp.py tests/test_snmp.py -q` → all pass
-- `python -m pytest -q` → **2842 passed, 1 skipped** (full suite; +2 vs. 2840 baseline from new tests)
+- `python -m pytest tests/test_dnssec.py tests/test_geo.py tests/test_ntp.py tests/test_snmp.py tests/test_netbios.py -q` → all pass
+- `python -m pytest -q` → **2844 passed, 1 skipped** (full suite; +2 vs. 2842 baseline from 2 new netbios tests)
 
 ## Implementation Summary
 

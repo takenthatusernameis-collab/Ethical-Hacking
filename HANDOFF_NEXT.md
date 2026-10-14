@@ -29,30 +29,45 @@ Refactored to the repo's documented convention (`HANDOFF_NEXT.md` notes): unifie
   - Retained `test_format_snmp_report_csv_commas_in_values` (comma in sysDescr) and `test_format_snmp_report_csv_no_uptime` (sysUpTime=None -> empty).
   - `tests/test_cli.py`: SNMP CLI CSV tests unchanged (header prefix + values still present); all pass.
 
+### New work this session — `ntp`-style CSV data-loss fix for NetBIOS
+`format_netbios_report_csv` (`ethscan/netbios.py:655`) previously emitted a single summary row whose `names` column was a `"; "`-joined list of `name<suffix>` strings. This dropped the markdown "Names" table (Name | Suffix | Service | Type | Flags) entirely — losing every per-name attribute (service type, group/unique, owner node type, permanent/active, conflict/deregister) and the name↔flags association.
+
+Refactored to the repo's documented convention: unified header with a `record_type` discriminator, one summary row + one row per NetBIOS name entry, empty fillers for non-applicable fields, stdlib `csv.writer` quoting, `rstrip("\r\n")`.
+
+- `ethscan/netbios.py` `format_netbios_report_csv`:
+  - Header (25 columns): `target,host,port,mac,queried_name,queried_suffix,num_names,record_type,name,suffix,suffix_hex,service_type,group,unique,owner_node_type,permanent,transient,active,conflict,deregister,raw,is_server,hostname,is_domain_member,error`.
+  - Summary row (`record_type=summary`): target/host/port/mac + query + `num_names` + aggregate assessment (`is_server`/`hostname`/`is_domain_member`) + top-level `error`; per-name fields empty.
+  - Name rows (`record_type=name`): target context repeated (self-contained rows, per ntp/geo/snmp pattern) + one row per entry in `data["names"]` carrying `name`, `suffix`, `suffix_hex`, `service_type`, and every decoded flag (`group`, `unique`, `owner_node_type`, `permanent`, `transient`, `active`, `conflict`, `deregister`, `raw`); assessment fields empty.
+  - Header prefix `target,host,port,mac,queried_name,queried_suffix,num_names` is unchanged, so existing CLI substring assertions still hold (they asserted `target,host,port,mac,names,num_names`; updated to the new prefix).
+  - Docstring rewritten to describe the multi-row behavior.
+- Tests (`tests/test_netbios.py`):
+  - Rewrote `test_format_netbios_report_csv` for the new 25-column schema, asserting summary row + per-name rows (service type, all flags, raw) and target context repetition.
+  - Added `test_format_netbios_report_csv_one_row_per_name` (verifies N names yield N distinct rows, not one joined cell; group/unique/permanent flags preserved).
+  - Added `test_format_netbios_report_csv_no_names` (header + single summary row when no probes).
+  - Updated `test_format_netbios_report_csv_commas_in_names` (comma in a name must not break per-row parsing) and `test_format_netbios_report_csv_error_case` (top-level error on summary row, mac empty when None).
+  - `tests/test_cli.py`: 3 netbios CSV header assertions updated to the new prefix; all 11 netbios CLI tests pass.
+
 ## What was actually verified
-- `python -m pytest tests/test_snmp.py -q` -> **83 passed**.
-- `python -m pytest tests/test_cli.py -q -k snmp` -> **10 passed**.
-- `python -m pytest -q` -> **2842 passed, 1 skipped, 4 warnings** (full suite; +2 vs. the 2840 baseline from new tests; the 4 warnings are pre-existing TLS `DeprecationWarning` from `ethscan/tls.py:152`, unrelated to this change).
-- Manual: `format_snmp_report_csv(_full_results())` emits header + summary row (sys_* populated, error empty) + one `community` row for `public` (valid=true, v2c) and one for `private` (valid=false, community_error="v2c request failed: timeout"). Confirmed via stdout (exact rows shown in session log).
+- `python -m pytest tests/test_netbios.py -q` -> **61 passed**.
+- `python -m pytest tests/test_cli.py -q -k netbios` -> **11 passed**.
+- `python -m pytest -q` -> **2844 passed, 1 skipped, 4 warnings** (full suite; +2 vs. the 2842 baseline from 2 new netbios tests; the 4 warnings are pre-existing TLS `DeprecationWarning` from `ethscan/tls.py:152`, unrelated to this change).
+- Manual: `format_netbios_report_csv(_full_results())` emits header + summary row (target context + `num_names=2`, `is_server=true`, `hostname=MYHOST`, error empty) + one `name` row for `MYHOST<0x00>` (Workstation service, B-node, active) and one for `MYHOST<0x20>` (File server service). Confirmed via stdout (exact rows shown in session log).
 
 ## What remains unresolved
-- TASK.md is stale: its top section still reads "The `resolve` command documentation ... completed" and a running task log; it does not record the dnssec/geo/ntp/snmp CSV data-loss fixes. (Out of scope for code changes; documentation.)
-- No other module was found in this session with the same "markdown renders a per-item table that CSV collapses into one row" defect.
+- No outstanding code defects found. The `netbios` CSV data-loss fix (this session) closed the last confirmed collapse defect.
+- TASK.md and HANDOFF_NEXT.md are updated to record all five CSV data-loss fixes (dnssec/geo/ntp/snmp/netbios) and the completed per-item audit.
 
 ## Audit of other list-returning modules (verified, no action needed)
-Cross-checked markdown vs CSV for list-returning modules. All already emit one CSV row per item (per the `record_type`/one-row-per-item convention):
-- `headers` (present/missing security headers -> one row each), `fuzz` (all_results -> one row each), `vuln` (findings -> one row each), `wifi` (one row per AP), `trace` (one row per hop + recursive hops), `redis` (findings joined but servers are single target; not a per-item loss), `cert` (one row per subdomain), `subdomains` (one row per result), `urlcheck` (section,key,value one row per item across web/ssl/fuzz), `dns` (one row per record value), `brute` (one row per credential).
+Cross-checked markdown vs CSV for list-returning modules. All emit one CSV row per item (per the `record_type`/one-row-per-item convention):
+- `headers` (present/missing security headers -> one row each), `fuzz` (all_results -> one row each), `vuln` (findings -> one row each), `wifi` (one row per AP), `trace` (one row per hop + recursive hops), `redis` (findings joined but servers are single target; not a per-item loss), `cert` (one row per subdomain), `subdomains` (one row per result), `urlcheck` (section,key,value one row per item across web/ssl/fuzz), `dns` (one row per record value), `brute` (one row per credential), `netbios` (one row per NetBIOS name entry; fixed this session).
 
 ## Failed approaches
-- None in this session. (snmp was correctly identified as a genuine data-loss candidate; wifi/trace/redis/cert/headers/fuzz/vuln were checked and dismissed with evidence — not assumed.)
+- None. The first-pass audit by a subagent reported 0 defects across all 52 modules, but that report was inaccurate: `netbios` was mislabeled OK when its CSV collapsed the per-name Names table into a single `"; "`-joined `names` column. Verified by direct read of `ethscan/netbios.py:655-686` vs the markdown Names table at `ethscan/netbios.py:605-631`. Lesson: trust but verify formatters that join list fields (`.join(...)` on a list of dicts) rather than emitting one row per item.
 
 ## Next precise task (with evidence)
-**Update `TASK.md` to record the completed CSV data-loss fixes and current audit status.**
-- Append a dated entry (top of `TASK.md`) noting the dnssec/geo/ntp/snmp CSV data-loss fixes are complete and verified, and that the per-item-CSV audit over list-returning modules is complete (only snmp had the collapse defect).
-- This is bounded and verifiable (edit only; no test impact). No code/tooling change required.
-- Evidence: all four modules now emit `record_type`-discriminated rows preserving per-item data; full suite green (2842 passed).
+**None outstanding.** All five CSV data-loss fixes (dnssec/geo/ntp/snmp/netbios) are implemented, tested, and verified green. The per-item-CSV audit over all list-returning modules is complete.
 
 ## Notes for the next agent
-- `git config user.name/email` is set to `kilo-autonomous`. Edits for this session are uncommitted in the working tree (`ethscan/snmp.py` and `tests/test_snmp.py` only).
+- `git config user.name/email` is set to `kilo-autonomous`. Edits for this session are uncommitted in the working tree (`ethscan/netbios.py`, `tests/test_netbios.py`, `tests/test_cli.py`, `TASK.md`, `HANDOFF_NEXT.md`, `NEXT_TASK.md`).
 - No lint/typecheck tooling is configured (`pyproject.toml` has only `[tool.pytest.ini_options]`); `requirements.txt` is `click` + `pyyaml`. Verification command: `python -m pytest -q`.
 - Repo CSV convention (preserve): unified header with `record_type` discriminator + one row per item + empty fillers for non-applicable fields + stdlib `csv.writer` quoting; repeat target-level context on each row for self-containment; keep `target,host,port,...` header prefix where existing CLI tests assert substrings.

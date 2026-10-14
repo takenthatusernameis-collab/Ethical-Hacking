@@ -18451,7 +18451,7 @@ def test_netbios_output_format_csv(monkeypatch) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["netbios", "--target", "192.168.1.100", "--output-format", "csv", "--timeout", "1.0"])
     assert result.exit_code == 0
-    assert "target,host,port,mac,names,num_names" in result.output
+    assert "target,host,port,mac,queried_name,queried_suffix,num_names" in result.output
     assert "192.168.1.100" in result.output
     assert "aa:bb:cc:dd:ee:ff" in result.output
     assert "MYHOST" in result.output
@@ -18480,7 +18480,7 @@ def test_netbios_output_format_csv_out(tmp_path, monkeypatch) -> None:
     assert result.exit_code == 0
     assert "Report written" in result.output
     content = out_file.read_text()
-    assert "target,host,port,mac,names,num_names" in content
+    assert "target,host,port,mac,queried_name,queried_suffix,num_names" in content
     assert "192.168.1.100" in content
 
 
@@ -18504,7 +18504,7 @@ def test_netbios_format_csv_alias(monkeypatch) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["netbios", "--target", "192.168.1.100", "--format", "csv", "--timeout", "1.0"])
     assert result.exit_code == 0
-    assert "target,host,port,mac,names,num_names" in result.output
+    assert "target,host,port,mac,queried_name,queried_suffix,num_names" in result.output
 
 
 def test_netbios_output_format_default_is_json(monkeypatch) -> None:
