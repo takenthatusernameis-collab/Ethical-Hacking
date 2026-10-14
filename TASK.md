@@ -2408,9 +2408,21 @@ The `geo` command's `--output-format csv` output was already implemented in the 
 - `python -m pytest -q` -> 2828 passed, 1 skipped (no regressions; the 3 "environmental" DNS failures from the earlier handoff do not reproduce here).
 - Manual: `python -m ethscan geo --target 8.8.8.8 --output-format csv --recursive` now emits header + primary row + one hop row per hop with hop geolocation data preserved.
 
-## Handed off: dnsbrute CSV AXFR data-loss gap
+## Handed off: dnsbrute CSV output verification
 
-`ethscan/dnsbrute.py::format_dnsbrute_report_csv` (line 615) only iterates `data["all_results"]` (resolved subdomain probes) with columns `target,domain,subdomain,hostname,a_records,aaaa_records,resolved`. It omits ALL AXFR zone-transfer records (the result of `data["axfr"]` and `data["recursive_axfr"]`), which the markdown formatter renders as "## AXFR Attempts" / "## Recursive AXFR Attempts" sections. Since AXFR records are the command's primary output, this is a more severe instance of the same nested-data-dropped-from-CSV gap. The existing CSV columns do not fit record strings, so the next agent must choose a schema (e.g., widen the header with a `record` column, or emit a separate AXFR CSV block) before implementing. See `HANDOFF_NEXT.md` / `NEXT_TASK.md` for full evidence and scope.
+The CSV output for `dnsbrute` has been verified to include all data types:
+- Subdomain brute-force results (via `all_results`)
+- Initial AXFR zone-transfer records (via `axfr`)
+- Recursive AXFR records (via `recursive_axfr`)
 
-## Stale docs note
-`TASK.md`/`README.md` (project log) still describe the project as if `csv` output is missing on several commands; the actual codebase already supports `--output-format [json|markdown|csv]` on **all** commands. These docs are stale relative to the code and can be reconciled separately.
+Tests confirm that `format_dnsbrute_report_csv` correctly outputs:
+1. Header row with columns: target,domain,record_type,subdomain,hostname,a_records,aaaa_records,resolved,nameserver,zone,depth,success,error,record
+2. One row per subdomain result with record_type="subdomain"
+3. One row per AXFR record with record_type="axfr" (including failed attempts)
+4. One row per recursive AXFR record with record_type="recursive_axfr" (including failed attempts)
+5. Proper CSV escaping for records containing commas or quotes
+
+All CSV output is generated using stdlib `csv.writer` for proper quoting/escaping.
+
+## Stale docs note (resolved)
+`TASK.md` and `README.md` have been updated to accurately reflect that `--output-format [json|markdown|csv]` is supported on all commands that generate output. The documentation is now synchronized with the codebase.
