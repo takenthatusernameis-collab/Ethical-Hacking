@@ -40,6 +40,16 @@ def test_normalize_target_ip() -> None:
     assert _normalize_target("2001:4860:4860::8888") == "2001:4860:4860::8888"
 
 
+def test_normalize_target_ipv6_url() -> None:
+    from ethscan.resolve import _normalize_target, _is_ip_address
+
+    # IPv6 literals in URL form must be returned bare (without surrounding
+    # brackets) so they are recognized as IP addresses for PTR lookups.
+    assert _normalize_target("https://[::1]") == "::1"
+    assert _normalize_target("https://[::1]:8080/") == "::1"
+    assert _is_ip_address(_normalize_target("https://[::1]")) is True
+
+
 def test_is_ip_address() -> None:
     from ethscan.resolve import _is_ip_address
     assert _is_ip_address("8.8.8.8") is True

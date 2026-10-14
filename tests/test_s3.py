@@ -81,6 +81,11 @@ def test_normalize_target_empty() -> None:
     assert _normalize_target("") == ""
 
 
+def test_normalize_target_ipv6_url() -> None:
+    assert _normalize_target("https://[::1]/path") == "::1"
+    assert _normalize_target("http://[fd00::1]:8443/path") == "fd00::1"
+
+
 # ---------------------------------------------------------------------------
 # _build_s3_url
 # ---------------------------------------------------------------------------
