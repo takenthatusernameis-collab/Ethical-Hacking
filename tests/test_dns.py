@@ -1,5 +1,6 @@
 """Tests for the ethscan dns module."""
 
+import threading
 import pytest
 
 from ethscan.dns import (
@@ -92,6 +93,7 @@ def test_run_dns_offline_basic(monkeypatch) -> None:
 
     monkeypatch.setattr("ethscan.dns.resolve_a_records", mock_resolve_a)
     monkeypatch.setattr("ethscan.dns.resolve_aaaa_records", mock_resolve_aaaa)
+    monkeypatch.setattr("ethscan.dns.DNS_AVAILABLE", False)
 
     results = run_dns("example.com", record_types=["A", "AAAA"], timeout=1.0)
     assert results["target"] == "example.com"
@@ -202,3 +204,95 @@ def test_format_dns_report_csv_multiple_types() -> None:
     assert "example.com,example.com,MX,mail.example.com" in lines
     assert "example.com,example.com,NS,ns1.example.com" in lines
     assert "example.com,example.com,NS,ns2.example.com" in lines
+
+
+def test_run_dns_workers_sequential(monkeypatch) -> None:
+    """Test that workers=1 runs sequentially (order preserved)."""
+    call_order = []
+
+    def mock_resolve_a(domain, timeout=2.0):
+        call_order.append(("A", timeout))
+        return ["1.2.3.4"]
+
+    def mock_resolve_aaaa(domain, timeout=2.0):
+        call_order.append(("AAAA", timeout))
+        return ["2001:db8::1"]
+
+    def mock_resolve_with_dnspython(domain, record_type, timeout=2.0):
+        call_order.append((record_type, timeout))
+        return [f"mocked-{record_type}"]
+
+    monkeypatch.setattr("ethscan.dns.resolve_a_records", mock_resolve_a)
+    monkeypatch.setattr("ethscan.dns.resolve_aaaa_records", mock_resolve_aaaa)
+    monkeypatch.setattr("ethscan.dns.resolve_with_dnspython", mock_resolve_with_dnspython)
+
+    # Test with multiple record types
+    results = run_dns(
+        "example.com",
+        record_types=["A", "AAAA", "MX"],
+        timeout=1.0,
+        workers=1,
+    )
+
+    # Check that the functions were called in the order of the input list
+    expected_order = [("A", 1.0), ("AAAA", 1.0), ("MX", 1.0)]
+    assert call_order == expected_order
+
+    # Check results
+    assert results["records"]["A"] == ["1.2.3.4"]
+    assert results["records"]["AAAA"] == ["2001:db8::1"]
+    assert results["records"]["MX"] == ["mocked-MX"]
+
+    # Also check that the records dictionary keys are in the input order
+    assert list(results["records"].keys()) == ["A", "AAAA", "MX"]
+
+
+def test_run_dns_workers_parallel(monkeypatch) -> None:
+    """Test that workers>1 runs in parallel (all record types processed)."""
+    call_order = []
+    call_lock = threading.Lock()
+
+    def mock_resolve_a(domain, timeout=2.0):
+        with call_lock:
+            call_order.append(("A", timeout))
+        return ["1.2.3.4"]
+
+    def mock_resolve_aaaa(domain, timeout=2.0):
+        with call_lock:
+            call_order.append(("AAAA", timeout))
+        return ["2001:db8::1"]
+
+    def mock_resolve_with_dnspython(domain, record_type, timeout=2.0):
+        with call_lock:
+            call_order.append((record_type, timeout))
+        return [f"mocked-{record_type}"]
+
+    monkeypatch.setattr("ethscan.dns.resolve_a_records", mock_resolve_a)
+    monkeypatch.setattr("ethscan.dns.resolve_aaaa_records", mock_resolve_aaaa)
+    monkeypatch.setattr("ethscan.dns.resolve_with_dnspython", mock_resolve_with_dnspython)
+
+    # Test with multiple record types and workers=2
+    results = run_dns(
+        "example.com",
+        record_types=["A", "AAAA", "MX"],
+        timeout=1.0,
+        workers=2,
+    )
+
+    # All three functions should have been called
+    assert len(call_order) == 3
+    # The order of calls may vary due to concurrency, but each should be called once with the correct timeout
+    for call in call_order:
+        assert call[1] == 1.0  # timeout
+    # We can also check that the set of record types called is correct
+    called_types = {call[0] for call in call_order}
+    assert called_types == {"A", "AAAA", "MX"}
+
+    # Check results
+    assert results["records"]["A"] == ["1.2.3.4"]
+    assert results["records"]["AAAA"] == ["2001:db8::1"]
+    assert results["records"]["MX"] == ["mocked-MX"]
+
+    # Additionally, we can check that the records dictionary keys are in the input order
+    # (insertion order preserved)
+    assert list(results["records"].keys()) == ["A", "AAAA", "MX"]

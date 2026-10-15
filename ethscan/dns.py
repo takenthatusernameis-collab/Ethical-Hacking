@@ -3,6 +3,7 @@
 import csv
 import io
 import socket
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Set
 
 try:
@@ -111,6 +112,7 @@ def run_dns(
     record_types: Optional[List[str]] = None,
     server: Optional[str] = None,
     timeout: float = DEFAULT_TIMEOUT,
+    workers: int = 1,
 ) -> Dict[str, object]:
     """Enumerate DNS records for a target domain.
 
@@ -120,6 +122,7 @@ def run_dns(
                       If None, uses DEFAULT_DNS_TYPES (A, AAAA).
         server: Custom DNS resolver IP address (only used with dnspython).
         timeout: Resolution timeout in seconds.
+        workers: Number of concurrent workers (default: 1).
 
     Returns:
         Structured results with target, domain, and records per type.
@@ -127,18 +130,17 @@ def run_dns(
     domain = _normalize_domain(target)
     types = record_types if record_types is not None else DEFAULT_DNS_TYPES
 
-    results: Dict[str, List[str]] = {}
     all_supported = {"A", "AAAA", "MX", "NS", "TXT", "CNAME", "SOA"}
 
-    for rtype in types:
-        rtype_upper = rtype.upper()
-        if rtype_upper not in all_supported:
-            continue
+    # Filter to only supported types, preserving input order
+    valid_types = [rtype.upper() for rtype in types if rtype.upper() in all_supported]
 
-        if rtype_upper == "A":
-            results["A"] = resolve_a_records(domain, timeout)
-        elif rtype_upper == "AAAA":
-            results["AAAA"] = resolve_aaaa_records(domain, timeout)
+    def resolve_type(rtype: str) -> tuple:
+        """Resolve a single record type, returning (rtype, results_list)."""
+        if rtype == "A":
+            return rtype, resolve_a_records(domain, timeout)
+        elif rtype == "AAAA":
+            return rtype, resolve_aaaa_records(domain, timeout)
         elif DNS_AVAILABLE:
             if server:
                 try:
@@ -146,14 +148,29 @@ def run_dns(
                     resolver.timeout = timeout
                     resolver.lifetime = timeout
                     resolver.nameservers = [server]
-                    answers = resolver.resolve(domain, rtype_upper)
-                    results[rtype_upper] = sorted(set(str(rdata) for rdata in answers))
+                    answers = resolver.resolve(domain, rtype)
+                    return rtype, sorted(set(str(rdata) for rdata in answers))
                 except (dns.exception.DNSException, OSError, ValueError):
-                    results[rtype_upper] = []
+                    return rtype, []
             else:
-                results[rtype_upper] = resolve_with_dnspython(domain, rtype_upper, timeout)
+                return rtype, resolve_with_dnspython(domain, rtype, timeout)
         else:
-            results[rtype_upper] = []
+            return rtype, []
+
+    results: Dict[str, List[str]] = {}
+
+    if workers <= 1:
+        for rtype in valid_types:
+            rtype_key, values = resolve_type(rtype)
+            results[rtype_key] = values
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            # Submit all jobs and keep futures in the same order as valid_types
+            futures = [executor.submit(resolve_type, rtype) for rtype in valid_types]
+            # Collect results in the order of valid_types to preserve insertion order
+            for i, rtype in enumerate(valid_types):
+                rtype_key, values = futures[i].result()
+                results[rtype_key] = values
 
     return {
         "target": target,

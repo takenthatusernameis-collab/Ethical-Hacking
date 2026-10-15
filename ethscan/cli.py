@@ -1223,6 +1223,12 @@ def headers(target: str, timeout: float, fmt: str, output_fmt: Optional[str], ou
 )
 @click.option("--timeout", default=2.0, type=float, help="Resolution timeout in seconds")
 @click.option(
+    "--workers",
+    default=1,
+    type=int,
+    help="Number of concurrent workers for parallel record type resolution (default: 1).",
+)
+@click.option(
     "--output-format",
     "output_fmt",
     type=click.Choice(["json", "markdown", "csv"]),
@@ -1247,6 +1253,7 @@ def dns(
     record_types: str,
     server: str,
     timeout: float,
+    workers: int,
     output_fmt: str,
     fmt: str,
     out_path: str,
@@ -1260,7 +1267,7 @@ def dns(
         click.echo(f"Valid types: {', '.join(sorted(valid_types))}")
         return
 
-    results = run_dns(target, record_types=types_list, server=server, timeout=timeout)
+    results = run_dns(target, record_types=types_list, server=server, timeout=timeout, workers=workers)
 
     # --output-format takes precedence over the deprecated --format alias
     chosen_format = output_fmt if output_fmt is not None else fmt

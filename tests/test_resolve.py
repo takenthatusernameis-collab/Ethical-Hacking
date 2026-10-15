@@ -192,6 +192,7 @@ def test_run_resolve_domain_defaults(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.resolve.resolve_a_records", mock_resolve_a)
     monkeypatch.setattr("ethscan.resolve.resolve_aaaa_records", mock_resolve_aaaa)
     monkeypatch.setattr("ethscan.resolve.resolve_cname_records", mock_resolve_cname)
+    monkeypatch.setattr("ethscan.resolve.DNS_AVAILABLE", False)
 
     results = run_resolve("example.com", timeout=1.0)
     assert results["target"] == "example.com"

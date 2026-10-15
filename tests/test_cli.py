@@ -2965,7 +2965,7 @@ def test_cli_help_lists_dns() -> None:
 
 
 def test_dns_offline_target_json(monkeypatch) -> None:
-    def mock_run_dns(target, record_types=None, server=None, timeout=2.0):
+    def mock_run_dns(target, record_types=None, server=None, timeout=2.0, workers=1):
         return {
             "target": target,
             "domain": "example.com",
@@ -2990,7 +2990,7 @@ def test_dns_offline_target_json(monkeypatch) -> None:
 
 
 def test_dns_offline_target_markdown(monkeypatch) -> None:
-    def mock_run_dns(target, record_types=None, server=None, timeout=2.0):
+    def mock_run_dns(target, record_types=None, server=None, timeout=2.0, workers=1):
         return {
             "target": target,
             "domain": "example.com",
@@ -3024,7 +3024,7 @@ def test_dns_offline_target_markdown(monkeypatch) -> None:
 def test_dns_types_option(monkeypatch) -> None:
     called_args = {}
 
-    def mock_run_dns(target, record_types=None, server=None, timeout=2.0):
+    def mock_run_dns(target, record_types=None, server=None, timeout=2.0, workers=1):
         called_args["record_types"] = record_types
         called_args["target"] = target
         return {
@@ -3075,7 +3075,7 @@ def test_dns_unknown_type() -> None:
 def test_dns_server_option(monkeypatch) -> None:
     called_args = {}
 
-    def mock_run_dns(target, record_types=None, server=None, timeout=2.0):
+    def mock_run_dns(target, record_types=None, server=None, timeout=2.0, workers=1):
         called_args["server"] = server
         called_args["target"] = target
         return {
@@ -3106,7 +3106,7 @@ def test_dns_server_option(monkeypatch) -> None:
 
 
 def test_dns_out_option(tmp_path, monkeypatch) -> None:
-    def mock_run_dns(target, record_types=None, server=None, timeout=2.0):
+    def mock_run_dns(target, record_types=None, server=None, timeout=2.0, workers=1):
         return {
             "target": target,
             "domain": "example.com",
@@ -3147,7 +3147,7 @@ def test_dns_help_shows_output_format() -> None:
 
 
 def test_dns_output_format_csv(monkeypatch) -> None:
-    def mock_run_dns(target, record_types=None, server=None, timeout=2.0):
+    def mock_run_dns(target, record_types=None, server=None, timeout=2.0, workers=1):
         return {
             "target": target,
             "domain": "example.com",
@@ -3174,7 +3174,7 @@ def test_dns_output_format_csv(monkeypatch) -> None:
 
 
 def test_dns_output_format_csv_out(tmp_path, monkeypatch) -> None:
-    def mock_run_dns(target, record_types=None, server=None, timeout=2.0):
+    def mock_run_dns(target, record_types=None, server=None, timeout=2.0, workers=1):
         return {
             "target": target,
             "domain": "example.com",
@@ -3211,7 +3211,7 @@ def test_dns_output_format_csv_out(tmp_path, monkeypatch) -> None:
 
 
 def test_dns_format_csv_alias(monkeypatch) -> None:
-    def mock_run_dns(target, record_types=None, server=None, timeout=2.0):
+    def mock_run_dns(target, record_types=None, server=None, timeout=2.0, workers=1):
         return {
             "target": target,
             "domain": "example.com",
@@ -3234,7 +3234,7 @@ def test_dns_format_csv_alias(monkeypatch) -> None:
 
 
 def test_dns_output_format_default_is_json(monkeypatch) -> None:
-    def mock_run_dns(target, record_types=None, server=None, timeout=2.0):
+    def mock_run_dns(target, record_types=None, server=None, timeout=2.0, workers=1):
         return {
             "target": target,
             "domain": "example.com",
@@ -3257,7 +3257,7 @@ def test_dns_output_format_default_is_json(monkeypatch) -> None:
 
 
 def test_dns_output_format_precedence_over_format(monkeypatch) -> None:
-    def mock_run_dns(target, record_types=None, server=None, timeout=2.0):
+    def mock_run_dns(target, record_types=None, server=None, timeout=2.0, workers=1):
         return {
             "target": target,
             "domain": "example.com",
@@ -3286,6 +3286,50 @@ def test_dns_output_format_precedence_over_format(monkeypatch) -> None:
     assert result.exit_code == 0
     # --output-format wins even though --format json is also given.
     assert result.output.strip().startswith("target,domain,record_type,record_value")
+
+
+def test_dns_workers_option(monkeypatch) -> None:
+    """Test that --workers option is present and passes value correctly."""
+    called_args = {}
+
+    def mock_run_dns(target, record_types=None, server=None, timeout=2.0, workers=1):
+        called_args.update(
+            {
+                "target": target,
+                "record_types": record_types,
+                "server": server,
+                "timeout": timeout,
+                "workers": workers,
+            }
+        )
+        return {
+            "target": target,
+            "domain": "example.com",
+            "record_types_queried": record_types or ["A", "AAAA"],
+            "records": {"A": ["93.184.216.34"]},
+            "dnspython_available": False,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_dns", mock_run_dns)
+
+    runner = CliRunner()
+    # Test help shows --workers option
+    result = runner.invoke(cli, ["dns", "--help"])
+    assert result.exit_code == 0
+    assert "--workers" in result.output
+
+    # Test default workers=1
+    result = runner.invoke(cli, ["dns", "--target", "example.com", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert called_args["workers"] == 1
+
+    # Test explicit --workers 2
+    result = runner.invoke(
+        cli,
+        ["dns", "--target", "example.com", "--workers", "2", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert called_args["workers"] == 2
 
 
 def test_ssl_help() -> None:
