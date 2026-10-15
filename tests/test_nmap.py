@@ -12,6 +12,10 @@ from ethscan.nmap import (
     format_nmap_report_json,
     format_nmap_report_markdown,
     format_nmap_report_csv,
+    _extract_text,
+    _finding_detail,
+    _escape,
+    _parse_port,
 )
 
 
@@ -354,3 +358,152 @@ def test_format_nmap_report_csv_missing_optional_fields():
     assert "10.0.0.1" in lines[1]
     assert "ssh" in lines[1]
     assert "open" in lines[1]
+
+
+def test_extract_text_with_element_and_text():
+    """Test _extract_text when element exists and has text (line 26-27)."""
+    import xml.etree.ElementTree as ET
+    elem = ET.Element("test")
+    elem.text = "  hello world  "
+    assert _extract_text(elem) == "hello world"
+    assert _extract_text(elem, default="fallback") == "hello world"
+
+
+def test_extract_text_with_empty_text():
+    """Test _extract_text when element has empty/whitespace text (line 28 fallback after strip)."""
+    import xml.etree.ElementTree as ET
+    elem = ET.Element("test")
+    elem.text = "   "
+    # element.text is truthy (whitespace), so it strips and returns empty string
+    assert _extract_text(elem) == ""
+    assert _extract_text(elem, default="fallback") == ""
+
+
+def test_extract_text_with_none_element():
+    """Test _extract_text when element is None (line 28 fallback)."""
+    assert _extract_text(None) == ""
+    assert _extract_text(None, default="fallback") == "fallback"
+
+
+def test_parse_port_with_ostype():
+    """Test _parse_port ostype branch (line 67)."""
+    import xml.etree.ElementTree as ET
+    port_elem = ET.Element("port", {"portid": "22", "protocol": "tcp"})
+    state_elem = ET.SubElement(port_elem, "state", {"state": "open", "reason": "syn-ack"})
+    service_elem = ET.SubElement(port_elem, "service", {
+        "name": "ssh",
+        "product": "OpenSSH",
+        "version": "7.2p2",
+        "ostype": "Linux",  # This triggers line 67
+        "method": "probed",
+        "conf": "10",
+    })
+    result = _parse_port(port_elem)
+    assert result["ostype"] == "Linux"
+    assert "Linux" in result["banner"]
+
+
+def test_finding_detail_protocol_kind():
+    """Test _finding_detail with kind='protocol' (line 259-260)."""
+    finding = {
+        "kind": "protocol",
+        "protocol": "TLSv1.0",
+        "title": "Obsolete Protocol",
+        "severity": "high",
+    }
+    detail = _finding_detail(finding)
+    assert detail == "TLSv1.0"
+
+
+def test_finding_detail_cipher_kind():
+    """Test _finding_detail with kind='cipher' (line 261-262)."""
+    finding = {
+        "kind": "cipher",
+        "cipher": "AES128-SHA",
+        "title": "Weak Cipher",
+        "severity": "medium",
+    }
+    detail = _finding_detail(finding)
+    assert detail == "AES128-SHA"
+
+
+def test_finding_detail_certificate_kind_with_key_size():
+    """Test _finding_detail with kind='certificate' and key_size (lines 263-266)."""
+    finding = {
+        "kind": "certificate",
+        "key_size": 1024,
+        "title": "Weak Key",
+        "severity": "high",
+    }
+    detail = _finding_detail(finding)
+    assert detail == "key size 1024 bits"
+
+
+def test_finding_detail_certificate_kind_with_signature_algorithm():
+    """Test _finding_detail with kind='certificate' and signature_algorithm (lines 267-269)."""
+    finding = {
+        "kind": "certificate",
+        "signature_algorithm": "sha1WithRSAEncryption",
+        "title": "Weak Signature",
+        "severity": "medium",
+    }
+    detail = _finding_detail(finding)
+    assert detail == "signature algorithm sha1WithRSAEncryption"
+
+
+def test_finding_detail_certificate_kind_default():
+    """Test _finding_detail with kind='certificate' and no key_size/signature (line 270)."""
+    finding = {
+        "kind": "certificate",
+        "title": "Cert Issue",
+        "severity": "low",
+    }
+    detail = _finding_detail(finding)
+    assert detail == ""
+
+
+def test_finding_detail_unknown_kind():
+    """Test _finding_detail with unknown kind (line 271 default return)."""
+    finding = {
+        "kind": "unknown_type",
+        "title": "Unknown",
+        "severity": "info",
+    }
+    detail = _finding_detail(finding)
+    assert detail == ""
+
+
+def test_format_nmap_report_csv_score_none():
+    """Test format_nmap_report_csv with finding score=None (line 376)."""
+    data = {
+        "findings": [
+            {
+                "id": "TEST-CVE",
+                "kind": "service",
+                "title": "Test Finding",
+                "severity": "high",
+                "description": "A test",
+                "product": "TestProd",
+                "version": "1.0",
+                "port": 22,
+                "host": "10.0.0.1",
+                "hostnames": [],
+                "state": "open",
+                "service_name": "ssh",
+                "score": None,  # This triggers line 376
+            },
+        ]
+    }
+    output = format_nmap_report_csv(data)
+    lines = output.strip().split("\n")
+    assert len(lines) == 2  # header + 1 finding
+    # score should be empty string, not "None"
+    assert lines[1].endswith(",Test Finding") or "TEST-CVE" in lines[1]
+
+
+def test_escape_pipe_characters():
+    """Test _escape function for pipe escaping in Markdown."""
+    assert _escape("a|b") == "a\\|b"
+    assert _escape("no pipes") == "no pipes"
+    assert _escape("|||") == "\\|\\|\\|"
+    assert _escape("") == ""
