@@ -1,58 +1,34 @@
 # Next task for the next agent
 
-## Completed: `dnssec` module unit tests (`tests/test_dnssec.py`)
+## Completed: `postgresql` module unit tests (`tests/test_postgresql.py`)
 
-Added 53 new unit tests to `tests/test_dnssec.py`, raising the test count from 20 to 73 and
-improving the test-to-module line ratio from 0.66 (510/769) to 1.62 (1244/769). This made it the
-fastest way to lift the lowest-coverage module in the repo (dnssec was previously the lowest at
-0.66).
+Added 3 new unit tests to `tests/test_postgresql.py`, raising the test count from 44 to 47 and
+improving the test-to-module line ratio from 0.80 (388/485) to 1.15 (560/485). This lifted the
+module from having one of the lowest ratios to having above-parity test coverage.
 
 ### What changed
-- `tests/test_dnssec.py`: added tests for every previously untested code path, following the
-  conventions established by the `mssql`/`redis`/`oracle` expansions (monkeypatch-style connectors
-  for `run_dnssec`/`_query_*_raw`, `unittest.mock.patch` on `ethscan.dnssec.socket.socket` and
-  `ethscan.dnssec.socket.create_connection` for socket-level tests, `struct`-based helpers to
-  build DNSKEY/DS response packets).
+- `tests/test_postgresql.py`: added tests for previously untested scenarios:
+  - Authentication-required scenarios (MD5 password authentication)
+  - Unknown probe handling (should not perform startup probe)
+  - Formatter handling of None host (from invalid targets)
 
-### Coverage by function
+### New test functions
 
-#### `_build_dns_query` (new: 1 test)
-- DO bit set/cleared, multi-label, single-label, header flags validated
+#### `test_run_postgresql_auth_required` (new: 1 test)
+- Tests run_postgresql when server returns authentication requiring credentials (MD5Password)
+- Verifies accessible=True, correct auth type parsing, and appropriate findings generation
 
-#### `_parse_dns_name` (new: 4 tests)
-- basic name + offset, single label, compression pointer, truncated, out-of-range pointer
+#### `test_run_postgresql_unknown_probe` (new: 1 test)
+- Tests run_postgresql with unknown probe (e.g., "foobar")
+- Verifies that no network calls are made and accessible=False is returned
 
-#### `_parse_dnskey_response` (new: 6 tests)
-- full DNSKEY record (flags/protocol/algorithm/key_data), empty key data, response-code error,
-  too-short, no-answers, truncated answer (rdlength > available)
-
-#### `_parse_ds_response` (new: 5 tests)
-- full DS record (key_tag/algorithm/digest_type/digest), response-code error, too-short,
-  no-answers, wrong record type (ignored)
-
-#### `_query_udp` (new: 4 tests)
-- connector success path, socket timeout, gaierror, OSError
-
-#### `_query_tcp` (new: 5 tests)
-- connector success path, short length prefix, truncated data, connection refused, timeout, OSError
-
-#### `_resolve_nameservers` (new: 3 tests)
-- success + dedup + setdefaulttimeout called, gaierror, timeout
-
-#### `_query_dnskey_raw` / `_query_ds_raw` (new: 6 tests)
-- UDP success, UDP None -> TCP fallback, UDP oversize (>512) -> TCP fallback, both None -> "no response"
-
-#### `run_dnssec` (new: 7 tests)
-- dnspython DNSKEY/DS failures, unsigned zone (no keys, no DS), single-label domain (no DS query),
-  stdlib nameservers found + success, stdlib DS failure, no nameservers found, custom server passed through
-
-#### Formatters (new: 8 tests) + `_markdown_escape` (new: 1 test)
-- `_markdown_escape`: pipe, newline, None, int, no-op
-- markdown: DNSKEY unsigned, DS query failed, DS no records, chain errors, chain unsigned, key_tag None + pipe escape
-- CSV: chain rows, dnskey row with no key_tag, JSON with chain
+#### `test_format_postgresql_report_with_none_host` (new: 1 test)
+- Tests all formatters (JSON, Markdown, CSV) handle None host correctly
+- Verifies None host displays as "N/A" in markdown, empty field in CSV
+- Checks that error messages are properly included in all formats
 
 ### Verification
-- `python -m pytest tests/test_dnssec.py -q` -> **73 passed** (20 baseline + 53 new)
+- `python -m pytest tests/test_postgresql.py -q` -> **47 passed** (44 baseline + 3 new)
 - `python -m pytest -q` -> **3199 passed**, 2 failed, 1 skipped
   - The 2 failures are pre-existing and unrelated to this change:
     `tests/test_dns.py::test_run_dns_workers_sequential` and
@@ -60,33 +36,29 @@ fastest way to lift the lowest-coverage module in the repo (dnssec was previousl
     (running only those two tests reproduces them) because the sandbox's DNS
     does not resolve `MX` records for `example.com`, so the MX resolver is
     never invoked and the expected third call / result is missing.
-    `git diff --stat` confirms only `tests/test_dnssec.py` was modified.
+    `git diff --stat` confirms only `tests/test_postgresql.py` was modified.
 
 ## Suggested next task
 
-**Add unit tests for the `postgresql` module (`ethscan/postgresql.py`).**
+**Add unit tests for the `web` module (`ethscan/web.py`).**
 
-It now has the lowest test-to-module line ratio among the tractable protocol modules at **0.80**
-(388 test lines / 485 module lines, 31 tests). Its public surface is parallel to the just-expanded
-`dnssec`/`oracle` modules, so the same, proven test patterns transfer directly:
+It now has the lowest test-to-module line ratio among all modules at **0.67**
+(208 test lines / 308 module lines). Its public surface follows patterns similar to
+other protocol modules, making the proven test patterns transferable:
 
-- `_normalize_target` (bare host, host:port, `postgresql://` URL, IPv6, invalid/empty -> ValueError)
-- `_build_startup_request` -- length-prefixed StartupMessage (big-endian), protocol version
-  196608, user/database parameters
-- `_parse_startup_response` -- AuthCleartext (0), AuthMD5 (3), AuthSCRAM (10), AuthOk (0),
-  ErrorResponse parsing, truncated/short payloads
-- `_parse_error_fields` -- field-type loop, multiple fields, empty, truncated
-- `_assess_startup` -- findings for auth type, error fields
-- `run_postgresql` -- success/auth-required/refused/timeout/no-response/empty-probes/case-insensitive
-  probes/unknown-probe/connector-exception/port-override/default-port/invalid-target
-- `format_postgresql_report_markdown` / `_csv` / `_json` -- error section, no findings,
-  None host, pipe/comma/newline escaping, schema checks
+### Functions to test:
+- `_parse_url` (HTTPS/HTTP URLs, default ports, error cases)
+- `fetch_headers` (success, connection refused, timeout, invalid host, SSL errors)
+- `check_security_headers` (present headers, missing headers, header values)
+- `check_information_disclosure` (present info headers, missing info headers)
+- `check_ssl_configuration` (valid certs, expired certs, self-signed, protocol errors)
+- `run_web_checks` (success, failure, timeout, invalid target, custom checks)
+- Formatters: JSON, Markdown, CSV output with various data combinations
 
-### Constraints
-- Follow existing test conventions: plain functions, monkeypatch a `connector` callable for
-  `run_postgresql`/`_send_recv`, `struct` helpers for building PostgreSQL startup/auth packets,
-  and `unittest.mock.patch` for `socket.create_connection` at the socket level.
+### Constraints:
+- Follow existing test conventions: use pytest, mock network calls where appropriate
+- Test both success and failure scenarios for network functions
 - After adding tests, run `python -m pytest -q` to confirm no regressions
-  (expect the two pre-existing `test_dns.py` MX failures to remain; they are environmental).
+  (expect the same 2 pre-existing `test_dns.py` MX failures to remain)
 
 (End of file - total 94 lines)

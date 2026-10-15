@@ -480,3 +480,81 @@ def test_format_postgresql_report_markdown_no_parameters():
     out = format_postgresql_report_markdown(data)
     assert "# PostgreSQL Reconnaissance Report" in out
     assert "No notable findings" in out
+
+
+def test_run_postgresql_auth_required():
+    """Test run_postgresql when authentication is required (e.g., MD5 password)."""
+    # Simulate server responding with MD5 password authentication request
+    def connector(host, port, request, timeout):
+        # Return greeting with MD5 authentication request (code 3)
+        greeting = (
+            _pg_parameter_status("server_version", "13.2")
+            + _pg_authentication(3)  # MD5Password
+            + _pg_backend_key_data(12345)
+            + _pg_msg(b"Z", b"I")  # ReadyForQuery
+        )
+        return greeting, None
+
+    results = run_postgresql("localhost:5432", connector=connector)
+    assert results["accessible"] is True
+    assert results["host"] == "localhost"
+    assert results["port"] == 5432
+    assert results["version"] == "13.2"
+    assert results["startup"]["auth_type_name"] == "MD5Password"
+    assert results["startup"]["auth_type_code"] == 3
+    # Should have findings about version and authentication method
+    findings = results["findings"]
+    assert any("PostgreSQL server version: 13.2" in f for f in findings)
+    assert any("Authentication method: MD5Password (code 3)" in f for f in findings)
+
+
+def test_run_postgresql_unknown_probe():
+    """Test run_postgresql with an unknown probe (should not perform startup probe)."""
+    called = {"n": 0}
+
+    def connector(host, port, request, timeout):
+        called["n"] += 1
+        # This should not be called for unknown probe
+        return _pg_greeting("13.2"), None
+
+    # Pass an unknown probe that's not "startup"
+    results = run_postgresql("localhost", probes=["foobar", "unknown"], connector=connector)
+    assert results["accessible"] is False  # No probes were performed
+    assert results["version"] is None
+    assert results["startup"] == {}
+    assert results["error"] is None
+    assert called["n"] == 0  # Connector should not have been called
+
+
+def test_format_postgresql_report_with_none_host():
+    """Test formatters handle None host (from invalid target)."""
+    data = {
+        "target": "invalid://",
+        "host": None,
+        "port": 5432,
+        "accessible": False,
+        "startup": {},
+        "version": None,
+        "findings": [],
+        "error": "Could not parse host",
+    }
+
+    # Test JSON formatter
+    json_out = format_postgresql_report_json(data)
+    assert json.loads(json_out) == data
+
+    # Test markdown formatter
+    md_out = format_postgresql_report_markdown(data)
+    assert "# PostgreSQL Reconnaissance Report" in md_out
+    assert "**Host:** N/A" in md_out  # None host should show as N/A
+    assert "**Accessible:** No" in md_out
+    assert "**Error:** Could not parse host" in md_out
+
+    # Test CSV formatter
+    csv_out = format_postgresql_report_csv(data)
+    lines = csv_out.strip().split("\n")
+    assert lines[0].rstrip("\r") == "target,host,port,accessible,version,auth_type,process_id,findings,error"
+    assert "invalid://" in lines[1]
+    assert "" in lines[1]  # Empty host field
+    assert "false" in lines[1]  # accessible=false
+    assert "Could not parse host" in lines[1]  # error in last field
