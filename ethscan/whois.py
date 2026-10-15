@@ -5,11 +5,22 @@ import io
 import re
 import socket
 from typing import Dict, List, Optional
+from urllib.parse import urlparse
 
 
 DEFAULT_WHOIS_SERVER = "whois.iana.org"
 DEFAULT_TIMEOUT = 5.0
 DEFAULT_RECURSIVE_DEPTH = 2
+
+
+def _normalize_target(target: str) -> str:
+    """Extract a bare hostname or IP from a target that may be a URL."""
+    normalized = target.strip()
+    if "://" not in normalized:
+        normalized = "http://" + normalized
+    parsed = urlparse(normalized)
+    host = (parsed.hostname or parsed.netloc or "").lower()
+    return host
 
 
 def query_whois(
