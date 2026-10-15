@@ -2,14 +2,31 @@
 
 import csv
 import io
+import json
+import socket
+import struct
 
 import pytest
+from unittest.mock import ANY, MagicMock, patch
 
 from ethscan.dnssec import (
     DEFAULT_TIMEOUT,
     ALGORITHM_NAMES,
     DIGEST_TYPE_NAMES,
     DNS_AVAILABLE,
+    DNSKEY_QTYPE,
+    DS_QTYPE,
+    _build_dns_query,
+    _get_parent_zone,
+    _markdown_escape,
+    _parse_dns_name,
+    _parse_dnskey_response,
+    _parse_ds_response,
+    _query_dnskey_raw,
+    _query_ds_raw,
+    _query_tcp,
+    _query_udp,
+    _resolve_nameservers,
     format_dnssec_report_csv,
     format_dnssec_report_json,
     format_dnssec_report_markdown,
@@ -508,3 +525,659 @@ def test_format_dnssec_report_csv_escaping() -> None:
     # csv.reader un-escapes; verify round-trip preserves the original values
     assert reader[1][4] == 'ex,am"ple.com.'
     assert reader[2][10] == 'ab,cd"ef'
+
+
+def test_build_dns_query():
+    q = _build_dns_query("example.com", DNSKEY_QTYPE, True)
+    assert struct.unpack(">H", q[2:4])[0] == 0x8100
+    assert q[12:] == b"\x07example\x03com\x00" + struct.pack(">HH", DNSKEY_QTYPE, 1)
+    q2 = _build_dns_query("example.com", DS_QTYPE, False)
+    assert struct.unpack(">H", q2[2:4])[0] == 0x0100
+    q3 = _build_dns_query("com", DNSKEY_QTYPE, True)
+    assert q3[12:] == b"\x03com\x00" + struct.pack(">HH", DNSKEY_QTYPE, 1)
+    q4 = _build_dns_query("sub.example.com", DS_QTYPE, True)
+    assert q4[12:] == b"\x03sub\x07example\x03com\x00" + struct.pack(">HH", DS_QTYPE, 1)
+
+
+def test_parse_dns_name_basic():
+    name, off = _parse_dns_name(b"\x07example\x03com\x00rest", 0)
+    assert name == "example.com"
+    assert off == 13
+    name, off = _parse_dns_name(b"\x07example\x03com\x00", 0)
+    assert name == "example.com"
+    assert off == 13
+
+
+def test_parse_dns_name_single_label():
+    name, off = _parse_dns_name(b"\x03com\x00tail", 0)
+    assert name == "com"
+    assert off == 5
+
+
+def test_parse_dns_name_compression():
+    question = b"\x07example\x03com\x00" + struct.pack(">HH", DNSKEY_QTYPE, 1)
+    header = struct.pack(">HHHHHH", 0x1234, 0x8000, 1, 1, 0, 0)
+    answer = b"\xc0\x0c" + struct.pack(">HHIH", DNSKEY_QTYPE, 1, 3600, 10) + b"\x00" * 10
+    data = header + question + answer
+    name, off = _parse_dns_name(data, 12)
+    assert name == "example.com"
+
+
+def test_parse_dns_name_truncated():
+    name, off = _parse_dns_name(b"\x07exa", 0)
+    assert name == ""
+    name, off = _parse_dns_name(b"", 0)
+    assert name == ""
+
+
+def test_parse_dns_name_pointer_out_of_range():
+    data = b"\xc0\xff"
+    name, off = _parse_dns_name(data, 0)
+    assert name == ""
+
+
+def _dnskey_response_with_key(key_data: bytes = b"\xde\xad\xbe\xef") -> bytes:
+    question = b"\x07example\x03com\x00" + struct.pack(">HH", DNSKEY_QTYPE, 1)
+    header = struct.pack(">HHHHHH", 0x1234, 0x8000, 1, 1, 0, 0)
+    rdlen = 4 + len(key_data)
+    answer = (
+        b"\xc0\x0c"
+        + struct.pack(">HHIH", DNSKEY_QTYPE, 1, 3600, rdlen)
+        + struct.pack(">HBB", 0x0101, 3, 8)
+        + key_data
+    )
+    return header + question + answer
+
+
+def test_parse_dnskey_response_full():
+    data = _dnskey_response_with_key()
+    res = _parse_dnskey_response(data, "example.com")
+    assert res["success"] is True
+    assert res["error"] is None
+    key = res["keys"][0]
+    assert key["name"] == "example.com"
+    assert key["flags"] == 257
+    assert key["protocol"] == 3
+    assert key["algorithm"] == 8
+    assert key["algorithm_name"] == "RSASHA256"
+    assert key["key_tag"] is None  # dnspython not installed
+    assert key["key_data"] == "deadbeef"
+
+
+def test_parse_dnskey_response_empty_key_data():
+    data = _dnskey_response_with_key(b"")
+    res = _parse_dnskey_response(data, "example.com")
+    assert res["success"] is True
+    assert res["keys"][0]["key_data"] == ""
+
+
+def test_parse_dnskey_response_response_code_error():
+    question = b"\x07example\x03com\x00" + struct.pack(">HH", DNSKEY_QTYPE, 1)
+    data = struct.pack(">HHHHHH", 0x1234, 0x8101, 1, 0, 0, 0) + question
+    res = _parse_dnskey_response(data, "example.com")
+    assert res["success"] is False
+    assert res["error"] == "response code 1"
+
+
+def test_parse_dnskey_response_too_short():
+    res = _parse_dnskey_response(b"\x00\x00", "example.com")
+    assert res["success"] is False
+    assert res["error"] == "response too short"
+
+
+def test_parse_dnskey_response_no_answers():
+    question = b"\x07example\x03com\x00" + struct.pack(">HH", DNSKEY_QTYPE, 1)
+    data = struct.pack(">HHHHHH", 0x1234, 0x8000, 1, 1, 0, 0) + question
+    res = _parse_dnskey_response(data, "example.com")
+    assert res["success"] is True
+    assert res["keys"] == []
+
+
+def test_parse_dnskey_response_truncated_answer():
+    question = b"\x07example\x03com\x00" + struct.pack(">HH", DNSKEY_QTYPE, 1)
+    # rdlength claims 20 bytes but only 4 are present; the parser slices
+    # available data and still emits a key with the bytes it could read.
+    ans = b"\xc0\x0c" + struct.pack(">HHIH", DNSKEY_QTYPE, 1, 3600, 20) + b"\x00\x01\x03\x08"
+    data = struct.pack(">HHHHHH", 0x1234, 0x8000, 1, 1, 0, 0) + question + ans
+    res = _parse_dnskey_response(data, "example.com")
+    assert res["success"] is True
+    assert len(res["keys"]) == 1
+    assert res["keys"][0]["flags"] == 1
+    assert res["keys"][0]["protocol"] == 3
+    assert res["keys"][0]["algorithm"] == 8
+
+
+def _ds_response_with_digest(digest: bytes = b"\xaa\xbb\xcc") -> bytes:
+    question = b"\x07example\x03com\x00" + struct.pack(">HH", DS_QTYPE, 1)
+    header = struct.pack(">HHHHHH", 0x1234, 0x8000, 1, 1, 0, 0)
+    rdlen = 4 + len(digest)
+    answer = (
+        b"\xc0\x0c"
+        + struct.pack(">HHIH", DS_QTYPE, 1, 3600, rdlen)
+        + struct.pack(">HBB", 0x1234, 8, 2)
+        + digest
+    )
+    return header + question + answer
+
+
+def test_parse_ds_response_full():
+    data = _ds_response_with_digest()
+    res = _parse_ds_response(data, "example.com")
+    assert res["success"] is True
+    rec = res["records"][0]
+    assert rec["name"] == "example.com"
+    assert rec["key_tag"] == 0x1234
+    assert rec["algorithm"] == 8
+    assert rec["algorithm_name"] == "RSASHA256"
+    assert rec["digest_type"] == 2
+    assert rec["digest_type_name"] == "SHA-256"
+    assert rec["digest"] == "aabbcc"
+
+
+def test_parse_ds_response_response_code_error():
+    question = b"\x07example\x03com\x00" + struct.pack(">HH", DS_QTYPE, 1)
+    data = struct.pack(">HHHHHH", 0x1234, 0x8102, 1, 0, 0, 0) + question
+    res = _parse_ds_response(data, "example.com")
+    assert res["success"] is False
+    assert res["error"] == "response code 2"
+
+
+def test_parse_ds_response_too_short():
+    res = _parse_ds_response(b"\x00\x00", "example.com")
+    assert res["success"] is False
+    assert res["error"] == "response too short"
+
+
+def test_parse_ds_response_no_answers():
+    question = b"\x07example\x03com\x00" + struct.pack(">HH", DS_QTYPE, 1)
+    data = struct.pack(">HHHHHH", 0x1234, 0x8000, 1, 1, 0, 0) + question
+    res = _parse_ds_response(data, "example.com")
+    assert res["success"] is True
+    assert res["records"] == []
+
+
+def test_parse_ds_response_wrong_record_type():
+    question = b"\x07example\x03com\x00" + struct.pack(">HH", DNSKEY_QTYPE, 1)
+    header = struct.pack(">HHHHHH", 0x1234, 0x8000, 1, 1, 0, 0)
+    digest = b"\xaa\xbb\xcc"
+    rdlen = 4 + len(digest)
+    answer = (
+        b"\xc0\x0c"
+        + struct.pack(">HHIH", DNSKEY_QTYPE, 1, 3600, rdlen)
+        + struct.pack(">HHB", 0x1234, 8, 2)
+        + digest
+    )
+    data = header + question + answer
+    res = _parse_ds_response(data, "example.com")
+    assert res["success"] is True
+    assert res["records"] == []
+
+
+def _mock_udp_sock(recvfrom_ret=None, recvfrom_exc=None):
+    inst = MagicMock()
+    inst.__enter__.return_value = inst
+    if recvfrom_exc is not None:
+        inst.recvfrom.side_effect = recvfrom_exc
+    else:
+        inst.recvfrom.return_value = recvfrom_ret
+    return inst
+
+
+def test_query_udp_success():
+    with patch("ethscan.dnssec.socket.socket") as msock:
+        inst = _mock_udp_sock(recvfrom_ret=(b"resp", ("1.2.3.4", 53)))
+        msock.return_value = inst
+        r = _query_udp("1.2.3.4", b"q", 1.0)
+        assert r == b"resp"
+        inst.sendto.assert_called_once_with(b"q", ("1.2.3.4", 53))
+        inst.settimeout.assert_called_once_with(1.0)
+
+
+def test_query_udp_timeout():
+    with patch("ethscan.dnssec.socket.socket") as msock:
+        inst = _mock_udp_sock(recvfrom_exc=socket.timeout())
+        msock.return_value = inst
+        assert _query_udp("1.2.3.4", b"q", 1.0) is None
+
+
+def test_query_udp_gaierror():
+    with patch("ethscan.dnssec.socket.socket") as msock:
+        inst = _mock_udp_sock(recvfrom_exc=socket.gaierror())
+        msock.return_value = inst
+        assert _query_udp("1.2.3.4", b"q", 1.0) is None
+
+
+def test_query_udp_oserror():
+    with patch("ethscan.dnssec.socket.socket") as msock:
+        inst = _mock_udp_sock(recvfrom_exc=OSError("boom"))
+        msock.return_value = inst
+        assert _query_udp("1.2.3.4", b"q", 1.0) is None
+
+
+def _mock_tcp_sock(recv_side_effect):
+    inst = MagicMock()
+    inst.__enter__.return_value = inst
+    inst.recv.side_effect = recv_side_effect
+    return inst
+
+
+def test_query_tcp_success():
+    with patch("ethscan.dnssec.socket.create_connection") as mconn:
+        inst = _mock_tcp_sock([struct.pack(">H", 5), b"hello"])
+        mconn.return_value = inst
+        r = _query_tcp("1.2.3.4", b"q", 1.0)
+        assert r == b"hello"
+        inst.sendall.assert_called_once_with(struct.pack(">H", 1) + b"q")
+        inst.settimeout.assert_called_once_with(1.0)
+
+
+def test_query_tcp_short_length_prefix():
+    with patch("ethscan.dnssec.socket.create_connection") as mconn:
+        inst = _mock_tcp_sock([b"\x00"])
+        mconn.return_value = inst
+        assert _query_tcp("1.2.3.4", b"q", 1.0) is None
+
+
+def test_query_tcp_truncated_data():
+    with patch("ethscan.dnssec.socket.create_connection") as mconn:
+        inst = _mock_tcp_sock([struct.pack(">H", 10), b"ab", b""])
+        mconn.return_value = inst
+        assert _query_tcp("1.2.3.4", b"q", 1.0) == b"ab"
+
+
+def test_query_tcp_connection_refused():
+    with patch("ethscan.dnssec.socket.create_connection") as mconn:
+        mconn.side_effect = ConnectionRefusedError()
+        assert _query_tcp("1.2.3.4", b"q", 1.0) is None
+
+
+def test_query_tcp_timeout():
+    with patch("ethscan.dnssec.socket.create_connection") as mconn:
+        mconn.side_effect = socket.timeout()
+        assert _query_tcp("1.2.3.4", b"q", 1.0) is None
+
+
+def test_query_tcp_oserror():
+    with patch("ethscan.dnssec.socket.create_connection") as mconn:
+        mconn.side_effect = OSError("unreachable")
+        assert _query_tcp("1.2.3.4", b"q", 1.0) is None
+
+
+def test_resolve_nameservers_success():
+    with patch("ethscan.dnssec.socket.getaddrinfo") as m, \
+         patch("ethscan.dnssec.socket.setdefaulttimeout") as mset:
+        m.return_value = [
+            (2, 1, 6, "", ("9.9.9.9", 53)),
+            (2, 1, 6, "", ("8.8.8.8", 53)),
+            (2, 1, 6, "", ("9.9.9.9", 53)),
+        ]
+        r = _resolve_nameservers("example.com", 1.0)
+        assert sorted(r) == ["8.8.8.8", "9.9.9.9"]
+        mset.assert_called_once_with(1.0)
+
+
+def test_resolve_nameservers_gaierror():
+    with patch("ethscan.dnssec.socket.getaddrinfo", side_effect=socket.gaierror()):
+        assert _resolve_nameservers("bad.invalid", 1.0) == []
+
+
+def test_resolve_nameservers_timeout():
+    with patch("ethscan.dnssec.socket.getaddrinfo", side_effect=socket.timeout()):
+        assert _resolve_nameservers("bad.invalid", 1.0) == []
+
+
+def test_query_dnskey_raw_udp_success():
+    with patch("ethscan.dnssec._query_udp", return_value=b"resp") as mudp, \
+         patch("ethscan.dnssec._parse_dnskey_response", return_value={"success": True, "keys": [], "error": None}) as mp:
+        r = _query_dnskey_raw("1.2.3.4", "example.com", 1.0)
+        assert r == {"success": True, "keys": [], "error": None}
+        mudp.assert_called_once_with("1.2.3.4", ANY, 1.0)
+        mp.assert_called_once_with(b"resp", "example.com")
+
+
+def test_query_dnskey_raw_udp_none_falls_back_to_tcp():
+    with patch("ethscan.dnssec._query_udp", return_value=None) as mudp, \
+         patch("ethscan.dnssec._query_tcp", return_value=b"tcPresp") as mtcp, \
+         patch("ethscan.dnssec._parse_dnskey_response", return_value={"success": True, "keys": [1], "error": None}) as mp:
+        r = _query_dnskey_raw("1.2.3.4", "example.com", 1.0)
+        assert r["success"] is True
+        mtcp.assert_called_once_with("1.2.3.4", ANY, 1.0)
+
+
+def test_query_dnskey_raw_udp_oversize_falls_back_to_tcp():
+    with patch("ethscan.dnssec._query_udp", return_value=b"x" * 600) as mudp, \
+         patch("ethscan.dnssec._query_tcp", return_value=b"tcPresp") as mtcp, \
+         patch("ethscan.dnssec._parse_dnskey_response", return_value={"success": True, "keys": [], "error": None}) as mp:
+        r = _query_dnskey_raw("1.2.3.4", "example.com", 1.0)
+        mtcp.assert_called_once()
+
+
+def test_query_dnskey_raw_both_none():
+    with patch("ethscan.dnssec._query_udp", return_value=None) as mudp, \
+         patch("ethscan.dnssec._query_tcp", return_value=None) as mtcp:
+        r = _query_dnskey_raw("1.2.3.4", "example.com", 1.0)
+        assert r == {"success": False, "keys": [], "error": "no response"}
+
+
+def test_query_ds_raw_udp_success():
+    with patch("ethscan.dnssec._query_udp", return_value=b"resp") as mudp, \
+         patch("ethscan.dnssec._parse_ds_response", return_value={"success": True, "records": [], "error": None}) as mp:
+        r = _query_ds_raw("1.2.3.4", "example.com", 1.0)
+        assert r == {"success": True, "records": [], "error": None}
+        mp.assert_called_once_with(b"resp", "example.com")
+
+
+def test_query_ds_raw_udp_none_falls_back_to_tcp():
+    with patch("ethscan.dnssec._query_udp", return_value=None), \
+         patch("ethscan.dnssec._query_tcp", return_value=b"tcPresp") as mtcp, \
+         patch("ethscan.dnssec._parse_ds_response", return_value={"success": True, "records": [1], "error": None}) as mp:
+        r = _query_ds_raw("1.2.3.4", "example.com", 1.0)
+        assert r["success"] is True
+        mtcp.assert_called_once()
+
+
+def test_query_ds_raw_both_none():
+    with patch("ethscan.dnssec._query_udp", return_value=None), \
+         patch("ethscan.dnssec._query_tcp", return_value=None):
+        r = _query_ds_raw("1.2.3.4", "example.com", 1.0)
+        assert r == {"success": False, "records": [], "error": "no response"}
+
+
+def test_run_dnssec_dnspython_dnskey_failed(monkeypatch):
+    monkeypatch.setattr("ethscan.dnssec.DNS_AVAILABLE", True)
+    monkeypatch.setattr(
+        "ethscan.dnssec._query_dnskey_dnspython",
+        lambda domain, server, timeout: {"success": False, "keys": [], "error": "boom"},
+    )
+    monkeypatch.setattr(
+        "ethscan.dnssec._query_ds_dnspython",
+        lambda domain, server, timeout: {"success": False, "records": [], "error": "boom"},
+    )
+    results = run_dnssec("example.com", timeout=1.0)
+    assert results["validated"] is False
+    assert results["dnspython_available"] is True
+    assert any("DNSKEY query failed: boom" in n for n in results["notes"])
+    assert any("DS query failed: boom" in n for n in results["notes"])
+    assert len(results["chain"]) == 1
+
+
+def test_run_dnssec_dnspython_unsigned_zone(monkeypatch):
+    monkeypatch.setattr("ethscan.dnssec.DNS_AVAILABLE", True)
+    monkeypatch.setattr(
+        "ethscan.dnssec._query_dnskey_dnspython",
+        lambda domain, server, timeout: {"success": True, "keys": [], "error": None},
+    )
+    monkeypatch.setattr(
+        "ethscan.dnssec._query_ds_dnspython",
+        lambda domain, server, timeout: {"success": True, "records": [], "error": None},
+    )
+    results = run_dnssec("example.com", timeout=1.0)
+    assert results["validated"] is False
+    assert any("No DNSKEY records found (unsigned zone)" in n for n in results["notes"])
+    assert any("No DS records found at parent" in n for n in results["notes"])
+    assert len(results["chain"]) == 1
+
+
+def test_run_dnssec_single_label_no_ds_query(monkeypatch):
+    monkeypatch.setattr("ethscan.dnssec.DNS_AVAILABLE", True)
+    called = {"ds": False}
+
+    def fake_dnskey(domain, server, timeout):
+        return {"success": True, "keys": [{"name": "com."}], "error": None}
+
+    def fake_ds(domain, server, timeout):
+        called["ds"] = True
+        return {"success": True, "records": [], "error": None}
+
+    monkeypatch.setattr("ethscan.dnssec._query_dnskey_dnspython", fake_dnskey)
+    monkeypatch.setattr("ethscan.dnssec._query_ds_dnspython", fake_ds)
+    results = run_dnssec("com", timeout=1.0)
+    assert results["validated"] is True
+    assert results["domain"] == "com"
+    assert called["ds"] is False
+    assert len(results["chain"]) == 1
+
+
+def test_run_dnssec_stdlib_nameservers_found(monkeypatch):
+    monkeypatch.setattr("ethscan.dnssec.DNS_AVAILABLE", False)
+    monkeypatch.setattr("ethscan.dnssec._resolve_nameservers", lambda domain, timeout: ["8.8.8.8"])
+    monkeypatch.setattr(
+        "ethscan.dnssec._query_dnskey_raw",
+        lambda ns, domain, timeout: {"success": True, "keys": [1], "error": None},
+    )
+    monkeypatch.setattr(
+        "ethscan.dnssec._query_ds_raw",
+        lambda ns, domain, timeout: {"success": True, "records": [1], "error": None},
+    )
+    results = run_dnssec("example.com", timeout=1.0)
+    assert results["validated"] is True
+    assert results["dnspython_available"] is False
+    assert any("dnspython not installed" in n for n in results["notes"])
+    assert len(results["chain"]) == 2
+
+
+def test_run_dnssec_stdlib_ds_failure(monkeypatch):
+    monkeypatch.setattr("ethscan.dnssec.DNS_AVAILABLE", False)
+    monkeypatch.setattr("ethscan.dnssec._resolve_nameservers", lambda domain, timeout: ["8.8.8.8"])
+    monkeypatch.setattr(
+        "ethscan.dnssec._query_dnskey_raw",
+        lambda ns, domain, timeout: {"success": True, "keys": [1], "error": None},
+    )
+    monkeypatch.setattr(
+        "ethscan.dnssec._query_ds_raw",
+        lambda ns, domain, timeout: {"success": False, "records": [], "error": "no parent"},
+    )
+    results = run_dnssec("example.com", timeout=1.0)
+    assert results["validated"] is True
+    assert any("DS query failed: no parent" in n for n in results["notes"])
+    assert len(results["chain"]) == 1
+
+
+def test_run_dnssec_no_nameservers(monkeypatch):
+    monkeypatch.setattr("ethscan.dnssec.DNS_AVAILABLE", False)
+    monkeypatch.setattr("ethscan.dnssec._resolve_nameservers", lambda domain, timeout: [])
+    results = run_dnssec("example.com", timeout=1.0)
+    assert results["validated"] is False
+    assert results["dnskey"]["error"] == "no nameservers found"
+    assert results["ds"]["error"] == "no nameservers found"
+    assert any("no nameservers found" in n for n in results["notes"])
+
+
+def test_run_dnssec_custom_server(monkeypatch):
+    monkeypatch.setattr("ethscan.dnssec.DNS_AVAILABLE", True)
+    received = {}
+
+    def fake_dnskey(domain, server, timeout):
+        received["server"] = server
+        return {"success": True, "keys": [{"name": "example.com."}], "error": None}
+
+    def fake_ds(domain, server, timeout):
+        received["ds_server"] = server
+        return {"success": True, "records": [{"name": "example.com."}], "error": None}
+
+    monkeypatch.setattr("ethscan.dnssec._query_dnskey_dnspython", fake_dnskey)
+    monkeypatch.setattr("ethscan.dnssec._query_ds_dnspython", fake_ds)
+    run_dnssec("example.com", server="9.9.9.9", timeout=1.0)
+    assert received["server"] == "9.9.9.9"
+    assert received["ds_server"] == "9.9.9.9"
+
+
+def test_markdown_escape():
+    assert _markdown_escape("a|b") == "a\\|b"
+    assert _markdown_escape("a\nb") == "a b"
+    assert _markdown_escape(None) == "None"
+    assert _markdown_escape(42) == "42"
+    assert _markdown_escape("plain") == "plain"
+
+
+def test_format_dnssec_report_markdown_dnskey_unsigned():
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "validated": False,
+        "dnskey": {"success": True, "keys": [], "error": None},
+        "ds": {"success": False, "records": [], "error": "no response"},
+        "chain": [],
+        "notes": [],
+        "dnspython_available": False,
+    }
+    out = format_dnssec_report_markdown(data)
+    assert "*No DNSKEY records found (unsigned zone)*" in out
+    assert "*Query failed: no response*" in out
+
+
+def test_format_dnssec_report_markdown_ds_no_records():
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "validated": False,
+        "dnskey": {"success": True, "keys": [], "error": None},
+        "ds": {"success": True, "records": [], "error": None},
+        "chain": [],
+        "notes": [],
+        "dnspython_available": False,
+    }
+    out = format_dnssec_report_markdown(data)
+    assert "*No DS records found at parent zone*" in out
+
+
+def test_format_dnssec_report_markdown_chain_errors():
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "validated": False,
+        "dnskey": {"success": False, "keys": [], "error": "boom"},
+        "ds": {"success": False, "records": [], "error": "boom"},
+        "chain": [
+            {"zone": "example.com", "dnskey": {"success": False, "keys": [], "error": "boom"}},
+            {"zone": "com", "ds": {"success": False, "records": [], "error": "boom"}},
+        ],
+        "notes": [],
+        "dnspython_available": False,
+    }
+    out = format_dnssec_report_markdown(data)
+    assert "**DNSKEY Error:** boom" in out
+    assert "**DS Error:** boom" in out
+
+
+def test_format_dnssec_report_markdown_chain_unsigned():
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "validated": False,
+        "dnskey": {"success": False, "keys": [], "error": "boom"},
+        "ds": {"success": False, "records": [], "error": "boom"},
+        "chain": [
+            {"zone": "example.com", "dnskey": {"success": True, "keys": [], "error": None}},
+            {"zone": "com", "ds": {"success": True, "records": [], "error": None}},
+        ],
+        "notes": [],
+        "dnspython_available": False,
+    }
+    out = format_dnssec_report_markdown(data)
+    assert "**DNSKEYs:** None (unsigned)" in out
+    assert "**DS Records:** None" in out
+
+
+def test_format_dnssec_report_markdown_key_tag_none_and_pipe_escape():
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "validated": True,
+        "dnskey": {
+            "success": True,
+            "keys": [
+                {
+                    "name": "ex|am.com.",
+                    "flags": 256,
+                    "protocol": 3,
+                    "algorithm_name": "RSASHA256",
+                    "key_tag": None,
+                }
+            ],
+            "error": None,
+        },
+        "ds": {"success": True, "records": [], "error": None},
+        "chain": [],
+        "notes": [],
+        "dnspython_available": False,
+    }
+    out = format_dnssec_report_markdown(data)
+    assert "ex\\|am.com." in out
+    assert "| None |" in out
+
+
+def test_format_dnssec_report_csv_chain_rows():
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "validated": True,
+        "dnskey": {"success": True, "keys": [], "error": None},
+        "ds": {"success": True, "records": [], "error": None},
+        "chain": [
+            {"zone": "example.com", "dnskey": {"success": True, "keys": [{"name": "x"}], "error": None}},
+            {"zone": "com", "ds": {"success": True, "records": [{"name": "y"}], "error": None}},
+        ],
+        "notes": [],
+        "dnspython_available": False,
+    }
+    out = format_dnssec_report_csv(data)
+    reader = list(csv.reader(io.StringIO(out)))
+    assert len(reader) == 5
+    assert [r[3] for r in reader[1:]] == ["dnskey", "ds", "chain", "chain"]
+    assert reader[3][4] == "example.com"
+    assert reader[3][11] == "1"
+    assert reader[3][12] == "true"
+    assert reader[4][4] == "com"
+    assert reader[4][11] == "1"
+    assert reader[4][12] == "true"
+
+
+def test_format_dnssec_report_csv_dnskey_no_key_tag():
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "validated": True,
+        "dnskey": {
+            "success": True,
+            "keys": [
+                {
+                    "name": "ex,am.com.",
+                    "flags": 256,
+                    "protocol": 3,
+                    "algorithm_name": "RSASHA256",
+                    "key_tag": None,
+                }
+            ],
+            "error": None,
+        },
+        "ds": {"success": True, "records": [], "error": None},
+        "chain": [],
+        "notes": [],
+        "dnspython_available": False,
+    }
+    out = format_dnssec_report_csv(data)
+    reader = list(csv.reader(io.StringIO(out)))
+    assert reader[1][4] == "ex,am.com."
+    assert reader[1][8] == "None"
+
+
+def test_format_dnssec_report_json_with_chain():
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "validated": True,
+        "dnskey": {"success": True, "keys": [{"name": "example.com."}], "error": None},
+        "ds": {"success": True, "records": [{"name": "example.com."}], "error": None},
+        "chain": [
+            {"zone": "example.com", "dnskey": {"success": True, "keys": [{}], "error": None}},
+            {"zone": "com", "ds": {"success": True, "records": [{}], "error": None}},
+        ],
+        "notes": ["note"],
+        "dnspython_available": False,
+    }
+    out = format_dnssec_report_json(data)
+    parsed = json.loads(out)
+    assert parsed["validated"] is True
+    assert len(parsed["chain"]) == 2
+    assert parsed["notes"] == ["note"]

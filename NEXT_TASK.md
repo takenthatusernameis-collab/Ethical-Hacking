@@ -1,126 +1,92 @@
 # Next task for the next agent
 
-## Completed: `oracle` module unit tests (`tests/test_oracle.py`)
+## Completed: `dnssec` module unit tests (`tests/test_dnssec.py`)
 
-Added 72 new unit tests to `tests/test_oracle.py`, raising the test count from 14 to 86 and
-improving the test-to-module line ratio from 0.49 (257/528) to 1.71 (903/528). This made it the
-fastest way to lift the lowest-coverage module in the repo (oracle was previously the lowest at 0.49).
+Added 53 new unit tests to `tests/test_dnssec.py`, raising the test count from 20 to 73 and
+improving the test-to-module line ratio from 0.66 (510/769) to 1.62 (1244/769). This made it the
+fastest way to lift the lowest-coverage module in the repo (dnssec was previously the lowest at
+0.66).
 
 ### What changed
-- `tests/test_oracle.py`: added tests for every previously untested code path, following the
-  conventions established by the `mssql`/`redis` expansions (monkeypatch-style connectors for
-  `run_oracle`/`_send_recv`, `unittest.mock.patch` on `ethscan.oracle.socket.create_connection`
-  for socket-level tests, `struct`-based helpers to build TNS Accept/Refuse packets).
+- `tests/test_dnssec.py`: added tests for every previously untested code path, following the
+  conventions established by the `mssql`/`redis`/`oracle` expansions (monkeypatch-style connectors
+  for `run_dnssec`/`_query_*_raw`, `unittest.mock.patch` on `ethscan.dnssec.socket.socket` and
+  `ethscan.dnssec.socket.create_connection` for socket-level tests, `struct`-based helpers to
+  build DNSKEY/DS response packets).
 
 ### Coverage by function
 
-#### `_normalize_target` (new: 7 tests)
-- URL with scheme but no port (oracle:// and tns://) -> DEFAULT_PORT
-- whitespace stripping
-- empty / None target -> ValueError
-- port 0 -> DEFAULT_PORT (port is falsy)
-- URL with path / path+port variants
-- IPv6 URL without port
+#### `_build_dns_query` (new: 1 test)
+- DO bit set/cleared, multi-label, single-label, header flags validated
 
-#### `_build_connect_request` (new: 5 tests)
-- full TNS header fields validated (!HHBBH: length, checksum, type=Connect, reserved, hdr checksum)
-- total length == 58 + len(connect_data)
-- desired/min version fields at offset 8/10
-- all fixed fields (Service Options, SDU=0x0800, TDU=0xFFFF, NT proto, offset=58, max receivable, flags, trace facility, connection id, reserved)
-- connect data placement (offset 58 + length field)
+#### `_parse_dns_name` (new: 4 tests)
+- basic name + offset, single label, compression pointer, truncated, out-of-range pointer
 
-#### `_send_recv` (new: 10 tests)
-- connector success path
-- connector error (exception) -> wrapped "connector error: ..."
-- connector receives all args (host/port/req/timeout)
-- socket.recv timeout (inner) -> (None, None)
-- create_connection timeout (outer) -> "Timeout"
-- ConnectionRefusedError -> "Connection refused"
-- generic OSError -> error string
-- socket success -> sendall called, data returned
-- empty request -> sendall not called
-- no data (server closes) -> (None, None)
-- multi-chunk recv concatenated
+#### `_parse_dnskey_response` (new: 6 tests)
+- full DNSKEY record (flags/protocol/algorithm/key_data), empty key data, response-code error,
+  too-short, no-answers, truncated answer (rdlength > available)
 
-#### `_parse_accept_response` (new: 4 tests)
-- wrong packet type (not 0x02) -> error message
-- payload too short (< 2 bytes for version)
-- version 0 -> "0"
-- empty data -> "too short" error
+#### `_parse_ds_response` (new: 5 tests)
+- full DS record (key_tag/algorithm/digest_type/digest), response-code error, too-short,
+  no-answers, wrong record type (ignored)
 
-#### `_parse_refuse_response` (new: 6 tests)
-- wrong packet type (not 0x04)
-- empty data (< 8 bytes)
-- payload too short (< 4 bytes)
-- data_length mismatch (claimed length > available)
-- zero-length error data
-- binary (non-UTF-8) data decoded with replacement
-- multiple (ERR=...) codes -> first one extracted
+#### `_query_udp` (new: 4 tests)
+- connector success path, socket timeout, gaierror, OSError
 
-#### `_assess_version` (new: 4 tests)
-- None version, no error -> []
-- error only (no version) -> single Error finding
-- empty dict -> []
-- version + error both present
+#### `_query_tcp` (new: 5 tests)
+- connector success path, short length prefix, truncated data, connection refused, timeout, OSError
 
-#### `run_oracle` (new: 12 tests)
-- empty probes -> short-circuits, not accessible, no error, connector not called
-- invalid target ("") -> ValueError caught, error message set
-- no response (connector returns (None, None)) -> "No response from server"
-- response too short (< 8 bytes) -> accessible=True, packet-type error
-- unexpected packet type -> "Unexpected packet type 0xNN"
-- case-insensitive probe names (["VERSION"])
-- whitespace probe names (["  version  "])
-- unknown probe -> not accessible, no error
-- connector raises exception -> error propagated
-- explicit port override (host:port parsed)
-- default port when omitted
-- refuse response -> accessible=True, error propagated
-- None probes -> uses DEFAULT_PROBES
+#### `_resolve_nameservers` (new: 3 tests)
+- success + dedup + setdefaulttimeout called, gaierror, timeout
 
-#### Formatters (new: 12 tests) + `_markdown_escape` (new: 3 tests)
-- `format_oracle_report_markdown`: error section, no-findings case, None host ("N/A"), no-version (section omitted), not-accessible ("No"), with version
-- `format_oracle_report_csv`: header schema, empty version cell, error column populated, comma-in-field escaping (via csv.reader), newline-in-field escaping
-- `format_oracle_report_json`: with error, accessible full result
-- `_markdown_escape` direct: pipe -> backslash-pipe, newline -> space, None -> "None", no-op for plain text
+#### `_query_dnskey_raw` / `_query_ds_raw` (new: 6 tests)
+- UDP success, UDP None -> TCP fallback, UDP oversize (>512) -> TCP fallback, both None -> "no response"
+
+#### `run_dnssec` (new: 7 tests)
+- dnspython DNSKEY/DS failures, unsigned zone (no keys, no DS), single-label domain (no DS query),
+  stdlib nameservers found + success, stdlib DS failure, no nameservers found, custom server passed through
+
+#### Formatters (new: 8 tests) + `_markdown_escape` (new: 1 test)
+- `_markdown_escape`: pipe, newline, None, int, no-op
+- markdown: DNSKEY unsigned, DS query failed, DS no records, chain errors, chain unsigned, key_tag None + pipe escape
+- CSV: chain rows, dnskey row with no key_tag, JSON with chain
 
 ### Verification
-- `python -m pytest tests/test_oracle.py -q` -> **86 passed** (14 baseline + 72 new)
-- `python -m pytest -q` -> **3072 passed**, 2 failed, 1 skipped
+- `python -m pytest tests/test_dnssec.py -q` -> **73 passed** (20 baseline + 53 new)
+- `python -m pytest -q` -> **3199 passed**, 2 failed, 1 skipped
   - The 2 failures are pre-existing and unrelated to this change:
     `tests/test_dns.py::test_run_dns_workers_sequential` and
     `tests/test_dns.py::test_run_dns_workers_parallel`. They fail in isolation
     (running only those two tests reproduces them) because the sandbox's DNS
     does not resolve `MX` records for `example.com`, so the MX resolver is
     never invoked and the expected third call / result is missing.
-    `git diff --stat` confirms only `tests/test_oracle.py` was modified.
+    `git diff --stat` confirms only `tests/test_dnssec.py` was modified.
 
 ## Suggested next task
 
-**Add unit tests for the `mysql` module (`ethscan/mysql.py`).**
+**Add unit tests for the `postgresql` module (`ethscan/postgresql.py`).**
 
-It now has the lowest test-to-module line ratio in the repository at **0.50**
-(249 test lines / 501 module lines, 8 tests). Its public surface is parallel to the
-just-expanded `oracle` module, so the same, proven test patterns transfer directly:
+It now has the lowest test-to-module line ratio among the tractable protocol modules at **0.80**
+(388 test lines / 485 module lines, 31 tests). Its public surface is parallel to the just-expanded
+`dnssec`/`oracle` modules, so the same, proven test patterns transfer directly:
 
-- `_normalize_target` (host, host:port, mysql:// URL, IPv6, invalid/empty -> ValueError)
-- `_send_recv` -- not tested; mirror the oracle/mssql socket tests:
-  `unittest.mock.patch("ethscan.mysql.socket.create_connection")` for the socket
-  timeout/connect/ConnectionRefused/OSError/success/empty-request/multi-chunk cases,
-  plus the connector success/error/args-passed cases.
-- `_parse_handshake` -- best-effort Protocol::HandshakeV10 parser; build minimal
-  MySQL handshake packets with `struct` (server version, protocol version,
-  capabilities, charset, status flags) and test truncated/short payloads.
-- `_assess_handshake` -- findings emitted for version, missing fields, error-only.
-- `run_mysql` -- success/timeout/refused/no-response/empty-probes/case-insensitive
-  probes/unknown-probe/connector-exception/port-override/default-port/invalid-target.
-- `format_mysql_report_markdown` / `_csv` / `_json` -- error section, no findings,
-  None host, pipe/comma/newline escaping, schema checks.
+- `_normalize_target` (bare host, host:port, `postgresql://` URL, IPv6, invalid/empty -> ValueError)
+- `_build_startup_request` -- length-prefixed StartupMessage (big-endian), protocol version
+  196608, user/database parameters
+- `_parse_startup_response` -- AuthCleartext (0), AuthMD5 (3), AuthSCRAM (10), AuthOk (0),
+  ErrorResponse parsing, truncated/short payloads
+- `_parse_error_fields` -- field-type loop, multiple fields, empty, truncated
+- `_assess_startup` -- findings for auth type, error fields
+- `run_postgresql` -- success/auth-required/refused/timeout/no-response/empty-probes/case-insensitive
+  probes/unknown-probe/connector-exception/port-override/default-port/invalid-target
+- `format_postgresql_report_markdown` / `_csv` / `_json` -- error section, no findings,
+  None host, pipe/comma/newline escaping, schema checks
 
 ### Constraints
-- Follow existing test conventions: plain functions, monkeypatch a `connector` callable
-  for `run_mysql`/`_send_recv` (the `_send_recv` connector signature is identical to
-  oracle's), `struct` helpers for building MySQL handshake packets, and
-  `unittest.mock.patch` for `socket.create_connection` at the socket level.
+- Follow existing test conventions: plain functions, monkeypatch a `connector` callable for
+  `run_postgresql`/`_send_recv`, `struct` helpers for building PostgreSQL startup/auth packets,
+  and `unittest.mock.patch` for `socket.create_connection` at the socket level.
 - After adding tests, run `python -m pytest -q` to confirm no regressions
   (expect the two pre-existing `test_dns.py` MX failures to remain; they are environmental).
+
+(End of file - total 94 lines)
