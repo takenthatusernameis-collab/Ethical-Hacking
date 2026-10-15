@@ -2437,3 +2437,45 @@ The previous handoff claimed this task was done; it was not. The README still co
 ### Verification
 - `python -m pytest -q` -> 2857 passed, 4 warnings (pre-existing TLS deprecation warnings).
 - Command coverage check: 53 CLI commands, 53 README entries, 0 missing, 0 extra, 0 duplicates.
+
+## Completed: `redis` module unit tests (test coverage improvement)
+
+Added 75 new unit tests to `tests/test_redis.py`, raising the test count from 17 to 92 and improving the test-to-module line ratio from 0.35 (161/457) to 1.92 (876/457). The redis module (`ethscan/redis.py`, 457 lines) was the most under-tested module in the project.
+
+### What was added
+
+**New imports:** `_assess_dangerous`, `_markdown_escape`, `patch`, `MagicMock` from `unittest.mock`.
+
+**Tests for previously-untested functions:**
+- `_assess_dangerous` (8 tests): bind to 0.0.0.0, localhost bind, no requirepass, requirepass set, dir configured, dbfilename set, multiple findings, no findings
+- `_markdown_escape` (5 tests): pipe escaping, newline replacement, combined, no special chars, non-string input
+- `_send_recv` socket-level failures (4 tests): connector argument pass-through, socket timeout, OSError/connection refused, successful send with mock socket
+
+**Tests for under-tested functions:**
+- `_normalize_target` (6 tests): URL without port, bare host with port, IPv6 brackets without port, whitespace stripping, empty host raises ValueError, URL with path
+- `_build_resp_array` (2 tests): empty args, CONFIG GET command
+- `_parse_resp_simple_string` (2 tests): without newline, direct call
+- `_parse_resp_bulk_string` (4 tests): empty bulk string, non-dollar prefix, no newline, incomplete data
+- `_parse_resp` (9 tests): error type (-), error without newline, integer, invalid integer, integer without newline, bulk string, empty data, null bulk in array, array truncation, invalid count, unknown type
+- `_parse_info` (5 tests): section headers, empty, non-bulk, error response, null bulk string
+- `_parse_config` (5 tests): odd-length array, empty response, non-list, null value, error response
+
+**Tests for `run_redis` edge cases (8 tests):**
+- PING error, INFO error, CONFIG error
+- INFO server fallback to full INFO (success and error)
+- Config-only probes
+- Empty probes defaults to all probes
+- Bytes response for PING (including bulk-string PONG)
+- Custom probe subset
+- Default probes constant
+- Port parsed from target
+
+**Tests for formatters (10 tests):**
+- JSON: with error, with dangerous findings
+- Markdown: with error, full info fields, config fields, dangerous findings list, no findings case, target with pipe
+- CSV: dangerous findings joined, with error, findings newline escaping, missing port defaults to DEFAULT_PORT
+
+### Verification
+- `python -m pytest tests/test_redis.py -q` -> 92 passed
+- `python -m pytest -q` -> 2932 passed, 1 skipped (2857 baseline + 75 new)
+- No warnings, no regressions

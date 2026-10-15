@@ -1,17 +1,6 @@
 # Next task for the next agent
 
-## Completed: README "Brief Features" list deduplication and factual correction
-
-The previous handoff claimed this task was done; it was not. The README still contained 84 duplicate command entries across three format variants, with `hash` appearing 3 times. Fixed by deduplicating to exactly one entry per command (53 entries matching the 53 registered CLI commands) and correcting factual errors found by cross-referencing live `--help` output.
-
-### What changed
-- `README.md`: removed 84 duplicate entries; unified all 53 entries to the detailed format; corrected `hash`, `s3`, `stale`, `completion`, `config` entries; restored the missing `dnsbrute` entry.
-
-### Verification
-- `python -m pytest -q` -> 2857 passed, 4 warnings (pre-existing TLS deprecation warnings).
-- Command coverage check: 53 CLI commands, 53 README entries, 0 missing, 0 extra, 0 duplicates.
-
-## Completed: Fix TLS deprecation warnings in ethscan/tls.py
+## Completed: Fix TLS deprecation warnings in `ethscan/tls.py`
 
 Fixed the pre-existing TLS deprecation warnings by suppressing DeprecationWarning when setting minimum_version and maximum_version to deprecated TLSVersion.TLSv1 and TLSv1.1 in the _build_context function.
 
@@ -22,14 +11,36 @@ Fixed the pre-existing TLS deprecation warnings by suppressing DeprecationWarnin
 - TLS test suite: 27 passed, 0 warnings.
 - Full test suite: 2857 passed, 0 warnings.
 
+## Completed: `redis` module unit tests (test coverage improvement)
+
+Added 75 new unit tests to `tests/test_redis.py`, raising the test count from 17 to 92 and improving the test-to-module line ratio from 0.35 (161/457) to 1.92 (876/457). Covered all previously-untested functions (`_assess_dangerous`, `_markdown_escape`) and all edge cases in RESP parsers, `_send_recv`, `_parse_info`, `_parse_config`, `_normalize_target`, `run_redis`, and all three formatters.
+
+### Verification
+- `python -m pytest tests/test_redis.py -q` -> 92 passed
+- `python -m pytest -q` -> 2932 passed, 1 skipped (2857 baseline + 75 new), 0 warnings
+
 ## Current state
 - All 53 commands implemented and registered.
 - README is now consistent and factually accurate.
-- Tests: 2857 passing (1 skipped).
+- TLS deprecation warnings suppressed.
+- Redis module test coverage improved from 0.35 to 1.92.
+- Tests: 2932 passing (1 skipped).
 - No deprecation warnings in the test suite.
 
 ## Suggested next task
-Add unit tests for the redis module (ethscan/redis.py) to improve test coverage, as it currently has the lowest test-to-module line ratio (0.35). Verify that the tests pass and do not introduce any regressions.
+
+**Add unit tests for the `mssql` module (`ethscan/mssql.py`)** to improve test coverage, as it now has the lowest test-to-module line ratio in the project at 0.41 (286 test lines / 691 module lines).
+
+Key untested areas:
+- `_send_recv` — not tested at all (connector path, socket timeout, OSError)
+- `_build_prelogin_request` — only checks `isinstance(req, bytes)` and `req[0] == 0x12`; does not validate header fields, option structure, or the VERSION/ENCRYPTION/INSTINST/THREADID options
+- `_parse_prelogin_response` — missing encryption values (OFF/ON/NOT SUPPORTED/UNKNOWN), version not 4 bytes, thread_id < 4 bytes, truncated payload, empty instance name, unknown option types, msg_len truncation
+- `_assess_prelogin` — missing encryption OFF/NOT SUPPORTED/UNKNOWN cases, missing fields, None version
+- `run_mssql` — missing empty probes, invalid target (ValueError), no response (None), response-too-short, non-PRELOGIN response, case-insensitive probes, probes with unknown types
+- `format_mssql_report_markdown` — missing error section, no findings case, empty prelogin, None host
+- `format_mssql_report_csv` — only one basic test; missing empty findings, error, and escaping edge cases
+
+The test file already has `_tds_prelogin_resp` and `_add_option` helpers that can be reused for building TDS responses. Use `unittest.mock.patch` to mock `socket` for `_send_recv` socket-level tests, matching the pattern in `tests/test_redis.py`.
 
 Constraints:
 - Follow existing test conventions in the project.
