@@ -2,26 +2,36 @@
 
 import csv
 import io
+import socket
 import ssl
+from unittest.mock import patch, MagicMock
 
 import pytest
 
 from ethscan.tls import (
+    ERROR_MAX_LENGTH,
     COMMON_CIPHERS,
     DEFAULT_PORT,
     DEFAULT_TIMEOUT,
     DEFAULT_WORKERS,
     OBSOLETE_VERSIONS,
     TLS_VERSIONS,
+    _build_context,
+    _cipher_sort_key,
     _normalize_host,
+    _probe,
     _resolve_version,
+    _resolve_versions,
+    _truncate,
+    _version_name,
+    _version_sort_key,
     enumerate_tls,
     format_tls_report_csv,
     format_tls_report_json,
     format_tls_report_markdown,
-    run_tls,
     probe_cipher,
     probe_version,
+    run_tls,
 )
 
 
@@ -587,3 +597,296 @@ def test_format_tls_report_csv_empty() -> None:
     reader = list(csv.reader(io.StringIO(output)))
     assert len(reader) == 1
     assert reader[0][0] == "target"
+
+
+# ---------------------------------------------------------------------------
+# _version_name
+# ---------------------------------------------------------------------------
+
+
+def test_version_name_from_member() -> None:
+    assert _version_name(ssl.TLSVersion.TLSv1) == "TLSv1"
+    assert _version_name(ssl.TLSVersion.TLSv1_2) == "TLSv1_2"
+    assert _version_name(ssl.TLSVersion.TLSv1_3) == "TLSv1_3"
+
+
+def test_version_name_from_string() -> None:
+    assert _version_name("TLSv1") == "TLSv1"
+    assert _version_name("tlsv1.2") == "tlsv1.2"
+    assert _version_name("BOGUS") == "BOGUS"
+
+
+# ---------------------------------------------------------------------------
+# _resolve_versions
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_versions_all_valid() -> None:
+    specs = ["TLSv1", "tls1.2", "TLSv1_3"]
+    assert _resolve_versions(specs) == [
+        ssl.TLSVersion.TLSv1,
+        ssl.TLSVersion.TLSv1_2,
+        ssl.TLSVersion.TLSv1_3,
+    ]
+
+
+def test_resolve_versions_accepts_members() -> None:
+    assert _resolve_versions([ssl.TLSVersion.TLSv1_2, ssl.TLSVersion.TLSv1_3]) == [
+        ssl.TLSVersion.TLSv1_2,
+        ssl.TLSVersion.TLSv1_3,
+    ]
+
+
+def test_resolve_versions_empty_returns_empty() -> None:
+    assert _resolve_versions([]) == []
+
+
+def test_resolve_versions_invalid_raises() -> None:
+    with pytest.raises(ValueError) as excinfo:
+        _resolve_versions(["TLSv1_2", "NOPE", "BOGUS"])
+    msg = str(excinfo.value)
+    assert "Unknown TLS versions" in msg
+    assert "NOPE" in msg
+    assert "BOGUS" in msg
+
+
+# ---------------------------------------------------------------------------
+# _build_context
+# ---------------------------------------------------------------------------
+
+
+def test_build_context_defaults() -> None:
+    ctx = _build_context()
+    assert ctx.check_hostname is False
+    assert ctx.verify_mode == ssl.CERT_NONE
+
+
+def test_build_context_with_version() -> None:
+    ctx = _build_context(version=ssl.TLSVersion.TLSv1_2)
+    assert ctx.minimum_version == ssl.TLSVersion.TLSv1_2
+    assert ctx.maximum_version == ssl.TLSVersion.TLSv1_2
+
+
+def test_build_context_with_cipher(monkeypatch) -> None:
+    calls = []
+
+    def recorder(self, ciphers):
+        calls.append(ciphers)
+
+    monkeypatch.setattr(ssl.SSLContext, "set_ciphers", recorder)
+    ctx = _build_context(cipher="AES128-SHA")
+    assert calls == ["AES128-SHA"]
+    assert ctx.check_hostname is False
+
+
+# ---------------------------------------------------------------------------
+# _probe
+# ---------------------------------------------------------------------------
+
+
+@patch("ethscan.tls.socket.create_connection")
+def test_probe_returns_cipher(mock_create_connection) -> None:
+    mock_sock = MagicMock()
+    mock_create_connection.return_value.__enter__.return_value = mock_sock
+    mock_ctx = MagicMock()
+    mock_ssock = MagicMock()
+    mock_ctx.wrap_socket.return_value.__enter__.return_value = mock_ssock
+    mock_ssock.cipher.return_value = ("AES128-GCM-SHA256", "TLSv1.2")
+
+    cipher_name, protocol = _probe("example.com", 443, mock_ctx, timeout=5.0)
+    assert cipher_name == "AES128-GCM-SHA256"
+    assert protocol == "TLSv1.2"
+    mock_sock.settimeout.assert_called_once_with(5.0)
+    mock_ctx.wrap_socket.assert_called_once_with(mock_sock, server_hostname="example.com")
+
+
+@patch("ethscan.tls.socket.create_connection")
+def test_probe_no_cipher_returns_none(mock_create_connection) -> None:
+    mock_sock = MagicMock()
+    mock_create_connection.return_value.__enter__.return_value = mock_sock
+    mock_ctx = MagicMock()
+    mock_ssock = MagicMock()
+    mock_ctx.wrap_socket.return_value.__enter__.return_value = mock_ssock
+    mock_ssock.cipher.return_value = None
+
+    cipher_name, protocol = _probe("example.com", 443, mock_ctx, timeout=2.0)
+    assert cipher_name is None
+    assert protocol is None
+
+
+@patch("ethscan.tls.socket.create_connection")
+def test_probe_propagates_oserror(mock_create_connection) -> None:
+    mock_create_connection.side_effect = OSError("connection refused")
+    mock_ctx = MagicMock()
+    with pytest.raises(OSError):
+        _probe("example.com", 443, mock_ctx, timeout=1.0)
+
+
+# ---------------------------------------------------------------------------
+# probe_version dispatch
+# ---------------------------------------------------------------------------
+
+
+def test_probe_version_success(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "ethscan.tls._probe",
+        lambda *a, **kw: ("AES128-GCM-SHA256", "TLSv1.2"),
+    )
+    result = probe_version("example.com", 443, ssl.TLSVersion.TLSv1_2, timeout=1.0)
+    assert result["version"] == "TLSv1_2"
+    assert result["supported"] is True
+    assert result["negotiated_cipher"] == "AES128-GCM-SHA256"
+    assert result["negotiated_protocol"] == "TLSv1.2"
+    assert result["error"] is None
+
+
+def test_probe_version_ssl_error(monkeypatch) -> None:
+    def raise_ssl(*args, **kwargs):
+        raise ssl.SSLError("SSLV3_ALERT_HANDSHAKE_FAILURE")
+
+    monkeypatch.setattr("ethscan.tls._probe", raise_ssl)
+    result = probe_version("example.com", 443, ssl.TLSVersion.TLSv1_2, timeout=1.0)
+    assert result["version"] == "TLSv1_2"
+    assert result["supported"] is False
+    assert result["error"] is not None
+    assert "SSLV3_ALERT_HANDSHAKE_FAILURE" in result["error"]
+
+
+def test_probe_version_oserror(monkeypatch) -> None:
+    def raise_os(*args, **kwargs):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr("ethscan.tls._probe", raise_os)
+    result = probe_version("example.com", 443, ssl.TLSVersion.TLSv1_2, timeout=1.0)
+    assert result["supported"] is False
+    assert result["error"] == "connection refused"
+
+
+# ---------------------------------------------------------------------------
+# probe_cipher dispatch
+# ---------------------------------------------------------------------------
+
+
+def test_probe_cipher_success(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "ethscan.tls._probe",
+        lambda *a, **kw: ("AES128-GCM-SHA256", "TLSv1.2"),
+    )
+    result = probe_cipher("example.com", 443, "AES128-GCM-SHA256", timeout=1.0)
+    assert result["cipher"] == "AES128-GCM-SHA256"
+    assert result["supported"] is True
+    assert result["negotiated_version"] == "TLSv1.2"
+    assert result["error"] is None
+
+
+def test_probe_cipher_ssl_error(monkeypatch) -> None:
+    def raise_ssl(*args, **kwargs):
+        raise ssl.SSLError("bad decrypt")
+
+    monkeypatch.setattr("ethscan.tls._probe", raise_ssl)
+    result = probe_cipher("example.com", 443, "AES128-SHA", timeout=1.0)
+    assert result["cipher"] == "AES128-SHA"
+    assert result["supported"] is False
+    assert result["error"] is not None
+    assert "bad decrypt" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# _truncate
+# ---------------------------------------------------------------------------
+
+
+def test_truncate_short_message() -> None:
+    assert _truncate("short") == "short"
+
+
+def test_truncate_exact_limit() -> None:
+    message = "a" * ERROR_MAX_LENGTH
+    assert _truncate(message) == message
+
+
+def test_truncate_long_message_default_limit() -> None:
+    message = "x" * (ERROR_MAX_LENGTH + 50)
+    truncated = _truncate(message)
+    assert len(truncated) == ERROR_MAX_LENGTH
+    assert truncated.endswith("...")
+    assert truncated == "x" * (ERROR_MAX_LENGTH - 3) + "..."
+
+
+def test_truncate_long_message_custom_limit() -> None:
+    message = "y" * 100
+    truncated = _truncate(message, limit=30)
+    assert len(truncated) == 30
+    assert truncated.endswith("...")
+
+
+# ---------------------------------------------------------------------------
+# _version_sort_key / _cipher_sort_key
+# ---------------------------------------------------------------------------
+
+
+def test_version_sort_key_known() -> None:
+    assert _version_sort_key("TLSv1") == TLS_VERSIONS.index(ssl.TLSVersion.TLSv1)
+    assert _version_sort_key("TLSv1_2") == TLS_VERSIONS.index(ssl.TLSVersion.TLSv1_2)
+    assert _version_sort_key("TLSv1_3") == TLS_VERSIONS.index(ssl.TLSVersion.TLSv1_3)
+
+
+def test_version_sort_key_unknown() -> None:
+    sentinel = len(TLS_VERSIONS)
+    assert _version_sort_key("SSLv3") == sentinel
+    assert _version_sort_key("BOGUS") == sentinel
+
+
+def test_cipher_sort_key_known() -> None:
+    assert _cipher_sort_key("AES128-SHA") == 0
+    assert _cipher_sort_key("AES256-GCM-SHA384") == COMMON_CIPHERS.index("AES256-GCM-SHA384")
+
+
+def test_cipher_sort_key_unknown() -> None:
+    sentinel = len(COMMON_CIPHERS)
+    assert _cipher_sort_key("SOME-CIPHER") == sentinel
+    assert _cipher_sort_key("") == sentinel
+
+
+# ---------------------------------------------------------------------------
+# enumerate_tls notes
+# ---------------------------------------------------------------------------
+
+
+def test_enumerate_tls_note_versions_without_ciphers(monkeypatch) -> None:
+    def mock_probe_version(host, port, version, timeout=DEFAULT_TIMEOUT):
+        return {
+            "version": version.name,
+            "supported": True,
+            "error": None,
+            "negotiated_cipher": "AES128-SHA",
+            "negotiated_protocol": "TLSv1",
+        }
+
+    def mock_probe_cipher(host, port, cipher, timeout=DEFAULT_TIMEOUT):
+        return {
+            "cipher": cipher,
+            "supported": False,
+            "error": "no cipher",
+            "negotiated_version": None,
+        }
+
+    monkeypatch.setattr("ethscan.tls.probe_version", mock_probe_version)
+    monkeypatch.setattr("ethscan.tls.probe_cipher", mock_probe_cipher)
+
+    result = enumerate_tls(
+        "example.com",
+        versions=["TLSv1_2"],
+        ciphers=["AES128-SHA"],
+        timeout=1.0,
+        max_workers=2,
+    )
+    assert result["supported_versions"] == ["TLSv1_2"]
+    assert result["supported_ciphers"] == []
+    assert any("no tested cipher succeeded" in note for note in result["notes"])
+
+
+def test_build_context_default_version_unchanged(monkeypatch) -> None:
+    ctx = _build_context()
+    assert ctx.minimum_version == ssl.TLSVersion.MINIMUM_SUPPORTED
+    assert ctx.maximum_version == ssl.TLSVersion.MAXIMUM_SUPPORTED

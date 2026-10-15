@@ -1,43 +1,46 @@
 # Handoff to Next Agent
 
 ## What changed
-- Expanded `tests/test_ssl.py` from 17 tests to **48 tests** (added 31 new tests)
-- Added comprehensive test coverage for all public and internal functions in the `ssl` module:
-  - `_normalize_host`: URL parsing, ports, IPv6, whitespace, case normalization
-  - `_rdn_to_str`: empty dicts, single/multiple fields
-  - `_parse_cert`: edge cases with malformed data, various signature algorithm formats, public key info variations (bits/size), empty/missing fields, SAN handling, deduplication
-  - `_build_context`: verify True/False with correct SSL settings
-  - `_get_chain`: prefers verified chain, falls back to unverified, handles empty/missing methods
-  - `_decode_cert`: binary cert decoding with success/fallback paths, cases with/without binary data
-  - `inspect_certificate`: verification success/failure with retry behavior, expired certs, bad dates, missing certs, generic errors
-  - `run_ssl`: URL normalization, target preservation, error propagation
-  - Formatters: JSON, Markdown, CSV with various data combinations (errors, missing certs, escaping)
-- Improved robustness of `_parse_cert()` in `ethscan/ssl.py` to handle malformed subject/issuer tuples more defensively
+- Significantly expanded `tests/test_tls.py` (from 27 tests / 589 lines to 54 tests), closing all coverage gaps in `ethscan/tls.py`.
+- Added imports used by the new tests: `socket`, `from unittest.mock import patch, MagicMock`, and the internal helpers `_probe`, `_version_name`, `_resolve_versions`, `_build_context`, `_truncate`, `_version_sort_key`, `_cipher_sort_key`, plus `ERROR_MAX_LENGTH`.
+- New tests added (no production code changes required — `ethscan/tls.py` needed no fixes):
+  - `_version_name`: member input and string input.
+  - `_resolve_versions`: all-valid list, member list, empty list, invalid raises `ValueError` listing the unknowns.
+  - `_build_context`: defaults (check_hostname False, CERT_NONE), version pinning (minimum/maximum_version), cipher application (spies on `set_ciphers` so tests stay deterministic regardless of OpenSSL cipher availability).
+  - `_probe`: success returns `(cipher, protocol)`, `None` cipher returns `(None, None)`, and propagates `OSError` — mocked via `socket.create_connection` + context manager chains (no network).
+  - `probe_version` dispatch: success path (sets negotiated cipher/protocol, supported=True), `ssl.SSLError` path, and `OSError` path — mocked via `ethscan.tls._probe`.
+  - `probe_cipher` dispatch: success path (sets negotiated_version, supported=True) and `ssl.SSLError` path.
+  - `_truncate`: short/empty, exact-limit, long-message with default limit and custom limit.
+  - `_version_sort_key` / `_cipher_sort_key`: known (returns index) and unknown (returns sentinel `len(...)`).
+  - `enumerate_tls`: the "versions supported but no tested cipher succeeded" note path.
+- `.gitignore`: added transient `.coverage` / `.coverage.*` artifacts.
 
 ## What was actually verified
-- `python -m pytest tests/test_ssl.py -q` → **48 passed** (was 17 tests, now 48 tests)
-- `python -m pytest tests/test_ssl.py tests/test_cli.py -q` → **859 passed** (ssl unit + CLI integration tests)
-- `python -m pytest -q` → **3294 passed, 1 skipped, 2 failed** (same 2 pre-existing DNS MX failures as baseline: `tests/test_dns.py::test_run_dns_workers_sequential` and `tests/test_dns.py::test_run_dns_workers_parallel` due to sandbox DNS limitations)
-- `git diff --stat` confirms only `ethscan/ssl.py` and `tests/test_ssl.py` were modified
+- `python -m pytest tests/test_tls.py -q` -> **54 passed** (was 27).
+- `python -m pytest tests/test_tls.py -q --cov=ethscan.tls --cov-report=term-missing` -> **100% coverage** (`ethscan/tls.py  193 stmts  0 miss`).
+- `python -m pytest -q` -> **3321 passed, 1 skipped, 2 failed** (baseline was 3294 passed, 1 skipped, 2 failed; +27 from new tests). The 2 failures are the pre-existing, environmental DNS MX failures:
+  - `tests/test_dns.py::test_run_dns_workers_sequential`
+  - `tests/test_dns.py::test_run_dns_workers_parallel`
+  (Sandbox DNS does not resolve `MX` records for `example.com`; unrelated to this task.)
+- `git diff --stat` confirms only `tests/test_tls.py` and `.gitignore` were modified; `ethscan/tls.py` is unchanged.
 
 ## What remains unresolved
-- The two pre-existing `test_dns.py` MX failures (environmental, unchanged) — not related to this task
+- The two pre-existing `test_dns.py` MX failures are environmental and out of scope (do not modify tests or DNS resolution to mask them).
+- `ethscan/ssh.py` has the lowest coverage of any module (55%) but depends on the optional `paramiko` package, which is **not installed** in this environment (`ssh.PARAMIKO_AVAILABLE == False`), so its paramiko code paths cannot be unit-tested here without adding the dependency.
 
 ## Next precise task (with evidence)
-**Add unit tests for the `tls` module (`ethscan/tls.py`).**
+**Expand unit tests for the `ethscan/osdetect.py` module.**
 
-Current state: `tls.py` is a substantial protocol module (433 lines). The handoff history shows we have been systematically improving test coverage across modules. Its public surface includes:
-- `_normalize_host`: Hostname extraction from URLs/bare targets
-- `_version_to_str`, `_str_to_version`, `_cipher_to_str`, `_ssl_error_to_str`: Conversion utilities
-- `format_tls_versions`, `format_tls_ciphers`, `format_tls_obsolete`, `format_tls_vulnerabilities`: Analysis/formatting helpers
-- `probe_version`, `probe_cipher`: TLS version/cipher probing (network operations)
-- `scan_tls`, `run_tls`: Main scanning functions
-- Formatters: JSON, Markdown, CSV output formatting with various result structures
-- Utility functions like `_collect_ciphers`, `_determine_security`, etc.
+This is the strongest next target:
+- Lowest test-to-module line ratio among real modules at **0.78** (416 test lines / 530 module lines), and uses only the Python standard library (`socket`, `struct`, `os`, `re`) — no external dependencies.
+- Coverage is **79%** with 55 missing statements (missing lines: `39-100` cover `_errno_message`, `_build_syn_packet`, `_checksum`, `_connect_tcp`; `187-208` sit in the `probe_*`/`run_osdetect` network paths).
+- It exposes many **pure, deterministic, network-free helpers** ideal for safe unit tests: `_errno_message`, `_build_syn_packet` (verifiable 20-byte struct output + checksum), `_checksum` (Internet one's-complement), `_match_os_from_banner`, `_match_os_from_ttl`, `_match_os_from_behavior`, `_normalize_host`, `_truncate`.
+- Network probes (`probe_syn`, `probe_rst`, `probe_fin`, `probe_ack`, `_connect_tcp`, `run_osdetect`) are mockable via `socket.create_connection`, mirroring the pattern just validated in `tests/test_tls.py`.
+- Formatters `format_osdetect_report_json` / `_markdown` / `_csv` are untested and exercise rich branching (pipe escaping, truncation, findings, notes).
 
 Constraints:
-- Follow existing test conventions: use pytest, mock socket/SSL calls where appropriate, test both success and failure cases
-- After adding tests, run `python -m pytest -q` to confirm no regressions (expect the same 2 pre-existing DNS failures)
-- Focus on increasing test coverage for core functions, especially the probe/scan functions with proper mocking to avoid network dependencies
+- Follow the established pytest conventions used in `test_tls.py` / `test_ssl.py` / `test_web.py` (monkeypatch `ethscan.osdetect.<fn>` for network probes; `@patch("ethscan.osdetect.socket.create_connection")` for socket-level probes).
+- Prefer pure-function unit tests first (deterministic, no network), then add mocked network paths.
+- Run `python -m pytest -q` afterward; expect the same 2 pre-existing `test_dns.py` MX failures (environmental) and 100%-or-greater coverage for `osdetect.py`.
 
 (End of file)
