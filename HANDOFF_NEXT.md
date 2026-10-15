@@ -1,12 +1,12 @@
 # Handoff to Next Agent
 
 ## What changed
-- Added 1 CLI test to `tests/test_cli.py`:
-  - `test_cli_no_subcommand_lists_commands` (verifies invoking `ethscan` with no subcommand exits 0 and lists all commands)
+- Added 1 CLI smoke test to `tests/test_cli.py`:
+  - `test_all_registered_commands_help_smoke` (iterates every command registered on the `cli` group and asserts `--help` exits 0, guarding against registration/wiring regressions).
 
 ## What was actually verified
-- `python -m pytest -q` → **3503 passed, 1 skipped** (was 3502 passed, 1 skipped; +1 test). Full suite green; no regressions.
-- New test passes individually.
+- New test passes individually (`python -m pytest tests/test_cli.py::test_all_registered_commands_help_smoke -q` → 1 passed).
+- Full suite: `python -m pytest -q` → **3504 passed, 1 skipped** (was 3503 passed, 1 skipped; +1 test). No regressions.
 
 ## What remains unresolved
 - Project remains feature-complete: all ~54 commands implemented, registered in `ethscan/cli.py`, have JSON/Markdown/CSV output, unit tests, CLI integration tests.

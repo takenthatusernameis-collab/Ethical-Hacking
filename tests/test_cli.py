@@ -54,6 +54,20 @@ def test_cli_no_subcommand_lists_commands() -> None:
     assert "audit" in result.output
 
 
+def test_all_registered_commands_help_smoke() -> None:
+    """Every command registered on the cli group must expose a working --help.
+
+    Guards against registration regressions (e.g. a module imported but not
+    wired into cli.py, or a command that crashes when --help is invoked).
+    """
+    runner = CliRunner()
+    for name in sorted(cli.commands.keys()):
+        result = runner.invoke(cli, [name, "--help"])
+        assert result.exit_code == 0, (
+            f"command {name!r} --help failed with exit {result.exit_code}: {result.output}"
+        )
+
+
 def test_audit_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["audit", "--help"])
