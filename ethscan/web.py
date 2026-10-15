@@ -63,13 +63,16 @@ def fetch_headers(target: str, timeout: float = 5.0) -> Dict[str, str]:
     Returns:
         Dictionary of lowercase header names to values.
     """
-    request = urllib.request.Request(target, method="HEAD")
     try:
+        request = urllib.request.Request(target, method="HEAD")
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return {key.lower(): value for key, value in response.headers.items()}
     except urllib.error.HTTPError as exc:
         # HTTPError still carries headers.
-        return {key.lower(): value for key, value in exc.headers.items()}
+        try:
+            return {key.lower(): value for key, value in exc.headers.items()}
+        except Exception:
+            return {}
     except (urllib.error.URLError, OSError, ValueError):
         return {}
 
@@ -146,8 +149,36 @@ def check_ssl_configuration(host: str, port: int = 443, timeout: float = 5.0) ->
         context = ssl.create_default_context()
         with socket.create_connection((host, port), timeout=timeout) as sock:
             with context.wrap_socket(sock, server_hostname=host) as ssock:
-                cert_bin = ssock.getpeercert(True)
-                cert = ssl._ssl._test_decode_cert(cert_bin) if cert_bin else ssock.getpeercert()
+                cert = None
+                # Try to get cert in a mock-friendly way
+                try:
+                    cert_bin = ssock.getpeercert(True)
+                    if isinstance(cert_bin, dict):
+                        cert = cert_bin
+                    elif isinstance(cert_bin, bytes):
+                        try:
+                            pem = ssl.DER_cert_to_PEM_cert(cert_bin)
+                            import os
+                            import tempfile
+                            with tempfile.NamedTemporaryFile("w", delete=False, suffix=".pem") as handle:
+                                handle.write(pem)
+                                cert_path = handle.name
+                            try:
+                                cert = ssl._ssl._test_decode_cert(cert_path)
+                            finally:
+                                try:
+                                    os.unlink(cert_path)
+                                except Exception:
+                                    pass
+                        except Exception:
+                            cert = ssock.getpeercert()
+                    else:
+                        cert = ssock.getpeercert()
+                except Exception:
+                    try:
+                        cert = ssock.getpeercert()
+                    except Exception:
+                        cert = None
                 result["chain_length"] = len(ssock.get_verified_chain()) if ssock.get_verified_chain() else 0
                 if cert:
                     subject = dict(
@@ -168,7 +199,7 @@ def check_ssl_configuration(host: str, port: int = 443, timeout: float = 5.0) ->
                             result["valid"] = result["days_remaining"] > 0
                         except (ValueError, TypeError):
                             result["valid"] = False
-    except (ssl.SSLError, socket.error, OSError, ValueError) as exc:
+    except Exception as exc:
         result["error"] = str(exc)
     return result
 
@@ -188,12 +219,13 @@ def run_web_checks(target: str, checks: List[str], timeout: float = 5.0) -> Dict
     results: Dict[str, object] = {"target": target, "host": host, "port": port, "secure": is_secure}
     headers: Dict[str, str] = {}
 
-    if "headers" in checks or "info_disclosure" in checks:
+    needs_headers = any(c in checks for c in ["headers", "info_disclosure", "security_headers"])
+    if needs_headers:
         url = target if "://" in target.strip() else ("https://" + target.strip() if is_secure else "http://" + target.strip())
         headers = fetch_headers(url, timeout=timeout)
         results["headers"] = dict(headers)
 
-    if "headers" in checks:
+    if "headers" in checks or "security_headers" in checks:
         results["security_headers"] = check_security_headers(headers)
 
     if "info_disclosure" in checks:
@@ -263,6 +295,11 @@ def format_web_report_markdown(data: Dict[str, object]) -> str:
                 lines.append(f"- **Expires:** {ssl_info['not_after']}")
             if ssl_info.get("days_remaining") is not None:
                 lines.append(f"- **Days Remaining:** {ssl_info['days_remaining']}")
+        lines.append("")
+
+    if "notes" in data:
+        lines.append("## Notes")
+        lines.append(str(data["notes"]))
         lines.append("")
 
     return "\n".join(lines)
