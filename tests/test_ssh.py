@@ -1,5 +1,10 @@
 """Tests for the ethscan ssh module."""
 
+import socket
+import struct
+from typing import List
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from ethscan.ssh import (
@@ -16,8 +21,13 @@ from ethscan.ssh import (
     WEAK_MACS,
     _analyze_algorithms,
     _extract_port,
+    _get_host_key_info_paramiko,
+    _get_host_key_info_stdlib,
     _normalize_host,
     _parse_kexinit,
+    _read_packet,
+    _send_kexinit,
+    _ssh_banner_exchange,
     format_ssh_report_csv,
     format_ssh_report_json,
     format_ssh_report_markdown,
