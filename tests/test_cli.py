@@ -1801,6 +1801,26 @@ def test_web_unknown_check() -> None:
     assert "Unknown checks" in result.output
 
 
+def test_web_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["web", "--help"])
+    assert result.exit_code == 0
+    assert "--target" in result.output
+    assert "--checks" in result.output
+    assert "--timeout" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_web() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "web" in result.output
+
+
 def test_headers_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["headers", "--help"])
@@ -12614,6 +12634,24 @@ def test_jwt_none_algorithm_cli() -> None:
     result = runner.invoke(cli, ["jwt", "--token", token, "--format", "json"])
     assert result.exit_code == 0
     assert "alg=none" in result.output
+
+
+def test_jwt_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["jwt", "--help"])
+    assert result.exit_code == 0
+    assert "--token" in result.output
+    assert "--format" in result.output
+    assert "--out" in result.output
+    assert "json" in result.output
+    assert "markdown" in result.output
+
+
+def test_cli_help_lists_jwt() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0
+    assert "jwt" in result.output
 
 
 # ---------------------------------------------------------------------------

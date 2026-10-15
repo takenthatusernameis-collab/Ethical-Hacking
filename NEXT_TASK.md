@@ -1,53 +1,14 @@
 # Next task for the next agent
 
-## Completed: `web` module unit tests (`tests/test_web.py`)
+## Current state (verified this session)
+- All ~54 ethscan commands are implemented, registered in `ethscan/cli.py`, and wired with `--format`/`--output-format [json|markdown|csv]` and `--out`.
+- Every command module (`ethscan/*.py`) has a corresponding `tests/test_*.py` with healthy test-to-module line ratios (all >= ~0.7, most >1.0).
+- Every command has CLI integration tests in `tests/test_cli.py`.
+- `python -m pytest -q` → **3477 passed, 1 skipped** (full suite, green).
+- Offline CLI end-to-end verified: `cidr`, `hash`, `validate`.
 
-Expanded `tests/test_web.py` from 16 tests (203 lines) to **45 tests (665 lines)**, raising the test-to-module line ratio from **0.67 to 1.92** (665/346). This lifted the module from having the lowest ratio to above-parity test coverage.
+## This session's change
+- Closed two CLI test gaps: added `test_web_help`, `test_cli_help_lists_web`, `test_jwt_help`, `test_cli_help_lists_jwt` to `tests/test_cli.py` (+4 tests). Prior to this, the `web` and `jwt` commands lacked `--help` verification tests.
 
-### What changed
-- `tests/test_web.py`: added 29 new tests covering previously untested scenarios:
-  - `_parse_url`: HTTP default port, HTTPS with path, IPv4 address, whitespace stripping, localhost
-  - `fetch_headers`: success (mocked), HTTPError with headers (mocked), connection error (mocked)
-  - `check_security_headers`: partial presence, case-insensitive matching
-  - `check_information_disclosure`: multiple headers, case-insensitive matching
-  - `check_ssl_configuration`: success (mocked socket+ssl), connection error (mocked), SSL error (mocked), expired cert (mocked)
-  - `run_web_checks`: HTTPS target, SSL check, URL target, empty checks
-  - Formatters: JSON full/empty, Markdown no-security-headers/no-info-disclosure/no-ssl/pipe-escape, CSV SSL fields/no-security-headers/SSL error
-
-### Robustness fixes in `ethscan/web.py`
-- `fetch_headers`: wrapped `exc.headers` access in try/except to handle HTTPError without headers
-- `check_ssl_configuration`: broadened exception handling and made cert parsing mock-friendly
-- `run_web_checks`: added `security_headers` as alias for `headers` check
-- `format_web_report_markdown`: added Notes section
-
-### Verification
-- `python -m pytest tests/test_web.py -q` -> **45 passed** (2 pre-existing deprecation warnings)
-- `python -m pytest -q` -> **3244 passed, 1 skipped, 2 failed**
-  - The 2 failures are pre-existing and unrelated:
-    `tests/test_dns.py::test_run_dns_workers_sequential` and
-    `tests/test_dns.py::test_run_dns_workers_parallel`. They fail because the
-    sandbox's DNS does not resolve `MX` records for `example.com`.
-  - `git diff --stat` confirms only `ethscan/web.py` and `tests/test_web.py` were modified.
-
-## Suggested next task
-
-**Add unit tests for the `whois` module (`ethscan/whois.py`).**
-
-It now has the lowest test-to-module line ratio among real modules at **0.71**
-(249 test lines / 351 module lines). Its public surface follows patterns similar
-to other protocol modules, making the proven test patterns transferable:
-
-### Functions to test:
-- `_normalize_target` (bare host, URL, URL with port, IPv4, IPv6, whitespace)
-- `query_whois` (success, connection refused, timeout, invalid host, empty response)
-- `parse_whois_response` (registrar, creation/expiration dates, nameservers, registrant org, status codes, referral servers)
-- `run_whois` (success, recursive server following, failure, timeout, invalid target)
-- Formatters: JSON, Markdown, CSV output with various data combinations
-
-### Constraints:
-- Follow existing test conventions: use pytest, mock socket calls where appropriate
-- Test both success and failure scenarios for network functions
-- After adding tests, run `python -m pytest -q` to confirm no regressions
-  (expect the same 2 pre-existing `test_dns.py` MX failures to remain)
-
-(End of file - total 48 lines)
+## Next task
+There is no required next task — the codebase is complete and green. If continuing, the smallest bounded task is adding the remaining `web`/`jwt` CLI output tests (offline JSON/Markdown, `--out`, `--output-format` precedence) to match every other command's coverage. Use `monkeypatch` mocks; no live network; confirm with `python -m pytest -q`.
