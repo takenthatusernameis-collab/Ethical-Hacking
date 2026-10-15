@@ -386,3 +386,97 @@ def test_format_postgresql_report_csv_escapes_findings():
     header = out.split("\n", 1)[0]
     body = out.split("\n", 1)[1]
     assert "\n" not in body
+
+
+
+
+def test_parse_error_fields_with_truncated():
+    body = b"M" + b"message without nul"
+    fields = _parse_error_fields(body)
+    assert fields["M"] == "message without nul"
+
+
+def test_parse_error_fields_multiple_fields():
+    body = b"SERROR\x00" + b"C28000\x00" + b"Minvalid\x00" + b"\x00"
+    fields = _parse_error_fields(body)
+    assert fields["S"] == "ERROR"
+    assert fields["C"] == "28000"
+    assert fields["M"] == "invalid"
+
+
+def test_parse_startup_response_sasl_auth():
+    resp = _parse_startup_response(_pg_greeting("16.2", auth_code=10, pid=4242))
+    assert resp["auth_type_code"] == 10
+    assert resp["auth_type_name"] == "SASL"
+
+
+def test_parse_startup_response_cleartext_auth():
+    resp = _parse_startup_response(_pg_greeting("16.2", auth_code=2, pid=100))
+    assert resp["auth_type_code"] == 2
+    assert resp["auth_type_name"] == "CleartextPassword"
+
+
+def test_parse_startup_response_unknown_auth():
+    resp = _parse_startup_response(_pg_greeting("16.2", auth_code=99, pid=100))
+    assert resp["auth_type_code"] == 99
+    assert resp["auth_type_name"] == "Unknown(99)"
+
+
+def test_parse_startup_response_notice():
+    greeting = _pg_parameter_status("server_version", "16.2") + _pg_authentication(0) + _pg_msg(
+        b"N", b"Mnotice message\x00\x00"
+    )
+    resp = _parse_startup_response(greeting)
+    assert len(resp["notices"]) == 1
+    assert "notice message" in resp["notices"][0]["message"]
+
+
+def test_assess_startup_trust_ok():
+    findings = _assess_startup({"auth_type_name": "Ok", "auth_type_code": 0})
+    assert any("authentication method 'Ok' / trust" in f for f in findings)
+
+
+def test_assess_startup_error_message():
+    startup = {"errors": [{"message": "Connection refused"}]}
+    findings = _assess_startup(startup)
+    assert any("Server error: Connection refused" in f for f in findings)
+
+
+def test_assess_startup_version_weird():
+    findings = _assess_startup({"server_version": "beta-1.0"})
+    assert any("PostgreSQL server version: beta-1.0" in f for f in findings)
+
+
+def test_run_postgresql_with_probes_none_explicit():
+    results = run_postgresql("localhost", probes=None, connector=lambda *a: (_pg_greeting(), None))
+    assert results["version"] is not None
+
+
+def test_run_postgresql_exception_handling():
+    def bad_conn(*a):
+        raise RuntimeError("boom")
+    results = run_postgresql("localhost", connector=bad_conn)
+    assert results["accessible"] is False
+    assert "boom" in (results["error"] or "")
+
+
+def test_run_postgresql_invalid_target_url_no_host():
+    results = run_postgresql("://no-host", connector=lambda *a: (b"", None))
+    assert results["accessible"] is False
+    assert results["host"] is None
+
+
+def test_format_postgresql_report_markdown_no_parameters():
+    data = {
+        "target": "localhost:5432",
+        "host": "localhost",
+        "port": 5432,
+        "accessible": True,
+        "startup": {"server_version": "16.2", "auth_type_name": "Ok", "auth_type_code": 0, "process_id": 1},
+        "version": "16.2",
+        "findings": [],
+        "error": None,
+    }
+    out = format_postgresql_report_markdown(data)
+    assert "# PostgreSQL Reconnaissance Report" in out
+    assert "No notable findings" in out
