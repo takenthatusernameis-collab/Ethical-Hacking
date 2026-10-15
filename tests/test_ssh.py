@@ -2,7 +2,8 @@
 
 import socket
 import struct
-from typing import List
+import types
+from typing import Any, Dict, List
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -449,3 +450,427 @@ def test_format_ssh_report_csv_pipe_escaping() -> None:
     # With QUOTE_MINIMAL, pipe characters don't require quoting
     assert "pipe|algo" in output
     assert "pipe|desc" in output
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _kexinit_response(
+    kex: List[str] = None,
+    host_keys: List[str] = None,
+    ciphers_c2s: List[str] = None,
+    ciphers_s2c: List[str] = None,
+    macs_c2s: List[str] = None,
+    macs_s2c: List[str] = None,
+    compressions: List[str] = None,
+    languages: List[str] = None,
+) -> bytes:
+    """Build a valid SSH_MSG_KEXINIT server response (msg_type + cookie + name lists)."""
+    cookie = b"\x00" * 16
+
+    def name_list(names: List[str]) -> bytes:
+        data = ",".join(names).encode("ascii")
+        return struct.pack(">I", len(data)) + data
+
+    payload = b"\x14" + cookie
+    payload += name_list(kex or [])
+    payload += name_list(host_keys or [])
+    payload += name_list(ciphers_c2s or [])
+    payload += name_list(ciphers_s2c or [])
+    payload += name_list(macs_c2s or [])
+    payload += name_list(macs_s2c or [])
+    payload += name_list(compressions or ["none"])
+    payload += name_list(compressions or ["none"])
+    payload += name_list(languages or [""])
+    payload += name_list(languages or [""])
+    return payload
+
+
+def _ssh_result(**overrides: Any) -> Dict[str, Any]:
+    data: Dict[str, Any] = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 22,
+        "timeout": 10.0,
+        "banner": "SSH-2.0-OpenSSH_8.9",
+        "paramiko_available": False,
+        "kex_algorithms": {"supported": [], "weak": [], "strong": []},
+        "host_key_algorithms": {"supported": [], "weak": [], "strong": []},
+        "encryption_algorithms": {"supported": [], "weak": [], "strong": []},
+        "mac_algorithms": {"supported": [], "weak": [], "strong": []},
+        "host_key": None,
+        "findings": [],
+        "error": None,
+    }
+    data.update(overrides)
+    return data
+
+
+# ---------------------------------------------------------------------------
+# _ssh_banner_exchange
+# ---------------------------------------------------------------------------
+
+
+def test_ssh_banner_exchange_success() -> None:
+    sock = MagicMock()
+    sock.recv.return_value = b"SSH-2.0-OpenSSH_8.9\r\n"
+    assert _ssh_banner_exchange(sock, 5.0) == "SSH-2.0-OpenSSH_8.9"
+    sock.settimeout.assert_called_once_with(5.0)
+
+
+def test_ssh_banner_exchange_non_ssh_prefix() -> None:
+    sock = MagicMock()
+    sock.recv.return_value = b"HELLO\r\n"
+    assert _ssh_banner_exchange(sock, 5.0) is None
+
+
+def test_ssh_banner_exchange_timeout() -> None:
+    sock = MagicMock()
+    sock.recv.side_effect = socket.timeout("timed out")
+    assert _ssh_banner_exchange(sock, 5.0) is None
+
+
+def test_ssh_banner_exchange_oserror() -> None:
+    sock = MagicMock()
+    sock.recv.side_effect = OSError("connection reset")
+    assert _ssh_banner_exchange(sock, 5.0) is None
+
+
+# ---------------------------------------------------------------------------
+# _send_kexinit
+# ---------------------------------------------------------------------------
+
+
+def test_send_kexinit_sends_packet() -> None:
+    sock = MagicMock()
+    _send_kexinit(sock)
+    sock.sendall.assert_called_once()
+    sent = sock.sendall.call_args[0][0]
+    # [4-byte length][SSH_MSG_KEXINIT(0x14)]...
+    assert sent[4:5] == b"\x14"
+    assert len(sent) > 5 + 16
+
+
+# ---------------------------------------------------------------------------
+# _read_packet
+# ---------------------------------------------------------------------------
+
+
+def test_read_packet_short_length_reply() -> None:
+    sock = MagicMock()
+    sock.recv.return_value = b"\x00\x00"
+    assert _read_packet(sock) is None
+
+
+def test_read_packet_too_large() -> None:
+    sock = MagicMock()
+    sock.recv.return_value = struct.pack(">I", 40000)
+    assert _read_packet(sock) is None
+
+
+def test_read_packet_valid() -> None:
+    body = b"\x01hello"
+    sock = MagicMock()
+    sock.recv.side_effect = [struct.pack(">I", len(body)), body]
+    assert _read_packet(sock) == b"hello"
+
+
+def test_read_packet_partial_chunks() -> None:
+    body = b"\x00abcdefg"
+    sock = MagicMock()
+    sock.recv.side_effect = [struct.pack(">I", len(body)), b"\x00ab", b"cdefg"]
+    assert _read_packet(sock) == b"abcdefg"
+
+
+def test_read_packet_empty_chunk() -> None:
+    body = b"\x00abcdefg"
+    sock = MagicMock()
+    sock.recv.side_effect = [struct.pack(">I", len(body)), b"\x00ab", b""]
+    assert _read_packet(sock) is None
+
+
+def test_read_packet_timeout() -> None:
+    sock = MagicMock()
+    sock.recv.side_effect = socket.timeout("timed out")
+    assert _read_packet(sock) is None
+
+
+def test_read_packet_oserror() -> None:
+    sock = MagicMock()
+    sock.recv.side_effect = OSError("reset")
+    assert _read_packet(sock) is None
+
+
+# ---------------------------------------------------------------------------
+# _parse_kexinit edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_parse_kexinit_too_short() -> None:
+    assert _parse_kexinit(b"\x14\x00\x00") == {}
+
+
+def test_parse_kexinit_truncated_name_length() -> None:
+    cookie = b"\x00" * 16
+    payload = b"\x14" + cookie + struct.pack(">I", 10)
+    assert _parse_kexinit(payload) == {}
+
+
+def test_parse_kexinit_truncated_length_field() -> None:
+    cookie = b"\x00" * 16
+    payload = b"\x14" + cookie
+    for _ in range(8):
+        payload += struct.pack(">I", 0)
+    payload += b"\x00\x00"
+    result = _parse_kexinit(payload)
+    assert len(result) == 8
+    assert result["kex_algorithms"] == []
+
+
+# ---------------------------------------------------------------------------
+# _get_host_key_info_paramiko / _get_host_key_info_stdlib
+# ---------------------------------------------------------------------------
+
+
+def test_get_host_key_info_paramiko_unavailable() -> None:
+    assert _get_host_key_info_paramiko("example.com", 22, 1.0) is None
+
+
+def test_get_host_key_info_stdlib_returns_none() -> None:
+    assert _get_host_key_info_stdlib(MagicMock()) is None
+
+
+def test_get_host_key_info_paramiko_success(monkeypatch) -> None:
+    fake_paramiko = types.ModuleType("paramiko")
+    fake_host_key = MagicMock()
+    fake_host_key.get_fingerprint.return_value = b"\xde\xad\xbe\xef"
+    fake_host_key.get_name.return_value = "ssh-ed25519"
+    fake_host_key.get_bits.return_value = 256
+    fake_transport = MagicMock()
+    fake_transport.get_remote_server_key.return_value = fake_host_key
+    fake_paramiko.Transport = lambda sock: fake_transport
+
+    fake_sock = MagicMock()
+    monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *a, **k: fake_sock)
+    monkeypatch.setattr("ethscan.ssh.paramiko", fake_paramiko, raising=False)
+    monkeypatch.setattr("ethscan.ssh.PARAMIKO_AVAILABLE", True)
+
+    result = _get_host_key_info_paramiko("example.com", 22, 1.0)
+    assert result is not None
+    assert result["fingerprint"] == "de:ad:be:ef"
+    assert result["key_type"] == "ssh-ed25519"
+    assert result["key_bits"] == 256
+    fake_transport.close.assert_called_once()
+    fake_sock.close.assert_called_once()
+
+
+def test_get_host_key_info_paramiko_exception(monkeypatch) -> None:
+    fake_paramiko = types.ModuleType("paramiko")
+    fake_transport = MagicMock()
+    fake_transport.start_client.side_effect = Exception("handshake failed")
+    fake_paramiko.Transport = lambda sock: fake_transport
+
+    fake_sock = MagicMock()
+    monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *a, **k: fake_sock)
+    monkeypatch.setattr("ethscan.ssh.paramiko", fake_paramiko, raising=False)
+    monkeypatch.setattr("ethscan.ssh.PARAMIKO_AVAILABLE", True)
+
+    assert _get_host_key_info_paramiko("example.com", 22, 1.0) is None
+
+
+# ---------------------------------------------------------------------------
+# run_ssh paths
+# ---------------------------------------------------------------------------
+
+
+def test_run_ssh_success(monkeypatch) -> None:
+    response = _kexinit_response(
+        kex=["curve25519-sha256", "diffie-hellman-group1-sha1"],
+        host_keys=["ssh-ed25519", "ssh-rsa"],
+        ciphers_c2s=["aes256-ctr", "aes128-cbc"],
+        ciphers_s2c=[],
+        macs_c2s=["hmac-sha2-256", "hmac-sha1"],
+        macs_s2c=[],
+    )
+    fake_sock = MagicMock()
+    monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *a, **k: fake_sock)
+    monkeypatch.setattr("ethscan.ssh._ssh_banner_exchange", lambda s, t: "SSH-2.0-OpenSSH_8.9")
+    monkeypatch.setattr("ethscan.ssh._send_kexinit", lambda s: None)
+    monkeypatch.setattr("ethscan.ssh._read_packet", lambda s: response)
+
+    result = run_ssh("example.com", port=22, timeout=1.0)
+
+    assert result["banner"] == "SSH-2.0-OpenSSH_8.9"
+    assert result["error"] is None
+    assert result["paramiko_available"] is False
+    assert "curve25519-sha256" in result["kex_algorithms"]["supported"]
+    assert "diffie-hellman-group1-sha1" in result["kex_algorithms"]["weak"]
+    assert "ssh-rsa" in result["host_key_algorithms"]["weak"]
+    assert "aes128-cbc" in result["encryption_algorithms"]["weak"]
+    assert "hmac-sha1" in result["mac_algorithms"]["weak"]
+    finding_types = {f["type"] for f in result["findings"]}
+    assert {"weak_kex", "weak_host_key", "weak_cipher", "weak_mac"} <= finding_types
+    fake_sock.close.assert_called_once()
+
+
+def test_run_ssh_no_banner(monkeypatch) -> None:
+    fake_sock = MagicMock()
+    monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *a, **k: fake_sock)
+    monkeypatch.setattr("ethscan.ssh._ssh_banner_exchange", lambda s, t: None)
+
+    result = run_ssh("example.com", port=22, timeout=1.0)
+
+    assert result["banner"] is None
+    assert result["error"] == "No SSH banner received"
+    fake_sock.close.assert_called_once()
+
+
+def test_run_ssh_no_kexinit_response(monkeypatch) -> None:
+    fake_sock = MagicMock()
+    monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *a, **k: fake_sock)
+    monkeypatch.setattr("ethscan.ssh._ssh_banner_exchange", lambda s, t: "SSH-2.0-OpenSSH_8.9")
+    monkeypatch.setattr("ethscan.ssh._send_kexinit", lambda s: None)
+    monkeypatch.setattr("ethscan.ssh._read_packet", lambda s: None)
+
+    result = run_ssh("example.com", port=22, timeout=1.0)
+
+    assert result["banner"] == "SSH-2.0-OpenSSH_8.9"
+    assert result["error"] is None
+    assert result["findings"] == []
+    fake_sock.close.assert_called_once()
+
+
+def test_run_ssh_non_kexinit_response(monkeypatch) -> None:
+    fake_sock = MagicMock()
+    monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *a, **k: fake_sock)
+    monkeypatch.setattr("ethscan.ssh._ssh_banner_exchange", lambda s, t: "SSH-2.0-OpenSSH_8.9")
+    monkeypatch.setattr("ethscan.ssh._send_kexinit", lambda s: None)
+    monkeypatch.setattr("ethscan.ssh._read_packet", lambda s: b"\x99something")
+
+    result = run_ssh("example.com", port=22, timeout=1.0)
+
+    assert result["banner"] == "SSH-2.0-OpenSSH_8.9"
+    assert result["error"] is None
+    assert result["kex_algorithms"]["supported"] == []
+    fake_sock.close.assert_called_once()
+
+
+def test_run_ssh_oserror(monkeypatch) -> None:
+    def mock_create_connection(*args, **kwargs):
+        raise OSError("network is unreachable")
+
+    monkeypatch.setattr("ethscan.ssh.socket.create_connection", mock_create_connection)
+
+    result = run_ssh("example.com", port=22, timeout=1.0)
+    assert result["error"] == "Connection error: network is unreachable"
+    assert result["banner"] is None
+
+
+def test_run_ssh_send_kexinit_oserror(monkeypatch) -> None:
+    fake_sock = MagicMock()
+    fake_sock.sendall.side_effect = OSError("send failed")
+    monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *a, **k: fake_sock)
+    monkeypatch.setattr("ethscan.ssh._ssh_banner_exchange", lambda s, t: "SSH-2.0-OpenSSH_8.9")
+
+    result = run_ssh("example.com", port=22, timeout=1.0)
+    assert result["error"] == "Connection error: send failed"
+    fake_sock.close.assert_called_once()
+
+
+def test_run_ssh_close_swallows_exception(monkeypatch) -> None:
+    fake_sock = MagicMock()
+    fake_sock.close.side_effect = RuntimeError("close failed")
+    monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *a, **k: fake_sock)
+    monkeypatch.setattr("ethscan.ssh._ssh_banner_exchange", lambda s, t: None)
+
+    result = run_ssh("example.com", port=22, timeout=1.0)
+    assert result["error"] == "No SSH banner received"
+    assert result["banner"] is None
+    fake_sock.close.assert_called_once()
+
+
+def test_run_ssh_paramiko_weak_host_key(monkeypatch) -> None:
+    response = _kexinit_response(kex=["curve25519-sha256"], host_keys=["ssh-ed25519"])
+    fake_sock = MagicMock()
+    monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *a, **k: fake_sock)
+    monkeypatch.setattr("ethscan.ssh._ssh_banner_exchange", lambda s, t: "SSH-2.0-OpenSSH_8.9")
+    monkeypatch.setattr("ethscan.ssh._send_kexinit", lambda s: None)
+    monkeypatch.setattr("ethscan.ssh._read_packet", lambda s: response)
+    monkeypatch.setattr("ethscan.ssh.PARAMIKO_AVAILABLE", True)
+    monkeypatch.setattr(
+        "ethscan.ssh._get_host_key_info_paramiko",
+        lambda host, port, timeout: {
+            "fingerprint": "aa:bb:cc",
+            "key_type": "ssh-rsa",
+            "key_bits": 2048,
+        },
+    )
+
+    result = run_ssh("example.com", port=22, timeout=1.0)
+    assert result["paramiko_available"] is True
+    assert result["host_key"]["key_type"] == "ssh-rsa"
+    assert any(
+        f["type"] == "weak_host_key" and f["algorithm"] == "ssh-rsa"
+        for f in result["findings"]
+    )
+    fake_sock.close.assert_called_once()
+
+
+def test_run_ssh_paramiko_strong_host_key(monkeypatch) -> None:
+    response = _kexinit_response(kex=["curve25519-sha256"], host_keys=["ssh-ed25519"])
+    fake_sock = MagicMock()
+    monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *a, **k: fake_sock)
+    monkeypatch.setattr("ethscan.ssh._ssh_banner_exchange", lambda s, t: "SSH-2.0-OpenSSH_8.9")
+    monkeypatch.setattr("ethscan.ssh._send_kexinit", lambda s: None)
+    monkeypatch.setattr("ethscan.ssh._read_packet", lambda s: response)
+    monkeypatch.setattr("ethscan.ssh.PARAMIKO_AVAILABLE", True)
+    monkeypatch.setattr(
+        "ethscan.ssh._get_host_key_info_paramiko",
+        lambda host, port, timeout: {
+            "fingerprint": "aa:bb:cc",
+            "key_type": "ssh-ed25519",
+            "key_bits": 256,
+        },
+    )
+
+    result = run_ssh("example.com", port=22, timeout=1.0)
+    assert result["host_key"]["key_type"] == "ssh-ed25519"
+    # Strong host key type must not add a weak_host_key finding.
+    assert not any(f["type"] == "weak_host_key" for f in result["findings"])
+
+
+def test_run_ssh_paramiko_no_host_key(monkeypatch) -> None:
+    response = _kexinit_response(kex=["curve25519-sha256"], host_keys=["ssh-ed25519"])
+    fake_sock = MagicMock()
+    monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *a, **k: fake_sock)
+    monkeypatch.setattr("ethscan.ssh._ssh_banner_exchange", lambda s, t: "SSH-2.0-OpenSSH_8.9")
+    monkeypatch.setattr("ethscan.ssh._send_kexinit", lambda s: None)
+    monkeypatch.setattr("ethscan.ssh._read_packet", lambda s: response)
+    monkeypatch.setattr("ethscan.ssh.PARAMIKO_AVAILABLE", True)
+    monkeypatch.setattr("ethscan.ssh._get_host_key_info_paramiko", lambda host, port, timeout: None)
+
+    result = run_ssh("example.com", port=22, timeout=1.0)
+    assert result["host_key"] is None
+
+
+# ---------------------------------------------------------------------------
+# Markdown formatter edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_format_ssh_report_markdown_neutral_algo() -> None:
+    data = _ssh_result(
+        kex_algorithms={"supported": ["custom-kex"], "weak": [], "strong": []},
+        banner="SSH-2.0-test",
+        findings=[],
+    )
+    output = format_ssh_report_markdown(data)
+    assert "- custom-kex" in output
+
+
+def test_format_ssh_report_markdown_no_findings() -> None:
+    data = _ssh_result(banner="SSH-2.0-test", findings=[])
+    output = format_ssh_report_markdown(data)
+    assert "No weak algorithms detected" in output
