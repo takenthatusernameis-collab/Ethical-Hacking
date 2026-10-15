@@ -754,3 +754,191 @@ def test_run_subtake_unknown_cname_takeover_branch(monkeypatch) -> None:
     assert entry["takeover"]["service"] == "Unknown"
     assert entry["takeover"]["fingerprint"] == ""
     assert "http_confirmed" not in entry["takeover"]
+
+
+def _install_fake_dns(monkeypatch):
+    """Inject a fake dns package so ethscan.subtake's dnspython import path is exercised."""
+    import sys
+    import types
+
+    dns_pkg = types.ModuleType("dns")
+    dns_pkg.__path__ = []
+    dns_resolver = types.ModuleType("dns.resolver")
+    dns_exception = types.ModuleType("dns.exception")
+
+    class DNSException(Exception):
+        pass
+
+    dns_exception.DNSException = DNSException
+
+    class _Resolver:
+        def __init__(self):
+            self.timeout = None
+            self.lifetime = None
+            self.nameservers = []
+
+        def resolve(self, hostname, rdtype):
+            return []
+
+    dns_resolver.Resolver = _Resolver
+    dns_pkg.resolver = dns_resolver
+    dns_pkg.exception = dns_exception
+
+    monkeypatch.setitem(sys.modules, "dns", dns_pkg)
+    monkeypatch.setitem(sys.modules, "dns.resolver", dns_resolver)
+    monkeypatch.setitem(sys.modules, "dns.exception", dns_exception)
+    return dns_pkg, dns_resolver, dns_exception
+
+
+def _reload_subtake(monkeypatch):
+    """Reload ethscan.subtake with the fake dns package bound, returning the reloaded module."""
+    from importlib import reload
+
+    import ethscan.subtake as subtake_mod
+    _install_fake_dns(monkeypatch)
+    reload(subtake_mod)
+    return subtake_mod
+
+
+def _restore_subtake(monkeypatch):
+    """Remove the fake dns package and restore ethscan.subtake to its stdlib-only state."""
+    import sys
+    from importlib import reload
+
+    import ethscan.subtake as subtake_mod
+    monkeypatch.delitem(sys.modules, "dns", raising=False)
+    monkeypatch.delitem(sys.modules, "dns.resolver", raising=False)
+    monkeypatch.delitem(sys.modules, "dns.exception", raising=False)
+    reload(subtake_mod)
+
+
+def _make_resolver_answers(values):
+    class _Rdata:
+        def __init__(self, text):
+            self.text = text
+
+        def __str__(self):
+            return self.text
+
+    class _Resolver:
+        def __init__(self):
+            self.timeout = None
+            self.lifetime = None
+            self.nameservers = None
+
+        def resolve(self, hostname, rdtype):
+            return [_Rdata(v) for v in values]
+
+    return _Resolver
+
+
+def test_dns_available_module_imports(monkeypatch) -> None:
+    """Module-level dnspython imports succeed and DNS_AVAILABLE is True (lines 17-18)."""
+    subtake_mod = _reload_subtake(monkeypatch)
+    try:
+        assert subtake_mod.DNS_AVAILABLE is True
+    finally:
+        _restore_subtake(monkeypatch)
+
+
+def test_dns_unavailable_import_error(monkeypatch) -> None:
+    """The except ImportError branch runs when dns is not importable (lines 19-20)."""
+    import sys
+    from importlib import reload
+
+    import ethscan.subtake as subtake_mod
+    monkeypatch.setitem(sys.modules, "dns", None)
+    reload(subtake_mod)
+    try:
+        assert subtake_mod.DNS_AVAILABLE is False
+    finally:
+        monkeypatch.delitem(sys.modules, "dns", raising=False)
+        reload(subtake_mod)
+
+
+def test_resolve_cname_dnspython_success(monkeypatch) -> None:
+    """resolve_cname returns the CNAME target via dnspython when resolver given (lines 292-298)."""
+    subtake_mod = _reload_subtake(monkeypatch)
+    try:
+        monkeypatch.setattr(
+            subtake_mod.dns.resolver, "Resolver", _make_resolver_answers(["target.example.com."])
+        )
+        assert subtake_mod.resolve_cname("example.com", timeout=1.0, resolver="8.8.8.8") == "target.example.com"
+    finally:
+        _restore_subtake(monkeypatch)
+
+
+def test_resolve_cname_dnspython_exception_returns_none(monkeypatch) -> None:
+    """resolve_cname returns None when dnspython resolution raises (lines 292-300)."""
+    subtake_mod = _reload_subtake(monkeypatch)
+    try:
+        class _Resolver:
+            def resolve(self, hostname, rdtype):
+                raise subtake_mod.dns.exception.DNSException("no answer")
+
+        monkeypatch.setattr(subtake_mod.dns.resolver, "Resolver", _Resolver)
+        assert subtake_mod.resolve_cname("example.com", timeout=1.0, resolver="8.8.8.8") is None
+    finally:
+        _restore_subtake(monkeypatch)
+
+
+def test_resolve_a_records_dnspython_success(monkeypatch) -> None:
+    """resolve_a_records returns sorted unique IPs via dnspython when resolver given (lines 318-325)."""
+    subtake_mod = _reload_subtake(monkeypatch)
+    try:
+        monkeypatch.setattr(
+            subtake_mod.dns.resolver, "Resolver", _make_resolver_answers(["1.2.3.4", "5.6.7.8"])
+        )
+        assert subtake_mod.resolve_a_records("example.com", timeout=1.0, resolver="8.8.8.8") == ["1.2.3.4", "5.6.7.8"]
+    finally:
+        _restore_subtake(monkeypatch)
+
+
+def test_resolve_a_records_dnspython_exception_falls_back(monkeypatch) -> None:
+    """resolve_a_records falls back to socket when dnspython raises, returning [] on socket failure (lines 318-327)."""
+    subtake_mod = _reload_subtake(monkeypatch)
+    try:
+        class _Resolver:
+            def resolve(self, hostname, rdtype):
+                raise subtake_mod.dns.exception.DNSException("no answer")
+
+        monkeypatch.setattr(subtake_mod.dns.resolver, "Resolver", _Resolver)
+        monkeypatch.setattr(
+            subtake_mod.socket,
+            "getaddrinfo",
+            lambda *a, **k: (_ for _ in ()).throw(OSError("fail")),
+        )
+        assert subtake_mod.resolve_a_records("example.com", timeout=1.0, resolver="8.8.8.8") == []
+    finally:
+        _restore_subtake(monkeypatch)
+
+
+def test_resolve_aaaa_records_dnspython_success(monkeypatch) -> None:
+    """resolve_aaaa_records returns sorted unique IPv6 addresses via dnspython when resolver given (lines 342-349)."""
+    subtake_mod = _reload_subtake(monkeypatch)
+    try:
+        monkeypatch.setattr(
+            subtake_mod.dns.resolver, "Resolver", _make_resolver_answers(["2001:db8::1"])
+        )
+        assert subtake_mod.resolve_aaaa_records("example.com", timeout=1.0, resolver="8.8.8.8") == ["2001:db8::1"]
+    finally:
+        _restore_subtake(monkeypatch)
+
+
+def test_resolve_aaaa_records_dnspython_exception_falls_back(monkeypatch) -> None:
+    """resolve_aaaa_records falls back to socket when dnspython raises, returning [] on socket failure (lines 342-351)."""
+    subtake_mod = _reload_subtake(monkeypatch)
+    try:
+        class _Resolver:
+            def resolve(self, hostname, rdtype):
+                raise subtake_mod.dns.exception.DNSException("no answer")
+
+        monkeypatch.setattr(subtake_mod.dns.resolver, "Resolver", _Resolver)
+        monkeypatch.setattr(
+            subtake_mod.socket,
+            "getaddrinfo",
+            lambda *a, **k: (_ for _ in ()).throw(OSError("fail")),
+        )
+        assert subtake_mod.resolve_aaaa_records("example.com", timeout=1.0, resolver="8.8.8.8") == []
+    finally:
+        _restore_subtake(monkeypatch)
