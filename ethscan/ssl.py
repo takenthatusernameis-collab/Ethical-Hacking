@@ -230,7 +230,11 @@ def inspect_certificate(
 
                 try:
                     expiry = datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")
-                    result["days_remaining"] = (expiry - datetime.utcnow()).days
+                    from datetime import timezone
+                    expiry = datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")
+                    now_utc = datetime.now(timezone.utc)
+                    expiry_tz = expiry.replace(tzinfo=timezone.utc)
+                    result["days_remaining"] = (expiry_tz - now_utc).days
                     result["valid"] = result["days_remaining"] > 0
                 except (ValueError, TypeError):
                     result["valid"] = False

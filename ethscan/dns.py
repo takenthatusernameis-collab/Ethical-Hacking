@@ -141,8 +141,8 @@ def run_dns(
             return rtype, resolve_a_records(domain, timeout)
         elif rtype == "AAAA":
             return rtype, resolve_aaaa_records(domain, timeout)
-        elif DNS_AVAILABLE:
-            if server:
+        if server:
+            if DNS_AVAILABLE:
                 try:
                     resolver = dns.resolver.Resolver()
                     resolver.timeout = timeout
@@ -152,10 +152,8 @@ def run_dns(
                     return rtype, sorted(set(str(rdata) for rdata in answers))
                 except (dns.exception.DNSException, OSError, ValueError):
                     return rtype, []
-            else:
-                return rtype, resolve_with_dnspython(domain, rtype, timeout)
-        else:
             return rtype, []
+        return rtype, resolve_with_dnspython(domain, rtype, timeout)
 
     results: Dict[str, List[str]] = {}
 
