@@ -1,12 +1,17 @@
 """Tests for the ethscan mssql module."""
 
+import csv
+import io
 import json
+import socket
 import struct
+from unittest.mock import patch, MagicMock
 
 from ethscan.mssql import (
     DEFAULT_PORT,
     _normalize_target,
     _build_prelogin_request,
+    _send_recv,
     _parse_prelogin_response,
     _assess_prelogin,
     run_mssql,
@@ -17,6 +22,7 @@ from ethscan.mssql import (
     _OPTION_ENCRYPTION,
     _OPTION_INSTINST,
     _OPTION_THREADID,
+    _TDS_PRELOGIN,
 )
 
 
@@ -284,3 +290,826 @@ def test_formatters():
     assert "Encryption: REQUIRED" in csv_out
     assert "Instance name: MSSQLSERVER" in csv_out
     assert "Thread ID (SPID): 42" in csv_out
+
+
+# ---------------------------------------------------------------------------
+# _send_recv tests
+# ---------------------------------------------------------------------------
+
+
+def test_send_recv_with_connector():
+    def fake(host, port, req, timeout):
+        return b"response", None
+
+    data, err = _send_recv("h", 1433, b"req", 5.0, connector=fake)
+    assert data == b"response"
+    assert err is None
+
+
+def test_send_recv_connector_error():
+    def fake(host, port, req, timeout):
+        raise ValueError("connector broken")
+
+    data, err = _send_recv("h", 1433, b"req", 5.0, connector=fake)
+    assert data is None
+    assert "connector error" in err
+    assert "connector broken" in err
+
+
+def test_send_recv_connector_passes_all_args():
+    received = {}
+
+    def fake(host, port, req, timeout):
+        received["host"] = host
+        received["port"] = port
+        received["req"] = req
+        received["timeout"] = timeout
+        return b"+PONG\r\n", None
+
+    _send_recv("mssql.example.com", 1433, b"PING", 2.5, connector=fake)
+    assert received["host"] == "mssql.example.com"
+    assert received["port"] == 1433
+    assert received["req"] == b"PING"
+    assert received["timeout"] == 2.5
+
+
+def test_send_recv_socket_timeout_recv():
+    with patch("ethscan.mssql.socket.create_connection") as mock_conn:
+        mock_sock = MagicMock()
+        mock_conn.return_value = mock_sock
+        mock_sock.__enter__.return_value = mock_sock
+        mock_sock.recv.side_effect = socket.timeout("timed out")
+        data, err = _send_recv("127.0.0.1", 1433, b"req", 1.0)
+        assert data is None
+        assert err is None
+
+
+def test_send_recv_socket_timeout_connect():
+    with patch("ethscan.mssql.socket.create_connection") as mock_conn:
+        mock_conn.side_effect = socket.timeout("Connection timed out")
+        data, err = _send_recv("127.0.0.1", 1433, b"req", 1.0)
+        assert data is None
+        assert err == "Timeout"
+
+
+def test_send_recv_socket_connection_refused():
+    with patch("ethscan.mssql.socket.create_connection") as mock_conn:
+        mock_conn.side_effect = ConnectionRefusedError()
+        data, err = _send_recv("127.0.0.1", 1433, b"req", 1.0)
+        assert data is None
+        assert err == "Connection refused"
+
+
+def test_send_recv_socket_oserror():
+    with patch("ethscan.mssql.socket.create_connection") as mock_conn:
+        mock_conn.side_effect = OSError("Network unreachable")
+        data, err = _send_recv("127.0.0.1", 1433, b"req", 1.0)
+        assert data is None
+        assert "Network unreachable" in err
+
+
+def test_send_recv_socket_success():
+    with patch("ethscan.mssql.socket.create_connection") as mock_conn:
+        mock_sock = MagicMock()
+        mock_conn.return_value = mock_sock
+        mock_sock.__enter__.return_value = mock_sock
+        mock_sock.recv.side_effect = [b"response data", b""]
+        data, err = _send_recv("127.0.0.1", 1433, b"req", 1.0)
+        assert data == b"response data"
+        assert err is None
+        mock_sock.sendall.assert_called_once_with(b"req")
+
+
+def test_send_recv_socket_empty_request():
+    with patch("ethscan.mssql.socket.create_connection") as mock_conn:
+        mock_sock = MagicMock()
+        mock_conn.return_value = mock_sock
+        mock_sock.__enter__.return_value = mock_sock
+        mock_sock.recv.side_effect = [b"data", b""]
+        data, err = _send_recv("127.0.0.1", 1433, b"", 1.0)
+        assert data == b"data"
+        assert err is None
+        mock_sock.sendall.assert_not_called()
+
+
+def test_send_recv_socket_multi_chunk():
+    with patch("ethscan.mssql.socket.create_connection") as mock_conn:
+        mock_sock = MagicMock()
+        mock_conn.return_value = mock_sock
+        mock_sock.__enter__.return_value = mock_sock
+        mock_sock.recv.side_effect = [b"chunk1", b"chunk2", b""]
+        data, err = _send_recv("127.0.0.1", 1433, b"req", 1.0)
+        assert data == b"chunk1chunk2"
+        assert err is None
+
+
+# ---------------------------------------------------------------------------
+# _build_prelogin_request structure tests
+# ---------------------------------------------------------------------------
+
+
+def test_build_prelogin_request_header_fields():
+    req = _build_prelogin_request()
+    tds_type, flags, msg_len, channel_id, packet_num, window = struct.unpack(
+        "!BBHHBH", req[:9]
+    )
+    assert tds_type == _TDS_PRELOGIN
+    assert flags == 0x01
+    assert msg_len == len(req)
+    assert channel_id == 0x0000
+    assert packet_num == 0x01
+    assert window == 0x0000
+
+
+def test_build_prelogin_request_options():
+    req = _build_prelogin_request()
+    payload = req[9:]
+    pos = 0
+    opt_type, opt_len = struct.unpack("!BB", payload[pos : pos + 2])
+    assert opt_type == _OPTION_VERSION
+    assert opt_len == 4
+    assert payload[pos + 2 : pos + 2 + opt_len] == struct.pack("!I", 0x00000000)
+    pos += 2 + opt_len
+
+    opt_type, opt_len = struct.unpack("!BB", payload[pos : pos + 2])
+    assert opt_type == _OPTION_ENCRYPTION
+    assert opt_len == 1
+    assert payload[pos + 2] == 0x00
+    pos += 2 + opt_len
+
+    opt_type, opt_len = struct.unpack("!BB", payload[pos : pos + 2])
+    assert opt_type == _OPTION_INSTINST
+    assert opt_len == 0
+    pos += 2 + opt_len
+
+    opt_type, opt_len = struct.unpack("!BB", payload[pos : pos + 2])
+    assert opt_type == _OPTION_THREADID
+    assert opt_len == 0
+    pos += 2 + opt_len
+
+    assert pos == len(payload)
+
+
+def test_build_prelogin_request_total_length():
+    req = _build_prelogin_request()
+    msg_len = struct.unpack("!H", req[2:4])[0]
+    assert msg_len == len(req)
+
+
+def test_build_prelogin_request_ignores_params():
+    req1 = _build_prelogin_request()
+    req2 = _build_prelogin_request(
+        version="16.0.0", encryption="REQUIRED", instinst="FOO", threadid=42
+    )
+    assert req1 == req2
+
+
+# ---------------------------------------------------------------------------
+# _parse_prelogin_response edge case tests
+# ---------------------------------------------------------------------------
+
+
+def test_parse_prelogin_response_encryption_off():
+    resp = _tds_prelogin_resp(_add_option(_OPTION_ENCRYPTION, b"\x00"))
+    parsed = _parse_prelogin_response(resp)
+    assert parsed["encryption"] == "OFF"
+
+
+def test_parse_prelogin_response_encryption_on():
+    resp = _tds_prelogin_resp(_add_option(_OPTION_ENCRYPTION, b"\x01"))
+    parsed = _parse_prelogin_response(resp)
+    assert parsed["encryption"] == "ON"
+
+
+def test_parse_prelogin_response_encryption_required():
+    resp = _tds_prelogin_resp(_add_option(_OPTION_ENCRYPTION, b"\x02"))
+    parsed = _parse_prelogin_response(resp)
+    assert parsed["encryption"] == "REQUIRED"
+
+
+def test_parse_prelogin_response_encryption_not_supported():
+    resp = _tds_prelogin_resp(_add_option(_OPTION_ENCRYPTION, b"\x03"))
+    parsed = _parse_prelogin_response(resp)
+    assert parsed["encryption"] == "NOT SUPPORTED"
+
+
+def test_parse_prelogin_response_encryption_unknown():
+    resp = _tds_prelogin_resp(_add_option(_OPTION_ENCRYPTION, b"\x05"))
+    parsed = _parse_prelogin_response(resp)
+    assert parsed["encryption"] == "UNKNOWN(5)"
+
+
+def test_parse_prelogin_response_encryption_empty_value():
+    resp = _tds_prelogin_resp(_add_option(_OPTION_ENCRYPTION, b""))
+    parsed = _parse_prelogin_response(resp)
+    assert parsed["encryption"] == "UNKNOWN"
+
+
+def test_parse_prelogin_response_version_2_bytes():
+    resp = _tds_prelogin_resp(_add_option(_OPTION_VERSION, b"ab"))
+    parsed = _parse_prelogin_response(resp)
+    assert parsed["version"] == "ab"
+
+
+def test_parse_prelogin_response_version_6_bytes():
+    resp = _tds_prelogin_resp(_add_option(_OPTION_VERSION, b"abcdef"))
+    parsed = _parse_prelogin_response(resp)
+    assert parsed["version"] == "abcdef"
+
+
+def test_parse_prelogin_response_thread_id_short():
+    resp = _tds_prelogin_resp(_add_option(_OPTION_THREADID, struct.pack("!H", 42)))
+    parsed = _parse_prelogin_response(resp)
+    assert parsed["thread_id"] is None
+
+
+def test_parse_prelogin_response_thread_id_3_bytes():
+    resp = _tds_prelogin_resp(_add_option(_OPTION_THREADID, b"\x00\x00\x2A"))
+    parsed = _parse_prelogin_response(resp)
+    assert parsed["thread_id"] is None
+
+
+def test_parse_prelogin_response_empty_instance_name():
+    resp = _tds_prelogin_resp(_add_option(_OPTION_INSTINST, b""))
+    parsed = _parse_prelogin_response(resp)
+    assert parsed["instance_name"] == ""
+
+
+def test_parse_prelogin_response_unknown_option_type():
+    resp = _tds_prelogin_resp(_add_option(0x04, b"\x01"))
+    parsed = _parse_prelogin_response(resp)
+    assert parsed["error"] is None
+    assert parsed["version"] is None
+    assert parsed["encryption"] is None
+    assert parsed["instance_name"] is None
+    assert parsed["thread_id"] is None
+
+
+def test_parse_prelogin_response_multiple_unknown_options():
+    payload = (
+        _add_option(0x04, b"\x01")
+        + _add_option(0x05, b"\x00")
+        + _add_option(0x06, b"")
+    )
+    resp = _tds_prelogin_resp(payload)
+    parsed = _parse_prelogin_response(resp)
+    assert parsed["error"] is None
+    assert parsed["version"] is None
+    assert parsed["encryption"] is None
+
+
+def test_parse_prelogin_response_msg_len_truncation():
+    payload = _add_option(_OPTION_ENCRYPTION, b"\x02")
+    resp = _tds_prelogin_resp(payload)
+    truncated = resp[: len(resp) - 1]
+    parsed = _parse_prelogin_response(truncated)
+    assert parsed["error"] is None
+    assert parsed["encryption"] is None
+
+
+def test_parse_prelogin_response_msg_len_larger_than_data():
+    payload = _add_option(_OPTION_ENCRYPTION, b"\x02")
+    header = struct.pack(
+        "!BBHHBH", _TDS_PRELOGIN, 0x01, 9 + len(payload) + 50, 0x0000, 0x01, 0x0000
+    )
+    resp = header + payload
+    parsed = _parse_prelogin_response(resp)
+    assert parsed["encryption"] == "REQUIRED"
+    assert parsed["error"] is None
+
+
+def test_parse_prelogin_response_truncated_option():
+    payload = b"\x01\x05\x02"
+    resp = _tds_prelogin_resp(payload)
+    parsed = _parse_prelogin_response(resp)
+    assert parsed["error"] is None
+    assert parsed["encryption"] is None
+
+
+def test_parse_prelogin_response_short_data():
+    parsed = _parse_prelogin_response(b"\x12\x01\x00\x05")
+    assert parsed["error"] is not None
+    assert "too short" in parsed["error"]
+
+
+def test_parse_prelogin_response_exactly_header():
+    header = struct.pack(
+        "!BBHHBH", _TDS_PRELOGIN, 0x01, 9, 0x0000, 0x01, 0x0000
+    )
+    parsed = _parse_prelogin_response(header)
+    assert parsed["version"] is None
+    assert parsed["encryption"] is None
+    assert parsed["instance_name"] is None
+    assert parsed["thread_id"] is None
+    assert parsed["error"] is None
+
+
+def test_parse_prelogin_response_msg_len_smaller_than_data():
+    payload = _add_option(_OPTION_ENCRYPTION, b"\x02")
+    header = struct.pack(
+        "!BBHHBH", _TDS_PRELOGIN, 0x01, 9 + len(payload), 0x0000, 0x01, 0x0000
+    )
+    resp = header + payload + b"\x00\x00\x00"
+    parsed = _parse_prelogin_response(resp)
+    assert parsed["encryption"] == "REQUIRED"
+    assert parsed["error"] is None
+
+
+def test_parse_prelogin_response_unknown_encryption_value():
+    resp = _tds_prelogin_resp(_add_option(_OPTION_ENCRYPTION, b"\x07"))
+    parsed = _parse_prelogin_response(resp)
+    assert parsed["encryption"] == "UNKNOWN(7)"
+
+
+def test_parse_prelogin_response_empty_instance_decoded():
+    resp = _tds_prelogin_resp(_add_option(_OPTION_INSTINST, b"\x00"))
+    parsed = _parse_prelogin_response(resp)
+    assert parsed["instance_name"] is not None
+
+
+# ---------------------------------------------------------------------------
+# _assess_prelogin edge case tests
+# ---------------------------------------------------------------------------
+
+
+def test_assess_prelogin_encryption_off():
+    data = {
+        "version": "10.0.0",
+        "encryption": "OFF",
+        "instance_name": "MSSQLSERVER",
+        "thread_id": 123,
+        "error": None,
+    }
+    findings = _assess_prelogin(data)
+    assert any("Encryption: OFF" in f for f in findings)
+    assert any("plaintext" in f for f in findings)
+
+
+def test_assess_prelogin_encryption_not_supported():
+    data = {
+        "version": None,
+        "encryption": "NOT SUPPORTED",
+        "instance_name": None,
+        "thread_id": None,
+        "error": None,
+    }
+    findings = _assess_prelogin(data)
+    assert any("Encryption: NOT SUPPORTED" in f for f in findings)
+    assert any("plaintext" in f for f in findings)
+
+
+def test_assess_prelogin_encryption_unknown():
+    data = {
+        "version": None,
+        "encryption": "UNKNOWN(5)",
+        "instance_name": None,
+        "thread_id": None,
+        "error": None,
+    }
+    findings = _assess_prelogin(data)
+    assert any("Encryption: UNKNOWN(5)" in f for f in findings)
+    assert not any("plaintext" in f for f in findings)
+    assert not any("Encryption is required" in f for f in findings)
+
+
+def test_assess_prelogin_encryption_on():
+    data = {
+        "version": "15.0.0",
+        "encryption": "ON",
+        "instance_name": "SQLEXPRESS",
+        "thread_id": 5,
+        "error": None,
+    }
+    findings = _assess_prelogin(data)
+    assert any("Encryption: ON" in f for f in findings)
+    assert not any("plaintext" in f for f in findings)
+
+
+def test_assess_prelogin_encryption_required():
+    data = {
+        "version": None,
+        "encryption": "REQUIRED",
+        "instance_name": None,
+        "thread_id": None,
+        "error": None,
+    }
+    findings = _assess_prelogin(data)
+    assert any("Encryption: REQUIRED" in f for f in findings)
+    assert any("Encryption is required." in f for f in findings)
+
+
+def test_assess_prelogin_none_version():
+    data = {
+        "version": None,
+        "encryption": "ON",
+        "instance_name": None,
+        "thread_id": None,
+        "error": None,
+    }
+    findings = _assess_prelogin(data)
+    assert not any("MSSQL server version" in f for f in findings)
+    assert any("Encryption: ON" in f for f in findings)
+
+
+def test_assess_prelogin_missing_fields():
+    findings = _assess_prelogin({})
+    assert findings == []
+
+
+def test_assess_prelogin_error_only():
+    data = {
+        "version": None,
+        "encryption": None,
+        "instance_name": None,
+        "thread_id": None,
+        "error": "Parse error",
+    }
+    findings = _assess_prelogin(data)
+    assert any("Error: Parse error" in f for f in findings)
+    assert len(findings) == 1
+
+
+def test_assess_prelogin_thread_id_zero():
+    data = {
+        "version": None,
+        "encryption": None,
+        "instance_name": None,
+        "thread_id": 0,
+        "error": None,
+    }
+    findings = _assess_prelogin(data)
+    assert any("Thread ID (SPID): 0" in f for f in findings)
+
+
+# ---------------------------------------------------------------------------
+# run_mssql edge case tests
+# ---------------------------------------------------------------------------
+
+
+def _make_connector(version_val=0x0A000000, enc_val=b"\x02", instance=b"INSTANCE1",
+                    threadid=99):
+    def connector(host, port, request, timeout):
+        payload = (
+            _add_option(_OPTION_VERSION, struct.pack("!I", version_val))
+            + _add_option(_OPTION_ENCRYPTION, enc_val)
+            + _add_option(_OPTION_INSTINST, instance)
+            + _add_option(_OPTION_THREADID, struct.pack("!I", threadid))
+        )
+        return _tds_prelogin_resp(payload), None
+    return connector
+
+
+def test_run_mssql_empty_probes():
+    result = run_mssql(
+        target="example.com:1433",
+        probes=[],
+        connector=_make_connector(),
+    )
+    assert result["accessible"] is False
+    assert result["prelogin"] == {}
+    assert result["error"] is None
+    assert result["version"] is None
+    assert result["findings"] == []
+
+
+def test_run_mssql_invalid_target():
+    result = run_mssql(target="", connector=_make_connector())
+    assert result["accessible"] is False
+    assert result["host"] is None
+    assert result["prelogin"] == {}
+    assert "Could not parse host" in result["error"]
+
+
+def test_run_mssql_no_response():
+    def connector(host, port, request, timeout):
+        return None, None
+
+    result = run_mssql(target="example.com:1433", connector=connector)
+    assert result["accessible"] is False
+    assert result["error"] == "No response from server"
+
+
+def test_run_mssql_response_too_short():
+    def connector(host, port, request, timeout):
+        return b"\x12", None
+
+    result = run_mssql(target="example.com:1433", connector=connector)
+    assert result["accessible"] is True
+    assert result["prelogin"]["error"] is not None
+    assert "too short" in result["prelogin"]["error"]
+
+
+def test_run_mssql_non_prelogin_response():
+    def connector(host, port, request, timeout):
+        header = struct.pack(
+            "!BBHHBH", 0x10, 0x01, 9, 0x0000, 0x01, 0x0000
+        )
+        return header, None
+
+    result = run_mssql(target="example.com:1433", connector=connector)
+    assert result["accessible"] is True
+    assert "Expected PRELOGIN" in result["prelogin"]["error"]
+
+
+def test_run_mssql_case_insensitive_probes():
+    result = run_mssql(
+        target="example.com:1433",
+        probes=["PRELOGIN"],
+        connector=_make_connector(),
+    )
+    assert result["accessible"] is True
+    assert result["version"] == "10.0.0"
+
+
+def test_run_mssql_case_mixed_probes():
+    result = run_mssql(
+        target="example.com:1433",
+        probes=["  PreLogin  "],
+        connector=_make_connector(),
+    )
+    assert result["accessible"] is True
+    assert result["version"] == "10.0.0"
+
+
+def test_run_mssql_unknown_probes():
+    result = run_mssql(
+        target="example.com:1433",
+        probes=["unknown_probe"],
+        connector=_make_connector(),
+    )
+    assert result["accessible"] is False
+    assert result["error"] is None
+    assert result["prelogin"] == {}
+    assert result["version"] is None
+
+
+def test_run_mssql_connector_error():
+    def connector(host, port, request, timeout):
+        raise ValueError("Connector broken")
+
+    result = run_mssql(target="example.com:1433", connector=connector)
+    assert result["accessible"] is False
+    assert "connector error" in result["error"]
+    assert "Connector broken" in result["error"]
+
+
+def test_run_mssql_strips_whitespace_probes():
+    result = run_mssql(
+        target="example.com:1433",
+        probes=["  prelogin  "],
+        connector=_make_connector(),
+    )
+    assert result["accessible"] is True
+
+
+def test_run_mssql_error_response():
+    def connector(host, port, request, timeout):
+        return None, "Connection refused"
+
+    result = run_mssql(target="example.com:1433", connector=connector)
+    assert result["accessible"] is False
+    assert result["error"] == "Connection refused"
+
+
+def test_run_mssql_default_port():
+    result = run_mssql(target="example.com", connector=lambda *a: (b"", None))
+    assert result["port"] == DEFAULT_PORT
+
+
+def test_run_mssql_uses_parsed_port():
+    result = run_mssql(
+        target="example.com:1434",
+        connector=lambda h, p, r, t: (b"", None),
+    )
+    assert result["port"] == 1434
+
+
+def test_run_mssql_explicit_port_overrides():
+    result = run_mssql(
+        target="example.com:1434",
+        port=1435,
+        connector=lambda h, p, r, t: (b"", None),
+    )
+    assert result["port"] == 1435
+
+
+def test_run_mssql_empty_probe_list_strips():
+    result = run_mssql(
+        target="example.com",
+        probes=["  "],
+        connector=_make_connector(),
+    )
+    assert result["accessible"] is False
+    assert result["error"] is None
+
+
+# ---------------------------------------------------------------------------
+# Formatter edge case tests
+# ---------------------------------------------------------------------------
+
+
+def test_format_mssql_report_markdown_error_section():
+    data = {
+        "target": "testhost:1433",
+        "host": "testhost",
+        "port": 1433,
+        "accessible": False,
+        "prelogin": {},
+        "version": None,
+        "findings": [],
+        "error": "Connection refused",
+    }
+    md = format_mssql_report_markdown(data)
+    assert "## Error" in md
+    assert "**Error:** Connection refused" in md
+
+
+def test_format_mssql_report_markdown_no_findings():
+    data = {
+        "target": "testhost:1433",
+        "host": "testhost",
+        "port": 1433,
+        "accessible": False,
+        "prelogin": {},
+        "version": None,
+        "findings": [],
+        "error": None,
+    }
+    md = format_mssql_report_markdown(data)
+    assert "No notable findings" in md
+
+
+def test_format_mssql_report_markdown_empty_prelogin():
+    data = {
+        "target": "testhost:1433",
+        "host": "testhost",
+        "port": 1433,
+        "accessible": True,
+        "prelogin": {},
+        "version": None,
+        "findings": ["Some finding"],
+        "error": None,
+    }
+    md = format_mssql_report_markdown(data)
+    assert "## PRELOGIN Response" not in md
+
+
+def test_format_mssql_report_markdown_none_host():
+    data = {
+        "target": "testhost:1433",
+        "host": None,
+        "port": 1433,
+        "accessible": False,
+        "prelogin": {},
+        "version": None,
+        "findings": [],
+        "error": None,
+    }
+    md = format_mssql_report_markdown(data)
+    assert "**Host:** N/A" in md
+
+
+def test_format_mssql_report_markdown_with_version():
+    data = {
+        "target": "testhost:1433",
+        "host": "testhost",
+        "port": 1433,
+        "accessible": True,
+        "prelogin": {"version": "15.0.0", "encryption": "REQUIRED"},
+        "version": "15.0.0",
+        "findings": ["Finding"],
+        "error": None,
+    }
+    md = format_mssql_report_markdown(data)
+    assert "**Server Version:** 15.0.0" in md
+
+
+def test_format_mssql_report_markdown_pipe_escaping():
+    data = {
+        "target": "testhost:1433",
+        "host": "testhost",
+        "port": 1433,
+        "accessible": True,
+        "prelogin": {"version": "15.0.0", "encryption": "ON",
+                      "instance_name": "INST|ANCE", "thread_id": 42},
+        "version": "15.0.0",
+        "findings": [],
+        "error": None,
+    }
+    md = format_mssql_report_markdown(data)
+    assert "- **instance_name:** INST\\|ANCE" in md
+    assert "- **thread_id:** 42" in md
+
+
+def test_format_mssql_report_csv_empty_findings():
+    data = {
+        "target": "h:1433",
+        "host": "h",
+        "port": 1433,
+        "accessible": True,
+        "prelogin": {"version": "10.0.0", "encryption": "ON"},
+        "version": "10.0.0",
+        "findings": [],
+        "error": None,
+    }
+    csv_out = format_mssql_report_csv(data)
+    reader = csv.reader(io.StringIO(csv_out))
+    rows = list(reader)
+    assert rows[0] == [
+        "target", "host", "port", "accessible", "version", "encryption",
+        "instance_name", "thread_id", "findings", "error",
+    ]
+    assert rows[1][8] == ""
+
+
+def test_format_mssql_report_csv_error():
+    data = {
+        "target": "h:1433",
+        "host": "h",
+        "port": 1433,
+        "accessible": False,
+        "prelogin": {},
+        "version": None,
+        "findings": [],
+        "error": "Connection timed out",
+    }
+    csv_out = format_mssql_report_csv(data)
+    reader = csv.reader(io.StringIO(csv_out))
+    rows = list(reader)
+    assert rows[1][9] == "Connection timed out"
+    assert rows[1][3] == "false"
+
+
+def test_format_mssql_report_csv_escaping():
+    data = {
+        "target": "h:1433",
+        "host": "host,with,commas",
+        "port": 1433,
+        "accessible": True,
+        "prelogin": {"version": "10.0.0", "encryption": "ON"},
+        "version": "10.0.0",
+        "findings": ["Finding with, commas", "Another finding"],
+        "error": "Error, with comma",
+    }
+    csv_out = format_mssql_report_csv(data)
+    reader = csv.reader(io.StringIO(csv_out))
+    rows = list(reader)
+    assert rows[1][1] == "host,with,commas"
+    assert "Finding with, commas" in rows[1][8]
+    assert rows[1][9] == "Error, with comma"
+
+
+def test_format_mssql_report_csv_no_prelogin():
+    data = {
+        "target": "h:1433",
+        "host": "h",
+        "port": 1433,
+        "accessible": False,
+        "prelogin": {},
+        "version": None,
+        "findings": [],
+        "error": None,
+    }
+    csv_out = format_mssql_report_csv(data)
+    reader = csv.reader(io.StringIO(csv_out))
+    rows = list(reader)
+    assert rows[1][4] == ""  # version empty
+    assert rows[1][5] == ""  # encryption empty
+    assert rows[1][6] == ""  # instance_name empty
+    assert rows[1][7] == ""  # thread_id empty
+
+
+def test_format_mssql_report_json_empty():
+    data = {
+        "target": "h:1433",
+        "host": "h",
+        "port": 1433,
+        "accessible": False,
+        "prelogin": {},
+        "version": None,
+        "findings": [],
+        "error": "timeout",
+    }
+    json_out = format_mssql_report_json(data)
+    parsed = json.loads(json_out)
+    assert parsed["accessible"] is False
+    assert parsed["error"] == "timeout"
+
+
+def test_format_mssql_report_json_accessible():
+    data = {
+        "target": "h:1433",
+        "host": "h",
+        "port": 1433,
+        "accessible": True,
+        "prelogin": {"version": "16.0.0", "encryption": "REQUIRED",
+                      "instance_name": "MSSQLSERVER", "thread_id": 42},
+        "version": "16.0.0",
+        "findings": ["finding1"],
+        "error": None,
+    }
+    json_out = format_mssql_report_json(data)
+    parsed = json.loads(json_out)
+    assert parsed["accessible"] is True
+    assert parsed["prelogin"]["encryption"] == "REQUIRED"
+    assert parsed["prelogin"]["thread_id"] == 42
