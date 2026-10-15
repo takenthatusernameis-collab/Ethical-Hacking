@@ -430,3 +430,58 @@ def test_format_urlcheck_report_csv_empty() -> None:
     reader = list(csv.reader(io.StringIO(output)))
     assert reader[0] == ["section", "key", "value"]
     assert ["summary", "total_findings", "0"] in reader
+
+
+def test_run_urlcheck_with_weak_ssl(monkeypatch) -> None:
+    from ethscan import web, ssl
+
+    def mock_run_web_checks(target, checks, timeout=5.0):
+        return {
+            "target": target,
+            "host": "example.com",
+            "checks": checks,
+            "secure": False,
+            "security_headers": {
+                "present": [],
+                "missing": ["Strict-Transport-Security"],
+                "missing_count": 1,
+            },
+            "information_disclosure": ["Server: Apache/2.2.3"],
+        }
+
+    def mock_run_ssl(host, port=443, timeout=5.0):
+        return {
+            "host": host,
+            "port": port,
+            "valid": False,
+            "error": "Certificate expired",
+            "cert": {
+                "subject": "example.com",
+                "issuer": "Test CA",
+                "signature_algorithm": "sha1WithRSAEncryption",
+                "key_size": 1024,
+                "not_before": "2020-01-01",
+                "not_after": "2021-01-01",
+            },
+        }
+
+    monkeypatch.setattr(web, "run_web_checks", mock_run_web_checks)
+    monkeypatch.setattr(ssl, "run_ssl", mock_run_ssl)
+
+    results = run_urlcheck(
+        "https://example.com",
+        ["headers", "info_disclosure", "ssl"],
+        wordlist=["/admin"],
+        fuzz_paths=True,
+        port=443,
+        timeout=5.0,
+        workers=5,
+    )
+    assert results["summary"]["total_findings"] > 0
+    assert results["summary"]["ssl_checked"] is True
+
+
+def test_urlcheck_normalize_url_trims() -> None:
+    from ethscan.urlcheck import _normalize_url
+
+    assert _normalize_url("  example.com  ") == "https://example.com"
