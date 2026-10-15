@@ -17272,6 +17272,49 @@ def test_fuzz_format_csv_alias(monkeypatch) -> None:
     assert "target,base_url,path,status_code,error,is_finding" in result.output
 
 
+def test_fuzz_output_format_json(monkeypatch) -> None:
+    mock_results = {
+        "target": "https://example.com",
+        "base_url": "https://example.com",
+        "paths_tested": 2,
+        "findings": [{"path": "/admin", "status_code": 200, "error": None}],
+        "all_results": [
+            {"path": "/admin", "status_code": 200, "error": None},
+            {"path": "/login", "status_code": 404, "error": None},
+        ],
+    }
+    monkeypatch.setattr("ethscan.cli.run_fuzz", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["fuzz", "--target", "https://example.com", "--output-format", "json"])
+    assert result.exit_code == 0
+    assert '"target": "https://example.com"' in result.output
+    assert '"paths_tested": 2' in result.output
+    assert '/admin' in result.output
+
+
+def test_fuzz_output_format_markdown(monkeypatch) -> None:
+    mock_results = {
+        "target": "https://example.com",
+        "base_url": "https://example.com",
+        "paths_tested": 2,
+        "findings": [{"path": "/admin", "status_code": 200, "error": None}],
+        "all_results": [
+            {"path": "/admin", "status_code": 200, "error": None},
+            {"path": "/login", "status_code": 404, "error": None},
+        ],
+    }
+    monkeypatch.setattr("ethscan.cli.run_fuzz", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["fuzz", "--target", "https://example.com", "--output-format", "markdown"])
+    assert result.exit_code == 0
+    assert "# ethscan HTTP Fuzz Report" in result.output
+    assert "- **Target:** https://example.com" in result.output
+    assert "- **Paths Tested:** 2" in result.output
+    assert "- **Findings (non-404):** 1" in result.output
+    assert "| /admin | 200 |" in result.output
+    assert "| /login | 404 |" in result.output
+
+
 def test_fuzz_workers_option(monkeypatch) -> None:
     """Test that --workers option passes workers parameter to run_fuzz."""
     captured = {}
@@ -19095,6 +19138,33 @@ def test_redis_output_format_precedence(monkeypatch) -> None:
     assert "target,host,port" in result.output
 
 
+def test_redis_output_format_markdown(monkeypatch) -> None:
+    def mock_run_redis(target, port=None, timeout=3.0, probes=None, connector=None):
+        return {
+            "target": target,
+            "host": target,
+            "port": 6379,
+            "ping": "PONG",
+            "info": {"redis_version": "7.0.0", "role": "master"},
+            "config": {"bind": "127.0.0.1", "requirepass": ""},
+            "dangerous_findings": [],
+            "accessible": True,
+            "error": None,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_redis", mock_run_redis)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["redis", "--target", "example.com", "--output-format", "markdown", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "# ethscan Redis Reconnaissance Report" in result.output
+    assert "- **Target:** example.com" in result.output
+    assert "- **Port:** 6379" in result.output
+    assert "- **Accessible:** Yes" in result.output
+    assert "## PING" in result.output
+    assert "- **Response:** PONG" in result.output
+    assert "## Server Info" in result.output
+
+
 def _smb_mock_results(target: str) -> dict:
     return {
         "target": target,
@@ -19195,6 +19265,24 @@ def test_smb_output_format_precedence(monkeypatch) -> None:
     result = runner.invoke(cli, ["smb", "--target", "example.com", "--output-format", "csv", "--format", "json", "--timeout", "1.0"])
     assert result.exit_code == 0
     assert "target,host,port" in result.output
+
+
+def test_smb_output_format_markdown(monkeypatch) -> None:
+    def mock_run_smb(target, port=None, timeout=3.0, dialects=None, smb2=False, connector=None):
+        return _smb_mock_results(target)
+
+    monkeypatch.setattr("ethscan.cli.run_smb", mock_run_smb)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["smb", "--target", "example.com", "--output-format", "markdown", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert "# ethscan SMB Reconnaissance Report" in result.output
+    assert "- **Target:** example.com" in result.output
+    assert "- **Host:** 192.168.1.100" in result.output
+    assert "- **Port:** 445" in result.output
+    assert "- **Accessible:** Yes" in result.output
+    assert "## Negotiation" in result.output
+    assert "- **Protocol:** SMB1" in result.output
+    assert "- **Dialect:** NT LM 0.12" in result.output
 
 
 def test_smb_port_passed_through(monkeypatch) -> None:
