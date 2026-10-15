@@ -16843,6 +16843,178 @@ def test_web_format_csv_alias(monkeypatch) -> None:
     assert "X-Frame-Options,present" in result.output
 
 
+def test_web_offline_target_json(monkeypatch) -> None:
+    mock_results = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "security_headers": {
+            "present": ["X-Frame-Options"],
+            "missing": ["Content-Security-Policy"],
+            "total": 8,
+            "present_count": 1,
+            "missing_count": 7,
+        },
+    }
+    monkeypatch.setattr("ethscan.cli.run_web_checks", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["web", "--target", "https://example.com", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["target"] == "https://example.com"
+    assert parsed["secure"] is True
+    assert parsed["security_headers"]["present_count"] == 1
+
+
+def test_web_offline_target_markdown(monkeypatch) -> None:
+    mock_results = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "security_headers": {
+            "present": ["X-Frame-Options"],
+            "missing": ["Content-Security-Policy"],
+            "total": 8,
+            "present_count": 1,
+            "missing_count": 7,
+        },
+    }
+    monkeypatch.setattr("ethscan.cli.run_web_checks", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["web", "--target", "https://example.com", "--format", "markdown", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "# ethscan Web Security Report" in result.output
+    assert "- **Target:** https://example.com" in result.output
+    assert "X-Frame-Options" in result.output
+
+
+def test_web_out_option_json(tmp_path, monkeypatch) -> None:
+    mock_results = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "security_headers": {
+            "present": ["X-Frame-Options"],
+            "missing": [],
+            "total": 8,
+            "present_count": 1,
+            "missing_count": 7,
+        },
+    }
+    monkeypatch.setattr("ethscan.cli.run_web_checks", lambda *a, **k: mock_results)
+    out_file = tmp_path / "web_report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "web",
+            "--target",
+            "https://example.com",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    parsed = json.loads(content)
+    assert parsed["target"] == "https://example.com"
+
+
+def test_web_out_option_markdown(tmp_path, monkeypatch) -> None:
+    mock_results = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "security_headers": {
+            "present": ["X-Frame-Options"],
+            "missing": [],
+            "total": 8,
+            "present_count": 1,
+            "missing_count": 7,
+        },
+    }
+    monkeypatch.setattr("ethscan.cli.run_web_checks", lambda *a, **k: mock_results)
+    out_file = tmp_path / "web_report.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "web",
+            "--target",
+            "https://example.com",
+            "--format",
+            "markdown",
+            "--out",
+            str(out_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "# ethscan Web Security Report" in content
+    assert "X-Frame-Options" in content
+
+
+def test_web_output_format_precedence_over_format(monkeypatch) -> None:
+    mock_results = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "security_headers": {"present": [], "missing": [], "total": 8, "present_count": 0, "missing_count": 8},
+    }
+    monkeypatch.setattr("ethscan.cli.run_web_checks", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "web",
+            "--target",
+            "https://example.com",
+            "--format",
+            "json",
+            "--output-format",
+            "csv",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    # --output-format wins over deprecated --format
+    assert result.output.strip().splitlines()[0] == "field,value"
+    assert "target,https://example.com" in result.output
+
+
+def test_web_default_format_is_json(monkeypatch) -> None:
+    mock_results = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "security_headers": {"present": [], "missing": [], "total": 8, "present_count": 0, "missing_count": 8},
+    }
+    monkeypatch.setattr("ethscan.cli.run_web_checks", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["web", "--target", "https://example.com", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["target"] == "https://example.com"
+
+
 def test_wifi_output_format_csv(monkeypatch) -> None:
     mock_results = {
         "platform": "Linux",
@@ -16929,6 +17101,61 @@ def test_jwt_format_csv_alias() -> None:
     assert result.exit_code == 0
     assert "field,value" in result.output
     assert "algorithm,HS256" in result.output
+
+
+def test_jwt_offline_json() -> None:
+    token = _make_jwt({"alg": "HS256"}, {"sub": "user1", "exp": 1800000000})
+    runner = CliRunner()
+    result = runner.invoke(cli, ["jwt", "--token", token])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["valid_structure"] is True
+    assert parsed["algorithm"] == "HS256"
+
+
+def test_jwt_offline_markdown() -> None:
+    token = _make_jwt({"alg": "HS256"}, {"sub": "user1", "exp": 1800000000})
+    runner = CliRunner()
+    result = runner.invoke(cli, ["jwt", "--token", token, "--format", "markdown"])
+    assert result.exit_code == 0
+    assert "# ethscan JWT Inspection Report" in result.output
+    assert "- **Algorithm:** HS256" in result.output
+    assert "- **Subject (sub):** user1" in result.output
+
+
+def test_jwt_out_option_json(tmp_path) -> None:
+    token = _make_jwt({"alg": "HS256"}, {"sub": "user1", "exp": 1800000000})
+    out_file = tmp_path / "jwt_report.json"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["jwt", "--token", token, "--out", str(out_file)])
+    assert result.exit_code == 0
+    assert "Report written" in result.output
+    assert out_file.exists()
+    content = out_file.read_text()
+    parsed = json.loads(content)
+    assert parsed["valid_structure"] is True
+
+
+def test_jwt_output_format_precedence_over_format() -> None:
+    token = _make_jwt({"alg": "HS256"}, {"sub": "user1", "exp": 1800000000})
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["jwt", "--token", token, "--format", "json", "--output-format", "csv"],
+    )
+    assert result.exit_code == 0
+    # --output-format wins over deprecated --format
+    assert result.output.strip().splitlines()[0] == "field,value"
+    assert "valid_structure,true" in result.output
+
+
+def test_jwt_default_format_is_json() -> None:
+    token = _make_jwt({"alg": "HS256"}, {"sub": "user1", "exp": 1800000000})
+    runner = CliRunner()
+    result = runner.invoke(cli, ["jwt", "--token", token])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["valid_structure"] is True
 
 
 def test_config_output_format_csv() -> None:
