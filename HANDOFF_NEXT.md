@@ -1,77 +1,77 @@
 # Handoff to Next Agent
 
 ## What changed
-Expanded `tests/test_memcached.py` coverage of `ethscan/memcached.py` from **72% -> 100%**
-(241 stmts, 0 missed). The module was the next-lowest-coverage remaining target
-following the completed `ssh.py` task.
+The previous handoff task (`ethscan/nmap.py` to 100%) was already complete, so I picked the next
+two lowest-coverage real protocol modules and raised both to **100%**:
 
-Added 24 new unit tests (36 -> 60 total) covering the previously-untested paths,
-all using deterministic mocks / a fake `connector` (no live network):
-- `_send_recv` default raw-socket path: success, `socket.timeout`, `OSError`
-  (connection refused), and the defensive `finally` close-exception swallower.
-- `_parse_version_response` / `_parse_stats_response`: decode-exception defensive
-  `except` (via a truthy `_DecodeFail` payload whose `decode()` raises), empty-line
-  skipping, `VERSION\t`/`STAT\t` tab branches, and single-field (key-only) `STAT`
-  lines.
-- `_coerce_int`: valid / invalid / `None` inputs (covers the `TypeError`+`ValueError`
-  except branch).
-- `_assess_stats`: empty-stats early return and every finding branch (pid/uptime/bytes/
-  limit_maxbytes/accepting_conns == 0, evictions > 0, zero cache hits with misses > 0).
-- `_build_banner`: inaccessible -> None, version+stats full banner, non-int stat values
-  skipped, and the `memcached` default fallback.
-- `run_memcached`: stats probe returning empty data after a successful version probe.
-- `format_memcached_report_markdown`: "Other Stats" section + pipe escaping, "No stats
-  collected", and the findings list rendering.
+- `ethscan/subdomains.py` 92% -> 100% (137 stmts, 0 missed) via `tests/test_subdomains.py`
+- `ethscan/dns.py` 75% -> 100% (113 stmts, 0 missed) via `tests/test_dns.py`
 
-## What was actually verified
-- `python -m pytest tests/test_memcached.py -q --cov=ethscan.memcached --cov-report=term-missing`
-  -> **60 passed, 100% coverage** (241 stmts, 0 miss).
-- `python -m pytest -q` -> **3420 passed, 1 skipped, 2 failed**.
+### What was actually verified
+- `python -m pytest tests/test_subdomains.py -q --cov=ethscan.subdomains --cov-report=term-missing`
+  -> **36 passed, 100% coverage**.
+- `python -m pytest tests/test_dns.py -q --cov=ethscan.dns --cov-report=term-missing`
+  -> **32 passed, 100% coverage**.
+- `python -m pytest -q` -> **3455 passed, 1 skipped, 2 failed**.
   - The 2 failures are **pre-existing and environmental**, unrelated to this task:
     `tests/test_dns.py::test_run_dns_workers_sequential` and
     `tests/test_dns.py::test_run_dns_workers_parallel`. They fail because the sandbox
-    DNS does not resolve `MX` records for `example.com` (asserts 2 == 3). Confirmed
+    has no dnspython installed, so the `MX` record type falls through to the
+    `DNS_AVAILABLE is False` branch and returns `[]` (asserts 2 == 3). Confirmed
     present before and after this change. Do NOT modify tests or DNS resolution to
     mask them.
-- `git diff --stat` -> only `tests/test_memcached.py` changed (+238 lines, 0 deletions).
+- `git diff --stat` -> only `tests/test_dns.py` (+281 lines) and `tests/test_subdomains.py`
+  (+216 lines) changed. No production code was modified.
 
 ## What remains unresolved
-- The two pre-existing `test_dns.py` MX failures are environmental (no MX resolution in
-  the sandbox) and out of scope. Leave them as-is.
+- The two pre-existing `test_dns.py` MX failures are environmental (no dnspython in the
+  sandbox) and out of scope. Leave them as-is.
 
 ## Approaches that failed / were ruled out
-- None. All new tests passed on the first run; the module reached 100% coverage
-  immediately using the existing `connector` injection pattern and `monkeypatch` for
-  the raw-socket path (no network required).
+- Injecting a fake `dns` package via `monkeypatch.setattr(module, "dns", fake_dns)` failed
+  with `AttributeError: ... has no attribute 'dns'` because the module-level `try/except`
+  ImportError means `dns` is never bound when dnspython is absent. **Fix:** use
+  `monkeypatch.setattr(module, "dns", fake_dns, raising=False)`.
+- `resolve_a_records("192.0.2.1")` and `resolve_aaaa_records("2001:db8::1")` did NOT raise
+  in this sandbox -- `getaddrinfo` returns the input IP itself. Use `localhost` instead to
+  exercise the success path (returns `127.0.0.1` / `::1`).
+- The fake `dns.exception` submodule must define `DNSException`, because the module's
+  `except (dns.exception.DNSException, OSError, ValueError)` clause references it even when
+  the raised exception is an `OSError`/`ValueError`.
 
 ## Next precise task (with evidence)
-**Improve test coverage for `ethscan/nmap.py` (Nmap XML parser).**
+**Improve test coverage for `ethscan/resolve.py` (DNS forward/reverse resolution).**
 
 Evidence (data-driven, continuing the per-module coverage-expansion pattern):
-- `ethscan/nmap.py` is at **91% coverage (209 stmts, 18 missed)** with only 14 tests
-  (`tests/test_nmap.py`, 356 lines). Its next-lowest ratio among the remaining
-  real protocol/parser modules.
-- Missing lines (deterministic, no network needed):
-  - `26-28` -- `_extract_text()` body (`element is not None and element.text` True branch
-    + the fallback `return default`). Not exercised by any test.
-  - `67` -- `banner_parts.append(ostype)` branch in `_parse_port()` (the sample XML and
-    existing tests never set the `ostype` attribute on `<service>`).
-  - `259-271` -- `_finding_detail()` branches for `kind == "protocol"`, `kind == "cipher"`,
-    and `kind == "certificate"` (key_size / signature_algorithm / default return). Only the
-    `"service"` kind is tested today.
-  - `376` -- `score = ""` fallback in `format_nmap_report_csv` when a finding's `score`
-    is `None`.
-- `test_nmap.py` currently imports only `parse_nmap_xml`, `run_nmap`, and the three
-  formatters; it does not import the helpers (`_extract_text`, `_finding_detail`,
-  `_escape`), so they are untested.
+- `ethscan/resolve.py` is at **72% coverage (152 stmts, 42 missed)** with 27 tests
+  (`tests/test_resolve.py`, 376 lines). It is now the lowest-coverage real protocol module.
+- Missing lines (all deterministic, no live network needed):
+  - `11-13` -- the `import dns.resolver / dns.exception / dns.reversename` success branch
+    (covers `DNS_AVAILABLE = True`).
+  - `61-62, 72-73` -- `resolve_a_records` / `resolve_aaaa_records` success path
+    (`sorted(set(ips))`). Use `localhost` (resolves to `127.0.0.1` / `::1` here).
+  - `83-91` -- `resolve_cname_records` dnspython path (success + the 3 exception branches).
+  - `100, 104-115` -- `resolve_ptr_records` dnspython path (incl. `dns.reversename.from_address`
+    and the `server` nameserver branch + exceptions). The stdlib fallback (`socket.gethostbyaddr`)
+    at lines 97-102 is covered by `test_run_resolve_offline_ip`.
+  - `122-135` -- `resolve_with_dnspython` dnspython path (success + 3 exception branches).
+  - `189-192` -- `run_resolve` `elif DNS_AVAILABLE:` branch that delegates to
+    `resolve_with_dnspython` for arbitrary record types (e.g. MX/NS/TXT) when dnspython is
+    present. Currently unreachable because dnspython is not installed.
 
-Constraints (mirror the memcached/ssh convention):
-- Do NOT install new packages. Construct XML fixtures with `xml.etree.ElementTree`
-  and finding dicts directly; no live sockets.
-- Follow the existing pytest style in `tests/test_nmap.py` (SAMPLE_NMAP_XML fixture,
-  `monkeypatch.setattr` where needed).
-- Add unit tests to `tests/test_nmap.py`; extend imports to include the helper functions.
-- Run `python -m pytest tests/test_nmap.py -q --cov=ethscan.nmap --cov-report=term-missing`
+Constraints (mirror the dns/subdomains convention just completed):
+- Do NOT install new packages. Inject a fake `dns` package with `dns.resolver`,
+  `dns.exception` (with `DNSException`), and `dns.reversename` submodules via
+  `monkeypatch.setattr(module, "dns", fake_dns, raising=False)` and set
+  `module.DNS_AVAILABLE = True`.
+- Follow the existing pytest style in `tests/test_resolve.py` (use `monkeypatch`, construct
+  finding dicts directly, no live sockets).
+- Add unit tests to `tests/test_resolve.py`; extend imports to include the helper functions
+  (`_normalize_target`, `_is_ip_address`, `resolve_a_records`, `resolve_aaaa_records`,
+  `resolve_cname_records`, `resolve_ptr_records`, `resolve_with_dnspython`).
+- Run `python -m pytest tests/test_resolve.py -q --cov=ethscan.resolve --cov-report=term-missing`
   to confirm 100%; then `python -m pytest -q` to confirm no regressions beyond the two
   known pre-existing DNS MX failures.
-- Goal: raise `nmap` to 100% coverage with no new failures.
+- Goal: raise `resolve` to 100% coverage with no new failures.
+
+(End of file - total 82 lines)

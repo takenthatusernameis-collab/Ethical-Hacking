@@ -32,6 +32,13 @@ def test_normalize_domain_url() -> None:
     assert _normalize_domain("http://sub.example.com:8080/foo") == "sub.example.com:8080"
 
 
+def test_normalize_domain_ipv6_url() -> None:
+    """IPv6 literals in URL form are returned bare (bracket stripping, line 41)."""
+    from ethscan.dns import _normalize_domain
+    assert _normalize_domain("https://[::1]/") == "::1"
+    assert _normalize_domain("https://[2001:db8::1]:8080/path") == "2001:db8::1"
+
+
 def test_format_dns_report_json() -> None:
     data = {
         "target": "example.com",
@@ -296,3 +303,275 @@ def test_run_dns_workers_parallel(monkeypatch) -> None:
     # Additionally, we can check that the records dictionary keys are in the input order
     # (insertion order preserved)
     assert list(results["records"].keys()) == ["A", "AAAA", "MX"]
+
+
+def test_resolve_a_records_localhost() -> None:
+    """resolve_a_records success path returns sorted unique IPv4 (lines 58-59)."""
+    results = resolve_a_records("localhost", timeout=2.0)
+    assert "127.0.0.1" in results
+    assert results == sorted(set(results))
+
+
+def test_resolve_aaaa_records_offline_ipv6() -> None:
+    """resolve_aaaa_records returns [] for an unresolvable name (socket.gaierror path)."""
+    results = resolve_aaaa_records("invalid.nonexistent.domain.tld", timeout=0.1)
+    assert results == []
+
+
+def test_resolve_aaaa_records_localhost() -> None:
+    """resolve_aaaa_records success path returns sorted unique IPv6 (lines 77-78)."""
+    results = resolve_aaaa_records("localhost", timeout=2.0)
+    assert "::1" in results
+    assert results == sorted(set(results))
+
+
+def test_resolve_with_dnspython_unavailable() -> None:
+    """resolve_with_dnspython returns [] when DNS_AVAILABLE is False (line 96-97)."""
+    import ethscan.dns as dns_mod
+
+    original = dns_mod.DNS_AVAILABLE
+    dns_mod.DNS_AVAILABLE = False
+    try:
+        assert dns_mod.resolve_with_dnspython("example.com", "MX", 0.1) == []
+    finally:
+        dns_mod.DNS_AVAILABLE = original
+
+
+def _install_fake_dns(monkeypatch, resolver_resolve, dns_exception=None):
+    """Inject a fake dns package into ethscan.dns so dnspython paths are testable."""
+    import types
+
+    import ethscan.dns as dns_mod
+
+    fake_dns = types.ModuleType("dns")
+    fake_dns.resolver = types.ModuleType("dns.resolver")
+    fake_dns.exception = types.ModuleType("dns.exception")
+
+    class DNSException(Exception):
+        pass
+
+    fake_dns.exception.DNSException = dns_exception or DNSException
+
+    class FakeResolver:
+        def __init__(self):
+            self.timeout = None
+            self.lifetime = None
+            self.nameservers = []
+
+        def resolve(self, domain, rdtype):
+            return resolver_resolve(domain, rdtype, self)
+
+    fake_dns.resolver.Resolver = FakeResolver
+    monkeypatch.setattr(dns_mod, "dns", fake_dns, raising=False)
+    monkeypatch.setattr(dns_mod, "DNS_AVAILABLE", True)
+
+
+def test_resolve_with_dnspython_success(monkeypatch) -> None:
+    """resolve_with_dnspython returns sorted unique rdata strings (lines 100-105)."""
+    def fake_resolve(domain, rdtype, self):
+        assert domain == "example.com"
+        assert rdtype == "MX"
+        assert self.timeout == 1.0
+        assert self.lifetime == 1.0
+
+        class Rdata:
+            def __str__(self_):
+                return self_.value
+
+            def __init__(self_, value):
+                self_.value = value
+
+        return [Rdata("mail.example.com"), Rdata("mail.example.com"), Rdata("mail2.example.com")]
+
+    _install_fake_dns(monkeypatch, fake_resolve)
+
+    import ethscan.dns as dns_mod
+    result = dns_mod.resolve_with_dnspython("example.com", "MX", timeout=1.0)
+    assert result == ["mail.example.com", "mail2.example.com"]
+
+
+def test_resolve_with_dnspython_dns_exception(monkeypatch) -> None:
+    """resolve_with_dnspython swallows dns.exception.DNSException (line 106-107)."""
+    class MyDNSException(Exception):
+        pass
+
+    def fake_resolve(domain, rdtype, self):
+        raise MyDNSException("boom")
+
+    _install_fake_dns(monkeypatch, fake_resolve, dns_exception=MyDNSException)
+
+    import ethscan.dns as dns_mod
+    assert dns_mod.resolve_with_dnspython("example.com", "MX", 0.1) == []
+
+
+def test_resolve_with_dnspython_oserror(monkeypatch) -> None:
+    """resolve_with_dnspython swallows OSError (line 106-107)."""
+    def fake_resolve(domain, rdtype, self):
+        raise OSError("network down")
+
+    _install_fake_dns(monkeypatch, fake_resolve)
+
+    import ethscan.dns as dns_mod
+    assert dns_mod.resolve_with_dnspython("example.com", "MX", 0.1) == []
+
+
+def test_resolve_with_dnspython_valueerror(monkeypatch) -> None:
+    """resolve_with_dnspython swallows ValueError (line 106-107)."""
+    def fake_resolve(domain, rdtype, self):
+        raise ValueError("bad input")
+
+    _install_fake_dns(monkeypatch, fake_resolve)
+
+    import ethscan.dns as dns_mod
+    assert dns_mod.resolve_with_dnspython("example.com", "MX", 0.1) == []
+
+
+def test_run_dns_custom_server_success(monkeypatch) -> None:
+    """run_dns uses the custom-server dnspython path (lines 145-152)."""
+    seen = {}
+
+    def fake_resolve(domain, rdtype, self):
+        seen["domain"] = domain
+        seen["rdtype"] = rdtype
+        seen["nameservers"] = self.nameservers
+        seen["timeout"] = self.timeout
+
+        class Rdata:
+            def __str__(self_):
+                return "mocked.example.com"
+
+        return [Rdata()]
+
+    _install_fake_dns(monkeypatch, fake_resolve)
+
+    import ethscan.dns as dns_mod
+    results = dns_mod.run_dns("example.com", record_types=["MX"], server="1.1.1.1", timeout=1.0)
+    assert seen["nameservers"] == ["1.1.1.1"]
+    assert seen["timeout"] == 1.0
+    assert results["records"]["MX"] == ["mocked.example.com"]
+    assert results["dnspython_available"] is True
+
+
+def test_run_dns_custom_server_dns_exception(monkeypatch) -> None:
+    """run_dns custom-server path swallows DNSException (lines 153-154)."""
+    class MyDNSException(Exception):
+        pass
+
+    def fake_resolve(domain, rdtype, self):
+        raise MyDNSException("boom")
+
+    _install_fake_dns(monkeypatch, fake_resolve, dns_exception=MyDNSException)
+
+    import ethscan.dns as dns_mod
+    results = dns_mod.run_dns("example.com", record_types=["MX"], server="1.1.1.1", timeout=1.0)
+    assert results["records"]["MX"] == []
+
+
+def test_run_dns_custom_server_oserror(monkeypatch) -> None:
+    """run_dns custom-server path swallows OSError (lines 153-154)."""
+    def fake_resolve(domain, rdtype, self):
+        raise OSError("network down")
+
+    _install_fake_dns(monkeypatch, fake_resolve)
+
+    import ethscan.dns as dns_mod
+    results = dns_mod.run_dns("example.com", record_types=["MX"], server="1.1.1.1", timeout=1.0)
+    assert results["records"]["MX"] == []
+
+
+def test_run_dns_custom_server_valueerror(monkeypatch) -> None:
+    """run_dns custom-server path swallows ValueError (lines 153-154)."""
+    def fake_resolve(domain, rdtype, self):
+        raise ValueError("bad input")
+
+    _install_fake_dns(monkeypatch, fake_resolve)
+
+    import ethscan.dns as dns_mod
+    results = dns_mod.run_dns("example.com", record_types=["MX"], server="1.1.1.1", timeout=1.0)
+    assert results["records"]["MX"] == []
+
+
+def test_run_dns_dnspython_unavailable_returns_empty(monkeypatch) -> None:
+    """run_dns returns [] for non-A/AAAA types when DNS_AVAILABLE is False (lines 157-158)."""
+    monkeypatch.setattr("ethscan.dns.DNS_AVAILABLE", False)
+
+    import ethscan.dns as dns_mod
+    results = dns_mod.run_dns("example.com", record_types=["MX"], timeout=1.0)
+    assert results["records"]["MX"] == []
+    assert results["dnspython_available"] is False
+
+
+def test_run_dns_dnspython_path_without_server(monkeypatch) -> None:
+    """run_dns delegates to resolve_with_dnspython when DNS_AVAILABLE and no server (line 156)."""
+    calls = []
+
+    def fake_resolve_with_dnspython(domain, record_type, timeout=2.0):
+        calls.append((domain, record_type, timeout))
+        return [f"r:{record_type}"]
+
+    monkeypatch.setattr("ethscan.dns.resolve_with_dnspython", fake_resolve_with_dnspython)
+    monkeypatch.setattr("ethscan.dns.DNS_AVAILABLE", True)
+
+    import ethscan.dns as dns_mod
+    results = dns_mod.run_dns("example.com", record_types=["MX", "NS"], timeout=1.0)
+    assert calls == [("example.com", "MX", 1.0), ("example.com", "NS", 1.0)]
+    assert results["records"]["MX"] == ["r:MX"]
+    assert results["records"]["NS"] == ["r:NS"]
+    assert results["dnspython_available"] is True
+
+
+def test_dns_availability_flag_true(monkeypatch) -> None:
+    """DNS_AVAILABLE is True when the dns package imports cleanly (lines 11-12)."""
+    import sys
+    import types
+    from importlib import reload
+
+    dns_pkg = types.ModuleType("dns")
+    dns_pkg.__path__ = []
+    dns_resolver = types.ModuleType("dns.resolver")
+    dns_exception = types.ModuleType("dns.exception")
+
+    class DNSException(Exception):
+        pass
+
+    dns_exception.DNSException = DNSException
+
+    class Resolver:
+        def __init__(self):
+            pass
+
+        def resolve(self, domain, rdtype):
+            return []
+
+    dns_resolver.Resolver = Resolver
+    dns_pkg.resolver = dns_resolver
+    dns_pkg.exception = dns_exception
+
+    monkeypatch.setitem(sys.modules, "dns", dns_pkg)
+    monkeypatch.setitem(sys.modules, "dns.resolver", dns_resolver)
+    monkeypatch.setitem(sys.modules, "dns.exception", dns_exception)
+
+    import ethscan.dns as dns_mod
+    reload(dns_mod)
+    try:
+        assert dns_mod.DNS_AVAILABLE is True
+    finally:
+        monkeypatch.delitem(sys.modules, "dns", raising=False)
+        monkeypatch.delitem(sys.modules, "dns.resolver", raising=False)
+        monkeypatch.delitem(sys.modules, "dns.exception", raising=False)
+        reload(dns_mod)
+
+
+def test_dns_availability_flag_false(monkeypatch) -> None:
+    """DNS_AVAILABLE is False when dns is not importable (the except branch)."""
+    import sys
+    from importlib import reload
+
+    monkeypatch.setitem(sys.modules, "dns", None)  # forces ImportError on import dns
+    import ethscan.dns as dns_mod
+    reload(dns_mod)
+    try:
+        assert dns_mod.DNS_AVAILABLE is False
+    finally:
+        monkeypatch.delitem(sys.modules, "dns", raising=False)
+        reload(dns_mod)
