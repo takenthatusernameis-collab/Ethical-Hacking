@@ -2477,5 +2477,27 @@ Added 75 new unit tests to `tests/test_redis.py`, raising the test count from 17
 
 ### Verification
 - `python -m pytest tests/test_redis.py -q` -> 92 passed
+
+## Completed: `ethscan/dnsbrute.py` coverage audit (86% -> 100%)
+
+Pushed `ethscan/dnsbrute.py` statement coverage from 86% to 100% (328 statements, 0 missing) by adding 15 tests to `tests/test_dnsbrute.py`:
+
+- `_parse_dns_name` edge cases: empty data at offset, truncated compression pointer, invalid length byte, label past end of data (4 tests).
+- `parse_dns_response`: non-empty question section, truncated answer record (2 tests).
+- dnspython branches via fake-dns injection + `reload(ethscan.dnsbrute)` (restored in `finally`), same pattern as `tests/test_subtake.py`: module-level `import dns.resolver`/`import dns.exception` (`DNS_AVAILABLE=True`), `_axfr_dnspython` success path (form error + OSError branches), `_resolve_label` custom-resolver success and `DNSException` swallow paths (7 tests).
+- Recursive AXFR: `max_depth=0` depth guard, failed depth-2 entry with error and no records, markdown/CSV rendering of those entries (2 tests).
+
+`dnspython` remains NOT installed and NOT in `requirements.txt`; it stays an optional `*_AVAILABLE` dependency.
+
+### Verification
+- `python -m pytest tests/test_dnsbrute.py -q` -> 88 passed, 1 skipped (was 75 passed; +15 tests).
+- Coverage on `ethscan/dnsbrute.py`: 86% -> **100%** (328 stmts, 0 missing).
+- `python -m pytest -q` -> **3532 passed, 1 skipped** (was 3517; no regressions).
+- `python -m ruff check tests/test_dnsbrute.py` -> only the 11 pre-existing errors; no new lint errors introduced.
+
+## Current state
+- All 54 ethscan commands implemented/registered with JSON/Markdown/CSV output; unit + CLI integration tests present; no live network in tests.
+- Full suite green: 3532 passed, 1 skipped.
+- `dnspython` remains an optional `*_AVAILABLE` dependency (not installed, not in `requirements.txt`).
 - `python -m pytest -q` -> 2932 passed, 1 skipped (2857 baseline + 75 new)
 - No warnings, no regressions

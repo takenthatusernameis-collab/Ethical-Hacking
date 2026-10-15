@@ -1410,3 +1410,439 @@ def test_format_dnsbrute_report_csv_mixed_subdomain_and_axfr() -> None:
     assert reader[2][2] == "axfr"
     assert reader[2][8] == "ns1.example.com"
     assert "NS" in reader[2][13]
+
+
+# ---------------------------------------------------------------------------
+# _parse_dns_name edge cases (truncated / malformed DNS names)
+# ---------------------------------------------------------------------------
+
+
+def test_parse_dns_name_empty_data_breaks_on_offset_check() -> None:
+    """Offset beyond data exits immediately (line 103)."""
+    assert _parse_dns_name(b"", 0) == ("", 0)
+
+
+def test_parse_dns_name_truncated_compression_pointer() -> None:
+    """Compression pointer with no following byte is skipped (lines 110-111)."""
+    assert _parse_dns_name(b"\xc0", 0) == ("", 2)
+
+
+def test_parse_dns_name_invalid_length_byte() -> None:
+    """A high-bit length byte that is not a pointer stops parsing (lines 123-124)."""
+    assert _parse_dns_name(b"\x80", 0) == ("", 1)
+
+
+def test_parse_dns_name_label_past_end_of_data() -> None:
+    """A declared label longer than the remaining data stops parsing (line 127)."""
+    assert _parse_dns_name(b"\x03ab", 0) == ("", 1)
+
+
+# ---------------------------------------------------------------------------
+# parse_dns_response edge cases (question section, truncated answers)
+# ---------------------------------------------------------------------------
+
+
+def _encode_question(name: str) -> bytes:
+    body = b""
+    for label in name.split("."):
+        body += bytes([len(label)]) + label.encode()
+    body += b"\x00"
+    body += struct.pack(">HH", 1, 1)
+    return body
+
+
+def test_parse_dns_response_parses_question_section() -> None:
+    """A non-empty question section advances the offset (lines 182-183)."""
+    header = struct.pack(">HHHHHH", 0xABCD, 0x8000, 1, 0, 0, 0)
+    data = header + _encode_question("example.com")
+    parsed = parse_dns_response(data)
+    assert parsed["valid"] is True
+    assert parsed["query_id"] == 0xABCD
+    assert parsed["question_count"] == 1
+    assert parsed["answers"] == []
+
+
+def test_parse_dns_response_truncated_answer_record() -> None:
+    """An answer record header truncated past the end stops parsing (line 189)."""
+    header = struct.pack(">HHHHHH", 0xABCD, 0x8000, 0, 1, 0, 0)
+    name = _encode_dns_name("example.com")[:-1]  # 9 bytes, no room for fixed header
+    data = header + name
+    parsed = parse_dns_response(data)
+    assert parsed["valid"] is True
+    assert parsed["answer_count"] == 1
+    assert parsed["answers"] == []
+
+
+# ---------------------------------------------------------------------------
+# dnspython branches via fake-dns injection + reload (dnspython not installed)
+# ---------------------------------------------------------------------------
+
+
+def _install_fake_dns(monkeypatch):
+    """Inject a fake dns package so dnsbrute's dnspython import path is exercised."""
+    import sys
+    import types
+
+    dns_pkg = types.ModuleType("dns")
+    dns_pkg.__path__ = []
+    dns_resolver = types.ModuleType("dns.resolver")
+    dns_exception = types.ModuleType("dns.exception")
+    dns_query = types.ModuleType("dns.query")
+    dns_zone = types.ModuleType("dns.zone")
+
+    class DNSException(Exception):
+        pass
+
+    class FormError(DNSException):
+        pass
+
+    dns_exception.DNSException = DNSException
+    dns_exception.FormError = FormError
+
+    class _Resolver:
+        def __init__(self):
+            self.timeout = None
+            self.lifetime = None
+            self.nameservers = []
+
+        def resolve(self, hostname, rdtype):
+            return []
+
+    dns_resolver.Resolver = _Resolver
+    dns_pkg.resolver = dns_resolver
+    dns_pkg.exception = dns_exception
+    dns_pkg.query = dns_query
+    dns_pkg.zone = dns_zone
+
+    monkeypatch.setitem(sys.modules, "dns", dns_pkg)
+    monkeypatch.setitem(sys.modules, "dns.resolver", dns_resolver)
+    monkeypatch.setitem(sys.modules, "dns.exception", dns_exception)
+    monkeypatch.setitem(sys.modules, "dns.query", dns_query)
+    monkeypatch.setitem(sys.modules, "dns.zone", dns_zone)
+    return dns_pkg, dns_resolver, dns_exception, dns_query, dns_zone
+
+
+def _reload_dnsbrute(monkeypatch):
+    """Reload ethscan.dnsbrute with the fake dns package bound."""
+    from importlib import reload
+
+    import ethscan.dnsbrute as dnsbrute_mod
+
+    _install_fake_dns(monkeypatch)
+    reload(dnsbrute_mod)
+    return dnsbrute_mod
+
+
+def _restore_dnsbrute(monkeypatch):
+    """Remove the fake dns package and restore ethscan.dnsbrute to stdlib-only state."""
+    import sys
+    from importlib import reload
+
+    import ethscan.dnsbrute as dnsbrute_mod
+
+    monkeypatch.delitem(sys.modules, "dns", raising=False)
+    monkeypatch.delitem(sys.modules, "dns.resolver", raising=False)
+    monkeypatch.delitem(sys.modules, "dns.exception", raising=False)
+    monkeypatch.delitem(sys.modules, "dns.query", raising=False)
+    monkeypatch.delitem(sys.modules, "dns.zone", raising=False)
+    reload(dnsbrute_mod)
+
+
+def test_dnsbrute_dns_available_module_imports(monkeypatch) -> None:
+    """Module-level dnspython imports succeed and DNS_AVAILABLE is True (lines 16-17)."""
+    dnsbrute_mod = _reload_dnsbrute(monkeypatch)
+    try:
+        assert dnsbrute_mod.DNS_AVAILABLE is True
+        assert dnsbrute_mod.dns is not None
+    finally:
+        _restore_dnsbrute(monkeypatch)
+
+
+def test_axfr_dnspython_success_path(monkeypatch) -> None:
+    """_axfr_dnspython builds records from a dnspython zone transfer (lines 303, 307-323)."""
+    dnsbrute_mod = _reload_dnsbrute(monkeypatch)
+    try:
+
+        class _Rdata:
+            def __init__(self, text: str) -> None:
+                self.text = text
+
+            def __str__(self) -> str:
+                return self.text
+
+        class _Rdataset:
+            def __init__(self, ttl: int, rdtype_name: str, rdatas: list) -> None:
+                self.ttl = ttl
+                self.rdtype_name = rdtype_name
+                self._rdatas = rdatas
+
+            def __iter__(self):
+                return iter(self._rdatas)
+
+        class _Node:
+            def __init__(self, rdatasets: list) -> None:
+                self.rdatasets = rdatasets
+
+        class _Zone:
+            def __init__(self) -> None:
+                self.nodes = {
+                    "example.com": _Node(
+                        [_Rdataset(300, "NS", [_Rdata("ns1.example.com")])]
+                    )
+                }
+
+        def fake_xfr(nameserver, zone, timeout=None, lifetime=None):
+            return object()
+
+        def fake_from_xfr(source):
+            return _Zone()
+
+        dnsbrute_mod.dns.query.xfr = fake_xfr
+        dnsbrute_mod.dns.zone.from_xfr = fake_from_xfr
+
+        result = dnsbrute_mod.attempt_axfr("ns1.example.com", "example.com", timeout=1.0)
+        assert result["success"] is True
+        assert result["error"] is None
+        assert result["records"] == ["example.com 300 IN NS ns1.example.com"]
+    finally:
+        _restore_dnsbrute(monkeypatch)
+
+
+def test_axfr_dnspython_form_error_and_oserror(monkeypatch) -> None:
+    """_axfr_dnspython handles FormError and generic DNS/OS errors (lines 310-313)."""
+    dnsbrute_mod = _reload_dnsbrute(monkeypatch)
+    try:
+        form_error = dnsbrute_mod.dns.exception.FormError("boom")
+
+        def raising_xfr(nameserver, zone, timeout=None, lifetime=None):
+            raise form_error
+
+        dnsbrute_mod.dns.query.xfr = raising_xfr
+        result = dnsbrute_mod.attempt_axfr("ns1.example.com", "example.com", timeout=1.0)
+        assert result["success"] is False
+        assert result["error"] == "transfer refused (boom)"
+
+        def raising_oserror(nameserver, zone, timeout=None, lifetime=None):
+            raise OSError("network down")
+
+        dnsbrute_mod.dns.query.xfr = raising_oserror
+        result = dnsbrute_mod.attempt_axfr("ns2.example.com", "example.com", timeout=1.0)
+        assert result["success"] is False
+        assert result["error"] == "network down"
+    finally:
+        _restore_dnsbrute(monkeypatch)
+
+
+def test_resolve_label_uses_custom_resolver(monkeypatch) -> None:
+    """_resolve_label uses dnspython with a custom resolver when available (lines 374-391)."""
+    dnsbrute_mod = _reload_dnsbrute(monkeypatch)
+    try:
+
+        class _Rdata:
+            def __init__(self, text: str) -> None:
+                self.text = text
+
+            def __str__(self) -> str:
+                return self.text
+
+        def fake_resolve(self, hostname, rdtype):
+            if rdtype == "A":
+                return [_Rdata("93.184.216.34")]
+            if rdtype == "AAAA":
+                return [_Rdata("2606:2800:220:1:248:1893:25c8:1946")]
+            return []
+
+        dnsbrute_mod.dns.resolver.Resolver.resolve = fake_resolve
+
+        def fake_axfr(nameserver, zone, timeout=2.0):
+            return _axfr_result(nameserver, False, [], "refused")
+
+        monkeypatch.setattr(dnsbrute_mod, "attempt_axfr", fake_axfr)
+
+        results = dnsbrute_mod.run_dnsbrute(
+            "example.com",
+            nameservers=["ns1.example.com"],
+            resolver="1.2.3.4",
+            subdomains=["www"],
+            timeout=1.0,
+        )
+        assert results["resolver"] == "1.2.3.4"
+        assert results["dnspython_available"] is True
+        by_name = {entry["subdomain"]: entry for entry in results["resolved"]}
+        assert by_name["www"]["a"] == ["93.184.216.34"]
+        assert by_name["www"]["aaaa"] == ["2606:2800:220:1:248:1893:25c8:1946"]
+    finally:
+        _restore_dnsbrute(monkeypatch)
+
+
+def test_resolve_label_custom_resolver_swallows_dns_errors(monkeypatch) -> None:
+    """_resolve_label swallows DNSException from A and AAAA lookups (lines 381-382, 390-391)."""
+    dnsbrute_mod = _reload_dnsbrute(monkeypatch)
+    try:
+        dns_exception = dnsbrute_mod.dns.exception
+
+        def fake_resolve(self, hostname, rdtype):
+            raise dns_exception.DNSException("no such name")
+
+        dnsbrute_mod.dns.resolver.Resolver.resolve = fake_resolve
+
+        def fake_axfr(nameserver, zone, timeout=2.0):
+            return _axfr_result(nameserver, False, [], "refused")
+
+        monkeypatch.setattr(dnsbrute_mod, "attempt_axfr", fake_axfr)
+
+        results = dnsbrute_mod.run_dnsbrute(
+            "example.com",
+            nameservers=["ns1.example.com"],
+            resolver="1.2.3.4",
+            subdomains=["www"],
+            timeout=1.0,
+        )
+        assert results["resolver"] == "1.2.3.4"
+        by_name = {entry["subdomain"]: entry for entry in results["resolved"]}
+        assert by_name == {}
+    finally:
+        _restore_dnsbrute(monkeypatch)
+
+
+# ---------------------------------------------------------------------------
+# Recursive AXFR guard and failure paths
+# ---------------------------------------------------------------------------
+
+
+def test_run_dnsbrute_recursive_max_depth_zero_hits_guard(monkeypatch) -> None:
+    """max_depth=0 stops recursion at the depth guard immediately (line 448)."""
+    calls = []
+
+    def fake_axfr(nameserver, zone, timeout=2.0):
+        calls.append((nameserver, zone))
+        return _axfr_result(
+            nameserver, True, ["example.com 300 IN NS ns1.example.com"], None
+        )
+
+    monkeypatch.setattr("ethscan.dnsbrute.attempt_axfr", fake_axfr)
+
+    results = run_dnsbrute(
+        "example.com",
+        nameservers=["ns1.example.com"],
+        subdomains=["www"],
+        timeout=1.0,
+        recursive=True,
+        max_depth=0,
+    )
+
+    assert results["recursive"] is True
+    assert results["max_depth"] == 0
+    assert results["recursive_axfr"] == []
+    assert results["axfr"] == []
+    assert calls == []
+
+
+def test_run_dnsbrute_recursive_depth_two_failure(monkeypatch) -> None:
+    """A failed depth-2 AXFR still records an entry with error and no records."""
+    def fake_axfr(nameserver, zone, timeout=2.0):
+        if nameserver == "ns1.example.com":
+            return _axfr_result(
+                nameserver,
+                True,
+                ["example.com 300 IN NS ns1.sub.example.com"],
+                None,
+            )
+        return _axfr_result(nameserver, False, [], "transfer refused (REFUSED)")
+
+    monkeypatch.setattr("ethscan.dnsbrute.attempt_axfr", fake_axfr)
+
+    results = run_dnsbrute(
+        "example.com",
+        nameservers=["ns1.example.com"],
+        subdomains=["www"],
+        timeout=1.0,
+        recursive=True,
+        max_depth=2,
+    )
+
+    recursive = results["recursive_axfr"]
+    assert len(recursive) == 1
+    assert recursive[0]["nameserver"] == "ns1.sub.example.com"
+    assert recursive[0]["depth"] == 2
+    assert recursive[0]["success"] is False
+    assert recursive[0]["error"] == "transfer refused (REFUSED)"
+    assert recursive[0]["records"] == []
+
+
+def test_format_dnsbrute_report_markdown_recursive_entry_with_error() -> None:
+    """Markdown renderer prints the error for a failed recursive entry (line 596)."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "zone": "example.com",
+        "nameservers": ["ns1.example.com"],
+        "nameserver_source": "option",
+        "dnspython_available": True,
+        "axfr": [],
+        "axfr_success": False,
+        "axfr_total_records": 0,
+        "recursive_axfr": [
+            {
+                "nameserver": "ns1.sub.example.com",
+                "zone": "example.com",
+                "depth": 2,
+                "success": False,
+                "records_count": 0,
+                "records": [],
+                "error": "transfer refused (REFUSED)",
+            }
+        ],
+        "recursive_axfr_total_records": 0,
+        "subdomains_tested": 1,
+        "resolved_count": 0,
+        "resolved": [],
+        "all_results": [],
+        "recursive": True,
+        "max_depth": 2,
+    }
+    output = format_dnsbrute_report_markdown(data)
+    assert "## Recursive AXFR Attempts" in output
+    assert "- **Error:** transfer refused (REFUSED)" in output
+
+
+def test_format_dnsbrute_report_csv_recursive_entry_no_records() -> None:
+    """CSV renderer emits a row for a recursive entry without records (line 719)."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "zone": "example.com",
+        "nameservers": ["ns1.example.com"],
+        "nameserver_source": "option",
+        "dnspython_available": True,
+        "axfr": [],
+        "axfr_success": False,
+        "axfr_total_records": 0,
+        "recursive_axfr": [
+            {
+                "nameserver": "ns1.sub.example.com",
+                "zone": "example.com",
+                "depth": 2,
+                "success": False,
+                "records_count": 0,
+                "records": [],
+                "error": "transfer refused (REFUSED)",
+            }
+        ],
+        "recursive_axfr_total_records": 0,
+        "subdomains_tested": 1,
+        "resolved_count": 0,
+        "resolved": [],
+        "all_results": [],
+        "recursive": True,
+        "max_depth": 2,
+    }
+    output = format_dnsbrute_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    rows = [row for row in reader if row[2] == "recursive_axfr"]
+    assert len(rows) == 1
+    assert rows[0][8] == "ns1.sub.example.com"
+    assert rows[0][10] == "2"
+    assert rows[0][11] == "false"
+    assert rows[0][12] == "transfer refused (REFUSED)"
+    assert rows[0][13] == ""
