@@ -2426,3 +2426,14 @@ All CSV output is generated using stdlib `csv.writer` for proper quoting/escapin
 
 ## Stale docs note (resolved)
 `TASK.md` and `README.md` have been updated to accurately reflect that `--output-format [json|markdown|csv]` is supported on all commands that generate output. The documentation is now synchronized with the codebase.
+
+## Completed: README "Brief Features" list deduplication and factual correction
+
+The previous handoff claimed this task was done; it was not. The README still contained 84 duplicate command entries across three format variants, with `hash` appearing 3 times. Fixed by deduplicating to exactly one entry per command (53 entries matching the 53 registered CLI commands) and correcting factual errors found by cross-referencing live `--help` output.
+
+### Changes
+- `README.md`: removed 84 duplicate entries; unified all 53 entries to the detailed format; corrected `hash`, `s3`, `stale`, `completion`, `config` entries; restored the missing `dnsbrute` entry.
+
+### Verification
+- `python -m pytest -q` -> 2857 passed, 4 warnings (pre-existing TLS deprecation warnings).
+- Command coverage check: 53 CLI commands, 53 README entries, 0 missing, 0 extra, 0 duplicates.
