@@ -874,3 +874,20 @@ def test_format_ssh_report_markdown_no_findings() -> None:
     data = _ssh_result(banner="SSH-2.0-test", findings=[])
     output = format_ssh_report_markdown(data)
     assert "No weak algorithms detected" in output
+def test_paramiko_import_success(monkeypatch):
+    """Test paramiko import when available."""
+    import sys
+    from importlib import reload
+
+    # Create a mock paramiko module
+    mock_paramiko = types.ModuleType('paramiko')
+    monkeypatch.setitem(sys.modules, 'paramiko', mock_paramiko)
+
+    # Reload the ssh module to trigger the import
+    import ethscan.ssh
+    reload(ethscan.ssh)
+    assert ethscan.ssh.PARAMIKO_AVAILABLE is True
+
+    # Clean up
+    monkeypatch.delitem(sys.modules, 'paramiko', raising=False)
+    reload(ethscan.ssh)
