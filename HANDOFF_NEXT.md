@@ -1,37 +1,33 @@
 # Handoff to Next Agent
 
 ## What changed
-- Added comprehensive unit tests for the `mysql` module (`ethscan/mysql.py`), increasing the test count from 8 to 60+ (exact count: 60 test functions in `tests/test_mysql.py`).
-- Improved the test-to-module line ratio for the mysql module from approximately 0.50 to over 1.5 (774 test lines / 501 module lines).
-- Covered all previously untested functions including `_normalize_target`, `_send_recv` (connector and socket level), `_parse_handshake`, `_assess_handshake`, `run_mysql`, and all three formatters (`format_mysql_report_json`, `format_mysql_report_markdown`, `format_mysql_report_csv`).
-- Added edge case testing for IPv6 targets, invalid targets, malformed handshake packets, and various error conditions.
+- Added 23 new unit tests for the `trace` module (`ethscan/trace.py`), increasing test count from 12 to 35 tests (242 → ~315 lines of test code).
+- Expanded test coverage for: `_normalize_host` edge cases, `_fmt_rtt` edge cases, `_probe_once` (timeout, socket errors, close exceptions), `_trace_single` (invalid targets, DNS failures, reaching targets, error handling, multiple probes), `run_trace` (recursive tracing with max depth, destination not reached, no intermediate hops, cycle prevention), and formatter edge cases for markdown/CSV including recursive traces.
+- Fixed test expectations to match actual implementation behavior.
 
 ## What was actually verified
-- `python -m pytest tests/test_mysql.py -q` -> 60 passed
-- `python -m pytest -q` -> 3113 passed, 2 failed, 1 skipped (same two pre-existing DNS test failures as baseline)
-- No new regressions introduced; the two DNS test failures are environmental and unchanged.
+- `python -m pytest tests/test_trace.py -q` → 35 passed
+- `python -m pytest -q` → 3136 passed, 2 failed, 1 skipped (same two pre-existing DNS environment failures in `tests/test_dns.py`; unchanged from baseline)
+- No regressions introduced.
 
 ## What remains unresolved
-- The two pre-existing DNS test failures in `tests/test_dns.py`:
-  - `test_run_dns_workers_sequential`: fails because the sandbox's DNS does not resolve `MX` records for `example.com`, causing the MX resolver to never be invoked.
-  - `test_run_dns_workers_parallel`: same environmental issue.
-- These failures are unrelated to the mysql module changes and persist from the baseline.
+- Two pre-existing environmental failures in `tests/test_dns.py`: `test_run_dns_workers_sequential` and `test_run_dns_workers_parallel` - these fail because the sandbox DNS does not resolve MX records for example.com, not related to trace changes.
 
 ## Next precise task (with evidence)
-**Add unit tests for the `mssql` module (ethscan/mssql.py)** to improve test coverage, as it now has the lowest test-to-module line ratio in the project at approximately 0.41 (286 test lines / 691 module lines) based on historical data.
+**Add comprehensive unit tests for the `mongodb` module (ethscan/mongodb.py)** to improve test coverage. Current state: mongodb.py has 418 lines, tests/test_mongodb.py has 20 test functions (282 test lines), ratio ~0.67 - one of the lowest among non-trivial modules.
 
-The mssql module has 691 lines but currently only 77 test functions (1114 test lines). Key untested areas include:
-- `_send_recv` — not tested at all (connector path, socket timeout, OSError)
-- `_build_prelogin_request` — only checks `isinstance(req, bytes)` and `req[0] == 0x12`; does not validate header fields, option structure, or the VERSION/ENCRYPTION/INSTINST/THREADID options
-- `_parse_prelogin_response` — missing encryption values (OFF/ON/NOT SUPPORTED/UNKNOWN), version not 4 bytes, thread_id < 4 bytes, truncated payload, empty instance name, unknown option types, msg_len truncation
-- `_assess_prelogin` — missing encryption OFF/NOT SUPPORTED/UNKNOWN cases, missing fields, None version
-- `run_mssql` — missing empty probes, invalid target (ValueError), no response (None), response-too-short, non-PRELOGIN response, case-insensitive probes, probes with unknown types
-- `format_mssql_report_markdown` — missing error section, no findings case, empty prelogin, None host
-- `format_mssql_report_csv` — only basic tests; missing empty findings, error, and escaping edge cases
+Key areas to cover:
+- `_normalize_target`: URL schemes (mongodb://, mongo://), username:password, auth database, ports, IPv6, trailing slashes, query params, edge cases (empty, whitespace, missing host)
+- `_send_recv`: connector path (success, error), socket path (success with multiple chunks, empty response, timeout connect/recv, connection refused, OSError), empty request
+- `_build_mongodb_message`: header construction (request_id, response_to, opcode, length), data handling
+- `_build_buildinfo_request`: message structure validation
+- `_parse_buildinfo_response`: valid responses, empty data, truncated data, messages without buildinfo, various error codes, non-OP_REPLY responses, malformed data
+- `_assess_buildinfo`: version strings, gitVersion, bits, debug flags, maxBsonObjectSize, empty buildinfo
+- `run_mongodb`: with connector mocks (success, no response, error strings), various probe combinations, case-insensitive probes, empty probe lists, invalid targets, port overrides, exception handling
+- `format_mongodb_report_markdown`: error sections, no findings, empty buildinfo, None values, escaping
+- `format_mongodb_report_csv`: empty findings, errors, comma/escape handling, empty buildinfo
 
 Constraints:
-- Follow existing test conventions (monkeypatch connector for `run_mssql`, `struct` helpers for building TDS responses like the existing `_tds_prelogin_resp` and `_add_option` helpers already in the file).
-- Use `unittest.mock.patch` to mock `socket` for `_send_recv` socket-level tests, matching the pattern used in `tests/test_redis.py`.
-- After adding tests, run `python -m pytest -q` to confirm no regressions (expect the two pre-existing `test_dns.py` MX failures to remain; they are environmental).
-
-Alternative: Add tests for the `oracle` module (ratio approximately 0.49, 256 test lines / 527 module lines) if mssql tests are deemed insufficiently impactful.
+- Follow existing test conventions (monkeypatch connector for `run_mongodb`, mock socket for `_send_recv` like other modules)
+- Use `unittest.mock.patch` and `MagicMock`
+- After adding tests, run `python -m pytest -q` to confirm no regressions (expect same 2 pre-existing DNS failures)
