@@ -5,6 +5,7 @@ import io
 import json
 import socket
 import ssl
+import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Union
 
@@ -148,8 +149,19 @@ def _build_context(
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE
     if version is not None:
-        context.minimum_version = version
-        context.maximum_version = version
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                category=DeprecationWarning,
+                message="ssl.TLSVersion.TLSv1 is deprecated",
+            )
+            warnings.filterwarnings(
+                "ignore",
+                category=DeprecationWarning,
+                message="ssl.TLSVersion.TLSv1_1 is deprecated",
+            )
+            context.minimum_version = version
+            context.maximum_version = version
     if cipher is not None:
         context.set_ciphers(cipher)
     return context
