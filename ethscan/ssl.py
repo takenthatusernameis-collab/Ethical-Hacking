@@ -62,16 +62,30 @@ def _parse_cert(cert: dict) -> dict:
         Structured certificate data: subject, issuer, SANs, validity dates,
         signature algorithm, and key size.
     """
-    subject_dict = dict(
-        item[0]
-        for item in cert.get("subject", ())
-        if isinstance(item, tuple) and len(item) >= 1
-    )
-    issuer_dict = dict(
-        item[0]
-        for item in cert.get("issuer", ())
-        if isinstance(item, tuple) and len(item) >= 1
-    )
+    subject_dict = {}
+    for item in cert.get("subject", ()):
+        if isinstance(item, tuple) and len(item) >= 1 and isinstance(item[0], tuple):
+            try:
+                subject_dict[item[0][0]] = item[0][1]
+            except Exception:
+                continue
+        elif isinstance(item, tuple) and len(item) == 2:
+            try:
+                subject_dict[item[0]] = item[1]
+            except Exception:
+                continue
+    issuer_dict = {}
+    for item in cert.get("issuer", ()):
+        if isinstance(item, tuple) and len(item) >= 1 and isinstance(item[0], tuple):
+            try:
+                issuer_dict[item[0][0]] = item[0][1]
+            except Exception:
+                continue
+        elif isinstance(item, tuple) and len(item) == 2:
+            try:
+                issuer_dict[item[0]] = item[1]
+            except Exception:
+                continue
 
     subject = subject_dict.get("commonName") or _rdn_to_str(subject_dict) or None
     issuer = issuer_dict.get("commonName") or _rdn_to_str(issuer_dict) or None

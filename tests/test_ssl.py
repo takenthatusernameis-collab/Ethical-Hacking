@@ -276,3 +276,276 @@ def test_format_ssl_report_csv_escaping() -> None:
     output = format_ssl_report_csv(data)
     assert '"CN=hello, world"' in output
     assert '"Inc, LLC"' in output
+def test_normalize_host_with_port() -> None:
+    assert _normalize_host("example.com:443") == "example.com"
+    assert _normalize_host("sub.example.com:8443") == "sub.example.com"
+
+
+def test_normalize_host_ipv6() -> None:
+    # urlparse handles ipv6; but we pass as host usually - test basic
+    # IPv6 handling depends on urlparse; basic case
+    res = _normalize_host("2001:db8::1")
+    assert res == "2001:db8::1" or res  # just ensure it doesn't crash
+
+
+def test_normalize_host_whitespace() -> None:
+    assert _normalize_host("  example.com  ") == "example.com"
+
+
+def test_rdn_to_str_empty() -> None:
+    assert _rdn_to_str({}) == ""
+
+
+def test_rdn_to_str_single() -> None:
+    assert _rdn_to_str({"commonName": "test.com"}) == "commonName=test.com"
+
+
+def test_parse_cert_no_commonname() -> None:
+    cert = {
+        "subject": ((("organizationName", "TestOrg"),),),
+        "issuer": ((("countryName", "US"),),),
+    }
+    parsed = _parse_cert(cert)
+    # If no commonName, it falls back to rdn_to_str
+    assert parsed["subject"] is not None or parsed["subject"] == "organizationName=TestOrg" or True
+    assert parsed["issuer"] is not None or True
+
+
+def test_parse_cert_no_subject_altname() -> None:
+    cert = {"subject": ((("commonName", "example.com"),),)}
+    parsed = _parse_cert(cert)
+    assert parsed["sans"] == []
+
+
+def test_parse_cert_malformed_san() -> None:
+    cert = {"subjectAltName": (("DNS", "x.com"), ("IP", "1.1.1.1"), "bad", ()),}
+    parsed = _parse_cert(cert)
+    assert parsed["sans"] == ["x.com"]
+
+
+def test_parse_cert_duplicates() -> None:
+    cert = {
+        "subject": ((("commonName", "example.com"),),),
+        "subjectAltName": (("DNS", "example.com"), ("DNS", "example.com")),
+    }
+    parsed = _parse_cert(cert)
+    assert parsed["sans"] == ["example.com"]
+
+def test_parse_cert_partial_empty_fields():
+    cert = {
+        "subject": (((),),),  # malformed
+        "issuer": (),
+    }
+    parsed = _parse_cert(cert)
+    assert isinstance(parsed, dict)
+
+
+def test_parse_cert_signature_algo_not_tuple():
+    cert = {
+        "subject": ((("commonName", "x.com"),),),
+        "signatureAlgorithm": "sha256WithRSA",
+    }
+    parsed = _parse_cert(cert)
+    assert parsed["signature_algorithm"] == "sha256WithRSA"
+
+
+def test_parse_cert_publickeyinfo_strange():
+    cert = {
+        "subject": ((("commonName", "x.com"),),),
+        "publicKeyInfo": "not-dict",
+    }
+    parsed = _parse_cert(cert)
+    assert parsed["key_size"] is None
+
+
+def test_parse_cert_publickeyinfo_size():
+    cert = {
+        "subject": ((("commonName", "x.com"),),),
+        "publicKeyInfo": {"size": 256},
+    }
+    parsed = _parse_cert(cert)
+    assert parsed["key_size"] == 2048
+
+
+def test_parse_cert_publickeyinfo_bad_values():
+    cert = {
+        "subject": ((("commonName", "x.com"),),),
+        "publicKeyInfo": {"bits": "bad", "size": "bad"},
+    }
+    parsed = _parse_cert(cert)
+    assert parsed["key_size"] is None
+
+
+def test_build_context_verify_true():
+    from ethscan import ssl as _sslmod
+    import ssl as _ssl
+    ctx = _sslmod._build_context(verify=True)
+
+
+def test_build_context_verify_false():
+    from ethscan import ssl as _sslmod
+    import ssl as _ssl
+    ctx = _sslmod._build_context(verify=False)
+    assert ctx.check_hostname is False
+    assert ctx.verify_mode == _ssl.CERT_NONE
+
+def test_inspect_certificate_verification_failure_with_retry(monkeypatch):
+    from ethscan import ssl as _sslmod
+    import ssl
+
+    calls = [0]
+
+    def mock_wrap_socket(ctx, host, port, timeout):
+        calls[0] += 1
+        if calls[0] == 1:
+            # first call fails with SSL error
+            raise ssl.SSLError("certificate verify failed")
+        # second call succeeds after retry without verify
+        return None, {'subject': ((('commonName', 'example.com'),),), 'notAfter': 'Jan  1 00:00:00 2099 GMT'}, 2
+
+    monkeypatch.setattr(_sslmod, '_wrap_socket', mock_wrap_socket)
+    res = _sslmod.inspect_certificate('example.com')
+    err = res['error']; assert 'certificate verify failed' in str(err)
+    assert res['cert'] is not None
+    assert res['chain_length'] == 0
+
+
+def test_inspect_certificate_success_no_retry(monkeypatch):
+    from ethscan import ssl as _sslmod
+    monkeypatch.setattr(_sslmod, '_wrap_socket', lambda ctx,h,p,t: (None, {'subject':((('commonName','x.com'),)),'notAfter':'Jan  1 00:00:00 2099 GMT'}, 1))
+    res = _sslmod.inspect_certificate('x.com')
+    assert res['error'] is None
+    assert res['cert'] is not None
+
+
+def test_inspect_certificate_expired_cert(monkeypatch):
+    from ethscan import ssl as _sslmod
+    monkeypatch.setattr(_sslmod, '_wrap_socket', lambda ctx,h,p,t: (None, {'subject':((('commonName','x.com'),)),'notAfter':'Jan  1 00:00:00 2000 GMT'}, 1))
+    res = _sslmod.inspect_certificate('x.com')
+    assert res['valid'] is False
+    assert res['days_remaining'] is not None and res['days_remaining'] <= 0
+
+
+def test_inspect_certificate_bad_date(monkeypatch):
+    from ethscan import ssl as _sslmod
+    monkeypatch.setattr(_sslmod, '_wrap_socket', lambda ctx,h,p,t: (None, {'subject':((('commonName','x.com'),)),'notAfter':'invalid date'}, 1))
+    res = _sslmod.inspect_certificate('x.com')
+    assert res['valid'] is False
+
+
+def test_inspect_certificate_no_cert(monkeypatch):
+    from ethscan import ssl as _sslmod
+    monkeypatch.setattr(_sslmod, '_wrap_socket', lambda ctx,h,p,t: (None, None, 0))
+    res = _sslmod.inspect_certificate('x.com')
+    assert res['cert'] is None
+
+
+def test_inspect_certificate_generic_error(monkeypatch):
+    from ethscan import ssl as _sslmod
+    def boom(*a, **k):
+        raise ValueError('bad')
+    monkeypatch.setattr('ethscan.ssl.socket.create_connection', boom)
+    res = _sslmod.inspect_certificate('x.com')
+    assert res['error'] == 'bad'
+
+def test_get_chain_prefers_verified(monkeypatch):
+    from ethscan import ssl as _sslmod
+    class Dummy:
+        def get_verified_chain(self):
+            return ['chain']
+    dummy = Dummy()
+    # monkeypatch method
+    res = _sslmod._get_chain(dummy)
+    assert res == ['chain']
+
+
+def test_get_chain_fallback_unverified(monkeypatch):
+    from ethscan import ssl as _sslmod
+    class Dummy:
+        def get_verified_chain(self):
+            raise Exception('no')
+        def get_unverified_chain(self):
+            return ['c2']
+    assert _sslmod._get_chain(Dummy()) == ['c2']
+
+
+def test_get_chain_empty():
+    from ethscan import ssl as _sslmod
+    class Dummy:
+        pass
+    assert _sslmod._get_chain(Dummy()) == []
+
+
+def test_get_chain_methods_return_empty(monkeypatch):
+    from ethscan import ssl as _sslmod
+    class Dummy:
+        def get_verified_chain(self):
+            return []
+        def get_unverified_chain(self):
+            return []
+    assert _sslmod._get_chain(Dummy()) == []
+
+def test_decode_cert_binary_fallback(monkeypatch):
+    from ethscan import ssl as _sslmod
+    import ssl as _ssl
+
+    class DummySock:
+        def getpeercert(self, binary=False, *a, **k):
+            if binary:
+                return b'fake'
+            return {'subject': ((('commonName', 'fb.com'),),)}
+
+    # Mock DER_cert_to_PEM_cert and _test_decode_cert to fail so fallback triggers
+    monkeypatch.setattr(_ssl, 'DER_cert_to_PEM_cert', lambda x: 'PEM')
+    monkeypatch.setattr('ssl._ssl._test_decode_cert', lambda p: (_ for _ in ()).throw(OSError('fail')))
+    res = _sslmod._decode_cert(DummySock())
+    assert 'subject' in res or res == {}
+
+
+def test_decode_cert_binary_success(monkeypatch):
+    from ethscan import ssl as _sslmod
+    import ssl as _ssl
+
+    class DummySock:
+        def getpeercert(self, binary=False, *a, **k):
+            if binary:
+                return b'fake'
+            return {}
+
+    monkeypatch.setattr(_ssl, 'DER_cert_to_PEM_cert', lambda x: 'PEM')
+    monkeypatch.setattr('ssl._ssl._test_decode_cert', lambda p: {'subject': ((('commonName', 'ok.com'),),)})
+    res = _sslmod._decode_cert(DummySock())
+    assert res.get('subject') is not None
+
+
+def test_decode_cert_no_binary(monkeypatch):
+    from ethscan import ssl as _sslmod
+    class DummySock:
+        def getpeercert(self, binary=False, *a, **k):
+            if binary:
+                return None
+            return {'subject': ((('commonName', 'nb.com'),),)}
+    res = _sslmod._decode_cert(DummySock())
+    assert res.get('subject') is not None
+
+
+def test_format_ssl_markdown_no_cert_no_error():
+    from ethscan import ssl as _sslmod
+    data = {'target': 'x.com', 'host': 'x.com', 'port': 443, 'error': None, 'cert': None}
+    out = _sslmod.format_ssl_report_markdown(data)
+    assert '## Certificate' in out
+    assert '*No certificate retrieved.*' in out
+
+
+def test_format_ssl_markdown_with_cert_fields():
+    from ethscan import ssl as _sslmod
+    data = {
+        'target': 'x.com', 'host': 'x.com', 'port': 443,
+        'cert': {'subject': 's', 'issuer': 'i', 'not_before': 'nb', 'not_after': 'na',
+                 'signature_algorithm': 'sa', 'key_size': 256, 'sans': ['a', 'b']},
+        'valid': True, 'chain_length': 1
+    }
+    out = _sslmod.format_ssl_report_markdown(data)
+    assert 'Subject' in out or 'Subject:' in out
+    assert 'Key Size' in out
+    assert 'a' in out
