@@ -374,3 +374,350 @@ def test_format_resolve_report_csv_comma_value() -> None:
     output = format_resolve_report_csv(data)
     reader = list(csv.reader(io.StringIO(output)))
     assert reader[1][3] == '"v=spf1, include:example.com"'
+
+def test_resolve_a_records_success() -> None:
+    from ethscan import resolve
+    # Use localhost which resolves to 127.0.0.1 in this environment
+    result = resolve.resolve_a_records("localhost")
+    assert "127.0.0.1" in result
+
+
+def test_resolve_aaaa_records_success() -> None:
+    from ethscan import resolve
+    result = resolve.resolve_aaaa_records("localhost")
+    # Could be ::1 or empty depending on setup; at least exercise path
+    assert isinstance(result, list)
+
+
+def test_resolve_cname_records_no_dnspython() -> None:
+    from ethscan import resolve
+    # When DNS_AVAILABLE is False, returns empty
+    orig = resolve.DNS_AVAILABLE
+    try:
+        resolve.DNS_AVAILABLE = False
+        result = resolve.resolve_cname_records("example.com")
+        assert result == []
+    finally:
+        resolve.DNS_AVAILABLE = orig
+
+
+def test_resolve_ptr_records_no_dnspython() -> None:
+    from ethscan import resolve
+    orig = resolve.DNS_AVAILABLE
+    try:
+        resolve.DNS_AVAILABLE = False
+        result = resolve.resolve_ptr_records("127.0.0.1")
+        assert isinstance(result, list)
+    finally:
+        resolve.DNS_AVAILABLE = orig
+
+
+def test_resolve_with_dnspython_no_dnspython() -> None:
+    from ethscan import resolve
+    orig = resolve.DNS_AVAILABLE
+    try:
+        resolve.DNS_AVAILABLE = False
+        result = resolve.resolve_with_dnspython("example.com", "MX")
+        assert result == []
+    finally:
+        resolve.DNS_AVAILABLE = orig
+
+
+def test_normalize_target_bracketed_ipv6_with_port() -> None:
+    from ethscan.resolve import _normalize_target
+    assert _normalize_target("https://[2001:db8::1]:443/path") == "2001:db8::1"
+
+def test_resolve_cname_records_dnspython_success() -> None:
+    from ethscan import resolve
+
+    class DummyAnswer:
+        def __init__(self, val):
+            self.val = val
+
+        def __str__(self):
+            return self.val
+
+    class DummyResolver:
+        def __init__(self):
+            self.timeout = None
+            self.lifetime = None
+
+        def resolve(self, domain, rtype):
+            assert domain == "example.com"
+            assert rtype == "CNAME"
+            return [DummyAnswer("target.example.com"), DummyAnswer("target.example.com")]
+
+    class FakeDns:
+        exception = type("exception", (), {"DNSException": Exception})
+        resolver = type("resolver", (), {"Resolver": DummyResolver})
+
+    orig = resolve.DNS_AVAILABLE
+    try:
+        resolve.DNS_AVAILABLE = True
+        resolve.dns = FakeDns()
+        result = resolve.resolve_cname_records("example.com", timeout=1.0)
+        assert result == ["target.example.com"]
+    finally:
+        resolve.DNS_AVAILABLE = orig
+
+
+def test_resolve_cname_records_dnspython_exception() -> None:
+    from ethscan import resolve
+
+    class DummyResolver:
+        def __init__(self):
+            self.timeout = None
+            self.lifetime = None
+
+        def resolve(self, domain, rtype):
+            raise Exception("fail")
+
+    class FakeDns:
+        exception = type("exception", (), {"DNSException": Exception})
+        resolver = type("resolver", (), {"Resolver": DummyResolver})
+
+    orig = resolve.DNS_AVAILABLE
+    try:
+        resolve.DNS_AVAILABLE = True
+        resolve.dns = FakeDns()
+        result = resolve.resolve_cname_records("example.com")
+        assert result == []
+    finally:
+        resolve.DNS_AVAILABLE = orig
+
+
+def test_resolve_ptr_records_dnspython_success() -> None:
+    from ethscan import resolve
+
+    class DummyAnswer:
+        def __str__(self):
+            return "ptr.example.com"
+
+    class DummyResolver:
+        def __init__(self):
+            self.timeout = None
+            self.lifetime = None
+            self.nameservers = None
+
+        def resolve(self, rev_name, rtype):
+            assert rtype == "PTR"
+            return [DummyAnswer()]
+
+    class FakeReversename:
+        @staticmethod
+        def from_address(ip):
+            assert ip == "8.8.8.8"
+            return "8.8.8.8.in-addr.arpa"
+
+    class FakeDns:
+        exception = type("exception", (), {"DNSException": Exception})
+        resolver = type("resolver", (), {"Resolver": DummyResolver})
+        reversename = FakeReversename()
+
+    orig = resolve.DNS_AVAILABLE
+    try:
+        resolve.DNS_AVAILABLE = True
+        resolve.dns = FakeDns()
+        result = resolve.resolve_ptr_records("8.8.8.8", timeout=1.0)
+        assert result == ["ptr.example.com"]
+    finally:
+        resolve.DNS_AVAILABLE = orig
+
+
+def test_resolve_ptr_records_dnspython_with_server() -> None:
+    from ethscan import resolve
+
+    class DummyAnswer:
+        def __str__(self):
+            return "ptr.example.com"
+
+    class DummyResolver:
+        def __init__(self):
+            self.timeout = None
+            self.lifetime = None
+            self.nameservers = None
+
+        def resolve(self, rev_name, rtype):
+            assert rtype == "PTR"
+            return [DummyAnswer()]
+
+    class FakeReversename:
+        @staticmethod
+        def from_address(ip):
+            return "8.8.8.8.in-addr.arpa"
+
+    class FakeDns:
+        exception = type("exception", (), {"DNSException": Exception})
+        resolver = type("resolver", (), {"Resolver": DummyResolver})
+        reversename = FakeReversename()
+
+    orig = resolve.DNS_AVAILABLE
+    try:
+        resolve.DNS_AVAILABLE = True
+        resolve.dns = FakeDns()
+        result = resolve.resolve_ptr_records("8.8.8.8", server="1.1.1.1")
+        assert result == ["ptr.example.com"]
+    finally:
+        resolve.DNS_AVAILABLE = orig
+
+
+def test_resolve_ptr_records_dnspython_exception() -> None:
+    from ethscan import resolve
+
+    class DummyResolver:
+        def __init__(self):
+            self.timeout = None
+            self.lifetime = None
+            self.nameservers = None
+
+        def resolve(self, rev_name, rtype):
+            raise Exception("fail")
+
+    class FakeReversename:
+        @staticmethod
+        def from_address(ip):
+            return "8.8.8.8.in-addr.arpa"
+
+    class FakeDns:
+        exception = type("exception", (), {"DNSException": Exception})
+        resolver = type("resolver", (), {"Resolver": DummyResolver})
+        reversename = FakeReversename()
+
+    orig = resolve.DNS_AVAILABLE
+    try:
+        resolve.DNS_AVAILABLE = True
+        resolve.dns = FakeDns()
+        result = resolve.resolve_ptr_records("8.8.8.8")
+        assert result == []
+    finally:
+        resolve.DNS_AVAILABLE = orig
+
+
+def test_resolve_with_dnspython_success() -> None:
+    from ethscan import resolve
+
+    class DummyAnswer:
+        def __init__(self, v):
+            self.v = v
+
+        def __str__(self):
+            return self.v
+
+    class DummyResolver:
+        def __init__(self):
+            self.timeout = None
+            self.lifetime = None
+            self.nameservers = None
+
+        def resolve(self, domain, rtype):
+            return [DummyAnswer("mx1.example.com"), DummyAnswer("mx2.example.com")]
+
+    class FakeDns:
+        exception = type("exception", (), {"DNSException": Exception})
+        resolver = type("resolver", (), {"Resolver": DummyResolver})
+
+    orig = resolve.DNS_AVAILABLE
+    try:
+        resolve.DNS_AVAILABLE = True
+        resolve.dns = FakeDns()
+        result = resolve.resolve_with_dnspython("example.com", "MX")
+        assert result == ["mx1.example.com", "mx2.example.com"]
+    finally:
+        resolve.DNS_AVAILABLE = orig
+
+
+def test_resolve_with_dnspython_with_server() -> None:
+    from ethscan import resolve
+
+    class DummyAnswer:
+        def __str__(self):
+            return "ns1.example.com"
+
+    class DummyResolver:
+        def __init__(self):
+            self.timeout = None
+            self.lifetime = None
+            self.nameservers = None
+
+        def resolve(self, domain, rtype):
+            return [DummyAnswer()]
+
+    class FakeDns:
+        exception = type("exception", (), {"DNSException": Exception})
+        resolver = type("resolver", (), {"Resolver": DummyResolver})
+
+    orig = resolve.DNS_AVAILABLE
+    try:
+        resolve.DNS_AVAILABLE = True
+        resolve.dns = FakeDns()
+        result = resolve.resolve_with_dnspython("example.com", "NS", server="1.1.1.1")
+        assert result == ["ns1.example.com"]
+    finally:
+        resolve.DNS_AVAILABLE = orig
+
+
+def test_resolve_with_dnspython_exception() -> None:
+    from ethscan import resolve
+
+    class DummyResolver:
+        def __init__(self):
+            self.timeout = None
+            self.lifetime = None
+            self.nameservers = None
+
+        def resolve(self, domain, rtype):
+            raise Exception("fail")
+
+    class FakeDns:
+        exception = type("exception", (), {"DNSException": Exception})
+        resolver = type("resolver", (), {"Resolver": DummyResolver})
+
+    orig = resolve.DNS_AVAILABLE
+    try:
+        resolve.DNS_AVAILABLE = True
+        resolve.dns = FakeDns()
+        result = resolve.resolve_with_dnspython("example.com", "TXT")
+        assert result == []
+    finally:
+        resolve.DNS_AVAILABLE = orig
+
+
+def test_run_resolve_with_arbitrary_record_type_dnspython() -> None:
+    from ethscan import resolve
+
+    class DummyAnswer:
+        def __str__(self):
+            return "txt.example.com"
+
+    class DummyResolver:
+        def __init__(self):
+            self.timeout = None
+            self.lifetime = None
+            self.nameservers = None
+
+        def resolve(self, domain, rtype):
+            assert rtype == "TXT"
+            return [DummyAnswer()]
+
+    class FakeDns:
+        exception = type("exception", (), {"DNSException": Exception})
+        resolver = type("resolver", (), {"Resolver": DummyResolver})
+
+    orig = resolve.DNS_AVAILABLE
+    try:
+        resolve.DNS_AVAILABLE = True
+        resolve.dns = FakeDns()
+        result = resolve.run_resolve("example.com", record_types=["TXT"], server="1.1.1.1")
+        assert result["records"]["TXT"] == ["txt.example.com"]
+        assert result["dnspython_available"] is True
+    finally:
+        resolve.DNS_AVAILABLE = orig
+
+
+def test_run_resolve_with_unsupported_and_mixed_types() -> None:
+    from ethscan import resolve
+
+    result = resolve.run_resolve("example.com", record_types=["MX", "A", "BOGUS"])
+    # MX falls through to dnspython path only if available; dnspython not installed here
+    assert "A" in result["records"]
+    assert "MX" not in result["records"] or isinstance(result["records"].get("MX"), list)

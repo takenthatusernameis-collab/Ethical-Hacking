@@ -170,8 +170,6 @@ def run_resolve(
 
     for rtype in types:
         rtype_upper = rtype.upper()
-        if rtype_upper not in all_supported:
-            continue
 
         if is_ip and rtype_upper != "PTR":
             continue
@@ -186,10 +184,13 @@ def run_resolve(
             results["CNAME"] = resolve_cname_records(normalized, timeout)
         elif rtype_upper == "PTR":
             results["PTR"] = resolve_ptr_records(normalized, timeout, server)
-        elif DNS_AVAILABLE:
-            results[rtype_upper] = resolve_with_dnspython(normalized, rtype_upper, timeout, server)
+        elif rtype_upper in all_supported:
+            continue  # should not happen due to above
         else:
-            results[rtype_upper] = []
+            if DNS_AVAILABLE:
+                results[rtype_upper] = resolve_with_dnspython(normalized, rtype_upper, timeout, server)
+            else:
+                continue  # ignore unknown types when dnspython unavailable
 
     return {
         "target": target,
