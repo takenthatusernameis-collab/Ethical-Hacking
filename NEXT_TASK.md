@@ -1,92 +1,126 @@
 # Next task for the next agent
 
-## Completed: `mssql` module unit tests (`tests/test_mssql.py`)
+## Completed: `oracle` module unit tests (`tests/test_oracle.py`)
 
-Added 71 new unit tests to `tests/test_mssql.py`, raising the test count from 6 to 77 and improving the test-to-module line ratio from 0.41 (285/690) to 1.62 (1114/690).
+Added 72 new unit tests to `tests/test_oracle.py`, raising the test count from 14 to 86 and
+improving the test-to-module line ratio from 0.49 (257/528) to 1.71 (903/528). This made it the
+fastest way to lift the lowest-coverage module in the repo (oracle was previously the lowest at 0.49).
 
 ### What changed
-- `tests/test_mssql.py`: added comprehensive tests covering all previously untested code paths.
+- `tests/test_oracle.py`: added tests for every previously untested code path, following the
+  conventions established by the `mssql`/`redis` expansions (monkeypatch-style connectors for
+  `run_oracle`/`_send_recv`, `unittest.mock.patch` on `ethscan.oracle.socket.create_connection`
+  for socket-level tests, `struct`-based helpers to build TNS Accept/Refuse packets).
 
 ### Coverage by function
 
-#### `_send_recv` (new: 9 tests)
-- `test_send_recv_with_connector` — connector success path
-- `test_send_recv_connector_error` — connector raises exception, returns wrapped error
-- `test_send_recv_connector_passes_all_args` — verifies host/port/req/timeout forwarded
-- `test_send_recv_socket_timeout_recv` — recv raises `socket.timeout` (inner except catches, returns `(None, None)`)
-- `test_send_recv_socket_timeout_connect` — `create_connection` raises `socket.timeout` (returns `"Timeout"`)
-- `test_send_recv_socket_connection_refused` — `ConnectionRefusedError` returns `"Connection refused"`
-- `test_send_recv_socket_oserror` — generic `OSError` returns error string
-- `test_send_recv_socket_success` — mocked socket returns data, verifies `sendall` called
-- `test_send_recv_socket_empty_request` — empty request, `sendall` not called, data still received
-- `test_send_recv_socket_multi_chunk` — multiple `recv` chunks are concatenated
+#### `_normalize_target` (new: 7 tests)
+- URL with scheme but no port (oracle:// and tns://) -> DEFAULT_PORT
+- whitespace stripping
+- empty / None target -> ValueError
+- port 0 -> DEFAULT_PORT (port is falsy)
+- URL with path / path+port variants
+- IPv6 URL without port
 
-#### `_build_prelogin_request` (new: 4 tests)
-- `test_build_prelogin_request_header_fields` — validates TDS header: type=0x12, flags=0x01, msg_len=len(req), channel_id=0, packet_num=1, window=0
-- `test_build_prelogin_request_options` — walks the options payload to verify VERSION (0x00, 4 bytes), ENCRYPTION (0x01, 1 byte), INSTINST (0x02, 0 bytes), THREADID (0x03, 0 bytes) are in correct order and well-formed
-- `test_build_prelogin_request_total_length` — header msg_len equals total bytes
-- `test_build_prelogin_request_ignores_params` — passing args to unused params produces identical output (documents current behavior)
+#### `_build_connect_request` (new: 5 tests)
+- full TNS header fields validated (!HHBBH: length, checksum, type=Connect, reserved, hdr checksum)
+- total length == 58 + len(connect_data)
+- desired/min version fields at offset 8/10
+- all fixed fields (Service Options, SDU=0x0800, TDU=0xFFFF, NT proto, offset=58, max receivable, flags, trace facility, connection id, reserved)
+- connect data placement (offset 58 + length field)
 
-#### `_parse_prelogin_response` (new: 19 tests)
-- All encryption values: OFF (0x00), ON (0x01), REQUIRED (0x02), NOT SUPPORTED (0x03), UNKNOWN (0x05), empty value → UNKNOWN
-- Version not 4 bytes (2 bytes, 6 bytes) → falls back to UTF-8 decode
-- Thread ID short (< 4 bytes) → `None`
-- Empty instance name → `""`
-- Unknown option types (0x04, and multiple unknown) → silently ignored
-- msg_len larger than data → parses available payload
-- msg_len truncation (last byte cut) → option parser breaks early, encryption stays `None`
-- Truncated option (length byte > available bytes) → breaks early
-- Short data (< 9 bytes) → "too short" error
-- Exactly 9-byte header (no payload) → all fields `None`, no error
-- msg_len smaller than data → extra bytes ignored
-- Unknown encryption value (0x07) → `UNKNOWN(7)`
+#### `_send_recv` (new: 10 tests)
+- connector success path
+- connector error (exception) -> wrapped "connector error: ..."
+- connector receives all args (host/port/req/timeout)
+- socket.recv timeout (inner) -> (None, None)
+- create_connection timeout (outer) -> "Timeout"
+- ConnectionRefusedError -> "Connection refused"
+- generic OSError -> error string
+- socket success -> sendall called, data returned
+- empty request -> sendall not called
+- no data (server closes) -> (None, None)
+- multi-chunk recv concatenated
 
-#### `_assess_prelogin` (new: 9 tests)
-- Encryption OFF → plaintext warning finding
-- Encryption NOT SUPPORTED → plaintext warning finding
-- Encryption UNKNOWN → no plaintext warning, no "required" finding
-- Encryption ON → no plaintext warning
-- Encryption REQUIRED → "Encryption is required." finding
-- None version → no version finding emitted
-- Missing fields (empty dict) → empty findings list
-- Error-only case → single "Error: ..." finding
-- Thread ID 0 → finding emitted with 0
+#### `_parse_accept_response` (new: 4 tests)
+- wrong packet type (not 0x02) -> error message
+- payload too short (< 2 bytes for version)
+- version 0 -> "0"
+- empty data -> "too short" error
 
-#### `run_mssql` (new: 13 tests)
-- Empty probes (`probes=[]`) → not accessible, no error, no prelogin
-- Invalid target (empty string) → `ValueError` caught, error message set
-- No response (connector returns `(None, None)`) → "No response from server"
-- Response too short (1 byte) → accessible=True but prelogin error
-- Non-PRELOGIN response (type 0x10 LOGIN7) → "Expected PRELOGIN response"
-- Case-insensitive probes (`["PRELOGIN"]`, `["  PreLogin  "]`) → lowercased internally
-- Unknown probes (`["unknown_probe"]`) → no probe runs, not accessible, no error
-- Connector raises exception → "connector error: ..."
-- Whitespace probes (`["  prelogin  "]`) → stripped and matched
-- Error response from connector → error propagated
-- Default port used when omitted
-- Parsed port used from target
-- Explicit `port` parameter overrides parsed port
+#### `_parse_refuse_response` (new: 6 tests)
+- wrong packet type (not 0x04)
+- empty data (< 8 bytes)
+- payload too short (< 4 bytes)
+- data_length mismatch (claimed length > available)
+- zero-length error data
+- binary (non-UTF-8) data decoded with replacement
+- multiple (ERR=...) codes -> first one extracted
 
-#### Formatters (new: 12 tests)
-- `format_mssql_report_markdown`: error section, no findings case, empty prelogin (section skipped), None host ("N/A"), with version (Server Version line), pipe escaping in instance_name
-- `format_mssql_report_csv`: empty findings column, error column populated, comma escaping in host/findings/error fields, no prelogin data, header schema verified
-- `format_mssql_report_json`: empty result with error, accessible result with full prelogin
+#### `_assess_version` (new: 4 tests)
+- None version, no error -> []
+- error only (no version) -> single Error finding
+- empty dict -> []
+- version + error both present
+
+#### `run_oracle` (new: 12 tests)
+- empty probes -> short-circuits, not accessible, no error, connector not called
+- invalid target ("") -> ValueError caught, error message set
+- no response (connector returns (None, None)) -> "No response from server"
+- response too short (< 8 bytes) -> accessible=True, packet-type error
+- unexpected packet type -> "Unexpected packet type 0xNN"
+- case-insensitive probe names (["VERSION"])
+- whitespace probe names (["  version  "])
+- unknown probe -> not accessible, no error
+- connector raises exception -> error propagated
+- explicit port override (host:port parsed)
+- default port when omitted
+- refuse response -> accessible=True, error propagated
+- None probes -> uses DEFAULT_PROBES
+
+#### Formatters (new: 12 tests) + `_markdown_escape` (new: 3 tests)
+- `format_oracle_report_markdown`: error section, no-findings case, None host ("N/A"), no-version (section omitted), not-accessible ("No"), with version
+- `format_oracle_report_csv`: header schema, empty version cell, error column populated, comma-in-field escaping (via csv.reader), newline-in-field escaping
+- `format_oracle_report_json`: with error, accessible full result
+- `_markdown_escape` direct: pipe -> backslash-pipe, newline -> space, None -> "None", no-op for plain text
 
 ### Verification
-- `python -m pytest tests/test_mssql.py -q` -> 77 passed
-- `python -m pytest -q` -> **3003 passed** (2932 baseline + 71 new), 0 warnings
+- `python -m pytest tests/test_oracle.py -q` -> **86 passed** (14 baseline + 72 new)
+- `python -m pytest -q` -> **3072 passed**, 2 failed, 1 skipped
+  - The 2 failures are pre-existing and unrelated to this change:
+    `tests/test_dns.py::test_run_dns_workers_sequential` and
+    `tests/test_dns.py::test_run_dns_workers_parallel`. They fail in isolation
+    (running only those two tests reproduces them) because the sandbox's DNS
+    does not resolve `MX` records for `example.com`, so the MX resolver is
+    never invoked and the expected third call / result is missing.
+    `git diff --stat` confirms only `tests/test_oracle.py` was modified.
 
 ## Suggested next task
 
-Review the remaining low-coverage modules to determine the next priority. Current candidates (approximate ratios from repo):
-- `mysql` — ratio ~0.50 (249 test lines / 501 module lines), 8 tests
-- `oracle` — ratio ~0.49 (256 test lines / 527 module lines)
-- `snmp` — recently had CSV fixes but unit test coverage of core parsing (_parse_snmp_response, BER encoding) could be expanded
-- `ldap` — BER-encoded request/response handling and anonymous-bind parsing paths are lightly covered
-- `postgresql` — `run_postgresql` connector edge cases and auth-method parsing have minimal coverage
+**Add unit tests for the `mysql` module (`ethscan/mysql.py`).**
 
-Pick whichever module has the lowest test-to-module line ratio and add unit tests for its `_send_recv` / `_parse_*` / `_assess_*` / `run_*` / formatter functions following the patterns above (monkeypatch connector for `run_*`, `struct` helpers for building responses, `unittest.mock.patch` for `socket` in `_send_recv` tests).
+It now has the lowest test-to-module line ratio in the repository at **0.50**
+(249 test lines / 501 module lines, 8 tests). Its public surface is parallel to the
+just-expanded `oracle` module, so the same, proven test patterns transfer directly:
+
+- `_normalize_target` (host, host:port, mysql:// URL, IPv6, invalid/empty -> ValueError)
+- `_send_recv` -- not tested; mirror the oracle/mssql socket tests:
+  `unittest.mock.patch("ethscan.mysql.socket.create_connection")` for the socket
+  timeout/connect/ConnectionRefused/OSError/success/empty-request/multi-chunk cases,
+  plus the connector success/error/args-passed cases.
+- `_parse_handshake` -- best-effort Protocol::HandshakeV10 parser; build minimal
+  MySQL handshake packets with `struct` (server version, protocol version,
+  capabilities, charset, status flags) and test truncated/short payloads.
+- `_assess_handshake` -- findings emitted for version, missing fields, error-only.
+- `run_mysql` -- success/timeout/refused/no-response/empty-probes/case-insensitive
+  probes/unknown-probe/connector-exception/port-override/default-port/invalid-target.
+- `format_mysql_report_markdown` / `_csv` / `_json` -- error section, no findings,
+  None host, pipe/comma/newline escaping, schema checks.
 
 ### Constraints
-- Follow existing test conventions (plain functions, `_add_option`/`_tds_prelogin_resp`-style helpers, `unittest.mock.patch` for socket-level tests).
-- After adding tests, run `python -m pytest -q` to confirm no regressions.
+- Follow existing test conventions: plain functions, monkeypatch a `connector` callable
+  for `run_mysql`/`_send_recv` (the `_send_recv` connector signature is identical to
+  oracle's), `struct` helpers for building MySQL handshake packets, and
+  `unittest.mock.patch` for `socket.create_connection` at the socket level.
+- After adding tests, run `python -m pytest -q` to confirm no regressions
+  (expect the two pre-existing `test_dns.py` MX failures to remain; they are environmental).
