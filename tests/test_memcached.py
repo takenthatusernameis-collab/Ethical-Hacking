@@ -1,13 +1,19 @@
 """Tests for the ethscan memcached module."""
 
 import json
+import socket
+from unittest.mock import MagicMock
+
 import pytest
 
 from ethscan.memcached import (
     DEFAULT_PORT,
     DEFAULT_PROBES,
     DEFAULT_TIMEOUT,
+    _assess_stats,
+    _build_banner,
     _build_memcached_request,
+    _coerce_int,
     _normalize_target,
     _parse_stats_response,
     _parse_version_response,
@@ -17,6 +23,26 @@ from ethscan.memcached import (
     format_memcached_report_markdown,
     run_memcached,
 )
+
+
+class _DecodeFail:
+    """Truth object whose decode() always raises (covers defensive except)."""
+
+    def __bool__(self) -> bool:
+        return True
+
+    def decode(self, *args, **kwargs):
+        raise ValueError("decode failed")
+
+
+def _mock_socket(recv_data=b"", connect_side_effect=None, close_side_effect=None):
+    sock = MagicMock()
+    sock.recv.return_value = recv_data
+    if connect_side_effect is not None:
+        sock.connect.side_effect = connect_side_effect
+    if close_side_effect is not None:
+        sock.close.side_effect = close_side_effect
+    return sock
 
 
 def test_normalize_target_basic():
@@ -399,3 +425,215 @@ def test_run_memcached_empty_probes_list():
     results = run_memcached("localhost", probes=[], connector=lambda *a: (b"", None))
     assert results["accessible"] is False
     assert results["error"] is None
+
+
+def test_send_recv_default_socket_success(monkeypatch):
+    """_send_recv uses a real TCP socket when no connector is supplied."""
+    sock = _mock_socket(recv_data=b"VERSION 1.6.14\r\n")
+    monkeypatch.setattr("ethscan.memcached.socket.socket", lambda *a, **k: sock)
+    data, err = _send_recv("localhost", 11211, b"version\r\n", 3.0)
+    assert data == b"VERSION 1.6.14\r\n"
+    assert err is None
+    sock.connect.assert_called_once_with(("localhost", 11211))
+    sock.sendall.assert_called_once_with(b"version\r\n")
+
+
+def test_send_recv_default_socket_timeout(monkeypatch):
+    """A socket timeout on connect is reported as 'timeout'."""
+    sock = _mock_socket()
+    sock.connect.side_effect = socket.timeout("timed out")
+    monkeypatch.setattr("ethscan.memcached.socket.socket", lambda *a, **k: sock)
+    data, err = _send_recv("localhost", 11211, b"version\r\n", 3.0)
+    assert data is None
+    assert err == "timeout"
+
+
+def test_send_recv_default_socket_oserror(monkeypatch):
+    """An OSError during connect is surfaced as the error string."""
+    sock = _mock_socket()
+    sock.connect.side_effect = ConnectionRefusedError(111, "Connection refused")
+    monkeypatch.setattr("ethscan.memcached.socket.socket", lambda *a, **k: sock)
+    data, err = _send_recv("localhost", 11211, b"version\r\n", 3.0)
+    assert data is None
+    assert "Connection refused" in err
+
+
+def test_send_recv_default_socket_close_swallowed(monkeypatch):
+    """An exception while closing the socket is swallowed (defensive finally)."""
+    sock = _mock_socket(recv_data=b"VERSION 1.6.14\r\n")
+    sock.close.side_effect = OSError("close failed")
+    monkeypatch.setattr("ethscan.memcached.socket.socket", lambda *a, **k: sock)
+    data, err = _send_recv("localhost", 11211, b"version\r\n", 3.0)
+    assert data == b"VERSION 1.6.14\r\n"
+    assert err is None
+
+
+def test_coerce_int_valid():
+    assert _coerce_int("42") == 42
+
+
+def test_coerce_int_invalid():
+    assert _coerce_int("not-a-number") is None
+
+
+def test_coerce_int_none():
+    assert _coerce_int(None) is None
+
+
+def test_parse_version_response_decode_failure():
+    """Defensive except when the payload's decode() raises."""
+    assert _parse_version_response(_DecodeFail()) is None  # type: ignore[arg-type]
+
+
+def test_parse_version_response_empty_lines_skipped():
+    data = b"\r\nVERSION 1.6.14\r\n"
+    assert _parse_version_response(data) == "1.6.14"
+
+
+def test_parse_version_response_tab_separator():
+    data = b"VERSION\t1.6.14\r\n"
+    assert _parse_version_response(data) == "1.6.14"
+
+
+def test_parse_stats_response_decode_failure():
+    """Defensive except when the payload's decode() raises."""
+    assert _parse_stats_response(_DecodeFail()) == {}  # type: ignore[arg-type]
+
+
+def test_parse_stats_response_empty_lines_skipped():
+    data = b"\r\nSTAT pid 1\r\nEND\r\n"
+    assert _parse_stats_response(data) == {"pid": "1"}
+
+
+def test_parse_stats_response_single_field_space():
+    data = b"STAT some_key\r\nEND\r\n"
+    assert _parse_stats_response(data) == {"some_key": ""}
+
+
+def test_parse_stats_response_single_field_tab():
+    data = b"STAT\tsome_key\r\nEND\r\n"
+    assert _parse_stats_response(data) == {"some_key": ""}
+
+
+def test_assess_stats_empty():
+    assert _assess_stats({}) == []
+
+
+def test_assess_stats_all_findings():
+    stats = {
+        "pid": "0",
+        "uptime": "0",
+        "bytes": "0",
+        "limit_maxbytes": "0",
+        "accepting_conns": "0",
+        "evictions": "5",
+        "get_hits": "0",
+        "get_misses": "10",
+    }
+    findings = _assess_stats(stats)
+    assert "server reports pid 0" in findings
+    assert "server uptime is 0" in findings
+    assert "server reports 0 bytes" in findings
+    assert "limit_maxbytes is 0 (unbounded cache)" in findings
+    assert "server is not currently accepting connections" in findings
+    assert "evictions are occurring (cache pressure)" in findings
+    assert "no cache hits recorded" in findings
+
+
+def test_build_banner_inaccessible():
+    assert _build_banner({"accessible": False, "version": "1.0", "stats": {"uptime": "5"}}) is None
+
+
+def test_build_banner_version_and_stats():
+    results = {
+        "accessible": True,
+        "version": "1.6.14",
+        "stats": {"uptime": "3600", "bytes": "2048", "curr_connections": "5"},
+    }
+    assert _build_banner(results) == "memcached 1.6.14; uptime=3600s; bytes=2048; curr_connections=5"
+
+
+def test_build_banner_non_int_stats_skipped():
+    results = {
+        "accessible": True,
+        "version": None,
+        "stats": {"uptime": "abc", "bytes": "", "curr_connections": "x"},
+    }
+    assert _build_banner(results) == "memcached"
+
+
+def test_build_banner_no_version_no_stats():
+    assert _build_banner({"accessible": True, "version": None, "stats": {}}) == "memcached"
+
+
+def test_run_memcached_stats_no_response():
+    """An empty stats response after a successful version probe sets an error."""
+    def connector(host, port, request, timeout):
+        if request == b"version\r\n":
+            return b"VERSION 1.6.14\r\n", None
+        if request == b"stats\r\n":
+            return b"", None
+        return None, "unexpected"
+
+    results = run_memcached("localhost", connector=connector)
+    assert results["accessible"] is True
+    assert "no response" in results["error"]
+
+
+def test_format_memcached_report_markdown_other_stats_and_pipe_escape():
+    data = {
+        "target": "localhost:11211",
+        "host": "localhost",
+        "port": 11211,
+        "accessible": True,
+        "version": "1.6.14",
+        "stats": {
+            "pid": "1",
+            "uptime": "3600",
+            "bytes": "1024",
+            "curr_connections": "5",
+            "custom_key": "a|b value",
+        },
+        "findings": [],
+        "error": None,
+    }
+    output = format_memcached_report_markdown(data)
+    assert "### Other Stats" in output
+    assert "custom_key" in output
+    assert "a\\|b value" in output
+
+
+def test_format_memcached_report_markdown_no_stats():
+    data = {
+        "target": "localhost:11211",
+        "host": "localhost",
+        "port": 11211,
+        "accessible": True,
+        "version": None,
+        "stats": {},
+        "findings": [],
+        "error": None,
+    }
+    output = format_memcached_report_markdown(data)
+    assert "## Stats" in output
+    assert "- No stats collected." in output
+
+
+def test_format_memcached_report_markdown_with_findings():
+    data = {
+        "target": "localhost:11211",
+        "host": "localhost",
+        "port": 11211,
+        "accessible": True,
+        "version": None,
+        "stats": {},
+        "findings": [
+            "evictions are occurring (cache pressure)",
+            "no cache hits recorded",
+        ],
+        "error": None,
+    }
+    output = format_memcached_report_markdown(data)
+    assert "## Findings" in output
+    assert "- evictions are occurring (cache pressure)" in output
+    assert "- no cache hits recorded" in output
