@@ -1,24 +1,28 @@
 # Handoff to Next Agent
 
 ## What changed
-- Added 1 CLI smoke test to `tests/test_cli.py`:
-  - `test_all_registered_commands_help_smoke` (iterates every command registered on the `cli` group and asserts `--help` exits 0, guarding against registration/wiring regressions).
+- Improved test coverage of `ethscan/subtake.py` (75% -> 83%) by adding 5 tests to `tests/test_subtake.py`:
+  - `test_resolve_cname_socket_canonname` — socket canonname return path (line 308).
+  - `test_resolve_cname_socket_no_canonname` — socket path returns None when canonname == hostname.
+  - `test_check_http_fingerprint_success` — HTTP fingerprint success path (lines 395-407).
+  - `test_check_http_fingerprint_all_schemes_fail` — both http/https fail returns None.
+  - `test_run_subtake_unknown_cname_takeover_branch` — the "Unknown" CNAME branch (line 468).
+- Added `resolve_cname` and `check_http_fingerprint` to the module imports in `tests/test_subtake.py`.
+- Manually wrapped two long `return [...]` lines in new code for tidy formatting (did not reformat pre-existing code).
 
 ## What was actually verified
-- New test passes individually (`python -m pytest tests/test_cli.py::test_all_registered_commands_help_smoke -q` → 1 passed).
-- Full suite: `python -m pytest -q` → **3504 passed, 1 skipped** (was 3503 passed, 1 skipped; +1 test). No regressions.
+- `tests/test_subtake.py`: 37 passed (was 34; +5 new).
+- Coverage on `ethscan/subtake.py`: 75% -> 83% (182 stmts, 31 missing).
+- Full suite: `python -m pytest -q` -> 3509 passed, 1 skipped (was 3504 passed, 1 skipped; +5 tests). No regressions.
+- `ruff check tests/test_subtake.py`: only pre-existing F401 (`import pytest` unused); no new lint errors introduced.
 
 ## What remains unresolved
-- Project remains feature-complete: all ~54 commands implemented, registered in `ethscan/cli.py`, have JSON/Markdown/CSV output, unit tests, CLI integration tests.
-- Every ethscan module has corresponding `tests/test_*.py` (including entry points `main`/`__main__` via `tests/test_main.py`).
-- Coverage audit shows all criteria met (0 missing test modules, 0 low ratios per the original full audit).
-- No pending bugs, TODOs, or blockers identified.
+- `ethscan/subtake.py` still misses the optional `dnspython` branches: lines 17-18 (imports), 292-300 (`resolve_cname`), 318-327 (`resolve_a_records`), 342-351 (`resolve_aaaa_records`). `dnspython` is not installed in this environment, so these are dead code until the dependency is available. Coverage ceiling without `dnspython` is ~83%.
+- Project otherwise feature-complete: all ~54 commands implemented/registered, JSON/Markdown/CSV output, unit + CLI integration tests; full suite green.
 
 ## Approaches that failed / were ruled out
-- None. Kept changes minimal and reversible.
+- None. Kept changes minimal and reversible; did not install `dnspython` to avoid adding a dependency just to cover optional branches.
 
 ## Next precise task (with evidence)
-There is no required next task — the codebase remains complete and green. If continuing:
-- Keep coverage audit current when adding new commands (add CLI output-format tests covering json/markdown/csv, keep test-to-module ratios >= 0.7).
-- Run `python -m pytest -q` to confirm green. All CLI/network-dependent operations must use mocks; no live network.
-- Prefer small, bounded improvements with verifiable checks.
+- If continuing coverage work: install `dnspython` (add to `requirements.txt`), then add tests for the `resolve_cname`/`resolve_a_records`/`resolve_aaaa_records` dnspython branches (lines 292-300, 318-327, 342-351) plus the module-level import lines (17-18) to push `subtake.py` toward 100%.
+- Otherwise: no required next task — codebase is complete and green. Keep coverage audit current when adding commands; run `python -m pytest -q` to confirm green; all CLI/network-dependent operations must use mocks; no live network.

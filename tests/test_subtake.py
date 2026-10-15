@@ -6,10 +6,12 @@ from ethscan.subtake import (
     DEFAULT_SUBDOMAINS,
     TAKEOVER_SIGNATURES,
     _normalize_domain,
+    check_http_fingerprint,
     check_takeover_signature,
     format_subtake_report_csv,
     format_subtake_report_json,
     format_subtake_report_markdown,
+    resolve_cname,
     run_subtake,
 )
 
@@ -656,3 +658,99 @@ def test_format_subtake_report_csv_pipe_escaping() -> None:
     lines = output.splitlines()
     # a_records joined with comma is quoted; fingerprint with comma+quote is quoted/escaped
     assert lines[1] == 'www,www.example.com,mybucket.s3.amazonaws.com,"1.2.3.4, 5.6.7.8",,true,AWS S3,"finger""print,with,comma",false'
+
+
+def test_resolve_cname_socket_canonname(monkeypatch) -> None:
+    """resolve_cname returns the socket canonname when dnspython is unavailable."""
+    import socket
+
+    def mock_getaddrinfo(host, port, *args, **kwargs):
+        return [
+            (
+                socket.AF_INET,
+                socket.SOCK_STREAM,
+                socket.IPPROTO_TCP,
+                "alias.example.com",
+                ("127.0.0.1", 80),
+            )
+        ]
+
+    monkeypatch.setattr("ethscan.subtake.socket.getaddrinfo", mock_getaddrinfo)
+    assert resolve_cname("example.com", timeout=1.0) == "alias.example.com"
+
+
+def test_resolve_cname_socket_no_canonname(monkeypatch) -> None:
+    """resolve_cname returns None when socket yields no distinct canonname."""
+    import socket
+
+    def mock_getaddrinfo(host, port, *args, **kwargs):
+        return [
+            (
+                socket.AF_INET,
+                socket.SOCK_STREAM,
+                socket.IPPROTO_TCP,
+                "example.com",
+                ("127.0.0.1", 80),
+            )
+        ]
+
+    monkeypatch.setattr("ethscan.subtake.socket.getaddrinfo", mock_getaddrinfo)
+    assert resolve_cname("example.com", timeout=1.0) is None
+
+
+def test_check_http_fingerprint_success(monkeypatch) -> None:
+    """check_http_fingerprint returns the body snippet on a successful HTTP fetch."""
+
+    class MockResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return b"<html>NoSuchBucket</html>"
+
+    def mock_urlopen(req, timeout=5.0):
+        return MockResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", mock_urlopen)
+    body = check_http_fingerprint("example.com", timeout=1.0)
+    assert body == "<html>NoSuchBucket</html>"
+
+
+def test_check_http_fingerprint_all_schemes_fail(monkeypatch) -> None:
+    """check_http_fingerprint returns None when both http and https fail."""
+
+    def mock_urlopen(req, timeout=5.0):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr("urllib.request.urlopen", mock_urlopen)
+    assert check_http_fingerprint("example.com", timeout=1.0) is None
+
+
+def test_run_subtake_unknown_cname_takeover_branch(monkeypatch) -> None:
+    """A CNAME matching no known service takes the 'Unknown' takeover branch."""
+
+    def mock_resolve_cname(hostname, timeout=2.0, resolver=None):
+        if hostname == "www.example.com":
+            return "random.unmatched.example.com"
+        return None
+
+    def mock_resolve_a(hostname, timeout=2.0, resolver=None):
+        return []
+
+    def mock_resolve_aaaa(hostname, timeout=2.0, resolver=None):
+        return []
+
+    monkeypatch.setattr("ethscan.subtake.resolve_cname", mock_resolve_cname)
+    monkeypatch.setattr("ethscan.subtake.resolve_a_records", mock_resolve_a)
+    monkeypatch.setattr("ethscan.subtake.resolve_aaaa_records", mock_resolve_aaaa)
+
+    results = run_subtake("example.com", subdomains=["www"], timeout=1.0)
+    assert results["vulnerable_count"] == 0
+    entry = results["all_results"][0]
+    assert entry["cname"] == "random.unmatched.example.com"
+    assert entry["takeover"]["service"] == "Unknown"
+    assert entry["takeover"]["fingerprint"] == ""
+    assert "http_confirmed" not in entry["takeover"]
