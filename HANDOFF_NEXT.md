@@ -1,18 +1,17 @@
 # Handoff to Next Agent
 
 ## What changed
-- Added 2 bounded unit tests to `tests/test_urlcheck.py`:
-  - `test_run_urlcheck_with_weak_ssl` (mocks web/ssl to cover weak SSL finding aggregation)
-  - `test_urlcheck_normalize_url_trims` (verifies URL normalization trims whitespace)
+- Added 1 CLI test to `tests/test_cli.py`:
+  - `test_cli_no_subcommand_lists_commands` (verifies invoking `ethscan` with no subcommand exits 0 and lists all commands)
 
 ## What was actually verified
-- `python -m pytest -q` → **3502 passed, 1 skipped** (was 3500 passed, 1 skipped; +2 tests). Full suite green; no regressions.
-- New tests pass individually: both pass as part of the suite.
+- `python -m pytest -q` → **3503 passed, 1 skipped** (was 3502 passed, 1 skipped; +1 test). Full suite green; no regressions.
+- New test passes individually.
 
 ## What remains unresolved
 - Project remains feature-complete: all ~54 commands implemented, registered in `ethscan/cli.py`, have JSON/Markdown/CSV output, unit tests, CLI integration tests.
-- Every ethscan module has corresponding `tests/test_*.py` (except entry points `main`/`__main__`).
-- Coverage audit shows all criteria met (0 missing test modules, 0 low ratios per the original full audit). Added a couple of tests to improve urlcheck coverage.
+- Every ethscan module has corresponding `tests/test_*.py` (including entry points `main`/`__main__` via `tests/test_main.py`).
+- Coverage audit shows all criteria met (0 missing test modules, 0 low ratios per the original full audit).
 - No pending bugs, TODOs, or blockers identified.
 
 ## Approaches that failed / were ruled out

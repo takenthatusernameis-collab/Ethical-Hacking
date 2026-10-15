@@ -44,6 +44,16 @@ def test_cli_help_lists_commands() -> None:
     assert "web" in result.output
 
 
+def test_cli_no_subcommand_lists_commands() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, [])
+    assert result.exit_code == 0
+    assert "Usage:" in result.output
+    assert "Commands:" in result.output
+    assert "scan" in result.output
+    assert "audit" in result.output
+
+
 def test_audit_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["audit", "--help"])
