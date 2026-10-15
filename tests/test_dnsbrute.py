@@ -800,13 +800,23 @@ def test_run_dnsbrute_resolver_used_for_resolution(monkeypatch) -> None:
             if rdtype == "A" and hostname.startswith("www."):
                 from dns.rrset import RRset
                 from dns.rdata import from_text
-                rrset = RRset(dns.name.from_text(hostname), 300, 1, 1)
+                rrset = RRset(
+                    dns.name.from_text(hostname),
+                    dns.rdataclass.IN,
+                    dns.rdatatype.A,
+                )
+                rrset.ttl = 300
                 rrset.add(from_text("IN", "A", "1.2.3.4"))
                 return rrset
             if rdtype == "AAAA" and hostname.startswith("www."):
                 from dns.rrset import RRset
                 from dns.rdata import from_text
-                rrset = RRset(dns.name.from_text(hostname), 300, 1, 1)
+                rrset = RRset(
+                    dns.name.from_text(hostname),
+                    dns.rdataclass.IN,
+                    dns.rdatatype.AAAA,
+                )
+                rrset.ttl = 300
                 rrset.add(from_text("IN", "AAAA", "::1"))
                 return rrset
         raise dns.resolver.NXDOMAIN()
