@@ -77,6 +77,34 @@ def test_parse_proc_net_wireless_malformed_lines(tmp_path) -> None:
     assert result[0]["interface"] == "wlan0"
 
 
+def test_parse_proc_net_wireless_with_empty_lines(tmp_path) -> None:
+    content = """Inter-| sta-|   Quality        |   Discarded packets               | Missed | WE
+ face | tus | link level noise |  nwid  crypt   frag  retry   misc | beacon | 22
+ wlan0: 0000  45.  -45.  -256    0      0   0   0   0        0
+
+ wlan1: 0000  30.  -60.  -200    0      0   0   0   0        0
+"""
+    f = tmp_path / "wireless"
+    f.write_text(content)
+    result = _parse_proc_net_wireless(str(f))
+    assert len(result) == 2
+    assert result[0]["interface"] == "wlan0"
+    assert result[1]["interface"] == "wlan1"
+
+
+def test_parse_proc_net_wireless_unparseable_numbers(tmp_path) -> None:
+    content = """Inter-| sta-|   Quality        |   Discarded packets               | Missed | WE
+ face | tus | link level noise |  nwid  crypt   frag  retry   misc | beacon | 22
+ wlan0: not_a_number  45.  -45.  -256    0      0   0   0   0        0
+ wlan1: 0000  30.  -60.  -200    0      0   0   0   0        0
+"""
+    f = tmp_path / "wireless"
+    f.write_text(content)
+    result = _parse_proc_net_wireless(str(f))
+    assert len(result) == 1
+    assert result[0]["interface"] == "wlan1"
+
+
 # ---------------------------------------------------------------------------
 # iwlist scan parsing
 # ---------------------------------------------------------------------------
@@ -148,6 +176,25 @@ def test_run_iwlist_scan_wpa() -> None:
         result = _run_iwlist_scan("wlan0")
         assert len(result) == 1
         assert result[0]["encryption"] == "wpa2"  # WPA2 takes precedence
+
+
+def test_run_iwlist_scan_channel_fallback() -> None:
+    output = """wlan0     Scan completed :
+          Cell 01 - Address: 00:11:22:33:44:55
+                    ESSID:"TestNetwork"
+                    Protocol:IEEE 802.11bgn
+                    Mode:Master
+                    Channel 6
+                    Encryption key:off
+                    Bit Rates:1 Mb/s; 2 Mb/s; 5.5 Mb/s; 11 Mb/s
+                    Quality=45/70  Signal level=-65 dBm
+"""
+    mock_result = MagicMock(returncode=0, stdout=output, stderr="")
+    with patch("subprocess.run", return_value=mock_result):
+        result = _run_iwlist_scan("wlan0")
+        assert len(result) == 1
+        assert result[0]["channel"] == 6
+        assert result[0]["frequency"] is None
 
 
 def test_run_iwlist_scan_wpa3() -> None:
@@ -223,6 +270,67 @@ def test_run_iw_scan_wpa() -> None:
         result = _run_iw_scan("wlan0")
         assert len(result) == 1
         assert result[0]["encryption"] == "wpa"
+
+
+def test_run_iw_scan_multiple_bss() -> None:
+    output = """BSS 00:11:22:33:44:55(on wlan0)
+        TSF: 123456789
+        freq: 2412
+        beacon interval: 100
+        capability: ESS Privacy ShortSlotTime (0x0411)
+        signal: -65.00 dBm
+        SSID: Network1
+        Supported rates: 1.0* 2.0* 5.5* 11.0*
+        DS Parameter set: channel 1
+        RSN:     * Version: 1
+BSS AA:BB:CC:DD:EE:FF(on wlan0)
+        TSF: 987654321
+        freq: 2437
+        beacon interval: 100
+        capability: ESS Privacy ShortSlotTime (0x0411)
+        signal: -80.00 dBm
+        SSID: Network2
+        Supported rates: 1.0* 2.0* 5.5* 11.0*
+        DS Parameter set: channel 6
+"""
+    mock_result = MagicMock(returncode=0, stdout=output, stderr="")
+    with patch("subprocess.run", return_value=mock_result):
+        result = _run_iw_scan("wlan0")
+        assert len(result) == 2
+        assert result[0]["bssid"] == "00:11:22:33:44:55"
+        assert result[0]["ssid"] == "Network1"
+        assert result[1]["bssid"] == "AA:BB:CC:DD:EE:FF"
+        assert result[1]["ssid"] == "Network2"
+
+
+def test_run_iw_scan_stray_line_before_bss() -> None:
+    output = """Some random line before any BSS
+BSS 00:11:22:33:44:55(on wlan0)
+        freq: 2412
+        signal: -65.00 dBm
+        SSID: TestNetwork
+        DS Parameter set: channel 1
+"""
+    mock_result = MagicMock(returncode=0, stdout=output, stderr="")
+    with patch("subprocess.run", return_value=mock_result):
+        result = _run_iw_scan("wlan0")
+        assert len(result) == 1
+        assert result[0]["bssid"] == "00:11:22:33:44:55"
+
+
+def test_run_iw_scan_privacy_wep_no_wpa() -> None:
+    output = """BSS 00:11:22:33:44:55(on wlan0)
+        freq: 2412
+        signal: -65.00 dBm
+        SSID: TestNetwork
+        DS Parameter set: channel 1
+        capability: Privacy
+"""
+    mock_result = MagicMock(returncode=0, stdout=output, stderr="")
+    with patch("subprocess.run", return_value=mock_result):
+        result = _run_iw_scan("wlan0")
+        assert len(result) == 1
+        assert result[0]["encryption"] == "wep"
 
 
 # ---------------------------------------------------------------------------
@@ -521,3 +629,18 @@ def test_format_wifi_report_csv_escaping() -> None:
     }
     output = format_wifi_report_csv(data)
     assert '"Net,work"' in output
+
+
+def test_format_wifi_report_csv_with_notes() -> None:
+    data = {
+        "platform": "linux",
+        "platform_supported": True,
+        "interfaces": [],
+        "access_points": [],
+        "notes": ["Note one", "Note two"],
+    }
+    output = format_wifi_report_csv(data)
+    lines = output.splitlines()
+    assert "note" in lines
+    assert "Note one" in output
+    assert "Note two" in output
