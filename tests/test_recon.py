@@ -3,17 +3,16 @@
 import csv
 import io
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from ethscan.recon import (
     DEFAULT_RECON_MODULES,
     _normalize_domain,
-    run_recon,
     format_recon_report_csv,
     format_recon_report_json,
     format_recon_report_markdown,
+    run_recon,
 )
-
 
 # ---------------------------------------------------------------------------
 # Domain normalization
@@ -619,3 +618,109 @@ def test_format_recon_report_csv_whois_geo_trace() -> None:
     assert ["geo", "query", "1.2.3.4"] in reader
     assert ["geo", "country", "United States"] in reader
     assert ["trace", "hop_1", "10.0.0.1"] in reader
+
+
+def test_run_recon_dns_failure_handling() -> None:
+    with patch("ethscan.recon.run_subdomains"), \
+         patch("ethscan.recon.run_dns") as mock_dns, \
+         patch("ethscan.recon.run_whois"), \
+         patch("ethscan.recon.run_geo"), \
+         patch("ethscan.recon.run_trace"):
+
+        mock_dns.side_effect = Exception("DNS error")
+
+        result = run_recon("example.com", modules=["dns"])
+
+        assert "dns" in result["modules_run"]
+        assert len(result["notes"]) >= 1
+        assert any("dns module failed" in note for note in result["notes"])
+
+
+def test_run_recon_whois_failure_handling() -> None:
+    with patch("ethscan.recon.run_subdomains"), \
+         patch("ethscan.recon.run_dns"), \
+         patch("ethscan.recon.run_whois") as mock_whois, \
+         patch("ethscan.recon.run_geo"), \
+         patch("ethscan.recon.run_trace"):
+
+        mock_whois.side_effect = Exception("WHOIS error")
+
+        result = run_recon("example.com", modules=["whois"])
+
+        assert "whois" in result["modules_run"]
+        assert len(result["notes"]) >= 1
+        assert any("whois module failed" in note for note in result["notes"])
+
+
+def test_run_recon_geo_failure_handling() -> None:
+    with patch("ethscan.recon.run_subdomains"), \
+         patch("ethscan.recon.run_dns"), \
+         patch("ethscan.recon.run_whois"), \
+         patch("ethscan.recon.run_geo") as mock_geo, \
+         patch("ethscan.recon.run_trace"):
+
+        mock_geo.side_effect = Exception("Geo error")
+
+        result = run_recon("example.com", modules=["geo"])
+
+        assert "geo" in result["modules_run"]
+        assert len(result["notes"]) >= 1
+        assert any("geo module failed" in note for note in result["notes"])
+
+
+def test_run_recon_trace_failure_handling() -> None:
+    with patch("ethscan.recon.run_subdomains"), \
+         patch("ethscan.recon.run_dns"), \
+         patch("ethscan.recon.run_whois"), \
+         patch("ethscan.recon.run_geo"), \
+         patch("ethscan.recon.run_trace") as mock_trace:
+
+        mock_trace.side_effect = Exception("Trace error")
+
+        result = run_recon("example.com", modules=["trace"])
+
+        assert "trace" in result["modules_run"]
+        assert len(result["notes"]) >= 1
+        assert any("trace module failed" in note for note in result["notes"])
+
+
+def test_format_recon_report_markdown_geo_success_with_flags() -> None:
+    data = {
+        "target": "8.8.8.8",
+        "domain": "8.8.8.8",
+        "modules_run": ["geo"],
+        "subdomains": None,
+        "dns": None,
+        "whois": None,
+        "geo": {
+            "geolocation": {
+                "status": "success",
+                "country": "US",
+                "cached": True,
+                "offline_fallback": True,
+            }
+        },
+        "trace": None,
+        "notes": [],
+    }
+    output = format_recon_report_markdown(data)
+    assert "IP Geolocation" in output
+    assert "Cached" in output
+    assert "Offline Fallback" in output
+
+
+def test_format_recon_report_markdown_geo_no_data() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "modules_run": ["geo"],
+        "subdomains": None,
+        "dns": None,
+        "whois": None,
+        "geo": {"geolocation": None},
+        "trace": None,
+        "notes": [],
+    }
+    output = format_recon_report_markdown(data)
+    assert "IP Geolocation" in output
+    assert "No geolocation data available" in output
