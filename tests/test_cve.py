@@ -1,19 +1,20 @@
 """Tests for the ethscan cve command."""
 
 import json
-import tempfile
-from pathlib import Path
-from unittest import mock
+import urllib.error
 
 from ethscan.cve import (
-    DEFAULT_API_URL,
     _extract_cve_summary,
+    _fetch_cve_data,
+    _finding_detail,
+    _get_cached_or_fetch,
     _is_cache_valid,
     _load_cache,
     _lookup_cve_id,
     _normalize_host,
     _resolve_host,
     _save_cache,
+    _severity_rank,
     format_cve_report_csv,
     format_cve_report_json,
     format_cve_report_markdown,
@@ -64,7 +65,6 @@ def test_cache_save_and_load(tmp_path, monkeypatch) -> None:
 
 
 def test_cache_valid_with_timestamp(tmp_path, monkeypatch) -> None:
-    import time
 
     monkeypatch.setattr("ethscan.cve.time.time", lambda: 1000.0)
     assert _is_cache_valid({"timestamp": 999.0}) is True
@@ -905,3 +905,260 @@ def test_format_cve_report_csv_escaping() -> None:
     assert row[9] == ""
     assert row[10] == ""
     assert row[11] == ""
+
+
+def test_load_cache_invalid_json(tmp_path, monkeypatch) -> None:
+    cache_file = tmp_path / "cve_cache.json"
+    cache_file.write_text("{not valid json", encoding="utf-8")
+    monkeypatch.setattr("ethscan.cve.CACHE_FILE", cache_file)
+    assert _load_cache() == {}
+
+
+def test_save_cache_os_error(tmp_path, monkeypatch) -> None:
+    cache_file = tmp_path / "cve_cache.json"
+    monkeypatch.setattr("ethscan.cve.CACHE_FILE", cache_file)
+
+    def fake_open(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr("builtins.open", fake_open)
+    _save_cache({"CVE-X": {"id": "CVE-X"}})
+
+
+def test_is_cache_valid_type_error() -> None:
+    assert _is_cache_valid({"timestamp": "not-a-number"}) is False
+
+
+def test_fetch_cve_data_non_dict(monkeypatch) -> None:
+    class FakeResponse:
+        def read(self) -> bytes:
+            return b"[1, 2, 3]"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+    monkeypatch.setattr(
+        "ethscan.cve.urllib.request.urlopen",
+        lambda req, timeout=None: FakeResponse(),
+    )
+    assert _fetch_cve_data("CVE-X") is None
+
+
+def test_fetch_cve_data_network_error(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "ethscan.cve.urllib.request.urlopen",
+        lambda req, timeout=None: (_ for _ in ()).throw(
+            urllib.error.URLError("down")
+        ),
+    )
+    assert _fetch_cve_data("CVE-X") is None
+
+
+def test_fetch_cve_data_success(monkeypatch) -> None:
+    class FakeResponse:
+        def read(self) -> bytes:
+            return b'{"vulnerabilities": []}'
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+    monkeypatch.setattr(
+        "ethscan.cve.urllib.request.urlopen",
+        lambda req, timeout=None: FakeResponse(),
+    )
+    assert _fetch_cve_data("CVE-X") == {"vulnerabilities": []}
+
+
+def test_get_cached_or_fetch_cache_hit(tmp_path, monkeypatch) -> None:
+    cache_file = tmp_path / "cve_cache.json"
+    monkeypatch.setattr("ethscan.cve.CACHE_FILE", cache_file)
+    monkeypatch.setattr("ethscan.cve.time.time", lambda: 1000.0)
+    _save_cache({"CVE-X": {"id": "CVE-X", "timestamp": 999.0}})
+
+    result = _get_cached_or_fetch(
+        "CVE-X", timeout=0.5, use_cache=True, offline_fallback=False, api_url=None
+    )
+    assert result["cached"] is True
+    assert result["id"] == "CVE-X"
+
+
+def test_get_cached_or_fetch_offline_fallback(tmp_path, monkeypatch) -> None:
+    cache_file = tmp_path / "cve_cache.json"
+    monkeypatch.setattr("ethscan.cve.CACHE_FILE", cache_file)
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+    _save_cache({"CVE-X": {"id": "CVE-X", "timestamp": 1.0}})
+
+    result = _get_cached_or_fetch(
+        "CVE-X", timeout=0.5, use_cache=True, offline_fallback=True, api_url=None
+    )
+    assert result["cached"] is True
+    assert result["offline_fallback"] is True
+
+
+def test_get_cached_or_fetch_saves_cache(tmp_path, monkeypatch) -> None:
+    cache_file = tmp_path / "cve_cache.json"
+    monkeypatch.setattr("ethscan.cve.CACHE_FILE", cache_file)
+    monkeypatch.setattr(
+        "ethscan.cve._fetch_cve_data",
+        lambda *a, **k: {"vulnerabilities": [{"cve": {"id": "CVE-X"}}]},
+    )
+
+    result = _get_cached_or_fetch(
+        "CVE-X", timeout=0.5, use_cache=True, offline_fallback=False, api_url=None
+    )
+    assert result["cached"] is False
+    assert "CVE-X" in _load_cache()
+
+
+def test_extract_cve_summary_first_not_dict() -> None:
+    assert _extract_cve_summary({"vulnerabilities": ["not a dict"]}) == {}
+
+
+def test_extract_cve_summary_cve_not_dict() -> None:
+    assert _extract_cve_summary({"vulnerabilities": [{"cve": "not a dict"}]}) == {}
+
+
+def test_severity_rank_empty_string() -> None:
+    assert _severity_rank("") is None
+
+
+def test_run_cve_services_file_read_error(tmp_path, monkeypatch) -> None:
+    services_file = tmp_path / "services.json"
+    services_file.write_text("{not valid json", encoding="utf-8")
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "ethscan.service.run_service", lambda *a, **k: {"results": []}
+    )
+
+    result = run_cve(
+        "example.com", services_file=str(services_file), timeout=0.5, use_cache=False
+    )
+    assert any("Failed to read services file" in n for n in result["notes"])
+
+
+def test_run_cve_nvd_summary_appended(tmp_path, monkeypatch) -> None:
+    services_file = tmp_path / "services.json"
+    services_file.write_text(
+        json.dumps(
+            {
+                "target": "example.com",
+                "host": "example.com",
+                "timeout": 3.0,
+                "ports_scanned": 1,
+                "services_found": 1,
+                "results": [
+                    {
+                        "port": 22,
+                        "banner": "SSH-2.0-OpenSSH_7.2p2",
+                        "service": "OpenSSH",
+                    }
+                ],
+            }
+        )
+    )
+    cve_data = {
+        "vulnerabilities": [
+            {
+                "cve": {
+                    "id": "CVE-2016-6210",
+                    "descriptions": [
+                        {"lang": "en", "value": "OpenSSH user enumeration"}
+                    ],
+                    "metrics": {
+                        "cvssMetricV31": [
+                            {"cvssData": {"baseSeverity": "MEDIUM", "baseScore": 5.9}}
+                        ]
+                    },
+                    "published": "2016-08-01",
+                    "lastModified": "2026-01-01",
+                    "references": [{"url": "http://example.com"}],
+                }
+            }
+        ]
+    }
+    monkeypatch.setattr(
+        "ethscan.cve._get_cached_or_fetch", lambda *a, **k: cve_data
+    )
+
+    result = run_cve(
+        "example.com", services_file=str(services_file), timeout=0.5, use_cache=False
+    )
+    nvd = [e for e in result["cve_entries"] if e.get("source") == "nvd"]
+    assert len(nvd) == 1
+    assert nvd[0]["cve_id"] == "CVE-2016-6210"
+    assert nvd[0]["cve"]["severity"] == "MEDIUM"
+
+
+def test_finding_detail_non_service() -> None:
+    assert _finding_detail({"kind": "protocol", "title": "Weak protocol"}) == ""
+
+
+def test_format_cve_report_markdown_full_sections() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "timeout": 0.5,
+        "use_cache": True,
+        "offline_fallback": True,
+        "api_url": "https://custom.example.com/",
+        "severity_filter": "high",
+        "service_timeout": 3.0,
+        "workers": 10,
+        "profile": "fast",
+        "services_checked": 1,
+        "cve_entries": [],
+        "cve_count": 0,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+        "notes": [],
+    }
+    output = format_cve_report_markdown(data)
+    assert "Profile" in output and "fast" in output
+    assert "Service Timeout" in output and "3.0s" in output
+    assert "Workers" in output and "10" in output
+    assert "API URL" in output
+    assert "Severity Filter" in output and "high" in output
+
+
+def test_format_cve_report_markdown_cached_offline_flags() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "timeout": 0.5,
+        "use_cache": True,
+        "offline_fallback": True,
+        "api_url": None,
+        "severity_filter": None,
+        "services_checked": 1,
+        "cve_entries": [
+            {
+                "source": "nvd",
+                "port": 22,
+                "product": "OpenSSH",
+                "version": "7.2p2",
+                "cve_id": "CVE-X",
+                "cve": {
+                    "id": "CVE-X",
+                    "description": "desc",
+                    "severity": "MEDIUM",
+                    "score": 5.0,
+                    "published": "",
+                    "last_modified": "",
+                    "references": [],
+                },
+                "cached": True,
+                "offline_fallback": True,
+            }
+        ],
+        "cve_count": 1,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 1, "low": 0},
+        "notes": [],
+    }
+    output = format_cve_report_markdown(data)
+    assert "- **Cached:** Yes" in output
+    assert "- **Offline Fallback:** Yes" in output
