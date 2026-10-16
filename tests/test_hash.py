@@ -1140,3 +1140,35 @@ def test_format_check_report_csv_pipe_escaping() -> None:
 
     # With QUOTE_MINIMAL, pipe characters don't require quoting
     assert "pass|word" in output
+
+
+# ---------------------------------------------------------------------------
+# Remaining error paths (unsupported algorithms / edge cases)
+# ---------------------------------------------------------------------------
+
+
+def test_compute_hash_unsupported_algorithm_raises() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="Unsupported algorithm"):
+        _compute_hash("password", "ripemd160")
+
+
+def test_compute_password_hash_salt_and_pepper_unsupported_algorithm_raises() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="does not support HMAC"):
+        _compute_password_hash("password", "ntlm", salt="saltvalue", pepper="pepper")
+
+
+def test_infer_algorithm_empty_digest() -> None:
+    assert _infer_algorithm("") is None
+
+
+def test_infer_algorithm_multiple_matches_without_md5(monkeypatch) -> None:
+    import ethscan.hash
+
+    # Two distinct keys share a length and neither is md5, so the
+    # "prefer md5" branch is skipped and matches[0] is returned.
+    monkeypatch.setattr(ethscan.hash, "_DIGEST_LENGTHS", {"foo": 8, "bar": 8})
+    assert _infer_algorithm("aabbccdd") == "foo"
