@@ -818,3 +818,36 @@ def test_format_whois_report_csv_escaping() -> None:
     output = format_whois_report_csv(data)
     assert '"Registrar, Inc."' in output
     assert '"Org ""quoted"""' in output
+
+
+def test_run_whois_recursive_referral_equals_current_server(monkeypatch) -> None:
+    """referral == current_server must break the recursion (line 209)."""
+
+    def mock_query(target, server="whois.iana.org", port=43, timeout=5.0):
+        return "Registrar: Test Registrar\nReferral Server: whois.registrar.net\n"
+
+    monkeypatch.setattr("ethscan.whois.query_whois", mock_query)
+
+    results = run_whois("example.com", server="whois.registrar.net", recursive=True, max_depth=2)
+    assert results["server"] == "whois.registrar.net"
+    assert results["recursive"] is True
+    assert results["recursive_hops"] == []
+
+
+def test_run_whois_recursive_response_repeat_loop_protection(monkeypatch) -> None:
+    """A repeated hop response must break the recursion (line 242)."""
+
+    def mock_query(target, server="whois.iana.org", port=43, timeout=5.0):
+        return "Registrar: Test Registrar\nReferral Server: whois.registrar.net\n"
+
+    monkeypatch.setattr("ethscan.whois.query_whois", mock_query)
+
+    results = run_whois("example.com", recursive=True, max_depth=5)
+    assert results["recursive"] is True
+    assert results["max_depth"] == 5
+    # One hop is made, then the repeated response stops further recursion.
+    assert len(results["recursive_hops"]) == 1
+    hop = results["recursive_hops"][0]
+    assert hop["depth"] == 1
+    assert hop["server"] == "whois.registrar.net"
+    assert hop["parsed"]["registrar"] == "Test Registrar"
