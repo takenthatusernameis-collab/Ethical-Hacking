@@ -4594,6 +4594,23 @@ def test_scan_output_format_precedence(monkeypatch) -> None:
     assert "port,open" not in result.output
 
 
+
+def test_scan_ports_all(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        called_args["host"] = host
+        called_args["ports"] = ports
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return [(p, False) for p in ports[:2]]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "all"])
+    assert result.exit_code == 0
+    assert len(called_args["ports"]) == 65535
 def test_scan_help_shows_output_format() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["scan", "--help"])
@@ -20400,3 +20417,166 @@ def test_oracle_probes_pass_through(monkeypatch) -> None:
     result = runner.invoke(cli, ["oracle", "--target", "example.com", "--probes", "version"])
     assert result.exit_code == 0
     assert captured["probes"] == ["version"]
+
+def test_hash_stdin_with_out_csv(tmp_path) -> None:
+    out_file = tmp_path / "hash.csv"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["hash", "--algorithm", "md5", "--output-format", "csv", "--out", str(out_file)],
+        input="password\n",
+    )
+    assert result.exit_code == 0
+    assert out_file.exists()
+    content = out_file.read_text()
+    assert "digest,algorithm" in content
+
+def test_hash_stdin_with_out_markdown(tmp_path) -> None:
+    out_file = tmp_path / "hash.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["hash", "--algorithm", "sha256", "--format", "markdown", "--out", str(out_file)],
+        input="password\n",
+    )
+    assert result.exit_code == 0
+    assert out_file.exists()
+
+def test_cve_service_profile_override_ports(monkeypatch) -> None:
+    called = {}
+
+    def mock_run_cve(target, services_file=None, port=None, timeout=3.0, max_workers=10, **kwargs):
+        called["target"] = target
+        called["timeout"] = timeout
+        called["max_workers"] = max_workers
+        return {"target": target, "services": []}
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cve", "--target", "example.com", "--profile", "fast", "--ports", "80,443"])
+    assert result.exit_code == 0
+    # fast profile defaults: timeout 0.5, workers 200 in general; but for service/cve context check
+
+def test_cve_service_profile_override_workers_only(monkeypatch) -> None:
+    called = {}
+
+    def mock_run_cve(target, services_file=None, port=None, timeout=3.0, max_workers=10, **kwargs):
+        called["timeout"] = timeout
+        called["max_workers"] = max_workers
+        return {"target": target, "services": []}
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+    runner = CliRunner()
+    # Set timeout explicitly so it != default 3.0, workers remain 50 default
+    result = runner.invoke(cli, ["cve", "--target", "example.com", "--profile", "fast", "--ports", "80,443", "--timeout", "5.0"])
+    assert result.exit_code == 0
+
+def test_cve_service_profile_no_ports(monkeypatch) -> None:
+    called = {}
+
+    def mock_run_cve(target, services_file=None, port=None, timeout=3.0, max_workers=10, **kwargs):
+        called["ports"] = kwargs.get("ports") if "ports" in kwargs else None
+        return {"target": target, "services": []}
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cve", "--target", "example.com", "--profile", "fast"])
+    assert result.exit_code == 0
+
+def test_radix_no_cidrs_error() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["radix"])
+    assert result.exit_code == 1
+    assert "at least one CIDR network is required" in result.output
+
+def test_config_init_write_error(tmp_path, monkeypatch) -> None:
+    runner = CliRunner()
+    original_open = open
+    def mock_open(*args, **kwargs):
+        mode = kwargs.get('mode', '')
+        if len(args) > 1:
+            mode = str(args[1])
+        if 'w' in str(mode):
+            raise OSError('disk full')
+        return original_open(*args, **kwargs)
+    monkeypatch.setattr('builtins.open', mock_open)
+    result = runner.invoke(cli, ['config', '--init', str(tmp_path / 'x.yaml')])
+    assert result.exit_code == 1
+    assert 'Error writing config' in result.output
+
+def test_config_out_write_error(tmp_path, monkeypatch) -> None:
+    cfg = tmp_path / 'ethscan.yaml'
+    cfg.write_text('defaults:\n  timeout: 5\n')
+    out_file = tmp_path / 'out.json'
+    runner = CliRunner()
+    original_open = open
+    def mock_open(*args, **kwargs):
+        mode = kwargs.get('mode', '')
+        if len(args) > 1:
+            mode = str(args[1])
+        if 'w' in mode and str(args[0]) == str(out_file):
+            raise OSError('disk full')
+        return original_open(*args, **kwargs)
+    monkeypatch.setattr('builtins.open', mock_open)
+    result = runner.invoke(cli, ['config', '--config', str(cfg), '--format', 'json', '--out', str(out_file)])
+    assert result.exit_code == 1
+    assert 'Error writing output' in result.output
+
+def test_config_with_file_markdown(tmp_path) -> None:
+    cfg = tmp_path / 'ethscan.yaml'
+    cfg.write_text('defaults:\n  timeout: 5\ncommands:\n  scan:\n    ports: common\n')
+    runner = CliRunner()
+    result = runner.invoke(cli, ['config', '--config', str(cfg), '--format', 'markdown'])
+    assert result.exit_code == 0
+    assert '| timeout | 5.0 |' in result.output or '| timeout | 5' in result.output
+    assert 'scan' in result.output
+
+def test_config_markdown_command_no_overrides(tmp_path) -> None:
+    cfg = tmp_path / 'ethscan.yaml'
+    cfg.write_text('defaults:\n  timeout: 5\ncommands:\n  scan: {}\n')
+    runner = CliRunner()
+    result = runner.invoke(cli, ['config', '--config', str(cfg), '--format', 'markdown'])
+    assert result.exit_code == 0
+    assert 'No overrides' in result.output
+
+def test_completion_run_raises_value_error(monkeypatch) -> None:
+    def mock_run(*args, **kwargs):
+        raise ValueError("bad shell")
+    monkeypatch.setattr("ethscan.cli.run_completion", mock_run)
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(cli, ["completion", "--shell", "bash"])
+    assert result.exit_code == 1
+
+def test_stale_no_targets() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["stale"])
+    assert result.exit_code == 0
+    assert "At least one target must be provided" in result.output
+
+def test_hash_file_out_markdown(tmp_path) -> None:
+    pw = tmp_path / 'p.txt'
+    pw.write_text('password\n')
+    out = tmp_path / 'h.md'
+    runner = CliRunner()
+    result = runner.invoke(cli, ['hash', '--file', str(pw), '--format', 'markdown', '--out', str(out)])
+    assert result.exit_code == 0
+    assert out.exists()
+
+def test_hash_output_format_precedence_out(tmp_path) -> None:
+    pw = tmp_path / 'p.txt'
+    pw.write_text('password\n')
+    out = tmp_path / 'h.json'
+    runner = CliRunner()
+    result = runner.invoke(cli, ['hash', '--file', str(pw), '--output-format', 'json', '--format', 'markdown', '--out', str(out)])
+    assert result.exit_code == 0
+    assert out.exists()
+    assert '"passwords_hashed"' in out.read_text()
+
+def test_hash_multiple_algorithms_with_out(tmp_path) -> None:
+    pw = tmp_path / 'p.txt'
+    pw.write_text('password\n')
+    out = tmp_path / 'h.json'
+    runner = CliRunner()
+    result = runner.invoke(cli, ['hash', '--file', str(pw), '--algorithm', 'md5', '--algorithm', 'sha256', '--format', 'json', '--out', str(out)])
+    assert result.exit_code == 0
+    assert out.exists()
