@@ -395,6 +395,19 @@ def test_extract_subdomains_strips_whitespace() -> None:
     assert result == ["www.example.com"]
 
 
+def test_extract_subdomains_skips_empty_name() -> None:
+    cert_data = {
+        "entries": [
+            {"name_value": ""},
+            {"common_name": ""},
+            {},
+            {"name_value": "www.example.com"},
+        ]
+    }
+    result = _extract_subdomains(cert_data)
+    assert result == ["www.example.com"]
+
+
 # ---------------------------------------------------------------------------
 # run_cert
 # ---------------------------------------------------------------------------
