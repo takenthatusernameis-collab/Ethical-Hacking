@@ -803,3 +803,58 @@ def test_format_netbios_report_csv_error_case() -> None:
     assert rows[1][22] == ""
     assert rows[1][3] == ""  # mac empty when None
     assert rows[1][3] == ""  # mac empty when None
+
+# Extra coverage for previously-uncovered branches
+
+
+def test_parse_dns_name_truncated_compression_pointer():
+    # offset+1 >= len(data)
+    data = b"\xc0"
+    with pytest.raises(ValueError):
+        from ethscan.netbios import _parse_dns_name
+        _parse_dns_name(data, 0)
+
+
+def test_parse_dns_name_decode_valueerror_fallback():
+    # raw bytes that make _decode_name_chars raise
+    from ethscan.netbios import _parse_dns_name
+    # build one label with invalid length? Instead trigger via decode error by
+    # providing a raw label whose decode raises. Simpler: monkey invalid pointer chain
+    # Use a label length 1 with byte 0xff (invalid NetBIOS encoding -> ValueError)
+    data = bytes([1, 0xFF, 0])
+    name, off = _parse_dns_name(data, 0)
+    assert isinstance(name, str)
+
+
+def test_skip_question_truncated():
+    from ethscan.netbios import _skip_question
+    with pytest.raises(ValueError):
+        _skip_question(b"\x20A" * 1, 0, 1)
+
+
+def test_send_recv_real_and_errors():
+    import socket as _s
+    from ethscan.netbios import _send_recv
+    from unittest.mock import patch
+    # success
+    class FakeSock:
+        def __init__(self): pass
+        def settimeout(self, t): pass
+        def sendto(self, req, addr): pass
+        def recvfrom(self, n): return (b"data", ("h", 1))
+        def close(self): pass
+    with patch("ethscan.netbios.socket.socket", return_value=FakeSock()):
+        data, err = _send_recv("h", 137, b"req", 1.0)
+        assert data == b"data" and err is None
+    # timeout
+    class TimeoutSock(FakeSock):
+        def recvfrom(self, n): raise _s.timeout()
+    with patch("ethscan.netbios.socket.socket", return_value=TimeoutSock()):
+        data, err = _send_recv("h", 137, b"req", 1.0)
+        assert data is None and err == "timeout"
+    # oserror
+    class ErrSock(FakeSock):
+        def recvfrom(self, n): raise OSError("boom")
+    with patch("ethscan.netbios.socket.socket", return_value=ErrSock()):
+        data, err = _send_recv("h", 137, b"req", 1.0)
+        assert err == "boom"
