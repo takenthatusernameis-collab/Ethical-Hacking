@@ -433,7 +433,13 @@ def test_format_urlcheck_report_csv_empty() -> None:
 
 
 def test_run_urlcheck_with_weak_ssl(monkeypatch) -> None:
-    from ethscan import web, ssl
+    """run_urlcheck counts weak-SSL cert findings in the summary.
+
+    The dependency names are imported at module level in urlcheck.py, so the
+    mocks must be installed on the urlcheck namespace (not on the source
+    modules), otherwise run_urlcheck would invoke the real implementations.
+    """
+    import ethscan.urlcheck as urlcheck_module
 
     def mock_run_web_checks(target, checks, timeout=5.0):
         return {
@@ -465,8 +471,8 @@ def test_run_urlcheck_with_weak_ssl(monkeypatch) -> None:
             },
         }
 
-    monkeypatch.setattr(web, "run_web_checks", mock_run_web_checks)
-    monkeypatch.setattr(ssl, "run_ssl", mock_run_ssl)
+    monkeypatch.setattr(urlcheck_module, "run_web_checks", mock_run_web_checks)
+    monkeypatch.setattr(urlcheck_module, "run_ssl", mock_run_ssl)
 
     results = run_urlcheck(
         "https://example.com",
@@ -479,9 +485,162 @@ def test_run_urlcheck_with_weak_ssl(monkeypatch) -> None:
     )
     assert results["summary"]["total_findings"] > 0
     assert results["summary"]["ssl_checked"] is True
+    # Weak cert contributes: small key + sha1 signature + invalid cert.
+    assert results["ssl"]["cert"]["key_size"] == 1024
+    assert results["ssl"]["cert"]["signature_algorithm"] == "sha1WithRSAEncryption"
 
 
 def test_urlcheck_normalize_url_trims() -> None:
     from ethscan.urlcheck import _normalize_url
 
     assert _normalize_url("  example.com  ") == "https://example.com"
+
+
+def test_run_urlcheck_fuzz_findings_counted(monkeypatch) -> None:
+    """Fuzz findings are folded into the summary total_findings count."""
+    import ethscan.urlcheck as urlcheck_module
+
+    monkeypatch.setattr(
+        urlcheck_module,
+        "run_web_checks",
+        lambda target, checks, timeout=5.0: {
+            "target": target,
+            "host": "example.com",
+            "secure": True,
+            "security_headers": {
+                "present": [],
+                "missing": [],
+                "total": 7,
+                "present_count": 7,
+                "missing_count": 0,
+            },
+            "information_disclosure": [],
+        },
+    )
+    monkeypatch.setattr(
+        urlcheck_module,
+        "run_fuzz",
+        lambda target, wordlist=None, timeout=5.0: {
+            "target": target,
+            "base_url": target,
+            "paths_tested": 2,
+            "findings": [
+                {"path": "/admin", "status_code": 200, "error": None},
+                {"path": "/config", "status_code": 200, "error": None},
+            ],
+            "all_results": [],
+        },
+    )
+
+    results = run_urlcheck(
+        "https://example.com",
+        ["headers"],
+        wordlist=["/admin", "/config"],
+        fuzz_paths=True,
+        port=443,
+        timeout=5.0,
+        workers=5,
+    )
+    assert results["summary"]["total_findings"] == 2
+    assert results["fuzz"]["findings"][0]["path"] == "/admin"
+
+
+def test_format_urlcheck_report_markdown_web_ssl_error() -> None:
+    """Markdown renderer emits the web-check SSL error branch."""
+    data = {
+        "target": "https://example.com",
+        "normalized_target": "https://example.com",
+        "checks_requested": ["ssl"],
+        "fuzz_enabled": False,
+        "port": 443,
+        "timeout": 5.0,
+        "workers": 10,
+        "web": {
+            "target": "https://example.com",
+            "host": "example.com",
+            "port": 443,
+            "secure": True,
+            "ssl": {"error": "TLS handshake failed", "valid": False},
+        },
+        "fuzz": None,
+        "ssl": None,
+        "summary": {
+            "total_findings": 0,
+            "web_checks_run": ["ssl"],
+            "fuzz_enabled": False,
+            "ssl_checked": False,
+        },
+    }
+    output = format_urlcheck_report_markdown(data)
+    assert "### SSL Configuration (from web check)" in output
+    assert "TLS handshake failed" in output
+    assert "**Valid:**" not in output
+
+
+def test_format_urlcheck_report_csv_info_disclosure() -> None:
+    """CSV renderer emits a row per information-disclosure finding."""
+    data = {
+        "target": "https://example.com",
+        "normalized_target": "https://example.com",
+        "summary": {
+            "total_findings": 1,
+            "web_checks_run": ["headers", "info_disclosure"],
+            "fuzz_enabled": False,
+            "ssl_checked": False,
+        },
+        "web": {
+            "security_headers": {"present": [], "missing": []},
+            "information_disclosure": [
+                {"header": "Server", "value": "Apache/2.4.1", "description": "Reveals server software version."},
+            ],
+        },
+        "fuzz": None,
+        "ssl": None,
+    }
+    output = format_urlcheck_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert ["web", "information_disclosure", "Server"] in reader
+
+
+def test_format_urlcheck_report_markdown_info_disclosure_table() -> None:
+    """Markdown renderer emits the info-disclosure table when findings exist."""
+    data = {
+        "target": "https://example.com",
+        "normalized_target": "https://example.com",
+        "checks_requested": ["headers", "info_disclosure"],
+        "fuzz_enabled": False,
+        "port": 443,
+        "timeout": 5.0,
+        "workers": 10,
+        "web": {
+            "target": "https://example.com",
+            "host": "example.com",
+            "port": 443,
+            "secure": True,
+            "security_headers": {
+                "present": [],
+                "missing": ["Strict-Transport-Security"],
+                "total": 7,
+                "present_count": 0,
+                "missing_count": 7,
+            },
+            "information_disclosure": [
+                {"header": "Server", "value": "Apache/2.2.3", "description": "Reveals server software version."},
+                {"header": "X-Powered-By", "value": "PHP/7.4.0", "description": "Reveals technology stack."},
+            ],
+        },
+        "fuzz": None,
+        "ssl": None,
+        "summary": {
+            "total_findings": 2,
+            "web_checks_run": ["headers", "info_disclosure"],
+            "fuzz_enabled": False,
+            "ssl_checked": False,
+        },
+    }
+    output = format_urlcheck_report_markdown(data)
+    assert "### Information Disclosure" in output
+    assert "| Header | Value | Description |" in output
+    assert "| Server | Apache/2.2.3 | Reveals server software version. |" in output
+    assert "| X-Powered-By | PHP/7.4.0 | Reveals technology stack. |" in output
+    assert "No information disclosure headers detected." not in output

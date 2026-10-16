@@ -2528,3 +2528,28 @@ Same class as the intentionally-uncovered `redis.py:55-56` and `mongodb.py:205-2
 - `python -m pytest -q` -> 3679 passed, 1 skipped (full suite; no regressions).
 - `python -m ruff check tests/test_vuln.py` -> 4 errors, all pre-existing (`_hashlib_name` F401, local import ordering in existing `test_transform_banner_*` tests); zero new issues introduced.
 - No files under `ethscan/` were modified.
+
+## Completed: `ethscan/urlcheck.py` coverage audit (95% -> 100%)
+
+Pushed `ethscan/urlcheck.py` statement coverage from 95% to **100%** (196 statements, 0 missing) by adding 4 tests to `tests/test_urlcheck.py` and repairing 1 existing test:
+
+- Repaired `test_run_urlcheck_with_weak_ssl`: it previously patched `ethscan.web.run_web_checks` / `ethscan.ssl.run_ssl` on the *source* modules, but `urlcheck.py` imports those names at module level (`from ethscan.web import run_web_checks`, `from ethscan.ssl import run_ssl`), so the mocks were ineffective and the real implementations were invoked. Now patched on the `ethscan.urlcheck` namespace, which exercises the summary SSL-cert findings branch (lines 92-97): small key, sha1 signature, invalid cert.
+- `test_run_urlcheck_fuzz_findings_counted`: fuzz findings folded into `summary.total_findings` (line 88), with `run_web_checks`/`run_fuzz` mocked on the urlcheck namespace.
+- `test_format_urlcheck_report_markdown_info_disclosure_table`: info-disclosure table branch (lines 158-161).
+- `test_format_urlcheck_report_markdown_web_ssl_error`: web-check SSL error branch (line 170).
+- `test_format_urlcheck_report_csv_info_disclosure`: CSV information-disclosure row (line 270).
+
+### Verification
+- `python -m pytest tests/test_urlcheck.py -q` -> 21 passed (was 17).
+- `python -m pytest -q --cov=ethscan.urlcheck --cov-report=term-missing` -> `ethscan/urlcheck.py` **100%** (was 95%), 0 missing.
+- `python -m pytest -q` -> **3734 passed, 1 skipped** (was 3730); no regressions.
+- `python -m ruff check tests/test_urlcheck.py` -> 1 error, pre-existing (`pytest` F401 unused import present in the original file); zero new issues introduced.
+- No files under `ethscan/` were modified.
+
+## Current state
+- All 54 ethscan commands implemented/registered with JSON/Markdown/CSV output; unit + CLI integration tests present; no live network in tests.
+- Full suite green: **3734 passed, 1 skipped**.
+- `ethscan/urlcheck.py` at **100%** statement coverage.
+- `dnspython` remains an optional `*_AVAILABLE` dependency (not installed, not in `requirements.txt`).
+- `python -m pytest -q` -> 3734 passed, 1 skipped; no regressions.
+- No warnings, no regressions.
