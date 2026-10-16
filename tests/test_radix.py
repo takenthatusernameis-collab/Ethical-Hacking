@@ -1,7 +1,7 @@
 """Tests for the ethscan radix module."""
 
+import ipaddress
 import json
-import tempfile
 from pathlib import Path
 
 from ethscan.radix import (
@@ -10,16 +10,13 @@ from ethscan.radix import (
     _contains_in_merged,
     _contains_ip,
     _merge_networks,
-    _nth_bit,
     _normalize_cidr,
+    _nth_bit,
     format_radix_report_csv,
     format_radix_report_json,
     format_radix_report_markdown,
     run_radix,
 )
-
-import ipaddress
-
 
 # ---------------------------------------------------------------------------
 # CIDR normalization
@@ -119,6 +116,24 @@ def test_common_prefix_length_disjoint() -> None:
         ipaddress.ip_network("192.168.1.0/24"),
     ]
     assert _common_prefix_length(nets) == 0
+
+
+def test_common_prefix_length_identical_address_different_prefix() -> None:
+    """All bits match but prefix lengths differ -> min prefixlen is returned (line 65)."""
+    nets = [
+        ipaddress.ip_network("192.168.1.0/24"),
+        ipaddress.ip_network("192.168.1.0/25"),
+    ]
+    assert _common_prefix_length(nets) == 24
+
+
+def test_common_prefix_length_ipv6_full_match() -> None:
+    """IPv6 networks sharing the full 128-bit address (line 65 path)."""
+    nets = [
+        ipaddress.ip_network("2001:db8::/64"),
+        ipaddress.ip_network("2001:db8::/128"),
+    ]
+    assert _common_prefix_length(nets) == 64
 
 
 def test_common_prefix_of_pair_ipv4() -> None:
@@ -482,7 +497,7 @@ def test_format_radix_report_json_contains() -> None:
 
 
 def test_subtract_networks_basic() -> None:
-    from ethscan.radix import _subtract_networks, _parse_networks
+    from ethscan.radix import _parse_networks, _subtract_networks
 
     minuend = _parse_networks(["192.168.1.0/24"])
     subtrahend = _parse_networks(["192.168.1.128/25"])
@@ -492,7 +507,7 @@ def test_subtract_networks_basic() -> None:
 
 
 def test_subtract_networks_disjoint() -> None:
-    from ethscan.radix import _subtract_networks, _parse_networks
+    from ethscan.radix import _parse_networks, _subtract_networks
 
     minuend = _parse_networks(["192.168.1.0/24"])
     subtrahend = _parse_networks(["10.0.0.0/8"])
@@ -502,7 +517,7 @@ def test_subtract_networks_disjoint() -> None:
 
 
 def test_subtract_networks_full_overlap() -> None:
-    from ethscan.radix import _subtract_networks, _parse_networks
+    from ethscan.radix import _parse_networks, _subtract_networks
 
     minuend = _parse_networks(["192.168.1.0/24"])
     subtrahend = _parse_networks(["192.168.1.0/24"])
@@ -511,7 +526,7 @@ def test_subtract_networks_full_overlap() -> None:
 
 
 def test_subtract_networks_multiple() -> None:
-    from ethscan.radix import _subtract_networks, _parse_networks
+    from ethscan.radix import _parse_networks, _subtract_networks
 
     minuend = _parse_networks(["192.168.0.0/16"])
     subtrahend = _parse_networks(["192.168.1.0/24", "192.168.2.0/24"])
@@ -537,12 +552,34 @@ def test_subtract_networks_empty_subtrahend() -> None:
 
 
 def test_subtract_networks_ipv6() -> None:
-    from ethscan.radix import _subtract_networks, _parse_networks
+    from ethscan.radix import _parse_networks, _subtract_networks
 
     minuend = _parse_networks(["2001:db8::/32"])
     subtrahend = _parse_networks(["2001:db8:1::/48"])
     result = _subtract_networks(minuend, subtrahend)
     assert len(result) >= 1
+
+
+def test_subtract_networks_version_mismatch_skipped() -> None:
+    """Subtrahend of a different IP version is skipped (line 111)."""
+    from ethscan.radix import _subtract_networks
+
+    minuend = [ipaddress.ip_network("192.168.1.0/24")]
+    subtrahend = [ipaddress.ip_network("2001:db8::/32")]
+    result = _subtract_networks(minuend, subtrahend)
+    assert len(result) == 1
+    assert str(result[0]) == "192.168.1.0/24"
+
+
+def test_subtract_networks_non_subset_overlap() -> None:
+    """When r_net overlaps but is not a superset of s_net, address_exclude
+    raises ValueError and the except branch clears diffs (lines 121-122)."""
+    from ethscan.radix import _subtract_networks
+
+    minuend = [ipaddress.ip_network("192.168.1.0/24")]
+    subtrahend = [ipaddress.ip_network("192.168.0.0/23")]
+    result = _subtract_networks(minuend, subtrahend)
+    assert result == []
 
 
 def test_run_radix_diff_basic() -> None:
@@ -706,3 +743,79 @@ def test_format_radix_report_csv_pipe_escaping() -> None:
 
     # With QUOTE_MINIMAL, pipe characters don't require quoting
     assert "192.168.1.0/24" in output
+
+
+# ---------------------------------------------------------------------------
+# _format_network_info
+# ---------------------------------------------------------------------------
+
+
+def test_format_network_info_ipv4_large() -> None:
+    from ethscan.radix import _format_network_info
+
+    info = _format_network_info(ipaddress.ip_network("192.168.1.0/24"))
+    assert info["broadcast_address"] == "192.168.1.255"
+    assert info["first_host"] == "192.168.1.1"
+    assert info["last_host"] == "192.168.1.254"
+    assert info["usable_host_count"] == 254
+
+
+def test_format_network_info_ipv4_single() -> None:
+    from ethscan.radix import _format_network_info
+
+    info = _format_network_info(ipaddress.ip_network("192.168.1.1/32"))
+    assert info["broadcast_address"] == "192.168.1.1"
+    assert info["first_host"] == "192.168.1.1"
+    assert info["last_host"] == "192.168.1.1"
+    assert info["usable_host_count"] == 0
+
+
+def test_format_network_info_ipv4_pair() -> None:
+    from ethscan.radix import _format_network_info
+
+    info = _format_network_info(ipaddress.ip_network("192.168.1.0/31"))
+    assert info["first_host"] == "192.168.1.1"
+    assert info["last_host"] == "192.168.1.1"
+    assert info["usable_host_count"] == 0
+
+
+def test_format_network_info_ipv6_large() -> None:
+    from ethscan.radix import _format_network_info
+
+    info = _format_network_info(ipaddress.ip_network("2001:db8::/64"))
+    assert info["broadcast_address"] is None
+    assert info["first_host"] == "2001:db8::1"
+    assert info["usable_host_count"] == ipaddress.ip_network("2001:db8::/64").num_addresses - 2
+
+
+def test_format_network_info_ipv6_single() -> None:
+    from ethscan.radix import _format_network_info
+
+    info = _format_network_info(ipaddress.ip_network("2001:db8::1/128"))
+    assert info["broadcast_address"] is None
+    assert info["first_host"] == "2001:db8::1"
+    assert info["last_host"] == "2001:db8::1"
+    assert info["usable_host_count"] == 0
+
+
+def test_format_network_info_ipv6_pair() -> None:
+    from ethscan.radix import _format_network_info
+
+    info = _format_network_info(ipaddress.ip_network("2001:db8::/127"))
+    assert info["first_host"] == "2001:db8::1"
+    assert info["last_host"] == "2001:db8::1"
+    assert info["usable_host_count"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Markdown diff table error handling (lines 467-469)
+# ---------------------------------------------------------------------------
+
+
+def test_format_radix_report_markdown_diff_invalid_network() -> None:
+    data = run_radix(["192.168.1.0/24"], diff=["192.168.1.128/25"])
+    data["diff"]["difference"] = ["not-a-network"]
+    output = format_radix_report_markdown(data)
+    assert "## Set Difference" in output
+    assert "not-a-network" in output
+    assert "?" in output
