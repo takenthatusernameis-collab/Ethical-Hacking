@@ -5,9 +5,9 @@ import socket
 import pytest
 
 from ethscan.whois import (
-    DEFAULT_RECURSIVE_DEPTH,
-    DEFAULT_WHOIS_SERVER,
     DEFAULT_TIMEOUT,
+    DEFAULT_WHOIS_SERVER,
+    _normalize_target,
     extract_referral_server,
     format_whois_report_csv,
     format_whois_report_json,
@@ -15,7 +15,6 @@ from ethscan.whois import (
     parse_whois,
     query_whois,
     run_whois,
-    _normalize_target,
 )
 
 
@@ -25,7 +24,6 @@ def test_default_whois_server() -> None:
 
 
 def test_normalize_target() -> None:
-    from ethscan.whois import _normalize_target
 
     # Basic domain
     assert _normalize_target("example.com") == "example.com"
@@ -276,7 +274,6 @@ def test_query_whois_connection_refused(monkeypatch) -> None:
 
 
 def test_extract_referral_server() -> None:
-    from ethscan.whois import extract_referral_server
 
     # Test each pattern
     assert extract_referral_server("Registrar WHOIS Server: whois.example.com") == "whois.example.com"

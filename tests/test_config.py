@@ -1,8 +1,6 @@
 """Tests for the ethscan configuration module."""
 
-import json
 
-import pytest
 import yaml
 
 from ethscan.config import (
@@ -265,14 +263,16 @@ def test_find_config_file_oserror_on_is_file(tmp_path, monkeypatch) -> None:
 def test_load_config_oserror_on_open(tmp_path) -> None:
     path = tmp_path / "ethscan.yaml"
     path.write_text("defaults: {}\n")
+    import builtins
+
     import ethscan.config as cfg
 
-    original_open = __builtins__.open
+    original_open = builtins.open
 
     def bad_open(*args, **kwargs):
         raise OSError("nope")
 
-    __builtins__.open = bad_open  # type: ignore[assignment]
+    builtins.open = bad_open  # type: ignore[assignment]
     try:
         config = cfg.load_config(str(path))
         assert config["defaults"] == {}
@@ -281,7 +281,7 @@ def test_load_config_oserror_on_open(tmp_path) -> None:
         assert "_parse_error" in config
         assert "Failed to read" in config["_parse_error"]
     finally:
-        __builtins__.open = original_open  # type: ignore[assignment]
+        builtins.open = original_open  # type: ignore[assignment]
 
 
 def test_build_default_map_non_dict_overrides(tmp_path) -> None:
@@ -301,6 +301,11 @@ def test_config_path_string_returns_none() -> None:
     assert config_path_string({"_path": None}) is None
 
 
+
+def test_config_path_string_returns_path() -> None:
+    from ethscan.config import config_path_string
+
+    assert config_path_string({"_path": "/etc/ethscan.yaml"}) == "/etc/ethscan.yaml"
 def test_format_config_report_csv_includes_parse_error(tmp_path) -> None:
     from ethscan.config import format_config_report_csv
 
