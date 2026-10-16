@@ -2497,7 +2497,34 @@ Pushed `ethscan/dnsbrute.py` statement coverage from 86% to 100% (328 statements
 
 ## Current state
 - All 54 ethscan commands implemented/registered with JSON/Markdown/CSV output; unit + CLI integration tests present; no live network in tests.
-- Full suite green: 3532 passed, 1 skipped.
+- Full suite green: 3679 passed, 1 skipped.
 - `dnspython` remains an optional `*_AVAILABLE` dependency (not installed, not in `requirements.txt`).
-- `python -m pytest -q` -> 2932 passed, 1 skipped (2857 baseline + 75 new)
+- `python -m pytest -q` -> 3679 passed, 1 skipped (3532 baseline + 147 new across multiple sessions).
 - No warnings, no regressions
+
+## Completed: `ethscan/vuln.py` coverage audit (93% -> 98%)
+
+Pushed `ethscan/vuln.py` statement coverage from 93% to 98% (369 statements, 9 missing) by adding 13 tests to `tests/test_vuln.py`:
+
+- `_compute_password_hash` direct: no salt/pepper, salt-only, pepper-only, salt+pepper, unsupported-algorithm-with-pepper ValueError (5 tests).
+- `_compute_peppered_hash` unsupported-algorithm ValueError (1 test).
+- `_transform_banner` salt+pepper with unsupported algorithm ValueError (1 test).
+- `_apply_salt_pepper_to_banner` graceful fallback (returns banner unchanged on ValueError; no-salt/no-pepper passthrough) (2 tests).
+- `_finding_detail` certificate signature-only path and certificate with no fields (2 tests).
+- `format_vuln_report_markdown` with `severity_filter` set (1 test).
+- `format_vuln_report_markdown` recursive findings with empty findings list ("No vulnerabilities found." branch) (1 test).
+
+### Remaining missing lines (provably unreachable / dead code, intentionally left uncovered)
+- Lines 37, 57-62: First definitions of `_hashlib_name`/`_compute_peppered_hash` (lines 35-66) are overridden by later duplicates (lines 378-409) and never called.
+- Lines 555-556: IPv4 addresses are always captured by the hostname regex in `_extract_hosts_from_banner` before the IPv4-specific branch runs, so `seen.add(ip)`/`hosts.append(ip)` in the IPv4 loop is unreachable.
+- Line 904: `if depth > max_depth: return {}` in `_recursive_scan` is unreachable because recursion is gated by `depth < max_depth`.
+- Line 1047: Final `return ""` fallback in `_finding_detail` is unreachable because all four finding kinds (service/protocol/cipher/certificate) are handled by earlier branches.
+
+Same class as the intentionally-uncovered `redis.py:55-56` and `mongodb.py:205-206`.
+
+### Verification
+- `python -m pytest tests/test_vuln.py -q` -> 98 passed (was 81).
+- `python -m pytest -q --cov=ethscan.vuln --cov-report=term-missing` -> `ethscan/vuln.py` **98%** (was 93%), missing only 37, 57-62, 555-556, 904, 1047.
+- `python -m pytest -q` -> 3679 passed, 1 skipped (full suite; no regressions).
+- `python -m ruff check tests/test_vuln.py` -> 4 errors, all pre-existing (`_hashlib_name` F401, local import ordering in existing `test_transform_banner_*` tests); zero new issues introduced.
+- No files under `ethscan/` were modified.

@@ -8,14 +8,16 @@ from ethscan.vuln import (
     DEFAULT_TIMEOUT,
     DEFAULT_WORKERS,
     PROTOCOL_VULNS,
-    SEVERITIES,
     SERVICE_VULNS,
+    SEVERITIES,
     VULN_DB,
     _apply_salt_pepper_to_banner,
     _compute_password_hash,
+    _compute_peppered_hash,
     _hashlib_name,
     _normalize_host,
     _severity_rank,
+    _transform_banner,
     format_vuln_report_csv,
     format_vuln_report_json,
     format_vuln_report_markdown,
@@ -1190,3 +1192,174 @@ def test_format_vuln_report_csv_missing_optional_fields() -> None:
     assert "TEST-1" in row
     assert "cipher" in row
     assert "high" in row
+
+
+# ---------------------------------------------------------------------------
+# _compute_password_hash direct tests
+# ---------------------------------------------------------------------------
+
+
+def test_compute_password_hash_no_salt_no_pepper() -> None:
+    import hashlib
+
+    expected = hashlib.new("sha256", b"hello world").hexdigest()
+    assert _compute_password_hash("hello world", "sha256") == expected
+
+
+def test_compute_password_hash_salt_only() -> None:
+    import hashlib
+
+    expected = hashlib.new("sha256", ("salt" + "hello world").encode("utf-8")).hexdigest()
+    assert _compute_password_hash("hello world", "sha256", salt="salt") == expected
+
+
+def test_compute_password_hash_pepper_only() -> None:
+    import hmac
+
+    expected = hmac.new(b"pepper", b"hello world", "sha256").hexdigest()
+    assert _compute_password_hash("hello world", "sha256", pepper="pepper") == expected
+
+
+def test_compute_password_hash_salt_and_pepper() -> None:
+    import hmac
+
+    expected = hmac.new(b"pepper", (b"salt" + b"hello world"), "sha256").hexdigest()
+    assert (
+        _compute_password_hash("hello world", "sha256", salt="salt", pepper="pepper")
+        == expected
+    )
+
+
+def test_compute_password_hash_unsupported_algorithm_with_pepper() -> None:
+    try:
+        _compute_password_hash("hello world", "md4", pepper="pepper")
+    except ValueError as exc:
+        assert "does not support HMAC" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for unsupported algorithm with pepper")
+
+
+# ---------------------------------------------------------------------------
+# _compute_peppered_hash direct tests
+# ---------------------------------------------------------------------------
+
+
+def test_compute_peppered_hash_unsupported_algorithm() -> None:
+    try:
+        _compute_peppered_hash("message", "md4", "pepper")
+    except ValueError as exc:
+        assert "does not support HMAC" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for unsupported algorithm")
+
+
+# ---------------------------------------------------------------------------
+# _transform_banner error path
+# ---------------------------------------------------------------------------
+
+
+def test_transform_banner_salt_and_pepper_unsupported_algorithm() -> None:
+    try:
+        _transform_banner("SSH-2.0-OpenSSH_7.2p2", "md4", salt="salt", pepper="pepper")
+    except ValueError as exc:
+        assert "does not support HMAC" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for unsupported algorithm")
+
+
+# ---------------------------------------------------------------------------
+# _apply_salt_pepper_to_banner graceful fallback
+# ---------------------------------------------------------------------------
+
+
+def test_apply_salt_pepper_to_banner_unsupported_algorithm_returns_banner() -> None:
+    assert (
+        _apply_salt_pepper_to_banner("SSH-2.0-OpenSSH_7.2p2", "salt", "pepper", "md4")
+        == "SSH-2.0-OpenSSH_7.2p2"
+    )
+
+
+def test_apply_salt_pepper_to_banner_no_salt_no_pepper_returns_banner() -> None:
+    assert (
+        _apply_salt_pepper_to_banner("SSH-2.0-OpenSSH_7.2p2", None, None, "sha256")
+        == "SSH-2.0-OpenSSH_7.2p2"
+    )
+
+
+# ---------------------------------------------------------------------------
+# _finding_detail certificate paths
+# ---------------------------------------------------------------------------
+
+
+def test_finding_detail_certificate_signature_only() -> None:
+    from ethscan.vuln import _finding_detail
+
+    assert _finding_detail(
+        {"kind": "certificate", "signature_algorithm": "md5WithRSAEncryption"}
+    ) == "signature algorithm md5WithRSAEncryption"
+
+
+def test_finding_detail_certificate_no_fields() -> None:
+    from ethscan.vuln import _finding_detail
+
+    assert _finding_detail({"kind": "certificate"}) == ""
+
+
+# ---------------------------------------------------------------------------
+# format_vuln_report_markdown severity_filter line
+# ---------------------------------------------------------------------------
+
+
+def test_format_vuln_report_markdown_with_severity_filter() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "services_checked": 1,
+        "tls_checked": False,
+        "certificate_checked": False,
+        "finding_count": 0,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+        "severity_filter": "critical",
+        "min_severity_filter": None,
+        "findings": [],
+        "notes": [],
+    }
+    output = format_vuln_report_markdown(data)
+    assert "**Severity Filter:** critical" in output
+
+
+# ---------------------------------------------------------------------------
+# format_vuln_report_markdown recursive "no findings" branch
+# ---------------------------------------------------------------------------
+
+
+def test_format_vuln_report_markdown_recursive_findings_no_vulnerabilities() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "services_checked": 1,
+        "tls_checked": False,
+        "certificate_checked": False,
+        "finding_count": 0,
+        "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+        "recursive": True,
+        "max_depth": 1,
+        "recursive_hosts_scanned": ["backend.internal.example.com"],
+        "recursive_findings": [
+            {
+                "host": "backend.internal.example.com",
+                "depth": 1,
+                "finding_count": 0,
+                "services_checked": 1,
+                "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+                "findings": [],
+            }
+        ],
+        "findings": [],
+        "notes": [],
+    }
+    output = format_vuln_report_markdown(data)
+    assert "**Recursive:** Yes" in output
+    assert "## Recursive Scan Results" in output
+    assert "backend.internal.example.com" in output
+    assert "*No vulnerabilities found.*" in output
