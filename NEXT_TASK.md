@@ -20,30 +20,25 @@ The `ethscan/vuln.py` coverage task is COMPLETE.
 3. `python -m pytest -q` — full suite 3679 passed, 1 skipped, no regressions.
 4. `python -m ruff check tests/test_vuln.py` — no new linting issues.
 
+## What was verified (this session)
+
+- `ethscan/smb.py` coverage improved from 96% (19 missing lines: 215-230, 367, 375, 646, 857) to **100%** (0 missing) by adding 8 targeted unit tests to `tests/test_smb.py`:
+  - `_send_recv` real-socket path: success, `socket.timeout`, `OSError`/connection-refused, and `close()`-error-swallowed branches (patched `ethscan.smb.socket.socket` with a fake, following `tests/test_mongodb.py` convention).
+  - `_build_banner`: non-SMB1 early return and `signing="enabled"` branch.
+  - `_build_smb2_banner`: `signing="disabled"` branch.
+  - `format_smb_report_markdown`: SMB2 negotiate context entry with `detail=None`.
+- `tests/test_smb.py`: 103 passed (was 95).
+- `python -m pytest -q` full suite: **3717 passed, 1 skipped** (was 3709 + 8 new); no regressions.
+- `python -m ruff check tests/test_smb.py`: 1 error, pre-existing import-sorting (I001); zero new issues.
+
+## Current coverage state (from `python -m pytest -q --cov=ethscan --cov-report=term-missing`)
+
+- `ethscan/smb.py`: **100%** (was 96%, 19 missing lines closed this session).
+- `ethscan/oracle.py`: **99%** (2 missing: 304-305 — `except Exception` after `decode(..., errors="replace")`, provably unreachable; same class as intentionally-uncovered `redis.py:55-56` and `mongodb.py:205-206`; left uncovered).
+- `ethscan/vuln.py`: 98% (9 missing, all unreachable/dead code).
+- Remaining 95% modules: `ntp.py` (12 missing), `recon.py` (11), `wifi.py` (11), `urlcheck.py` (10), `web.py` (10); plus `netbios.py` 97%, `snmp.py` 96%, `ldap.py` 96%, `ping.py` 96%, `hash.py` 96%, `mssql.py` 98%, `dnssec.py` 98%, `ftp.py` 98%.
+- Full suite: 98% total coverage, 3717 passed, 1 skipped.
+
 ## Next precise task
-No remaining work on the vuln coverage assignment. Remaining coverage gaps across other `ethscan/` modules (from `python -m pytest -q --cov=ethscan --cov-report=term-missing`):
 
-- `ethscan/oracle.py`: 92% (18 missing: 218-220, 239-241, 272-274, 292-294, 304-305, 315-316, 412-413) — lowest percentage.
-- `ethscan/vuln.py`: 98% (9 missing, all unreachable as noted above).
-- `ethscan/netbios.py`: 95% (16 missing).
-- `ethscan/ntp.py`: 95% (12 missing).
-- `ethscan/recon.py`: 95% (11 missing).
-- `ethscan/urlcheck.py`: 95% (10 missing).
-- `ethscan/web.py`: 95% (10 missing).
-- `ethscan/wifi.py`: 95% (11 missing).
-- `ethscan/smb.py`: 96% (19 missing).
-- `ethscan/snmp.py`: 96% (15 missing).
-- `ethscan/ping.py`: 96% (9 missing).
-- `ethscan/radix.py`: 97% (9 missing).
-- `ethscan/passwords.py`: 97% (4 missing).
-- `ethscan/resolve.py`: 97% (4 missing).
-- `ethscan/s3.py`: 97% (6 missing).
-- `ethscan/service.py`: 97% (3 missing).
-- `ethscan/mssql.py`: 98% (8 missing).
-- `ethscan/mysql.py`: 99% (3 missing).
-- `ethscan/postgresql.py`: 99% (1 missing).
-- `ethscan/trace.py`: 99% (1 missing).
-- `ethscan/redis.py`: 99% (2 missing, intentionally uncovered).
-- `ethscan/mongodb.py`: 99% (2 missing, intentionally uncovered).
-
-Pick one bounded, high-value task: improve coverage on `ethscan/oracle.py` (lowest % at 92%) or `ethscan/smb.py` (largest absolute gap at 19 lines), following existing test conventions. Or select a new command per TASK.md conventions. No prior handoff is pending.
+Improve coverage on one of the 95% modules — e.g. `ethscan/wifi.py` (11 missing lines: 35, 54-55, 113, 176, 180, 197, 378-381) or `ethscan/ntp.py` (12 missing: 249, 252-253, 303-304, 340-341, 357-359, 368, 387) — adding targeted unit tests following existing test conventions (`tests/test_wifi.py` / `tests/test_ntp.py`), without modifying files under `ethscan/`. Alternatively select a new command per the TASK.md conventions (`run_*`, `format_*_report_json/markdown`, CLI registration, unit + CLI integration tests, stdlib only). No prior handoff is pending. Verification baseline: full suite 3717 passed, 1 skipped; `smb.py` at 100%.

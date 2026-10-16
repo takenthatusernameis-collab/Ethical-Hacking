@@ -3,7 +3,9 @@
 import csv
 import io
 import json
+import socket
 import struct
+from unittest.mock import patch
 
 import pytest
 
@@ -12,6 +14,7 @@ from ethscan.smb import (
     DEFAULT_PORT,
     DEFAULT_SMB2_DIALECTS,
     SMB1_MAGIC,
+    _build_banner,
     SMB2_CIPHER_AES128_CCM,
     SMB2_CIPHER_AES128_GCM,
     SMB2_DIALECT_002,
@@ -287,6 +290,138 @@ def test_send_recv_connector_receives_arguments() -> None:
         "request": b"req-bytes",
         "timeout": 2.5,
     }
+
+
+def test_send_recv_real_socket_success() -> None:
+    """The non-connector path: socket.socket, settimeout, connect, sendall, recv."""
+
+    class FakeSocket:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+
+        def settimeout(self, timeout):
+            self.timeout = timeout
+
+        def connect(self, addr):
+            self.addr = addr
+
+        def sendall(self, data):
+            self.sent = data
+
+        def recv(self, n):
+            return b"pong"
+
+        def close(self):
+            self.closed = True
+
+    with patch("ethscan.smb.socket.socket", FakeSocket):
+        data, err = _send_recv("10.0.0.1", 445, b"ping", 1.0)
+    assert data == b"pong"
+    assert err is None
+
+
+def test_send_recv_real_socket_timeout() -> None:
+    class FakeSocket:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect(self, addr):
+            pass
+
+        def sendall(self, data):
+            pass
+
+        def recv(self, n):
+            raise socket.timeout()
+
+        def close(self):
+            pass
+
+    with patch("ethscan.smb.socket.socket", FakeSocket):
+        data, err = _send_recv("10.0.0.1", 445, b"ping", 0.5)
+    assert data is None
+    assert err == "timeout"
+
+
+def test_send_recv_real_socket_oserror() -> None:
+    class FakeSocket:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect(self, addr):
+            raise ConnectionRefusedError("[Errno 111] Connection refused")
+
+        def sendall(self, data):
+            pass
+
+        def recv(self, n):
+            return b""
+
+        def close(self):
+            pass
+
+    with patch("ethscan.smb.socket.socket", FakeSocket):
+        data, err = _send_recv("10.0.0.1", 445, b"ping", 1.0)
+    assert data is None
+    assert "Connection refused" in err
+
+
+def test_send_recv_real_socket_close_error_swallowed() -> None:
+    class FakeSocket:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect(self, addr):
+            pass
+
+        def sendall(self, data):
+            pass
+
+        def recv(self, n):
+            return b"data"
+
+        def close(self):
+            raise OSError("close failed")
+
+    with patch("ethscan.smb.socket.socket", FakeSocket):
+        data, err = _send_recv("10.0.0.1", 445, b"ping", 1.0)
+    assert data == b"data"
+    assert err is None
+
+
+# ---------------------------------------------------------------------------
+# _build_banner
+# ---------------------------------------------------------------------------
+
+
+def test_build_banner_non_smb1_returns_none() -> None:
+    assert _build_banner({"protocol": "SMB2"}) is None
+
+
+def test_build_banner_signing_enabled() -> None:
+    parsed = {
+        "protocol": "SMB1",
+        "dialect": "NT LM 0.12",
+        "security_mode": 0x05,
+        "signing_required": False,
+        "signing_enabled": True,
+        "challenge_response": True,
+        "challenge": "0102030405060708",
+    }
+    banner = _build_banner(parsed)
+    assert banner is not None
+    assert "signing=enabled" in banner
+    assert "auth=challenge-response" in banner
+    assert "challenge present" in banner
 
 
 # ---------------------------------------------------------------------------
@@ -934,6 +1069,21 @@ def test_build_smb2_banner_non_smb2() -> None:
     assert _build_smb2_banner({"protocol": "SMB1"}) is None
 
 
+def test_build_smb2_banner_signing_disabled() -> None:
+    parsed = {
+        "protocol": "SMB2",
+        "dialect": "SMB 3.1.1",
+        "security_mode": 0,
+        "signing_enabled": False,
+        "signing_required": False,
+        "server_guid": None,
+        "capability_flags": [],
+    }
+    banner = _build_smb2_banner(parsed)
+    assert banner is not None
+    assert "signing=disabled" in banner
+
+
 # ---------------------------------------------------------------------------
 # run_smb2
 # ---------------------------------------------------------------------------
@@ -1222,6 +1372,23 @@ def test_format_smb_report_markdown_smb2_contexts() -> None:
     assert "- **Negotiate Contexts:** 2" in output
     assert "**preauth_integrity:**" in output
     assert "**encryption:**" in output
+
+
+def test_format_smb_report_markdown_smb2_context_without_detail() -> None:
+    results = _accessible_results()
+    smb2 = _smb2_results()
+    smb2["negotiate_context_count"] = 1
+    smb2["negotiate_contexts"] = [
+        {
+            "type": SMB2_ENCRYPTION_CAP,
+            "type_name": "encryption",
+            "detail": None,
+        },
+    ]
+    results["smb2"] = smb2
+    output = format_smb_report_markdown(results)
+    assert "- **Negotiate Contexts:** 1" in output
+    assert "**encryption**" in output
 
 
 def test_format_smb_report_json_with_smb2() -> None:
