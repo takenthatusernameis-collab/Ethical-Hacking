@@ -1,12 +1,13 @@
 # Next Task for Agent
 
 ## Context
-- validate.py coverage improved to 100% with targeted tests in tests/test_validate.py (no source changes).
-- Full suite: 3596 passed, 1 skipped (baseline maintained, all green).
-- Next focus: continue improving coverage for other modules. Review current state to pick the next lowest-coverage/high-value module.
+- postgresql.py coverage improved from 91% to 99% with 8 targeted tests in tests/test_postgresql.py (no source changes).
+- Full suite: 3604 passed, 1 skipped (baseline maintained, all green).
+- `postgresql.py` line 201 remains uncovered — unreachable defensive code (`data[pos:pos+1]` on bytes always returns 1 byte when `pos < len(data)`).
+- Next focus: continue improving coverage for other modules. cve.py at 87% is the lowest (43 missing lines), followed by dnssec.py at 89% (45 missing), redis.py at 92% (21 missing), vuln.py at 93% (24 missing).
 
 ## Task
-Identify the next module with meaningful coverage gaps (e.g., urlcheck.py, vuln.py, validate is now 100%; check term-missing for all modules) and add targeted unit tests in its test file without modifying source. Focus on uncovered branches/edge cases.
+Identify the next module with meaningful coverage gaps (cve.py at 87% is the lowest, or dnssec.py at 89%, redis.py at 92%, vuln.py at 93%) and add targeted unit tests in its test file without modifying source. Focus on uncovered branches/edge cases.
 
 ## Verification
 1. Run `python3 -m pytest -q --cov=ethscan --cov-report=term-missing` to see current coverage per module.
@@ -22,5 +23,9 @@ Identify the next module with meaningful coverage gaps (e.g., urlcheck.py, vuln.
 - Follow existing test patterns.
 
 ## Evidence
-- validate.py: 100% (199/199 statements)
-- Full suite green: 3596 passed, 1 skipped
+- postgresql.py: 99% (235/236 statements, line 201 unreachable defensive code)
+- cve.py: 87% (43 missing lines)
+- dnssec.py: 89% (45 missing lines)
+- redis.py: 92% (21 missing lines)
+- vuln.py: 93% (24 missing lines)
+- Full suite green: 3604 passed, 1 skipped

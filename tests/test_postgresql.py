@@ -1,19 +1,22 @@
 """Tests for the ethscan postgresql module."""
 
 import json
+import socket
+import threading
 
 from ethscan.postgresql import (
-    DEFAULT_PORT,
-    _normalize_target,
-    _build_startup_request,
-    _parse_startup_response,
-    _parse_error_fields,
-    _assess_startup,
     _AUTH_TYPE_NAMES,
-    run_postgresql,
+    DEFAULT_PORT,
+    _assess_startup,
+    _build_startup_request,
+    _normalize_target,
+    _parse_error_fields,
+    _parse_startup_response,
+    _send_recv,
     format_postgresql_report_csv,
     format_postgresql_report_json,
     format_postgresql_report_markdown,
+    run_postgresql,
 )
 
 
@@ -383,7 +386,6 @@ def test_format_postgresql_report_csv_escapes_findings():
     out = format_postgresql_report_csv(data)
     # Findings with embedded newlines/special chars are flattened for CSV.
     assert "Old PostgreSQL version detected; suspicious" in out
-    header = out.split("\n", 1)[0]
     body = out.split("\n", 1)[1]
     assert "\n" not in body
 
@@ -558,3 +560,151 @@ def test_format_postgresql_report_with_none_host():
     assert "" in lines[1]  # Empty host field
     assert "false" in lines[1]  # accessible=false
     assert "Could not parse host" in lines[1]  # error in last field
+
+
+# --- helpers -----------------------------------------------------------------
+
+
+def _free_port() -> int:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    return port
+
+
+def _start_tcp_server(response: bytes) -> int:
+    """Start a local TCP server that reads the request, sends *response*, closes."""
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+    port = server.getsockname()[1]
+
+    def serve() -> None:
+        try:
+            conn, _ = server.accept()
+            conn.recv(4096)  # read client request before responding
+            if response:
+                conn.sendall(response)
+            conn.close()
+        except OSError:
+            pass
+        finally:
+            server.close()
+
+    threading.Thread(target=serve, daemon=True).start()
+    return port
+
+
+def _start_tcp_server_no_response() -> int:
+    """Start a local TCP server that reads the request, sends nothing, closes."""
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+    port = server.getsockname()[1]
+
+    def serve() -> None:
+        try:
+            conn, _ = server.accept()
+            conn.recv(4096)  # read client request
+            conn.close()  # close without sending -> clean EOF
+        except OSError:
+            pass
+        finally:
+            server.close()
+
+    threading.Thread(target=serve, daemon=True).start()
+    return port
+
+
+def _start_tcp_server_never_sends() -> int:
+    """Start a local TCP server that accepts but never sends or closes.
+
+    Returns the port and a holder dict that keeps the accepted connection
+    alive so the client blocks on recv until the socket timeout fires.
+    """
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+    port = server.getsockname()[1]
+    held: dict = {}
+
+    def serve() -> None:
+        try:
+            conn, _ = server.accept()
+            conn.recv(4096)  # read client request so close would send FIN not RST
+            held["conn"] = conn  # keep alive so client blocks on recv
+        except OSError:
+            pass
+        finally:
+            server.close()
+
+    threading.Thread(target=serve, daemon=True).start()
+    return port, held
+
+
+# --- _send_recv real socket path (no connector) ------------------------------
+
+
+def test_send_recv_success_real_socket():
+    port = _start_tcp_server(_pg_greeting("16.2", 0, 5555))
+    data, err = _send_recv("127.0.0.1", port, _build_startup_request(), 2.0)
+    assert err is None
+    assert data is not None
+
+
+def test_send_recv_connection_refused():
+    port = _free_port()  # nothing listening
+    data, err = _send_recv("127.0.0.1", port, _build_startup_request(), 2.0)
+    assert data is None
+    assert err == "Connection refused"
+
+
+def test_send_recv_no_data():
+    port = _start_tcp_server_no_response()  # accepts, sends nothing, clean EOF
+    data, err = _send_recv("127.0.0.1", port, _build_startup_request(), 2.0)
+    assert data is None
+    assert err is None
+
+
+def test_send_recv_recv_timeout():
+    # Server accepts and holds the connection open; client recv times out.
+    port, _held = _start_tcp_server_never_sends()
+    data, err = _send_recv("127.0.0.1", port, _build_startup_request(), 0.1)
+    assert data is None
+    assert err is None  # recv timeout returns (None, None); connect timeout returns "Timeout"
+
+
+def test_send_recv_connect_timeout():
+    data, err = _send_recv("10.255.255.1", 5432, _build_startup_request(), 0.5)
+    assert data is None
+    assert err is not None
+
+
+def test_send_recv_oserror_unresolvable_host():
+    data, err = _send_recv("invalid.host.ethscan.invalid", 5432, _build_startup_request(), 2.0)
+    assert data is None
+    assert err is not None
+
+
+# --- _parse_startup_response edge cases --------------------------------------
+
+
+def test_parse_startup_response_short_length_break():
+    # 5 bytes: type byte + length=3 (< 4) -> break at the length check.
+    resp = b"\x00" + (3).to_bytes(4, "big")
+    result = _parse_startup_response(resp)
+    assert result["parameters"] == {}
+    assert result["server_version"] is None
+
+
+def test_parse_startup_response_empty_msg_type_break():
+    # A single zero byte is a truthy msg_type; a zero-length msg_type can only
+    # arise from a truncated slice at a position inside the buffer. Passing a
+    # one-byte buffer with type byte triggers the short-length break instead.
+    resp = b"\x00" + (4).to_bytes(4, "big") + b"abcd"
+    result = _parse_startup_response(resp)
+    assert result["parameters"] == {}
