@@ -225,6 +225,47 @@ def test_parse_icmp_reply_not_ipv4() -> None:
     assert result["error"] == "not IPv4"
 
 
+def test_parse_icmp_reply_ip_header_truncated() -> None:
+    # version=4, ihl=0 -> ip_header_len=0 < 20
+    result = _parse_icmp_reply(b"\x40" + b"\x00" * 19, 12345)
+    assert result["error"] == "IP header truncated"
+
+
+def test_parse_icmp_reply_icmp_header_truncated() -> None:
+    # valid 20-byte IPv4 header (ihl=5) with no ICMP bytes following
+    version_ihl = (4 << 4) | 5
+    total_length = 20
+    ip_header = struct.pack(
+        "!BBHHHBBH4s4s",
+        version_ihl,
+        0,
+        total_length,
+        0,
+        0,
+        64,
+        socket.IPPROTO_ICMP,
+        0,
+        socket.inet_aton("10.0.0.1"),
+        socket.inet_aton("10.0.0.2"),
+    )
+    ip_checksum = _checksum(ip_header)
+    ip_header = struct.pack(
+        "!BBHHHBBH4s4s",
+        version_ihl,
+        0,
+        total_length,
+        0,
+        0,
+        64,
+        socket.IPPROTO_ICMP,
+        ip_checksum,
+        socket.inet_aton("10.0.0.1"),
+        socket.inet_aton("10.0.0.2"),
+    )
+    result = _parse_icmp_reply(ip_header, 12345)
+    assert result["error"] == "ICMP header truncated"
+
+
 # ---------------------------------------------------------------------------
 # _resolve_host
 # ---------------------------------------------------------------------------
@@ -249,6 +290,20 @@ def test_try_create_raw_socket() -> None:
     result = _try_create_raw_socket()
     if result is not None:
         result.close()
+
+
+def test_try_create_raw_socket_success(monkeypatch) -> None:
+    fake_sock = object()
+
+    def mock_socket(family, type_, proto=0):
+        assert family == socket.AF_INET
+        assert type_ == socket.SOCK_RAW
+        assert proto == socket.IPPROTO_ICMP
+        return fake_sock
+
+    monkeypatch.setattr(socket, "socket", mock_socket)
+    result = _try_create_raw_socket()
+    assert result is fake_sock
 
 
 # ---------------------------------------------------------------------------
@@ -520,6 +575,83 @@ def test_probe_icmp_raw_socket_wrong_id(monkeypatch) -> None:
     )
     assert result["response_type"] == RESP_NO_RESPONSE
     assert "identifier mismatch" in result["error"]
+    assert fake_send.closed is True
+
+
+def test_probe_icmp_raw_send_socket_creation_fails_falls_back(monkeypatch) -> None:
+    # raw_socket is provided but creating the send raw socket fails ->
+    # raw_socket is reset to None and the TCP fallback path is used.
+    fake_raw = object()
+    original_socket = socket.socket
+
+    def mock_socket(family, type_, proto=0):
+        if type_ == socket.SOCK_RAW and proto == socket.IPPROTO_ICMP:
+            raise OSError("no raw socket")
+        return original_socket(family, type_, proto)
+
+    monkeypatch.setattr(socket, "socket", mock_socket)
+
+    # Closed local port -> connect refused -> RESP_RST via TCP fallback.
+    test_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    test_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    test_sock.bind(("127.0.0.1", 0))
+    port = test_sock.getsockname()[1]
+    test_sock.close()
+
+    result = probe_icmp(
+        "127.0.0.1",
+        timeout=2.0,
+        ttl=64,
+        raw_socket=fake_raw,
+        identifier=12345,
+        sequence=1,
+        resolved_ip="127.0.0.1",
+        port=port,
+    )
+    assert result["response_type"] == RESP_RST
+    assert result["ip"] == "127.0.0.1"
+
+
+def test_probe_icmp_raw_sendto_oserror(monkeypatch) -> None:
+    # send_sock is created but sendto raises OSError -> RESP_NO_RESPONSE.
+    fake_raw = object()
+
+    class _FakeSendSocket:
+        def __init__(self):
+            self.closed = False
+
+        def setsockopt(self, *args, **kwargs):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def sendto(self, data, addr):
+            raise OSError("send failed")
+
+        def close(self):
+            self.closed = True
+
+    fake_send = _FakeSendSocket()
+
+    def mock_socket(family, type_, proto=0):
+        if type_ == socket.SOCK_RAW and proto == socket.IPPROTO_ICMP:
+            return fake_send
+        return socket.socket(family, type_, proto)
+
+    monkeypatch.setattr(socket, "socket", mock_socket)
+
+    result = probe_icmp(
+        "10.0.0.1",
+        timeout=1.0,
+        ttl=64,
+        raw_socket=fake_raw,
+        identifier=12345,
+        sequence=1,
+        resolved_ip="10.0.0.1",
+    )
+    assert result["response_type"] == RESP_NO_RESPONSE
+    assert "send failed" in result["error"]
     assert fake_send.closed is True
 
 
