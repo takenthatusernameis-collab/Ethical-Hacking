@@ -1128,3 +1128,19 @@ def test_format_csv_escapes():
     }
     c = format_mysql_report_csv(data)
     assert '"has,comma"' in c or "has,comma" in c  # csv will quote
+
+
+def test_parse_handshake_salt1_no_null_terminator():
+    # salt1 with no null byte and no null bytes after it → line 157 (else branch)
+    # 9 salt bytes (payload len 20) so pos+2 > len triggers the early return
+    # before capabilities/charset are read; salt1_len is capped at 8.
+    payload = b"\x0a" + b"5.7.0\x00" + b"\x01\x02\x03\x04" + b"salt12345"
+    header = bytes([len(payload) & 0xFF, (len(payload) >> 8) & 0xFF, (len(payload) >> 16) & 0xFF, 0x00])
+    data = header + payload
+    parsed = _parse_handshake(data)
+    assert parsed["protocol_version"] == 10
+    assert parsed["server_version"] == "5.7.0"
+    assert parsed["thread_id"] == 0x04030201
+    assert parsed["salt1"] == "salt1234"  # salt1_len capped at 8
+    assert "capabilities" not in parsed
+    assert "charset" not in parsed

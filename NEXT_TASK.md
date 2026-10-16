@@ -1,31 +1,40 @@
 # Next Task for Agent
 
 ## Context
-- dnssec.py coverage improved from 89% to 98% with 9 targeted tests in tests/test_dnssec.py (no source changes).
-  - Covered: _parse_dns_name pointer truncation + invalid length bits; _parse_dnskey_response/_parse_ds_response truncated record data; _query_dnskey_dnspython/_query_ds_dnspython success + error paths (via `ethscan.dnssec.dns` MagicMock patch); markdown DS "unknown error" branch.
-- dnssec.py lines 11-16 remain uncovered: the `import dns` success branch — impossible without dnspython installed (same class as postgresql.py:201 unreachable code).
-- Full suite: 3630 passed, 1 skipped (+9 new tests, no regressions). ruff: 17 pre-existing errors, none introduced.
-- Current per-module coverage: mysql.py 89% (25 missing: lines 107, 111, 150, 152, 157, 160, 172, 184, 197, 213, 241-263, 424) — now the lowest with the most missing lines; redis.py 92% (21 missing), vuln.py 93% (24 missing) next.
+- `mysql.py` coverage task is COMPLETE: raised from 89% to 99% (224 stmts, 3 missing).
+  - The 3 remaining missing lines (107, 111, 150) are provably unreachable defensive code, same class as `postgresql.py:201`; left uncovered intentionally (no source modification allowed).
+  - Added 1 test to `tests/test_mysql.py`; full suite 3652 passed, 1 skipped; zero new ruff errors.
+- `ethscan/redis.py` is now the lowest coverable-coverage module at **92%** with **21 missing lines**, all coverable via mocked connectors.
 
 ## Task
-Identify the module with meaningful coverage gaps (mysql.py at 89% with 25 missing lines is the recommended target) and add targeted unit tests in tests/test_mysql.py without modifying source. Focus on uncovered branches/edge cases (missing lines: 107, 111, 150, 152, 157, 160, 172, 184, 197, 213, 241-263, 424).
+Identify the module with meaningful coverage gaps (`ethscan/redis.py` at 92%, 21 missing lines is the recommended target) and add targeted unit tests in `tests/test_redis.py` without modifying source under `ethscan/`. Focus on the uncovered branches/edge cases:
+
+Missing lines: 54-56, 112-113, 127, 149, 155, 159, 163-165, 200-201, 223-224, 242-243, 312, 316, 319.
+
+Key branches to cover:
+- `_normalize_target` lines 54-56: bracketed IPv6 host without `]:port` (e.g. `"[::1]"`).
+- `_parse_resp_bulk_string` lines 112-113: `except Exception` returning `(None, 0)` (malformed length).
+- `_parse_resp` lines 127, 149: `return None, 0` when `\r\n` not found for simple string / array count.
+- `_parse_resp` array lines 155, 159, 163-165: `pos >= len(data)`, null-bulk-string `pass`/append branches.
+- `_send_recv` lines 200-201: `sock.close()` raising in `finally`.
+- `_parse_info` lines 223-224 / `_parse_config` lines 242-243: `except Exception: pass`.
+- `run_redis` lines 312, 316, 319: `ping_resp` is `bytes` decode branch, non-bytes/non-str `str()` branch, non-PONG `pass` branch.
 
 ## Verification
-1. Run `python3 -m pytest -q --cov=ethscan --cov-report=term-missing` to see current coverage per module.
-2. Add minimal targeted tests to tests/test_mysql.py for the missing lines above.
-3. Run `python3 -m pytest -q tests/test_mysql.py` to ensure new tests pass.
-4. Run full suite `python3 -m pytest -q` to confirm no regressions.
-5. Run `python3 -m ruff check tests/test_mysql.py` and ensure zero new linting issues are introduced (17 pre-existing errors in test_dnssec.py are out of scope).
+1. Run `python3 -m pytest tests/test_redis.py -q` (baseline: 92 passed).
+2. Add minimal targeted tests to `tests/test_redis.py` for the missing lines above.
+3. Run `python3 -m pytest -q tests/test_redis.py` to ensure new tests pass.
+4. Run `python3 -m pytest -q --cov=ethscan.redis --cov-report=term-missing` — redis.py should rise toward 100% (only unreachable defensive code, if any, remains).
+5. Run full suite `python3 -m pytest -q` to confirm no regressions (baseline: 3652 passed, 1 skipped).
+6. Run `python3 -m ruff check tests/test_redis.py` and ensure zero new linting issues are introduced.
 
 ## Constraints
-- No live network calls; mock external dependencies.
+- No live network calls; mock external dependencies via the `connector` parameter (follows existing `test_mysql.py`/`test_redis.py` patterns).
 - No modifications to source files under `ethscan/`.
-- Keep changes minimal and focused.
-- Follow existing test patterns.
+- Keep changes minimal and focused; follow existing test patterns.
 
 ## Evidence
-- mysql.py: 89% (219 stmts, 25 missing: 107, 111, 150, 152, 157, 160, 172, 184, 197, 213, 241-263, 424)
-- dnssec.py: 98% (392 stmts, 6 missing: lines 11-16 un-coverable without dnspython)
-- postgresql.py: 99% (1 missing: line 201 unreachable defensive code)
-- cve.py: 100% (324/324 statements)
-- Full suite green: 3630 passed, 1 skipped
+- `ethscan/redis.py`: 279 stmts, 21 missing, 92% cover.
+- `tests/test_redis.py`: 92 passed baseline.
+- `ethscan/mysql.py`: 99% (done, only unreachable lines 107/111/150 remain).
+- Full suite green: 3652 passed, 1 skipped.
