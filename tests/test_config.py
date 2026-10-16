@@ -246,3 +246,65 @@ def test_format_config_report_csv_escaping() -> None:
     }
     output = format_config_report_csv(config)
     assert '"Hello, World"' in output
+
+def test_find_config_file_oserror_on_is_file(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+
+    class BadPath:
+        def is_file(self):
+            raise OSError("boom")
+
+    monkeypatch.setattr(
+        "ethscan.config._candidate_paths",
+        lambda explicit=None: [BadPath()],
+    )
+    assert find_config_file() is None
+
+
+def test_load_config_oserror_on_open(tmp_path) -> None:
+    path = tmp_path / "ethscan.yaml"
+    path.write_text("defaults: {}\n")
+    import ethscan.config as cfg
+
+    original_open = __builtins__.open
+
+    def bad_open(*args, **kwargs):
+        raise OSError("nope")
+
+    __builtins__.open = bad_open  # type: ignore[assignment]
+    try:
+        config = cfg.load_config(str(path))
+        assert config["defaults"] == {}
+        assert config["commands"] == {}
+        assert "_path" in config
+        assert "_parse_error" in config
+        assert "Failed to read" in config["_parse_error"]
+    finally:
+        __builtins__.open = original_open  # type: ignore[assignment]
+
+
+def test_build_default_map_non_dict_overrides(tmp_path) -> None:
+    config = {
+        "defaults": {"timeout": 5.0},
+        "commands": {"scan": [1, 2, 3]},
+    }
+    dm = build_default_map(config, "scan")
+    assert dm == {"timeout": 5.0}
+
+
+def test_config_path_string_returns_none() -> None:
+    from ethscan.config import config_path_string
+
+    assert config_path_string({}) is None
+    assert config_path_string({"_path": 123}) is None
+    assert config_path_string({"_path": None}) is None
+
+
+def test_format_config_report_csv_includes_parse_error(tmp_path) -> None:
+    from ethscan.config import format_config_report_csv
+
+    config = {"_parse_error": "bad parse"}
+    output = format_config_report_csv(config)
+    assert "parse_error" in output
+    assert "bad parse" in output
