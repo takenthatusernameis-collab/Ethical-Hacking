@@ -1,28 +1,18 @@
-# Handoff to Next Agent
+What changed:
+- Added targeted tests to `tests/test_ldap.py` achieving 100% coverage for `ethscan/ldap.py`. Tests cover BER length/TLV edge cases, _parse_attribute/_parse_search_entry continue paths, _parse_ldap_message validation, _build_banner behavior, markdown referral, and _send_recv timeout/OSError/close-exception paths. Added internal helper imports; minor ruff cleanup applied.
 
-## What changed
-- `tests/test_hash.py`: added 4 targeted unit tests to close coverage gaps in `ethscan/hash.py`.
-- No files under `ethscan/` were modified.
+What was verified:
+- `python -m pytest tests/test_ldap.py` → 102 passed.
+- `python -m pytest --cov=ethscan.ldap --cov-report=term-missing` → 362/362 covered (100%).
+- `python -m pytest --cov=ethscan --cov-report=term-missing` → 12681/12481+ (124 missing overall; ldap now 100%).
+- Full suite → 3813 passed, 1 skipped.
+- `python -m ruff check tests/test_ldap.py` → passes.
 
-New coverage on `ethscan/hash.py` (96% → **98%**, 246 stmts, 5 missing):
-- `_compute_hash` final `raise ValueError` via `test_compute_hash_unsupported_algorithm_raises` (line 109).
-- `_compute_password_hash` salt+pepper HMAC-unsupported path via `test_compute_password_hash_salt_and_pepper_unsupported_algorithm_raises` (line 238).
-- `_infer_algorithm` empty digest via `test_infer_algorithm_empty_digest` (line 308).
-- `_infer_algorithm` multiple matches without md5 via `test_infer_algorithm_multiple_matches_without_md5` (line 320).
+What remains unresolved:
+- Overall 124 missing statements across several modules (e.g. snmp.py: 15, radix.py: 9, passwords.py: 4, resolve.py: 4, s3.py: 6, ssl.py: 4, service.py: 3, redis.py: 2, postgresql.py: 1, smtp.py: 1). No work done on these yet.
 
-## What was actually verified
-- `python -m pytest tests/test_hash.py -q` — 126 passed (122 baseline + 4 new).
-- `python -m pytest tests/test_hash.py -q --cov=ethscan.hash --cov-report=term-missing` — **98%** (was 96%), 246 stmts, 5 missing: 34-35, 60, 83, 226.
-- `python -m pytest -q` — full suite **3796 passed, 1 skipped**; no regressions (was 3792 passed, 1 skipped).
-- `python -m ruff check tests/test_hash.py` — no new violations (1 pre-existing I001 import-sort in the untouched import block).
+Which approaches failed and why:
+- None.
 
-## What remains unresolved
-- `ethscan/hash.py` lines 34-35, 60, 83: MD4 import-time code; MD4 is unavailable on this OpenSSL build, so these run only at import when `hashlib.new("md4")` succeeds. Uncoverable without modifying `ethscan/hash.py` (out of scope for a test-only task).
-- `ethscan/hash.py` line 226: `raise` inside the iterations+pepper branch of `_compute_password_hash`; `_compute_pbkdf2_hash` validates the hashlib name first, so the line is logically unreachable without modifying `ethscan/hash.py`.
-
-## Approaches that failed / were ruled out
-- Covering MD4 lines (34-35, 60, 83): requires OpenSSL md4 at import time; unavailable in this environment.
-- Covering line 226: unreachable given current code structure.
-
-## Next precise task (with evidence)
-Improve coverage on `ethscan/ldap.py` (96% coverage, 15 missing statements: lines 284, 340, 345, 364, 367-368, 377, 471-473, 475, 481-482, 493, 650) — add targeted unit tests to `tests/test_ldap.py` following existing conventions, without modifying files under `ethscan/`. Verification baseline: full suite 3796 passed, 1 skipped; `hash.py` now 98% (remaining misses are environment/dead-code only).
+Next task:
+- Select one module with the smallest missing set (e.g. passwords.py has 4 missing: 65,108,120,220) and add minimal targeted unit tests to `tests/test_passwords.py` without modifying `ethscan/`, preserving existing test conventions. Verify the targeted tests pass, ruff on modified test files passes, and full suite remains 3813 passed, 1 skipped.

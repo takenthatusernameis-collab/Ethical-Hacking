@@ -1,13 +1,11 @@
 # Next Task for Agent
 
 ## Status
-`ethscan/hash.py` coverage task DONE (96% → **98%**, 246 stmts, 5 missing). Added 4 targeted unit tests to `tests/test_hash.py` only; no files under `ethscan/` modified. Full suite 3796 passed, 1 skipped; ruff: no new violations.
+`ethscan/ldap.py` coverage task DONE (96% → 100%, 362 stmts, 0 missing). Added 16 targeted tests to `tests/test_ldap.py` covering BER edge cases, parsing branches, _send_recv paths, _build_banner, and markdown referral; ruff passes. Full suite 3813 passed, 1 skipped.
 
-Remaining 5 misses on hash.py are not coverable in this session without modifying ethscan/:
-- lines 34-35, 60, 83: MD4 import-time code, md4 unavailable on this OpenSSL build.
-- line 226: logically unreachable (`_compute_pbkdf2_hash` raises first for any algorithm without a hashlib name).
+Repository coverage: 12681 statements, 124 missing (99%). No obvious trivial coverage gap stands out immediately (memcached already 100%).
 
 ## Next precise task
-Improve coverage on `ethscan/ldap.py` (96% coverage, 15 missing statements: lines 284, 340, 345, 364, 367-368, 377, 471-473, 475, 481-482, 493, 650) — add targeted unit tests to `tests/test_ldap.py` following existing conventions, without modifying files under `ethscan/`.
+Identify a specific small module with uncovered lines (e.g. `ethscan/snmp.py` 15 missing, `ethscan/passwords.py` 4, `ethscan/radix.py` 9) and add minimal targeted unit tests to its corresponding test file following existing conventions, without modifying files under `ethscan/`. Prioritize the smallest missing set.
 
-Verification baseline: full suite `3796 passed, 1 skipped`; `tests/test_ldap.py` should pass and `ethscan/ldap.py` coverage should rise from 96%; `python -m ruff check tests/test_ldap.py` must introduce no new violations.
+Verification: tests for that module pass; ruff on modified test files passes; full suite remains green (3813 passed, 1 skipped).

@@ -1,4 +1,5 @@
 """Tests for the ethscan ldap module."""
+from __future__ import annotations
 
 import csv
 import io
@@ -9,7 +10,6 @@ import threading
 import pytest
 
 from ethscan.ldap import (
-    DEFAULT_LDAP_VERSION,
     DEFAULT_LDAPS_PORT,
     DEFAULT_PORT,
     FILTER_TAG_PRESENT,
@@ -18,19 +18,22 @@ from ethscan.ldap import (
     LDAP_TAG_SEARCH_REQUEST,
     LDAP_TAG_SEARCH_RESULT_DONE,
     LDAP_TAG_SEARCH_RESULT_ENTRY,
-    TAG_BOOLEAN,
     TAG_ENUMERATED,
     TAG_INTEGER,
     TAG_OCTET_STRING,
     TAG_SEQUENCE,
     TAG_SET,
+    _ber_length,
+    _ber_tlv,
+    _build_banner,
     _build_bind_request,
     _build_root_dse_search,
     _int_bytes,
-    _ber_length,
-    _ber_tlv,
     _normalize_target,
+    _parse_attribute,
+    _parse_ldap_message,
     _parse_ldap_response,
+    _parse_search_entry,
     _read_length,
     _read_tlv,
     _send_recv,
@@ -39,7 +42,6 @@ from ethscan.ldap import (
     format_ldap_report_markdown,
     run_ldap,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers to build well-formed LDAP responses
@@ -54,9 +56,9 @@ def _build_bind_response(
     result_code: int = 0,
     matched_dn: bytes = b"",
     diagnostic: bytes = b"",
-    version: int = None,
+    version: int | None = None,
     message_id: int = 1,
-    referral: bytes = None,
+    referral: bytes | None = None,
 ) -> bytes:
     """Build a raw LDAPMessage wrapping a BindResponse."""
     inner = b""
@@ -936,3 +938,164 @@ def test_format_ldap_report_csv_empty_root_dse() -> None:
     row = reader[1]
     assert row[11] == ""  # vendor_name
     assert row[15] == ""  # root_dse_attributes
+
+
+def test_read_length_indefinite_form_raises() -> None:
+    with pytest.raises(ValueError):
+        _read_length(b"\x80", 0)
+
+
+def test_read_length_long_form_count_zero_raises() -> None:
+    with pytest.raises(ValueError):
+        _read_length(b"\x80\x00", 0)
+
+
+def test_read_length_long_form_too_many_bytes_raises() -> None:
+    with pytest.raises(ValueError):
+        _read_length(b"\x85" + b"\x00\x00\x00\x00\x00", 0)
+
+
+def test_read_length_truncated_long_form_raises() -> None:
+    with pytest.raises(ValueError):
+        _read_length(b"\x82\x01", 0)
+
+
+
+
+
+
+
+
+def test_parse_attribute_malformed_raises() -> None:
+    # type tag not OCTET_STRING
+    bad = _ber_tlv(TAG_INTEGER, b"\x01")
+    with pytest.raises(ValueError):
+        _parse_attribute(bad)
+
+
+def test_parse_attribute_non_set_skipped() -> None:
+    content = _ber_tlv(TAG_OCTET_STRING, b"type") + _ber_tlv(TAG_INTEGER, b"\x01")
+    res = _parse_attribute(content)
+    assert res["type"] == "type"
+    assert res["values"] == []
+
+
+def test_parse_attribute_non_octet_value_skipped() -> None:
+    set_content = _ber_tlv(TAG_INTEGER, b"\x01")
+    content = _ber_tlv(TAG_OCTET_STRING, b"type") + _ber_tlv(TAG_SET, set_content)
+    res = _parse_attribute(content)
+    assert res["values"] == []
+
+
+def test_parse_search_entry_non_sequence_skipped() -> None:
+    dn = _ber_tlv(TAG_OCTET_STRING, b"dc=ex")
+    bad = _ber_tlv(TAG_OCTET_STRING, b"bad")
+    content = dn + bad
+    res = _parse_search_entry(content)
+    assert res["dn"] == "dc=ex"
+    assert res["attributes"] == {}
+
+
+def test_parse_search_entry_malformed_attribute_skipped() -> None:
+    dn = _ber_tlv(TAG_OCTET_STRING, b"dc=ex")
+    bad_attr = _ber_tlv(TAG_INTEGER, b"\x01")
+    attr_seq = _ber_tlv(TAG_SEQUENCE, bad_attr)
+    content = dn + attr_seq
+    res = _parse_search_entry(content)
+    assert res["attributes"] == {}
+
+
+def test_parse_ldap_message_missing_message_id() -> None:
+
+    # messageID tag is OCTET_STRING, not INTEGER
+    content = _ber_tlv(TAG_OCTET_STRING, b"bad") + _ber_tlv(TAG_INTEGER, b"\x01")
+    result = {"entries": []}
+    with pytest.raises(ValueError, match="missing messageID"):
+        _parse_ldap_message(content, result)
+
+
+def test_build_banner_inaccessible_returns_none() -> None:
+    assert _build_banner({"accessible": False}) is None
+
+
+def test_build_banner_accessible_basic() -> None:
+    assert _build_banner({"accessible": True}) == "LDAPv3; anonymous bind not allowed"
+
+
+def test_build_banner_with_version_and_vendor() -> None:
+    res = _build_banner({"accessible": True, "ldap_version": 2})
+    assert "LDAPv2" in res
+    res = _build_banner({"accessible": True, "root_dse": {"vendor": ["VendorX"]}})
+    assert "vendor=VendorX" in res
+
+
+def test_format_ldap_report_markdown_with_referral() -> None:
+    results = _mock_results()
+    results["referral"] = "ldap://ref.example.com"
+    report = format_ldap_report_markdown(results)
+    assert "**Referral:** ldap://ref.example.com" in report
+
+
+def test_send_recv_timeout() -> None:
+    import socket
+    import threading
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind(("127.0.0.1", 0))
+    s.listen(1)
+    port = s.getsockname()[1]
+
+    def hold():
+        try:
+            c, _ = s.accept()
+            import time
+
+            time.sleep(5)
+            c.close()
+        except (OSError, RuntimeError):
+            pass
+
+    t = threading.Thread(target=hold, daemon=True)
+    t.start()
+    try:
+        data, err = _send_recv("127.0.0.1", port, b"req", 0.05)
+        assert data is None
+        assert err == "timeout"
+    finally:
+        t.join(timeout=1)
+        s.close()
+
+
+def test_send_recv_oserror() -> None:
+    data, err = _send_recv("127.0.0.1", 1, b"req", 0.1)
+    assert data is None
+    assert err is not None
+
+
+def test_send_recv_close_exception() -> None:
+    import ethscan.ldap as ldap_mod
+
+    class BadSock:
+        def settimeout(self, t):
+            pass
+
+        def connect(self, a):
+            pass
+
+        def sendall(self, b):
+            pass
+
+        def recv(self, n):
+            return b"abc"
+
+        def close(self):
+            raise RuntimeError("fail")
+
+    orig = ldap_mod.socket.socket
+    try:
+        ldap_mod.socket.socket = lambda *a, **k: BadSock()
+        data, err = _send_recv("h", 1, b"r", 1.0)
+        assert data == b"abc"
+        assert err is None
+    finally:
+        ldap_mod.socket.socket = orig
