@@ -1,25 +1,26 @@
 # Next Task for Agent
 
 ## Context
-- Current state: Full test suite 3585 passed, 1 skipped. No source changes made.
-- smtp.py coverage improved from 88% to 99% (+targeted tests in tests/test_smtp.py). Only line 222 remains uncovered (edge case in connection error path).
-- validate.py is at 96% coverage with 7 missing lines: 59-60, 76, 271, 296, 309, 339.
+- validate.py coverage improved to 100% with targeted tests in tests/test_validate.py (no source changes).
+- Full suite: 3596 passed, 1 skipped (baseline maintained, all green).
+- Next focus: continue improving coverage for other modules. Review current state to pick the next lowest-coverage/high-value module.
 
 ## Task
-Add targeted unit tests to `tests/test_validate.py` to cover the missing lines in `ethscan/validate.py` (lines 59-60, 76, 271, 296, 309, 339). Do NOT modify source code in `ethscan/validate.py`. Focus on exercising specific branches/edge cases that are currently uncovered.
+Identify the next module with meaningful coverage gaps (e.g., urlcheck.py, vuln.py, validate is now 100%; check term-missing for all modules) and add targeted unit tests in its test file without modifying source. Focus on uncovered branches/edge cases.
 
 ## Verification
-1. Run `python3 -m pytest -q tests/test_validate.py` to ensure new tests pass.
-2. Run `python3 -m pytest -q --cov=ethscan.validate --cov-report=term-missing` and confirm coverage increases toward 100% (or as much as achievable without source changes).
-3. Run full suite `python3 -m pytest -q` to confirm no regressions (must remain green).
-4. Run `ruff check tests/test_validate.py` and fix any linting issues.
+1. Run `python3 -m pytest -q --cov=ethscan --cov-report=term-missing` to see current coverage per module.
+2. Pick a module with < 100% and add minimal targeted tests to improve coverage.
+3. Run `python3 -m pytest -q tests/test_<chosen>.py` to ensure new tests pass.
+4. Run full suite `python3 -m pytest -q` to confirm no regressions.
+5. Run `python3 -m ruff check tests/test_<chosen>.py` and fix any linting issues.
 
 ## Constraints
-- No live network calls; mock external dependencies where needed.
+- No live network calls; mock external dependencies.
 - No modifications to source files under `ethscan/`.
-- Keep changes minimal and focused on the missing branches.
-- Follow existing test patterns and style in the codebase.
+- Keep changes minimal and focused.
+- Follow existing test patterns.
 
 ## Evidence
-- Current validate.py coverage: 96% (7 missing lines as listed above)
-- Full suite: 3585 passed, 1 skipped (baseline)
+- validate.py: 100% (199/199 statements)
+- Full suite green: 3596 passed, 1 skipped
