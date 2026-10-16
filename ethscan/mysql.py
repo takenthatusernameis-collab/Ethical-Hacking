@@ -247,9 +247,16 @@ def _parse_handshake(data: bytes) -> Dict[str, Any]:
     # Auth plugin name (null-terminated) - optional
     auth_plugin_name = ""
     # Try to read remaining as plugin name
-    remaining = payload[pos + salt2_max:] if pos + salt2_max < len(payload) else b""
+    # If salt2 was terminated by null inside the slice, the plugin name starts at pos + (index of null + 1)
+    # But we need to be precise relative to pos
+    salt2_full_slice = payload[pos:pos + salt2_max] if salt2_max > 0 else b""
+    null_in_slice = salt2_full_slice.find(b"\x00")
+    if null_in_slice != -1:
+        plugin_start = pos + null_in_slice + 1
+    else:
+        plugin_start = pos + salt2_max
+    remaining = payload[plugin_start:] if plugin_start < len(payload) else b""
     if remaining:
-        # Skip null if present after salt2
         start_ap = 0
         if remaining.startswith(b"\x00"):
             start_ap = 1
