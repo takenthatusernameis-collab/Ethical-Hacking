@@ -5,6 +5,7 @@ import io
 import json
 import socket
 import struct
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -272,6 +273,32 @@ def test_send_recv_oserror() -> None:
     assert err == "Network is unreachable"
 
 
+def test_send_recv_real_socket_success() -> None:
+    """Non-connector path: socket.sendto/recvfrom success returns data, None."""
+    with patch("ethscan.ntp.socket.socket") as mock_socket:
+        fake_sock = MagicMock()
+        fake_sock.recvfrom.return_value = (b"\x10" * 48, ("127.0.0.1", 123))
+        mock_socket.return_value = fake_sock
+        data, err = _send_recv("127.0.0.1", 123, b"\x00", 1.0)
+    assert data == b"\x10" * 48
+    assert err is None
+    fake_sock.sendto.assert_called_once()
+    fake_sock.recvfrom.assert_called_once_with(65536)
+    fake_sock.close.assert_called_once()
+
+
+def test_send_recv_real_socket_oserror() -> None:
+    """Non-connector path: recvfrom OSError is caught and reported."""
+    with patch("ethscan.ntp.socket.socket") as mock_socket:
+        fake_sock = MagicMock()
+        fake_sock.recvfrom.side_effect = OSError("boom")
+        mock_socket.return_value = fake_sock
+        data, err = _send_recv("127.0.0.1", 123, b"\x00", 1.0)
+    assert data is None
+    assert err == "boom"
+    fake_sock.close.assert_called_once()
+
+
 # ---------------------------------------------------------------------------
 # run_ntp - against injectable fake connector
 # ---------------------------------------------------------------------------
@@ -344,6 +371,19 @@ def test_run_ntp_time_connection_error() -> None:
     result = run_ntp("127.0.0.1", timeout=1.0, connector=connector)
     assert result["error"] is not None
     assert "time request failed" in result["error"]
+
+
+def test_run_ntp_time_response_parse_error() -> None:
+    """_parse_time_response returns an error dict for a too-short packet."""
+    def connector(host, port, request, timeout):
+        if request[0] & 0x07 == 3:
+            return b"\x00" * 10, None  # too short for a 48-byte time packet
+        return None, "unexpected request"
+
+    result = run_ntp("ntp.example.com", timeout=1.0, connector=connector)
+    assert result["error"] == "Response too short for NTP time packet"
+    assert result["is_reflector"] is False
+    assert result["monlist_response"] is None
 
 
 def test_run_ntp_monlist_timeout() -> None:
@@ -762,3 +802,69 @@ def test_format_ntp_report_csv_multiple_peers() -> None:
     assert reader[3][7] == "1235"
     assert reader[3][8] == "4"
     assert reader[3][9] == "3"
+
+
+def test_format_ntp_report_markdown_time_request_error() -> None:
+    data = {
+        "target": "ntp.example.com",
+        "host": "ntp.example.com",
+        "port": 123,
+        "time_response": {"error": "Request timed out"},
+        "monlist_response": None,
+        "is_reflector": False,
+        "amplification_factor": None,
+        "error": None,
+    }
+    output = format_ntp_report_markdown(data)
+    assert "Time Request Error" in output
+    assert "Request timed out" in output
+
+
+def test_format_ntp_report_markdown_with_timestamps() -> None:
+    data = {
+        "target": "ntp.example.com",
+        "host": "ntp.example.com",
+        "port": 123,
+        "time_response": {
+            "leap_indicator": "no warning",
+            "version": 4,
+            "mode": 4,
+            "stratum": 2,
+            "poll": 4,
+            "precision": -20,
+            "root_delay_ms": 250.0,
+            "root_dispersion_ms": 125.0,
+            "reference_id": "0x0a0b0c0d",
+            "reference_timestamp": 1700000000,
+            "originate_timestamp": None,
+            "receive_timestamp": None,
+            "transmit_timestamp": None,
+        },
+        "monlist_response": None,
+        "is_reflector": False,
+        "amplification_factor": None,
+        "error": None,
+    }
+    output = format_ntp_report_markdown(data)
+    assert "Reference Timestamp" in output
+    assert "N/A" in output
+
+
+def test_format_ntp_report_markdown_monlist_error() -> None:
+    data = {
+        "target": "ntp.example.com",
+        "host": "ntp.example.com",
+        "port": 123,
+        "time_response": {
+            "leap_indicator": "no warning",
+            "version": 4,
+            "mode": 4,
+            "stratum": 2,
+        },
+        "monlist_response": {"error": "monlist request failed"},
+        "is_reflector": False,
+        "amplification_factor": None,
+        "error": None,
+    }
+    output = format_ntp_report_markdown(data)
+    assert "monlist request failed" in output
