@@ -1,35 +1,23 @@
 # Handoff to Next Agent
 
 ## What changed
-- Added 15 tests to `tests/test_dnsbrute.py` covering previously-uncovered `ethscan/dnsbrute.py` lines:
-  - `test_parse_dns_name_empty_data_breaks_on_offset_check` — line 103 (`offset >= len(data)` break).
-  - `test_parse_dns_name_truncated_compression_pointer` — lines 110-111.
-  - `test_parse_dns_name_invalid_length_byte` — lines 123-124.
-  - `test_parse_dns_name_label_past_end_of_data` — line 127.
-  - `test_parse_dns_response_parses_question_section` — lines 182-183.
-  - `test_parse_dns_response_truncated_answer_record` — line 189.
-  - `test_dnsbrute_dns_available_module_imports` — module-level `import dns.resolver`/`import dns.exception`, `DNS_AVAILABLE = True` (lines 16-17).
-  - `test_axfr_dnspython_success_path` — `_axfr_dnspython` success path: `import dns.zone`, `dns.query.xfr`, `dns.zone.from_xfr`, record building (lines 303, 307-323).
-  - `test_axfr_dnspython_form_error_and_oserror` — `_axfr_dnspython` FormError and generic exception branches (lines 310-313).
-  - `test_resolve_label_uses_custom_resolver` — `_resolve_label` custom resolver + dnspython branch (lines 374-391).
-  - `test_resolve_label_custom_resolver_swallows_dns_errors` — DNSException swallow in A/AAAA lookups (lines 381-382, 390-391).
-  - `test_run_dnsbrute_recursive_max_depth_zero_hits_guard` — recursion depth guard (line 448).
-  - `test_run_dnsbrute_recursive_depth_two_failure` — failed depth-2 AXFR entry with error and no records.
-  - `test_format_dnsbrute_report_markdown_recursive_entry_with_error` — markdown error entry (line 596).
-  - `test_format_dnsbrute_report_csv_recursive_entry_no_records` — CSV empty-records recursive row (line 719).
-- Tests use fake-dns injection into `sys.modules` + `reload(ethscan.dnsbrute)` (same pattern as `test_subtake.py`), restoring stdlib-only state in `finally`.
+- Added 1 test to `tests/test_ssl.py` covering previously-uncovered `ethscan/ssl.py` lines:
+  - `test_parse_cert_unhashable_keys_hit_except_branches` — subject/issuer `except Exception: continue` branches in `_parse_cert` (lines 75-76, 82-88) via unhashable dict keys.
+- Working tree also contains unstaged (pre-existing before this session) additions to `tests/test_web.py` (+8 tests: `test_fetch_headers_http_error_with_bad_headers`, `test_check_ssl_cert_*` x7); they pass and were included in the green run below. Nothing in this session touches `ethscan/` source.
 
 ## What was actually verified
-- `tests/test_dnsbrute.py`: 88 passed, 1 skipped (was ~75; +15 tests).
-- Coverage on `ethscan/dnsbrute.py`: 86% -> **100%** (328 stmts, 0 missing).
-- Full suite: `python -m pytest -q` -> **3532 passed, 1 skipped** (was 3517 passed, 1 skipped; +15 tests). Green, no regressions.
-- `python -m ruff check tests/test_dnsbrute.py` -> 11 errors, all pre-existing on the unmodified file; no new lint errors.
+- `tests/test_ssl.py`: 49 passed.
+- `python -m pytest -q --cov=ethscan` -> **3541 passed, 1 skipped** (was 3540; +1 test). Green, no regressions.
+- Coverage on `ethscan/ssl.py`: 96% -> **100%** (201 stmts, 0 missing; previously missing 75-76, 82-88).
+- `python -m ruff check tests/test_ssl.py` -> 9 errors, all pre-existing on the unmodified file; no new lint errors.
+- `dnspython` remains NOT installed and NOT in `requirements.txt` (installing it globally breaks 10 pre-existing tests — see earlier HANDOFF_NEXT.md "Approaches that failed").
 
 ## What remains unresolved
-- Nothing required. Codebase is complete and green (54 commands, JSON/Markdown/CSV output, unit + CLI integration tests).
+- Unstaged working-tree changes: `tests/test_web.py` (+8 tests, predates this session) and `tests/test_ssl.py` (+1 test, this session). Not committed (no commit requested).
 
 ## Approaches that failed / were ruled out
-- Installing `dnspython` globally: broke 10 pre-existing tests across `test_dns.py`, `test_dnsbrute.py`, `test_dnssec.py`, `test_resolve.py`, `test_subdomains.py`. Root cause: tests rip `sys.modules["dns"]` out and reload modules; with real dnspython installed, cached `dns.*` submodules detach from a freshly reimported `dns` package. Reverting the install and covering the branches via fake-dns injection achieved 100% coverage with zero regressions. Do NOT reinstall dnspython globally.
+- Installing `dnspython` globally: broke 10 pre-existing tests across `test_dns.py`, `test_dnsbrute.py`, `test_dnssec.py`, `test_resolve.py`, `test_subdomains.py`. Do NOT reinstall dnspython globally.
 
 ## Next precise task (with evidence)
-- None required — codebase is complete and green. Keep coverage current when adding commands; run `python -m pytest -q` to confirm green; all CLI/network-dependent operations must use mocks; no live network. `dnspython` remains an optional `*_AVAILABLE` dependency (not installed, not in `requirements.txt`).
+- Coverage next target: `ethscan/whois.py` — 99% with only 2 missing lines (209, 242) per `python -m pytest -q --cov=ethscan --cov-report=term-missing`. Add test(s) to `tests/test_whois.py` to cover those lines, run `python -m pytest -q` (expect ~3542 passed, 1 skipped) and `python -m pytest -q --cov=ethscan` to confirm whois.py 100%; lint with `python -m ruff check tests/test_whois.py` (allow only pre-existing errors). No live network; mock socket/DNS dependencies.
+- Alternative bounded target: `ethscan/config.py` (91%, missing lines 91-92, 122-123, 182, 188-191, 269).

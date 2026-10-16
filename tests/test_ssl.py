@@ -549,3 +549,17 @@ def test_format_ssl_markdown_with_cert_fields():
     assert 'Subject' in out or 'Subject:' in out
     assert 'Key Size' in out
     assert 'a' in out
+
+
+def test_parse_cert_unhashable_keys_hit_except_branches() -> None:
+    """Unhashable subject/issuer keys raise in dict assignment, hitting except branches."""
+    from ethscan import ssl as _sslmod
+
+    cert = {
+        "subject": ((["unhashable"], "value"),),
+        "issuer": (((["x"],), "v"), (["y"], "w")),
+    }
+    parsed = _sslmod._parse_cert(cert)
+    assert isinstance(parsed, dict)
+    assert parsed["subject_dict"] == {}
+    assert parsed["issuer_dict"] == {}

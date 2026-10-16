@@ -663,3 +663,300 @@ def test_format_web_report_csv_ssl_error() -> None:
     assert "ssl_field,value" in output
     assert "error,Connection failed" in output
     assert "valid,false" in output
+
+
+def test_fetch_headers_http_error_with_bad_headers() -> None:
+    """Test fetch_headers handles HTTPError when headers access fails."""
+    from io import BytesIO
+    import urllib.error
+
+    class BadErr(urllib.error.HTTPError):
+        def __init__(self) -> None:
+            try:
+                super().__init__('http://x', 500, 'err', None, None)
+            except Exception:
+                pass
+
+        @property
+        def headers(self):  # type: ignore[override]
+            raise Exception('bad')
+
+    with patch('urllib.request.urlopen', side_effect=BadErr()):
+        result = fetch_headers('http://x')
+        assert result == {}
+
+
+def test_check_ssl_cert_bytes_decode_success() -> None:
+    """Test SSL cert parsing when binary cert decodes successfully."""
+    from unittest.mock import patch, MagicMock
+
+    class FakeSSock:
+        def getpeercert(self, binary_form=False):
+            if binary_form:
+                return b'goodbytes'
+            return None
+
+        def get_verified_chain(self):
+            return []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return None
+
+    class FakeConn:
+        def __enter__(self):
+            return MagicMock()
+
+        def __exit__(self, *a):
+            return None
+
+    ctx = MagicMock()
+    ctx.wrap_socket.return_value = FakeSSock()
+    decoded = {
+        'subject': ((('commonName', 'decoded.com'),),),
+        'issuer': ((('commonName', 'ca'),),),
+        'notAfter': 'Dec 31 23:59:59 2099 GMT',
+    }
+    with patch('socket.create_connection', return_value=FakeConn()), \
+         patch('ssl.create_default_context', return_value=ctx), \
+         patch('ssl.DER_cert_to_PEM_cert', return_value='PEM'), \
+         patch('ssl._ssl._test_decode_cert', return_value=decoded), \
+         patch('tempfile.NamedTemporaryFile') as mtmp, \
+         patch('os.unlink'):
+        mtmp.return_value.__enter__.return_value.write = lambda s: None
+        mtmp.return_value.__enter__.return_value.name = '/tmp/fake.pem'
+        result = check_ssl_configuration('x.com', 443, 5.0)
+        assert result['not_after'] == 'Dec 31 23:59:59 2099 GMT'
+
+
+def test_check_ssl_cert_bytes_decode_fallback() -> None:
+    """Test SSL cert bytes decode fails then falls back to non-binary."""
+    from unittest.mock import patch, MagicMock
+
+    class FakeSSock:
+        def getpeercert(self, binary_form=False):
+            if binary_form:
+                return b'goodbytes'
+            return {
+                'subject': ((('commonName', 'fallback.com'),),),
+                'issuer': ((('commonName', 'ca'),),),
+                'notAfter': 'Dec 31 23:59:59 2099 GMT',
+            }
+
+        def get_verified_chain(self):
+            return []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return None
+
+    class FakeConn:
+        def __enter__(self):
+            return MagicMock()
+
+        def __exit__(self, *a):
+            return None
+
+    ctx = MagicMock()
+    ctx.wrap_socket.return_value = FakeSSock()
+    with patch('socket.create_connection', return_value=FakeConn()), \
+         patch('ssl.create_default_context', return_value=ctx), \
+         patch('ssl.DER_cert_to_PEM_cert', return_value='PEM'), \
+         patch('ssl._ssl._test_decode_cert', side_effect=Exception('decode fail')):
+        result = check_ssl_configuration('x.com', 443, 5.0)
+        assert result['not_after'] == 'Dec 31 23:59:59 2099 GMT'
+
+
+def test_check_ssl_cert_bytes_decode_bytes_fails_then_fallback() -> None:
+    """Test bytes path where DER decode raises, fallback to non-binary."""
+    from unittest.mock import patch, MagicMock
+
+    class FakeSSock:
+        def getpeercert(self, binary_form=False):
+            if binary_form:
+                return b'badbytes'
+            return {
+                'subject': ((('commonName', 'fb.com'),),),
+                'issuer': ((('commonName', 'ca'),),),
+                'notAfter': 'Dec 31 23:59:59 2099 GMT',
+            }
+
+        def get_verified_chain(self):
+            return []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return None
+
+    class FakeConn:
+        def __enter__(self):
+            return MagicMock()
+
+        def __exit__(self, *a):
+            return None
+
+    ctx = MagicMock()
+    ctx.wrap_socket.return_value = FakeSSock()
+    with patch('socket.create_connection', return_value=FakeConn()), \
+         patch('ssl.create_default_context', return_value=ctx), \
+         patch('ssl.DER_cert_to_PEM_cert', side_effect=Exception('bad')):
+        result = check_ssl_configuration('x.com', 443, 5.0)
+        assert result['not_after'] == 'Dec 31 23:59:59 2099 GMT'
+
+
+def test_check_ssl_cert_bin_not_bytes_goes_to_else() -> None:
+    """Test when cert_bin is not bytes/dict, goes to else branch."""
+    from unittest.mock import patch, MagicMock
+
+    class FakeSSock:
+        def getpeercert(self, binary_form=False):
+            if binary_form:
+                return 'notbytes'
+            return {
+                'subject': ((('commonName', 'x.com'),),),
+                'issuer': ((('commonName', 'ca'),),),
+                'notAfter': 'Dec 31 23:59:59 2099 GMT',
+            }
+
+        def get_verified_chain(self):
+            return []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return None
+
+    class FakeConn:
+        def __enter__(self):
+            return MagicMock()
+
+        def __exit__(self, *a):
+            return None
+
+    ctx = MagicMock()
+    ctx.wrap_socket.return_value = FakeSSock()
+    with patch('socket.create_connection', return_value=FakeConn()), \
+         patch('ssl.create_default_context', return_value=ctx):
+        result = check_ssl_configuration('x.com', 443, 5.0)
+        assert result['not_after'] == 'Dec 31 23:59:59 2099 GMT'
+
+
+def test_check_ssl_cert_bin_raises_fallback() -> None:
+    """Test getpeercert(True) raises, fallback to non-binary."""
+    from unittest.mock import patch, MagicMock
+
+    class FakeSSock:
+        def getpeercert(self, binary_form=False):
+            if binary_form:
+                raise Exception('boom')
+            return {
+                'subject': ((('commonName', 'ok.com'),),),
+                'issuer': ((('commonName', 'ca'),),),
+                'notAfter': 'Dec 31 23:59:59 2099 GMT',
+            }
+
+        def get_verified_chain(self):
+            return []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return None
+
+    class FakeConn:
+        def __enter__(self):
+            return MagicMock()
+
+        def __exit__(self, *a):
+            return None
+
+    ctx = MagicMock()
+    ctx.wrap_socket.return_value = FakeSSock()
+    with patch('socket.create_connection', return_value=FakeConn()), \
+         patch('ssl.create_default_context', return_value=ctx):
+        result = check_ssl_configuration('x.com', 443, 5.0)
+        assert result['not_after'] == 'Dec 31 23:59:59 2099 GMT'
+
+
+def test_check_ssl_cert_bin_is_dict() -> None:
+    """Test when getpeercert(True) returns dict directly."""
+    from unittest.mock import patch, MagicMock
+
+    class FakeSSock:
+        def getpeercert(self, binary_form=False):
+            if binary_form:
+                return {
+                    'subject': ((('commonName', 'dict.com'),),),
+                    'issuer': ((('commonName', 'ca'),),),
+                    'notAfter': 'Dec 31 23:59:59 2099 GMT',
+                }
+            return None
+
+        def get_verified_chain(self):
+            return []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return None
+
+    class FakeConn:
+        def __enter__(self):
+            return MagicMock()
+
+        def __exit__(self, *a):
+            return None
+
+    ctx = MagicMock()
+    ctx.wrap_socket.return_value = FakeSSock()
+    with patch('socket.create_connection', return_value=FakeConn()), \
+         patch('ssl.create_default_context', return_value=ctx):
+        result = check_ssl_configuration('x.com', 443, 5.0)
+        assert result['not_after'] == 'Dec 31 23:59:59 2099 GMT'
+
+
+def test_check_ssl_cert_bin_unexpected_type_fallback() -> None:
+    """Test unexpected cert_bin type falls back."""
+    from unittest.mock import patch, MagicMock
+
+    class FakeSSock:
+        def getpeercert(self, binary_form=False):
+            if binary_form:
+                return 123
+            return {
+                'subject': ((('commonName', 'x.com'),),),
+                'issuer': ((('commonName', 'ca'),),),
+                'notAfter': 'Dec 31 23:59:59 2099 GMT',
+            }
+
+        def get_verified_chain(self):
+            return []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return None
+
+    class FakeConn:
+        def __enter__(self):
+            return MagicMock()
+
+        def __exit__(self, *a):
+            return None
+
+    ctx = MagicMock()
+    ctx.wrap_socket.return_value = FakeSSock()
+    with patch('socket.create_connection', return_value=FakeConn()), \
+         patch('ssl.create_default_context', return_value=ctx):
+        result = check_ssl_configuration('x.com', 443, 5.0)
+        assert result['not_after'] == 'Dec 31 23:59:59 2099 GMT'
