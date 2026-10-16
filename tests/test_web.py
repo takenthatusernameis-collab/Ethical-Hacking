@@ -960,3 +960,143 @@ def test_check_ssl_cert_bin_unexpected_type_fallback() -> None:
          patch('ssl.create_default_context', return_value=ctx):
         result = check_ssl_configuration('x.com', 443, 5.0)
         assert result['not_after'] == 'Dec 31 23:59:59 2099 GMT'
+
+
+def test_check_ssl_cert_unlink_raises() -> None:
+    """Test os.unlink raising is swallowed after cert decode."""
+
+    class FakeSSock:
+        def getpeercert(self, binary_form=False):
+            if binary_form:
+                return b'goodbytes'
+            return None
+
+        def get_verified_chain(self):
+            return []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return None
+
+    class FakeConn:
+        def __enter__(self):
+            return MagicMock()
+
+        def __exit__(self, *a):
+            return None
+
+    ctx = MagicMock()
+    ctx.wrap_socket.return_value = FakeSSock()
+    decoded = {
+        'subject': ((('commonName', 'decoded.com'),),),
+        'issuer': ((('commonName', 'ca'),),),
+        'notAfter': 'Dec 31 23:59:59 2099 GMT',
+    }
+    with patch('socket.create_connection', return_value=FakeConn()), \
+         patch('ssl.create_default_context', return_value=ctx), \
+         patch('ssl.DER_cert_to_PEM_cert', return_value='PEM'), \
+         patch('ssl._ssl._test_decode_cert', return_value=decoded), \
+         patch('tempfile.NamedTemporaryFile') as mtmp, \
+         patch('os.unlink', side_effect=OSError('unlink fail')):
+        mtmp.return_value.__enter__.return_value.write = lambda s: None
+        mtmp.return_value.__enter__.return_value.name = '/tmp/fake.pem'
+        result = check_ssl_configuration('x.com', 443, 5.0)
+        assert result['not_after'] == 'Dec 31 23:59:59 2099 GMT'
+
+
+def test_check_ssl_cert_both_peercert_calls_raise() -> None:
+    """Test getpeercert(True) and getpeercert() both raise -> cert None."""
+
+    class FakeSSock:
+        def getpeercert(self, binary_form=False):
+            raise RuntimeError('peercert boom')
+
+        def get_verified_chain(self):
+            return []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return None
+
+    class FakeConn:
+        def __enter__(self):
+            return MagicMock()
+
+        def __exit__(self, *a):
+            return None
+
+    ctx = MagicMock()
+    ctx.wrap_socket.return_value = FakeSSock()
+    with patch('socket.create_connection', return_value=FakeConn()), \
+         patch('ssl.create_default_context', return_value=ctx):
+        result = check_ssl_configuration('x.com', 443, 5.0)
+        assert result['subject'] is None
+        assert result['issuer'] is None
+        assert result['not_after'] is None
+        assert result['valid'] is False
+
+
+def test_check_ssl_cert_invalid_date_format() -> None:
+    """Test notAfter with unparseable date sets valid False."""
+
+    class FakeSSock:
+        def getpeercert(self, binary_form=False):
+            if binary_form:
+                return b'goodbytes'
+            return {
+                'subject': ((('commonName', 'x.com'),),),
+                'issuer': ((('commonName', 'ca'),),),
+                'notAfter': 'not-a-date',
+            }
+
+        def get_verified_chain(self):
+            return []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return None
+
+    class FakeConn:
+        def __enter__(self):
+            return MagicMock()
+
+        def __exit__(self, *a):
+            return None
+
+    ctx = MagicMock()
+    ctx.wrap_socket.return_value = FakeSSock()
+    with patch('socket.create_connection', return_value=FakeConn()), \
+         patch('ssl.create_default_context', return_value=ctx), \
+         patch('ssl.DER_cert_to_PEM_cert', return_value='PEM'), \
+         patch('ssl._ssl._test_decode_cert', side_effect=Exception('decode fail')):
+        result = check_ssl_configuration('x.com', 443, 5.0)
+        assert result['not_after'] == 'not-a-date'
+        assert result['valid'] is False
+
+
+def test_run_web_checks_ssl_on_http() -> None:
+    """Test ssl check on a non-HTTPS target returns error branch."""
+    results = run_web_checks('http://example.com', ['ssl'], timeout=1.0)
+    assert 'ssl' in results
+    assert results['ssl']['valid'] is False
+    assert results['ssl']['error'] == 'Target is not HTTPS'
+
+
+def test_format_web_report_markdown_with_notes() -> None:
+    """Test notes section renders in markdown report."""
+    data = {
+        'target': 'https://example.com',
+        'host': 'example.com',
+        'port': 443,
+        'secure': True,
+        'notes': 'Some extra context',
+    }
+    output = format_web_report_markdown(data)
+    assert '## Notes' in output
+    assert 'Some extra context' in output
