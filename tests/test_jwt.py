@@ -10,6 +10,8 @@ from ethscan.jwt import (
     STANDARD_CLAIMS,
     format_jwt_report_csv,
     format_jwt_report_json,
+    _decode_json_segment,
+    _format_value,
     format_jwt_report_markdown,
     parse_jwt,
     run_jwt,
@@ -393,3 +395,42 @@ def test_format_jwt_report_csv_escaping() -> None:
     output = format_jwt_report_csv(data)
     assert '"Hello, World"' in output
     assert '"Issue with, comma"' in output
+
+
+def test_format_value_list_dict() -> None:
+    assert _format_value({"a": 1}) == '{"a": 1}'
+    assert _format_value([1, 2]) == '[1, 2]'
+    assert _format_value(5) == "5"
+
+
+def test_markdown_header_others_and_nbf() -> None:
+    token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEiLCJ4LWZvbyI6MX0.eyJzdWIiOiIxMjMiLCJuYmYiOjEwMC4wLCJleHAiOjIwMC4wfQ.sig"
+    data = run_jwt(token, now=150.0)
+    md = format_jwt_report_markdown(data)
+    assert "x-foo" in md
+    assert "Not Before (nbf)" in md
+
+
+def test_b64url_decode_bad_segment() -> None:
+    assert _decode_json_segment("@@@notbase64@@@") is None
+    assert _decode_json_segment("AAAA") is None  # valid b64 but not JSON object
+
+
+def test_csv_error_and_other_claims() -> None:
+    data = {
+        "valid_structure": False,
+        "segment_count": 2,
+        "has_signature": False,
+        "token_length": 5,
+        "algorithm": None,
+        "algorithm_type": None,
+        "token_type": None,
+        "error": "boom",
+        "standard_claims": {},
+        "other_claims": {"foo": "bar"},
+        "findings": [],
+    }
+    csv_out = format_jwt_report_csv(data)
+    assert "error,boom" in csv_out
+    assert "other_claim,value" in csv_out
+    assert "foo,bar" in csv_out
