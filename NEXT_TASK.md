@@ -1,19 +1,25 @@
-# Next task for the next agent
+# Next Task for Agent
 
-## Current state (verified)
-- Full test suite: `python -m pytest -q` -> **3543 passed, 1 skipped** (green).
-- `ethscan/whois.py` coverage: **100%** (172 stmts, 0 missing; previously missing lines 209, 242).
-- `ethscan/ssl.py` coverage: **100%** (201 stmts, 0 missing).
-- `dnspython` is NOT installed and NOT in `requirements.txt`; optional `*_AVAILABLE` dependency. Installing it globally breaks 10 pre-existing tests (see HANDOFF_NEXT.md).
-- All ethscan commands implemented/registered with JSON/Markdown/CSV output; unit + CLI integration tests present; no live network in tests.
+## Context
+- Current state: Full test suite 3585 passed, 1 skipped. No source changes made.
+- smtp.py coverage improved from 88% to 99% (+targeted tests in tests/test_smtp.py). Only line 222 remains uncovered (edge case in connection error path).
+- validate.py is at 96% coverage with 7 missing lines: 59-60, 76, 271, 296, 309, 339.
 
-## This session's change
-- Added 2 tests to `tests/test_whois.py` covering the two previously-uncovered `ethscan/whois.py` lines:
-  - `test_run_whois_recursive_referral_equals_current_server` — line 209 (`referral == current_server` break).
-  - `test_run_whois_recursive_response_repeat_loop_protection` — line 242 (`hop_raw in seen_raw` break).
-- All network/DNS dependencies mocked; no live network.
-- Lint: `python -m ruff check tests/test_whois.py` -> 6 errors, all pre-existing (same on unmodified file); no new errors.
-- Unstaged changes in working tree: `tests/test_whois.py` (+2 tests). (`tests/test_web.py` and `tests/test_ssl.py` changes pre-date this session.) Not committed.
+## Task
+Add targeted unit tests to `tests/test_validate.py` to cover the missing lines in `ethscan/validate.py` (lines 59-60, 76, 271, 296, 309, 339). Do NOT modify source code in `ethscan/validate.py`. Focus on exercising specific branches/edge cases that are currently uncovered.
 
-## Next task
-- Push `ethscan/config.py` to 100% coverage: it is 91% with missing lines 91-92, 122-123, 182, 188-191, 269 per `python -m pytest -q --cov=ethscan --cov-report=term-missing`. Add test(s) to `tests/test_config.py`, run `python -m pytest -q` and `python -m pytest -q --cov=ethscan` to confirm config.py 100%, and lint with `python -m ruff check tests/test_config.py` (only pre-existing errors allowed). No live network; mock filesystem/config dependencies as needed.
+## Verification
+1. Run `python3 -m pytest -q tests/test_validate.py` to ensure new tests pass.
+2. Run `python3 -m pytest -q --cov=ethscan.validate --cov-report=term-missing` and confirm coverage increases toward 100% (or as much as achievable without source changes).
+3. Run full suite `python3 -m pytest -q` to confirm no regressions (must remain green).
+4. Run `ruff check tests/test_validate.py` and fix any linting issues.
+
+## Constraints
+- No live network calls; mock external dependencies where needed.
+- No modifications to source files under `ethscan/`.
+- Keep changes minimal and focused on the missing branches.
+- Follow existing test patterns and style in the codebase.
+
+## Evidence
+- Current validate.py coverage: 96% (7 missing lines as listed above)
+- Full suite: 3585 passed, 1 skipped (baseline)
