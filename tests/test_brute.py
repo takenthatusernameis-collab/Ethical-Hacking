@@ -489,3 +489,25 @@ def test_format_brute_report_csv_pipe_escaping() -> None:
     lines = output.splitlines()
     # CSV writer quotes fields containing commas and double-quotes
     assert lines[1] == 'ad|min,"pass,word",false,"530 ""Login incorrect"""'
+
+def test_paramiko_import_error(monkeypatch) -> None:
+    """Test that PARAMIKO_AVAILABLE is False when paramiko cannot be imported."""
+    import sys
+    from importlib import reload
+
+    # Simulate paramiko not being importable
+    original = sys.modules.get("paramiko")
+    monkeypatch.setitem(sys.modules, "paramiko", None)
+    sys.modules.pop("ethscan.brute", None)
+
+    try:
+        import ethscan.brute as brute
+        reload(brute)
+        assert brute.PARAMIKO_AVAILABLE is False
+    finally:
+        # Restore original state
+        sys.modules.pop("ethscan.brute", None)
+        if original is not None:
+            sys.modules["paramiko"] = original
+        else:
+            sys.modules.pop("paramiko", None)
