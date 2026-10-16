@@ -1,34 +1,27 @@
 # Handoff to Next Agent
 
 ## What changed
-- Improved `ethscan/cve.py` test coverage from 87% to 100% by adding 17 targeted unit tests to `tests/test_cve.py` (no modifications to source files under `ethscan/`).
-- New tests cover:
-  - `_load_cache` invalid JSON -> `{}`
-  - `_save_cache` OSError -> no raise
-  - `_is_cache_valid` TypeError/ValueError on bad timestamp -> `False`
-  - `_fetch_cve_data` non-dict JSON -> `None`, network error -> `None`, success dict path
-  - `_get_cached_or_fetch` cache hit (`cached=True`), offline fallback, save-cache path
-  - `_extract_cve_summary` first-not-dict and cve-not-dict -> `{}`
-  - `_severity_rank("")` -> `None`
-  - `run_cve` services-file read error note, NVD summary appended branch
-  - `_finding_detail` non-service kind -> `""`
-  - `format_cve_report_markdown` profile/service_timeout/workers/api_url/severity_filter/cached/offline_fallback sections
-- Fixed ruff issues in `tests/test_cve.py` (unused imports removed, import block sorted) via `ruff check --fix`.
-- Added `import urllib.error` to `tests/test_cve.py`.
+- Added 9 targeted unit tests to `tests/test_dnssec.py` (no modifications to source under `ethscan/`):
+  - `_parse_dns_name` compression-pointer truncation (`b"\xc0"`) and invalid length bits (`b"\x40..."`)
+  - `_parse_dnskey_response` / `_parse_ds_response` truncated record data (rdlength claims more bytes than present)
+  - `_query_dnskey_dnspython` / `_query_ds_dnspython` success and error paths, driving `ethscan.dnssec.dns` with a `MagicMock` (dnspython is not installed in this env)
+  - `format_dnssec_report_markdown` DS "Query failed: unknown error" branch (error is None/empty)
+- Fixed `F821` (undefined `_query_dnskey_dnspython`/`_query_ds_dnspython`) by adding both to the import block.
 
 ## What was actually verified
-- `python3 -m pytest -q tests/test_cve.py` — 58 passed (was 50, +8 net after removing/consolidating; all new tests pass)
-- `python3 -m pytest -q --cov=ethscan.cve --cov-report=term-missing tests/test_cve.py` — 100% coverage (324/324 statements, 0 missing)
-- `python3 -m pytest -q` — 3621 passed, 1 skipped (was 3604 passed, 1 skipped; no regressions)
-- `python3 -m ruff check tests/test_cve.py` — All checks passed.
+- `python3 -m pytest -q tests/test_dnssec.py` — 82 passed (was 73).
+- `python3 -m pytest -q --cov=ethscan.dnssec --cov-report=term-missing tests/test_dnssec.py` — dnssec.py 98% (392 stmts, 6 missing: lines 11-16 only).
+- `python3 -m ruff check tests/test_dnssec.py` — 17 errors, all pre-existing (import sorting, unused imports); zero new errors introduced by this session.
+- `python3 -m pytest -q` — 3630 passed, 1 skipped (was 3621 passed, 1 skipped; +9 new tests, no regressions).
+- `python3 -m pytest -q --cov=ethscan --cov-report=term-missing` — TOTAL 97% (389 missing); dnssec.py 98%, mysql.py 89% (25 missing: lines 107, 111, 150, 152, 157, 160, 172, 184, 197, 213, 241-263, 424).
 
 ## What remains unresolved
-- `ethscan/postgresql.py` line 201 (`if not msg_type: break` in `_parse_startup_response`) is unreachable defensive code: `data[pos:pos+1]` on `bytes` always returns 1 byte when `pos < len(data)`, so `msg_type` is never empty. Cannot be covered without modifying source (prohibited by constraints).
-- Other modules still have coverage gaps: dnssec.py 89% (45 missing), mysql.py 89% (25 missing), redis.py 92% (21 missing), vuln.py 93% (24 missing), plus many others in the 92–99% range.
+- `ethscan/dnssec.py` lines 11-16: the `try: import dns... DNS_AVAILABLE = True` branch. Cannot be covered without installing dnspython (a network/environment change; out of scope, same class as postgresql.py:201).
+- Remaining coverage gaps: mysql.py 89% (25 missing — lowest, most missing lines), redis.py 92% (21 missing), vuln.py 93% (24 missing), plus many in the 92–99% range.
 
 ## Approaches that failed / were ruled out
-- Line 201 in postgresql.py cannot be reached with `bytes` input — no source modification allowed per constraints.
-- No source modifications attempted — kept changes strictly in tests per constraints.
+- Covering dnssec.py lines 11-16 without dnspython installed — impossible; the `try` block raises `ImportError` at line 10.
+- Mocking `ethscan.dnssec.dns` with a plain `MagicMock` and raising `mock_dns.exception.DNSException` — `TypeError: catching classes that do not inherit from BaseException`, because `dns.exception.DNSException` is a mock, not a real class. Fixed by assigning a real `Exception` subclass to `mock_dns.exception.DNSException` and raising that.
 
 ## Next precise task (with evidence)
-See `NEXT_TASK.md` for detailed next task: continue coverage work, recommended target is `dnssec.py` at 89% with 45 missing lines (lowest coverage with most missing lines; tied with mysql.py at 89% but dnssec has more gaps). Add targeted unit tests in `tests/test_dnssec.py` without changing source, then verify with pytest + coverage + full suite + ruff.
+Continue coverage work on `mysql.py` at 89% with 25 missing lines (lowest coverage with most missing lines; tied was dnssec but now done at 98%). Missing lines: 107, 111, 150, 152, 157, 160, 172, 184, 197, 213, 241-263, 424. Add targeted unit tests in `tests/test_mysql.py` without modifying source under `ethscan/`, then verify: `python3 -m pytest -q tests/test_mysql.py`, `--cov=ethscan.mysql`, full suite `python3 -m pytest -q`, and `python3 -m ruff check tests/test_mysql.py` (introduce zero new errors).

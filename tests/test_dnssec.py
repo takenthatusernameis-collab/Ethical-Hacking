@@ -22,7 +22,9 @@ from ethscan.dnssec import (
     _parse_dns_name,
     _parse_dnskey_response,
     _parse_ds_response,
+    _query_dnskey_dnspython,
     _query_dnskey_raw,
+    _query_ds_dnspython,
     _query_ds_raw,
     _query_tcp,
     _query_udp,
@@ -1181,3 +1183,147 @@ def test_format_dnssec_report_json_with_chain():
     assert parsed["validated"] is True
     assert len(parsed["chain"]) == 2
     assert parsed["notes"] == ["note"]
+
+
+def test_parse_dns_name_pointer_truncated():
+    """Compression pointer with only one byte remaining hits the truncated break."""
+    name, off = _parse_dns_name(b"\xc0", 0)
+    assert name == ""
+    assert off == 2
+
+
+def test_parse_dns_name_invalid_length_bits():
+    """Label length with high bits set but not a pointer stops parsing."""
+    name, off = _parse_dns_name(b"\x40\x00", 0)
+    assert name == ""
+    assert off == 1
+
+
+def test_parse_dnskey_response_truncated_key_data():
+    """DNSKEY answer claiming more rdlength bytes than present stops at line 283."""
+    question = b"\x07example\x03com\x00" + struct.pack(">HH", DNSKEY_QTYPE, 1)
+    header = struct.pack(">HHHHHH", 0x1234, 0x8000, 1, 1, 0, 0)
+    # Compressed name, type DNSKEY, class IN, ttl 3600, rdlength 100, but 1 byte follows.
+    answer = b"\xc0\x0c" + struct.pack(">HHIH", DNSKEY_QTYPE, 1, 3600, 100) + b"\x00"
+    data = header + question + answer
+    res = _parse_dnskey_response(data, "example.com")
+    assert res["success"] is True
+    assert res["keys"] == []
+
+
+def test_parse_ds_response_truncated_key_data():
+    """DS answer claiming more rdlength bytes than present stops at line 348."""
+    question = b"\x07example\x03com\x00" + struct.pack(">HH", DS_QTYPE, 1)
+    header = struct.pack(">HHHHHH", 0x1234, 0x8000, 1, 1, 0, 0)
+    answer = b"\xc0\x0c" + struct.pack(">HHIH", DS_QTYPE, 1, 3600, 100) + b"\x00"
+    data = header + question + answer
+    res = _parse_ds_response(data, "example.com")
+    assert res["success"] is True
+    assert res["records"] == []
+
+
+def test_query_dnskey_dnspython_success(monkeypatch):
+    mock_dns = MagicMock()
+    mock_rdata = MagicMock()
+    mock_rdata.rdtype = mock_dns.rdatatype.DNSKEY
+    mock_rdata.flags = 257
+    mock_rdata.protocol = 3
+    mock_rdata.algorithm = 8
+    mock_rdata.__str__.return_value = "dummy deadbeef"
+    mock_answer = MagicMock()
+    mock_answer.__iter__.return_value = [mock_rdata]
+    mock_answer.name = "example.com."
+    mock_response = MagicMock()
+    mock_response.answer = [mock_answer]
+    mock_dns.query.udp.return_value = mock_response
+    mock_dns.dnssec.key_id.return_value = 4242
+
+    import ethscan.dnssec as dnssec_mod
+
+    monkeypatch.setattr(dnssec_mod, "dns", mock_dns, raising=False)
+    r = _query_dnskey_dnspython("example.com", "1.2.3.4", 1.0)
+    assert r["success"] is True
+    assert r["error"] is None
+    assert len(r["keys"]) == 1
+    assert r["keys"][0]["key_tag"] == 4242
+    assert r["keys"][0]["algorithm_name"] == "RSASHA256"
+
+
+def test_query_dnskey_dnspython_error(monkeypatch):
+    mock_dns = MagicMock()
+
+    class FakeDNSException(Exception):
+        pass
+
+    mock_dns.exception.DNSException = FakeDNSException
+    mock_dns.query.udp.side_effect = FakeDNSException("network down")
+
+    import ethscan.dnssec as dnssec_mod
+
+    monkeypatch.setattr(dnssec_mod, "dns", mock_dns, raising=False)
+    r = _query_dnskey_dnspython("example.com", None, 1.0)
+    assert r["success"] is False
+    assert r["keys"] == []
+    assert "network down" in r["error"]
+
+
+def test_query_ds_dnspython_success(monkeypatch):
+    mock_dns = MagicMock()
+    mock_rdata = MagicMock()
+    mock_rdata.rdtype = mock_dns.rdatatype.DS
+    mock_rdata.key_tag = 54321
+    mock_rdata.algorithm = 8
+    mock_rdata.digest_type = 2
+    mock_rdata.digest = b"\xaa\xbb\xcc"
+    mock_answer = MagicMock()
+    mock_answer.__iter__.return_value = [mock_rdata]
+    mock_answer.name = "example.com."
+    mock_response = MagicMock()
+    mock_response.answer = [mock_answer]
+    mock_dns.query.udp.return_value = mock_response
+
+    import ethscan.dnssec as dnssec_mod
+
+    monkeypatch.setattr(dnssec_mod, "dns", mock_dns, raising=False)
+    r = _query_ds_dnspython("example.com", "1.2.3.4", 1.0)
+    assert r["success"] is True
+    assert r["error"] is None
+    assert len(r["records"]) == 1
+    rec = r["records"][0]
+    assert rec["key_tag"] == 54321
+    assert rec["digest"] == "aabbcc"
+    assert rec["digest_type_name"] == "SHA-256"
+
+
+def test_query_ds_dnspython_error(monkeypatch):
+    mock_dns = MagicMock()
+
+    class FakeDNSException(Exception):
+        pass
+
+    mock_dns.exception.DNSException = FakeDNSException
+    mock_dns.query.udp.side_effect = FakeDNSException("servfail")
+
+    import ethscan.dnssec as dnssec_mod
+
+    monkeypatch.setattr(dnssec_mod, "dns", mock_dns, raising=False)
+    r = _query_ds_dnspython("example.com", None, 1.0)
+    assert r["success"] is False
+    assert r["records"] == []
+    assert "servfail" in r["error"]
+
+
+def test_format_dnssec_report_markdown_ds_query_failed_unknown_error():
+    """DS failure with no error string emits 'unknown error'."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "validated": False,
+        "dnskey": {"success": True, "keys": [], "error": None},
+        "ds": {"success": False, "records": [], "error": None},
+        "chain": [],
+        "notes": [],
+        "dnspython_available": False,
+    }
+    out = format_dnssec_report_markdown(data)
+    assert "*Query failed: unknown error*" in out
