@@ -874,3 +874,72 @@ def test_format_redis_csv_default_port_missing():
     out = format_redis_report_csv(data)
     rows = list(csv.reader(io.StringIO(out)))
     assert rows[1][2] == str(DEFAULT_PORT)
+
+
+def test_normalize_target_bracketed_ipv6_nondigit_port():
+    assert _normalize_target("[::1]:notaport") == ("[::1]:notaport", DEFAULT_PORT)
+
+
+def test_parse_resp_bulk_string_bad_length():
+    assert _parse_resp_bulk_string(b"$abc\r\n") == (None, 0)
+
+
+def test_parse_resp_simple_string_no_newline():
+    assert _parse_resp(b"+PONG") == (None, 0)
+
+
+def test_parse_resp_array_count_no_newline():
+    assert _parse_resp(b"*2") == (None, 0)
+
+
+def test_parse_resp_array_null_bulk_truncated():
+    assert _parse_resp(b"*2\r\n$-1") == (None, 0)
+
+
+def test_send_recv_close_raises():
+    with patch("ethscan.redis.socket.socket") as mock_sock_cls:
+        mock_sock = MagicMock()
+        mock_sock_cls.return_value = mock_sock
+        mock_sock.recv.return_value = b"+PONG\r\n"
+        mock_sock.close.side_effect = OSError("close failed")
+        data, err = _send_recv("127.0.0.1", 6379, b"PING", 1.0)
+        assert data == b"+PONG\r\n"
+        assert err is None
+
+
+def test_parse_info_exception():
+    assert _parse_info(None) == {}
+
+
+def test_parse_config_exception():
+    assert _parse_config(None) == {}
+
+
+def test_run_redis_ping_bytes_decode_branch():
+    def fake(host, port, req, timeout):
+        return b"+PONG\r\n", None
+
+    with patch("ethscan.redis._parse_resp", return_value=(b"PONG", 5)):
+        res = run_redis("example.com", port=6379, timeout=1.0, probes=["ping"], connector=fake)
+
+    assert res["ping"] == "PONG"
+    assert res["accessible"] is True
+
+
+def test_run_redis_ping_integer_response():
+    def fake(host, port, req, timeout):
+        return b":42\r\n", None
+
+    res = run_redis("example.com", port=6379, timeout=1.0, probes=["ping"], connector=fake)
+
+    assert res["ping"] == "42"
+
+
+def test_run_redis_ping_non_pong():
+    def fake(host, port, req, timeout):
+        return b"+OK\r\n", None
+
+    res = run_redis("example.com", port=6379, timeout=1.0, probes=["ping"], connector=fake)
+
+    assert res["ping"] == "OK"
+    assert res["accessible"] is True

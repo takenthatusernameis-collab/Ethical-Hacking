@@ -928,3 +928,75 @@ def test_format_geo_report_csv_no_hops_is_single_row() -> None:
     lines = output.splitlines()
     assert len(lines) == 2
     assert lines[0] == ",".join(_GEO_CSV_HEADER)
+
+
+def test_run_geo_offline_fallback_note():
+    with patch("ethscan.geo._resolve_host", return_value="8.8.8.8"), patch(
+        "ethscan.geo._get_cached_or_fetch",
+        return_value={
+            "status": "success",
+            "country": "United States",
+            "cached": True,
+            "offline_fallback": True,
+        },
+    ):
+        result = run_geo("8.8.8.8", timeout=1.0, use_cache=True, offline_fallback=True)
+
+    assert result["geolocation"]["offline_fallback"] is True
+    assert any("offline fallback" in note.lower() for note in result["notes"])
+
+
+def test_run_geo_recursive_success():
+    with patch("ethscan.geo._resolve_host", return_value="8.8.8.8"), patch(
+        "ethscan.geo._get_cached_or_fetch",
+        return_value={
+            "status": "success",
+            "country": "United States",
+            "cached": False,
+            "offline_fallback": False,
+        },
+    ), patch(
+        "ethscan.trace.run_trace",
+        return_value={
+            "hops": [
+                {
+                    "hop": 1,
+                    "ip": "10.0.0.1",
+                    "host": "router.local",
+                    "response_type": "TTL",
+                    "rtt_avg_ms": 1.5,
+                    "notes": [],
+                },
+                {
+                    "hop": 2,
+                    "ip": "10.0.0.1",
+                    "host": "dup.local",
+                    "response_type": "TTL",
+                    "rtt_avg_ms": 2.0,
+                    "notes": [],
+                },
+            ],
+            "notes": ["trace note"],
+        },
+    ):
+        result = run_geo("8.8.8.8", timeout=1.0, recursive=True)
+
+    assert result["recursive"] is True
+    assert result["hop_count"] == 1
+    assert result["hops"][0]["ip"] == "10.0.0.1"
+    assert any("traceroute" in note for note in result["notes"])
+
+
+def test_run_geo_recursive_exception():
+    with patch("ethscan.geo._resolve_host", return_value="8.8.8.8"), patch(
+        "ethscan.geo._get_cached_or_fetch",
+        return_value={
+            "status": "success",
+            "country": "United States",
+            "cached": False,
+            "offline_fallback": False,
+        },
+    ), patch("ethscan.trace.run_trace", side_effect=Exception("trace failed")):
+        result = run_geo("8.8.8.8", timeout=1.0, recursive=True)
+
+    assert any("recursive hop geolocation failed" in note for note in result["notes"])
