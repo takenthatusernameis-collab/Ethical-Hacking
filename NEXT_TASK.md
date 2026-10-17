@@ -1,24 +1,21 @@
 # Next Task for Agent
 
-## Status (current)
-- Working tree has one uncommitted change: the `completion` CLI fix (ethscan/cli.py + tests/test_completion.py).
-- Full suite: 3898 passed, 1 skipped. No regressions (baseline was 3891 passed).
-- Coverage: 99%, 70 missing (provably dead or environment-dependent; documented).
-- Code compiles cleanly; package imports successfully.
-- ruff: pre-existing errors (~1734 in ethscan/, 189 in cli.py), 276 in tests/ — not targeted.
-- mypy: 523 errors in 42 files — pre-existing, not targeted.
+## Status
+- Working tree: clean (HEAD fb57b52). No uncommitted changes.
+- Tests: 3899 passed, 1 skipped. No regressions.
+- Compilation/imports: clean.
+- Packaging: `ethscan/py.typed` included in package data (PEP 561).
+- Recent fixes committed: `config --init` parent-dir creation (8536ea2), positional `shell` for `completion` (9828bea).
+- Pre-existing technical debt (non-blocking): ruff/mypy errors, 70 documented coverage gaps.
 
 ## Next precise task
-No further bounded, high-value task is apparent: the project is feature-complete (all 59 README features implemented), every offline/network command exercised works end-to-end, and the full suite passes. Leave the handoff as-is and do not speculate changes.
+No bounded, high-value implementation task exists. Repository is stable and feature-complete. If user provides no new request, leave as-is.
 
-If the user asks to commit: re-run `python -m pytest -q` (expect 3898 passed, 1 skipped), then commit the ethscan/cli.py and tests/test_completion.py changes only.
-
-## Evidence / constraints
-- Remote HEAD == local HEAD (`57493bf`).
-- Preserve smallest reversible change; verify with focused tests after change.
+## Evidence/constraints
+- All tests green. Avoid speculative refactors, bulk linting, or coverage hunting on documented dead lines.
+- Stash `stash@{0}` preserved (abandoned bulk refactor) — do not apply.
 - Do not commit unless explicitly asked.
-- Do not count control-marker-only commits as project progress.
-- Do not hunt coverage on documented dead lines; do not bulk lint/type cleanup; do not redesign orchestration or weaken safety controls.
+- If new issue arises: reproduce smallest failure, make smallest reversible fix, run focused tests, then full suite.
 
 ## Recommended next action
-Inspect this handoff; if no new issue/request arrives, the session is complete with no further task.
+Inspect handoff; if no new issue/request, complete session with no further changes.
