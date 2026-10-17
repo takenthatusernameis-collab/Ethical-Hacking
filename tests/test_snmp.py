@@ -1328,3 +1328,30 @@ def test_parse_snmp_message_bad_varbind_tag_raises() -> None:
     msg = _encode_tlv(0x30, body)
     with pytest.raises(ValueError):
         _parse_snmp_message(msg)
+
+
+def test_send_recv_real_socket_path_closes_socket(monkeypatch) -> None:
+    import socket as _socket
+
+    class _FakeSock:
+        def __init__(self):
+            self.closed = False
+
+        def settimeout(self, timeout):
+            pass
+
+        def sendto(self, data, addr):
+            pass
+
+        def recvfrom(self, n):
+            return b"resp", ("h", 161)
+
+        def close(self):
+            self.closed = True
+
+    fake = _FakeSock()
+    monkeypatch.setattr(_socket, "socket", lambda *a, **k: fake)
+    data, err = _send_recv("h", 161, b"req", 1.0)
+    assert data == b"resp"
+    assert err is None
+    assert fake.closed is True
