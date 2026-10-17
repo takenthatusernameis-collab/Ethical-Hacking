@@ -1,26 +1,23 @@
 # Task State
 
 ## Current state
-- Working tree: modified (ethscan/config.py, tests/test_config.py). Not committed (per "do not commit unless explicitly asked").
-- HEAD: 01ef33d.
-- Tests: 3902 passed, 1 skipped (was 3899; +3 new regression tests).
-- Code compiles cleanly; `ethscan` imports successfully.
+- Working tree: modified (ethscan/cli.py). Not committed (per "do not commit unless explicitly asked").
+- HEAD: f94613c.
+- Tests: 3902 passed, 1 skipped (unchanged — no test referenced the removed function).
+- Code compiles cleanly; `ethscan` imports successfully; `hash` command still works (backed by `hash_cmd`).
 - Packaging: `ethscan/py.typed` present with package-data configured (PEP 561).
 
 ## Completed (this session)
-- Independently re-verified baseline: `python -m pytest -q` → 3899 passed, 1 skipped; `python -m ethscan --help` smoke test passes.
-- Did NOT accept the prior handoff conclusion that "no bounded task exists". Probed config/default_map behavior against the documented schema.
-- Found and fixed a real bug: the documented config key `format` (README + `dump_default_config()`) never applied, because every command's working Click dest is `fmt` (the deprecated `--format` alias), not `format`. Output therefore always fell back to JSON regardless of config.
-- Fix (smallest reversible): `ethscan/config.py::build_default_map` now remaps the documented `format` key to the `fmt` dest via `_normalize_format_key`. Chose `fmt` (not `output_fmt`) after empirical testing proved `output_fmt` would make config sticky and ignore the deprecated `--format` CLI flag, breaking the documented override contract.
-- Added 3 regression tests in tests/test_config.py; updated the existing `test_build_default_map_merges` assertion that encoded the old buggy passthrough.
-- Verified end-to-end: `format: markdown|csv` in config now produces Markdown/CSV; CLI `--output-format` and `--format` still override correctly; full documented sample config applies.
-- Re-ran `.github` workflow audit checks (controller syntax, audit markers, no forbidden fixed cap): all OK.
+- Independently re-verified baseline: `python -m pytest -q` → 3902 passed, 1 skipped; `python -m ethscan --help` smoke test passes.
+- Confirmed the prior session's `format` → `fmt` config fix is intact and end-to-end correct.
+- Identified and removed a genuine dead-code defect: the module-level `hash` function in `ethscan/cli.py` (lines 448–637) was an unreferenced duplicate of the `hash` command. The real `hash` command is `hash_cmd` (registered via `@cli.command(name="hash")` at cli.py:2907). Exhaustive search confirmed no code path, test, or import calls the orphan `hash` function — it shadowed the builtin `hash` at module scope and was pure cruft.
+- Verified removal: 53 registered commands (was 54 counting the phantom), `hash` CLI still functional, full suite green.
 
 ## Verified
 - `python -m pytest -q` → 3902 passed, 1 skipped
 - `python -m py_compile ethscan/*.py` → clean; imports OK
-- `bash -n .github/scripts/kilo-controller.sh` → OK; audit grep markers present; no forbidden cap
-- CLI: `ping`/`scan`/`config`/`cidr` with documented config schema produce expected formats
+- CLI: `hash --password test --algorithm sha256` produces expected JSON; `--format`/`--output-format` still work
+- Command count: 53 via `cli.commands` (matches the 53 documented README commands)
 
 ## Unresolved (pre-existing, not targets)
 - ruff: ~1735 in ethscan/, 189 in cli.py, 276 in tests
@@ -29,4 +26,6 @@
 - Stash `stash@{0}`: abandoned bulk refactor (preserved)
 
 ## Next precise task
-None apparent. If the modified tracking files are committed, the working tree is otherwise clean. Do not apply stash; do not hunt lint/type/coverage.
+None apparent. If resuming, re-verify: `python -m pytest -q` and `python -m ethscan hash --password test --algorithm sha256`. Do not apply stash; do not hunt lint/type/coverage.
+
+(End of file - total 32 lines)
