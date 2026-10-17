@@ -1,6 +1,7 @@
 """Command-line interface for ethscan."""
 
 import json
+import os
 from typing import Any, Dict, List, Optional
 
 import click
@@ -3348,6 +3349,9 @@ def config(
     if init_path:
         sample = dump_default_config()
         try:
+            parent_dir = os.path.dirname(os.path.abspath(init_path))
+            if parent_dir and not os.path.isdir(parent_dir):
+                os.makedirs(parent_dir, exist_ok=True)
             with open(init_path, "w", encoding="utf-8") as handle:
                 handle.write(sample)
         except OSError as exc:

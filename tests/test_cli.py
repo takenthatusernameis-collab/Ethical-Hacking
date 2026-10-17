@@ -11899,6 +11899,19 @@ def test_config_init_writes_sample(tmp_path) -> None:
     assert "commands:" in content
 
 
+def test_config_init_creates_parent_dirs(tmp_path) -> None:
+    """Test config --init creates missing parent directories."""
+    out = tmp_path / "nested" / "deep" / "config.yaml"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["config", "--init", str(out)])
+    assert result.exit_code == 0
+    assert "Sample config written" in result.output
+    assert out.exists()
+    assert out.parent.is_dir()
+    content = out.read_text()
+    assert "defaults:" in content
+
+
 def test_config_out_json(tmp_path) -> None:
     """Test config command with --out (json)."""
     out_file = tmp_path / "config.json"
