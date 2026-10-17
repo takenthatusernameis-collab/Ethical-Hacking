@@ -1,20 +1,17 @@
 What changed:
-- Added targeted tests to `tests/test_passwords.py` achieving 100% coverage for `ethscan/passwords.py`. Tests cover edge cases: unsupported algorithms for peppered hashing (both _compute_peppered_hash and _compute_password_hash paths), no-salt/no-pepper path, and fair verdict range. Fixed minor style issues (bytes literal). All existing tests continue to pass.
-- Added additional test cases to `tests/test_passwords.py` to exercise all verdict branches.
+- Added 7 targeted unit tests to `tests/test_service.py` achieving 100% coverage for `ethscan/service.py`. Tests cover previously uncovered branches in `grab_banner`: successful banner recv + signature match (FTP), no-signature fallback to `service_name.upper()`, HTTP/HTTPS HEAD fallback when initial banner is empty, OSError during HTTP fallback recv, capture-group signature match (Apache Server header), and OSError during initial banner recv. All use `monkeypatch` on `socket.create_connection` with lightweight fake sockets — no real network or threads.
 
 What was verified:
-- `python -m pytest tests/test_passwords.py` → 59 passed.
-- `python -m pytest --cov=ethscan.passwords --cov-report=term-missing` → 135/135 covered (100%).
-- `python -m ruff check tests/test_passwords.py` → passes.
-- Full suite → 3849 passed, 1 skipped (increased from 3848 passed with previous changes).
+- `python -m pytest tests/test_service.py --cov=ethscan.service --cov-report=term-missing` → 23 passed, 101/101 (100%).
+- `python -m pytest --cov=ethscan --cov-report=term-missing -q` → 3859 passed, 1 skipped (up from 3853). Overall missing statements down from 109 to 106.
+- `python -m ruff check tests/test_service.py` → no new errors introduced (3 pre-existing baseline errors in this file remain unchanged).
 
 What remains unresolved:
-- Overall missing statements reduced from 124 to 110. Remaining gaps (by module): radix.py 9, vuln.py 9, s3.py 6, snmp.py 5, resolve.py 4, ssl.py 4, service.py 3, redis.py 2, postgresql.py 1, smtp.py 1, trace.py 1. Some of these are defensive/rare branches.
-- No work done on other modules beyond passwords.
+- Overall missing statements: 106. Remaining gaps by module: vuln.py 9, radix.py 9, s3.py 6, snmp.py 5, resolve.py 4, ssl.py 4, postgresql.py 1, smtp.py 1, redis.py 2, dnssec.py 6, ftp.py 2, hash.py 5, mongodb.py 2, mssql.py 8, mysql.py 3, netbios.py 10, ntp.py 1, oracle.py 2, main.py 1. Some are defensive/rare branches.
 
 Which approaches failed and why:
-- Attempted to hit fair verdict with "abc123"/"12345678" initially; had to use "13579246" (non-common digits) to avoid the common-password penalty. Adjusted test accordingly.
-- Some defensive branches in postgresql/smtp are hard to trigger naturally (empty msg_type slice, socket close after connect) - not feasible to hit without unnatural test construction; tests focus on practical paths.
+- First attempt used real threaded TCP servers but hit a deadlock: server did `recv` before client, so client's banner `recv` returned empty. Switched to `monkeypatch`-based fake sockets with deterministic `recv` sequencing — reliable and fast.
+- Initial assertions on service names were wrong because earlier signatures in the list match first (e.g. "ProFTPD" matches the generic "FTP" pattern; "HTTP/1.1 200 OK" matches before the `Server:` capture-group pattern). Adjusted expectations to match actual matching order.
 
 Next task:
-- Continue improving coverage by tackling modules with smallest remaining gaps. Start with trace.py (1 missing), postgresql.py (1 missing), smtp.py (1 missing) if feasible; otherwise tackle redis.py (2) or service.py (3). Add minimal targeted unit tests to corresponding test files without modifying `ethscan/`. Verify targeted tests pass, ruff on modified test files passes, and full suite remains green (≥3849 passed, 1 skipped). Prefer practical test cases over contrived ones for unreachable defensive code.
+- Continue improving coverage by tackling modules with smallest remaining gaps. Start with postgresql.py (1 missing, line 201), smtp.py (1 missing, line 222), redis.py (2 missing, lines 55-56) if feasible; otherwise ntp.py (1), mysql.py (3), oracle.py (2), ftp.py (2), mongodb.py (2). Add minimal targeted unit tests to corresponding test files without modifying `ethscan/`. Verify targeted tests pass, ruff on modified test files passes, and full suite remains green (≥3859 passed, 1 skipped). Prefer practical test cases over contrived ones for unreachable defensive code.

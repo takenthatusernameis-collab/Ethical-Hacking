@@ -272,6 +272,206 @@ def test_format_service_report_csv_strips_newlines_in_banners() -> None:
     }
     output = format_service_report_csv(data)
     # Header row + one data row => exactly one newline (the row separator).
-    # A banner newline that is NOT stripped would inject extra newlines.
+    # A banner newline that is NOT stripped will inject extra newlines.
     assert output.count("\n") == 1
     assert "\n" not in output.split("\n", 1)[1]
+
+
+# ---------------------------------------------------------------------------
+# grab_banner real socket paths (lines 125-154 previously uncovered)
+# ---------------------------------------------------------------------------
+
+
+def test_grab_banner_success_with_signature(monkeypatch) -> None:
+    """Cover lines 125-129: connect, recv banner, decode, match signature."""
+
+    class FakeSock:
+        def __init__(self, data):
+            self._data = data
+            self._sent = b""
+
+        def settimeout(self, timeout):
+            pass
+
+        def recv(self, n):
+            if self._data:
+                chunk = self._data[:n]
+                self._data = self._data[n:]
+                return chunk
+            return b""
+
+        def sendall(self, data):
+            self._sent += data
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    banner_bytes = b"220 ProFTPD 1.3.5 Server ready.\r\n"
+    fake = FakeSock(banner_bytes)
+
+    def fake_create_connection(addr, timeout=None):
+        return fake
+
+    monkeypatch.setattr("ethscan.service.socket.create_connection", fake_create_connection)
+    port_ret, banner_ret, service = grab_banner("127.0.0.1", 21, 2.0)
+    assert port_ret == 21
+    assert banner_ret is not None
+    assert "ProFTPD" in banner_ret
+    # "ProFTPD" contains "FTP" so the first ftp signature matches first
+    assert service == "FTP"
+
+
+def test_grab_banner_no_signature_falls_back_to_upper(monkeypatch) -> None:
+    """Cover lines 147-154: banner present, service_name known, no signature match."""
+    class FakeSock:
+        def settimeout(self, timeout):
+            pass
+
+        def recv(self, n):
+            return b"220 something unknown\r\n"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    fake = FakeSock()
+    monkeypatch.setattr("ethscan.service.socket.create_connection", lambda addr, timeout=None: fake)
+    port_ret, banner_ret, service = grab_banner("127.0.0.1", 21, 2.0)
+    assert port_ret == 21
+    assert banner_ret is not None
+    assert service == "FTP"  # COMMON_SERVICE_PORTS[21] == 'ftp' -> upper()
+
+
+def test_grab_banner_http_fallback(monkeypatch) -> None:
+    """Cover lines 133-141: http/https banner empty triggers HTTP HEAD request."""
+    class FakeSock:
+        def __init__(self):
+            self._initial = True
+            self._sent = b""
+
+        def settimeout(self, timeout):
+            pass
+
+        def recv(self, n):
+            if self._initial:
+                self._initial = False
+                return b""  # initial banner empty
+            # Respond to HTTP HEAD request
+            return b"HTTP/1.1 200 OK\r\nServer: nginx\r\n\r\n"
+
+        def sendall(self, data):
+            self._sent += data
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    fake = FakeSock()
+    monkeypatch.setattr("ethscan.service.socket.create_connection", lambda addr, timeout=None: fake)
+    port_ret, banner_ret, service = grab_banner("127.0.0.1", 80, 2.0)
+    assert port_ret == 80
+    assert banner_ret is not None
+    assert "nginx" in banner_ret
+    assert service == "HTTP"  # first http signature matches 200 OK
+
+
+def test_grab_banner_http_fallback_oserror_caught(monkeypatch) -> None:
+    """Cover lines 140-141: OSError during HTTP fallback recv is swallowed."""
+    import socket as _socket
+
+    class FakeSock:
+        def __init__(self):
+            self._initial = True
+
+        def settimeout(self, timeout):
+            pass
+
+        def recv(self, n):
+            if self._initial:
+                self._initial = False
+                return b""  # initial banner empty
+            raise _socket.timeout("recv timeout")
+
+        def sendall(self, data):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    fake = FakeSock()
+    monkeypatch.setattr("ethscan.service.socket.create_connection", lambda addr, timeout=None: fake)
+    port_ret, banner_ret, service = grab_banner("127.0.0.1", 80, 2.0)
+    assert port_ret == 80
+    assert banner_ret is None
+    assert service is None
+
+
+def test_grab_banner_signature_with_capture_group(monkeypatch) -> None:
+    """Cover line 151: pattern with capture group sets detected_service to group(1).
+
+    Use a banner that skips the first http signature (no 200 OK line) so the
+    second pattern (Server: header with capture group) is reached.
+    """
+    class FakeSock:
+        def settimeout(self, timeout):
+            pass
+
+        def recv(self, n):
+            return b"Server: Apache/2.4.1\r\n\r\n"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    fake = FakeSock()
+    monkeypatch.setattr("ethscan.service.socket.create_connection", lambda addr, timeout=None: fake)
+    port_ret, banner_ret, service = grab_banner("127.0.0.1", 80, 2.0)
+    assert port_ret == 80
+    assert banner_ret is not None
+    assert service == "Apache/2.4.1"
+
+
+def test_grab_banner_initial_recv_oserror_caught(monkeypatch) -> None:
+    """Cover lines 130-131: OSError during initial banner recv is swallowed."""
+    import socket as _socket
+
+    class FakeSock:
+        def __init__(self):
+            self._initial = True
+
+        def settimeout(self, timeout):
+            pass
+
+        def recv(self, n):
+            if self._initial:
+                self._initial = False
+                raise _socket.timeout("initial banner timeout")
+            return b""
+
+        def sendall(self, data):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    fake = FakeSock()
+    monkeypatch.setattr("ethscan.service.socket.create_connection", lambda addr, timeout=None: fake)
+    port_ret, banner_ret, service = grab_banner("127.0.0.1", 80, 2.0)
+    assert port_ret == 80
+    assert banner_ret is None
+    assert service is None
