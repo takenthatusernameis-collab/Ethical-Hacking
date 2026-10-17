@@ -1,26 +1,50 @@
 # Handoff to Next Agent
 
 ## What changed
-- Added `test_run_vuln_recursive_negative_max_depth_guards_immediately` (~16 lines) to `tests/test_vuln.py`.
-- Covers `ethscan/vuln.py:904` (`return {}` when `depth > max_depth` in `_recursive_scan`).
-- Triggered via `run_vuln("example.com", recursive=True, max_depth=-1)`; the guard fires before any service detection, so no network is used.
-- No source change, no behavior change.
+- **No changes made.** The handoff task was already complete and its evidence was incorrect.
+- `tests/test_ntp.py` already contains `test_format_ntp_report_markdown_monlist_error` (line 853), which covers `ethscan/ntp.py:368` (the real error branch).
+- Working tree is clean. Nothing committed (per policy).
 
 ## What was verified
-- New test passes; `tests/test_vuln.py`: 100 passed.
-- Full suite: **3890 passed, 1 skipped** (was 3889; +1 new test). No regressions.
-- `ethscan/vuln.py` coverage: 98%, missing reduced to `37, 57-62, 555-556` (line 904 now covered).
-- `ruff check tests/test_vuln.py`: all checks passed.
-- Working tree: only `tests/test_vuln.py` modified (+1 test). Not committed (per policy).
+- Full suite: **3890 passed, 1 skipped**. No regressions.
+- `ethscan/ntp.py` coverage: 99%, missing only `387` — **provably dead code**.
+- `ruff check tests/test_ntp.py`: 4 pre-existing lint issues (unused imports `socket`/`DEFAULT_TIMEOUT`, unsorted import block, `SIM222` on line 568). All pre-existing, not introduced by this session.
 
 ## What remains unresolved
-- Remaining coverage gaps are all provably unreachable or environment-dependent (optional deps `paramiko`/`dnspython` not installed); no reachable, dependency-free gap left in `vuln.py`.
-- Project is feature-complete and stable.
-- One small reachable gap remains elsewhere: `ethscan/ntp.py:387` (monlist-error line `lines.append(f"- **Error:** {mon_resp['error']}")` in `format_ntp_report_markdown`), reachable via `format_ntp_report_markdown({"monlist_response": {"error": "<err>"}})`. No existing formatter test covers it.
+- **Nothing reachable.** Every remaining coverage gap in the project is provably dead code or requires an uninstalled optional dependency (`paramiko`, `dnspython`).
+
+### Evidence that `ethscan/ntp.py:387` is dead code (handoff was wrong)
+The handoff claimed line 387 (`lines.append(f"- **Error:** {mon_resp['error']}")`) was reachable via `format_ntp_report_markdown({"monlist_response": {"error": "<err>"}})`. That is false:
+
+```python
+mon_resp = data.get("monlist_response")
+if mon_resp:
+    lines.append("## Monlist Response (Amplification Check)")
+    if mon_resp.get("error"):            # line 367
+        lines.append(f"- **Error:** ...") # line 368  <-- error-bearing input hits THIS
+    else:
+        # ... peer fields ...
+        if mon_resp.get("error"):        # line 386  <-- re-checks same condition
+            lines.append(f"- **Error:** ...") # line 387  <-- DEAD: inside else, error is falsy here
+```
+
+Line 387 sits inside the `else` branch where `mon_resp.get("error")` is falsy, then re-checks the same condition. It can never execute. The test at line 853 already covers line 368. **Do not add a test for line 387 — it is impossible to cover.**
+
+### Other provably dead gaps (do not retest)
+- `ethscan/mysql.py:107, 111, 150` — `return {}`/`salt1_len = 8` after impossible conditions.
+- `ethscan/postgresql.py:201` — `break` when `msg_type` empty; only reachable via exact-length data that hits the loop exit instead.
+- `ethscan/resolve.py:188` — `continue` guarded by `rtype_upper in all_supported`, unreachable.
+- `ethscan/smtp.py:222` — `sock.close()` requires `_connect` to succeed then fail, impossible via the connector path.
+- `ethscan/redis.py:55-56` — requires `]:` present yet `bracket_end <= 0`, impossible since host starts with `[`.
+- `ethscan/mongodb.py:205-206` — `bytes.decode(..., errors="replace")` never raises.
+- `ethscan/oracle.py:304-305` — same `errors="replace"` guarantee.
+- `ethscan/mssql.py:389-391, 432-433, 455-456` — `struct.error`/`Exception` handlers on `decode(..., errors="replace")`, unreachable.
+- `ethscan/radix.py:149-150, 153-154, 158-161, 219-220` — version mismatch blocked by `sorted()` TypeError; `collapse_addresses`/`ip_network` exceptions impossible for valid inputs.
+- `ethscan/vuln.py:37, 57-62, 555-556` — environment-dependent optional-dep branches.
 
 ## Which approaches failed and why
-- None. Coverage-hunting reached diminishing returns: every remaining miss is dead code or needs an optional dependency not installed in this sandbox.
+- The handoff's coverage-hunting premise was flawed: it treated `ethscan/ntp.py:387` as reachable when it is dead code. Always verify reachability (trace the branch conditions) before writing a test for a coverage gap.
 
 ## Next precise task
-- Add a unit test in `tests/test_ntp.py` covering `ethscan/ntp.py:387`: call `format_ntp_report_markdown({"monlist_response": {"error": "<err>"}})` and assert the `- **Error:**` line appears. Bound to <30 lines.
-- Verify with the focused test, `ruff check tests/test_ntp.py`, and the full suite. Do not modify `ethscan/` source.
+- **None.** The project is feature-complete and stable at 99% coverage with all remaining gaps provably dead. No reachable, dependency-free coverage gap remains.
+- If a future task must be assigned, pick a bounded feature or bug fix with evidence, not a coverage gap.

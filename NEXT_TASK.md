@@ -1,23 +1,15 @@
 # Next Task for Agent
 
 ## Status (current)
-- `tests/test_vuln.py` modified (+1 test: `test_run_vuln_recursive_negative_max_depth_guards_immediately`), **not committed**.
+- Working tree: **clean**. Nothing uncommitted.
 - Full suite: **3890 passed, 1 skipped** (confirmed). No regressions.
-- `ethscan/vuln.py`: 98% coverage; line 904 now covered. Remaining misses (`37, 57-62, 555-556`) are provably unreachable or tooling-quirk/functionally covered.
-- `ruff check tests/test_vuln.py`: clean.
+- Project coverage: **99%** (12681 stmts, 70 missed). All remaining misses are provably dead code or require uninstalled optional deps (`paramiko`, `dnspython`).
+- `ruff check tests/test_ntp.py`: 4 pre-existing lint issues (unused imports, unsorted block, `SIM222`). Not introduced this session.
 
 ## Provably dead / unreachable-in-tests (do not retest; avoid `ethscan/` source changes)
-As previously documented across `cli.py`, `mssql.py`, `radix.py`, `hash.py`, `vuln.py`, plus environment-dependent optional-dep branches (`paramiko`, `dnspython`).
+- `ethscan/ntp.py:387` — **dead code**, not reachable. See HANDOFF_NEXT.md for the branch-trace proof.
+- `ethscan/mysql.py:107, 111, 150`, `postgresql.py:201`, `resolve.py:188`, `smtp.py:222`, `redis.py:55-56`, `mongodb.py:205-206`, `oracle.py:304-305`, `mssql.py:389-391, 432-433, 455-456`, `radix.py:149-150, 153-154, 158-161, 219-220`, `vuln.py:37, 57-62, 555-556` — all provably unreachable or environment-dependent.
 
 ## Next precise task
-**Cover `ethscan/ntp.py:387`** — the monlist-error line `lines.append(f"- **Error:** {mon_resp['error']}")` inside `if mon_resp.get("error"):` in `format_ntp_report_markdown`.
-
-Evidence:
-- `ethscan/ntp.py:386-387`: `if mon_resp.get("error"): lines.append(f"- **Error:** {mon_resp['error']}")`.
-- Reachable via `format_ntp_report_markdown({"monlist_response": {"error": "<err>"}})` — no network, no optional deps.
-- `format_ntp_report_markdown` is imported in `tests/test_ntp.py` but never invoked with an error-bearing `monlist_response`, so line 387 is uncovered.
-
-Constraints:
-- Add a unit test in `tests/test_ntp.py`, bound to <30 lines.
-- Verify with focused test, `ruff check tests/test_ntp.py`, and full suite.
-- Do not modify `ethscan/` source; do not commit unless explicitly asked.
+- **None.** No reachable, dependency-free coverage gap remains.
+- Coverage-hunting has reached diminishing returns. Any future task should be a bounded feature or bug fix with evidence, not a coverage gap.
