@@ -1300,3 +1300,31 @@ def test_format_snmp_report_csv_escaping() -> None:
 
 
 # Fix the markdown/json branches test - look at actual output format
+
+def test_parse_tlv_missing_tag_raises() -> None:
+    with pytest.raises(ValueError):
+        _parse_tlv(b"", 0)
+
+
+def test_parse_snmp_message_bad_version_tag_raises() -> None:
+    body = _encode_tlv(0x04, b"x") + _encode_tlv(0x04, b"public") + _encode_tlv(0xA0, b"")
+    msg = _encode_tlv(0x30, body)
+    with pytest.raises(ValueError):
+        _parse_snmp_message(msg)
+
+
+def test_parse_snmp_message_bad_community_tag_raises() -> None:
+    body = _encode_integer(1) + _encode_tlv(0x02, b"\x00") + _encode_tlv(0xA0, b"")
+    msg = _encode_tlv(0x30, body)
+    with pytest.raises(ValueError):
+        _parse_snmp_message(msg)
+
+
+def test_parse_snmp_message_bad_varbind_tag_raises() -> None:
+    vblist = _encode_tlv(0x04, b"bad")
+    pdu_body = _encode_integer(1) + _encode_integer(0) + _encode_integer(0) + _encode_tlv(0x30, vblist)
+    pdu = _encode_tlv(0xA0, pdu_body)
+    body = _encode_integer(1) + _encode_octet_string("public") + pdu
+    msg = _encode_tlv(0x30, body)
+    with pytest.raises(ValueError):
+        _parse_snmp_message(msg)
