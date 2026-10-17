@@ -5,7 +5,7 @@ import io
 import json
 import socket
 import ssl
-from typing import Dict, List, Optional
+from typing import Optional
 
 DEFAULT_PORT = 443
 DEFAULT_TIMEOUT = 5.0
@@ -238,7 +238,7 @@ def inspect_certificate(
                     result["valid"] = result["days_remaining"] > 0
                 except (ValueError, TypeError):
                     result["valid"] = False
-    except (ssl.SSLError, socket.error, OSError, ValueError) as exc:
+    except (ssl.SSLError, OSError, ValueError) as exc:
         result["error"] = str(exc)
     return result
 

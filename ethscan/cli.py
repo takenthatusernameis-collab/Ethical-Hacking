@@ -7,33 +7,6 @@ from typing import Any, Dict, List, Optional
 import click
 
 from ethscan import __version__
-from ethscan.passwords import (
-    audit_passwords,
-    format_audit_report_csv,
-    format_audit_report_json,
-    format_audit_report_markdown,
-)
-from ethscan.report import (
-    format_report_csv,
-    format_report_json,
-    format_report_markdown,
-    run_report,
-)
-from ethscan.scanner import get_common_ports, parse_port_range, scan_ports, get_profile_ports, get_profile_defaults, format_scan_report_json, format_scan_report_markdown, format_scan_report_csv
-from ethscan.web import (
-    format_web_report_csv,
-    format_web_report_json,
-    format_web_report_markdown,
-    run_web_checks,
-)
-from ethscan.fuzz import (
-    format_fuzz_report_csv,
-    format_fuzz_report_json,
-    format_fuzz_report_markdown,
-    run_fuzz,
-    load_wordlist,
-    load_wordlist as load_fuzz_wordlist,
-)
 from ethscan.brute import (
     format_brute_report_csv,
     format_brute_report_json,
@@ -41,18 +14,35 @@ from ethscan.brute import (
     run_brute,
 )
 from ethscan.brute import load_wordlist as load_cred_wordlist
-from ethscan.subdomains import (
-    format_subdomains_report_csv,
-    format_subdomains_report_json,
-    format_subdomains_report_markdown,
-    run_subdomains,
-    load_subdomain_wordlist,
+from ethscan.cert import (
+    format_cert_report_csv,
+    format_cert_report_json,
+    format_cert_report_markdown,
+    run_cert,
 )
-from ethscan.whois import (
-    format_whois_report_csv,
-    format_whois_report_json,
-    format_whois_report_markdown,
-    run_whois,
+from ethscan.cidr import (
+    format_cidr_report_csv,
+    format_cidr_report_json,
+    format_cidr_report_markdown,
+    run_cidr,
+)
+from ethscan.completion import (
+    format_completion_report_csv,
+    format_completion_report_json,
+    format_completion_report_markdown,
+    run_completion,
+)
+from ethscan.config import (
+    build_default_map,
+    format_config_report_csv,
+    load_config,
+    validate_config,
+)
+from ethscan.cve import (
+    format_cve_report_csv,
+    format_cve_report_json,
+    format_cve_report_markdown,
+    run_cve,
 )
 from ethscan.dns import (
     format_dns_report_csv,
@@ -60,95 +50,39 @@ from ethscan.dns import (
     format_dns_report_markdown,
     run_dns,
 )
-from ethscan.resolve import (
-    format_resolve_report_csv,
-    format_resolve_report_json,
-    format_resolve_report_markdown,
-    run_resolve,
-)
 from ethscan.dnsbrute import (
     format_dnsbrute_report_csv,
     format_dnsbrute_report_json,
     format_dnsbrute_report_markdown,
     run_dnsbrute,
 )
-from ethscan.ssl import (
-    format_ssl_report_csv,
-    format_ssl_report_json,
-    format_ssl_report_markdown,
-    run_ssl,
+from ethscan.dnssec import (
+    format_dnssec_report_csv,
+    format_dnssec_report_json,
+    format_dnssec_report_markdown,
+    run_dnssec,
 )
-from ethscan.tls import (
-    format_tls_report_csv,
-    format_tls_report_json,
-    format_tls_report_markdown,
-    run_tls,
+from ethscan.ftp import (
+    format_ftp_report_csv,
+    format_ftp_report_json,
+    format_ftp_report_markdown,
+    run_ftp,
 )
-from ethscan.service import (
-    format_service_report_csv,
-    format_service_report_json,
-    format_service_report_markdown,
-    run_service,
+from ethscan.fuzz import (
+    format_fuzz_report_csv,
+    format_fuzz_report_json,
+    format_fuzz_report_markdown,
+    load_wordlist,
+    run_fuzz,
 )
-from ethscan.vuln import (
-    format_vuln_report_csv,
-    format_vuln_report_json,
-    format_vuln_report_markdown,
-    run_vuln,
-)
-from ethscan.urlcheck import (
-    format_urlcheck_report_csv,
-    format_urlcheck_report_json,
-    format_urlcheck_report_markdown,
-    run_urlcheck,
-)
-from ethscan.osdetect import (
-    format_osdetect_report_csv,
-    format_osdetect_report_json,
-    format_osdetect_report_markdown,
-    run_osdetect,
-)
-from ethscan.trace import (
-    format_trace_report_csv,
-    format_trace_report_json,
-    format_trace_report_markdown,
-    run_trace,
-)
-from ethscan.wifi import (
-    format_wifi_report_csv,
-    format_wifi_report_json,
-    format_wifi_report_markdown,
-    run_wifi,
+from ethscan.fuzz import (
+    load_wordlist as load_fuzz_wordlist,
 )
 from ethscan.geo import (
     format_geo_report_csv,
     format_geo_report_json,
     format_geo_report_markdown,
     run_geo,
-)
-from ethscan.recon import (
-    format_recon_report_csv,
-    format_recon_report_json,
-    format_recon_report_markdown,
-    run_recon,
-)
-from ethscan.cert import (
-    format_cert_report_csv,
-    format_cert_report_json,
-    format_cert_report_markdown,
-    run_cert,
-)
-from ethscan.cve import (
-    format_cve_report_json,
-    format_cve_report_markdown,
-    format_cve_report_csv,
-    run_cve,
-)
-from ethscan.cidr import (
-    format_cidr_report_csv,
-    format_cidr_report_json,
-    format_cidr_report_markdown,
-    run_cidr,
 )
 from ethscan.hash import (
     format_check_report_csv,
@@ -161,48 +95,11 @@ from ethscan.hash import (
     run_check,
     run_hash,
 )
-from ethscan.dnssec import (
-    format_dnssec_report_csv,
-    format_dnssec_report_json,
-    format_dnssec_report_markdown,
-    run_dnssec,
-)
-from ethscan.subtake import (
-    format_subtake_report_csv,
-    format_subtake_report_json,
-    format_subtake_report_markdown,
-    run_subtake,
-)
-from ethscan.mac import (
-    format_mac_report_csv,
-    format_mac_report_json,
-    format_mac_report_markdown,
-    run_mac,
-)
-from ethscan.subdomains import load_subdomain_wordlist
 from ethscan.headers import (
     format_headers_report_csv,
     format_headers_report_json,
     format_headers_report_markdown,
     run_headers,
-)
-from ethscan.ping import (
-    format_ping_report_csv,
-    format_ping_report_json,
-    format_ping_report_markdown,
-    run_ping,
-)
-from ethscan.config import (
-    build_default_map,
-    format_config_report_csv,
-    load_config,
-    validate_config,
-)
-from ethscan.completion import (
-    format_completion_report_csv,
-    format_completion_report_json,
-    format_completion_report_markdown,
-    run_completion,
 )
 from ethscan.jwt import (
     format_jwt_report_csv,
@@ -210,17 +107,47 @@ from ethscan.jwt import (
     format_jwt_report_markdown,
     run_jwt,
 )
-from ethscan.validate import (
-    format_validate_report_csv,
-    format_validate_report_json,
-    format_validate_report_markdown,
-    run_validate,
+from ethscan.ldap import (
+    format_ldap_report_csv,
+    format_ldap_report_json,
+    format_ldap_report_markdown,
+    run_ldap,
 )
-from ethscan.radix import (
-    format_radix_report_csv,
-    format_radix_report_json,
-    format_radix_report_markdown,
-    run_radix,
+from ethscan.mac import (
+    format_mac_report_csv,
+    format_mac_report_json,
+    format_mac_report_markdown,
+    run_mac,
+)
+from ethscan.memcached import (
+    format_memcached_report_csv,
+    format_memcached_report_json,
+    format_memcached_report_markdown,
+    run_memcached,
+)
+from ethscan.mongodb import (
+    format_mongodb_report_csv,
+    format_mongodb_report_json,
+    format_mongodb_report_markdown,
+    run_mongodb,
+)
+from ethscan.mssql import (
+    format_mssql_report_csv,
+    format_mssql_report_json,
+    format_mssql_report_markdown,
+    run_mssql,
+)
+from ethscan.mysql import (
+    format_mysql_report_csv,
+    format_mysql_report_json,
+    format_mysql_report_markdown,
+    run_mysql,
+)
+from ethscan.netbios import (
+    format_netbios_report_csv,
+    format_netbios_report_json,
+    format_netbios_report_markdown,
+    run_netbios,
 )
 from ethscan.nmap import (
     format_nmap_report_csv,
@@ -228,56 +155,53 @@ from ethscan.nmap import (
     format_nmap_report_markdown,
     run_nmap,
 )
-from ethscan.stale import (
-    format_stale_report_csv,
-    format_stale_report_json,
-    format_stale_report_markdown,
-    run_stale,
-    load_domains_from_file,
-    DEFAULT_TIMEOUT,
-    DEFAULT_MAX_WORKERS,
-)
-from ethscan.ssh import (
-    format_ssh_report_csv,
-    format_ssh_report_json,
-    format_ssh_report_markdown,
-    run_ssh,
-)
-from ethscan.s3 import (
-    format_s3_report_csv,
-    format_s3_report_json,
-    format_s3_report_markdown,
-    run_s3,
-)
-from ethscan.ftp import (
-    format_ftp_report_csv,
-    format_ftp_report_json,
-    format_ftp_report_markdown,
-    run_ftp,
-)
-from ethscan.smtp import (
-    format_smtp_report_csv,
-    format_smtp_report_json,
-    format_smtp_report_markdown,
-    run_smtp,
-)
 from ethscan.ntp import (
     format_ntp_report_csv,
     format_ntp_report_json,
     format_ntp_report_markdown,
     run_ntp,
 )
-from ethscan.snmp import (
-    format_snmp_report_csv,
-    format_snmp_report_json,
-    format_snmp_report_markdown,
-    run_snmp,
+from ethscan.oracle import (
+    format_oracle_report_csv,
+    format_oracle_report_json,
+    format_oracle_report_markdown,
+    run_oracle,
 )
-from ethscan.netbios import (
-    format_netbios_report_csv,
-    format_netbios_report_json,
-    format_netbios_report_markdown,
-    run_netbios,
+from ethscan.osdetect import (
+    format_osdetect_report_csv,
+    format_osdetect_report_json,
+    format_osdetect_report_markdown,
+    run_osdetect,
+)
+from ethscan.passwords import (
+    audit_passwords,
+    format_audit_report_csv,
+    format_audit_report_json,
+    format_audit_report_markdown,
+)
+from ethscan.ping import (
+    format_ping_report_csv,
+    format_ping_report_json,
+    format_ping_report_markdown,
+    run_ping,
+)
+from ethscan.postgresql import (
+    format_postgresql_report_csv,
+    format_postgresql_report_json,
+    format_postgresql_report_markdown,
+    run_postgresql,
+)
+from ethscan.radix import (
+    format_radix_report_csv,
+    format_radix_report_json,
+    format_radix_report_markdown,
+    run_radix,
+)
+from ethscan.recon import (
+    format_recon_report_csv,
+    format_recon_report_json,
+    format_recon_report_markdown,
+    run_recon,
 )
 from ethscan.redis import (
     DEFAULT_PROBES,
@@ -286,56 +210,140 @@ from ethscan.redis import (
     format_redis_report_markdown,
     run_redis,
 )
+from ethscan.report import (
+    format_report_csv,
+    format_report_json,
+    format_report_markdown,
+    run_report,
+)
+from ethscan.resolve import (
+    format_resolve_report_csv,
+    format_resolve_report_json,
+    format_resolve_report_markdown,
+    run_resolve,
+)
+from ethscan.s3 import (
+    format_s3_report_csv,
+    format_s3_report_json,
+    format_s3_report_markdown,
+    run_s3,
+)
+from ethscan.scanner import (
+    format_scan_report_csv,
+    format_scan_report_json,
+    format_scan_report_markdown,
+    get_common_ports,
+    get_profile_defaults,
+    get_profile_ports,
+    parse_port_range,
+    scan_ports,
+)
+from ethscan.service import (
+    format_service_report_csv,
+    format_service_report_json,
+    format_service_report_markdown,
+    run_service,
+)
 from ethscan.smb import (
     format_smb_report_csv,
     format_smb_report_json,
     format_smb_report_markdown,
     run_smb,
 )
-from ethscan.ldap import (
-    format_ldap_report_csv,
-    format_ldap_report_json,
-    format_ldap_report_markdown,
-    run_ldap,
+from ethscan.smtp import (
+    format_smtp_report_csv,
+    format_smtp_report_json,
+    format_smtp_report_markdown,
+    run_smtp,
 )
-from ethscan.memcached import (
-    format_memcached_report_csv,
-    format_memcached_report_json,
-    format_memcached_report_markdown,
-    run_memcached,
+from ethscan.snmp import (
+    format_snmp_report_csv,
+    format_snmp_report_json,
+    format_snmp_report_markdown,
+    run_snmp,
 )
-from ethscan.mysql import (
-    format_mysql_report_csv,
-    format_mysql_report_json,
-    format_mysql_report_markdown,
-    run_mysql,
+from ethscan.ssh import (
+    format_ssh_report_csv,
+    format_ssh_report_json,
+    format_ssh_report_markdown,
+    run_ssh,
 )
-from ethscan.mongodb import (
-    format_mongodb_report_csv,
-    format_mongodb_report_json,
-    format_mongodb_report_markdown,
-    run_mongodb,
+from ethscan.ssl import (
+    format_ssl_report_csv,
+    format_ssl_report_json,
+    format_ssl_report_markdown,
+    run_ssl,
 )
-from ethscan.postgresql import (
-    format_postgresql_report_csv,
-    format_postgresql_report_json,
-    format_postgresql_report_markdown,
-    run_postgresql,
+from ethscan.stale import (
+    DEFAULT_MAX_WORKERS,
+    DEFAULT_TIMEOUT,
+    format_stale_report_csv,
+    format_stale_report_json,
+    format_stale_report_markdown,
+    load_domains_from_file,
+    run_stale,
 )
-
-from ethscan.mssql import (
-    format_mssql_report_csv,
-    format_mssql_report_json,
-    format_mssql_report_markdown,
-    run_mssql,
+from ethscan.subdomains import (
+    format_subdomains_report_csv,
+    format_subdomains_report_json,
+    format_subdomains_report_markdown,
+    load_subdomain_wordlist,
+    run_subdomains,
 )
-from ethscan.oracle import (
-    format_oracle_report_csv,
-    format_oracle_report_json,
-    format_oracle_report_markdown,
-    run_oracle,
+from ethscan.subtake import (
+    format_subtake_report_csv,
+    format_subtake_report_json,
+    format_subtake_report_markdown,
+    run_subtake,
 )
-
+from ethscan.tls import (
+    format_tls_report_csv,
+    format_tls_report_json,
+    format_tls_report_markdown,
+    run_tls,
+)
+from ethscan.trace import (
+    format_trace_report_csv,
+    format_trace_report_json,
+    format_trace_report_markdown,
+    run_trace,
+)
+from ethscan.urlcheck import (
+    format_urlcheck_report_csv,
+    format_urlcheck_report_json,
+    format_urlcheck_report_markdown,
+    run_urlcheck,
+)
+from ethscan.validate import (
+    format_validate_report_csv,
+    format_validate_report_json,
+    format_validate_report_markdown,
+    run_validate,
+)
+from ethscan.vuln import (
+    format_vuln_report_csv,
+    format_vuln_report_json,
+    format_vuln_report_markdown,
+    run_vuln,
+)
+from ethscan.web import (
+    format_web_report_csv,
+    format_web_report_json,
+    format_web_report_markdown,
+    run_web_checks,
+)
+from ethscan.whois import (
+    format_whois_report_csv,
+    format_whois_report_json,
+    format_whois_report_markdown,
+    run_whois,
+)
+from ethscan.wifi import (
+    format_wifi_report_csv,
+    format_wifi_report_json,
+    format_wifi_report_markdown,
+    run_wifi,
+)
 
 
 @click.group()

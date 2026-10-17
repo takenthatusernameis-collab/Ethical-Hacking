@@ -6,9 +6,9 @@ via OpenSSL). Fully offline and stdlib-only.
 """
 
 import csv
-import io
 import hashlib
 import hmac
+import io
 from typing import Dict, List, Optional
 
 # Algorithms supported natively by hashlib on this platform.

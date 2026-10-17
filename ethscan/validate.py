@@ -7,14 +7,11 @@ and CIDR network inputs offline, reusing ``parse_port_range`` from
 Fully stdlib-only and offline.
 """
 
-import ipaddress
 import csv
 import io
+import ipaddress
 import json
 from typing import Dict, List, Optional
-
-from ethscan.scanner import parse_port_range
-
 
 MAX_PORT = 65535
 MAX_EXPANDED_IPS = 256

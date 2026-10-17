@@ -165,7 +165,7 @@ def _build_bucket_candidates(
 
     base = domain
     if base.startswith("www."):
-        base = base[4:]
+        base = base.removeprefix("www.")
 
     dash_name = base.replace(".", "-")
     apex = base.split(".")[0]

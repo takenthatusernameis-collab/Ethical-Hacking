@@ -513,16 +513,16 @@ def format_oracle_report_csv(data: Dict[str, Any]) -> str:
 
 __all__ = [
     "DEFAULT_PORT",
-    "DEFAULT_TIMEOUT",
     "DEFAULT_PROBES",
-    "_normalize_target",
+    "DEFAULT_TIMEOUT",
+    "_assess_version",
     "_build_connect_request",
-    "_send_recv",
+    "_normalize_target",
     "_parse_accept_response",
     "_parse_refuse_response",
-    "_assess_version",
-    "run_oracle",
+    "_send_recv",
     "format_oracle_report_csv",
     "format_oracle_report_json",
     "format_oracle_report_markdown",
+    "run_oracle",
 ]

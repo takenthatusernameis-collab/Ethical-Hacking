@@ -3,11 +3,9 @@
 import csv
 import io
 import json
-import urllib.request
-import urllib.error
-from typing import Dict, List, Tuple
+from typing import Dict
 
-from ethscan.web import SECURITY_HEADERS, _parse_url, fetch_headers, check_security_headers
+from ethscan.web import _parse_url, check_security_headers, fetch_headers
 
 
 def run_headers(target: str, timeout: float = 5.0) -> Dict[str, object]:

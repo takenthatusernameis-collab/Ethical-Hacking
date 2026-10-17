@@ -677,15 +677,15 @@ def format_mssql_report_csv(data: Dict[str, Any]) -> str:
 
 __all__ = [
     "DEFAULT_PORT",
-    "DEFAULT_TIMEOUT",
     "DEFAULT_PROBES",
-    "_normalize_target",
-    "_build_prelogin_request",
-    "_send_recv",
-    "_parse_prelogin_response",
+    "DEFAULT_TIMEOUT",
     "_assess_prelogin",
-    "run_mssql",
+    "_build_prelogin_request",
+    "_normalize_target",
+    "_parse_prelogin_response",
+    "_send_recv",
     "format_mssql_report_csv",
     "format_mssql_report_json",
     "format_mssql_report_markdown",
+    "run_mssql",
 ]

@@ -9,7 +9,6 @@ import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Union
 
-
 DEFAULT_PORT = 443
 DEFAULT_TIMEOUT = 5.0
 DEFAULT_WORKERS = 10
@@ -236,7 +235,7 @@ def probe_version(
         entry["error"] = str(exc)
     except ssl.SSLError as exc:
         entry["error"] = _truncate(str(exc))
-    except (OSError, socket.error) as exc:
+    except OSError as exc:
         entry["error"] = _truncate(str(exc))
     return entry
 
@@ -272,7 +271,7 @@ def probe_cipher(
         entry["negotiated_version"] = protocol
     except ssl.SSLError as exc:
         entry["error"] = _truncate(str(exc))
-    except (OSError, socket.error) as exc:
+    except OSError as exc:
         entry["error"] = _truncate(str(exc))
     return entry
 

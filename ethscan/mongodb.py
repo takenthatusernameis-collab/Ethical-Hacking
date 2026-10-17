@@ -405,15 +405,15 @@ def format_mongodb_report_csv(data: Dict[str, Any]) -> str:
 
 __all__ = [
     'DEFAULT_PORT',
-    'DEFAULT_TIMEOUT',
     'DEFAULT_PROBES',
-    '_normalize_target',
-    '_send_recv',
-    '_build_buildinfo_request',
-    '_parse_buildinfo_response',
+    'DEFAULT_TIMEOUT',
     '_assess_buildinfo',
-    'run_mongodb',
+    '_build_buildinfo_request',
+    '_normalize_target',
+    '_parse_buildinfo_response',
+    '_send_recv',
     'format_mongodb_report_csv',
     'format_mongodb_report_json',
     'format_mongodb_report_markdown',
+    'run_mongodb',
 ]

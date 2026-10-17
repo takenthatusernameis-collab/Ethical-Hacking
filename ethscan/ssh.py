@@ -5,7 +5,7 @@ import io
 import json
 import socket
 import struct
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 try:
     import paramiko

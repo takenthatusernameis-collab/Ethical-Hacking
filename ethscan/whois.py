@@ -7,7 +7,6 @@ import socket
 from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
-
 DEFAULT_WHOIS_SERVER = "whois.iana.org"
 DEFAULT_TIMEOUT = 5.0
 DEFAULT_RECURSIVE_DEPTH = 2

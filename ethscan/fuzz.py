@@ -3,12 +3,11 @@
 import csv
 import io
 import json
-import urllib.request
 import urllib.error
 import urllib.parse
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Tuple, Optional
-
+from typing import Dict, List, Optional
 
 DEFAULT_WORDLIST = [
     "/admin",

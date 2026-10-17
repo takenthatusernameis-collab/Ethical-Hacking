@@ -11,13 +11,11 @@ to ``ftplib.FTP`` so tests can substitute a local fake FTP client.
 """
 
 import csv
+import ftplib
 import io
 import json
 import socket
-import time
 from typing import Any, Dict, Optional, Tuple
-
-import ftplib
 
 DEFAULT_PORT = 21
 DEFAULT_TIMEOUT = 3.0

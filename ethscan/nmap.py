@@ -11,13 +11,9 @@ import xml.etree.ElementTree as ET
 from typing import Dict, List, Optional
 
 from ethscan.vuln import (
+    SEVERITIES,
     match_service_vulns,
     parse_banner,
-    SEVERITIES,
-    SERVICE_VULNS,
-    PROTOCOL_VULNS,
-    CIPHER_VULNS,
-    CERTIFICATE_VULNS,
 )
 
 

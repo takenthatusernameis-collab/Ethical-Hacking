@@ -2,11 +2,11 @@
 
 import csv
 import io
-import ssl
-import socket
 import json
-import urllib.request
+import socket
+import ssl
 import urllib.error
+import urllib.request
 from typing import Dict, List, Tuple
 
 # Recommended security headers and their importance.

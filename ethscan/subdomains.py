@@ -4,12 +4,12 @@ import csv
 import io
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Optional, Tuple, Set
+from typing import Dict, List, Optional, Set, Tuple
 from urllib.parse import urlparse
 
 try:
-    import dns.resolver
     import dns.exception
+    import dns.resolver
     DNS_AVAILABLE = True
 except ImportError:
     DNS_AVAILABLE = False

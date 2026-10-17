@@ -30,9 +30,8 @@ toolkit works unchanged when no config file is present.
 
 import csv
 import io
-import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 try:
     import yaml

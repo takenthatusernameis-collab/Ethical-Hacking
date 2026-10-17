@@ -3,12 +3,12 @@
 import csv
 import io
 import socket
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Optional, Set
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, List, Optional
 
 try:
-    import dns.resolver
     import dns.exception
+    import dns.resolver
     DNS_AVAILABLE = True
 except ImportError:
     DNS_AVAILABLE = False

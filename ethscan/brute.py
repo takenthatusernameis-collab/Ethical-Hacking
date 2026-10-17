@@ -3,7 +3,6 @@
 import csv
 import io
 import json
-import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from ftplib import FTP
 from typing import Dict, List, Optional

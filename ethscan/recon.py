@@ -9,12 +9,11 @@ import io
 import json
 from typing import Dict, List, Optional
 
-from ethscan.subdomains import run_subdomains
 from ethscan.dns import run_dns
-from ethscan.whois import run_whois
 from ethscan.geo import run_geo
+from ethscan.subdomains import run_subdomains
 from ethscan.trace import run_trace
-
+from ethscan.whois import run_whois
 
 DEFAULT_RECON_MODULES = ["subdomains", "dns", "whois", "geo", "trace"]
 

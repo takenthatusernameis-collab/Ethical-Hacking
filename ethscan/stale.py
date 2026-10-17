@@ -2,12 +2,10 @@
 
 import csv
 import io
-import json
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional
 from urllib.parse import urlparse
-
 
 DEFAULT_TIMEOUT = 2.0
 DEFAULT_MAX_WORKERS = 50

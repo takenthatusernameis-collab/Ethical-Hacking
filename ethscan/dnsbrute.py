@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 from ethscan.dns import resolve_a_records, resolve_aaaa_records, resolve_with_dnspython
-from ethscan.subdomains import DEFAULT_SUBDOMAINS, load_subdomain_wordlist  # noqa: F401
+from ethscan.subdomains import DEFAULT_SUBDOMAINS
 
 try:
     import dns.exception

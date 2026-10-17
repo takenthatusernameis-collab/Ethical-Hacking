@@ -4,7 +4,7 @@ import csv
 import io
 import socket
 import struct
-from typing import Dict, List, Optional, Tuple, Set
+from typing import Dict, List, Optional, Tuple
 
 try:
     import dns.dnssec

@@ -470,16 +470,16 @@ def format_postgresql_report_csv(data: Dict[str, Any]) -> str:
 
 __all__ = [
     "DEFAULT_PORT",
-    "DEFAULT_TIMEOUT",
     "DEFAULT_PROBES",
-    "_normalize_target",
+    "DEFAULT_TIMEOUT",
+    "_assess_startup",
     "_build_startup_request",
-    "_send_recv",
+    "_normalize_target",
     "_parse_error_fields",
     "_parse_startup_response",
-    "_assess_startup",
-    "run_postgresql",
+    "_send_recv",
     "format_postgresql_report_csv",
     "format_postgresql_report_json",
     "format_postgresql_report_markdown",
+    "run_postgresql",
 ]

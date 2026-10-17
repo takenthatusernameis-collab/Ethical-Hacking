@@ -239,8 +239,7 @@ def _parse_handshake(data: bytes) -> Dict[str, Any]:
 
     # Auth plugin data part 2 (max 13 bytes)
     salt2_max = max(0, auth_plug_len - 8) if auth_plug_len > 8 else 12
-    if salt2_max > 13:
-        salt2_max = 13
+    salt2_max = min(salt2_max, 13)
     salt2 = payload[pos:pos + salt2_max].split(b"\x00", 1)[0].decode("utf-8", errors="replace") if salt2_max > 0 else ""
     salt_full = (salt1 + salt2) if salt1 or salt2 else ""
 
@@ -495,14 +494,14 @@ def format_mysql_report_csv(data: Dict[str, Any]) -> str:
 
 __all__ = [
     "DEFAULT_PORT",
-    "DEFAULT_TIMEOUT",
     "DEFAULT_PROBES",
-    "_normalize_target",
-    "_send_recv",
-    "_parse_handshake",
+    "DEFAULT_TIMEOUT",
     "_assess_handshake",
-    "run_mysql",
+    "_normalize_target",
+    "_parse_handshake",
+    "_send_recv",
     "format_mysql_report_csv",
     "format_mysql_report_json",
     "format_mysql_report_markdown",
+    "run_mysql",
 ]

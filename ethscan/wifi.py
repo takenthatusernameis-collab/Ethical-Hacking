@@ -25,7 +25,7 @@ def _parse_proc_net_wireless(filepath: str = "/proc/net/wireless") -> List[Dict]
     try:
         with open(filepath, "r") as f:
             lines = f.readlines()
-    except (OSError, IOError):
+    except OSError:
         return interfaces
 
     # Skip header lines (first 2 lines)

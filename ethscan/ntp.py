@@ -16,7 +16,6 @@ import io
 import json
 import socket
 import struct
-import time
 from typing import Any, Dict, Optional, Tuple
 
 DEFAULT_PORT = 123

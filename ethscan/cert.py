@@ -8,7 +8,6 @@ and offline fallback.
 import csv
 import io
 import json
-import os
 import socket
 import time
 import urllib.error

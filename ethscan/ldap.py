@@ -744,8 +744,8 @@ def format_ldap_report_csv(results: Dict[str, Any]) -> str:
 
 
 __all__ = [
-    "DEFAULT_LDAP_VERSION",
     "DEFAULT_LDAPS_PORT",
+    "DEFAULT_LDAP_VERSION",
     "DEFAULT_PORT",
     "DEFAULT_TIMEOUT",
     "LDAP_RESULT_CODES",
@@ -761,8 +761,8 @@ __all__ = [
     "_read_length",
     "_read_tlv",
     "_send_recv",
-    "run_ldap",
     "format_ldap_report_csv",
     "format_ldap_report_json",
     "format_ldap_report_markdown",
+    "run_ldap",
 ]

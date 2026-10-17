@@ -8,7 +8,7 @@ names, option names, and option values.
 
 import csv
 import io
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 
 import click
 from click import shell_completion

@@ -4,11 +4,11 @@ import csv
 import io
 import ipaddress
 import socket
-from typing import Dict, List, Optional, Set, Union
+from typing import Dict, List, Optional
 
 try:
-    import dns.resolver
     import dns.exception
+    import dns.resolver
     import dns.reversename
     DNS_AVAILABLE = True
 except ImportError:

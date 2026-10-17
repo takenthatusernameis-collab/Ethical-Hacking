@@ -7,13 +7,12 @@ and offline fallback. Stdlib only.
 import csv
 import io
 import json
-import os
 import socket
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 DEFAULT_API_URL = "http://ip-api.com/json/"
 DEFAULT_TIMEOUT = 5.0

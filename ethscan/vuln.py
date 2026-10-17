@@ -15,7 +15,6 @@ from typing import Dict, List, Optional, Tuple
 
 from ethscan.service import run_service
 
-
 DEFAULT_TIMEOUT = 3.0
 DEFAULT_WORKERS = 50
 DEFAULT_RECURSIVE_DEPTH = 2
@@ -1076,7 +1075,7 @@ def format_vuln_report_markdown(data: Dict[str, object]) -> str:
         lines.append("- **Pepper:** applied (HMAC key)")
     lines.append(f"- **Algorithm:** {data.get('algorithm', 'sha256')}")
     if data.get("recursive"):
-        lines.append(f"- **Recursive:** Yes")
+        lines.append("- **Recursive:** Yes")
         lines.append(f"- **Max Depth:** {data.get('max_depth', 0)}")
         lines.append(f"- **Recursive Hosts Scanned:** {len(data.get('recursive_hosts_scanned', []))}")
     lines.append("")

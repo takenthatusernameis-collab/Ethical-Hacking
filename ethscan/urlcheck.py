@@ -9,11 +9,9 @@ Combines:
 import csv
 import io
 import json
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 from ethscan.fuzz import (
-    DEFAULT_WORDLIST as FUZZ_DEFAULT_WORDLIST,
-    load_wordlist as load_fuzz_wordlist,
     run_fuzz,
 )
 from ethscan.ssl import run_ssl

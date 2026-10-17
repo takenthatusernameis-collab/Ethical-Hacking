@@ -15,9 +15,9 @@ DEFAULT_PROBES_PER_HOP = 3
 DEFAULT_MAX_DEPTH = 2
 
 __all__ = [
-    "run_trace",
     "format_trace_report_json",
     "format_trace_report_markdown",
+    "run_trace",
 ]
 
 
@@ -58,7 +58,7 @@ def _probe_once(dst_ip: str, port: int, ttl: int, timeout: float) -> Dict[str, A
         return {"hop_ip": dst_ip, "rtt_ms": rtt_ms, "reached": True, "error": None}
     except socket.timeout:
         return {"hop_ip": None, "rtt_ms": None, "reached": False, "error": None}
-    except socket.error:
+    except OSError:
         return {"hop_ip": None, "rtt_ms": None, "reached": False, "error": None}
     finally:
         try:

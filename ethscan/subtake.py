@@ -9,12 +9,12 @@ import csv
 import io
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set
 from urllib.parse import urlparse
 
 try:
-    import dns.resolver
     import dns.exception
+    import dns.resolver
     DNS_AVAILABLE = True
 except ImportError:
     DNS_AVAILABLE = False
@@ -392,8 +392,8 @@ def check_http_fingerprint(hostname: str, timeout: float = 5.0) -> Optional[str]
     Returns:
         Response body snippet if successful, None otherwise.
     """
-    import urllib.request
     import urllib.error
+    import urllib.request
 
     for scheme in ("https://", "http://"):
         url = f"{scheme}{hostname}"

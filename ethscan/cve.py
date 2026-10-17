@@ -6,14 +6,13 @@ service versions (provided via ``--services-file`` JSON output from the
 """
 
 import json
-import os
 import socket
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 DEFAULT_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 DEFAULT_TIMEOUT = 10.0
@@ -21,11 +20,9 @@ CACHE_DIR = Path.home() / ".cache" / "ethscan"
 CACHE_FILE = CACHE_DIR / "cve_cache.json"
 CACHE_TTL = 3600  # 1 hour
 
-from ethscan.vuln import (  # noqa: E402
-    BANNER_SIGNATURES,
-    SEVERITIES,
+from ethscan.vuln import (
     SERVICE_VULNS,
-    VULN_DB,
+    SEVERITIES,
     match_service_vulns,
     parse_banner,
     version_in_range,
@@ -389,8 +386,8 @@ def format_cve_report_json(data: Dict[str, object]) -> str:
 
 def format_cve_report_csv(data: Dict[str, object]) -> str:
     """Format CVE lookup results as CSV."""
-    import io
     import csv
+    import io
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -493,7 +490,7 @@ def format_cve_report_markdown(data: Dict[str, object]) -> str:
                     f"### {finding.get('id', 'Unknown')} "
                     f"({str(finding.get('severity', '')).upper()})"
                 )
-                lines.append(f"- **Source:** Built-in database")
+                lines.append("- **Source:** Built-in database")
                 detail = _escape(_finding_detail(finding))
                 if detail:
                     lines.append(f"- **Details:** {detail}")
@@ -507,7 +504,7 @@ def format_cve_report_markdown(data: Dict[str, object]) -> str:
                 lines.append(
                     f"### {cve_id} ({str(cve.get('severity', '')).upper()})"
                 )
-                lines.append(f"- **Source:** NVD API")
+                lines.append("- **Source:** NVD API")
                 product = str(entry.get("product") or "")
                 version = str(entry.get("version") or "")
                 if product or version:

@@ -10,7 +10,6 @@ import struct
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Tuple
 
-
 DEFAULT_TIMEOUT = 5.0
 DEFAULT_WORKERS = 10
 SYN_MAX_LENGTH = 200

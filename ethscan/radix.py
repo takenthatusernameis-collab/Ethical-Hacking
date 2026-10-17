@@ -9,7 +9,7 @@ module).
 import csv
 import io
 import ipaddress
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple
 
 
 def _normalize_cidr(value: str) -> str:

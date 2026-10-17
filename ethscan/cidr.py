@@ -10,7 +10,7 @@ Fully stdlib-only and offline.
 import csv
 import io
 import ipaddress
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional
 
 
 def _normalize_cidr(value: str) -> str:
