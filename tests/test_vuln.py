@@ -14,7 +14,6 @@ from ethscan.vuln import (
     _apply_salt_pepper_to_banner,
     _compute_password_hash,
     _compute_peppered_hash,
-    _hashlib_name,
     _normalize_host,
     _severity_rank,
     _transform_banner,
@@ -961,27 +960,27 @@ def test_transform_banner_no_salt_no_pepper() -> None:
 
 
 def test_transform_banner_salt_only() -> None:
-    from ethscan.vuln import _transform_banner
-
     import hashlib
+
+    from ethscan.vuln import _transform_banner
 
     expected = hashlib.new("sha256", ("salt" + "SSH-2.0-OpenSSH_7.2p2").encode("utf-8")).hexdigest()
     assert _transform_banner("SSH-2.0-OpenSSH_7.2p2", "sha256", salt="salt") == expected
 
 
 def test_transform_banner_pepper_only() -> None:
-    from ethscan.vuln import _transform_banner
-
     import hmac
+
+    from ethscan.vuln import _transform_banner
 
     expected = hmac.new(b"pepper", b"SSH-2.0-OpenSSH_7.2p2", "sha256").hexdigest()
     assert _transform_banner("SSH-2.0-OpenSSH_7.2p2", "sha256", pepper="pepper") == expected
 
 
 def test_transform_banner_salt_and_pepper() -> None:
-    from ethscan.vuln import _transform_banner
-
     import hmac
+
+    from ethscan.vuln import _transform_banner
 
     expected = hmac.new(b"pepper", (b"salt" + b"SSH-2.0-OpenSSH_7.2p2"), "sha256").hexdigest()
     assert (
@@ -1363,3 +1362,11 @@ def test_format_vuln_report_markdown_recursive_findings_no_vulnerabilities() -> 
     assert "## Recursive Scan Results" in output
     assert "backend.internal.example.com" in output
     assert "*No vulnerabilities found.*" in output
+
+
+def test_finding_detail_fallback_empty() -> None:
+    """Hit the final fallback return in _finding_detail for unknown kinds (line ~1047)."""
+    from ethscan.vuln import _finding_detail
+
+    assert _finding_detail({"kind": "nonexistent"}) == ""
+    assert _finding_detail({}) == ""
