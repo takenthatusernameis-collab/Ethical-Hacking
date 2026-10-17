@@ -753,3 +753,24 @@ def test_check_bucket_public_403_direct_response(monkeypatch) -> None:
     assert result["status_code"] == 403
     assert result["exists"] is True
     assert result["public"] is False
+
+
+def test_resolve_s3_endpoint_hostname_falsy_returns_none(monkeypatch) -> None:
+    monkeypatch.setattr("ethscan.s3._build_s3_url", lambda *args, **kwargs: "https:///")
+    assert _resolve_s3_endpoint("any-bucket", "us-east-1") is None
+
+
+def test_resolve_s3_endpoint_setdefaulttimeout_none_oserror(monkeypatch) -> None:
+    class _FakeSocket:
+        gaierror = OSError
+        herror = OSError
+
+        def setdefaulttimeout(self, value: float) -> None:
+            if value is None:
+                raise OSError("setdefaulttimeout(None) failed")
+
+        def gethostbyname(self, host: str) -> str:
+            return "1.2.3.4"
+
+    monkeypatch.setattr("ethscan.s3.socket", _FakeSocket())
+    assert _resolve_s3_endpoint("bucket", "us-east-1") == "1.2.3.4"

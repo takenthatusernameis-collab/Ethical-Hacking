@@ -2577,3 +2577,45 @@ The following branches are unreachable with the current code structure and are d
 - `ethscan/smtp.py:222` — `sock.close()` in the outer `except`; `sock` can only be non-None if `_connect()` succeeded, but then only the inner try/except runs (catches `socket.timeout`/`OSError` and returns early). Nothing between `_connect` success and the outer except can raise those exceptions.
 
 Same class as the intentionally-uncovered `vuln.py` lines (37, 57-62, 555-556, 904, 1047), `redis.py:55-56`, and `mongodb.py:205-206`.
+
+- `ethscan/resolve.py:188` — `elif rtype_upper in all_supported: continue  # should not happen due to above`; every supported type (A, AAAA, CNAME, PTR) is handled by an earlier `if/elif` branch, so this `continue` never fires.
+
+
+## Completed: `ethscan/s3.py` coverage audit (98% → 100%)
+
+Pushed `ethscan/s3.py` statement coverage from 98% to **100%** (179 statements, 0 missing) by adding 2 tests to `tests/test_s3.py` (no changes to `ethscan/`):
+
+- `test_resolve_s3_endpoint_hostname_falsy_returns_none` — monkeypatches `_build_s3_url` to return a hostless URL, covering the `if not hostname: return None` branch (line 136).
+- `test_resolve_s3_endpoint_setdefaulttimeout_none_oserror` — injects a fake `socket` whose `setdefaulttimeout(None)` raises `OSError` in the `finally` block, covering `except OSError: pass` (lines 145-146).
+
+### Verification
+- `python -m pytest tests/test_s3.py -q` → 49 passed.
+- `python -m pytest -q --cov=ethscan.s3 --cov-report=term-missing` → `ethscan/s3.py` **100%**, 0 missing.
+- `python -m ruff check tests/test_s3.py` → all checks passed.
+- `python -m pytest -q` → **3871 passed, 1 skipped** (full suite; no regressions).
+
+
+## Completed: `ethscan/fuzz.py` coverage audit (99% → 100%)
+
+Pushed `ethscan/fuzz.py` statement coverage from 99% to **100%** (83 statements, 0 missing) by adding 1 test to `tests/test_fuzz.py` and removing 3 pre-existing unused imports (`pytest`, `ThreadPoolExecutor`, `MagicMock`) so `ruff` passes on the modified file (no changes to `ethscan/`):
+
+- `test_fuzz_path_success` — monkeypatches `ethscan.fuzz.urllib.request.urlopen` to return a fake response with `status=200`, covering the urlopen success path (line 79).
+
+### Verification
+- `python -m pytest tests/test_fuzz.py -q` → 25 passed.
+- `python -m pytest -q --cov=ethscan.fuzz --cov-report=term-missing` → `ethscan/fuzz.py` **100%**, 0 missing.
+- `python -m ruff check tests/test_fuzz.py tests/test_s3.py` → all checks passed.
+- `python -m pytest -q` → **3872 passed, 1 skipped** (full suite; no regressions).
+
+
+## Current state
+- All 34 ethscan commands implemented/registered with JSON/Markdown/CSV output; unit + CLI integration tests present; no live network in tests.
+- Full suite green: **3872 passed, 1 skipped**.
+- `ethscan/s3.py` and `ethscan/fuzz.py` at **100%** statement coverage; `ethscan/main.py`, `ethscan/urlcheck.py`, `ethscan/dnsbrute.py`, and many others also at 100%.
+- Provably unreachable branches documented as dead code (not targeted): `ntp.py:387`, `postgresql.py:201`, `smtp.py:222`, `resolve.py:188`, `vuln.py` (37, 57-62, 555-556, 904, 1047). Same class as `redis.py:55-56` and `mongodb.py:205-206`.
+- Environment-dependent gaps (optional deps not installed): `brute.py:13` (`paramiko`), `dns.py:155` (dnspython).
+- `dnspython` remains an optional `*_AVAILABLE` dependency (not installed, not in `requirements.txt`).
+- `python -m pytest -q` → 3872 passed, 1 skipped; no warnings, no regressions.
+
+## Next task for the next agent
+Characterize each remaining sub-100% coverage gap: confirm provably-unreachable branches and add them to the documented dead-code list above, and cover any gap that proves achievable with a minimal targeted test without modifying `ethscan/`. Remaining gaps to evaluate: `cli.py` (607-635, 4639), `dnssec.py:11-16`, `hash.py` (34-35, 60, 83, 226), `mssql.py` (389-391, 404, 432-433, 455-456), `mongodb.py:205-206`, `mysql.py:107/111/150`, `netbios.py` (10 lines), `oracle.py:304-305`, `radix.py` (9 lines), `redis.py:55-56`. Verify: full suite ≥3872 passed, 1 skipped; `ruff` clean on any modified test files.

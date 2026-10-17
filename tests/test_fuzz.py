@@ -3,10 +3,7 @@
 import csv
 import io
 import threading
-from concurrent.futures import ThreadPoolExecutor
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from ethscan.fuzz import (
     DEFAULT_WORDLIST,
@@ -15,6 +12,7 @@ from ethscan.fuzz import (
     format_fuzz_report_csv,
     format_fuzz_report_json,
     format_fuzz_report_markdown,
+    fuzz_path,
     load_wordlist,
     run_fuzz,
 )
@@ -276,3 +274,21 @@ def test_run_fuzz_workers_single_is_sequential(monkeypatch) -> None:
 
     # Sequential branch must use exactly one thread.
     assert len(set(seen_threads)) == 1
+
+
+def test_fuzz_path_success(monkeypatch) -> None:
+    class _FakeResp:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr(
+        "ethscan.fuzz.urllib.request.urlopen",
+        lambda request, timeout=None: _FakeResp(),
+    )
+    result = fuzz_path("https://example.com", "/admin", timeout=1.0)
+    assert result == {"path": "/admin", "status_code": 200, "error": None}
