@@ -313,3 +313,51 @@ def test_format_mongodb_report_markdown_full():
     assert "**sysInfo:** Linux x86_64" in output
     assert "**modules:** ssl" in output
     assert "- MongoDB server version: 5.0.0" in output
+
+
+def test_format_mongodb_report_json_basic():
+    data = {
+        "target": "localhost:27017",
+        "host": "localhost",
+        "port": 27017,
+        "accessible": True,
+        "version": "5.0.0",
+        "buildInfo": {"version": "5.0.0"},
+        "findings": ["MongoDB server version: 5.0.0"],
+        "error": None,
+    }
+    output = format_mongodb_report_json(data)
+    assert '"target": "localhost:27017"' in output
+    assert '"accessible": true' in output
+
+
+def test_format_mongodb_report_csv_basic():
+    data = {
+        "target": "localhost:27017",
+        "host": "localhost",
+        "port": 27017,
+        "accessible": True,
+        "version": "5.0.0",
+        "buildInfo": {"version": "5.0.0", "sysInfo": "Linux x86_64", "modules": "ssl"},
+        "findings": ["a", "b"],
+        "error": None,
+    }
+    output = format_mongodb_report_csv(data)
+    assert "target,host,port,accessible,version,sysInfo,modules,findings,error" in output
+    assert "localhost:27017" in output
+    assert "a; b" in output
+
+
+def test_format_mongodb_report_csv_empty():
+    data = {
+        "target": "localhost:27017",
+        "host": None,
+        "port": 27017,
+        "accessible": False,
+        "version": None,
+        "buildInfo": None,
+        "findings": [],
+        "error": "Connection refused",
+    }
+    output = format_mongodb_report_csv(data)
+    assert "Connection refused" in output
