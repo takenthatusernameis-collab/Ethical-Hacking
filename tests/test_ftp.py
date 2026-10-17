@@ -66,6 +66,8 @@ class _FakeFTP:
         raise ftplib.Error(self.config.get("login_err", "530 Login incorrect"))
 
     def close(self) -> None:
+        if isinstance(self.config, dict) and self.config.get("close_raises"):
+            raise ftplib.Error("close failed")
         self.closed = True
 
 
@@ -232,6 +234,17 @@ def test_run_ftp_banner_read_failed() -> None:
     assert result["connected"] is True
     assert result["banner"] is None
     assert "banner read failed" in result["error"]
+
+
+def test_run_ftp_close_raises_swallowed() -> None:
+    def factory():
+        c = _FakeFTP()
+        c.config = {"banner": "220 fake.ftp.example FTP server ready", "close_raises": True}
+        return c
+
+    result = run_ftp("ftp.example.com", timeout=2.0, connector=factory)
+    assert result["connected"] is True
+    assert result["error"] is None
 
 
 def test_run_ftp_port_override() -> None:
