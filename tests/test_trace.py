@@ -267,6 +267,20 @@ def test_probe_once_timeout():
         assert "rtt_ms" in res or res.get("rtt_ms") is not None or res.get("error") is not None
 
 
+def test_probe_once_close_raises():
+    with patch("ethscan.trace.socket.socket") as mock_sock_class:
+        mock_sock = MagicMock()
+        mock_sock_class.return_value = mock_sock
+        mock_sock.setsockopt = MagicMock()
+        mock_sock.bind = MagicMock()
+        mock_sock.connect_ex = MagicMock(return_value=0)
+        mock_sock.recvfrom = MagicMock(side_effect=socket.timeout)
+        mock_sock.connect = MagicMock(side_effect=socket.timeout)
+        mock_sock.close = MagicMock(side_effect=Exception("close boom"))
+        res = trace._probe_once("1.1.1.1", 80, 1, 0.1)
+        assert isinstance(res, dict)
+
+
 def test_probe_once_connect_fail():
     with patch("ethscan.trace.socket.socket") as mock_sock_class:
         mock_sock = MagicMock()
