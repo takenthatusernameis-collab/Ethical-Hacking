@@ -422,7 +422,27 @@ def format_s3_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 def format_s3_report_csv(data: Dict[str, object]) -> str:
-    """Format S3 enumeration results as CSV."""
+    """Format S3 enumeration results as CSV.
+
+    Emits a header row plus one row per bucket probe result (including a
+    summary row). The Markdown formatter renders a per-bucket ``All Bucket
+    Results`` table (Bucket | Region | Exists | Public | Status | DNS
+    Resolved | Error) plus a public-bucket table with a ``URL`` column; this
+    CSV previously collapsed those tables into a single row per bucket that
+    dropped the ``url`` and ``dns_resolved`` fields, losing the per-bucket
+    association between the bucket and its S3 endpoint URL / DNS resolution.
+
+    Header (10 columns)::
+
+        target,domain,bucket,region,url,status_code,dns_resolved,
+        exists,public,error
+
+    - One row per entry in ``data["results"]``; target context repeated on
+      each row for self-containment.
+    - ``url`` and ``dns_resolved`` are emitted as their own columns so every
+      bucket probe carries its full per-item signal (including probes that
+      did not resolve / returned no URL) instead of collapsing them away.
+    """
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
@@ -430,7 +450,9 @@ def format_s3_report_csv(data: Dict[str, object]) -> str:
         "domain",
         "bucket",
         "region",
+        "url",
         "status_code",
+        "dns_resolved",
         "exists",
         "public",
         "error",
@@ -443,9 +465,11 @@ def format_s3_report_csv(data: Dict[str, object]) -> str:
             domain,
             entry.get("bucket", ""),
             entry.get("region", ""),
+            entry.get("url", "") or "",
             entry.get("status_code", ""),
+            entry.get("dns_resolved", "") or "",
             entry.get("exists", ""),
             entry.get("public", ""),
-            entry.get("error", ""),
+            entry.get("error", "") or "",
         ])
     return output.getvalue().rstrip("\r\n")

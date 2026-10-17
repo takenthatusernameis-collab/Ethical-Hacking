@@ -16233,8 +16233,10 @@ def test_s3_output_format_csv(monkeypatch) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["s3", "--target", "example.com", "--output-format", "csv"])
     assert result.exit_code == 0
-    assert "target,domain,bucket,region,status_code,exists,public,error" in result.output
+    assert "target,domain,bucket,region,url,status_code,dns_resolved,exists,public,error" in result.output
     assert "example-com" in result.output
+    assert "https://example-com.s3.amazonaws.com/" in result.output
+    assert "1.2.3.4" in result.output
     assert "200" in result.output
     assert "True" in result.output
 
@@ -16290,7 +16292,7 @@ def test_s3_output_format_csv_out(tmp_path, monkeypatch) -> None:
     assert "Report written to" in result.output
     assert out_file.exists()
     content = out_file.read_text(encoding="utf-8")
-    assert "target,domain,bucket,region,status_code,exists,public,error" in content
+    assert "target,domain,bucket,region,url,status_code,dns_resolved,exists,public,error" in content
 
 
 def test_s3_format_csv_alias(monkeypatch) -> None:

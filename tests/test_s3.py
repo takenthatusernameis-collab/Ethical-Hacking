@@ -642,7 +642,7 @@ def test_format_s3_report_csv_basic() -> None:
     output = format_s3_report_csv(data)
 
     lines = [line.rstrip("\r") for line in output.strip().split("\n")]
-    assert lines[0] == "target,domain,bucket,region,status_code,exists,public,error"
+    assert lines[0] == "target,domain,bucket,region,url,status_code,dns_resolved,exists,public,error"
     assert "example-com" in lines[1]
     assert "200" in lines[1]
     assert "True" in lines[1]  # public
@@ -734,6 +734,63 @@ def test_format_s3_report_csv_pipe_escaping() -> None:
     # With QUOTE_MINIMAL, pipe characters don't require quoting
     assert "weird|bucket" in output
     assert "pipe|error|msg" in output
+
+
+def test_format_s3_report_csv_preserves_url_and_dns_resolved() -> None:
+    """Every bucket probe row carries its URL and DNS resolution (no data loss)."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "region": "us-east-1",
+        "timeout": 5.0,
+        "workers": 20,
+        "wordlist_used": False,
+        "candidates_tested": 2,
+        "regions_checked": ["us-east-1"],
+        "results": [
+            {
+                "bucket": "public-bucket",
+                "region": "us-east-1",
+                "url": "https://public-bucket.s3.amazonaws.com/",
+                "dns_resolved": "1.2.3.4",
+                "status_code": 200,
+                "exists": True,
+                "public": True,
+                "error": None,
+            },
+            {
+                "bucket": "missing-bucket",
+                "region": "eu-west-1",
+                "url": "https://missing-bucket.s3.eu-west-1.amazonaws.com/",
+                "dns_resolved": None,
+                "status_code": 404,
+                "exists": False,
+                "public": False,
+                "error": "Connection reset",
+            },
+        ],
+        "public_buckets": [],
+        "private_buckets": [],
+        "existing_buckets": [],
+        "notes": [],
+    }
+    output = format_s3_report_csv(data)
+
+    lines = [line.rstrip("\r") for line in output.strip().split("\n")]
+    assert lines[0] == "target,domain,bucket,region,url,status_code,dns_resolved,exists,public,error"
+    # Public bucket row: URL + DNS resolved preserved.
+    assert "public-bucket" in lines[1]
+    assert "https://public-bucket.s3.amazonaws.com/" in lines[1]
+    assert "1.2.3.4" in lines[1]
+    assert "True" in lines[1]  # exists
+    assert "True" in lines[1]  # public
+    # Missing bucket row: URL preserved, DNS resolved empty, error preserved.
+    assert "missing-bucket" in lines[2]
+    assert "https://missing-bucket.s3.eu-west-1.amazonaws.com/" in lines[2]
+    assert "404" in lines[2]
+    assert "False" in lines[2]  # exists
+    assert "False" in lines[2]  # public
+    assert "Connection reset" in lines[2]
 
 def test_check_bucket_public_403_direct_response(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.s3._resolve_s3_endpoint", _mock_dns("1.2.3.4"))
