@@ -1,7 +1,7 @@
 # Task State (Current Session)
 
 ## Current state
-- Working tree has one uncommitted change: the `config --init` parent-directory fix (ethscan/cli.py + tests/test_cli.py).
+- Working tree clean; both fixes committed (config --init parent-directory fix in 8536ea2; completion positional-`shell` fix in 9828bea). HEAD == 6ee9bd2.
 - Full suite: 3899 passed, 1 skipped. No regressions (baseline 3898 passed).
 - Coverage: 99% (70 missing lines); all gaps documented as provably unreachable or environment-dependent.
 - Code compiles cleanly; `ethscan` imports successfully.
@@ -17,7 +17,7 @@
 ## Verified this session (2026-10-17)
 - `python -m pytest -q` → 3899 passed, 1 skipped (baseline matches TASK.md; no regressions)
 - `python -m py_compile ethscan/*.py` → clean; `import ethscan.cli` OK
-- Working tree clean; HEAD == origin/main (8536ea2). config --init fix committed in 8536ea2; completion fix committed in 9828bea.
+- Working tree clean; HEAD == origin/main == 6ee9bd2. config --init fix committed in 8536ea2; completion fix committed in 9828bea. Re-verified `python -m pytest -q` → 3899 passed, 1 skipped (this session).
 - Stash stash@{0} holds an abandoned bulk refactor (55 files, ~1.5k lines +/-) created at base 57493bf — NOT applied; conflicts with the minimal-change principle; left preserved in the stash, do not apply.
 - No further bounded task: project feature-complete (all 59 README features implemented); suite green; leave handoff as-is, do not speculate changes.
 
