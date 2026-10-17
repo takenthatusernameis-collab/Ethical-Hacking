@@ -6,11 +6,12 @@ No uncommitted changes in working tree. Recent committed fixes:
 - `completion`: accepts positional `shell` argument (bash|zsh|fish) in addition to `--shell` flag; keeps backward-compatible behavior (committed 9828bea).
 
 ## What was verified
-- Baseline: 3899 passed, 1 skipped (full test suite). No regressions.
+- Baseline: 3899 passed, 1 skipped (full test suite). No regressions. Re-verified in this session.
 - `completion` CLI examples work (positional shell, `--shell` flag, defaults, validation).
-- `config --init` with nested paths creates parent directories and writes sample config.
+- `config --init` with nested paths creates parent directories and writes sample config. Re-verified in this session.
 - Code compiles cleanly; `ethscan` imports successfully.
 - `ethscan/py.typed` present (PEP 561); packaging metadata includes package data.
+- CLI smoke test: `python -m ethscan --help` and `config --init /tmp/.../config.yaml` exit 0.
 
 ## What remains unresolved
 - Pre-existing ruff errors (~1734 in ethscan/, 189 in cli.py; 276 in tests) — not targeted for cleanup.
