@@ -14,5 +14,12 @@
   - `tests/test_cli.py`: added `test_config_init_creates_parent_dirs` covering a 2-level nested path.
 - Verified fix: nested `--init` now exits 0 and writes the sample config; full suite 3899 passed, 1 skipped; no new ruff errors on the changed lines in cli.py; modules compile cleanly.
 
+## Verified this session (2026-10-17)
+- `python -m pytest -q` → 3899 passed, 1 skipped (baseline matches TASK.md; no regressions)
+- `python -m py_compile ethscan/*.py` → clean; `import ethscan.cli` OK
+- Working tree clean; HEAD == origin/main (8536ea2). config --init fix committed in 8536ea2; completion fix committed in 9828bea.
+- Stash stash@{0} holds an abandoned bulk refactor (55 files, ~1.5k lines +/-) created at base 57493bf — NOT applied; conflicts with the minimal-change principle; left preserved in the stash, do not apply.
+- No further bounded task: project feature-complete (all 59 README features implemented); suite green; leave handoff as-is, do not speculate changes.
+
 ## Documented unreachable/environment-dependent gaps (reference, not targets)
 See HANDOFF_NEXT.md for full enumeration (cli, dnssec, hash, mongodb/redis, mssql, mysql, netbios, oracle, radix, ntp/postgresql/smtp/resolve/vuln). Do not add tests for these.
