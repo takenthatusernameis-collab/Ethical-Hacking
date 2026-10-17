@@ -42,50 +42,6 @@ def test_trace_runs_json(monkeypatch):
     assert '"target": "example.com"' in result.output
 
 
-"""CLI tests for trace command."""
-from click.testing import CliRunner
-
-from ethscan import cli
-
-
-def test_trace_help():
-    runner = CliRunner()
-    result = runner.invoke(cli.cli, ["trace", "--help"])
-    assert result.exit_code == 0
-    assert "target" in result.output
-    assert "max-hops" in result.output or "max_hops" in result.output
-
-
-def test_trace_help_lists_options():
-    runner = CliRunner()
-    result = runner.invoke(cli.cli, ["trace", "--help"])
-    assert result.exit_code == 0
-    assert "--max-hops" in result.output
-    assert "--probes-per-hop" in result.output
-    assert "--port" in result.output
-
-
-def test_trace_runs_json(monkeypatch):
-    runner = CliRunner()
-
-    def fake_run(target, port=80, max_hops=30, timeout=2.0, probes_per_hop=3, recursive=False, max_depth=2):
-        return {
-            "target": target,
-            "dst_ip": "1.1.1.1",
-            "port": port,
-            "max_hops": max_hops,
-            "timeout": timeout,
-            "probes_per_hop": probes_per_hop,
-            "hops": [{"hop": 1, "ip": "1.1.1.1", "rtt_ms": 5.0, "reached": True}],
-            "reached": True,
-        }
-
-    monkeypatch.setattr(cli, "run_trace", fake_run)
-    result = runner.invoke(cli.cli, ["trace", "--target", "example.com"])
-    assert result.exit_code == 0
-    assert '"target": "example.com"' in result.output
-
-
 def test_trace_runs_markdown(monkeypatch):
     runner = CliRunner()
 
