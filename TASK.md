@@ -2548,8 +2548,32 @@ Pushed `ethscan/urlcheck.py` statement coverage from 95% to **100%** (196 statem
 
 ## Current state
 - All 54 ethscan commands implemented/registered with JSON/Markdown/CSV output; unit + CLI integration tests present; no live network in tests.
-- Full suite green: **3734 passed, 1 skipped**.
+- Full suite green: **3860 passed, 1 skipped**.
+- `ethscan/main.py` at **100%** statement coverage.
 - `ethscan/urlcheck.py` at **100%** statement coverage.
+- Provably unreachable branches documented (not targeted): `ntp.py:387`, `postgresql.py:201`, `smtp.py:222` (see dead-code section below).
 - `dnspython` remains an optional `*_AVAILABLE` dependency (not installed, not in `requirements.txt`).
-- `python -m pytest -q` -> 3734 passed, 1 skipped; no regressions.
+- `python -m pytest -q` -> 3860 passed, 1 skipped; no regressions.
 - No warnings, no regressions.
+
+## Completed: `ethscan/main.py` coverage audit (67% -> 100%)
+
+Pushed `ethscan/main.py` statement coverage from 67% to **100%** (3 statements, 0 missing) by adding 1 test to `tests/test_main.py`:
+
+- `test_python_m_ethscan_main_help_runs` — executes `ethscan.main` with `__name__ == "__main__"` via `runpy.run_module()` with `ethscan.cli.cli` patched to raise `SystemExit`, covering the `cli()` call at line 7. A `subprocess.run`-based approach was tried first but coverage does not track subprocesses, so line 7 stayed missing; the in-process `runpy` approach is reliable and coverage-trackable.
+
+### Verification
+- `python -m pytest tests/test_main.py -q` → 9 passed (was 8).
+- `python -m pytest -q --cov=ethscan.main --cov-report=term-missing` → `ethscan/main.py` **100%** (was 67%), 0 missing.
+- `python -m pytest -q` → **3860 passed, 1 skipped** (was 3859; +1 for the new test); no regressions.
+- `python -m ruff check tests/test_main.py` → 2 pre-existing `PLW1510` errors on `subprocess.run` lines (51, 61); zero new issues introduced.
+- No files under `ethscan/` were modified.
+
+### Provably dead code (intentionally left uncovered)
+The following branches are unreachable with the current code structure and are documented here rather than targeted with contrived tests:
+
+- `ethscan/ntp.py:387` — `if mon_resp.get("error"):` inside the `else` branch of the same `if mon_resp.get("error"):` at line 367; `mon_resp` is never mutated between checks, so the inner check is always False.
+- `ethscan/postgresql.py:201` — `if not msg_type: break` where `msg_type = data[pos:pos + 1]` and the while condition is `pos < n`; a 1-byte slice is always truthy.
+- `ethscan/smtp.py:222` — `sock.close()` in the outer `except`; `sock` can only be non-None if `_connect()` succeeded, but then only the inner try/except runs (catches `socket.timeout`/`OSError` and returns early). Nothing between `_connect` success and the outer except can raise those exceptions.
+
+Same class as the intentionally-uncovered `vuln.py` lines (37, 57-62, 555-556, 904, 1047), `redis.py:55-56`, and `mongodb.py:205-206`.

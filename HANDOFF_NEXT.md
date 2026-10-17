@@ -1,17 +1,19 @@
 What changed:
-- Added 7 targeted unit tests to `tests/test_service.py` achieving 100% coverage for `ethscan/service.py`. Tests cover previously uncovered branches in `grab_banner`: successful banner recv + signature match (FTP), no-signature fallback to `service_name.upper()`, HTTP/HTTPS HEAD fallback when initial banner is empty, OSError during HTTP fallback recv, capture-group signature match (Apache Server header), and OSError during initial banner recv. All use `monkeypatch` on `socket.create_connection` with lightweight fake sockets — no real network or threads.
+- Added `test_python_m_ethscan_main_help_runs` to `tests/test_main.py` to cover `ethscan/main.py:7` (the `cli()` call under `if __name__ == "__main__":`). Uses `runpy.run_module("ethscan.main", run_name="__main__")` with `ethscan.cli.cli` patched to raise `SystemExit`, avoiding a subprocess (which coverage cannot track).
 
 What was verified:
-- `python -m pytest tests/test_service.py --cov=ethscan.service --cov-report=term-missing` → 23 passed, 101/101 (100%).
-- `python -m pytest --cov=ethscan --cov-report=term-missing -q` → 3859 passed, 1 skipped (up from 3853). Overall missing statements down from 109 to 106.
-- `python -m ruff check tests/test_service.py` → no new errors introduced (3 pre-existing baseline errors in this file remain unchanged).
+- `tests/test_main.py` → 9 passed (was 8).
+- `ethscan/main.py` coverage: 67% → **100%** (3 stmts, 0 missing).
+- Full suite: **3860 passed, 1 skipped** (was 3859; +1 for the new test; no regressions).
+- `python -m ruff check tests/test_main.py` → only the 2 pre-existing `PLW1510` errors on `subprocess.run` lines (51, 61); zero new issues.
 
-What remains unresolved:
-- Overall missing statements: 106. Remaining gaps by module: vuln.py 9, radix.py 9, s3.py 6, snmp.py 5, resolve.py 4, ssl.py 4, postgresql.py 1, smtp.py 1, redis.py 2, dnssec.py 6, ftp.py 2, hash.py 5, mongodb.py 2, mssql.py 8, mysql.py 3, netbios.py 10, ntp.py 1, oracle.py 2, main.py 1. Some are defensive/rare branches.
+What remains unresolved (provably dead code — intentionally left uncovered):
+- `ethscan/ntp.py:387` — `if mon_resp.get("error"):` inside the `else` branch of the same `if mon_resp.get("error"):` at line 367. `mon_resp` is never mutated between the two checks, so the inner check is always False. Same class as vuln.py's unreachable lines (37, 57-62, 555-556, 904, 1047).
+- `ethscan/postgresql.py:201` — `if not msg_type: break` where `msg_type = data[pos:pos + 1]` and the while loop condition is `pos < n`; a 1-byte slice is always truthy. Unreachable.
+- `ethscan/smtp.py:222` — `sock.close()` in the outer `except` where `sock` can only be non-None if `_connect()` succeeded, but then only the inner try/except runs (catches `socket.timeout`/`OSError` and returns early). Nothing between `_connect` success and the outer except can raise those exceptions. Unreachable.
 
 Which approaches failed and why:
-- First attempt used real threaded TCP servers but hit a deadlock: server did `recv` before client, so client's banner `recv` returned empty. Switched to `monkeypatch`-based fake sockets with deterministic `recv` sequencing — reliable and fast.
-- Initial assertions on service names were wrong because earlier signatures in the list match first (e.g. "ProFTPD" matches the generic "FTP" pattern; "HTTP/1.1 200 OK" matches before the `Server:` capture-group pattern). Adjusted expectations to match actual matching order.
+- First attempt used `subprocess.run([sys.executable, "-m", "ethscan.main", ...])` to cover main.py:7, but coverage does not track subprocesses — line 7 stayed missing. Switched to `runpy.run_module` in-process with `cli` patched — reliable and coverage-trackable.
 
 Next task:
-- Continue improving coverage by tackling modules with smallest remaining gaps. Start with postgresql.py (1 missing, line 201), smtp.py (1 missing, line 222), redis.py (2 missing, lines 55-56) if feasible; otherwise ntp.py (1), mysql.py (3), oracle.py (2), ftp.py (2), mongodb.py (2). Add minimal targeted unit tests to corresponding test files without modifying `ethscan/`. Verify targeted tests pass, ruff on modified test files passes, and full suite remains green (≥3859 passed, 1 skipped). Prefer practical test cases over contrived ones for unreachable defensive code.
+- Continue improving coverage by tackling modules with the smallest remaining gaps. Next smallest: ftp.py (2 missing: lines 145-146), mongodb.py (2 missing: 205-206), oracle.py (2 missing: 304-305), redis.py (2 missing: 55-56), then mysql.py (3 missing: 107, 111, 150). Add minimal targeted unit tests to corresponding test files without modifying `ethscan/`. Verify targeted tests pass, ruff on modified test files passes, and full suite remains ≥3860 passed, 1 skipped.

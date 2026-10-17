@@ -65,3 +65,33 @@ def test_python_m_ethscan_version_runs() -> None:
     )
     assert result.returncode == 0
     assert __version__ in result.stdout
+
+
+def test_python_m_ethscan_main_help_runs() -> None:
+    """Execute ethscan.main with __name__ == "__main__" to cover the cli() guard (main.py:7)."""
+    import runpy
+
+    saved_argv = sys.argv
+    sys.argv = ["ethscan.main", "--help"]
+    try:
+        import ethscan.cli as cli_mod
+
+        called = {"n": 0}
+        orig_cli = cli_mod.cli
+
+        def counting_cli(*args, **kwargs):
+            called["n"] += 1
+            raise SystemExit(0)
+
+        cli_mod.cli = counting_cli
+        try:
+            try:
+                runpy.run_module("ethscan.main", run_name="__main__")
+            except SystemExit:
+                pass
+        finally:
+            cli_mod.cli = orig_cli
+    finally:
+        sys.argv = saved_argv
+
+    assert called["n"] == 1, "cli() should be invoked exactly once by the __main__ guard"
