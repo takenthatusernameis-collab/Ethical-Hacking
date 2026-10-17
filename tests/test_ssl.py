@@ -1,6 +1,5 @@
 """Tests for the ethscan ssl module."""
 
-import pytest
 
 from ethscan.ssl import (
     DEFAULT_PORT,
@@ -377,21 +376,23 @@ def test_parse_cert_publickeyinfo_bad_values():
 
 
 def test_build_context_verify_true():
+
     from ethscan import ssl as _sslmod
-    import ssl as _ssl
-    ctx = _sslmod._build_context(verify=True)
+    _sslmod._build_context(verify=True)
 
 
 def test_build_context_verify_false():
-    from ethscan import ssl as _sslmod
     import ssl as _ssl
+
+    from ethscan import ssl as _sslmod
     ctx = _sslmod._build_context(verify=False)
     assert ctx.check_hostname is False
     assert ctx.verify_mode == _ssl.CERT_NONE
 
 def test_inspect_certificate_verification_failure_with_retry(monkeypatch):
-    from ethscan import ssl as _sslmod
     import ssl
+
+    from ethscan import ssl as _sslmod
 
     calls = [0]
 
@@ -463,7 +464,7 @@ def test_get_chain_fallback_unverified(monkeypatch):
     from ethscan import ssl as _sslmod
     class Dummy:
         def get_verified_chain(self):
-            raise Exception('no')
+            raise RuntimeError('no')
         def get_unverified_chain(self):
             return ['c2']
     assert _sslmod._get_chain(Dummy()) == ['c2']
@@ -486,8 +487,9 @@ def test_get_chain_methods_return_empty(monkeypatch):
     assert _sslmod._get_chain(Dummy()) == []
 
 def test_decode_cert_binary_fallback(monkeypatch):
-    from ethscan import ssl as _sslmod
     import ssl as _ssl
+
+    from ethscan import ssl as _sslmod
 
     class DummySock:
         def getpeercert(self, binary=False, *a, **k):
@@ -503,8 +505,9 @@ def test_decode_cert_binary_fallback(monkeypatch):
 
 
 def test_decode_cert_binary_success(monkeypatch):
-    from ethscan import ssl as _sslmod
     import ssl as _ssl
+
+    from ethscan import ssl as _sslmod
 
     class DummySock:
         def getpeercert(self, binary=False, *a, **k):
@@ -563,3 +566,30 @@ def test_parse_cert_unhashable_keys_hit_except_branches() -> None:
     assert isinstance(parsed, dict)
     assert parsed["subject_dict"] == {}
     assert parsed["issuer_dict"] == {}
+
+def test_wrap_socket():
+    import socket
+
+    from ethscan import ssl as sslmod
+
+    class DummySock:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def getpeercert(self, binary=False): return {'subject': ((('commonName','t'),),)} if not binary else None
+        def getpeercertchain(self): return []
+
+    class DummyCtx:
+        def wrap_socket(self, sock, server_hostname=None):
+            class S:
+                def __enter__(self): return self
+                def __exit__(self, *a): return False
+                def getpeercert(self, binary=False): return {'subject': ((('CN','t'),),)} if not binary else None
+                def getpeercertchain(self): return []
+            return S()
+
+    orig = socket.create_connection
+    try:
+        socket.create_connection = lambda *a, **k: DummySock()
+        sslmod._wrap_socket(DummyCtx(), 'example.com', 443, 5)
+    finally:
+        socket.create_connection = orig

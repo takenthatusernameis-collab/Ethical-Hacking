@@ -1,23 +1,21 @@
 """Tests for the ethscan mongodb module."""
 
-import json
 import socket
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from ethscan.mongodb import (
     DEFAULT_PORT,
-    DEFAULT_PROBES,
-    DEFAULT_TIMEOUT,
-    _normalize_target,
-    _build_buildinfo_request,
-    _parse_buildinfo_response,
     _assess_buildinfo,
+    _build_buildinfo_request,
+    _normalize_target,
+    _parse_buildinfo_response,
     _send_recv,
-    run_mongodb,
     format_mongodb_report_csv,
     format_mongodb_report_json,
     format_mongodb_report_markdown,
+    run_mongodb,
 )
+
 
 # Copy key existing tests
 def test_normalize_target_basic():
@@ -361,3 +359,9 @@ def test_format_mongodb_report_csv_empty():
     }
     output = format_mongodb_report_csv(data)
     assert "Connection refused" in output
+
+def test_parse_buildinfo_handles_decode_edge_case():
+    from ethscan.mongodb import _parse_buildinfo_response
+    # Try to construct data that might exercise edge cases
+    _parse_buildinfo_response(b'')
+    _parse_buildinfo_response(b'\x00\x00\x00\x00' * 5)

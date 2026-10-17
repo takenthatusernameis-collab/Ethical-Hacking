@@ -1144,3 +1144,20 @@ def test_parse_handshake_salt1_no_null_terminator():
     assert parsed["salt1"] == "salt1234"  # salt1_len capped at 8
     assert "capabilities" not in parsed
     assert "charset" not in parsed
+
+def test_parse_handshake_minimal():
+    from ethscan.mysql import _parse_handshake
+    # data with exactly 4 bytes gives empty payload
+    assert _parse_handshake(b'\x00\x00\x00\x00') == {}
+
+def test_parse_handshake_edge_cases():
+    from ethscan.mysql import _parse_handshake
+    # exactly 4 bytes
+    assert _parse_handshake(b'\x00\x00\x00\x00') == {}
+    # >4 but payload empty after slicing? 4 bytes total means slice gives empty
+    assert _parse_handshake(b'\x05\x00\x00\x00') == {}
+    # payload non-empty but pos >= len? impossible normally; create minimal
+    # protocol version only, then break early
+    data = b'\x01\x00\x00\x00' + b'\x0a'  # 4 byte header + 1 byte protocol
+    res = _parse_handshake(data)
+    assert 'protocol_version' in res

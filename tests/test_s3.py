@@ -1,11 +1,9 @@
 """Tests for the ethscan s3 module."""
+from __future__ import annotations
 
 import json
 import socket
 import urllib.error
-from typing import Optional
-
-import pytest
 
 from ethscan.s3 import (
     DEFAULT_BUCKET_NAMES,
@@ -22,7 +20,6 @@ from ethscan.s3 import (
     run_s3,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fake HTTP response helpers
 # ---------------------------------------------------------------------------
@@ -36,7 +33,7 @@ class _FakeResponse:
     def getcode(self) -> int:
         return self._status
 
-    def read(self, n: Optional[int] = -1) -> bytes:
+    def read(self, n: int | None = -1) -> bytes:
         if n is None or n < 0:
             return self._body
         return self._body[:n]
@@ -48,7 +45,7 @@ class _FakeResponse:
         return False
 
 
-def _mock_dns(resolved: Optional[str] = "1.2.3.4"):
+def _mock_dns(resolved: str | None = "1.2.3.4"):
     return lambda bucket_name, region, timeout=5.0: resolved
 
 
@@ -737,3 +734,22 @@ def test_format_s3_report_csv_pipe_escaping() -> None:
     # With QUOTE_MINIMAL, pipe characters don't require quoting
     assert "weird|bucket" in output
     assert "pipe|error|msg" in output
+
+def test_check_bucket_public_403_direct_response(monkeypatch) -> None:
+    monkeypatch.setattr("ethscan.s3._resolve_s3_endpoint", _mock_dns("1.2.3.4"))
+
+    class DummyResp:
+        def __init__(self):
+            self.code = 403
+        def getcode(self):
+            return self.code
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr("ethscan.s3.urllib.request.urlopen", lambda req, timeout=None: DummyResp())
+    result = check_bucket_public("mybucket", "us-east-1", 1.0)
+    assert result["status_code"] == 403
+    assert result["exists"] is True
+    assert result["public"] is False

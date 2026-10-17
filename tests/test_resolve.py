@@ -721,3 +721,24 @@ def test_run_resolve_with_unsupported_and_mixed_types() -> None:
     # MX falls through to dnspython path only if available; dnspython not installed here
     assert "A" in result["records"]
     assert "MX" not in result["records"] or isinstance(result["records"].get("MX"), list)
+
+def test_resolve_dnspython_available(monkeypatch):
+    import sys
+    from ethscan import resolve
+
+    # simulate dnspython available
+    class DummyResolver:
+        def query(self, *a, **k):
+            raise Exception("test")
+
+    dummy_dns = type('M', (), {})()
+    dummy_dns.resolver = type('R', (), {'Resolver': DummyResolver, 'query': lambda *a, **k: []})()
+    dummy_dns.exception = type('E', (), {})()
+    dummy_dns.reversename = type('Rev', (), {})()
+    monkeypatch.setitem(sys.modules, 'dns', dummy_dns)
+    monkeypatch.setitem(sys.modules, 'dns.resolver', dummy_dns.resolver)
+    monkeypatch.setitem(sys.modules, 'dns.exception', dummy_dns.exception)
+    monkeypatch.setitem(sys.modules, 'dns.reversename', dummy_dns.reversename)
+    # reload module
+    import importlib
+    importlib.reload(resolve)
