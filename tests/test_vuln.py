@@ -844,6 +844,20 @@ def test_run_vuln_recursive_stops_when_no_new_hosts(monkeypatch) -> None:
     assert results["recursive_hosts_scanned"] == []
 
 
+def test_run_vuln_recursive_negative_max_depth_guards_immediately() -> None:
+    # A negative max_depth makes depth (0) > max_depth true at the first
+    # recursive step, so _recursive_scan returns {} before any service
+    # detection runs: no network, no run_service calls. Exercises line 904.
+    results = run_vuln("example.com", recursive=True, max_depth=-1)
+    assert results["recursive"] is True
+    assert results["max_depth"] == -1
+    assert results["host"] == "example.com"
+    assert results["findings"] == []
+    assert results["finding_count"] == 0
+    assert results["recursive_hosts_scanned"] == []
+    assert results["recursive_findings"] == []
+
+
 def test_format_vuln_report_markdown_with_recursive() -> None:
     data = {
         "target": "example.com",
