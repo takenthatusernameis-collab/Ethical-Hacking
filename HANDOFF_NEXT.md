@@ -1,50 +1,33 @@
 # Handoff to Next Agent
 
 ## What changed
-- **No changes made.** The handoff task was already complete and its evidence was incorrect.
-- `tests/test_ntp.py` already contains `test_format_ntp_report_markdown_monlist_error` (line 853), which covers `ethscan/ntp.py:368` (the real error branch).
-- Working tree is clean. Nothing committed (per policy).
+- Removed 7 tracked junk files that were duplicate copies of real source/test files with a `,cover` suffix, committed into the repo but never referenced anywhere:
+  - `ethscan/cli.py,cover`
+  - `ethscan/mongodb.py,cover`
+  - `ethscan/passwords.py,cover`
+  - `ethscan/postgresql.py,cover`
+  - `ethscan/redis.py,cover`
+  - `ethscan/smtp.py,cover`
+  - `tests/test_trace_cli.py,cover`
+- The deletions are **staged** (`git rm`) but **not committed** (per policy: no commit unless explicitly asked).
+- No source code, tests, or behavior were modified.
 
 ## What was verified
-- Full suite: **3890 passed, 1 skipped**. No regressions.
-- `ethscan/ntp.py` coverage: 99%, missing only `387` — **provably dead code**.
-- `ruff check tests/test_ntp.py`: 4 pre-existing lint issues (unused imports `socket`/`DEFAULT_TIMEOUT`, unsorted import block, `SIM222` on line 568). All pre-existing, not introduced by this session.
+- `git ls-files | grep -i cover` -> no matches; tracked index is clean of `.cover` files.
+- `git status --short` shows exactly the 7 staged deletions, nothing else.
+- Full test suite: **3891 passed, 1 skipped** — identical to baseline, no regressions.
+- `ruff check`: **2010 errors**, unchanged from baseline (all pre-existing; `.cover` files were not linted). No new lint issues introduced.
 
 ## What remains unresolved
-- **Nothing reachable.** Every remaining coverage gap in the project is provably dead code or requires an uninstalled optional dependency (`paramiko`, `dnspython`).
-
-### Evidence that `ethscan/ntp.py:387` is dead code (handoff was wrong)
-The handoff claimed line 387 (`lines.append(f"- **Error:** {mon_resp['error']}")`) was reachable via `format_ntp_report_markdown({"monlist_response": {"error": "<err>"}})`. That is false:
-
-```python
-mon_resp = data.get("monlist_response")
-if mon_resp:
-    lines.append("## Monlist Response (Amplification Check)")
-    if mon_resp.get("error"):            # line 367
-        lines.append(f"- **Error:** ...") # line 368  <-- error-bearing input hits THIS
-    else:
-        # ... peer fields ...
-        if mon_resp.get("error"):        # line 386  <-- re-checks same condition
-            lines.append(f"- **Error:** ...") # line 387  <-- DEAD: inside else, error is falsy here
-```
-
-Line 387 sits inside the `else` branch where `mon_resp.get("error")` is falsy, then re-checks the same condition. It can never execute. The test at line 853 already covers line 368. **Do not add a test for line 387 — it is impossible to cover.**
-
-### Other provably dead gaps (do not retest)
-- `ethscan/mysql.py:107, 111, 150` — `return {}`/`salt1_len = 8` after impossible conditions.
-- `ethscan/postgresql.py:201` — `break` when `msg_type` empty; only reachable via exact-length data that hits the loop exit instead.
-- `ethscan/resolve.py:188` — `continue` guarded by `rtype_upper in all_supported`, unreachable.
-- `ethscan/smtp.py:222` — `sock.close()` requires `_connect` to succeed then fail, impossible via the connector path.
-- `ethscan/redis.py:55-56` — requires `]:` present yet `bracket_end <= 0`, impossible since host starts with `[`.
-- `ethscan/mongodb.py:205-206` — `bytes.decode(..., errors="replace")` never raises.
-- `ethscan/oracle.py:304-305` — same `errors="replace"` guarantee.
-- `ethscan/mssql.py:389-391, 432-433, 455-456` — `struct.error`/`Exception` handlers on `decode(..., errors="replace")`, unreachable.
-- `ethscan/radix.py:149-150, 153-154, 158-161, 219-220` — version mismatch blocked by `sorted()` TypeError; `collapse_addresses`/`ip_network` exceptions impossible for valid inputs.
-- `ethscan/vuln.py:37, 57-62, 555-556` — environment-dependent optional-dep branches.
+- The staged `.cover` deletions are not yet committed or pushed to `origin/main`.
+- Project still carries ~2010 pre-existing ruff errors (dominated by UP006/FA100) — not a bounded, one-session task; no `[tool.ruff]` target-version config exists in `pyproject.toml`.
+- Coverage is at ~99%; all remaining gaps are provably dead code or require uninstalled optional deps (`paramiko`, `dnspython`) — no reachable, dependency-free coverage gap remains (see prior HANDOFF_NEXT.md branch-trace proofs).
 
 ## Which approaches failed and why
-- The handoff's coverage-hunting premise was flawed: it treated `ethscan/ntp.py:387` as reachable when it is dead code. Always verify reachability (trace the branch conditions) before writing a test for a coverage gap.
+- Coverage-hunting is exhausted: previous sessions established every remaining miss is unreachable/dead. Do not add tests for dead lines (e.g. `ethscan/ntp.py:387` is inside an `else` where the condition is falsy).
 
 ## Next precise task
-- **None.** The project is feature-complete and stable at 99% coverage with all remaining gaps provably dead. No reachable, dependency-free coverage gap remains.
-- If a future task must be assigned, pick a bounded feature or bug fix with evidence, not a coverage gap.
+1. Commit the 7 staged `.cover` deletions and push to `origin/main` (verify persistence: `git ls-remote origin main` matches local HEAD).
+2. After that, the repo is stable with no bounded, dependency-free coverage gap remaining. The next agent should pick a **bounded feature or bug fix with evidence**, not a coverage gap — there is none left to hunt safely.
+
+Constraints: do not commit unless explicitly asked (this session); do not weaken safety/permissions; do not redesign orchestration.
