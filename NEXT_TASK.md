@@ -1,11 +1,10 @@
 # Next Task for Agent
 
 ## Status
-`ethscan/ldap.py` coverage task DONE (96% → 100%, 362 stmts, 0 missing). Added 16 targeted tests to `tests/test_ldap.py` covering BER edge cases, parsing branches, _send_recv paths, _build_banner, and markdown referral; ruff passes. Full suite 3813 passed, 1 skipped.
-
-Repository coverage: 12681 statements, 124 missing (99%). No obvious trivial coverage gap stands out immediately (memcached already 100%).
+- `ethscan/passwords.py` coverage → 100% (135/135), added 6 new tests to `tests/test_passwords.py`. Full suite: 3849 passed, 1 skipped. ruff passes on modified tests.
+- Overall coverage: 110 missing statements (down from 124).
 
 ## Next precise task
-Identify a specific small module with uncovered lines (e.g. `ethscan/snmp.py` 15 missing, `ethscan/passwords.py` 4, `ethscan/radix.py` 9) and add minimal targeted unit tests to its corresponding test file following existing conventions, without modifying files under `ethscan/`. Prioritize the smallest missing set.
+Select the module with the smallest number of missing lines among remaining: trace.py (1), postgresql.py (1), smtp.py (1), redis.py (2), service.py (3), resolve.py/ssl.py (4), snmp.py (5), s3.py (6), radix.py (9), vuln.py (9). Add minimal targeted unit tests to the corresponding test file without modifying `ethscan/`, focusing on practical paths. For truly unreachable defensive branches, document in test context if needed but prefer achievable coverage.
 
-Verification: tests for that module pass; ruff on modified test files passes; full suite remains green (3813 passed, 1 skipped).
+Verification: targeted module tests pass; ruff on modified test files passes; full suite remains ≥3849 passed, 1 skipped.
