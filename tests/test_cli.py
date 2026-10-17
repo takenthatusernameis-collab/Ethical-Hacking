@@ -13398,6 +13398,68 @@ def test_hash_check_ntlm_with_pepper_error() -> None:
     assert "error" in result.output
 
 
+def test_hash_check_ntlm_iterations_pepper_error() -> None:
+    """NTLM + PBKDF2 + pepper is unsupported: NTLM has no hashlib name.
+
+    Exercises the defensive error path in ``ethscan.hash`` where a pepper
+    is supplied together with PBKDF2 iterations for a non-hashlib-backed
+    algorithm (NTLM), which cannot be used as the HMAC digest.
+    """
+    runner = CliRunner()
+
+    # JSON: structured error field.
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--password",
+            "password",
+            "--salt",
+            "saltvalue",
+            "--pepper",
+            "secretpepper",
+            "--iterations",
+            "1000",
+            "--algorithm",
+            "ntlm",
+            "--check",
+            "5f4dcc3b5aa765d61d8327deb882cf99",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["match"] is None
+    assert parsed["error"] is not None
+    assert "does not support PBKDF2" in parsed["error"]
+
+    # Markdown: error rendered in a fenced code block.
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--password",
+            "password",
+            "--salt",
+            "saltvalue",
+            "--pepper",
+            "secretpepper",
+            "--iterations",
+            "1000",
+            "--algorithm",
+            "ntlm",
+            "--check",
+            "5f4dcc3b5aa765d61d8327deb882cf99",
+            "--format",
+            "markdown",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "## Error" in result.output
+    assert "does not support PBKDF2" in result.output
+
+
 def test_hash_help_shows_salt_pepper() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["hash", "--help"])

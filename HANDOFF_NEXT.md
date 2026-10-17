@@ -1,26 +1,27 @@
 # Handoff to Next Agent
 
 ## What changed
-- Executed the prior agent's assigned task: committed test additions `tests/test_netbios.py` and `tests/test_mssql.py` were already present and committed (commit 3eace12). No new source changes were made to `ethscan/`.
-- Inspected repository state; verified no uncommitted diffs exist in the working tree.
+- Added one new test `test_hash_check_ntlm_iterations_pepper_error` (62 lines) to `tests/test_cli.py` at line 13401, placed immediately after `test_hash_check_ntlm_with_pepper_error`.
+- No source changes to `ethscan/`. No behavior change.
 
 ## What was verified
-- Confirmed test additions are present: 8 new targeted tests in `tests/test_netbios.py`, 1 new test in `tests/test_mssql.py` (committed previously).
-- Verified the new/affected tests still pass: `tests/test_netbios.py` + `tests/test_mssql.py` = 151 passed in 0.16s.
-- Confirmed full suite state is consistent with prior handoff: 3887 passed, 1 skipped (as documented). No regressions observed in the focused test run.
-- Verified working tree is clean and test files are committed.
+- New test passes in isolation: `tests/test_cli.py::test_hash_check_ntlm_iterations_pepper_error` PASSED.
+- Full suite: **3888 passed, 1 skipped** (was 3887; +1 new test). No regressions.
+- Coverage delta: `ethscan/hash.py` went from 81% (246 stmts, 47 miss) to 84% (39 miss) when running the full `tests/test_cli.py` set. The test exercises the `run_check` error path where PBKDF2 iterations + pepper are combined with a non-hashlib-backed algorithm (NTLM).
+- `ruff check tests/test_cli.py`: no NEW violations introduced by the added lines. All 12 reported errors are pre-existing (C405 set-literal rewrites at lines 4423/4784, F811 duplicate `test_cve_help` at 10874, etc.) and unrelated to this change.
+- Working tree: only `tests/test_cli.py` modified (62 insertions, 0 deletions). Not committed (per policy: do not commit unless explicitly asked).
 
 ## What remains unresolved
-- Coverage for `ethscan/` is effectively complete per prior characterization: remaining missing lines are provably unreachable or unreachable-in-tests (documented in NEXT_TASK.md). No coverable gaps exist requiring source changes.
-- No new issues identified.
+- `ethscan/hash.py` lines **226 and 238** are still uncovered. They are **provably unreachable** in this environment: `_compute_pbkdf2_hash` (line 167) raises `ValueError("Algorithm 'ntlm' does not support PBKDF2 (no hashlib name).")` *before* the HMAC layer is reached, because NTLM has no hashlib name. The same applies to any non-hashlib algorithm (only NTLM exists in that category). These are defensive guards that cannot be triggered through the public CLI without changing source. Do not attempt to cover them.
+- Other small gaps (`brute.py:15`, `dns.py:155`, `dnssec.py:11-16`, `mongodb.py:205-206`, `mysql.py:107/111/150`, `ntp.py:387`, `oracle.py:304-305`, `postgresql.py:201`, `redis.py:55-56`, `resolve.py:188`, `smtp.py:222`, `vuln.py:37/57-62/555-556/904/1047`) are environment-dependent (missing optional deps: paramiko, dnspython) or already-characterized as unreachable-in-tests. Not coverable here.
 
 ## Which approaches failed and why
-- None. No alternative approaches attempted; followed prior agent's explicit next task (commit test additions) and confirmed they were already committed.
+- Attempted to cover `hash.py:226` directly: verified by running the new test in isolation that the line is NOT executed — the earlier `_compute_pbkdf2_hash` guard at line 167 raises first. Confirmed provably unreachable. Abandoned that specific line as a target; the test still yields net coverage improvement (8 genuinely reachable lines) and validates a real defensive error path.
 
 ## Next precise task
-Pick a bounded, high-value next task (no prior agent assignment to execute now). Suggested candidate (evidence-based):
-- **Task:** Improve coverage/quality of a module with low/contested coverage by characterizing or adding tests for coverable code paths only (without modifying `ethscan/` source). Focus on a specific module where missing lines are potentially coverable.
-- **Constraints:** Do not modify `ethscan/` source files to make lines coverable unless doing so is strictly necessary and the change is minimal/reversible. Preserve existing behavior. Verify with targeted tests and run relevant subset/full suite if needed. Do not commit unless explicitly requested.
-- **Evidence:** `NEXT_TASK.md` documents which modules have documented unreachable lines (radix, mssql, cli, etc.). Re-examine `cli.py` and others to see if any previously-marked lines might be coverable via different invocation paths without changing source.
+Pick a bounded, high-value next task. Suggested candidate (evidence-based):
+- **Task:** Audit another module's reachable error/validation path for a small, verifiable test addition. Good candidates with reachable-but-untested branches: `ethscan/vuln.py` (lines 37, 57-62, 555-556, 904, 1047 — need to verify which are reachable), or add edge-case tests for an existing well-covered command's option combinations in `tests/test_cli.py`.
+- **Constraints:** Do not modify `ethscan/` source to make lines coverable unless strictly necessary and minimal/reversible. Preserve existing behavior. Verify with targeted tests. Do not commit unless explicitly requested.
+- **Evidence:** Full coverage report shows `ethscan/` at 99% overall (12681 stmts, 72 miss). Remaining gaps are either provably unreachable or environment-dependent. Focus on reachable paths only.
 
-Notes: The coverage characterization work is complete; any further "coverage" work should be evidence-driven and not attempt to cover provably unreachable code.
+Notes: The coverage-characterization work is complete; any further "coverage" work should be evidence-driven and not attempt to cover provably unreachable code.
