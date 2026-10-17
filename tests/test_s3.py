@@ -669,7 +669,7 @@ def test_format_s3_report_csv_empty() -> None:
     output = format_s3_report_csv(data)
 
     lines = [line.rstrip("\r") for line in output.strip().split("\n")]
-    assert lines[0] == "target,domain,bucket,region,status_code,exists,public,error"
+    assert lines[0] == "target,domain,bucket,region,url,status_code,dns_resolved,exists,public,error"
 
 
 def test_format_s3_report_csv_missing_optional_fields() -> None:

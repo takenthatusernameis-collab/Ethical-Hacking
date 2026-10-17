@@ -16320,7 +16320,7 @@ def test_s3_format_csv_alias(monkeypatch) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["s3", "--target", "example.com", "--format", "csv"])
     assert result.exit_code == 0
-    assert "target,domain,bucket,region,status_code,exists,public,error" in result.output
+    assert "target,domain,bucket,region,url,status_code,dns_resolved,exists,public,error" in result.output
 
 
 def test_validate_help_shows_output_format() -> None:
