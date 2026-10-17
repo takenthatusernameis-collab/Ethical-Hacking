@@ -1,35 +1,42 @@
 # Handoff to Next Agent
 
 ## What changed
-- No source code, tests, or behavior modified this session.
-- Characterized every remaining sub-100% coverage gap (see TASK.md "Completed: full sub-100% gap characterization"). All gaps are provably unreachable or environment-dependent.
-- Documentation-only change to `TASK.md`.
+- Added `ethscan/py.typed` (PEP 561 marker) and updated `pyproject.toml` to package `py.typed` via `[tool.setuptools.package-data]`.
+- No source logic, tests, or behavior modified.
 
 ## What was verified
-- `git status` -> clean.
-- Full test suite: **3891 passed, 1 skipped** (baseline unchanged).
-- `python -m pytest -q --cov=ethscan --cov-report=term-missing` -> TOTAL 99%, 70 missing lines, all provably dead or environment-dependent.
+- `git status` -> clean (only new py.typed and pyproject.toml data entry).
+- Full test suite: 3891 passed, 1 skipped (baseline unchanged).
+- `python -m pytest -q --cov=ethscan --cov-report=term-missing` -> TOTAL 99%, 70 missing; all gaps provably dead or environment-dependent (documented in TASK.md).
+- Package installed in editable mode; `ethscan` imports successfully from site-packages.
+- All Python modules compile (`python -m py_compile ethscan/*.py`).
 
 ## What remains unresolved
-- ~2010 pre-existing ruff errors (UP006/FA100 dominated); no `[tool.ruff]` target-version config. Not a bounded one-session task.
-- Coverage ~99%; remaining gaps provably dead or optional-dep-dependent.
+- ruff reports pre-existing style issues: 1734 errors in ethscan/ (1405 unsafe-fixable), 276 in tests/ (57 unsafe-fixable). Not a bounded fix for this session; any lint cleanup must be incremental and evidence-based.
+- Coverage 99%; remaining 70 missing lines are documented as unreachable or environment-dependent (do not add tests for dead code).
 
-## Approaches failed
-- Coverage-hunting exhausted; do not add tests for dead lines.
-- Attempted to cover `mysql.py:107` but empirical tracing showed the guard at line 99 (`len(data) < 5`) makes it unreachable too; test was added then reverted.
+## Approaches failed / already exhausted
+- Coverage hunting exhausted: gaps are provably unreachable (guards prevent execution, decode with errors="replace", mixed-version sort raises earlier, etc.) or require optional deps (dnspython, paramiko) not present.
+- Repeated test attempts for unreachable branches were reverted (e.g. mysql.py:107).
 
 ## Next precise task
-Select a **bounded feature or bug fix with concrete evidence** (reproducible failure, issue, or user request). Coverage-hunting and junk cleanup are exhausted. Do not redesign orchestration or weaken safety controls. If no evidence-based task is apparent, inspect issue tracker / README for documented gaps before changing code.
-Constraints: no commit unless explicitly asked; preserve safety/permissions.
+Select a bounded, high-value feature or bug fix with concrete evidence (reproducible failure, issue, or user request). Do not:
+- Hunt coverage on documented dead lines
+- Redesign orchestration, permissions, or safety controls
+- Perform bulk lint fixes without clear scope/justification
 
-## Provably dead code (documented, not targeted)
-- `mysql.py:107, 111, 150` — guard at line 99 guarantees `len(data) >= 5`; `pos >= len(payload)` at pos=0 always False; `salt1_len < 0` impossible.
-- `mssql.py:389-391, 432-433, 455-456` — `struct.unpack` on 9 bytes cannot raise; `decode(errors="replace")` never raises.
-- `oracle.py:304-305` — `decode(errors="replace")` never raises.
-- `radix.py:149-150, 153-154, 158-161, 219-220` — mixed-version sort raises `TypeError` first; `collapse_addresses` only raises `TypeError` for mixed versions; overlapping pairs always collapse to len 1; `ip_network(strict=False)` cannot raise with valid inputs.
-- `cli.py:607-635` — dead `hash` function shadowed by registered `hash` command at line 2906.
-- `cli.py:4639` — `__main__` entry point, not executed under pytest.
-- `dnssec.py:11-16`, `hash.py:34-35/60/83/226`, `mongodb.py:205-206`, `redis.py:55-56` — environment-dependent (optional deps not installed).
-- `netbios.py` (10 lines) — environment-dependent (no live NetBIOS responder).
+Constraints: no commit unless explicitly asked; preserve working baseline; keep smallest reversible change.
 
-(End of file - total 31 lines)
+## Documented provably dead/unreachable gaps (not targets)
+- cli.py:607-635 (shadowed hash function), 4639 (__main__)
+- dnssec.py:11-16 (optional dnspython)
+- hash.py:34-35,60,83,226 (MD4/PBKDF2 environment constraints)
+- mongodb.py:205-206, redis.py:55-56 (optional deps)
+- mssql.py:389-391,432-433,455-456 (struct guarantees; decode with errors="replace")
+- mysql.py:107,111,150 (guards guarantee preconditions)
+- netbios.py:10 lines (no live responder)
+- oracle.py:304-305 (decode with errors="replace")
+- radix.py:149-150,153-154,158-161,219-220 (sort raises earlier; collapse semantics)
+- ntp.py:387, postgresql.py:201, smtp.py:222, resolve.py:188, vuln.py:37,57-62,555-556,904,1047 (documented)
+
+Full details in TASK.md.
