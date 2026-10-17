@@ -1,22 +1,22 @@
 """Tests for the ethscan completion module."""
 
-from unittest.mock import MagicMock
 
 import click
 import pytest
+from click.testing import CliRunner
 
+from ethscan.cli import cli
 from ethscan.completion import (
     DEFAULT_PROG_NAME,
     _available_shells,
     _completion_class_for,
     available_shells,
-    generate_completion_script,
-    run_completion,
     format_completion_report_csv,
     format_completion_report_json,
     format_completion_report_markdown,
+    generate_completion_script,
+    run_completion,
 )
-
 
 # ---------------------------------------------------------------------------
 # Public API helpers
@@ -250,3 +250,54 @@ def test_format_completion_report_csv_escaping() -> None:
     }
     output = format_completion_report_csv(result)
     assert '"line,with,commas"' in output
+
+
+# ---------------------------------------------------------------------------
+# CLI command
+# ---------------------------------------------------------------------------
+
+
+def _run_completion_cli(args: list) -> CliRunner:
+    return CliRunner().invoke(cli, ["completion"] + args)
+
+
+def test_completion_cli_positional_bash() -> None:
+    """The documented `ethscan completion bash` form must work (positional shell)."""
+    result = _run_completion_cli(["bash"])
+    assert result.exit_code == 0, result.output
+    assert '"shell": "bash"' in result.output
+
+
+def test_completion_cli_positional_zsh() -> None:
+    result = _run_completion_cli(["zsh"])
+    assert result.exit_code == 0, result.output
+    assert '"shell": "zsh"' in result.output
+
+
+def test_completion_cli_positional_fish() -> None:
+    result = _run_completion_cli(["fish"])
+    assert result.exit_code == 0, result.output
+    assert '"shell": "fish"' in result.output
+
+
+def test_completion_cli_default_shell() -> None:
+    result = _run_completion_cli([])
+    assert result.exit_code == 0, result.output
+    assert '"shell": "bash"' in result.output
+
+
+def test_completion_cli_option_still_works() -> None:
+    result = _run_completion_cli(["--shell", "zsh"])
+    assert result.exit_code == 0, result.output
+    assert '"shell": "zsh"' in result.output
+
+
+def test_completion_cli_option_overrides_positional() -> None:
+    result = _run_completion_cli(["bash", "--shell", "zsh"])
+    assert result.exit_code == 0, result.output
+    assert '"shell": "zsh"' in result.output
+
+
+def test_completion_cli_invalid_shell_errors() -> None:
+    result = _run_completion_cli(["powershell"])
+    assert result.exit_code != 0

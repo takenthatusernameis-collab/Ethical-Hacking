@@ -3503,11 +3503,19 @@ def jwt(token: Optional[str], fmt: str, output_fmt: Optional[str], out_path: Opt
 
 
 @cli.command()
-@click.option(
-    "--shell",
+@click.argument(
+    "shell",
     type=click.Choice(["bash", "zsh", "fish"]),
     default="bash",
-    help="Shell to generate a completion script for (default: bash).",
+    required=False,
+    metavar="SHELL",
+)
+@click.option(
+    "--shell",
+    "shell_option",
+    type=click.Choice(["bash", "zsh", "fish"]),
+    default=None,
+    help="Shell to generate a completion script for (default: bash). Alias for the positional SHELL argument.",
 )
 @click.option(
     "--prog-name",
@@ -3536,15 +3544,24 @@ def jwt(token: Optional[str], fmt: str, output_fmt: Optional[str], out_path: Opt
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def completion(shell: str, prog_name: str, fmt: str, output_fmt: Optional[str], out_path: Optional[str]) -> None:
+def completion(
+    shell: str,
+    shell_option: Optional[str],
+    prog_name: str,
+    fmt: str,
+    output_fmt: Optional[str],
+    out_path: Optional[str],
+) -> None:
     """Generate a shell completion script for ethscan.
 
     Supported shells: bash, zsh, fish. Save the output and source it
     in your shell to enable tab completion of commands, options, and
     option values.
     """
+    # The --shell option overrides the positional SHELL argument when both are given.
+    effective_shell = shell_option if shell_option is not None else shell
     try:
-        results = run_completion(cli, shell=shell, prog_name=prog_name)
+        results = run_completion(cli, shell=effective_shell, prog_name=prog_name)
     except ValueError as exc:
         click.echo(str(exc), err=True)
         raise SystemExit(1)
