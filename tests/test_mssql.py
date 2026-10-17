@@ -586,6 +586,21 @@ def test_parse_prelogin_response_truncated_option():
     assert parsed["encryption"] is None
 
 
+def test_parse_prelogin_response_trailing_byte_breaks_loop():
+    # A full option followed by exactly one trailing byte makes the loop
+    # re-enter with pos + 2 > len(payload) and hit the `break` (line 404).
+    payload = b"\x00\x01\x02\x03"  # version opt (type=0, len=1, val=0x02) + 1 byte
+    msg_len = 9 + len(payload)
+    header = struct.pack(
+        "!BBHHBH", _TDS_PRELOGIN, 0x01, msg_len, 0x0000, 0x01, 0x0000
+    )
+    resp = header + payload
+    parsed = _parse_prelogin_response(resp)
+    assert parsed["error"] is None
+    # The version option was decoded before the trailing byte broke the loop.
+    assert parsed["version"] == "\x02"
+
+
 def test_parse_prelogin_response_short_data():
     parsed = _parse_prelogin_response(b"\x12\x01\x00\x05")
     assert parsed["error"] is not None

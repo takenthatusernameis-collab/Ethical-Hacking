@@ -256,6 +256,13 @@ def test_parse_dns_name_truncated_label_raises() -> None:
         _parse_dns_name(b"\x05abc", 0)
 
 
+def test_parse_dns_name_empty_name_returns_empty() -> None:
+    # A root label immediately -> no labels collected -> raw is empty.
+    name, offset = _parse_dns_name(b"\x00", 0)
+    assert name == ""
+    assert offset == 1
+
+
 # ---------------------------------------------------------------------------
 # _parse_name_flags
 # ---------------------------------------------------------------------------
@@ -389,6 +396,42 @@ def test_parse_nbns_response_truncated_answer_raises() -> None:
     header = struct.pack("!HHHHHH", 0x1234, 0x8000, 0, 1, 0, 0)
     with pytest.raises(ValueError):
         _parse_nbns_response(header)
+
+
+def test_parse_nbns_response_truncated_rr_header() -> None:
+    # Answer name parses but fewer than 10 bytes remain for the RR header.
+    header = struct.pack("!HHHHHH", 0x1234, 0x8000, 0, 1, 0, 0)  # ancount=1
+    data = header + b"\x05hello\x00"  # name consumes to offset 19; <10 bytes left
+    with pytest.raises(ValueError):
+        _parse_nbns_response(data)
+
+
+def test_parse_nbns_response_truncated_rr_rdata() -> None:
+    # Full RR header present but rdlength claims more bytes than available.
+    header = struct.pack("!HHHHHH", 0x1234, 0x8000, 0, 1, 0, 0)  # ancount=1
+    rr = struct.pack("!HHIH", RR_TYPE_NBSTAT, RR_CLASS_IN, 0, 100)  # rdlength=100
+    data = header + b"\x05hello\x00" + rr  # no rdata bytes follow
+    with pytest.raises(ValueError):
+        _parse_nbns_response(data)
+
+
+def test_parse_nbns_response_nb_record() -> None:
+    header = struct.pack("!HHHHHH", 0x1234, 0x8000, 0, 1, 0, 0)  # ancount=1
+    rr = struct.pack("!HHIH", RR_TYPE_NB, RR_CLASS_IN, 0, 4)
+    data = header + b"\x05hello\x00" + rr + b"\x0a\x00\x00\x01"
+    message = _parse_nbns_response(data)
+    ans = message["answers"][0]
+    assert ans["type_name"] == "nb"
+    assert ans["address"] == "10.0.0.1"
+
+
+def test_parse_nbns_response_unknown_rr_type() -> None:
+    header = struct.pack("!HHHHHH", 0x1234, 0x8000, 0, 1, 0, 0)  # ancount=1
+    rr = struct.pack("!HHIH", 0x0001, RR_CLASS_IN, 0, 2)
+    data = header + b"\x05hello\x00" + rr + b"\x0a\x00"
+    message = _parse_nbns_response(data)
+    ans = message["answers"][0]
+    assert ans["type_name"] == "0x0001"
 
 
 # ---------------------------------------------------------------------------
@@ -804,6 +847,33 @@ def test_format_netbios_report_csv_error_case() -> None:
     assert rows[1][3] == ""  # mac empty when None
     assert rows[1][3] == ""  # mac empty when None
 
+
+def test_format_netbios_report_markdown_empty_name() -> None:
+    # A name entry with an empty name hits the "(empty)" fallback (line 615).
+    results = _full_results()
+    results["names"] = [{"name": "", "suffix": 0, "suffix_hex": "0x00",
+                         "service_type": "Workstation service",
+                         "flags": {"group": False, "unique": True,
+                                   "owner_node_type": "B-node",
+                                   "permanent": False, "transient": True,
+                                   "active": True, "conflict": False,
+                                   "deregister": False, "raw": 0x0400}}]
+    results["num_names"] = 1
+    results["is_server"] = False
+    results["hostname"] = None
+    results["is_domain_member"] = False
+    output = format_netbios_report_markdown(results)
+    assert "| (empty) |" in output
+
+
+def test_format_netbios_report_markdown_domain_member() -> None:
+    # is_domain_member True renders the domain-member assessment line (line 645).
+    results = _full_results()
+    results["is_domain_member"] = True
+    output = format_netbios_report_markdown(results)
+    assert "Domain member:" in output and "YES" in output
+
+
 # Extra coverage for previously-uncovered branches
 
 
@@ -830,6 +900,13 @@ def test_skip_question_truncated():
     from ethscan.netbios import _skip_question
     with pytest.raises(ValueError):
         _skip_question(b"\x20A" * 1, 0, 1)
+
+
+def test_skip_question_truncated_question_record():
+    # A valid question name followed by fewer than 4 type/class bytes.
+    from ethscan.netbios import _skip_question
+    with pytest.raises(ValueError):
+        _skip_question(b"\x05hello\x00\x00\x00", 0, 1)
 
 
 def test_send_recv_real_and_errors():
