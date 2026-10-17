@@ -161,6 +161,41 @@ def _merge(defaults: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any
     return merged
 
 
+# Click option dest names that the documented ``format`` config key maps to.
+# The user-facing ``--output-format`` option uses the ``output_fmt`` dest, while
+# the deprecated ``--format`` alias uses ``fmt``. Config values are applied via
+# Click's ``default_map``, which is keyed by dest, so the documented ``format``
+# key must be remapped to a dest that actually controls output. We map it to
+# ``fmt`` (the deprecated ``--format`` alias dest) rather than ``output_fmt``
+# because the runtime precedence rule is
+# ``chosen = output_fmt if output_fmt is not None else fmt``. Mapping to
+# ``output_fmt`` instead would make config values sticky and ignore the
+# deprecated ``--format`` CLI flag, breaking the documented override contract.
+_FORMAT_DEST = "fmt"
+
+
+def _normalize_format_key(options: Dict[str, Any]) -> Dict[str, Any]:
+    """Remap the documented ``format`` key to the working ``fmt`` Click dest.
+
+    Click's ``default_map`` is keyed by option *dest* names. The documented
+    config schema (see ``dump_default_config`` and the README) uses ``format``,
+    but every command's working format dest is ``fmt`` (the deprecated
+    ``--format`` alias). Without this remap a user's ``format: markdown``
+    setting is silently ignored and output stays JSON. ``fmt`` is used rather
+    than ``output_fmt`` so that CLI ``--format``/``--output-format`` flags still
+    override the config value.
+    """
+    if not isinstance(options, dict):
+        return options
+    if "format" not in options:
+        return options
+    normalized = dict(options)
+    value = normalized.pop("format")
+    # Do not clobber an explicit output_fmt already present in the config.
+    normalized.setdefault(_FORMAT_DEST, value)
+    return normalized
+
+
 def build_default_map(
     config: Dict[str, Any],
     command: str,
@@ -173,11 +208,12 @@ def build_default_map(
 
     Returns:
         A dict mapping option dest names to config values. Empty when the
-        command has no configured defaults.
+        command has no configured defaults. The documented ``format`` key is
+        remapped to the working ``fmt`` dest so it actually takes effect.
     """
-    defaults = config.get("defaults") or {}
+    defaults = _normalize_format_key(config.get("defaults") or {})
     commands = config.get("commands") or {}
-    overrides = commands.get(command) or {}
+    overrides = _normalize_format_key(commands.get(command) or {})
     if not isinstance(overrides, dict):
         overrides = {}
     return _merge(defaults, overrides)

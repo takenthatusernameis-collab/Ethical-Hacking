@@ -128,9 +128,29 @@ def test_build_default_map_merges() -> None:
         "commands": {"scan": {"timeout": 1.0, "ports": "common"}},
     }
     dm = build_default_map(config, "scan")
-    assert dm == {"timeout": 1.0, "workers": 50, "format": "json", "ports": "common"}
+    # The documented ``format`` key is remapped to the working ``fmt`` Click
+    # dest (the deprecated ``--format`` alias) so config-driven output format
+    # actually takes effect while still allowing CLI overrides.
+    assert dm == {"timeout": 1.0, "workers": 50, "fmt": "json", "ports": "common"}
     dm2 = build_default_map(config, "subdomains")
-    assert dm2 == {"timeout": 5.0, "workers": 50, "format": "json"}
+    assert dm2 == {"timeout": 5.0, "workers": 50, "fmt": "json"}
+
+
+def test_build_default_map_format_key_remapped_to_fmt() -> None:
+    """The documented ``format`` key must reach the working ``fmt`` dest."""
+    config = {"defaults": {"format": "markdown"}, "commands": {}}
+    assert build_default_map(config, "ping") == {"fmt": "markdown"}
+
+
+def test_build_default_map_explicit_output_fmt_not_clobbered() -> None:
+    """An explicit ``output_fmt`` in config is preserved alongside ``format``."""
+    config = {"defaults": {"format": "json", "output_fmt": "markdown"}, "commands": {}}
+    assert build_default_map(config, "ping") == {"output_fmt": "markdown", "fmt": "json"}
+
+
+def test_build_default_map_command_level_format_remapped() -> None:
+    config = {"defaults": {}, "commands": {"scan": {"format": "csv"}}}
+    assert build_default_map(config, "scan") == {"fmt": "csv"}
 
 
 def test_build_default_map_empty() -> None:

@@ -1,30 +1,29 @@
 # Handoff to Next Agent
 
 ## What changed
-No uncommitted changes in working tree. Recent committed fixes:
-- `config --init`: creates parent directories when path contains missing parents (committed 8536ea2).
-- `completion`: accepts positional `shell` argument (bash|zsh|fish) in addition to `--shell` flag; keeps backward-compatible behavior (committed 9828bea).
+- `ethscan/config.py`: `build_default_map` now remaps the documented `format` config key to the working `fmt` Click dest via `_normalize_format_key`. Previously `format` was passed through verbatim and silently ignored (every command's format dest is `fmt`, the deprecated `--format` alias), so config-driven output format never took effect.
+- `tests/test_config.py`: updated `test_build_default_map_merges` (old assertion encoded the buggy passthrough) and added 3 regression tests (`test_build_default_map_format_key_remapped_to_fmt`, `test_build_default_map_explicit_output_fmt_not_clobbered`, `test_build_default_map_command_level_format_remapped`).
+- `TASK.md` / `NEXT_TASK.md`: updated to reflect the fix.
+
+Not committed (per "do not commit unless explicitly asked").
 
 ## What was verified
-- Baseline: 3899 passed, 1 skipped (full test suite). No regressions. Re-verified in this session.
-- `completion` CLI examples work (positional shell, `--shell` flag, defaults, validation).
-- `config --init` with nested paths creates parent directories and writes sample config. Re-verified in this session.
-- Code compiles cleanly; `ethscan` imports successfully.
-- `ethscan/py.typed` present (PEP 561); packaging metadata includes package data.
-- CLI smoke test: `python -m ethscan --help` and `config --init /tmp/.../config.yaml` exit 0.
+- Full suite: `python -m pytest -q` → 3902 passed, 1 skipped (was 3899; +3 new tests). No regressions.
+- `python -m py_compile ethscan/*.py` → clean; imports OK.
+- End-to-end with the documented sample config: `format: markdown|csv` now yields Markdown/CSV output for `ping`, `scan`, `config`, `cidr`; CLI `--output-format` and `--format` still override correctly; `--output-format json --format csv` → JSON (last flag wins), `--format csv` alone → CSV.
+- `.github` workflow audit: `bash -n` controller OK; all audit grep markers present; no forbidden fixed cap.
 
 ## What remains unresolved
-- Pre-existing ruff errors (~1734 in ethscan/, 189 in cli.py; 276 in tests) — not targeted for cleanup.
-- Pre-existing mypy errors (523 errors in 42 files) — not targeted for cleanup.
-- Coverage gaps (70 missing lines) — documented as provably unreachable or environment-dependent (require optional deps dnspython/paramiko, platform-specific paths, error branches not exercisable); do not hunt coverage.
-- Stash `stash@{0}` (WIP at 57493bf) contains abandoned bulk refactor (~55 files, ~1.5k lines) — not applied, conflicts with minimal-change principle; preserved.
+- Pre-existing ruff errors (~1735 in ethscan/, 189 in cli.py; 276 in tests) — not targeted.
+- Pre-existing mypy errors (523 errors in 42 files) — not targeted.
+- Coverage gaps (70 missing lines) — documented as provably unreachable or environment-dependent; do not hunt coverage.
+- Stash `stash@{0}` (WIP at 57493bf) contains abandoned bulk refactor (~55 files, ~1.5k lines) — not applied.
 
 ## Approaches failed / already exhausted
+- Mapping `format` → `output_fmt` instead of `fmt`: made config sticky and broke `test_config_explicit_overrides_config` (config `format: markdown` ignored the deprecated `--format json` CLI flag). Reverted after empirical testing; `fmt` is the correct dest.
 - Bulk lint/type cleanup — would expand scope beyond bounded task.
 - Coverage hunting on documented dead lines — not productive.
 - Bulk refactor in stash — abandoned to preserve working baseline.
 
 ## Next precise task
-No further bounded, high-value task is apparent. The project is feature-complete (all 59 README features implemented), all existing tests pass, and working tree is clean. If no new user request arrives, session is complete with no further action.
-
-Constraints: do not commit unless explicitly asked. Do not count control-marker-only commits as progress. Preserve smallest reversible changes. Do not weaken safety controls or redesign architecture. Tolerate pre-existing lint/type/coverage state.
+None apparent. If resuming, re-verify the fix end-to-end and consider committing the two modified files (config.py, test_config.py) plus the tracking files if the user wants persistence.

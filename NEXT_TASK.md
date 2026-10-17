@@ -1,21 +1,15 @@
 # Next Task for Agent
 
 ## Status
-- Working tree: clean (HEAD fb57b52). No uncommitted changes.
-- Tests: 3899 passed, 1 skipped. No regressions.
+- Working tree: modified (ethscan/config.py, tests/test_config.py). Not committed (per "do not commit unless explicitly asked"). HEAD 01ef33d.
+- Tests: 3902 passed, 1 skipped (was 3899; +3 new regression tests). No regressions.
 - Compilation/imports: clean.
 - Packaging: `ethscan/py.typed` included in package data (PEP 561).
-- Recent fixes committed: `config --init` parent-dir creation (8536ea2), positional `shell` for `completion` (9828bea).
-- Pre-existing technical debt (non-blocking): ruff/mypy errors, 70 documented coverage gaps.
+
+## Completed this session
+- Fixed a real bug the prior handoff missed: the documented config key `format` (README + `dump_default_config()`) never applied, because every command's working Click dest is `fmt` (the deprecated `--format` alias), not `format`. Output always fell back to JSON.
+- Fix: `ethscan/config.py::build_default_map` remaps `format` → `fmt` via `_normalize_format_key`. `fmt` was chosen over `output_fmt` after empirical testing showed `output_fmt` would make config sticky and ignore the deprecated `--format` CLI flag.
+- Added 3 regression tests in tests/test_config.py; updated `test_build_default_map_merges` assertion.
 
 ## Next precise task
-No bounded, high-value implementation task exists. Repository is stable and feature-complete. If user provides no new request, leave as-is.
-
-## Evidence/constraints
-- All tests green. Avoid speculative refactors, bulk linting, or coverage hunting on documented dead lines.
-- Stash `stash@{0}` preserved (abandoned bulk refactor) — do not apply.
-- Do not commit unless explicitly asked.
-- If new issue arises: reproduce smallest failure, make smallest reversible fix, run focused tests, then full suite.
-
-## Recommended next action
-Inspect handoff; if no new issue/request, complete session with no further changes.
+None apparent. Verify the fix end-to-end if resuming: `format: markdown` in an ethscan.yaml must yield Markdown output, and `--output-format`/`--format` CLI flags must still override. Do not apply stash; do not hunt lint/type/coverage.
