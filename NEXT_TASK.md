@@ -1,9 +1,16 @@
 # Next Task for Agent
 
 ## Status
-- Working tree: modified (ethscan/web.py, tests/test_cert.py, tests/test_geo.py, tests/test_mac.py, tests/test_osdetect.py, tests/test_wifi.py). Not committed.
+- Working tree: modified (18 files: 11 ethscan modules + 7 test files). Not committed. `tests/test_brute.py` left untouched (ruff F401 auto-fix broke `reload()`; reverted).
 - Tests: 3902 passed, 1 skipped.
-- PERF102 + SIM117 clean in touched files; global SIM117 reduced from 22 to 0 in src scope context; tests partially cleaned.
+- All safe autofix groups (I001, F401, F841, RUF015, PERF102, SIM117, E722) clean in `ethscan` + `tests`.
 
 ## Next precise task
-Apply the safe, deterministic lint cleanups that ruff can auto-fix without --unsafe where possible; otherwise one bounded code at a time. Continue SIM117 cleanup in remaining test files if desired (small batches), or pick another safe autofix group (e.g. F841, RUF015) bounded to specific files. Verify with ruff --select <codes> and pytest.
+All safe autofix groups are exhausted. Pick one of:
+1. Manually fix one bounded unsafe code without changing runtime behavior, e.g. BLE001/S110 in `ethscan/brute.py:119,124` (replace `except Exception: pass` with a logged or specific handler).
+2. Add a missing test for an untested command, or review README for stale command docs.
+3. Continue SIM117 cleanup if any new instances appear.
+
+Verify with `python -m ruff check --select <codes>` and `python -m pytest -q` after changes.
+
+(End of file - total 9 lines)

@@ -331,7 +331,7 @@ def test_attempt_axfr_uses_dnspython_when_available(monkeypatch) -> None:
 def test_attempt_axfr_dnspython_not_installed(monkeypatch) -> None:
     import builtins
 
-    import ethscan.dnsbrute as dnsbrute
+    from ethscan import dnsbrute
 
     real_import = builtins.__import__
 

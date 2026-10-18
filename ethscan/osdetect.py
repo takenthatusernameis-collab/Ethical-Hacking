@@ -1,6 +1,7 @@
 """OS fingerprinting module for ethscan."""
 from __future__ import annotations
 
+import contextlib
 import csv
 import io
 import json
@@ -10,7 +11,6 @@ import socket
 import struct
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
-import contextlib
 
 DEFAULT_TIMEOUT = 5.0
 DEFAULT_WORKERS = 10

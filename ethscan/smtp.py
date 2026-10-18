@@ -13,13 +13,13 @@ to ``socket.create_connection`` so tests can substitute a local fake SMTP server
 """
 from __future__ import annotations
 
+import contextlib
 import csv
 import io
 import json
 import socket
 import time
 from typing import Any, Optional
-import contextlib
 
 DEFAULT_PORT = 25
 DEFAULT_TIMEOUT = 2.0

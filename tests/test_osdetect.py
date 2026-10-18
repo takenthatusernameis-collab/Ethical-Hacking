@@ -1,5 +1,6 @@
 """Tests for the ethscan osdetect module."""
 
+import contextlib
 import csv
 import io
 import json
@@ -21,7 +22,6 @@ from ethscan.osdetect import (
     probe_syn,
     run_osdetect,
 )
-import contextlib
 
 # ---------------------------------------------------------------------------
 # Domain normalization

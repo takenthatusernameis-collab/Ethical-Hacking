@@ -12,13 +12,13 @@ defaults to a raw TCP socket so tests can substitute a local fake server.
 """
 from __future__ import annotations
 
+import contextlib
 import csv
 import io
 import json
 import socket
 import struct
 from typing import Any, Optional
-import contextlib
 
 DEFAULT_PORT = 1521
 DEFAULT_TIMEOUT = 3.0

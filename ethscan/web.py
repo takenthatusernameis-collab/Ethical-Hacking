@@ -1,5 +1,6 @@
 """Web application security checks for ethscan."""
 
+import contextlib
 import csv
 import io
 import json
@@ -7,7 +8,6 @@ import socket
 import ssl
 import urllib.error
 import urllib.request
-import contextlib
 
 # Recommended security headers and their importance.
 SECURITY_HEADERS: dict[str, str] = {

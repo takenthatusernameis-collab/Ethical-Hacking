@@ -30,13 +30,13 @@ response parsing without touching the network.
 """
 from __future__ import annotations
 
+import contextlib
 import csv
 import io
 import json
 import socket
 import ssl
 from typing import Any, Optional
-import contextlib
 
 DEFAULT_PORT = 389
 DEFAULT_LDAPS_PORT = 636

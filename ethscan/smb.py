@@ -35,6 +35,7 @@ exchange is performed; every network access flows through ``_send_recv``.
 """
 from __future__ import annotations
 
+import contextlib
 import csv
 import io
 import json
@@ -42,7 +43,6 @@ import os
 import socket
 import struct
 from typing import Any, Optional
-import contextlib
 
 DEFAULT_PORT = 445
 DEFAULT_TIMEOUT = 3.0

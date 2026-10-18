@@ -1,5 +1,6 @@
 """Tests for the ethscan web security module."""
 
+import contextlib
 import json
 from unittest.mock import MagicMock, patch
 
@@ -14,7 +15,6 @@ from ethscan.web import (
     format_web_report_markdown,
     run_web_checks,
 )
-import contextlib
 
 # ---------------------------------------------------------------------------
 # _parse_url

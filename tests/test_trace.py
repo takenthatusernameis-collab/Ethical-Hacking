@@ -1,3 +1,4 @@
+import contextlib
 import csv
 import io
 import json
@@ -5,7 +6,6 @@ import socket
 from unittest.mock import MagicMock, patch
 
 from ethscan import trace
-import contextlib
 
 
 def test_normalize_host():
@@ -545,4 +545,3 @@ def test_trace_single_raw_socket_unavailable_note():
             mock_probe.side_effect = Exception("raw")
             with contextlib.suppress(Exception):
                 trace._trace_single("t", 80, 1, 0.1, 1)
-import socket

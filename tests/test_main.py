@@ -1,5 +1,6 @@
 """Tests for the ethscan entry points (ethscan.main and ethscan.__main__)."""
 
+import contextlib
 import inspect
 import subprocess
 import sys
@@ -10,7 +11,6 @@ import ethscan.__main__
 import ethscan.main
 from ethscan import __version__
 from ethscan.cli import cli
-import contextlib
 
 
 def test_main_module_exposes_cli() -> None:

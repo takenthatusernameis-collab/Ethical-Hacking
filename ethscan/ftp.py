@@ -11,13 +11,13 @@ to ``ftplib.FTP`` so tests can substitute a local fake FTP client.
 """
 from __future__ import annotations
 
+import contextlib
 import csv
 import ftplib
 import io
 import json
 import socket
 from typing import Any, Optional
-import contextlib
 
 DEFAULT_PORT = 21
 DEFAULT_TIMEOUT = 3.0

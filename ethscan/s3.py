@@ -9,6 +9,7 @@ Stdlib only.
 """
 from __future__ import annotations
 
+import contextlib
 import csv
 import io
 import socket
@@ -17,7 +18,6 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 from urllib.parse import urlparse
-import contextlib
 
 DEFAULT_TIMEOUT = 5.0
 DEFAULT_MAX_WORKERS = 20

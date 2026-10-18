@@ -1,13 +1,13 @@
 """SSH security assessment module for ethscan."""
 from __future__ import annotations
 
+import contextlib
 import csv
 import io
 import json
 import socket
 import struct
 from typing import Any, Optional
-import contextlib
 
 try:
     import paramiko

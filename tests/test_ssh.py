@@ -326,9 +326,6 @@ def test_paramiko_available_flag() -> None:
 
 
 # Need to import struct and socket for some tests
-import socket
-import struct
-from typing import List
 
 # ---------------------------------------------------------------------------
 # CSV formatter
