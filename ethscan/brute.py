@@ -1,6 +1,7 @@
 """Brute-force login module for ethscan (FTP/SSH)."""
 from __future__ import annotations
 
+import contextlib
 import csv
 import io
 import json
@@ -119,10 +120,8 @@ def _attempt_ftp(
     except Exception as exc:
         result["error"] = str(exc)
     finally:
-        try:
+        with contextlib.suppress(Exception):  # pragma: no cover - defensive
             ftp.close()
-        except Exception:  # pragma: no cover - defensive
-            pass
     return result
 
 
@@ -176,10 +175,8 @@ def _attempt_ssh(
     except Exception as exc:
         result["error"] = str(exc)
     finally:
-        try:
+        with contextlib.suppress(Exception):  # pragma: no cover - defensive
             client.close()
-        except Exception:  # pragma: no cover - defensive
-            pass
     return result
 
 
