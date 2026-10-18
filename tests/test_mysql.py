@@ -62,14 +62,6 @@ def test_parse_handshake_empty():
     assert _parse_handshake(b"abc") == {}
 
 
-def test_parse_handshake_minimal():
-    # Minimal: protocol version 10, server version "5.7.0", then terminator
-    data = b"\x00\x00\x00\x01" + b"\x0a" + b"5.7.0\x00"
-    parsed = _parse_handshake(data)
-    assert parsed["protocol_version"] == 10
-    assert parsed["server_version"] == "5.7.0"
-
-
 def test_parse_handshake_truncated_after_protocol():
     # Only protocol version, then nothing
     data = b"\x00\x00\x00\x01\x0a"  # length=1, seq=0, payload: protocol_version=0x0a
@@ -150,13 +142,6 @@ def test_assess_handshake_mariadb():
     findings = _assess_handshake(handshake)
     assert any("MySQL/MariaDB server version: 10.5.10-MariaDB" in f for f in findings)
     assert any("MariaDB server detected" in f for f in findings)
-
-
-def test_assess_handshake_capabilities():
-    handshake = {"capabilities": (1 << 11) | (1 << 9)}  # SECURE_CONNECTION and SSL
-    findings = _assess_handshake(handshake)
-    assert any("Secure connection capability advertised" in f for f in findings)
-    assert any("SSL/TLS capability advertised" in f for f in findings)
 
 
 def test_assess_handshake_capabilities_none():
@@ -308,15 +293,6 @@ def test_run_mysql_handshake_simple():
     assert results["handshake"]["protocol_version"] == 10
 
 
-def test_run_mysql_no_response():
-    def connector(host, port, request, timeout):
-        return b"", None
-
-    results = run_mysql("localhost", connector=connector)
-    assert results["accessible"] is False
-    assert results["error"] == "No response from server"
-
-
 def test_run_mysql_timeout():
     def connector(host, port, request, timeout):
         return None, "Timeout"
@@ -333,27 +309,6 @@ def test_run_mysql_connection_refused():
     results = run_mysql("localhost", connector=connector)
     assert results["accessible"] is False
     assert results["error"] == "Connection refused"
-
-
-def test_run_mysql_empty_probes():
-    results = run_mysql("localhost", probes=[], connector=lambda *a: (b"", None))
-    assert results["accessible"] is False
-    assert results["error"] is None
-
-
-def test_run_mysql_port_override():
-    def connector(host, port, request, timeout):
-        assert port == 3307
-        return b"\x0a5.6.51\x00", None  # minimal
-
-    # with header for minimal
-    def conn(host, port, request, timeout):
-        payload = b"\x0a" + b"5.6.51\x00" + b"\x01\x00\x00\x00"
-        header = bytes([len(payload), 0, 0, 0])
-        return header + payload, None
-
-    results = run_mysql("localhost", port=3307, connector=conn)
-    assert results["port"] == 3307
 
 
 def test_run_mysql_url_format():

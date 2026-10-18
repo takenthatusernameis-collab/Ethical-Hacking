@@ -1,5 +1,7 @@
 """Tests for the ethscan ssh module."""
 
+from __future__ import annotations
+
 import socket
 import struct
 import types
