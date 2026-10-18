@@ -378,7 +378,7 @@ def _resolve_label(label: str, domain: str, timeout: float, resolver: Optional[s
             dns_resolver.lifetime = timeout
             dns_resolver.nameservers = [resolver]
             answers = dns_resolver.resolve(hostname, "A")
-            a_records = sorted(set(str(rdata) for rdata in answers))
+            a_records = sorted({str(rdata) for rdata in answers})
         except (dns.exception.DNSException, OSError, ValueError):
             pass
         try:
@@ -387,7 +387,7 @@ def _resolve_label(label: str, domain: str, timeout: float, resolver: Optional[s
             dns_resolver.lifetime = timeout
             dns_resolver.nameservers = [resolver]
             answers = dns_resolver.resolve(hostname, "AAAA")
-            aaaa_records = sorted(set(str(rdata) for rdata in answers))
+            aaaa_records = sorted({str(rdata) for rdata in answers})
         except (dns.exception.DNSException, OSError, ValueError):
             pass
     else:

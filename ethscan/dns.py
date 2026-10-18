@@ -103,7 +103,7 @@ def resolve_with_dnspython(
         resolver.lifetime = timeout
 
         answers = resolver.resolve(domain, record_type)
-        return sorted(set(str(rdata) for rdata in answers))
+        return sorted({str(rdata) for rdata in answers})
     except (dns.exception.DNSException, OSError, ValueError):
         return []
 
@@ -150,7 +150,7 @@ def run_dns(
                     resolver.lifetime = timeout
                     resolver.nameservers = [server]
                     answers = resolver.resolve(domain, rtype)
-                    return rtype, sorted(set(str(rdata) for rdata in answers))
+                    return rtype, sorted({str(rdata) for rdata in answers})
                 except (dns.exception.DNSException, OSError, ValueError):
                     return rtype, []
             return rtype, []

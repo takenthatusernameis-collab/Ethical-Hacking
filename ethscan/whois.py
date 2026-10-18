@@ -113,13 +113,13 @@ def parse_whois(raw: str) -> dict[str, object]:
         r"Name Server:\s*(\S+)", raw, re.IGNORECASE
     )
     if nameserver_matches:
-        result["nameservers"] = sorted(set(ns.strip().rstrip(".") for ns in nameserver_matches))
+        result["nameservers"] = sorted({ns.strip().rstrip(".") for ns in nameserver_matches})
 
     status_matches = re.findall(
         r"Status:\s*(\S+)", raw, re.IGNORECASE
     )
     if status_matches:
-        result["status_codes"] = sorted(set(status.strip() for status in status_matches))
+        result["status_codes"] = sorted({status.strip() for status in status_matches})
 
     return result
 

@@ -322,7 +322,7 @@ def resolve_a_records(hostname: str, timeout: float = 2.0, resolver: Optional[st
             dns_resolver.lifetime = timeout
             dns_resolver.nameservers = [resolver]
             answers = dns_resolver.resolve(hostname, "A")
-            ips = sorted(set(str(rdata) for rdata in answers))
+            ips = sorted({str(rdata) for rdata in answers})
             return ips
         except (dns.exception.DNSException, OSError, ValueError):
             pass
@@ -330,7 +330,7 @@ def resolve_a_records(hostname: str, timeout: float = 2.0, resolver: Optional[st
     try:
         socket.setdefaulttimeout(timeout)
         results = socket.getaddrinfo(hostname, None, socket.AF_INET)
-        ips = sorted(set(r[4][0] for r in results))
+        ips = sorted({r[4][0] for r in results})
     except (socket.timeout, socket.gaierror, OSError, ValueError):
         pass
     return ips
@@ -346,7 +346,7 @@ def resolve_aaaa_records(hostname: str, timeout: float = 2.0, resolver: Optional
             dns_resolver.lifetime = timeout
             dns_resolver.nameservers = [resolver]
             answers = dns_resolver.resolve(hostname, "AAAA")
-            ips = sorted(set(str(rdata) for rdata in answers))
+            ips = sorted({str(rdata) for rdata in answers})
             return ips
         except (dns.exception.DNSException, OSError, ValueError):
             pass
@@ -354,7 +354,7 @@ def resolve_aaaa_records(hostname: str, timeout: float = 2.0, resolver: Optional
     try:
         socket.setdefaulttimeout(timeout)
         results = socket.getaddrinfo(hostname, None, socket.AF_INET6)
-        ips = sorted(set(r[4][0] for r in results))
+        ips = sorted({r[4][0] for r in results})
     except (socket.timeout, socket.gaierror, OSError, ValueError):
         pass
     return ips

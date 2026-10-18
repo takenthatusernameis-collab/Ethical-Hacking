@@ -224,7 +224,7 @@ def run_validate(
     else:
         notes.append("One or more specifications were invalid; see error fields.")
 
-    all_ports = sorted(set(p for r in port_results for p in r["ports"]))
+    all_ports = sorted({p for r in port_results for p in r["ports"]})
     summary = {
         "ports_specified": len(port_results),
         "ports_valid": sum(1 for r in port_results if r["valid"]),

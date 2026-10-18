@@ -87,7 +87,7 @@ def resolve_cname_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list
         resolver.lifetime = timeout
 
         answers = resolver.resolve(domain, "CNAME")
-        return sorted(set(str(rdata) for rdata in answers))
+        return sorted({str(rdata) for rdata in answers})
     except (dns.exception.DNSException, OSError, ValueError):
         return []
 
@@ -111,7 +111,7 @@ def resolve_ptr_records(ip: str, timeout: float = DEFAULT_TIMEOUT, server: Optio
 
         rev_name = dns.reversename.from_address(ip)
         answers = resolver.resolve(rev_name, "PTR")
-        return sorted(set(str(rdata) for rdata in answers))
+        return sorted({str(rdata) for rdata in answers})
     except (dns.exception.DNSException, OSError, ValueError):
         return []
 
@@ -131,7 +131,7 @@ def resolve_with_dnspython(
             resolver.nameservers = [server]
 
         answers = resolver.resolve(domain, record_type)
-        return sorted(set(str(rdata) for rdata in answers))
+        return sorted({str(rdata) for rdata in answers})
     except (dns.exception.DNSException, OSError, ValueError):
         return []
 
