@@ -148,10 +148,10 @@ def _merge_networks(networks: list[ipaddress._BaseNetwork]) -> list[ipaddress._B
         if net.version != last.version:
             merged.append(net)
             continue
-try:
-                    collapsed = list(ipaddress.collapse_addresses([last, net]))
-                except ValueError:
-                    collapsed = None
+        try:
+            collapsed = list(ipaddress.collapse_addresses([last, net]))
+        except ValueError:
+            collapsed = None
         if collapsed and len(collapsed) == 1:
             merged[-1] = collapsed[0]
         elif last.overlaps(net):
