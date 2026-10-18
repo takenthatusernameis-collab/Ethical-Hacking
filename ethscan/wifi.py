@@ -66,6 +66,7 @@ def _run_iwlist_scan(interface: str) -> list[dict]:
             capture_output=True,
             text=True,
             timeout=10,
+            check=False,
         )
         if result.returncode != 0:
             return aps
@@ -140,6 +141,7 @@ def _run_iw_scan(interface: str) -> list[dict]:
             capture_output=True,
             text=True,
             timeout=10,
+            check=False,
         )
         if result.returncode != 0:
             return aps
