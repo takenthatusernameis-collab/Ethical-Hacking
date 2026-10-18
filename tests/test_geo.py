@@ -130,8 +130,7 @@ def test_load_cache_valid(tmp_path) -> None:
 
 def test_save_cache(tmp_path) -> None:
     cache_file = tmp_path / "cache.json"
-    with patch("ethscan.geo.CACHE_DIR", tmp_path):
-        with patch("ethscan.geo.CACHE_FILE", cache_file):
+    with patch("ethscan.geo.CACHE_DIR", tmp_path), patch("ethscan.geo.CACHE_FILE", cache_file):
             _save_cache({"8.8.8.8": {"status": "success", "country": "US"}})
             assert cache_file.exists()
             data = json.loads(cache_file.read_text())
@@ -259,8 +258,7 @@ def test_get_cached_or_fetch_cache_miss_fetches() -> None:
     mock_urlopen = MagicMock()
     mock_urlopen.__enter__.return_value.read.return_value = mock_data
 
-    with patch("urllib.request.urlopen", return_value=mock_urlopen):
-        with patch("ethscan.geo.CACHE_FILE", Path("/nonexistent/cache.json")):
+    with patch("urllib.request.urlopen", return_value=mock_urlopen), patch("ethscan.geo.CACHE_FILE", Path("/nonexistent/cache.json")):
             result = _get_cached_or_fetch("8.8.8.8", 1.0, use_cache=True, offline_fallback=False)
 
     assert result["cached"] is False
@@ -271,8 +269,7 @@ def test_get_cached_or_fetch_fetch_fails_no_cache(tmp_path) -> None:
     cache_file = tmp_path / "cache.json"
     cache_file.write_text("{}")
 
-    with patch("urllib.request.urlopen", side_effect=Exception("Network error")):
-        with patch("ethscan.geo.CACHE_FILE", cache_file):
+    with patch("urllib.request.urlopen", side_effect=Exception("Network error")), patch("ethscan.geo.CACHE_FILE", cache_file):
             result = _get_cached_or_fetch("8.8.8.8", 1.0, use_cache=True, offline_fallback=False)
 
     assert result["status"] == "fail"
@@ -290,8 +287,7 @@ def test_get_cached_or_fetch_fetch_fails_offline_fallback(tmp_path) -> None:
     cache_file = tmp_path / "cache.json"
     cache_file.write_text(json.dumps({"8.8.8.8": cached_data}))
 
-    with patch("urllib.request.urlopen", side_effect=Exception("Network error")):
-        with patch("ethscan.geo.CACHE_FILE", cache_file):
+    with patch("urllib.request.urlopen", side_effect=Exception("Network error")), patch("ethscan.geo.CACHE_FILE", cache_file):
             result = _get_cached_or_fetch("8.8.8.8", 1.0, use_cache=True, offline_fallback=True)
 
     assert result["cached"] is True

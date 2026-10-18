@@ -796,8 +796,6 @@ def test_run_osdetect_no_inferred_adds_notes() -> None:
     from ethscan import osdetect
     with patch("ethscan.osdetect.probe_syn", return_value={
         "port": 80, "connected": False, "response": "NO-RESPONSE", "probe_type": "SYN", "flags_observed": None, "error": None
-    }):
-        with patch("ethscan.osdetect._match_os_from_banner", return_value=[]), \
-             patch("ethscan.osdetect._match_os_from_behavior", return_value=[]):
+    }), patch("ethscan.osdetect._match_os_from_banner", return_value=[]), patch("ethscan.osdetect._match_os_from_behavior", return_value=[]):
             res = osdetect.run_osdetect("example.com", ports=[80], timeout=1.0, max_workers=1)
             assert any("No OS signature matched" in n for n in res["notes"])

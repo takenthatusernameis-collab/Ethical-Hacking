@@ -87,7 +87,7 @@ def check_security_headers(headers: dict[str, str]) -> dict[str, object]:
     """
     present: list[str] = []
     missing: list[str] = []
-    for header, description in SECURITY_HEADERS.items():
+    for header in SECURITY_HEADERS:
         if header.lower() in headers:
             present.append(header)
         else:
@@ -146,8 +146,7 @@ def check_ssl_configuration(host: str, port: int = 443, timeout: float = 5.0) ->
     }
     try:
         context = ssl.create_default_context()
-        with socket.create_connection((host, port), timeout=timeout) as sock:
-            with context.wrap_socket(sock, server_hostname=host) as ssock:
+        with socket.create_connection((host, port), timeout=timeout) as sock, context.wrap_socket(sock, server_hostname=host) as ssock:
                 cert = None
                 # Try to get cert in a mock-friendly way
                 try:

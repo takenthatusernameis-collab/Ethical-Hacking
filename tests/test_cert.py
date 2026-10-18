@@ -116,8 +116,7 @@ def test_load_cache_valid(tmp_path) -> None:
 
 def test_save_cache(tmp_path) -> None:
     cache_file = tmp_path / "cert_cache.json"
-    with patch("ethscan.cert.CACHE_DIR", tmp_path):
-        with patch("ethscan.cert.CACHE_FILE", cache_file):
+    with patch("ethscan.cert.CACHE_DIR", tmp_path), patch("ethscan.cert.CACHE_FILE", cache_file):
             _save_cache({"example.com": {"count": 5}})
             assert cache_file.exists()
             data = json.loads(cache_file.read_text())
@@ -272,8 +271,7 @@ def test_get_cached_or_fetch_fetch_fails_no_cache(tmp_path) -> None:
     cache_file = tmp_path / "cert_cache.json"
     cache_file.write_text("{}")
 
-    with patch("urllib.request.urlopen", side_effect=Exception("Network error")):
-        with patch("ethscan.cert.CACHE_FILE", cache_file):
+    with patch("urllib.request.urlopen", side_effect=Exception("Network error")), patch("ethscan.cert.CACHE_FILE", cache_file):
             result = _get_cached_or_fetch("example.com", 1.0, use_cache=True, offline_fallback=False, api_url=None)
 
     assert result["count"] == 0
@@ -292,8 +290,7 @@ def test_get_cached_or_fetch_fetch_fails_offline_fallback(tmp_path) -> None:
     cache_file = tmp_path / "cert_cache.json"
     cache_file.write_text(json.dumps({"example.com": cached_data}))
 
-    with patch("urllib.request.urlopen", side_effect=Exception("Network error")):
-        with patch("ethscan.cert.CACHE_FILE", cache_file):
+    with patch("urllib.request.urlopen", side_effect=Exception("Network error")), patch("ethscan.cert.CACHE_FILE", cache_file):
             result = _get_cached_or_fetch("example.com", 1.0, use_cache=True, offline_fallback=True, api_url=None)
 
     assert result["cached"] is True

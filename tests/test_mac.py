@@ -122,8 +122,7 @@ def test_load_cache_non_dict(tmp_path) -> None:
 
 def test_save_cache(tmp_path) -> None:
     cache_file = tmp_path / "mac_cache.json"
-    with patch("ethscan.mac.CACHE_DIR", tmp_path):
-        with patch("ethscan.mac.CACHE_FILE", cache_file):
+    with patch("ethscan.mac.CACHE_DIR", tmp_path), patch("ethscan.mac.CACHE_FILE", cache_file):
             _save_cache({"00:1a:2b:3c:4d:5e": {"vendor": "Cisco"}})
             assert cache_file.exists()
             data = json.loads(cache_file.read_text())
@@ -237,8 +236,7 @@ def test_get_cached_or_fetch_cache_miss_fetches() -> None:
     mock_urlopen = MagicMock()
     mock_urlopen.__enter__.return_value.read.return_value = b"Cisco Systems"
 
-    with patch("urllib.request.urlopen", return_value=mock_urlopen):
-        with patch("ethscan.mac.CACHE_FILE", Path("/nonexistent/cache.json")):
+    with patch("urllib.request.urlopen", return_value=mock_urlopen), patch("ethscan.mac.CACHE_FILE", Path("/nonexistent/cache.json")):
             result = _get_cached_or_fetch(
                 "00:1a:2b:3c:4d:5e", 1.0, use_cache=True, offline_fallback=False, api_url=None
             )
@@ -251,8 +249,7 @@ def test_get_cached_or_fetch_fetch_fails_no_cache(tmp_path) -> None:
     cache_file = tmp_path / "mac_cache.json"
     cache_file.write_text("{}")
 
-    with patch("urllib.request.urlopen", side_effect=Exception("Network error")):
-        with patch("ethscan.mac.CACHE_FILE", cache_file):
+    with patch("urllib.request.urlopen", side_effect=Exception("Network error")), patch("ethscan.mac.CACHE_FILE", cache_file):
             result = _get_cached_or_fetch(
                 "00:1a:2b:3c:4d:5e", 1.0, use_cache=True, offline_fallback=False, api_url=None
             )
@@ -271,8 +268,7 @@ def test_get_cached_or_fetch_fetch_fails_offline_fallback(tmp_path) -> None:
     cache_file = tmp_path / "mac_cache.json"
     cache_file.write_text(json.dumps({"00:1a:2b:3c:4d:5e": cached_data}))
 
-    with patch("urllib.request.urlopen", side_effect=Exception("Network error")):
-        with patch("ethscan.mac.CACHE_FILE", cache_file):
+    with patch("urllib.request.urlopen", side_effect=Exception("Network error")), patch("ethscan.mac.CACHE_FILE", cache_file):
             result = _get_cached_or_fetch(
                 "00:1a:2b:3c:4d:5e", 1.0, use_cache=True, offline_fallback=True, api_url=None
             )

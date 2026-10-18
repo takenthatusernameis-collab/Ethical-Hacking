@@ -339,8 +339,7 @@ def test_run_iw_scan_privacy_wep_no_wpa() -> None:
 
 
 def test_scan_interface_iw_success() -> None:
-    with patch("ethscan.wifi._run_iw_scan", return_value=[{"bssid": "AA:BB:CC:DD:EE:FF", "ssid": "IWNetwork"}]) as mock_iw:
-        with patch("ethscan.wifi._run_iwlist_scan") as mock_iwlist:
+    with patch("ethscan.wifi._run_iw_scan", return_value=[{"bssid": "AA:BB:CC:DD:EE:FF", "ssid": "IWNetwork"}]) as mock_iw, patch("ethscan.wifi._run_iwlist_scan") as mock_iwlist:
             result = _scan_interface("wlan0")
             assert len(result) == 1
             assert result[0]["ssid"] == "IWNetwork"
@@ -349,8 +348,7 @@ def test_scan_interface_iw_success() -> None:
 
 
 def test_scan_interface_iw_fails_iwlist_success() -> None:
-    with patch("ethscan.wifi._run_iw_scan", return_value=[]):
-        with patch("ethscan.wifi._run_iwlist_scan", return_value=[{"bssid": "00:11:22:33:44:55", "ssid": "IWListNetwork"}]) as mock_iwlist:
+    with patch("ethscan.wifi._run_iw_scan", return_value=[]), patch("ethscan.wifi._run_iwlist_scan", return_value=[{"bssid": "00:11:22:33:44:55", "ssid": "IWListNetwork"}]) as mock_iwlist:
             result = _scan_interface("wlan0")
             assert len(result) == 1
             assert result[0]["ssid"] == "IWListNetwork"
@@ -358,8 +356,7 @@ def test_scan_interface_iw_fails_iwlist_success() -> None:
 
 
 def test_scan_interface_both_fail() -> None:
-    with patch("ethscan.wifi._run_iw_scan", return_value=[]):
-        with patch("ethscan.wifi._run_iwlist_scan", return_value=[]):
+    with patch("ethscan.wifi._run_iw_scan", return_value=[]), patch("ethscan.wifi._run_iwlist_scan", return_value=[]):
             result = _scan_interface("wlan0")
             assert result == []
 
@@ -378,8 +375,7 @@ def test_run_wifi_non_linux() -> None:
 
 
 def test_run_wifi_linux_no_interfaces() -> None:
-    with patch("ethscan.wifi._parse_proc_net_wireless", return_value=[]):
-        with patch("platform.system", return_value="Linux"):
+    with patch("ethscan.wifi._parse_proc_net_wireless", return_value=[]), patch("platform.system", return_value="Linux"):
             result = run_wifi()
             assert result["platform_supported"] is True
             assert result["interfaces"] == []
@@ -389,9 +385,7 @@ def test_run_wifi_linux_no_interfaces() -> None:
 
 def test_run_wifi_linux_with_interfaces_no_scan_results() -> None:
     ifaces = [{"interface": "wlan0", "status": 0, "link_quality": 45.0, "signal_level": -45.0, "noise_level": -256.0}]
-    with patch("ethscan.wifi._parse_proc_net_wireless", return_value=ifaces):
-        with patch("ethscan.wifi._scan_interface", return_value=[]):
-            with patch("platform.system", return_value="Linux"):
+    with patch("ethscan.wifi._parse_proc_net_wireless", return_value=ifaces), patch("ethscan.wifi._scan_interface", return_value=[]), patch("platform.system", return_value="Linux"):
                 result = run_wifi()
                 assert len(result["interfaces"]) == 1
                 assert result["access_points"] == []
@@ -404,9 +398,7 @@ def test_run_wifi_linux_with_scan_results() -> None:
         {"bssid": "00:11:22:33:44:55", "ssid": "Network1", "channel": 1, "frequency": 2.412, "encryption": "wpa2", "signal_dbm": -65, "quality": "45/70"},
         {"bssid": "AA:BB:CC:DD:EE:FF", "ssid": "Network2", "channel": 6, "frequency": 2.437, "encryption": "open", "signal_dbm": -80, "quality": "30/70"},
     ]
-    with patch("ethscan.wifi._parse_proc_net_wireless", return_value=ifaces):
-        with patch("ethscan.wifi._scan_interface", return_value=aps):
-            with patch("platform.system", return_value="Linux"):
+    with patch("ethscan.wifi._parse_proc_net_wireless", return_value=ifaces), patch("ethscan.wifi._scan_interface", return_value=aps), patch("platform.system", return_value="Linux"):
                 result = run_wifi()
                 assert len(result["interfaces"]) == 1
                 assert len(result["access_points"]) == 2
@@ -420,9 +412,7 @@ def test_run_wifi_specific_interface() -> None:
         {"interface": "wlan1", "status": 0, "link_quality": 30.0, "signal_level": -60.0, "noise_level": -200.0},
     ]
     aps = [{"bssid": "00:11:22:33:44:55", "ssid": "Network1", "channel": 1, "frequency": 2.412, "encryption": "wpa2", "signal_dbm": -65, "quality": "45/70"}]
-    with patch("ethscan.wifi._parse_proc_net_wireless", return_value=ifaces):
-        with patch("ethscan.wifi._scan_interface", return_value=aps) as mock_scan:
-            with patch("platform.system", return_value="Linux"):
+    with patch("ethscan.wifi._parse_proc_net_wireless", return_value=ifaces), patch("ethscan.wifi._scan_interface", return_value=aps) as mock_scan, patch("platform.system", return_value="Linux"):
                 result = run_wifi(interface="wlan0")
                 assert len(result["interfaces"]) == 2
                 mock_scan.assert_called_once_with("wlan0")
@@ -430,8 +420,7 @@ def test_run_wifi_specific_interface() -> None:
 
 def test_run_wifi_specific_interface_not_found() -> None:
     ifaces = [{"interface": "wlan0", "status": 0, "link_quality": 45.0, "signal_level": -45.0, "noise_level": -256.0}]
-    with patch("ethscan.wifi._parse_proc_net_wireless", return_value=ifaces):
-        with patch("platform.system", return_value="Linux"):
+    with patch("ethscan.wifi._parse_proc_net_wireless", return_value=ifaces), patch("platform.system", return_value="Linux"):
             result = run_wifi(interface="wlan99")
             assert "not found" in result["notes"][0].lower()
 
@@ -442,9 +431,7 @@ def test_run_wifi_deduplication_by_bssid() -> None:
         {"bssid": "00:11:22:33:44:55", "ssid": "Network1", "channel": 1, "frequency": 2.412, "encryption": "wpa2", "signal_dbm": -65, "quality": "45/70"},
         {"bssid": "00:11:22:33:44:55", "ssid": "Network1", "channel": 1, "frequency": 2.412, "encryption": "wpa2", "signal_dbm": -50, "quality": "60/70"},  # Stronger
     ]
-    with patch("ethscan.wifi._parse_proc_net_wireless", return_value=ifaces):
-        with patch("ethscan.wifi._scan_interface", return_value=aps):
-            with patch("platform.system", return_value="Linux"):
+    with patch("ethscan.wifi._parse_proc_net_wireless", return_value=ifaces), patch("ethscan.wifi._scan_interface", return_value=aps), patch("platform.system", return_value="Linux"):
                 result = run_wifi()
                 assert len(result["access_points"]) == 1
                 assert result["access_points"][0]["signal_dbm"] == -50  # Keeps stronger
