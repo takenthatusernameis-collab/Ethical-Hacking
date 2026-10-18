@@ -1,44 +1,39 @@
 # Handoff to Next Agent
 
 ## What changed
-- Fixed RUF059 (4), RUF013 (2), RUF012 (1), FA102 (3) = 10 ruff errors across 4 test files:
-  - tests/test_osdetect.py:513: `ok, err, _` -> `ok, _, _` (err unused). The sibling test at :501 still asserts `err.endswith("...")` and is untouched.
-  - tests/test_ping.py:95,105: unpacked `code, checksum` -> `_, _`; dropped the two `assert code == 0` lines that referenced them. Redundant: `icmp_type == ICMP_ECHO_REQUEST` already pins the type byte, and code is structurally 0 by construction of the echo request.
-  - tests/test_ping.py:398: `recv_error: Exception = None` -> `recv_error: Exception | None = None` (RUF013).
-  - tests/test_netbios.py:47: `qdname: bytes = None` -> `qdname: bytes | None = None` (RUF013).
-  - tests/test_ftp.py:34: mutable class default `config: dict = {}` -> `config: dict | None = None` with `self.config = {}` in `__init__` (RUF012). Instance assignment preserves prior behaviour; all 7 `_FakeFTP()` call sites set `c.config` explicitly afterwards, so the default is never read.
-  - Added `from __future__ import annotations` to tests/test_ftp.py, tests/test_netbios.py, tests/test_ping.py to suppress the FA102 errors introduced by the PEP 604 unions (matches the convention already used by every ethscan source module).
-- PLR0402 (tests/test_brute.py:504 `import ethscan.brute as brute`) was attempted and REVERTED: it broke `test_paramiko_import_error` (`ImportError: module ethscan.brute not in sys.modules`) because the test relies on the module being registered under its full dotted name for `sys.modules.pop("ethscan.brute")` to take effect on reload. Do not retry.
+- Fixed a latent command-registration bug in ethscan/cli.py: the `if __name__ == "__main__": cli()` guard sat mid-file directly before the `redis`, `ldap`, `mssql`, and `oracle` command definitions. Because `cli()` blocks, those four commands were never registered when cli.py was executed directly as `__main__` (dead code after a blocking call). Moved the guard to the end of the file so all 53 commands register before `cli()` runs.
+- During the fix, a collateral edit accidentally changed the `completion` command's `click.echo("Completion script written")` to `click.echo(f"Report written to {out_path}")`. This was REVERTED; the completion command is unchanged from baseline.
+- Prior completed lint fixes (RUF059/RUF013/RUF012/FA102 across 4 test files; PLR0402 attempted and reverted) remain as documented in TASK.md.
 
 ## What was verified
-- `python -m pytest -q` -> 3900 passed, 1 skipped, 2 warnings (3901 collected; all accounted for).
-- `python -m ruff check --select RUF059,RUF013,RUF012,FA102 tests/` -> All checks passed.
-- `python -m ruff check --statistics` -> 55 errors (down from 62: 62 - 7 = 55; the 3 FA102 were newly introduced by this session's PEP 604 unions and were then cleared by adding `from __future__ import annotations`, netting 10 fixes / 3 introduces / 1 revert = 6 net).
-- `python -m pytest tests/test_ftp.py tests/test_netbios.py tests/test_osdetect.py tests/test_ping.py tests/test_brute.py -q` -> 249 passed.
+- `python -m pytest -q` -> 3900 passed, 1 skipped, 2 warnings (3901 collected; all accounted for). Baseline green restored.
+- `python -m ruff check ethscan/cli.py` -> clean (no new lint errors introduced).
+- `python -m ruff check --statistics` -> 55 errors (unchanged: BLE001 x42, TRY002 x12, PLR0402 x1; all previously proven unsafe).
+- All 53 cli commands register on import, including `redis`/`ldap`/`mssql`/`oracle`.
 - `python -m py_compile ethscan/*.py` -> clean; `ethscan` imports OK.
-- CLI smoke test unaffected (no source changes).
 
 ## What remains unresolved (pre-existing, not targets unless revisited)
 - ruff: 55 errors remain across 3 categories, ALL proven unsafe to touch:
   - BLE001 (42 blind-except): narrowing breaks tests that mock plain `Exception`.
   - TRY002 (12 raise-vanilla-class): raises plain `Exception` as mocks in tests.
   - PLR0402 (1 manual-from-import): tests/test_brute.py:504; fixing breaks `test_paramiko_import_error` (reload semantics).
-- mypy: not targeted. Coverage: 70 missing lines (documented unreachable/environment-dependent).
+- mypy: not targeted (~522 errors historically).
+- Coverage: 70 missing lines (documented unreachable/environment-dependent).
 
 ## Approaches failed / already exhausted (do not repeat unchanged)
+- The misplaced-guard fix itself caused one collateral edit to the `completion` command; it was caught by `test_completion_out_*` and reverted. Do not re-apply bulk string replacements across cli.py without checking the diff.
 - BLE001 narrowing at tested sites breaks tests that mock plain `Exception`. Do not reopen.
-- PLR0402 "fix" in tests/test_brute.py:504: changing `import ethscan.brute as brute` to `from ethscan import brute` breaks the reload-based `test_paramiko_import_error` (`ImportError: module ethscan.brute not in sys.modules`). Reverted. Do not retry.
-- UP045 bulk conversions (prior session): proven safe in files with `from __future__ import annotations`; already applied project-wide.
-- UP006/UP035: completed in prior session — do not repeat.
-- C405 (prior session): already resolved (code already uses set literals); re-verified clean this session.
+- PLR0402 "fix" in tests/test_brute.py:504: changing `import ethscan.brute as brute` to `from ethscan import brute` breaks the reload-based `test_paramiko_import_error`. Reverted. Do not retry.
+- UP045 bulk conversions, UP006/UP035, C405: completed in prior sessions — do not repeat.
 
 ## This session (2026-10-18)
-- Re-verified baseline: `python -m pytest -q` -> 3900 passed, 1 skipped, 2 warnings (green). No source/test changes made; working tree clean at HEAD 3739a12.
-- Confirmed no new safe bounded task remains: the 55 ruff errors (BLE001 x42, TRY002 x12, PLR0402 x1) are all previously proven unsafe to fix (see Approaches failed). mypy (~522 errors) and coverage (70 missing lines) are out of scope/not targeted.
+- Fixed the misplaced `__main__` guard in ethscan/cli.py (move from mid-file to EOF).
+- Re-verified baseline: `python -m pytest -q` -> 3900 passed, 1 skipped (green).
 - A stash (`stash@{0}`, WIP on main) holds abandoned experimental source changes across many ethscan files; do NOT merge without review — it is not part of the green baseline.
 
 ## Next precise task
-- None remaining. All clearly-safe bounded lint tasks are exhausted.
+- None remaining. All clearly-safe bounded lint tasks are exhausted; the latent guard bug is now fixed.
 - Await a genuine new issue/requirement before further speculative changes.
+- If a new issue arrives, implement the smallest verifiable change and confirm with `python -m pytest -q` and `python -m ruff check --select <affected codes>`. Preserve the working baseline.
 
 (End of file)

@@ -4598,8 +4598,6 @@ def smb(
         click.echo(output)
 
 
-if __name__ == "__main__":
-    cli()
 @cli.command()
 @click.option("--target", required=True, help="Target host, host:port, or redis:// URL (e.g. redis://localhost:6379)")
 @click.option("--port", default=None, type=int, help="Redis port (overrides parsed port; default 6379)")
@@ -4860,3 +4858,7 @@ def oracle(
         click.echo(f"Report written to {out_path}")
     else:
         click.echo(output)
+
+
+if __name__ == "__main__":
+    cli()
