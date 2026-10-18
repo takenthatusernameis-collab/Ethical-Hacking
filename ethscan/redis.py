@@ -207,7 +207,7 @@ def _parse_info(data: bytes) -> dict[str, str]:
     INFO returns a bulk string with lines like "key:value\r\n".
     """
     info: dict[str, str] = {}
-    try:
+    with contextlib.suppress(Exception):
         resp, _ = _parse_resp(data)
         if isinstance(resp, str):
             text = resp
@@ -220,8 +220,6 @@ def _parse_info(data: bytes) -> dict[str, str]:
             if ":" in line:
                 k, v = line.split(":", 1)
                 info[k.strip()] = v.strip()
-    except Exception:
-        pass
     return info
 
 
@@ -231,7 +229,7 @@ def _parse_config(data: bytes) -> dict[str, str]:
     Returns a dict of key->value from the array of bulk strings.
     """
     config: dict[str, str] = {}
-    try:
+    with contextlib.suppress(Exception):
         resp, _ = _parse_resp(data)
         if isinstance(resp, list) and len(resp) % 2 == 0:
             for i in range(0, len(resp), 2):
@@ -239,8 +237,6 @@ def _parse_config(data: bytes) -> dict[str, str]:
                 v = resp[i + 1]
                 if k is not None:
                     config[str(k)] = "" if v is None else str(v)
-    except Exception:
-        pass
     return config
 
 
