@@ -21,7 +21,7 @@ def _is_linux() -> bool:
 
 def _parse_proc_net_wireless(filepath: str = "/proc/net/wireless") -> list[dict]:
     """Parse /proc/net/wireless for interface status."""
-    interfaces = []
+    interfaces: list[dict] = []
     try:
         with open(filepath, "r") as f:
             lines = f.readlines()
@@ -58,7 +58,7 @@ def _parse_proc_net_wireless(filepath: str = "/proc/net/wireless") -> list[dict]
 
 def _run_iwlist_scan(interface: str) -> list[dict]:
     """Run iwlist scan on the given interface and parse results."""
-    aps = []
+    aps: list[dict] = []
     try:
         result = subprocess.run(
             ["iwlist", interface, "scan"],
@@ -133,7 +133,7 @@ def _run_iwlist_scan(interface: str) -> list[dict]:
 
 def _run_iw_scan(interface: str) -> list[dict]:
     """Run iw scan on the given interface and parse results (modern alternative to iwlist)."""
-    aps = []
+    aps: list[dict] = []
     try:
         result = subprocess.run(
             ["iw", "dev", interface, "scan"],
@@ -272,7 +272,7 @@ def run_wifi(interface: str | None = None) -> dict:
     result["access_points"] = all_aps
 
     # Deduplicate by BSSID (keep strongest signal)
-    seen = {}
+    seen: dict[str, dict] = {}
     for ap in all_aps:
         bssid = ap["bssid"]
         if bssid not in seen or (ap["signal_dbm"] is not None and seen[bssid]["signal_dbm"] is not None and ap["signal_dbm"] > seen[bssid]["signal_dbm"]):
