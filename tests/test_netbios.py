@@ -1,5 +1,7 @@
 """Tests for the ethscan netbios module."""
 
+from __future__ import annotations
+
 import csv
 import io
 import json
@@ -44,7 +46,7 @@ def _entry(name: str, suffix: int, flags: int) -> bytes:
 
 def _build_nbstat_response(
     transaction_id: int = 0x1234,
-    qdname: bytes = None,
+    qdname: bytes | None = None,
     entries=None,
     rcode: int = 0,
     is_response: bool = True,

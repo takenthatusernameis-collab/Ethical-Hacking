@@ -510,7 +510,7 @@ def test_connect_tcp_close_error() -> None:
     mock_sock = MagicMock()
     mock_sock.close.side_effect = Exception("bad")
     with patch("socket.create_connection", return_value=mock_sock):
-        ok, err, _ = osdetect._connect_tcp("example.com", 80, 5.0)
+        ok, _, _ = osdetect._connect_tcp("example.com", 80, 5.0)
         assert ok is True
 
 

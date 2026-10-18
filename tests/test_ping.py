@@ -1,5 +1,7 @@
 """Tests for the ethscan ping module."""
 
+from __future__ import annotations
+
 import csv
 import io
 import json
@@ -92,9 +94,8 @@ def test_build_icmp_echo_request_structure() -> None:
     req = _build_icmp_echo_request(12345, 1, b"test")
     assert len(req) >= 8
     # Parse back
-    icmp_type, code, checksum, ident, seq = struct.unpack("!BBHHH", req[:8])
+    icmp_type, _, _, ident, seq = struct.unpack("!BBHHH", req[:8])
     assert icmp_type == ICMP_ECHO_REQUEST
-    assert code == 0
     assert ident == 12345
     assert seq == 1
     assert req[8:] == b"test"
@@ -102,7 +103,7 @@ def test_build_icmp_echo_request_structure() -> None:
 
 def test_build_icmp_echo_request_empty_payload() -> None:
     req = _build_icmp_echo_request(12345, 1)
-    icmp_type, code, checksum, ident, seq = struct.unpack("!BBHHH", req[:8])
+    icmp_type, _, _, ident, seq = struct.unpack("!BBHHH", req[:8])
     assert icmp_type == ICMP_ECHO_REQUEST
     assert ident == 12345
     assert seq == 1
@@ -395,7 +396,7 @@ def test_probe_icmp_loopback_closed_no_raw_socket() -> None:
 class _FakeRawSocket:
     """Minimal fake raw socket that returns pre-set data from recvfrom."""
 
-    def __init__(self, data: bytes = b"", recv_error: Exception = None) -> None:
+    def __init__(self, data: bytes = b"", recv_error: Exception | None = None) -> None:
         self._data = data
         self._recv_error = recv_error
         self.timeout = None

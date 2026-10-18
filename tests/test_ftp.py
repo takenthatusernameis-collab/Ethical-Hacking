@@ -1,5 +1,7 @@
 """Tests for the ethscan ftp module."""
 
+from __future__ import annotations
+
 import csv
 import ftplib
 import io
@@ -31,11 +33,12 @@ class _FakeFTP:
     ``close`` is a no-op.
     """
 
-    config: dict = {}
+    config: dict | None = None
 
     def __init__(self) -> None:
         self.host = None
         self.port = None
+        self.config = {}
         self.connected = False
         self.closed = False
 
