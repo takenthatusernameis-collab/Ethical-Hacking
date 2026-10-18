@@ -26,7 +26,7 @@ def _available_shells() -> dict[str, Any]:
     """
     try:
         return dict(shell_completion._available_shells)
-    except Exception:  # pragma: no cover - defensive fallback
+    except AttributeError:  # pragma: no cover - defensive fallback
         return {"bash": shell_completion.BashComplete,
                 "zsh": shell_completion.ZshComplete,
                 "fish": shell_completion.FishComplete}
