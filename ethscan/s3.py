@@ -17,6 +17,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 from urllib.parse import urlparse
+import contextlib
 
 DEFAULT_TIMEOUT = 5.0
 DEFAULT_MAX_WORKERS = 20
@@ -141,10 +142,8 @@ def _resolve_s3_endpoint(
     except (socket.gaierror, socket.herror, OSError, ValueError):
         return None
     finally:
-        try:
+        with contextlib.suppress(OSError):
             socket.setdefaulttimeout(None)
-        except OSError:
-            pass
 
 
 def _build_bucket_candidates(

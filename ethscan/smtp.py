@@ -19,6 +19,7 @@ import json
 import socket
 import time
 from typing import Any, Optional
+import contextlib
 
 DEFAULT_PORT = 25
 DEFAULT_TIMEOUT = 2.0
@@ -288,10 +289,8 @@ def run_smtp(
                     results["error"] = f"relay check failed: {exc}"
 
         # Politely close.
-        try:
+        with contextlib.suppress(socket.timeout, OSError):
             _send_command(sock, "QUIT", timeout)
-        except (socket.timeout, OSError):
-            pass
     finally:
         if sock is not None:
             sock.close()

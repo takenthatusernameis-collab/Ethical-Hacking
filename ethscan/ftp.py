@@ -17,6 +17,7 @@ import io
 import json
 import socket
 from typing import Any, Optional
+import contextlib
 
 DEFAULT_PORT = 21
 DEFAULT_TIMEOUT = 3.0
@@ -139,10 +140,8 @@ def run_ftp(
                 results["anonymous_message"] = str(exc)
     finally:
         if client is not None:
-            try:
+            with contextlib.suppress(ftplib.Error, OSError):
                 client.close()
-            except (ftplib.Error, OSError):
-                pass
 
     return results
 

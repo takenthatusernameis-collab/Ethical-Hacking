@@ -7,6 +7,7 @@ import socket
 import ssl
 import urllib.error
 import urllib.request
+import contextlib
 
 # Recommended security headers and their importance.
 SECURITY_HEADERS: dict[str, str] = {
@@ -164,10 +165,8 @@ def check_ssl_configuration(host: str, port: int = 443, timeout: float = 5.0) ->
                             try:
                                 cert = ssl._ssl._test_decode_cert(cert_path)
                             finally:
-                                try:
+                                with contextlib.suppress(Exception):
                                     os.unlink(cert_path)
-                                except Exception:
-                                    pass
                         except Exception:
                             cert = ssock.getpeercert()
                     else:

@@ -42,6 +42,7 @@ import os
 import socket
 import struct
 from typing import Any, Optional
+import contextlib
 
 DEFAULT_PORT = 445
 DEFAULT_TIMEOUT = 3.0
@@ -225,10 +226,8 @@ def _send_recv(
     except OSError as exc:
         return None, str(exc)
     finally:
-        try:
+        with contextlib.suppress(OSError):
             sock.close()
-        except OSError:
-            pass
 
 
 def _build_smb1_negotiate_request(

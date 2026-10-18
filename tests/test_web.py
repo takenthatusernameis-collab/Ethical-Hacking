@@ -14,6 +14,7 @@ from ethscan.web import (
     format_web_report_markdown,
     run_web_checks,
 )
+import contextlib
 
 # ---------------------------------------------------------------------------
 # _parse_url
@@ -670,10 +671,8 @@ def test_fetch_headers_http_error_with_bad_headers() -> None:
 
     class BadErr(urllib.error.HTTPError):
         def __init__(self) -> None:
-            try:
+            with contextlib.suppress(Exception):
                 super().__init__('http://x', 500, 'err', None, None)
-            except Exception:
-                pass
 
         @property
         def headers(self):  # type: ignore[override]

@@ -18,6 +18,7 @@ import json
 import socket
 import struct
 from typing import Any, Optional
+import contextlib
 
 DEFAULT_PORT = 1521
 DEFAULT_TIMEOUT = 3.0
@@ -312,10 +313,8 @@ def _parse_refuse_response(data: bytes) -> dict[str, Any]:
     import re
     match = re.search(r'\(ERR=(\d+)\)', error_str)
     if match:
-        try:
+        with contextlib.suppress(ValueError):
             result["error_code"] = int(match.group(1))
-        except ValueError:
-            pass
 
     return result
 

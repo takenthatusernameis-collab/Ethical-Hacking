@@ -7,6 +7,7 @@ import json
 import socket
 import time
 from typing import Any, Optional
+import contextlib
 
 DEFAULT_PORT = 80
 DEFAULT_MAX_HOPS = 30
@@ -61,10 +62,8 @@ def _probe_once(dst_ip: str, port: int, ttl: int, timeout: float) -> dict[str, A
     except OSError:
         return {"hop_ip": None, "rtt_ms": None, "reached": False, "error": None}
     finally:
-        try:
+        with contextlib.suppress(Exception):
             sock.close()
-        except Exception:
-            pass
 
 
 def _trace_single(

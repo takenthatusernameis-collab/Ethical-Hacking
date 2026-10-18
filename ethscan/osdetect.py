@@ -10,6 +10,7 @@ import socket
 import struct
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
+import contextlib
 
 DEFAULT_TIMEOUT = 5.0
 DEFAULT_WORKERS = 10
@@ -129,10 +130,8 @@ def _connect_tcp(host: str, port: int, timeout: float) -> tuple[bool, Optional[s
     except OSError as exc:
         return False, _truncate(str(exc)), None
     finally:
-        try:
+        with contextlib.suppress(Exception):
             sock.close()
-        except Exception:
-            pass
 
 
 def probe_syn(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict[str, object]:
@@ -202,10 +201,8 @@ def probe_rst(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict[st
         entry["response"] = "NO-RESPONSE"
         entry["error"] = _truncate(str(exc))
     finally:
-        try:
+        with contextlib.suppress(Exception):
             sock.close()
-        except Exception:
-            pass
     return entry
 
 
@@ -242,10 +239,8 @@ def probe_fin(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict[st
         entry["response"] = "NO-RESPONSE"
         entry["error"] = _truncate(str(exc))
     finally:
-        try:
+        with contextlib.suppress(Exception):
             sock.close()
-        except Exception:
-            pass
     return entry
 
 
@@ -281,10 +276,8 @@ def probe_ack(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict[st
         entry["response"] = "NO-RESPONSE"
         entry["error"] = _truncate(str(exc))
     finally:
-        try:
+        with contextlib.suppress(Exception):
             sock.close()
-        except Exception:
-            pass
     return entry
 
 

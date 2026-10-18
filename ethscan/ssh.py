@@ -7,6 +7,7 @@ import json
 import socket
 import struct
 from typing import Any, Optional
+import contextlib
 
 try:
     import paramiko
@@ -452,10 +453,8 @@ def run_ssh(
         result["error"] = f"Connection error: {exc}"
     finally:
         if sock:
-            try:
+            with contextlib.suppress(Exception):
                 sock.close()
-            except Exception:
-                pass
 
     return result
 

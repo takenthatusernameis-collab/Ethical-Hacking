@@ -36,6 +36,7 @@ import json
 import socket
 import ssl
 from typing import Any, Optional
+import contextlib
 
 DEFAULT_PORT = 389
 DEFAULT_LDAPS_PORT = 636
@@ -477,10 +478,8 @@ def _send_recv(
     except OSError as exc:
         return None, str(exc)
     finally:
-        try:
+        with contextlib.suppress(Exception):
             sock.close()
-        except Exception:
-            pass
 
 
 # ---------------------------------------------------------------------------

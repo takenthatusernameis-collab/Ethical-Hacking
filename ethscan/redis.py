@@ -21,6 +21,7 @@ import io
 import json
 import socket
 from typing import Any, Optional
+import contextlib
 
 DEFAULT_PORT = 6379
 DEFAULT_TIMEOUT = 3.0
@@ -196,10 +197,8 @@ def _send_recv(
     except OSError as exc:
         return None, str(exc)
     finally:
-        try:
+        with contextlib.suppress(Exception):
             sock.close()
-        except Exception:
-            pass
 
 
 def _parse_info(data: bytes) -> dict[str, str]:

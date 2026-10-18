@@ -21,6 +21,7 @@ from ethscan.osdetect import (
     probe_syn,
     run_osdetect,
 )
+import contextlib
 
 # ---------------------------------------------------------------------------
 # Domain normalization
@@ -197,10 +198,8 @@ def test_probe_syn_loopback_open() -> None:
         assert result["connected"] is True
         assert result["response"] == "SYN-ACK"
     finally:
-        try:
+        with contextlib.suppress(OSError):
             sock.close()
-        except OSError:
-            pass
 
 
 # ---------------------------------------------------------------------------

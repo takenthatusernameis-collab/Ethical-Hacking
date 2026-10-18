@@ -5,6 +5,7 @@ import socket
 from unittest.mock import MagicMock, patch
 
 from ethscan import trace
+import contextlib
 
 
 def test_normalize_host():
@@ -315,10 +316,8 @@ def test_probe_once_recv_socket_error():
 
 
 def test_trace_single_invalid_target():
-    try:
+    with contextlib.suppress(ValueError):
         trace._trace_single("", 80, 3, 1.0, 1)
-    except ValueError:
-        pass
 
 
 def test_trace_single_dns_failure():
@@ -544,8 +543,6 @@ def test_trace_single_raw_socket_unavailable_note():
         mock_gethost.return_value = "1.1.1.1"
         with patch.object(trace, "_probe_once") as mock_probe:
             mock_probe.side_effect = Exception("raw")
-            try:
+            with contextlib.suppress(Exception):
                 trace._trace_single("t", 80, 1, 0.1, 1)
-            except Exception:
-                pass
 import socket

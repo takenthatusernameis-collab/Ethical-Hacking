@@ -10,6 +10,7 @@ import ethscan.__main__
 import ethscan.main
 from ethscan import __version__
 from ethscan.cli import cli
+import contextlib
 
 
 def test_main_module_exposes_cli() -> None:
@@ -87,10 +88,8 @@ def test_python_m_ethscan_main_help_runs() -> None:
 
         cli_mod.cli = counting_cli
         try:
-            try:
+            with contextlib.suppress(SystemExit):
                 runpy.run_module("ethscan.main", run_name="__main__")
-            except SystemExit:
-                pass
         finally:
             cli_mod.cli = orig_cli
     finally:
@@ -117,10 +116,8 @@ def test_python_m_ethscan_dunder_main_help_runs() -> None:
         orig_cli = cli_mod.cli
         cli_mod.cli = counting_cli
         try:
-            try:
+            with contextlib.suppress(SystemExit):
                 runpy.run_module("ethscan.__main__", run_name="__main__")
-            except SystemExit:
-                pass
         finally:
             cli_mod.cli = orig_cli
     finally:
