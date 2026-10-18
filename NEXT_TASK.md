@@ -1,7 +1,7 @@
 # Next Task for Agent
 
 ## Status
-- Working tree: clean except ethscan/radix.py (indentation fix, uncommitted).
+- Working tree: clean except deletion of ethscan/radix.py.bak2 (uncommitted stale backup artifact removed).
 - Tests: 3900 passed, 1 skipped (green baseline).
 - Repository complete: 53 CLI commands register on import.
 
@@ -11,9 +11,10 @@
 - ruff PLR0402 (1) — in tests/test_brute.py; reload semantics depend on import form.
 
 ## Completed this session
-- Fixed indentation corruption in ethscan/radix.py (_merge_networks) so collection/tests run.
-- Restored behavior of exception handling in cidr/trace/web where tests mock Exception to satisfy specific test expectations.
-- Confirmed 3900 passed, 1 skipped after fixes.
+- Fixed indentation corruption in ethscan/radix.py (_merge_networks) so collection/tests run (committed in 0a66048).
+- Removed stale backup artifact ethscan/radix.py.bak2 from the ethscan package (unreferenced by any source).
+- Restored behavior of exception handling in cidr/trace/web where tests mock Exception to satisfy specific test expectations (committed in 0a66048).
+- Confirmed 3900 passed, 1 skipped after fixes; 53 CLI commands register.
 
 ## Next precise task
 - None remaining. Await a genuine new issue/requirement (bug fix with failing test, feature with tests, or explicitly requested refactor with verification plan).
