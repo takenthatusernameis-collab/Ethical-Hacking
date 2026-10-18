@@ -1,7 +1,7 @@
 # Task State
 
 ## Current state
-- Working tree: clean. HEAD: 9c43623.
+- Working tree: clean. HEAD: 960e5e1.
 - Tests: 3902 passed, 1 skipped (green baseline).
 - Code compiles cleanly; ethscan imports successfully.
 - Packaging: ethscan/py.typed present with package-data configured (PEP 561).

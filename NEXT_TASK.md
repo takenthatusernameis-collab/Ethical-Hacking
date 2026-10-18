@@ -1,7 +1,7 @@
 # Next Task for Agent
 
 ## Status
-- Working tree: clean (HEAD: e79a29a). No uncommitted changes.
+- Working tree: clean (HEAD: 960e5e1). No uncommitted changes.
 - Tests: 3902 passed, 1 skipped (green baseline).
 - Repository complete: 53 CLI commands with CLI-level tests.
 

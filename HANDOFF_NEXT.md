@@ -8,7 +8,7 @@
 - `python -m ruff check ethscan --statistics` → 445 UP045, 40 BLE001, 485 total (down from 489; S110 fully resolved).
 - `python -m py_compile ethscan/*.py` → clean; `ethscan` imports OK.
 - Redis tests: `python -m pytest tests/test_redis.py -v` → 106 passed.
-- Working tree clean after commit (HEAD: e79a29a).
+- Working tree clean after commit (HEAD: 960e5e1).
 
 ## What remains unresolved (pre-existing, not targets)
 - ruff: 485 errors total (445 UP045, 40 BLE001). S110 resolved.
