@@ -1,15 +1,12 @@
 """Tests for the ethscan headers module."""
 
 import json
-from unittest.mock import patch, MagicMock
-
-import pytest
 
 from ethscan.headers import (
-    run_headers,
     format_headers_report_csv,
     format_headers_report_json,
     format_headers_report_markdown,
+    run_headers,
 )
 from ethscan.web import SECURITY_HEADERS
 

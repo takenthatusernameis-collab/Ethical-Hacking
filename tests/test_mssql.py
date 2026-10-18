@@ -5,24 +5,24 @@ import io
 import json
 import socket
 import struct
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from ethscan.mssql import (
-    DEFAULT_PORT,
-    _normalize_target,
-    _build_prelogin_request,
-    _send_recv,
-    _parse_prelogin_response,
-    _assess_prelogin,
-    run_mssql,
-    format_mssql_report_csv,
-    format_mssql_report_json,
-    format_mssql_report_markdown,
-    _OPTION_VERSION,
     _OPTION_ENCRYPTION,
     _OPTION_INSTINST,
     _OPTION_THREADID,
+    _OPTION_VERSION,
     _TDS_PRELOGIN,
+    DEFAULT_PORT,
+    _assess_prelogin,
+    _build_prelogin_request,
+    _normalize_target,
+    _parse_prelogin_response,
+    _send_recv,
+    format_mssql_report_csv,
+    format_mssql_report_json,
+    format_mssql_report_markdown,
+    run_mssql,
 )
 
 

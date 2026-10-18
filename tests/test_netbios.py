@@ -8,15 +8,13 @@ import struct
 import pytest
 
 from ethscan.netbios import (
-    DEFAULT_PORT,
     DEFAULT_NAME,
+    DEFAULT_PORT,
     DEFAULT_SUFFIX,
-    DEFAULT_TIMEOUT,
+    RCODE_NAMES,
     RR_CLASS_IN,
     RR_TYPE_NB,
     RR_TYPE_NBSTAT,
-    RCODE_NAMES,
-    SUFFIX_SERVICE_TYPES,
     _build_nbns_query,
     _decode_name_chars,
     _encode_name_chars,
@@ -24,15 +22,14 @@ from ethscan.netbios import (
     _normalize_target,
     _parse_dns_name,
     _parse_name_flags,
-    _parse_nbtstat_rdata,
     _parse_nbns_response,
+    _parse_nbtstat_rdata,
     _send_recv,
     format_netbios_report_csv,
     format_netbios_report_json,
     format_netbios_report_markdown,
     run_netbios,
 )
-
 
 # ---------------------------------------------------------------------------
 # Test helpers to build well-formed NBNS messages
@@ -795,7 +792,7 @@ def test_format_netbios_report_csv_one_row_per_name() -> None:
     # Distinct names, not one joined cell.
     assert {r[8] for r in name_rows} == {"MYHOST", "WORKGROUP"}
     # The group name's group flag is true and unique is false.
-    wg = [r for r in name_rows if r[8] == "WORKGROUP"][0]
+    wg = next(r for r in name_rows if r[8] == "WORKGROUP")
     assert wg[12] == "true"   # group
     assert wg[13] == "false"  # unique
     assert wg[14] == "P-node"
@@ -911,8 +908,9 @@ def test_skip_question_truncated_question_record():
 
 def test_send_recv_real_and_errors():
     import socket as _s
-    from ethscan.netbios import _send_recv
     from unittest.mock import patch
+
+    from ethscan.netbios import _send_recv
     # success
     class FakeSock:
         def __init__(self): pass

@@ -6,7 +6,6 @@ from ethscan.scanner import (
     COMMON_PORTS,
     FAST_PORTS,
     FULL_PORTS,
-    PROFILE_DEFAULTS,
     format_scan_report_csv,
     format_scan_report_json,
     format_scan_report_markdown,

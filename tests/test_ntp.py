@@ -3,7 +3,6 @@
 import csv
 import io
 import json
-import socket
 import struct
 from unittest.mock import MagicMock, patch
 
@@ -11,7 +10,6 @@ import pytest
 
 from ethscan.ntp import (
     DEFAULT_PORT,
-    DEFAULT_TIMEOUT,
     _build_monlist_request,
     _build_time_request,
     _format_ref_id,
@@ -24,7 +22,6 @@ from ethscan.ntp import (
     format_ntp_report_markdown,
     run_ntp,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers to build well-formed NTP response packets for tests

@@ -1,28 +1,21 @@
 """Tests for the ethscan geo module."""
 
 import json
-import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from ethscan.geo import (
-    DEFAULT_API_URL,
-    DEFAULT_TIMEOUT,
-    CACHE_DIR,
-    CACHE_FILE,
-    CACHE_TTL,
-    FIELDS,
-    _normalize_target,
-    _resolve_host,
-    _load_cache,
-    _save_cache,
-    _is_cache_valid,
     _fetch_geo_data,
     _get_cached_or_fetch,
-    run_geo,
+    _is_cache_valid,
+    _load_cache,
+    _normalize_target,
+    _resolve_host,
+    _save_cache,
     format_geo_report_csv,
     format_geo_report_json,
     format_geo_report_markdown,
+    run_geo,
 )
 
 _GEO_CSV_HEADER = [

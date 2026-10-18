@@ -11,7 +11,6 @@ import pytest
 
 from ethscan.dnsbrute import (
     DEFAULT_SUBDOMAINS,
-    DEFAULT_RECURSIVE_DEPTH,
     DNS_AVAILABLE,
     RCODE_NAMES,
     _axfr_result,
@@ -793,13 +792,12 @@ def test_run_dnsbrute_resolver_used_for_resolution(monkeypatch) -> None:
     except ImportError:
         pytest.skip("dnspython not installed")
 
-    original_resolve = dns.resolver.Resolver.resolve
 
     def mock_resolve(self, hostname, rdtype):
         if self.nameservers == ["8.8.8.8"]:
             if rdtype == "A" and hostname.startswith("www."):
-                from dns.rrset import RRset
                 from dns.rdata import from_text
+                from dns.rrset import RRset
                 rrset = RRset(
                     dns.name.from_text(hostname),
                     dns.rdataclass.IN,
@@ -809,8 +807,8 @@ def test_run_dnsbrute_resolver_used_for_resolution(monkeypatch) -> None:
                 rrset.add(from_text("IN", "A", "1.2.3.4"))
                 return rrset
             if rdtype == "AAAA" and hostname.startswith("www."):
-                from dns.rrset import RRset
                 from dns.rdata import from_text
+                from dns.rrset import RRset
                 rrset = RRset(
                     dns.name.from_text(hostname),
                     dns.rdataclass.IN,
@@ -1089,7 +1087,7 @@ def test_run_dnsbrute_recursive_filters_non_subdomain_ns(monkeypatch) -> None:
 
     monkeypatch.setattr("ethscan.dnsbrute.attempt_axfr", fake_axfr)
 
-    results = run_dnsbrute(
+    run_dnsbrute(
         "example.com",
         nameservers=["ns1.example.com"],
         subdomains=["www"],

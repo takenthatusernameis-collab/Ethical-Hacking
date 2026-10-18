@@ -1,7 +1,6 @@
 """Tests for the ethscan dns module."""
 
 import threading
-import pytest
 
 from ethscan.dns import (
     DEFAULT_DNS_TYPES,

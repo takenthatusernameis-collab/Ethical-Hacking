@@ -4,9 +4,7 @@ import socket
 import struct
 import types
 from typing import Any, Dict, List
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from ethscan.ssh import (
     DEFAULT_PORT,
@@ -328,10 +326,9 @@ def test_paramiko_available_flag() -> None:
 
 
 # Need to import struct and socket for some tests
-import struct
 import socket
+import struct
 from typing import List
-
 
 # ---------------------------------------------------------------------------
 # CSV formatter

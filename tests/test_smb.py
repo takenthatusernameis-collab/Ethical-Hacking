@@ -14,7 +14,6 @@ from ethscan.smb import (
     DEFAULT_PORT,
     DEFAULT_SMB2_DIALECTS,
     SMB1_MAGIC,
-    _build_banner,
     SMB2_CIPHER_AES128_CCM,
     SMB2_CIPHER_AES128_GCM,
     SMB2_DIALECT_002,
@@ -29,6 +28,7 @@ from ethscan.smb import (
     SMB2_SIGNING_ENABLED,
     SMB2_SIGNING_REQUIRED,
     SMB_COM_NEGOTIATE,
+    _build_banner,
     _build_smb1_negotiate_request,
     _build_smb2_banner,
     _build_smb2_negotiate_request,
@@ -47,7 +47,6 @@ from ethscan.smb import (
     run_smb,
     run_smb2,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers to build well-formed SMB1 negotiate responses

@@ -1,22 +1,19 @@
 """Tests for the ethscan wifi module."""
 
 import json
-import platform
-import tempfile
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from ethscan.wifi import (
     _is_linux,
     _parse_proc_net_wireless,
-    _run_iwlist_scan,
     _run_iw_scan,
+    _run_iwlist_scan,
     _scan_interface,
-    run_wifi,
     format_wifi_report_csv,
     format_wifi_report_json,
     format_wifi_report_markdown,
+    run_wifi,
 )
-
 
 # ---------------------------------------------------------------------------
 # Platform detection

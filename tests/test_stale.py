@@ -1,22 +1,23 @@
 """Unit tests for the stale DNS detection module."""
 
-import pytest
 import socket
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from ethscan.stale import (
     _normalize_domain,
+    check_ip_reachable,
+    check_tcp_connect,
+    format_stale_report_csv,
+    format_stale_report_json,
+    format_stale_report_markdown,
     load_domains_from_file,
     resolve_a_records,
     resolve_aaaa_records,
     resolve_cname,
-    check_tcp_connect,
-    check_ip_reachable,
     resolve_domain_all,
     run_stale,
-    format_stale_report_json,
-    format_stale_report_markdown,
-    format_stale_report_csv,
 )
 
 

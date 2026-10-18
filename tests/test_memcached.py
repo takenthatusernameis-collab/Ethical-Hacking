@@ -9,7 +9,6 @@ import pytest
 from ethscan.memcached import (
     DEFAULT_PORT,
     DEFAULT_PROBES,
-    DEFAULT_TIMEOUT,
     _assess_stats,
     _build_banner,
     _build_memcached_request,

@@ -9,18 +9,17 @@ from unittest.mock import MagicMock, patch
 
 from ethscan.oracle import (
     DEFAULT_PORT,
-    DEFAULT_PROBES,
-    _normalize_target,
+    _assess_version,
     _build_connect_request,
-    _send_recv,
+    _markdown_escape,
+    _normalize_target,
     _parse_accept_response,
     _parse_refuse_response,
-    _assess_version,
-    run_oracle,
+    _send_recv,
     format_oracle_report_csv,
     format_oracle_report_json,
     format_oracle_report_markdown,
-    _markdown_escape,
+    run_oracle,
 )
 
 
@@ -1015,8 +1014,9 @@ def test_parse_accept_response_header_struct_error():
     """Trigger struct.error when parsing TNS header (line ~218-220)."""
     # Create 8 bytes that might cause struct.unpack issues? No - 8 bytes is fine.
     # But we can monkeypatch struct.unpack to raise
-    from ethscan import oracle
     import struct as s
+
+    from ethscan import oracle
     orig = s.unpack
     def bad_unpack(fmt, buf):
         if fmt == '!HHBBH':
@@ -1032,8 +1032,9 @@ def test_parse_accept_response_header_struct_error():
 
 def test_parse_accept_response_version_struct_error():
     """Trigger struct.error when parsing version (line ~239-241)."""
-    from ethscan import oracle
     import struct as s
+
+    from ethscan import oracle
     orig = s.unpack
     def bad_unpack(fmt, buf):
         if fmt == '!H' and len(buf) == 2:  # version unpack
@@ -1051,8 +1052,9 @@ def test_parse_accept_response_version_struct_error():
 
 def test_parse_refuse_response_header_struct_error():
     """Trigger struct.error when parsing refuse header (line ~272-274)."""
-    from ethscan import oracle
     import struct as s
+
+    from ethscan import oracle
     orig = s.unpack
     def bad_unpack(fmt, buf):
         if fmt == '!HHBBH':
@@ -1068,8 +1070,9 @@ def test_parse_refuse_response_header_struct_error():
 
 def test_parse_refuse_response_datalen_struct_error():
     """Trigger struct.error when parsing data length (line ~292-294)."""
-    from ethscan import oracle
     import struct as s
+
+    from ethscan import oracle
     orig = s.unpack
     def bad_unpack(fmt, buf):
         if fmt == '!H' and buf == b'\x00\x64':  # data length bytes
@@ -1087,8 +1090,9 @@ def test_parse_refuse_response_datalen_struct_error():
 
 def test_parse_refuse_response_decode_fallback():
     """Ensure decode fallback to hex works (line ~304-305)."""
-    from ethscan import oracle
     import struct as s
+
+    from ethscan import oracle
     header = s.pack('!HHBBH', 8+6, 0, 0x04, 0, 0)
     error_data = b'\xff\xfe\xfd\xfd\xfe\xff'
     payload = s.pack('!HH', 0, len(error_data)) + error_data
@@ -1099,9 +1103,10 @@ def test_parse_refuse_response_decode_fallback():
 
 def test_parse_refuse_response_invalid_code_valueerror():
     """Handle ValueError when converting error code (line ~315-316)."""
-    from ethscan import oracle
-    import struct as s
     import re as r
+    import struct as s
+
+    from ethscan import oracle
     # Monkey patch re.search to return something that gives non-int
     orig_search = r.search
     class FakeMatch:
@@ -1119,8 +1124,9 @@ def test_parse_refuse_response_invalid_code_valueerror():
 
 def test_run_oracle_pkt_type_struct_error_in_resp():
     """Trigger struct.error when unpacking pkt_type (line ~412-413)."""
-    from ethscan import oracle
     import struct as s
+
+    from ethscan import oracle
     orig = s.unpack
     def bad_unpack(fmt, buf):
         if fmt == '!B' and buf == b'\x03':  # pkt_type byte at pos 4
@@ -1141,8 +1147,9 @@ def test_run_oracle_pkt_type_struct_error_in_resp():
 
 def test_parse_refuse_response_decode_raises():
     """Force decode to raise to hit except block (304-305)."""
-    from ethscan import oracle
     import struct as s
+
+    from ethscan import oracle
     header = s.pack('!HHBBH', 8+6, 0, 0x04, 0, 0)
     error_data = b'\xff\xfe\xfd\xfd\xfe\xff'
     class BadBytes(bytes):
@@ -1156,8 +1163,9 @@ def test_parse_refuse_response_decode_raises():
 
 def test_run_oracle_pkt_type_struct_error_precise():
     """More precise trigger for pkt_type struct.error (412-413)."""
-    from ethscan import oracle
     import struct as s
+
+    from ethscan import oracle
     orig = s.unpack
     calls = [0]
     def bad_unpack(fmt, buf):
@@ -1177,11 +1185,12 @@ def test_run_oracle_pkt_type_struct_error_precise():
 
 def test_parse_refuse_response_decode_fallback2():
     """Force decode to raise via monkeypatching (304-305)."""
-    from ethscan import oracle
     import struct as s
+
+    from ethscan import oracle
     header = s.pack('!HHBBH', 8+6, 0, 0x04, 0, 0)
     error_data = b'\xff\xfe\xfd\xfd\xfe\xff'
-    payload = s.pack('!HH', 0, len(error_data)) + error_data
+    s.pack('!HH', 0, len(error_data)) + error_data
     # Monkeypatch at the point of use - easier to just create a bad bytes subclass behavior
     class BadBytes(bytes):
         def decode(self, *args, **kwargs):
@@ -1194,8 +1203,9 @@ def test_parse_refuse_response_decode_fallback2():
 
 def test_parse_refuse_response_decode_exception_direct():
     """Directly test the decode exception path."""
-    from ethscan import oracle
     import struct as s
+
+    from ethscan import oracle
 
     header = s.pack('!HHBBH', 8+6, 0, 0x04, 0, 0)
     error_data = b'\xff\xfe\xfd\xfd\xfe\xff'
@@ -1213,8 +1223,7 @@ def test_parse_refuse_response_decode_exception_direct():
 
     # Simpler: just test by calling and catching - but we need to make the actual slice fail
     # Easier to do via mocking
-    import types
-    parsed = oracle._parse_refuse_response(header + payload)
+    oracle._parse_refuse_response(header + payload)
     # This won't hit it. Let us patch _parse_refuse_response's internal behavior by
     # creating a custom test that forces the except
     pass

@@ -3,8 +3,6 @@
 import csv
 import io
 
-import pytest
-
 from ethscan.urlcheck import (
     format_urlcheck_report_csv,
     format_urlcheck_report_json,

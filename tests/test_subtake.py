@@ -1,6 +1,5 @@
 """Tests for the ethscan subtake module."""
 
-import pytest
 
 from ethscan.subtake import (
     DEFAULT_SUBDOMAINS,

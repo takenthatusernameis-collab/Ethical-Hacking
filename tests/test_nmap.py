@@ -7,17 +7,16 @@ from pathlib import Path
 import pytest
 
 from ethscan.nmap import (
-    parse_nmap_xml,
-    run_nmap,
-    format_nmap_report_json,
-    format_nmap_report_markdown,
-    format_nmap_report_csv,
+    _escape,
     _extract_text,
     _finding_detail,
-    _escape,
     _parse_port,
+    format_nmap_report_csv,
+    format_nmap_report_json,
+    format_nmap_report_markdown,
+    parse_nmap_xml,
+    run_nmap,
 )
-
 
 SAMPLE_NMAP_XML = """<runscanner version="1.0" scanner="nmap" args="nmap -oX - 192.168.1.1" start="1234567890" nmap_version="7.94" xmloutputversion="1.05">
 <scaninfo type="syn" protocol="tcp" numservices="1000" services="1-1000"/>
@@ -389,8 +388,8 @@ def test_parse_port_with_ostype():
     """Test _parse_port ostype branch (line 67)."""
     import xml.etree.ElementTree as ET
     port_elem = ET.Element("port", {"portid": "22", "protocol": "tcp"})
-    state_elem = ET.SubElement(port_elem, "state", {"state": "open", "reason": "syn-ack"})
-    service_elem = ET.SubElement(port_elem, "service", {
+    ET.SubElement(port_elem, "state", {"state": "open", "reason": "syn-ack"})
+    ET.SubElement(port_elem, "service", {
         "name": "ssh",
         "product": "OpenSSH",
         "version": "7.2p2",

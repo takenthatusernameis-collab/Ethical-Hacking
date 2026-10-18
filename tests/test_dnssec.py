@@ -5,19 +5,15 @@ import io
 import json
 import socket
 import struct
-
-import pytest
 from unittest.mock import ANY, MagicMock, patch
 
 from ethscan.dnssec import (
-    DEFAULT_TIMEOUT,
     ALGORITHM_NAMES,
+    DEFAULT_TIMEOUT,
     DIGEST_TYPE_NAMES,
-    DNS_AVAILABLE,
     DNSKEY_QTYPE,
     DS_QTYPE,
     _build_dns_query,
-    _get_parent_zone,
     _markdown_escape,
     _parse_dns_name,
     _parse_dnskey_response,
@@ -838,31 +834,31 @@ def test_query_dnskey_raw_udp_success():
 
 
 def test_query_dnskey_raw_udp_none_falls_back_to_tcp():
-    with patch("ethscan.dnssec._query_udp", return_value=None) as mudp, \
+    with patch("ethscan.dnssec._query_udp", return_value=None), \
          patch("ethscan.dnssec._query_tcp", return_value=b"tcPresp") as mtcp, \
-         patch("ethscan.dnssec._parse_dnskey_response", return_value={"success": True, "keys": [1], "error": None}) as mp:
+         patch("ethscan.dnssec._parse_dnskey_response", return_value={"success": True, "keys": [1], "error": None}):
         r = _query_dnskey_raw("1.2.3.4", "example.com", 1.0)
         assert r["success"] is True
         mtcp.assert_called_once_with("1.2.3.4", ANY, 1.0)
 
 
 def test_query_dnskey_raw_udp_oversize_falls_back_to_tcp():
-    with patch("ethscan.dnssec._query_udp", return_value=b"x" * 600) as mudp, \
+    with patch("ethscan.dnssec._query_udp", return_value=b"x" * 600), \
          patch("ethscan.dnssec._query_tcp", return_value=b"tcPresp") as mtcp, \
-         patch("ethscan.dnssec._parse_dnskey_response", return_value={"success": True, "keys": [], "error": None}) as mp:
-        r = _query_dnskey_raw("1.2.3.4", "example.com", 1.0)
+         patch("ethscan.dnssec._parse_dnskey_response", return_value={"success": True, "keys": [], "error": None}):
+        _query_dnskey_raw("1.2.3.4", "example.com", 1.0)
         mtcp.assert_called_once()
 
 
 def test_query_dnskey_raw_both_none():
-    with patch("ethscan.dnssec._query_udp", return_value=None) as mudp, \
-         patch("ethscan.dnssec._query_tcp", return_value=None) as mtcp:
+    with patch("ethscan.dnssec._query_udp", return_value=None), \
+         patch("ethscan.dnssec._query_tcp", return_value=None):
         r = _query_dnskey_raw("1.2.3.4", "example.com", 1.0)
         assert r == {"success": False, "keys": [], "error": "no response"}
 
 
 def test_query_ds_raw_udp_success():
-    with patch("ethscan.dnssec._query_udp", return_value=b"resp") as mudp, \
+    with patch("ethscan.dnssec._query_udp", return_value=b"resp"), \
          patch("ethscan.dnssec._parse_ds_response", return_value={"success": True, "records": [], "error": None}) as mp:
         r = _query_ds_raw("1.2.3.4", "example.com", 1.0)
         assert r == {"success": True, "records": [], "error": None}
@@ -872,7 +868,7 @@ def test_query_ds_raw_udp_success():
 def test_query_ds_raw_udp_none_falls_back_to_tcp():
     with patch("ethscan.dnssec._query_udp", return_value=None), \
          patch("ethscan.dnssec._query_tcp", return_value=b"tcPresp") as mtcp, \
-         patch("ethscan.dnssec._parse_ds_response", return_value={"success": True, "records": [1], "error": None}) as mp:
+         patch("ethscan.dnssec._parse_ds_response", return_value={"success": True, "records": [1], "error": None}):
         r = _query_ds_raw("1.2.3.4", "example.com", 1.0)
         assert r["success"] is True
         mtcp.assert_called_once()

@@ -1,17 +1,15 @@
 """Tests for the ethscan ftp module."""
 
 import csv
+import ftplib
 import io
 import json
 import socket
-import threading
 
-import ftplib
 import pytest
 
 from ethscan.ftp import (
     DEFAULT_PORT,
-    DEFAULT_TIMEOUT,
     _connect,
     _normalize_target,
     format_ftp_report_csv,
@@ -19,7 +17,6 @@ from ethscan.ftp import (
     format_ftp_report_markdown,
     run_ftp,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fake FTP client (mirrors the ftplib.FTP interface) for deterministic tests

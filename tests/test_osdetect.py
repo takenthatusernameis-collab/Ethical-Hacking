@@ -4,15 +4,9 @@ import csv
 import io
 import json
 import threading
-from typing import List
-
-import pytest
 
 from ethscan.osdetect import (
-    DEFAULT_TIMEOUT,
-    OS_SIGNATURES,
     _checksum,
-    _connect_tcp,
     _match_os_from_banner,
     _match_os_from_behavior,
     _match_os_from_ttl,
@@ -27,7 +21,6 @@ from ethscan.osdetect import (
     probe_syn,
     run_osdetect,
 )
-
 
 # ---------------------------------------------------------------------------
 # Domain normalization
@@ -418,7 +411,6 @@ def test_format_osdetect_report_csv_empty() -> None:
 
 def test_errno_message_value_error() -> None:
     from unittest.mock import patch
-    import os
     with patch("os.strerror", side_effect=ValueError):
         from ethscan import osdetect
         assert osdetect._errno_message(12345) == "12345"
@@ -455,6 +447,7 @@ def test_checksum_even_length() -> None:
 
 def test_connect_tcp_success() -> None:
     from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     with patch("socket.create_connection", return_value=mock_sock):
@@ -467,6 +460,7 @@ def test_connect_tcp_success() -> None:
 
 def test_connect_tcp_refused() -> None:
     from unittest.mock import patch
+
     from ethscan import osdetect
     with patch("socket.create_connection", side_effect=ConnectionRefusedError):
         ok, err, flag = osdetect._connect_tcp("example.com", 80, 5.0)
@@ -477,6 +471,7 @@ def test_connect_tcp_refused() -> None:
 
 def test_connect_tcp_timeout() -> None:
     from unittest.mock import patch
+
     from ethscan import osdetect
     with patch("socket.create_connection", side_effect=Exception):
         pass  # different behavior? socket.timeout is subclass of OSError; test actual
@@ -490,6 +485,7 @@ def test_connect_tcp_timeout() -> None:
 
 def test_connect_tcp_oserror() -> None:
     from unittest.mock import patch
+
     from ethscan import osdetect
     with patch("socket.create_connection", side_effect=OSError("boom")):
         ok, err, flag = osdetect._connect_tcp("example.com", 80, 5.0)
@@ -500,6 +496,7 @@ def test_connect_tcp_oserror() -> None:
 
 def test_connect_tcp_oserror_truncate() -> None:
     from unittest.mock import patch
+
     from ethscan import osdetect
     with patch("socket.create_connection", side_effect=OSError("x" * 300)):
         ok, err, flag = osdetect._connect_tcp("example.com", 80, 5.0)
@@ -509,6 +506,7 @@ def test_connect_tcp_oserror_truncate() -> None:
 
 def test_connect_tcp_close_error() -> None:
     from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.close.side_effect = Exception("bad")
@@ -519,6 +517,7 @@ def test_connect_tcp_close_error() -> None:
 
 def test_probe_syn_connected() -> None:
     from unittest.mock import patch
+
     from ethscan import osdetect
     with patch("ethscan.osdetect._connect_tcp", return_value=(True, None, None)):
         res = osdetect.probe_syn("h", 80, 1.0)
@@ -528,6 +527,7 @@ def test_probe_syn_connected() -> None:
 
 def test_probe_syn_refused() -> None:
     from unittest.mock import patch
+
     from ethscan import osdetect
     with patch("ethscan.osdetect._connect_tcp", return_value=(False, "err", 1)):
         res = osdetect.probe_syn("h", 80, 1.0)
@@ -536,6 +536,7 @@ def test_probe_syn_refused() -> None:
 
 def test_probe_syn_noresp() -> None:
     from unittest.mock import patch
+
     from ethscan import osdetect
     with patch("ethscan.osdetect._connect_tcp", return_value=(False, "t", None)):
         res = osdetect.probe_syn("h", 80, 1.0)
@@ -544,6 +545,7 @@ def test_probe_syn_noresp() -> None:
 
 def test_probe_rst_open() -> None:
     from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.connect_ex.return_value = 0
@@ -554,6 +556,7 @@ def test_probe_rst_open() -> None:
 
 def test_probe_rst_refused_111() -> None:
     from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.connect_ex.return_value = 111
@@ -563,6 +566,7 @@ def test_probe_rst_refused_111() -> None:
 
 def test_probe_rst_refused_10061() -> None:
     from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.connect_ex.return_value = 10061
@@ -572,6 +576,7 @@ def test_probe_rst_refused_10061() -> None:
 
 def test_probe_rst_refused_10013() -> None:
     from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.connect_ex.return_value = 10013
@@ -581,6 +586,7 @@ def test_probe_rst_refused_10013() -> None:
 
 def test_probe_rst_other() -> None:
     from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.connect_ex.return_value = 1
@@ -589,8 +595,9 @@ def test_probe_rst_other() -> None:
 
 
 def test_probe_rst_timeout() -> None:
-    from unittest.mock import MagicMock, patch
     import socket as sockmod
+    from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.connect_ex.side_effect = sockmod.timeout
@@ -601,6 +608,7 @@ def test_probe_rst_timeout() -> None:
 
 def test_probe_rst_oserror() -> None:
     from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.connect_ex.side_effect = OSError("bad")
@@ -610,6 +618,7 @@ def test_probe_rst_oserror() -> None:
 
 def test_probe_rst_oserror_truncate() -> None:
     from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.connect_ex.side_effect = OSError("y" * 300)
@@ -619,6 +628,7 @@ def test_probe_rst_oserror_truncate() -> None:
 
 def test_probe_rst_close_err() -> None:
     from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.connect_ex.return_value = 1
@@ -629,6 +639,7 @@ def test_probe_rst_close_err() -> None:
 
 def test_probe_fin_open() -> None:
     from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.connect_ex.return_value = 0
@@ -638,6 +649,7 @@ def test_probe_fin_open() -> None:
 
 def test_probe_fin_refused() -> None:
     from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.connect_ex.return_value = 111
@@ -647,6 +659,7 @@ def test_probe_fin_refused() -> None:
 
 def test_probe_fin_other() -> None:
     from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.connect_ex.return_value = 2
@@ -655,8 +668,9 @@ def test_probe_fin_other() -> None:
 
 
 def test_probe_fin_timeout() -> None:
-    from unittest.mock import MagicMock, patch
     import socket as sockmod
+    from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.connect_ex.side_effect = sockmod.timeout
@@ -666,6 +680,7 @@ def test_probe_fin_timeout() -> None:
 
 def test_probe_fin_oserror() -> None:
     from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.connect_ex.side_effect = OSError("bad")
@@ -675,6 +690,7 @@ def test_probe_fin_oserror() -> None:
 
 def test_probe_fin_oserror_truncate() -> None:
     from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.connect_ex.side_effect = OSError("z" * 300)
@@ -684,6 +700,7 @@ def test_probe_fin_oserror_truncate() -> None:
 
 def test_probe_fin_close_err() -> None:
     from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.connect_ex.return_value = 0
@@ -694,6 +711,7 @@ def test_probe_fin_close_err() -> None:
 
 def test_probe_ack_open() -> None:
     from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.connect_ex.return_value = 0
@@ -703,6 +721,7 @@ def test_probe_ack_open() -> None:
 
 def test_probe_ack_refused() -> None:
     from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.connect_ex.return_value = 111
@@ -712,6 +731,7 @@ def test_probe_ack_refused() -> None:
 
 def test_probe_ack_other() -> None:
     from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.connect_ex.return_value = 3
@@ -720,8 +740,9 @@ def test_probe_ack_other() -> None:
 
 
 def test_probe_ack_timeout() -> None:
-    from unittest.mock import MagicMock, patch
     import socket as sockmod
+    from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.connect_ex.side_effect = sockmod.timeout
@@ -731,6 +752,7 @@ def test_probe_ack_timeout() -> None:
 
 def test_probe_ack_oserror() -> None:
     from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.connect_ex.side_effect = OSError("x")
@@ -740,6 +762,7 @@ def test_probe_ack_oserror() -> None:
 
 def test_probe_ack_oserror_truncate() -> None:
     from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.connect_ex.side_effect = OSError("w" * 300)
@@ -749,6 +772,7 @@ def test_probe_ack_oserror_truncate() -> None:
 
 def test_probe_ack_close_err() -> None:
     from unittest.mock import MagicMock, patch
+
     from ethscan import osdetect
     mock_sock = MagicMock()
     mock_sock.connect_ex.return_value = 0
@@ -759,6 +783,7 @@ def test_probe_ack_close_err() -> None:
 
 def test_run_osdetect_connected_infers_linux() -> None:
     from unittest.mock import patch
+
     from ethscan import osdetect
     syn1 = {"port": 80, "connected": True, "response": "SYN-ACK", "probe_type": "SYN", "flags_observed": "SYN-ACK", "error": None}
     syn2 = {"port": 443, "connected": False, "response": "NO-RESPONSE", "probe_type": "SYN", "flags_observed": None, "error": None}
@@ -793,6 +818,7 @@ def test_match_os_from_ttl_bsd_solaris() -> None:
 
 def test_run_osdetect_no_inferred_adds_notes() -> None:
     from unittest.mock import patch
+
     from ethscan import osdetect
     with patch("ethscan.osdetect.probe_syn", return_value={
         "port": 80, "connected": False, "response": "NO-RESPONSE", "probe_type": "SYN", "flags_observed": None, "error": None

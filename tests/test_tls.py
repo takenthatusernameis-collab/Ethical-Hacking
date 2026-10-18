@@ -2,18 +2,17 @@
 
 import csv
 import io
-import socket
 import ssl
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from ethscan.tls import (
-    ERROR_MAX_LENGTH,
     COMMON_CIPHERS,
     DEFAULT_PORT,
     DEFAULT_TIMEOUT,
     DEFAULT_WORKERS,
+    ERROR_MAX_LENGTH,
     OBSOLETE_VERSIONS,
     TLS_VERSIONS,
     _build_context,
@@ -524,7 +523,7 @@ def test_format_tls_report_markdown_error_truncation_and_escaping() -> None:
         "notes": [],
     }
     output = format_tls_report_markdown(data)
-    error_line = [line for line in output.split("\n") if "TLSv1_2" in line][0]
+    error_line = next(line for line in output.split("\n") if "TLSv1_2" in line)
     assert len(error_line) < 250
     assert "\\|" in error_line
     assert "..." in error_line

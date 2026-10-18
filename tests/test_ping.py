@@ -33,7 +33,6 @@ from ethscan.ping import (
     run_ping,
 )
 
-
 # ---------------------------------------------------------------------------
 # Host normalization
 # ---------------------------------------------------------------------------
@@ -372,7 +371,7 @@ def test_probe_icmp_loopback_closed_no_raw_socket() -> None:
     test_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     test_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     test_sock.bind(("127.0.0.1", 0))
-    port = test_sock.getsockname()[1]
+    test_sock.getsockname()[1]
     test_sock.close()
 
     result = probe_icmp(

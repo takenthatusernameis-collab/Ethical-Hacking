@@ -1,12 +1,11 @@
 """Tests for the ethscan service module."""
 
-import pytest
 
 from ethscan.service import (
+    COMMON_SERVICE_PORTS,
     DEFAULT_PORTS,
     DEFAULT_TIMEOUT,
     DEFAULT_WORKERS,
-    COMMON_SERVICE_PORTS,
     SERVICE_SIGNATURES,
     format_service_report_csv,
     format_service_report_json,
@@ -176,7 +175,7 @@ def test_banner_truncation_in_markdown(monkeypatch) -> None:
     output = format_service_report_markdown(result)
 
     assert "..." in output
-    assert len([line for line in output.split("\n") if "| 80 |" in line][0]) < 200
+    assert len(next(line for line in output.split("\n") if "| 80 |" in line)) < 200
 
 
 # ---------------------------------------------------------------------------

@@ -3,8 +3,6 @@
 import csv
 import io
 
-import pytest
-
 from ethscan.resolve import (
     DEFAULT_RECORD_TYPES,
     DEFAULT_TIMEOUT,
@@ -41,7 +39,7 @@ def test_normalize_target_ip() -> None:
 
 
 def test_normalize_target_ipv6_url() -> None:
-    from ethscan.resolve import _normalize_target, _is_ip_address
+    from ethscan.resolve import _is_ip_address, _normalize_target
 
     # IPv6 literals in URL form must be returned bare (without surrounding
     # brackets) so they are recognized as IP addresses for PTR lookups.
@@ -724,6 +722,7 @@ def test_run_resolve_with_unsupported_and_mixed_types() -> None:
 
 def test_resolve_dnspython_available(monkeypatch):
     import sys
+
     from ethscan import resolve
 
     # simulate dnspython available

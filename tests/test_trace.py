@@ -1,10 +1,8 @@
 import csv
-import socket
 import io
-import socket
 import json
 import socket
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from ethscan import trace
 
@@ -288,7 +286,7 @@ def test_probe_once_connect_fail():
         mock_sock.setsockopt = MagicMock()
         mock_sock.bind = MagicMock()
         mock_sock.connect_ex = MagicMock(return_value=1)
-        mock_sock.connect = MagicMock(side_effect=socket.error('conn err'))
+        mock_sock.connect = MagicMock(side_effect=OSError('conn err'))
         mock_sock.close = MagicMock()
         res = trace._probe_once("1.1.1.1", 80, 1, 0.1)
         assert res.get("reached") is False
@@ -296,7 +294,7 @@ def test_probe_once_connect_fail():
 
 def test_probe_once_socket_error():
     with patch("ethscan.trace.socket.socket") as mock_sock_class:
-        mock_sock_class.side_effect = socket.error("socket error")
+        mock_sock_class.side_effect = OSError("socket error")
         res = trace._probe_once("1.1.1.1", 80, 1, 0.1)
         assert res.get("hop_ip") is None
         assert res.get("reached") is False
@@ -309,7 +307,7 @@ def test_probe_once_recv_socket_error():
         mock_sock.setsockopt = MagicMock()
         mock_sock.bind = MagicMock()
         mock_sock.connect_ex = MagicMock(return_value=0)
-        mock_sock.connect = MagicMock(side_effect=socket.error('recv err'))
+        mock_sock.connect = MagicMock(side_effect=OSError('recv err'))
         mock_sock.close = MagicMock()
         res = trace._probe_once("1.1.1.1", 80, 1, 0.1)
         assert res.get("hop_ip") is None

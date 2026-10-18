@@ -1,11 +1,9 @@
 """Tests for the ethscan subdomains module."""
 
-import pytest
 
 from ethscan.subdomains import (
-    DEFAULT_SUBDOMAINS,
     DEFAULT_RECURSIVE_DEPTH,
-    DNS_AVAILABLE,
+    DEFAULT_SUBDOMAINS,
     _normalize_domain,
     format_subdomains_report_csv,
     format_subdomains_report_json,
@@ -485,7 +483,6 @@ def test_dns_availability_flag_true(monkeypatch) -> None:
 def test_dns_availability_flag_false(monkeypatch) -> None:
     """DNS_AVAILABLE is False when dns is not importable (the except branch)."""
     import sys
-    import types
     from importlib import reload
 
     import ethscan.subdomains as sub

@@ -5,29 +5,23 @@ import io
 import json
 import time
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from ethscan.mac import (
-    DEFAULT_API_URL,
-    DEFAULT_TIMEOUT,
-    CACHE_DIR,
-    CACHE_FILE,
-    CACHE_TTL,
-    _normalize_target,
-    _resolve_host,
-    _load_cache,
-    _save_cache,
-    _is_cache_valid,
+    _extract_oui,
     _fetch_mac_data,
     _get_cached_or_fetch,
-    _extract_oui,
+    _is_cache_valid,
     _is_mac_address,
-    run_mac,
+    _load_cache,
+    _normalize_target,
+    _resolve_host,
+    _save_cache,
     format_mac_report_csv,
     format_mac_report_json,
     format_mac_report_markdown,
+    run_mac,
 )
-
 
 # ---------------------------------------------------------------------------
 # Target normalization
@@ -353,7 +347,7 @@ def test_is_mac_address_false_hostname() -> None:
 
 
 def test_run_mac_offline_target(monkeypatch) -> None:
-    mock_data = {
+    {
         "mac": "00:1a:2b:3c:4d:5e",
         "vendor": "Cisco Systems",
         "timestamp": time.time(),

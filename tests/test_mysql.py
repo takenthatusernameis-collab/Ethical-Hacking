@@ -2,12 +2,10 @@
 
 import json
 import socket
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from ethscan.mysql import (
     DEFAULT_PORT,
-    DEFAULT_PROBES,
-    DEFAULT_TIMEOUT,
     _assess_handshake,
     _normalize_target,
     _parse_handshake,

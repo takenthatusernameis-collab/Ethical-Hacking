@@ -5,28 +5,22 @@ import io
 import json
 import time
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from ethscan.cert import (
-    DEFAULT_API_URL,
-    DEFAULT_TIMEOUT,
-    CACHE_DIR,
-    CACHE_FILE,
-    CACHE_TTL,
-    _normalize_target,
-    _resolve_host,
-    _load_cache,
-    _save_cache,
-    _is_cache_valid,
+    _extract_subdomains,
     _fetch_cert_data,
     _get_cached_or_fetch,
-    _extract_subdomains,
-    run_cert,
+    _is_cache_valid,
+    _load_cache,
+    _normalize_target,
+    _resolve_host,
+    _save_cache,
     format_cert_report_csv,
     format_cert_report_json,
     format_cert_report_markdown,
+    run_cert,
 )
-
 
 # ---------------------------------------------------------------------------
 # Target normalization
