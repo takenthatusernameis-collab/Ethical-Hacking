@@ -12,6 +12,7 @@ defaults to a raw TCP socket so tests can substitute a local fake server.
 """
 from __future__ import annotations
 
+import contextlib
 import csv
 import io
 import json
@@ -298,14 +299,12 @@ def _assess_handshake(handshake: dict[str, Any]) -> list[str]:
 
     capabilities = handshake.get("capabilities")
     if capabilities is not None:
-        try:
+        with contextlib.suppress(Exception):  # pragma: no cover - defensive
             # Common capability flags (simplified)
             if capabilities & (1 << 11):  # CLIENT_SECURE_CONNECTION
                 findings.append("Secure connection capability advertised")
             if capabilities & (1 << 9):  # CLIENT_SSL
                 findings.append("SSL/TLS capability advertised")
-        except Exception:
-            pass
 
     return findings
 

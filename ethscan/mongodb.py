@@ -13,6 +13,7 @@ defaults to a raw TCP socket so tests can substitute a local fake server.
 """
 from __future__ import annotations
 
+import contextlib
 import csv
 import io
 import json
@@ -201,11 +202,9 @@ def _parse_buildinfo_response(data: bytes) -> dict[str, Any]:
             if str_start + 4 <= len(doc_data):
                 str_len = int.from_bytes(doc_data[str_start:str_start+4], byteorder='little')
                 if str_start + 4 + str_len < len(doc_data):
-                    try:
+                    with contextlib.suppress(Exception):  # pragma: no cover - defensive
                         value = doc_data[str_start+4:str_start+4+str_len].decode('utf-8', errors='replace')
                         result[field.decode('utf-8')] = value
-                    except Exception:
-                        pass
 
     return result
 

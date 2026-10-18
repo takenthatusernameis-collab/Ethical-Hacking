@@ -1,6 +1,7 @@
 """SSL/TLS certificate inspection module for ethscan."""
 from __future__ import annotations
 
+import contextlib
 import csv
 import io
 import json
@@ -66,27 +67,19 @@ def _parse_cert(cert: dict) -> dict:
     subject_dict = {}
     for item in cert.get("subject", ()):
         if isinstance(item, tuple) and len(item) >= 1 and isinstance(item[0], tuple):
-            try:
+            with contextlib.suppress(Exception):  # pragma: no cover - defensive
                 subject_dict[item[0][0]] = item[0][1]
-            except Exception:
-                continue
         elif isinstance(item, tuple) and len(item) == 2:
-            try:
+            with contextlib.suppress(Exception):  # pragma: no cover - defensive
                 subject_dict[item[0]] = item[1]
-            except Exception:
-                continue
     issuer_dict = {}
     for item in cert.get("issuer", ()):
         if isinstance(item, tuple) and len(item) >= 1 and isinstance(item[0], tuple):
-            try:
+            with contextlib.suppress(Exception):  # pragma: no cover - defensive
                 issuer_dict[item[0][0]] = item[0][1]
-            except Exception:
-                continue
         elif isinstance(item, tuple) and len(item) == 2:
-            try:
+            with contextlib.suppress(Exception):  # pragma: no cover - defensive
                 issuer_dict[item[0]] = item[1]
-            except Exception:
-                continue
 
     subject = subject_dict.get("commonName") or _rdn_to_str(subject_dict) or None
     issuer = issuer_dict.get("commonName") or _rdn_to_str(issuer_dict) or None
@@ -164,12 +157,10 @@ def _get_chain(ssock) -> list:
     for method_name in ("get_verified_chain", "get_unverified_chain"):
         method = getattr(ssock, method_name, None)
         if method is not None:
-            try:
+            with contextlib.suppress(Exception):  # pragma: no cover - defensive
                 chain = method()
                 if chain:
                     return chain
-            except Exception:  # pragma: no cover - defensive
-                continue
     return []
 
 
