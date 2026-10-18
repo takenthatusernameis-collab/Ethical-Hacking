@@ -392,7 +392,7 @@ def run_oracle(
         # We'll use a dummy service name. The listener might refuse if the service name is invalid,
         # but we hope to still get an Accept packet with the version before checking the service name?
         # Alternatively, we can try to send an empty service name.
-        connect_data = "(DESCRIPTION=(CONNECT_DATA=(SERVICE_NAME=)))(ADDRESS=(PROTOCOL=TCP)(HOST=%s)(PORT=%d))" % (host, final_port)
+        connect_data = f"(DESCRIPTION=(CONNECT_DATA=(SERVICE_NAME=)))(ADDRESS=(PROTOCOL=TCP)(HOST={host})(PORT={final_port}))"
         try:
             request = _build_connect_request(
                 desired_version=0x03FF,

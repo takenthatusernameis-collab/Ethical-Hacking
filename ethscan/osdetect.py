@@ -410,7 +410,7 @@ def run_osdetect(
     # Cross-reference banners when provided
     os_matches: list[str] = []
     if banners:
-        for port, banner in banners.items():
+        for banner in banners.values():
             os_matches.extend(_match_os_from_banner(banner))
 
     # Infer OS from behavior

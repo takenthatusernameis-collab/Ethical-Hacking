@@ -109,8 +109,7 @@ def _trace_single(
         reached_hop = False
         probes_done = 0
         probe_results = []
-        for _ in range(max(1, probes_per_hop)):
-            probes_done += 1
+        for probes_done in range(1, max(1, probes_per_hop) + 1):
             res = _probe_once(dst_ip, port, ttl, timeout)
             if res.get("error"):
                 hop_obj = {

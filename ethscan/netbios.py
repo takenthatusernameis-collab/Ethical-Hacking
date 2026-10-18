@@ -484,9 +484,8 @@ def _derive_assessment(names: list[dict[str, Any]]) -> dict[str, Any]:
         suffix = entry.get("suffix")
         if suffix == _SUFFIX_FILE_SERVER:
             is_server = True
-        if suffix == _SUFFIX_WORKSTATION and not flags.get("group"):
-            if hostname is None:
-                hostname = entry.get("name")
+        if suffix == _SUFFIX_WORKSTATION and not flags.get("group") and hostname is None:
+            hostname = entry.get("name")
         if suffix == _SUFFIX_WORKSTATION and flags.get("group"):
             is_domain_member = True
 

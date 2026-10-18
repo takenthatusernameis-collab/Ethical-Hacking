@@ -130,11 +130,10 @@ def _wrap_socket(context, host, port, timeout):
     Returns:
         Tuple of (wrapped_socket, cert_dict_or_None).
     """
-    with socket.create_connection((host, port), timeout=timeout) as sock:
-        with context.wrap_socket(sock, server_hostname=host) as ssock:
-            cert = _decode_cert(ssock)
-            chain = _get_chain(ssock)
-            return ssock, cert, len(chain) if chain else 0
+    with socket.create_connection((host, port), timeout=timeout) as sock, context.wrap_socket(sock, server_hostname=host) as ssock:
+        cert = _decode_cert(ssock)
+        chain = _get_chain(ssock)
+        return ssock, cert, len(chain) if chain else 0
 
 
 def _decode_cert(ssock) -> dict:
