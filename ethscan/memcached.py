@@ -103,10 +103,7 @@ def _parse_version_response(data: bytes | None) -> str | None:
     """Parse a ``VERSION <x.y.z>\\r\\n`` response into the version string."""
     if not data:
         return None
-    try:
-        text = data.decode("utf-8", errors="replace")
-    except Exception:
-        return None
+    text = data.decode("utf-8", errors="replace")
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line:
@@ -131,10 +128,7 @@ def _parse_stats_response(data: bytes | None) -> dict[str, str]:
     stats: dict[str, str] = {}
     if not data:
         return stats
-    try:
-        text = data.decode("utf-8", errors="replace")
-    except Exception:
-        return stats
+    text = data.decode("utf-8", errors="replace")
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line:

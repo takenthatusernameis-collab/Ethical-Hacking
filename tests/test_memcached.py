@@ -24,16 +24,6 @@ from ethscan.memcached import (
 )
 
 
-class _DecodeFail:
-    """Truth object whose decode() always raises (covers defensive except)."""
-
-    def __bool__(self) -> bool:
-        return True
-
-    def decode(self, *args, **kwargs):
-        raise ValueError("decode failed")
-
-
 def _mock_socket(recv_data=b"", connect_side_effect=None, close_side_effect=None):
     sock = MagicMock()
     sock.recv.return_value = recv_data
@@ -479,11 +469,6 @@ def test_coerce_int_none():
     assert _coerce_int(None) is None
 
 
-def test_parse_version_response_decode_failure():
-    """Defensive except when the payload's decode() raises."""
-    assert _parse_version_response(_DecodeFail()) is None  # type: ignore[arg-type]
-
-
 def test_parse_version_response_empty_lines_skipped():
     data = b"\r\nVERSION 1.6.14\r\n"
     assert _parse_version_response(data) == "1.6.14"
@@ -492,11 +477,6 @@ def test_parse_version_response_empty_lines_skipped():
 def test_parse_version_response_tab_separator():
     data = b"VERSION\t1.6.14\r\n"
     assert _parse_version_response(data) == "1.6.14"
-
-
-def test_parse_stats_response_decode_failure():
-    """Defensive except when the payload's decode() raises."""
-    assert _parse_stats_response(_DecodeFail()) == {}  # type: ignore[arg-type]
 
 
 def test_parse_stats_response_empty_lines_skipped():
