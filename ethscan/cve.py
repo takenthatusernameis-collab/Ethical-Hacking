@@ -93,7 +93,7 @@ def _fetch_cve_data(
         if not isinstance(data, dict):
             return None
         return data
-    except Exception:
+    except (OSError, ValueError):
         return None
 
 

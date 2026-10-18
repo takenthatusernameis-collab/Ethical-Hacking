@@ -304,7 +304,7 @@ def _parse_refuse_response(data: bytes) -> dict[str, Any]:
     error_data = payload[4:4 + data_length]
     try:
         error_str = error_data.decode("utf-8", errors="replace")
-    except Exception:
+    except UnicodeDecodeError:
         error_str = error_data.hex()
 
     result["error"] = error_str

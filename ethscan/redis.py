@@ -111,7 +111,7 @@ def _parse_resp_bulk_string(data: bytes) -> tuple[str | None, int]:
             return None, 0  # incomplete
         value = data[start:end].decode("utf-8", errors="replace")
         return value, end + 2
-    except Exception:
+    except (UnicodeDecodeError, ValueError):
         return None, 0
 
 
@@ -169,7 +169,7 @@ def _parse_resp(data: bytes) -> tuple[Any | None, int]:
                 items.append(item)
                 pos += c
             return items, pos
-        except Exception:
+        except ValueError:
             return None, 0
     return None, 0
 

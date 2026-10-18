@@ -118,7 +118,7 @@ def _subtract_networks(
                     continue
                 try:
                     diffs = list(r_net.address_exclude(s_net))
-                except Exception:
+                except ValueError:
                     diffs = []
                 if diffs:
                     new_remaining.extend(diffs)
@@ -148,10 +148,10 @@ def _merge_networks(networks: list[ipaddress._BaseNetwork]) -> list[ipaddress._B
         if net.version != last.version:
             merged.append(net)
             continue
-        try:
-            collapsed = list(ipaddress.collapse_addresses([last, net]))
-        except Exception:
-            collapsed = None
+try:
+                    collapsed = list(ipaddress.collapse_addresses([last, net]))
+                except ValueError:
+                    collapsed = None
         if collapsed and len(collapsed) == 1:
             merged[-1] = collapsed[0]
         elif last.overlaps(net):

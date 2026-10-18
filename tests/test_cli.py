@@ -16311,7 +16311,7 @@ def test_validate_output_format_default_is_json() -> None:
     # Should be valid JSON (default)
     try:
         json.loads(result.output)
-    except Exception:
+    except json.JSONDecodeError:
         assert False, "Default output should be valid JSON"
 def test_geo_help_shows_output_format():
     runner = CliRunner()

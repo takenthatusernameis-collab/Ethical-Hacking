@@ -123,7 +123,7 @@ def _subtract_networks(
                     continue
                 try:
                     diffs = list(r_net.address_exclude(s_net))
-                except Exception:
+                except ValueError:
                     diffs = []
                 if diffs:
                     new_remaining.extend(diffs)

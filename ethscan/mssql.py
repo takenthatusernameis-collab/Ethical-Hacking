@@ -431,7 +431,7 @@ def _parse_prelogin_response(data: bytes) -> dict[str, Any]:
                 # If we get something else, just decode as string if possible.
                 try:
                     result["version"] = value.decode("utf-8", errors="replace")
-                except Exception:
+                except UnicodeDecodeError:
                     result["version"] = value.hex()
         elif opt_type == _OPTION_ENCRYPTION:
             # Encryption is a single byte: 0x00 off, 0x01 on, 0x02 required, 0x03 not supported.
@@ -454,7 +454,7 @@ def _parse_prelogin_response(data: bytes) -> dict[str, Any]:
             if value:
                 try:
                     result["instance_name"] = value.decode("utf-8", errors="replace")
-                except Exception:
+                except UnicodeDecodeError:
                     result["instance_name"] = value.hex()
             else:
                 result["instance_name"] = ""

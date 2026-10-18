@@ -71,7 +71,7 @@ def fetch_headers(target: str, timeout: float = 5.0) -> dict[str, str]:
         # HTTPError still carries headers.
         try:
             return {key.lower(): value for key, value in exc.headers.items()}
-        except Exception:
+        except (AttributeError, TypeError):
             return {}
     except (urllib.error.URLError, OSError, ValueError):
         return {}
