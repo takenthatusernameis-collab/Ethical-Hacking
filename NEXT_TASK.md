@@ -16,6 +16,11 @@
 - Do NOT retry PLR0402 in tests/test_brute.py:504 (breaks `test_paramiko_import_error`, reload semantics).
 - Await a genuine new issue/requirement before further speculative changes.
 
+## This session (2026-10-18)
+- Baseline re-verified green: `python -m pytest -q` -> 3900 passed, 1 skipped, 2 warnings. No changes made; working tree clean at HEAD 3739a12.
+- Confirmed no new safe bounded task remains (55 ruff errors: BLE001/TRY002/PLR0402, all previously proven unsafe).
+- A stash (`stash@{0}`) holds abandoned experimental source changes; do not merge without review.
+
 ## Instructions
 - Do NOT make speculative changes beyond the completed fixes unless a genuine new issue/requirement arrives.
 - If a new issue arrives, implement the smallest verifiable change and confirm with `python -m pytest -q` and `python -m ruff check --select <affected codes>`.

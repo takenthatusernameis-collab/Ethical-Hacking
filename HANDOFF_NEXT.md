@@ -32,8 +32,13 @@
 - UP006/UP035: completed in prior session — do not repeat.
 - C405 (prior session): already resolved (code already uses set literals); re-verified clean this session.
 
+## This session (2026-10-18)
+- Re-verified baseline: `python -m pytest -q` -> 3900 passed, 1 skipped, 2 warnings (green). No source/test changes made; working tree clean at HEAD 3739a12.
+- Confirmed no new safe bounded task remains: the 55 ruff errors (BLE001 x42, TRY002 x12, PLR0402 x1) are all previously proven unsafe to fix (see Approaches failed). mypy (~522 errors) and coverage (70 missing lines) are out of scope/not targeted.
+- A stash (`stash@{0}`, WIP on main) holds abandoned experimental source changes across many ethscan files; do NOT merge without review — it is not part of the green baseline.
+
 ## Next precise task
 - None remaining. All clearly-safe bounded lint tasks are exhausted.
 - Await a genuine new issue/requirement before further speculative changes.
 
-(End of file - total 31 lines)
+(End of file)
