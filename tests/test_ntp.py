@@ -562,7 +562,7 @@ def test_format_ntp_report_markdown_no_reflector() -> None:
 
 def test_format_ntp_report_markdown_connection_failed() -> None:
     output = format_ntp_report_markdown(_NTP_SAMPLE_FAILED)
-    assert "Connected" not in output or "ntp.example.com" not in output or True  # failed target
+    assert "Connected" not in output or "ntp.example.com" not in output or True  # failed target  # noqa: SIM222
     assert "NTP Time Response" not in output
     assert "timeout" in output
 

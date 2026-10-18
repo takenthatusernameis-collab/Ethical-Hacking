@@ -452,14 +452,14 @@ def test_format_ssh_report_csv_pipe_escaping() -> None:
 
 
 def _kexinit_response(
-    kex: list[str] = None,
-    host_keys: list[str] = None,
-    ciphers_c2s: list[str] = None,
-    ciphers_s2c: list[str] = None,
-    macs_c2s: list[str] = None,
-    macs_s2c: list[str] = None,
-    compressions: list[str] = None,
-    languages: list[str] = None,
+    kex: list[str] | None = None,
+    host_keys: list[str] | None = None,
+    ciphers_c2s: list[str] | None = None,
+    ciphers_s2c: list[str] | None = None,
+    macs_c2s: list[str] | None = None,
+    macs_s2c: list[str] | None = None,
+    compressions: list[str] | None = None,
+    languages: list[str] | None = None,
 ) -> bytes:
     """Build a valid SSH_MSG_KEXINIT server response (msg_type + cookie + name lists)."""
     cookie = b"\x00" * 16

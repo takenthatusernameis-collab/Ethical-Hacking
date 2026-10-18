@@ -557,20 +557,20 @@ def test_parse_dns_name_compression():
     header = struct.pack(">HHHHHH", 0x1234, 0x8000, 1, 1, 0, 0)
     answer = b"\xc0\x0c" + struct.pack(">HHIH", DNSKEY_QTYPE, 1, 3600, 10) + b"\x00" * 10
     data = header + question + answer
-    name, off = _parse_dns_name(data, 12)
+    name, _ = _parse_dns_name(data, 12)
     assert name == "example.com"
 
 
 def test_parse_dns_name_truncated():
-    name, off = _parse_dns_name(b"\x07exa", 0)
+    name, _ = _parse_dns_name(b"\x07exa", 0)
     assert name == ""
-    name, off = _parse_dns_name(b"", 0)
+    name, _ = _parse_dns_name(b"", 0)
     assert name == ""
 
 
 def test_parse_dns_name_pointer_out_of_range():
     data = b"\xc0\xff"
-    name, off = _parse_dns_name(data, 0)
+    name, _ = _parse_dns_name(data, 0)
     assert name == ""
 
 

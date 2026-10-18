@@ -889,7 +889,7 @@ def test_parse_dns_name_decode_valueerror_fallback():
     # providing a raw label whose decode raises. Simpler: monkey invalid pointer chain
     # Use a label length 1 with byte 0xff (invalid NetBIOS encoding -> ValueError)
     data = bytes([1, 0xFF, 0])
-    name, off = _parse_dns_name(data, 0)
+    name, _ = _parse_dns_name(data, 0)
     assert isinstance(name, str)
 
 

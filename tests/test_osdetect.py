@@ -498,7 +498,7 @@ def test_connect_tcp_oserror_truncate() -> None:
 
     from ethscan import osdetect
     with patch("socket.create_connection", side_effect=OSError("x" * 300)):
-        ok, err, flag = osdetect._connect_tcp("example.com", 80, 5.0)
+        ok, err, _ = osdetect._connect_tcp("example.com", 80, 5.0)
         assert ok is False
         assert err.endswith("...")
 
@@ -510,7 +510,7 @@ def test_connect_tcp_close_error() -> None:
     mock_sock = MagicMock()
     mock_sock.close.side_effect = Exception("bad")
     with patch("socket.create_connection", return_value=mock_sock):
-        ok, err, flag = osdetect._connect_tcp("example.com", 80, 5.0)
+        ok, err, _ = osdetect._connect_tcp("example.com", 80, 5.0)
         assert ok is True
 
 

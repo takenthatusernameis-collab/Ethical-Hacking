@@ -162,10 +162,12 @@ def test_run_memcached_stats_only():
     def connector(host, port, request, timeout):
         if request == b"stats\r\n":
             return (
-                b"STAT pid 12345\r\n"
-                b"STAT uptime 3600\r\n"
-                b"STAT bytes 1024\r\n"
-                b"END\r\n",
+                (
+                    b"STAT pid 12345\r\n"
+                    b"STAT uptime 3600\r\n"
+                    b"STAT bytes 1024\r\n"
+                    b"END\r\n"
+                ),
                 None,
             )
         return None, "unexpected request"
