@@ -1,10 +1,11 @@
 """DNS forward/reverse resolution module for ethscan."""
+from __future__ import annotations
 
 import csv
 import io
 import ipaddress
 import socket
-from typing import Dict, List, Optional
+from typing import Optional
 
 try:
     import dns.exception
@@ -53,7 +54,7 @@ def _is_ip_address(value: str) -> bool:
         return False
 
 
-def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> List[str]:
+def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str]:
     """Resolve A records (IPv4 addresses) for a domain using stdlib."""
     try:
         socket.setdefaulttimeout(timeout)
@@ -64,7 +65,7 @@ def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> List[str
         return []
 
 
-def resolve_aaaa_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> List[str]:
+def resolve_aaaa_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str]:
     """Resolve AAAA records (IPv6 addresses) for a domain using stdlib."""
     try:
         socket.setdefaulttimeout(timeout)
@@ -75,7 +76,7 @@ def resolve_aaaa_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> List[
         return []
 
 
-def resolve_cname_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> List[str]:
+def resolve_cname_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str]:
     """Resolve CNAME records using dnspython if available."""
     if not DNS_AVAILABLE:
         return []
@@ -91,7 +92,7 @@ def resolve_cname_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> List
         return []
 
 
-def resolve_ptr_records(ip: str, timeout: float = DEFAULT_TIMEOUT, server: Optional[str] = None) -> List[str]:
+def resolve_ptr_records(ip: str, timeout: float = DEFAULT_TIMEOUT, server: Optional[str] = None) -> list[str]:
     """Resolve PTR records (reverse DNS) for an IP address."""
     if not DNS_AVAILABLE:
         try:
@@ -117,7 +118,7 @@ def resolve_ptr_records(ip: str, timeout: float = DEFAULT_TIMEOUT, server: Optio
 
 def resolve_with_dnspython(
     domain: str, record_type: str, timeout: float = DEFAULT_TIMEOUT, server: Optional[str] = None
-) -> List[str]:
+) -> list[str]:
     """Resolve DNS records using dnspython if available."""
     if not DNS_AVAILABLE:
         return []
@@ -137,10 +138,10 @@ def resolve_with_dnspython(
 
 def run_resolve(
     target: str,
-    record_types: Optional[List[str]] = None,
+    record_types: Optional[list[str]] = None,
     server: Optional[str] = None,
     timeout: float = DEFAULT_TIMEOUT,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Perform forward/reverse DNS resolution for a target.
 
     Args:
@@ -165,7 +166,7 @@ def run_resolve(
     else:
         types = record_types
 
-    results: Dict[str, List[str]] = {}
+    results: dict[str, list[str]] = {}
     all_supported = {"A", "AAAA", "CNAME", "PTR"}
 
     for rtype in types:
@@ -203,14 +204,14 @@ def run_resolve(
     }
 
 
-def format_resolve_report_json(data: Dict[str, object]) -> str:
+def format_resolve_report_json(data: dict[str, object]) -> str:
     """Format resolve results as JSON."""
     import json
 
     return json.dumps(data, indent=2, default=str)
 
 
-def format_resolve_report_markdown(data: Dict[str, object]) -> str:
+def format_resolve_report_markdown(data: dict[str, object]) -> str:
     """Format resolve results as Markdown."""
     records = data["records"]
     lines = ["# ethscan DNS Forward/Reverse Resolution Report", ""]
@@ -239,7 +240,7 @@ def format_resolve_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_resolve_report_csv(data: Dict[str, object]) -> str:
+def format_resolve_report_csv(data: dict[str, object]) -> str:
     """Format resolve results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

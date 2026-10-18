@@ -3,6 +3,7 @@
 Performs IP geolocation using a public IP-to-location API with caching
 and offline fallback. Stdlib only.
 """
+from __future__ import annotations
 
 import csv
 import io
@@ -12,7 +13,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional
 
 DEFAULT_API_URL = "http://ip-api.com/json/"
 DEFAULT_TIMEOUT = 5.0
@@ -60,7 +61,7 @@ def _resolve_host(host: str) -> Optional[str]:
         return None
 
 
-def _load_cache() -> Dict[str, Dict]:
+def _load_cache() -> dict[str, dict]:
     """Load the geolocation cache from disk."""
     if not CACHE_FILE.exists():
         return {}
@@ -72,7 +73,7 @@ def _load_cache() -> Dict[str, Dict]:
         return {}
 
 
-def _save_cache(cache: Dict[str, Dict]) -> None:
+def _save_cache(cache: dict[str, dict]) -> None:
     """Save the geolocation cache to disk."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     try:
@@ -82,14 +83,14 @@ def _save_cache(cache: Dict[str, Dict]) -> None:
         pass
 
 
-def _is_cache_valid(entry: Dict, ttl: int = CACHE_TTL) -> bool:
+def _is_cache_valid(entry: dict, ttl: int = CACHE_TTL) -> bool:
     """Check if a cache entry is still valid."""
     if "timestamp" not in entry:
         return False
     return (time.time() - entry["timestamp"]) < ttl
 
 
-def _fetch_geo_data(ip: str, timeout: float = DEFAULT_TIMEOUT) -> Optional[Dict]:
+def _fetch_geo_data(ip: str, timeout: float = DEFAULT_TIMEOUT) -> Optional[dict]:
     """Fetch geolocation data from the public API."""
     url = f"{DEFAULT_API_URL}{ip}?fields={','.join(FIELDS)}"
     req = urllib.request.Request(url, headers={"User-Agent": "ethscan/0.1"})
@@ -106,7 +107,7 @@ def _fetch_geo_data(ip: str, timeout: float = DEFAULT_TIMEOUT) -> Optional[Dict]
 
 def _get_cached_or_fetch(
     ip: str, timeout: float, use_cache: bool, offline_fallback: bool
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Get geolocation data from cache or fetch from API."""
     cache = _load_cache() if use_cache else {}
 
@@ -146,7 +147,7 @@ def run_geo(
     api_url: Optional[str] = None,
     recursive: bool = False,
     max_depth: int = DEFAULT_MAX_DEPTH,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Run IP geolocation lookup against target.
 
     Args:
@@ -169,7 +170,7 @@ def run_geo(
     host = _normalize_target(target)
     ip = _resolve_host(host)
 
-    notes: List[str] = []
+    notes: list[str] = []
 
     if ip is None:
         notes.append(f"Could not resolve host {host!r} to an IPv4 address")
@@ -195,7 +196,7 @@ def run_geo(
     if geo_data.get("offline_fallback"):
         notes.append("API unavailable; used stale cached data (offline fallback)")
 
-    hops: List[Dict[str, object]] = []
+    hops: list[dict[str, object]] = []
     hop_count = 0
 
     if recursive:
@@ -250,7 +251,7 @@ def run_geo(
     return result
 
 
-def format_geo_report_json(data: Dict[str, object]) -> str:
+def format_geo_report_json(data: dict[str, object]) -> str:
     """Format geolocation results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
@@ -260,7 +261,7 @@ def _markdown_escape(text: object) -> str:
     return str(text).replace("|", "\\|").replace("\n", " ")
 
 
-def format_geo_report_markdown(data: Dict[str, object]) -> str:
+def format_geo_report_markdown(data: dict[str, object]) -> str:
     """Format geolocation results as Markdown."""
     lines = ["# ethscan IP Geolocation Report", ""]
     lines.append(f"- **Target:** {data['target']}")
@@ -344,7 +345,7 @@ def format_geo_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def _geo_csv_header() -> List[str]:
+def _geo_csv_header() -> list[str]:
     """Return the CSV header row for geo output.
 
     The first 13 columns carry the primary target / hop geolocation fields
@@ -375,8 +376,8 @@ def _geo_csv_header() -> List[str]:
 
 
 def _geo_csv_row(
-    target: str, ip: object, geo: Dict[str, object], hop: Optional[Dict[str, object]] = None
-) -> List[str]:
+    target: str, ip: object, geo: dict[str, object], hop: Optional[dict[str, object]] = None
+) -> list[str]:
     """Build a single CSV row for a geolocation result (primary target or hop).
 
     When ``hop`` is provided the trailing hop transport columns
@@ -410,7 +411,7 @@ def _geo_csv_row(
     return row
 
 
-def format_geo_report_csv(data: Dict[str, object]) -> str:
+def format_geo_report_csv(data: dict[str, object]) -> str:
     """Format geolocation results as CSV.
 
     Emits a header row followed by one row for the primary target's

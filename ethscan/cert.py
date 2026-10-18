@@ -4,6 +4,7 @@ Searches public CT log APIs (crt.sh) for certificates issued for a target
 domain, extracting associated subdomains. Stdlib only with filesystem caching
 and offline fallback.
 """
+from __future__ import annotations
 
 import csv
 import io
@@ -13,7 +14,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional
 
 DEFAULT_API_URL = "https://crt.sh/"
 DEFAULT_TIMEOUT = 10.0
@@ -42,7 +43,7 @@ def _resolve_host(host: str) -> Optional[str]:
         return None
 
 
-def _load_cache() -> Dict[str, Dict]:
+def _load_cache() -> dict[str, dict]:
     """Load the cert cache from disk."""
     if not CACHE_FILE.exists():
         return {}
@@ -54,7 +55,7 @@ def _load_cache() -> Dict[str, Dict]:
         return {}
 
 
-def _save_cache(cache: Dict[str, Dict]) -> None:
+def _save_cache(cache: dict[str, dict]) -> None:
     """Save the cert cache to disk."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     try:
@@ -64,7 +65,7 @@ def _save_cache(cache: Dict[str, Dict]) -> None:
         pass
 
 
-def _is_cache_valid(entry: Dict, ttl: int = CACHE_TTL) -> bool:
+def _is_cache_valid(entry: dict, ttl: int = CACHE_TTL) -> bool:
     """Check if a cache entry is still valid."""
     if "timestamp" not in entry:
         return False
@@ -73,7 +74,7 @@ def _is_cache_valid(entry: Dict, ttl: int = CACHE_TTL) -> bool:
 
 def _fetch_cert_data(
     domain: str, timeout: float = DEFAULT_TIMEOUT, api_url: Optional[str] = None
-) -> Optional[Dict]:
+) -> Optional[dict]:
     """Fetch certificate transparency data from the public API."""
     base = (api_url or DEFAULT_API_URL).rstrip("/") + "/"
     url = f"{base}?q=%25.{domain}&output=json"
@@ -95,7 +96,7 @@ def _get_cached_or_fetch(
     use_cache: bool,
     offline_fallback: bool,
     api_url: Optional[str],
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Get cert data from cache or fetch from API."""
     cache = _load_cache() if use_cache else {}
 
@@ -128,9 +129,9 @@ def _get_cached_or_fetch(
     return data
 
 
-def _extract_subdomains(cert_data: Dict[str, object]) -> List[str]:
+def _extract_subdomains(cert_data: dict[str, object]) -> list[str]:
     """Extract unique subdomain names from CT entries."""
-    names: List[str] = []
+    names: list[str] = []
     seen: set = set()
     entries = cert_data.get("entries") or []
     for entry in entries:
@@ -153,7 +154,7 @@ def run_cert(
     use_cache: bool = True,
     offline_fallback: bool = True,
     api_url: Optional[str] = None,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Search Certificate Transparency logs for TARGET.
 
     Args:
@@ -174,7 +175,7 @@ def run_cert(
     domain = _normalize_target(target)
     ip = _resolve_host(domain)
 
-    notes: List[str] = []
+    notes: list[str] = []
 
     if ip is None:
         notes.append(f"Could not resolve host {domain!r} to an IPv4 address")
@@ -214,12 +215,12 @@ def run_cert(
     return result
 
 
-def format_cert_report_json(data: Dict[str, object]) -> str:
+def format_cert_report_json(data: dict[str, object]) -> str:
     """Format cert results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_cert_report_markdown(data: Dict[str, object]) -> str:
+def format_cert_report_markdown(data: dict[str, object]) -> str:
     """Format cert results as Markdown."""
     lines = ["# ethscan Certificate Transparency Report", ""]
     lines.append(f"- **Target:** {data['target']}")
@@ -269,7 +270,7 @@ def format_cert_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_cert_report_csv(data: Dict[str, object]) -> str:
+def format_cert_report_csv(data: dict[str, object]) -> str:
     """Format cert results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

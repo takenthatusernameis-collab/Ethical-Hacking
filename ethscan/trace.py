@@ -6,7 +6,7 @@ import io
 import json
 import socket
 import time
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Optional
 
 DEFAULT_PORT = 80
 DEFAULT_MAX_HOPS = 30
@@ -42,7 +42,7 @@ def _fmt_rtt(rtt_ms: Optional[float]) -> str:
     return f"{rtt_ms:.2f}ms"
 
 
-def _probe_once(dst_ip: str, port: int, ttl: int, timeout: float) -> Dict[str, Any]:
+def _probe_once(dst_ip: str, port: int, ttl: int, timeout: float) -> dict[str, Any]:
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     except Exception as e:
@@ -73,7 +73,7 @@ def _trace_single(
     max_hops: int,
     timeout: float,
     probes_per_hop: int,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Trace a single target and return the result."""
     host = _normalize_host(target)
     if not host:
@@ -101,10 +101,10 @@ def _trace_single(
             "notes": ["Raw ICMP socket unavailable; connect-only fallback mode"],
         }
 
-    hops: List[Dict[str, Any]] = []
+    hops: list[dict[str, Any]] = []
     reached = False
     for ttl in range(1, max_hops + 1):
-        rtt_list: List[float] = []
+        rtt_list: list[float] = []
         hop_ip = None
         reached_hop = False
         probes_done = 0
@@ -205,9 +205,9 @@ def _trace_single(
     }
 
 
-def _extract_hop_ips(hops: List[Dict[str, Any]]) -> List[str]:
+def _extract_hop_ips(hops: list[dict[str, Any]]) -> list[str]:
     """Extract unique hop IPs from trace results (excluding the destination)."""
-    ips: Set[str] = set()
+    ips: set[str] = set()
     for hop in hops:
         ip = hop.get("ip")
         if ip and not hop.get("reached_destination", False):
@@ -224,7 +224,7 @@ def run_trace(
     raw_socket=None,
     recursive: bool = False,
     max_depth: int = DEFAULT_MAX_DEPTH,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run TCP traceroute, optionally recursively tracing intermediate hops."""
     # First, trace the main target
     main_result = _trace_single(target, port, max_hops, timeout, probes_per_hop)
@@ -245,13 +245,13 @@ def run_trace(
         return main_result
 
     # Recursively trace each hop IP up to max_depth
-    recursive_results: List[Dict[str, Any]] = []
-    seen_targets: Set[str] = {main_result.get("target", "").lower()}
+    recursive_results: list[dict[str, Any]] = []
+    seen_targets: set[str] = {main_result.get("target", "").lower()}
 
-    def _recursive_trace(targets: List[str], depth: int) -> None:
+    def _recursive_trace(targets: list[str], depth: int) -> None:
         if depth > max_depth or not targets:
             return
-        next_targets: List[str] = []
+        next_targets: list[str] = []
         for t in targets:
             t_lower = t.lower()
             if t_lower in seen_targets:
@@ -275,12 +275,12 @@ def run_trace(
     return main_result
 
 
-def format_trace_report_json(result: Dict[str, Any]) -> str:
+def format_trace_report_json(result: dict[str, Any]) -> str:
     return json.dumps(result, indent=2)
 
 
-def format_trace_report_markdown(result: Dict[str, Any]) -> str:
-    lines: List[str] = []
+def format_trace_report_markdown(result: dict[str, Any]) -> str:
+    lines: list[str] = []
     lines.append("# TCP Traceroute Report")
     lines.append("")
     lines.append(f"**Target:** {result.get('target', result.get('host', 'N/A'))}")
@@ -366,7 +366,7 @@ def format_trace_report_markdown(result: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def format_trace_report_csv(result: Dict[str, Any]) -> str:
+def format_trace_report_csv(result: dict[str, Any]) -> str:
     """Format trace results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)
@@ -380,7 +380,7 @@ def format_trace_report_csv(result: Dict[str, Any]) -> str:
         "reached_destination",
     ])
 
-    def _write_hops(target: Any, hops: List[Dict[str, Any]]) -> None:
+    def _write_hops(target: Any, hops: list[dict[str, Any]]) -> None:
         for hop in hops:
             hop_no = hop.get("hop", hop.get("ttl", ""))
             rtt = hop.get("rtt_avg_ms")

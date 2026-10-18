@@ -27,11 +27,12 @@ Only options explicitly listed in the config take effect; CLI arguments always
 take precedence over config values. The config is purely optional and the
 toolkit works unchanged when no config file is present.
 """
+from __future__ import annotations
 
 import csv
 import io
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 try:
     import yaml
@@ -41,7 +42,7 @@ except ImportError:  # pragma: no cover - pyyaml is a declared dependency
 # Candidate locations searched in order. The first existing file wins.
 # Evaluated lazily (see ``_candidate_paths``) so that ``Path.home()`` reflects
 # the current environment (useful for tests that monkeypatch the home dir).
-CONFIG_CANDIDATES: List[str] = [
+CONFIG_CANDIDATES: list[str] = [
     "ethscan.yaml",
     "ethscan.yml",
     ".ethscan.yaml",
@@ -49,20 +50,20 @@ CONFIG_CANDIDATES: List[str] = [
 ]
 
 # Default config used when no file is found.
-DEFAULT_CONFIG: Dict[str, Any] = {
+DEFAULT_CONFIG: dict[str, Any] = {
     "defaults": {},
     "commands": {},
 }
 
 
-def _candidate_paths(explicit: Optional[str] = None) -> List[Path]:
+def _candidate_paths(explicit: Optional[str] = None) -> list[Path]:
     """Return the list of config file paths to search.
 
     When ``explicit`` is provided it is prepended to the standard candidates.
     The first two candidates are relative to the current working directory;
     the last two are relative to the user's home directory (``Path.home()``).
     """
-    paths: List[Path] = []
+    paths: list[Path] = []
     if explicit:
         paths.append(Path(explicit))
     home = Path.home()
@@ -92,7 +93,7 @@ def find_config_file(explicit: Optional[str] = None) -> Optional[Path]:
     return None
 
 
-def load_config(explicit: Optional[str] = None) -> Dict[str, Any]:
+def load_config(explicit: Optional[str] = None) -> dict[str, Any]:
     """Load and validate the ethscan configuration.
 
     Args:
@@ -149,12 +150,12 @@ def load_config(explicit: Optional[str] = None) -> Dict[str, Any]:
     }
 
 
-def _merge(defaults: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
+def _merge(defaults: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
     """Merge command-level defaults with global defaults.
 
     Command-level values take precedence over global defaults.
     """
-    merged: Dict[str, Any] = {}
+    merged: dict[str, Any] = {}
     merged.update(defaults)
     merged.update(overrides)
     return merged
@@ -173,7 +174,7 @@ def _merge(defaults: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any
 _FORMAT_DEST = "fmt"
 
 
-def _normalize_format_key(options: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_format_key(options: dict[str, Any]) -> dict[str, Any]:
     """Remap the documented ``format`` key to the working ``fmt`` Click dest.
 
     Click's ``default_map`` is keyed by option *dest* names. The documented
@@ -196,9 +197,9 @@ def _normalize_format_key(options: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def build_default_map(
-    config: Dict[str, Any],
+    config: dict[str, Any],
     command: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Build the Click ``default_map`` for a single command.
 
     Args:
@@ -218,7 +219,7 @@ def build_default_map(
     return _merge(defaults, overrides)
 
 
-def config_path_string(config: Dict[str, Any]) -> Optional[str]:
+def config_path_string(config: dict[str, Any]) -> Optional[str]:
     """Return the path of the loaded config file, or None."""
     path = config.get("_path")
     if isinstance(path, str):
@@ -226,13 +227,13 @@ def config_path_string(config: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def validate_config(config: Dict[str, Any], known_commands: Optional[List[str]] = None) -> List[str]:
+def validate_config(config: dict[str, Any], known_commands: Optional[list[str]] = None) -> list[str]:
     """Validate a config dict and return a list of human-readable warnings.
 
     An empty list means the config is structurally valid. Warnings are
     non-fatal and do not prevent the toolkit from running.
     """
-    warnings: List[str] = []
+    warnings: list[str] = []
     parse_error = config.get("_parse_error")
     if isinstance(parse_error, str):
         warnings.append(parse_error)
@@ -286,7 +287,7 @@ commands:
     return sample
 
 
-def format_config_report_csv(config: Dict[str, Any]) -> str:
+def format_config_report_csv(config: dict[str, Any]) -> str:
     """Format config as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

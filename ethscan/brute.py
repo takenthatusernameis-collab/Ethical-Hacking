@@ -1,11 +1,12 @@
 """Brute-force login module for ethscan (FTP/SSH)."""
+from __future__ import annotations
 
 import csv
 import io
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from ftplib import FTP
-from typing import Dict, List, Optional
+from typing import Optional
 
 try:
     import paramiko
@@ -43,7 +44,7 @@ DEFAULT_PASSWORDS = [
 SUPPORTED_PROTOCOLS = {"ftp", "ssh"}
 
 
-def load_wordlist(path: str) -> List[str]:
+def load_wordlist(path: str) -> list[str]:
     """Load a wordlist from file, one entry per line.
 
     Args:
@@ -91,7 +92,7 @@ def _attempt_ftp(
     username: str,
     password: str,
     timeout: float,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Attempt a single FTP login.
 
     Args:
@@ -102,9 +103,9 @@ def _attempt_ftp(
         timeout: Connection timeout in seconds.
 
     Returns:
-        Dict with username, password, success flag, and error (if any).
+        dict with username, password, success flag, and error (if any).
     """
-    result: Dict[str, object] = {
+    result: dict[str, object] = {
         "username": username,
         "password": password,
         "success": False,
@@ -131,7 +132,7 @@ def _attempt_ssh(
     username: str,
     password: str,
     timeout: float,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Attempt a single SSH login (requires paramiko).
 
     Args:
@@ -142,9 +143,9 @@ def _attempt_ssh(
         timeout: Connection timeout in seconds.
 
     Returns:
-        Dict with username, password, success flag, and error (if any).
+        dict with username, password, success flag, and error (if any).
     """
-    result: Dict[str, object] = {
+    result: dict[str, object] = {
         "username": username,
         "password": password,
         "success": False,
@@ -185,12 +186,12 @@ def _attempt_ssh(
 def run_brute(
     target: str,
     protocol: str = DEFAULT_PROTOCOL,
-    usernames: Optional[List[str]] = None,
-    passwords: Optional[List[str]] = None,
+    usernames: Optional[list[str]] = None,
+    passwords: Optional[list[str]] = None,
     port: Optional[int] = None,
     timeout: float = DEFAULT_TIMEOUT,
     max_workers: int = DEFAULT_WORKERS,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Run a brute-force login attack against a target.
 
     Args:
@@ -223,7 +224,7 @@ def run_brute(
 
     attempt = _attempt_ftp if protocol == "ftp" else _attempt_ssh
 
-    results: List[Dict[str, object]] = []
+    results: list[dict[str, object]] = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [
             executor.submit(attempt, host, resolved_port, user, pwd, timeout)
@@ -252,7 +253,7 @@ def run_brute(
     }
 
 
-def format_brute_report_csv(data: Dict[str, object]) -> str:
+def format_brute_report_csv(data: dict[str, object]) -> str:
     """Format brute-force results as CSV (credential dump).
 
     Produces one row per attempt with columns: username, password, success, error.
@@ -272,12 +273,12 @@ def format_brute_report_csv(data: Dict[str, object]) -> str:
     return output.getvalue().rstrip("\r\n")
 
 
-def format_brute_report_json(data: Dict[str, object]) -> str:
+def format_brute_report_json(data: dict[str, object]) -> str:
     """Format brute-force results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_brute_report_markdown(data: Dict[str, object]) -> str:
+def format_brute_report_markdown(data: dict[str, object]) -> str:
     """Format brute-force results as Markdown."""
     lines = ["# ethscan Brute Force Report", ""]
     lines.append(f"- **Target:** {data['target']}")

@@ -1,4 +1,5 @@
 """Password strength auditing module for ethscan."""
+from __future__ import annotations
 
 import csv
 import hashlib
@@ -6,7 +7,7 @@ import hmac
 import io
 import json
 import math
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 # Common passwords sourced from well-known weak-password lists (offline).
 COMMON_PASSWORDS = {
@@ -170,7 +171,7 @@ def evaluate_password(
     salt: Optional[str] = None,
     pepper: Optional[str] = None,
     algorithm: str = "sha256",
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Evaluate a single password and return a structured report.
 
     Args:
@@ -240,10 +241,10 @@ VALID_SORT_KEYS = ("score", "verdict", "length")
 
 
 def _sort_audit_pairs(
-    results: List[Tuple[str, Dict[str, object]]],
+    results: list[tuple[str, dict[str, object]]],
     sort_by: Optional[str],
     sort_desc: bool,
-) -> List[Tuple[str, Dict[str, object]]]:
+) -> list[tuple[str, dict[str, object]]]:
     """Return a sorted copy of the audit result pairs.
 
     Args:
@@ -258,7 +259,7 @@ def _sort_audit_pairs(
     if sort_by not in VALID_SORT_KEYS:
         return list(results)
 
-    def sort_key(item: Tuple[str, Dict[str, object]]) -> Any:
+    def sort_key(item: tuple[str, dict[str, object]]) -> Any:
         _, eval_data = item
         value = eval_data.get(sort_by)
         if sort_by == "verdict":
@@ -270,14 +271,14 @@ def _sort_audit_pairs(
 
 
 def audit_passwords(
-    passwords: List[str],
+    passwords: list[str],
     min_length: Optional[int] = None,
     sort_by: Optional[str] = None,
     sort_desc: bool = True,
     salt: Optional[str] = None,
     pepper: Optional[str] = None,
     algorithm: str = "sha256",
-) -> List[Tuple[str, Dict[str, object]]]:
+) -> list[tuple[str, dict[str, object]]]:
     """Audit a list of passwords.
 
     Args:
@@ -303,8 +304,8 @@ def audit_passwords(
 
 
 def format_audit_report_json(
-    passwords: List[str],
-    results: List[Tuple[str, Dict[str, object]]],
+    passwords: list[str],
+    results: list[tuple[str, dict[str, object]]],
     min_length: Optional[int] = None,
     sort_by: Optional[str] = None,
     sort_desc: bool = True,
@@ -339,8 +340,8 @@ def format_audit_report_json(
 
 
 def format_audit_report_markdown(
-    passwords: List[str],
-    results: List[Tuple[str, Dict[str, object]]],
+    passwords: list[str],
+    results: list[tuple[str, dict[str, object]]],
     min_length: Optional[int] = None,
     sort_by: Optional[str] = None,
     sort_desc: bool = True,
@@ -382,8 +383,8 @@ def format_audit_report_markdown(
 
 
 def format_audit_report_csv(
-    passwords: List[str],
-    results: List[Tuple[str, Dict[str, object]]],
+    passwords: list[str],
+    results: list[tuple[str, dict[str, object]]],
     min_length: Optional[int] = None,
     salt: Optional[str] = None,
     pepper: Optional[str] = None,

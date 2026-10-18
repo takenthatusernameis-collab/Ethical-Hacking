@@ -4,12 +4,13 @@ Generates cryptographic hashes for passwords using the stdlib ``hashlib``
 module. Supports MD5, SHA-1, SHA-256, SHA-512, NTLM, and MD4 (when available
 via OpenSSL). Fully offline and stdlib-only.
 """
+from __future__ import annotations
 
 import csv
 import hashlib
 import hmac
 import io
-from typing import Dict, List, Optional
+from typing import Optional
 
 # Algorithms supported natively by hashlib on this platform.
 # Maps canonical key -> hashlib algorithm name.
@@ -255,18 +256,18 @@ def _hashlib_name(algorithm: str) -> Optional[str]:
     return _HASHLIB_ALGORITHMS.get(algorithm)
 
 
-def _supported_algorithms() -> List[str]:
+def _supported_algorithms() -> list[str]:
     """Return the list of supported algorithm keys (sorted)."""
     algos = set(_HASHLIB_ALGORITHMS.keys()) | {"ntlm"}
     return sorted(algos)
 
 
-def _normalize_passwords(passwords: List[str]) -> List[str]:
+def _normalize_passwords(passwords: list[str]) -> list[str]:
     """Strip whitespace and drop empty passwords."""
     return [pwd.strip() for pwd in passwords if pwd.strip()]
 
 
-def load_passwords_from_file(path: str) -> List[str]:
+def load_passwords_from_file(path: str) -> list[str]:
     """Load passwords from a file, one password per line.
 
     Args:
@@ -285,7 +286,7 @@ def load_passwords_from_file(path: str) -> List[str]:
 
 # Canonical digest lengths (hex) per algorithm, used to infer the algorithm
 # from an unknown digest when ``--algorithm`` is not specified.
-_DIGEST_LENGTHS: Dict[str, int] = {
+_DIGEST_LENGTHS: dict[str, int] = {
     "md5": 32,
     "sha1": 40,
     "sha256": 64,
@@ -327,7 +328,7 @@ def run_check(
     salt: Optional[str] = None,
     pepper: Optional[str] = None,
     iterations: Optional[int] = None,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Compare a plaintext password against a known hash digest.
 
     Args:
@@ -390,12 +391,12 @@ def run_check(
 
 
 def run_hash(
-    passwords: List[str],
+    passwords: list[str],
     algorithm: str = "md5",
     salt: Optional[str] = None,
     pepper: Optional[str] = None,
     iterations: Optional[int] = None,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Generate hashes for a list of passwords.
 
     Args:
@@ -427,7 +428,7 @@ def run_hash(
 
     password_list = _normalize_passwords(passwords)
 
-    results: List[Dict[str, object]] = []
+    results: list[dict[str, object]] = []
     for pwd in password_list:
         try:
             digest = _compute_password_hash(
@@ -454,7 +455,7 @@ def run_hash(
             }
         )
 
-    notes: List[str] = []
+    notes: list[str] = []
     if salt:
         notes.append("Salt applied: prepended to each password before hashing.")
     if pepper:
@@ -483,14 +484,14 @@ def run_hash(
     }
 
 
-def format_hash_report_json(data: Dict[str, object]) -> str:
+def format_hash_report_json(data: dict[str, object]) -> str:
     """Format hash results as a JSON string."""
     import json
 
     return json.dumps(data, indent=2, default=str)
 
 
-def format_check_report_json(data: Dict[str, object]) -> str:
+def format_check_report_json(data: dict[str, object]) -> str:
     """Format a password check result as a JSON string."""
     import json
 
@@ -502,7 +503,7 @@ def _escape(value: str) -> str:
     return value.replace("|", "\\|")
 
 
-def format_hash_report_markdown(data: Dict[str, object]) -> str:
+def format_hash_report_markdown(data: dict[str, object]) -> str:
     """Format hash results as a Markdown string."""
     lines = ["# ethscan Password Hash Report", ""]
     lines.append(f"- **Algorithm:** {data['algorithm']}")
@@ -541,7 +542,7 @@ def format_hash_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_check_report_markdown(data: Dict[str, object]) -> str:
+def format_check_report_markdown(data: dict[str, object]) -> str:
     """Format a password check result as a Markdown string."""
     lines = ["# ethscan Password Check Report", ""]
     lines.append(f"- **Password:** `{_escape(str(data.get('password', '')))}`")
@@ -576,7 +577,7 @@ def format_check_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_check_report_csv(data: Dict[str, object]) -> str:
+def format_check_report_csv(data: dict[str, object]) -> str:
     """Format a password check result as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)
@@ -606,7 +607,7 @@ def format_check_report_csv(data: Dict[str, object]) -> str:
     return output.getvalue().rstrip("\r\n")
 
 
-def format_hash_report_csv(data: Dict[str, object]) -> str:
+def format_hash_report_csv(data: dict[str, object]) -> str:
     """Format hash results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

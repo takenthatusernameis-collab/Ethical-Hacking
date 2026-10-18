@@ -1,10 +1,11 @@
 """DNSSEC validation module for ethscan."""
+from __future__ import annotations
 
 import csv
 import io
 import socket
 import struct
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
 try:
     import dns.dnssec
@@ -113,9 +114,9 @@ def _build_dns_query(name: str, qtype: int, want_dnssec: bool = True) -> bytes:
     return header + question
 
 
-def _parse_dns_name(data: bytes, offset: int) -> Tuple[str, int]:
+def _parse_dns_name(data: bytes, offset: int) -> tuple[str, int]:
     """Parse a (possibly compressed) DNS name starting at offset."""
-    labels: List[str] = []
+    labels: list[str] = []
     jumped = False
     end_offset = offset
     seen = set()
@@ -199,7 +200,7 @@ def _query_tcp(
         return None
 
 
-def _resolve_nameservers(domain: str, timeout: float) -> List[str]:
+def _resolve_nameservers(domain: str, timeout: float) -> list[str]:
     """Resolve authoritative nameservers for a domain using stdlib."""
     try:
         socket.setdefaulttimeout(timeout)
@@ -214,7 +215,7 @@ def _query_dnskey_raw(
     nameserver: str,
     domain: str,
     timeout: float = DEFAULT_TIMEOUT,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Query DNSKEY records using raw UDP/TCP socket."""
     query = _build_dns_query(domain, DNSKEY_QTYPE, want_dnssec=True)
     response = _query_udp(nameserver, query, timeout)
@@ -229,7 +230,7 @@ def _query_ds_raw(
     nameserver: str,
     domain: str,
     timeout: float = DEFAULT_TIMEOUT,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Query DS records using raw UDP/TCP socket."""
     query = _build_dns_query(domain, DS_QTYPE, want_dnssec=True)
     response = _query_udp(nameserver, query, timeout)
@@ -240,9 +241,9 @@ def _query_ds_raw(
     return _parse_ds_response(response, domain)
 
 
-def _parse_dnskey_response(data: bytes, domain: str) -> Dict[str, object]:
+def _parse_dnskey_response(data: bytes, domain: str) -> dict[str, object]:
     """Parse DNSKEY response."""
-    result: Dict[str, object] = {
+    result: dict[str, object] = {
         "success": False,
         "keys": [],
         "error": None,
@@ -251,7 +252,7 @@ def _parse_dnskey_response(data: bytes, domain: str) -> Dict[str, object]:
         result["error"] = "response too short"
         return result
 
-    query_id = struct.unpack(">H", data[0:2])[0]
+    struct.unpack(">H", data[0:2])[0]
     flags = struct.unpack(">H", data[2:4])[0]
     response_code = flags & 0x000F
     if response_code != 0:
@@ -305,9 +306,9 @@ def _parse_dnskey_response(data: bytes, domain: str) -> Dict[str, object]:
     return result
 
 
-def _parse_ds_response(data: bytes, domain: str) -> Dict[str, object]:
+def _parse_ds_response(data: bytes, domain: str) -> dict[str, object]:
     """Parse DS response."""
-    result: Dict[str, object] = {
+    result: dict[str, object] = {
         "success": False,
         "records": [],
         "error": None,
@@ -316,7 +317,7 @@ def _parse_ds_response(data: bytes, domain: str) -> Dict[str, object]:
         result["error"] = "response too short"
         return result
 
-    query_id = struct.unpack(">H", data[0:2])[0]
+    struct.unpack(">H", data[0:2])[0]
     flags = struct.unpack(">H", data[2:4])[0]
     response_code = flags & 0x000F
     if response_code != 0:
@@ -374,7 +375,7 @@ def _query_dnskey_dnspython(
     domain: str,
     server: Optional[str] = None,
     timeout: float = DEFAULT_TIMEOUT,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Query DNSKEY records using dnspython."""
     try:
         resolver = dns.resolver.Resolver()
@@ -406,7 +407,7 @@ def _query_ds_dnspython(
     domain: str,
     server: Optional[str] = None,
     timeout: float = DEFAULT_TIMEOUT,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Query DS records using dnspython."""
     try:
         resolver = dns.resolver.Resolver()
@@ -438,7 +439,7 @@ def run_dnssec(
     target: str,
     server: Optional[str] = None,
     timeout: float = DEFAULT_TIMEOUT,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Validate DNSSEC for a target domain.
 
     Args:
@@ -453,8 +454,8 @@ def run_dnssec(
 
     dnskey_result = {"success": False, "keys": [], "error": None}
     ds_result = {"success": False, "records": [], "error": None}
-    chain: List[Dict[str, object]] = []
-    notes: List[str] = []
+    chain: list[dict[str, object]] = []
+    notes: list[str] = []
 
     if DNS_AVAILABLE:
         dnskey_result = _query_dnskey_dnspython(domain, server, timeout)
@@ -516,7 +517,7 @@ def run_dnssec(
     }
 
 
-def format_dnssec_report_json(data: Dict[str, object]) -> str:
+def format_dnssec_report_json(data: dict[str, object]) -> str:
     """Format DNSSEC results as JSON."""
     import json
     return json.dumps(data, indent=2, default=str)
@@ -527,7 +528,7 @@ def _markdown_escape(text: object) -> str:
     return str(text).replace("|", "\\|").replace("\n", " ")
 
 
-def format_dnssec_report_markdown(data: Dict[str, object]) -> str:
+def format_dnssec_report_markdown(data: dict[str, object]) -> str:
     """Format DNSSEC results as Markdown."""
     lines = ["# ethscan DNSSEC Validation Report", ""]
     lines.append(f"- **Target:** {data['target']}")
@@ -609,7 +610,7 @@ def format_dnssec_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def _dnssec_csv_header() -> List[str]:
+def _dnssec_csv_header() -> list[str]:
     """Return the CSV header row for dnssec output."""
     return [
         "target",
@@ -644,7 +645,7 @@ def _dnssec_row(
     count: str = "",
     success: str = "",
     error: str = "",
-) -> List[str]:
+) -> list[str]:
     """Build a single CSV row for a DNSSEC record (key, DS record, or status)."""
     return [
         target,
@@ -670,9 +671,9 @@ def _dnssec_status_row(
     validated: bool,
     record_type: str,
     name: str,
-    result: Dict[str, object],
+    result: dict[str, object],
     item_key: str,
-) -> List[str]:
+) -> list[str]:
     """Build a CSV status row summarizing a DNSKEY/DS query.
 
     Captures the query success/error and record count so a failed or
@@ -692,7 +693,7 @@ def _dnssec_status_row(
     )
 
 
-def format_dnssec_report_csv(data: Dict[str, object]) -> str:
+def format_dnssec_report_csv(data: dict[str, object]) -> str:
     """Format DNSSEC results as CSV.
 
     Emits a header row followed by one row per DNSKEY record, one row per DS

@@ -14,19 +14,20 @@ Offline-first SNMP reconnaissance using only the Python standard library
 All network access is confined to a single helper, ``_send_recv``, which
 defaults to a raw UDP socket so tests can substitute a local fake server.
 """
+from __future__ import annotations
 
 import csv
 import io
 import json
 import socket
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 DEFAULT_PORT = 161
 DEFAULT_TIMEOUT = 3.0
 DEFAULT_COMMUNITIES = ("public", "private", "default", "")
 
 # Standard MIB-II OIDs requested in every GET request.
-STANDARD_OIDS: Dict[str, str] = {
+STANDARD_OIDS: dict[str, str] = {
     "sysDescr": "1.3.6.1.2.1.1.1.0",
     "sysObjectID": "1.3.6.1.2.1.1.2.0",
     "sysUpTime": "1.3.6.1.2.1.1.3.0",
@@ -110,7 +111,7 @@ ERROR_STATUS_NAMES = {
 # ---------------------------------------------------------------------------
 
 
-def _normalize_target(target: str) -> Tuple[str, int]:
+def _normalize_target(target: str) -> tuple[str, int]:
     """Parse a target into a bare host and port.
 
     Accepts ``host``, ``host:port``, and ``snmp://host:port`` forms.
@@ -213,7 +214,7 @@ def _encode_null() -> bytes:
     return _encode_tlv(TAG_NULL, b"")
 
 
-def _build_get_request(version: int, community: str, oids: List[str]) -> bytes:
+def _build_get_request(version: int, community: str, oids: list[str]) -> bytes:
     """Build an SNMP GET request message (v1 or v2c).
 
     Args:
@@ -241,7 +242,7 @@ def _build_get_request(version: int, community: str, oids: List[str]) -> bytes:
 # ---------------------------------------------------------------------------
 
 
-def _parse_tlv(data: bytes, offset: int) -> Tuple[int, bytes, int]:
+def _parse_tlv(data: bytes, offset: int) -> tuple[int, bytes, int]:
     """Parse one BER TLV at *offset*, returning (tag, value, next_offset)."""
     if offset >= len(data):
         raise ValueError("truncated TLV: missing tag")
@@ -299,7 +300,7 @@ def _decode_varbind_value(tag: int, value: bytes) -> Any:
     return value.hex()
 
 
-def _parse_snmp_message(data: bytes) -> Dict[str, Any]:
+def _parse_snmp_message(data: bytes) -> dict[str, Any]:
     """Parse an SNMP message (GET request or GET response) into a dict.
 
     Returns a dict with ``version``, ``community``, ``pdu_type``,
@@ -349,7 +350,7 @@ def _parse_snmp_message(data: bytes) -> Dict[str, Any]:
     if ptag != TAG_SEQUENCE:
         raise ValueError("expected SEQUENCE varbind-list")
 
-    varbinds: List[Dict[str, Any]] = []
+    varbinds: list[dict[str, Any]] = []
     vb_off = 0
     while vb_off < len(v):
         vb_tag, vb_value, vb_off = _parse_tlv(v, vb_off)
@@ -393,7 +394,7 @@ def _send_recv(
     request: bytes,
     timeout: float,
     connector=None,
-) -> Tuple[Optional[bytes], Optional[str]]:
+) -> tuple[Optional[bytes], Optional[str]]:
     """Send a UDP request and receive the response (injectable for tests)."""
     if connector is not None:
         return connector(host, port, request, timeout)
@@ -417,7 +418,7 @@ def _send_recv(
 # ---------------------------------------------------------------------------
 
 
-def _assign_varbind(entry: Dict[str, Any], varbind: Dict[str, Any]) -> None:
+def _assign_varbind(entry: dict[str, Any], varbind: dict[str, Any]) -> None:
     """Copy a decoded varbind into the per-community result entry."""
     key = _OID_TO_KEY.get(varbind.get("oid", ""))
     if key is None:
@@ -435,9 +436,9 @@ def _probe_community(
     community: str,
     timeout: float,
     connector,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Probe a single community string with v2c first, then v1."""
-    entry: Dict[str, Any] = {
+    entry: dict[str, Any] = {
         "community": community,
         "valid": False,
         "version": None,
@@ -479,9 +480,9 @@ def run_snmp(
     target: str,
     port: Optional[int] = None,
     timeout: float = DEFAULT_TIMEOUT,
-    communities: Optional[List[str]] = None,
+    communities: Optional[list[str]] = None,
     connector=None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run SNMP reconnaissance against *target*.
 
     Args:
@@ -500,7 +501,7 @@ def run_snmp(
     server_port = port if port is not None else parsed_port
     community_list = list(communities) if communities is not None else list(DEFAULT_COMMUNITIES)
 
-    results: Dict[str, Any] = {
+    results: dict[str, Any] = {
         "target": target,
         "host": host,
         "port": server_port,
@@ -539,7 +540,7 @@ def run_snmp(
 # ---------------------------------------------------------------------------
 
 
-def format_snmp_report_json(data: Dict[str, Any]) -> str:
+def format_snmp_report_json(data: dict[str, Any]) -> str:
     """Format SNMP reconnaissance results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
@@ -549,7 +550,7 @@ def _escape_markdown(value: Any) -> str:
     return str(value).replace("|", "\\|")
 
 
-def format_snmp_report_markdown(data: Dict[str, Any]) -> str:
+def format_snmp_report_markdown(data: dict[str, Any]) -> str:
     """Format SNMP reconnaissance results as Markdown."""
     lines = ["# ethscan SNMP Report", ""]
     lines.append(f"- **Target:** {_escape_markdown(data.get('target', ''))}")
@@ -614,7 +615,7 @@ def format_snmp_report_markdown(data: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def format_snmp_report_csv(data: Dict[str, Any]) -> str:
+def format_snmp_report_csv(data: dict[str, Any]) -> str:
     """Format SNMP reconnaissance results as CSV.
 
     Emits a header row plus one row per probed community (including a

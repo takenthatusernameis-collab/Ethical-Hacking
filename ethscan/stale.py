@@ -1,10 +1,11 @@
 """Stale DNS record detection module for ethscan."""
+from __future__ import annotations
 
 import csv
 import io
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Optional
+from typing import Optional
 from urllib.parse import urlparse
 
 DEFAULT_TIMEOUT = 2.0
@@ -27,7 +28,7 @@ def _normalize_domain(target: str) -> str:
     return parsed.netloc.lower()
 
 
-def load_domains_from_file(path: str) -> List[str]:
+def load_domains_from_file(path: str) -> list[str]:
     """Load domains from file, one domain per line.
 
     Args:
@@ -44,7 +45,7 @@ def load_domains_from_file(path: str) -> List[str]:
         ]
 
 
-def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> List[str]:
+def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str]:
     """Resolve A records (IPv4 addresses) for a domain using stdlib."""
     try:
         socket.setdefaulttimeout(timeout)
@@ -55,7 +56,7 @@ def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> List[str
         return []
 
 
-def resolve_aaaa_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> List[str]:
+def resolve_aaaa_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str]:
     """Resolve AAAA records (IPv6 addresses) for a domain using stdlib."""
     try:
         socket.setdefaulttimeout(timeout)
@@ -94,15 +95,12 @@ def check_tcp_connect(ip: str, port: int = 80, timeout: float = DEFAULT_TIMEOUT)
 
 def check_ip_reachable(ip: str, timeout: float = DEFAULT_TIMEOUT) -> bool:
     """Check if an IP is reachable on common ports (80, 443, 22)."""
-    for port in (80, 443, 22):
-        if check_tcp_connect(ip, port, timeout):
-            return True
-    return False
+    return any(check_tcp_connect(ip, port, timeout) for port in (80, 443, 22))
 
 
-def resolve_domain_all(domain: str, timeout: float) -> Dict[str, object]:
+def resolve_domain_all(domain: str, timeout: float) -> dict[str, object]:
     """Resolve all record types for a domain and check reachability."""
-    result: Dict[str, object] = {
+    result: dict[str, object] = {
         "domain": domain,
         "A": [],
         "AAAA": [],
@@ -139,10 +137,10 @@ def resolve_domain_all(domain: str, timeout: float) -> Dict[str, object]:
 
 
 def run_stale(
-    targets: List[str],
+    targets: list[str],
     timeout: float = DEFAULT_TIMEOUT,
     max_workers: int = DEFAULT_MAX_WORKERS,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Detect stale DNS records for a list of domains.
 
     Args:
@@ -156,7 +154,7 @@ def run_stale(
     normalized_targets = [_normalize_domain(t) for t in targets]
     unique_targets = sorted(set(normalized_targets))
 
-    results: List[Dict[str, object]] = []
+    results: list[dict[str, object]] = []
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_domain = {
@@ -179,13 +177,13 @@ def run_stale(
     }
 
 
-def format_stale_report_json(data: Dict[str, object]) -> str:
+def format_stale_report_json(data: dict[str, object]) -> str:
     """Format stale detection results as JSON."""
     import json
     return json.dumps(data, indent=2, default=str)
 
 
-def format_stale_report_markdown(data: Dict[str, object]) -> str:
+def format_stale_report_markdown(data: dict[str, object]) -> str:
     """Format stale detection results as Markdown."""
     lines = ["# ethscan Stale DNS Record Detection Report", ""]
     lines.append(f"- **Total Checked:** {data['total_checked']}")
@@ -220,7 +218,7 @@ def format_stale_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_stale_report_csv(data: Dict[str, object]) -> str:
+def format_stale_report_csv(data: dict[str, object]) -> str:
     """Format stale detection results as CSV.
 
     Emits a header row followed by one row per domain with columns:

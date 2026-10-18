@@ -10,19 +10,20 @@ Offline-first NTP reconnaissance using only the Python standard library
 All network access is confined to a single helper, ``_send_recv``, which
 defaults to a raw UDP socket so tests can substitute a local fake server.
 """
+from __future__ import annotations
 
 import csv
 import io
 import json
 import socket
 import struct
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional
 
 DEFAULT_PORT = 123
 DEFAULT_TIMEOUT = 3.0
 
 
-def _normalize_target(target: str) -> Tuple[str, int]:
+def _normalize_target(target: str) -> tuple[str, int]:
     """Parse a target into a bare host and port.
 
     Accepts ``host``, ``host:port``, and ``ntp://host:port`` forms.
@@ -111,7 +112,7 @@ def _build_monlist_request() -> bytes:
     )
 
 
-def _parse_time_response(data: bytes) -> Dict[str, Any]:
+def _parse_time_response(data: bytes) -> dict[str, Any]:
     """Parse an NTP time response packet (mode 4, server)."""
     if len(data) < 48:
         return {"error": "Response too short for NTP time packet"}
@@ -167,7 +168,7 @@ def _format_ref_id(ref_id: int, stratum: int) -> str:
     return f"0x{ref_id:08x}"
 
 
-def _parse_monlist_response(data: bytes) -> Dict[str, Any]:
+def _parse_monlist_response(data: bytes) -> dict[str, Any]:
     """Parse an NTP monlist response packet (mode 7)."""
     if len(data) < 12:
         return {"error": "Response too short for NTP control packet"}
@@ -235,7 +236,7 @@ def _send_recv(
     request: bytes,
     timeout: float,
     connector=None,
-) -> Tuple[Optional[bytes], Optional[str]]:
+) -> tuple[Optional[bytes], Optional[str]]:
     """Send a UDP request and receive the response (injectable for tests)."""
     if connector is not None:
         return connector(host, port, request, timeout)
@@ -260,7 +261,7 @@ def run_ntp(
     timeout: float = DEFAULT_TIMEOUT,
     check_monlist: bool = True,
     connector=None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run NTP reconnaissance against *target*.
 
     Args:
@@ -278,7 +279,7 @@ def run_ntp(
     host, parsed_port = _normalize_target(target)
     server_port = port if port is not None else parsed_port
 
-    results: Dict[str, Any] = {
+    results: dict[str, Any] = {
         "target": target,
         "host": host,
         "port": server_port,
@@ -321,12 +322,12 @@ def run_ntp(
     return results
 
 
-def format_ntp_report_json(data: Dict[str, Any]) -> str:
+def format_ntp_report_json(data: dict[str, Any]) -> str:
     """Format NTP reconnaissance results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_ntp_report_markdown(data: Dict[str, Any]) -> str:
+def format_ntp_report_markdown(data: dict[str, Any]) -> str:
     """Format NTP reconnaissance results as Markdown."""
     lines = ["# ethscan NTP Report", ""]
     lines.append(f"- **Target:** {data.get('target', '')}")
@@ -391,7 +392,7 @@ def format_ntp_report_markdown(data: Dict[str, Any]) -> str:
         lines.append("- **Reflector:** YES ⚠️")
         lines.append(f"- **Amplification Factor:** {data.get('amplification_factor', 'N/A')}x")
         lines.append("  (Server responded to monlist request with peer data)")
-    elif check_monlist := data.get("monlist_response") is not None:
+    elif data.get("monlist_response") is not None:
         lines.append("")
         lines.append("## Amplification Assessment")
         lines.append("- **Reflector:** NO")
@@ -405,7 +406,7 @@ def format_ntp_report_markdown(data: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def format_ntp_report_csv(data: Dict[str, Any]) -> str:
+def format_ntp_report_csv(data: dict[str, Any]) -> str:
     """Format NTP reconnaissance results as CSV.
 
     Emits a header row plus one row per peer (including a summary row).

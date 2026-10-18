@@ -4,12 +4,13 @@ Enumerates subdomains, resolves their CNAME/A records, and checks if they
 point to known vulnerable cloud services (AWS S3, GitHub Pages, Heroku, Azure,
 Shopify, etc.) where the target resource no longer exists.
 """
+from __future__ import annotations
 
 import csv
 import io
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Optional, Set
+from typing import Optional
 from urllib.parse import urlparse
 
 try:
@@ -311,9 +312,9 @@ def resolve_cname(hostname: str, timeout: float = 2.0, resolver: Optional[str] =
     return None
 
 
-def resolve_a_records(hostname: str, timeout: float = 2.0, resolver: Optional[str] = None) -> List[str]:
+def resolve_a_records(hostname: str, timeout: float = 2.0, resolver: Optional[str] = None) -> list[str]:
     """Resolve A records (IPv4 addresses) for a hostname."""
-    ips: List[str] = []
+    ips: list[str] = []
     if resolver and DNS_AVAILABLE:
         try:
             dns_resolver = dns.resolver.Resolver()
@@ -335,9 +336,9 @@ def resolve_a_records(hostname: str, timeout: float = 2.0, resolver: Optional[st
     return ips
 
 
-def resolve_aaaa_records(hostname: str, timeout: float = 2.0, resolver: Optional[str] = None) -> List[str]:
+def resolve_aaaa_records(hostname: str, timeout: float = 2.0, resolver: Optional[str] = None) -> list[str]:
     """Resolve AAAA records (IPv6 addresses) for a hostname."""
-    ips: List[str] = []
+    ips: list[str] = []
     if resolver and DNS_AVAILABLE:
         try:
             dns_resolver = dns.resolver.Resolver()
@@ -359,7 +360,7 @@ def resolve_aaaa_records(hostname: str, timeout: float = 2.0, resolver: Optional
     return ips
 
 
-def check_takeover_signature(cname: str, timeout: float = 5.0) -> Optional[Dict[str, object]]:
+def check_takeover_signature(cname: str, timeout: float = 5.0) -> Optional[dict[str, object]]:
     """Check if a CNAME points to a vulnerable service with takeover signature.
 
     Args:
@@ -409,12 +410,12 @@ def check_http_fingerprint(hostname: str, timeout: float = 5.0) -> Optional[str]
 
 def run_subtake(
     target: str,
-    subdomains: Optional[List[str]] = None,
+    subdomains: Optional[list[str]] = None,
     timeout: float = 2.0,
     max_workers: int = 50,
     resolver: Optional[str] = None,
     http_timeout: float = 5.0,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Detect subdomain takeover vulnerabilities.
 
     Args:
@@ -431,17 +432,17 @@ def run_subtake(
     domain = _normalize_domain(target)
     labels = subdomains if subdomains is not None else DEFAULT_SUBDOMAINS
 
-    all_results: List[Dict[str, object]] = []
-    vulnerable: List[Dict[str, object]] = []
-    seen_hostnames: Set[str] = set()
+    all_results: list[dict[str, object]] = []
+    vulnerable: list[dict[str, object]] = []
+    seen_hostnames: set[str] = set()
 
-    def _resolve_and_check(label: str) -> Dict[str, object]:
+    def _resolve_and_check(label: str) -> dict[str, object]:
         hostname = f"{label}.{domain}"
         cname = resolve_cname(hostname, timeout, resolver)
         a_records = resolve_a_records(hostname, timeout, resolver)
         aaaa_records = resolve_aaaa_records(hostname, timeout, resolver)
 
-        result: Dict[str, object] = {
+        result: dict[str, object] = {
             "subdomain": label,
             "hostname": hostname,
             "cname": cname,
@@ -493,13 +494,13 @@ def run_subtake(
     }
 
 
-def format_subtake_report_json(data: Dict[str, object]) -> str:
+def format_subtake_report_json(data: dict[str, object]) -> str:
     """Format subdomain takeover results as JSON."""
     import json
     return json.dumps(data, indent=2, default=str)
 
 
-def format_subtake_report_csv(data: Dict[str, object]) -> str:
+def format_subtake_report_csv(data: dict[str, object]) -> str:
     """Format subdomain takeover results as CSV.
 
     Produces a header row followed by one row per candidate with columns:
@@ -546,7 +547,7 @@ def _escape(value: str) -> str:
     return value.replace("|", "\\|")
 
 
-def format_subtake_report_markdown(data: Dict[str, object]) -> str:
+def format_subtake_report_markdown(data: dict[str, object]) -> str:
     """Format subdomain takeover results as Markdown."""
     lines = ["# ethscan Subdomain Takeover Report", ""]
     lines.append(f"- **Target:** {data['target']}")

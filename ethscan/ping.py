@@ -4,6 +4,7 @@ ICMP echo request probes with per-probe RTT and TTL reporting, plus a
 TCP-ping fallback (connect-based latency measurement on a configurable port)
 when raw ICMP sockets are unavailable (non-root).
 """
+from __future__ import annotations
 
 import csv
 import io
@@ -11,7 +12,7 @@ import json
 import socket
 import struct
 import time
-from typing import Dict, List, Optional
+from typing import Optional
 
 DEFAULT_COUNT = 4
 DEFAULT_TIMEOUT = 2.0
@@ -61,7 +62,7 @@ def _build_icmp_echo_request(identifier: int, sequence: int, payload: bytes = b"
     return header + payload
 
 
-def _parse_icmp_reply(data: bytes, expected_id: int) -> Optional[Dict[str, object]]:
+def _parse_icmp_reply(data: bytes, expected_id: int) -> Optional[dict[str, object]]:
     """Parse an ICMP Echo Reply packet.
 
     Returns a dict with keys: type, code, identifier, sequence, payload, error.
@@ -88,7 +89,7 @@ def _parse_icmp_reply(data: bytes, expected_id: int) -> Optional[Dict[str, objec
     icmp_offset = ip_header_len
     icmp_type = data[icmp_offset]
     icmp_code = data[icmp_offset + 1]
-    icmp_checksum = struct.unpack("!H", data[icmp_offset + 2:icmp_offset + 4])[0]
+    struct.unpack("!H", data[icmp_offset + 2:icmp_offset + 4])[0]
     icmp_identifier = struct.unpack("!H", data[icmp_offset + 4:icmp_offset + 6])[0]
     icmp_sequence = struct.unpack("!H", data[icmp_offset + 6:icmp_offset + 8])[0]
 
@@ -143,7 +144,7 @@ def probe_icmp(
     payload: bytes = b"",
     resolved_ip: Optional[str] = None,
     port: int = DEFAULT_PORT,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Send an ICMP Echo Request and wait for a reply.
 
     When a raw ICMP socket is provided (privileged/root), the function
@@ -287,7 +288,7 @@ def run_ping(
     ttl: int = DEFAULT_TTL,
     port: int = DEFAULT_PORT,
     raw_socket: Optional[socket.socket] = None,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Run ICMP ping (or TCP fallback) against *target*.
 
     Args:
@@ -315,8 +316,8 @@ def run_ping(
 
     identifier = 0xFFFF & int(time.time() * 1000)
 
-    probes: List[Dict[str, object]] = []
-    notes: List[str] = []
+    probes: list[dict[str, object]] = []
+    notes: list[str] = []
 
     if ip is None:
         notes.append(f"Could not resolve host {host!r} to an IPv4 address")
@@ -374,12 +375,12 @@ def run_ping(
     }
 
 
-def format_ping_report_json(data: Dict[str, object]) -> str:
+def format_ping_report_json(data: dict[str, object]) -> str:
     """Format ping results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_ping_report_markdown(data: Dict[str, object]) -> str:
+def format_ping_report_markdown(data: dict[str, object]) -> str:
     """Format ping results as Markdown."""
     lines = ["# ethscan Ping Report", ""]
     lines.append(f"- **Target:** {data['target']}")
@@ -427,7 +428,7 @@ def format_ping_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_ping_report_csv(data: Dict[str, object]) -> str:
+def format_ping_report_csv(data: dict[str, object]) -> str:
     """Format ping results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

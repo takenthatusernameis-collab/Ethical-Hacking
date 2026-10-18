@@ -11,13 +11,14 @@ Offline-first SMTP reconnaissance using only the Python standard library
 All network access is confined to a single helper, ``_connect``, which defaults
 to ``socket.create_connection`` so tests can substitute a local fake SMTP server.
 """
+from __future__ import annotations
 
 import csv
 import io
 import json
 import socket
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 DEFAULT_PORT = 25
 DEFAULT_TIMEOUT = 2.0
@@ -27,7 +28,7 @@ RELAY_PROBE_DOMAIN = "ethscan.invalid"
 # VRFY response classification. A 3-digit SMTP code is mapped to a human label
 # and a boolean ``found`` flag (True when the server confirms knowledge of the
 # user). ``None`` means the response was inconclusive.
-_VRFY_LABELS: Dict[str, Tuple[Optional[bool], str]] = {
+_VRFY_LABELS: dict[str, tuple[Optional[bool], str]] = {
     "250": (None, "user known"),
     "251": (True, "user not local but will forward"),
     "252": (None, "user enumeration not allowed / will accept"),
@@ -36,7 +37,7 @@ _VRFY_LABELS: Dict[str, Tuple[Optional[bool], str]] = {
 }
 
 
-def _normalize_target(target: str) -> Tuple[str, int]:
+def _normalize_target(target: str) -> tuple[str, int]:
     """Parse a target into a bare host and port.
 
     Accepts ``host``, ``host:port``, ``smtp://host:port`` and ``host:25`` forms.
@@ -74,7 +75,7 @@ def _normalize_target(target: str) -> Tuple[str, int]:
     return host, int(port) if port else DEFAULT_PORT
 
 
-def _parse_smtp_response(lines: List[str]) -> Tuple[int, str, bool]:
+def _parse_smtp_response(lines: list[str]) -> tuple[int, str, bool]:
     """Parse the first line of an SMTP response list.
 
     Returns ``(code, message, complete)`` where ``complete`` is False when the
@@ -90,7 +91,7 @@ def _parse_smtp_response(lines: List[str]) -> Tuple[int, str, bool]:
     return code, message, complete
 
 
-def _read_response(sock: socket.socket, timeout: float, max_lines: int = 100) -> List[str]:
+def _read_response(sock: socket.socket, timeout: float, max_lines: int = 100) -> list[str]:
     """Read a complete SMTP response (all continuation lines) from *sock*.
 
     A response is complete once a line whose fourth character is a space
@@ -98,7 +99,7 @@ def _read_response(sock: socket.socket, timeout: float, max_lines: int = 100) ->
     continuations.
     """
     sock.settimeout(timeout)
-    lines: List[str] = []
+    lines: list[str] = []
     buf = b""
     start = time.monotonic()
     while True:
@@ -128,7 +129,7 @@ def _read_response(sock: socket.socket, timeout: float, max_lines: int = 100) ->
     return lines
 
 
-def _send_command(sock: socket.socket, command: str, timeout: float) -> List[str]:
+def _send_command(sock: socket.socket, command: str, timeout: float) -> list[str]:
     """Send *command* over *sock* and return the parsed response lines."""
     sock.settimeout(timeout)
     data = (command + "\r\n").encode("utf-8")
@@ -151,7 +152,7 @@ def _connect(
     return connector((host, port), timeout)
 
 
-def _classify_vrfy(code: int) -> Tuple[Optional[bool], str]:
+def _classify_vrfy(code: int) -> tuple[Optional[bool], str]:
     """Map an SMTP ``VRFY`` response code to ``(found, description)``."""
     key = str(code)
     if key in _VRFY_LABELS:
@@ -167,12 +168,12 @@ def run_smtp(
     target: str,
     port: Optional[int] = None,
     timeout: float = DEFAULT_TIMEOUT,
-    users: Optional[List[str]] = None,
+    users: Optional[list[str]] = None,
     check_starttls: bool = True,
     check_relay: bool = True,
     ehlo_name: str = DEFAULT_EHLO_NAME,
     connector=socket.create_connection,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run SMTP reconnaissance against *target*.
 
     Args:
@@ -191,7 +192,7 @@ def run_smtp(
     """
     host, parsed_port = _normalize_target(target)
     server_port = port if port is not None else parsed_port
-    results: Dict[str, Any] = {
+    results: dict[str, Any] = {
         "target": target,
         "host": host,
         "port": server_port,
@@ -228,7 +229,7 @@ def run_smtp(
             try:
                 resp = _send_command(sock, f"EHLO {ehlo_name}", timeout)
                 results["ehlo_success"] = True
-                caps: List[str] = []
+                caps: list[str] = []
                 # In an EHLO multi-line response the first line carries the
                 # server greeting (a domain) and the final line is a bare
                 # acknowledgement ("250 OK"); neither is an extension keyword.
@@ -251,7 +252,7 @@ def run_smtp(
             for user in users:
                 if not user:
                     continue
-                entry: Dict[str, Any] = {
+                entry: dict[str, Any] = {
                     "user": user,
                     "found": None,
                     "description": None,
@@ -298,12 +299,12 @@ def run_smtp(
     return results
 
 
-def format_smtp_report_json(data: Dict[str, Any]) -> str:
+def format_smtp_report_json(data: dict[str, Any]) -> str:
     """Format SMTP reconnaissance results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_smtp_report_markdown(data: Dict[str, Any]) -> str:
+def format_smtp_report_markdown(data: dict[str, Any]) -> str:
     """Format SMTP reconnaissance results as Markdown."""
     lines = ["# ethscan SMTP Report", ""]
     lines.append(f"- **Target:** {data.get('target', '')}")
@@ -340,7 +341,7 @@ def format_smtp_report_markdown(data: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def format_smtp_report_csv(data: Dict[str, Any]) -> str:
+def format_smtp_report_csv(data: dict[str, Any]) -> str:
     """Format SMTP reconnaissance results as CSV.
 
     Emits one row per VRFY-checked user (``target,host,port,user,found,code,description``)

@@ -1,4 +1,5 @@
 """OS fingerprinting module for ethscan."""
+from __future__ import annotations
 
 import csv
 import io
@@ -8,7 +9,7 @@ import re
 import socket
 import struct
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
 DEFAULT_TIMEOUT = 5.0
 DEFAULT_WORKERS = 10
@@ -111,7 +112,7 @@ def _checksum(data: bytes) -> int:
     return (~total) & 0xFFFF
 
 
-def _connect_tcp(host: str, port: int, timeout: float) -> Tuple[bool, Optional[str], Optional[int]]:
+def _connect_tcp(host: str, port: int, timeout: float) -> tuple[bool, Optional[str], Optional[int]]:
     """Open a standard TCP connection and report success/failure.
 
     Returns (connected, error_message, observed_rst_flag_or_None). The RST flag
@@ -134,7 +135,7 @@ def _connect_tcp(host: str, port: int, timeout: float) -> Tuple[bool, Optional[s
             pass
 
 
-def probe_syn(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> Dict[str, object]:
+def probe_syn(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict[str, object]:
     """Probe a target with a TCP SYN packet and observe the response behavior.
 
     Uses stdlib sockets only. Because raw sockets require root privileges on
@@ -145,7 +146,7 @@ def probe_syn(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> Dict[st
     Returns a dict with: port, connected, response, error, and any observed
     TCP flags that can be inferred.
     """
-    entry: Dict[str, object] = {
+    entry: dict[str, object] = {
         "port": port,
         "probe_type": "SYN",
         "connected": False,
@@ -168,9 +169,9 @@ def probe_syn(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> Dict[st
     return entry
 
 
-def probe_rst(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> Dict[str, object]:
+def probe_rst(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict[str, object]:
     """Probe a target with a TCP RST packet and observe the response."""
-    entry: Dict[str, object] = {
+    entry: dict[str, object] = {
         "port": port,
         "probe_type": "RST",
         "connected": False,
@@ -208,9 +209,9 @@ def probe_rst(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> Dict[st
     return entry
 
 
-def probe_fin(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> Dict[str, object]:
+def probe_fin(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict[str, object]:
     """Probe a target with a FIN packet and observe the response."""
-    entry: Dict[str, object] = {
+    entry: dict[str, object] = {
         "port": port,
         "probe_type": "FIN",
         "connected": False,
@@ -248,9 +249,9 @@ def probe_fin(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> Dict[st
     return entry
 
 
-def probe_ack(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> Dict[str, object]:
+def probe_ack(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict[str, object]:
     """Probe a target with an ACK packet and observe the response."""
-    entry: Dict[str, object] = {
+    entry: dict[str, object] = {
         "port": port,
         "probe_type": "ACK",
         "connected": False,
@@ -337,9 +338,9 @@ OS_SIGNATURES = [
 ]
 
 
-def _match_os_from_banner(banner: str) -> List[str]:
+def _match_os_from_banner(banner: str) -> list[str]:
     """Match an OS signature against a service banner."""
-    matches: List[str] = []
+    matches: list[str] = []
     for entry in OS_SIGNATURES:
         for pattern, label in entry["patterns"]:
             if pattern.search(banner):
@@ -348,9 +349,9 @@ def _match_os_from_banner(banner: str) -> List[str]:
     return matches
 
 
-def _match_os_from_ttl(ttl: int) -> List[str]:
+def _match_os_from_ttl(ttl: int) -> list[str]:
     """Infer possible OS families from an observed TTL value."""
-    matches: List[str] = []
+    matches: list[str] = []
     for entry in OS_SIGNATURES:
         low, high = entry["ttl_range"]
         if low <= ttl <= high:
@@ -358,11 +359,11 @@ def _match_os_from_ttl(ttl: int) -> List[str]:
     return matches
 
 
-def _match_os_from_behavior(behavior: Dict[str, object]) -> List[str]:
+def _match_os_from_behavior(behavior: dict[str, object]) -> list[str]:
     """Infer OS family from TCP/IP stack behavior observations."""
-    matches: List[str] = []
+    matches: list[str] = []
     response = str(behavior.get("response") or "")
-    flags = str(behavior.get("flags_observed") or "")
+    str(behavior.get("flags_observed") or "")
 
     # Windows typically sends RST in response to a FIN on a closed port
     if response == "RST" and "FIN" in behavior.get("probe_type", ""):
@@ -375,11 +376,11 @@ def _match_os_from_behavior(behavior: Dict[str, object]) -> List[str]:
 
 def run_osdetect(
     target: str,
-    ports: Optional[List[int]] = None,
+    ports: Optional[list[int]] = None,
     timeout: float = DEFAULT_TIMEOUT,
     max_workers: int = DEFAULT_WORKERS,
-    banners: Optional[Dict[int, str]] = None,
-) -> Dict[str, object]:
+    banners: Optional[dict[int, str]] = None,
+) -> dict[str, object]:
     """Run OS fingerprinting against a target using TCP/IP stack behavior.
 
     Args:
@@ -396,7 +397,7 @@ def run_osdetect(
     host = _normalize_host(target)
     port_list = ports if ports is not None else [22, 80, 443]
 
-    probes: List[Dict[str, object]] = []
+    probes: list[dict[str, object]] = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_port = {
             executor.submit(probe_syn, host, port, timeout): port
@@ -407,7 +408,7 @@ def run_osdetect(
     probes.sort(key=lambda r: r["port"])
 
     # Cross-reference banners when provided
-    os_matches: List[str] = []
+    os_matches: list[str] = []
     if banners:
         for port, banner in banners.items():
             os_matches.extend(_match_os_from_banner(banner))
@@ -420,13 +421,13 @@ def run_osdetect(
 
     # Deduplicate while preserving order
     seen = set()
-    inferred: List[str] = []
+    inferred: list[str] = []
     for name in os_matches:
         if name not in seen:
             seen.add(name)
             inferred.append(name)
 
-    notes: List[str] = []
+    notes: list[str] = []
     if not inferred:
         notes.append("No OS signature matched; target may be a firewall or non-standard stack")
     if not any(p.get("connected") for p in probes):
@@ -445,12 +446,12 @@ def run_osdetect(
     }
 
 
-def format_osdetect_report_json(data: Dict[str, object]) -> str:
+def format_osdetect_report_json(data: dict[str, object]) -> str:
     """Format OS detection results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_osdetect_report_markdown(data: Dict[str, object]) -> str:
+def format_osdetect_report_markdown(data: dict[str, object]) -> str:
     """Format OS detection results as Markdown."""
     lines = ["# ethscan OS Detection Report", ""]
     lines.append(f"- **Target:** {data['target']}")
@@ -490,7 +491,7 @@ def format_osdetect_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_osdetect_report_csv(data: Dict[str, object]) -> str:
+def format_osdetect_report_csv(data: dict[str, object]) -> str:
     """Format OS detection results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

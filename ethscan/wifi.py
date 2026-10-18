@@ -4,6 +4,7 @@ Lists nearby Wi-Fi access points (SSID, BSSID, channel, encryption, signal stren
 On Linux, parses /proc/net/wireless and uses iwlist/iw scan output (shell out with
 graceful fallback when tools unavailable). On other platforms, reports platform not supported.
 """
+from __future__ import annotations
 
 import csv
 import io
@@ -11,7 +12,7 @@ import json
 import platform
 import re
 import subprocess
-from typing import Dict, List, Optional
+from typing import Optional
 
 
 def _is_linux() -> bool:
@@ -19,7 +20,7 @@ def _is_linux() -> bool:
     return platform.system().lower() == "linux"
 
 
-def _parse_proc_net_wireless(filepath: str = "/proc/net/wireless") -> List[Dict]:
+def _parse_proc_net_wireless(filepath: str = "/proc/net/wireless") -> list[dict]:
     """Parse /proc/net/wireless for interface status."""
     interfaces = []
     try:
@@ -56,7 +57,7 @@ def _parse_proc_net_wireless(filepath: str = "/proc/net/wireless") -> List[Dict]
     return interfaces
 
 
-def _run_iwlist_scan(interface: str) -> List[Dict]:
+def _run_iwlist_scan(interface: str) -> list[dict]:
     """Run iwlist scan on the given interface and parse results."""
     aps = []
     try:
@@ -130,7 +131,7 @@ def _run_iwlist_scan(interface: str) -> List[Dict]:
     return aps
 
 
-def _run_iw_scan(interface: str) -> List[Dict]:
+def _run_iw_scan(interface: str) -> list[dict]:
     """Run iw scan on the given interface and parse results (modern alternative to iwlist)."""
     aps = []
     try:
@@ -204,7 +205,7 @@ def _run_iw_scan(interface: str) -> List[Dict]:
     return aps
 
 
-def _scan_interface(interface: str) -> List[Dict]:
+def _scan_interface(interface: str) -> list[dict]:
     """Scan a single interface using available tools."""
     # Try iw first (modern), then iwlist (legacy)
     aps = _run_iw_scan(interface)
@@ -213,7 +214,7 @@ def _scan_interface(interface: str) -> List[Dict]:
     return _run_iwlist_scan(interface)
 
 
-def run_wifi(interface: Optional[str] = None) -> Dict:
+def run_wifi(interface: Optional[str] = None) -> dict:
     """Run Wi-Fi reconnaissance.
 
     Args:
@@ -280,12 +281,12 @@ def run_wifi(interface: Optional[str] = None) -> Dict:
     return result
 
 
-def format_wifi_report_json(results: Dict) -> str:
+def format_wifi_report_json(results: dict) -> str:
     """Format Wi-Fi scan results as JSON."""
     return json.dumps(results, indent=2)
 
 
-def format_wifi_report_markdown(results: Dict) -> str:
+def format_wifi_report_markdown(results: dict) -> str:
     """Format Wi-Fi scan results as Markdown."""
     lines = ["# Wi-Fi Reconnaissance Report", ""]
 
@@ -331,7 +332,7 @@ def format_wifi_report_markdown(results: Dict) -> str:
     return "\n".join(lines)
 
 
-def format_wifi_report_csv(results: Dict) -> str:
+def format_wifi_report_csv(results: dict) -> str:
     """Format Wi-Fi scan results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

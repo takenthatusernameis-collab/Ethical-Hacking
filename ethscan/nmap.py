@@ -3,12 +3,13 @@
 Parses Nmap XML scan output and cross-references detected service versions
 against the built-in vulnerability database.
 """
+from __future__ import annotations
 
 import csv
 import io
 import json
 import xml.etree.ElementTree as ET
-from typing import Dict, List, Optional
+from typing import Optional
 
 from ethscan.vuln import (
     SEVERITIES,
@@ -24,7 +25,7 @@ def _extract_text(element: Optional[ET.Element], default: str = "") -> str:
     return default
 
 
-def _parse_port(port_elem: ET.Element) -> Dict[str, object]:
+def _parse_port(port_elem: ET.Element) -> dict[str, object]:
     """Parse a single port element from Nmap XML."""
     port_id = int(port_elem.get("portid", 0))
     protocol = port_elem.get("protocol", "tcp")
@@ -80,13 +81,13 @@ def _parse_port(port_elem: ET.Element) -> Dict[str, object]:
     }
 
 
-def _parse_host(host_elem: ET.Element) -> Dict[str, object]:
+def _parse_host(host_elem: ET.Element) -> dict[str, object]:
     """Parse a single host element from Nmap XML."""
     address_elem = host_elem.find("address")
     addr = address_elem.get("addr", "") if address_elem is not None else ""
     addr_type = address_elem.get("addrtype", "ipv4") if address_elem is not None else "ipv4"
 
-    hostnames: List[str] = []
+    hostnames: list[str] = []
     hostnames_elem = host_elem.find("hostnames")
     if hostnames_elem is not None:
         for hn_elem in hostnames_elem.findall("hostname"):
@@ -97,7 +98,7 @@ def _parse_host(host_elem: ET.Element) -> Dict[str, object]:
     status_elem = host_elem.find("status")
     status = status_elem.get("state", "unknown") if status_elem is not None else "unknown"
 
-    ports: List[Dict[str, object]] = []
+    ports: list[dict[str, object]] = []
     ports_elem = host_elem.find("ports")
     if ports_elem is not None:
         for port_elem in ports_elem.findall("port"):
@@ -112,7 +113,7 @@ def _parse_host(host_elem: ET.Element) -> Dict[str, object]:
     }
 
 
-def parse_nmap_xml(xml_content: str) -> List[Dict[str, object]]:
+def parse_nmap_xml(xml_content: str) -> list[dict[str, object]]:
     """Parse Nmap XML content and return a list of host results.
 
     Args:
@@ -123,7 +124,7 @@ def parse_nmap_xml(xml_content: str) -> List[Dict[str, object]]:
     """
     root = ET.fromstring(xml_content)
 
-    hosts: List[Dict[str, object]] = []
+    hosts: list[dict[str, object]] = []
     for host_elem in root.findall("host"):
         hosts.append(_parse_host(host_elem))
 
@@ -132,7 +133,7 @@ def parse_nmap_xml(xml_content: str) -> List[Dict[str, object]]:
 
 def run_nmap(
     input_file: str,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Parse an Nmap XML file and cross-reference findings with the vulnerability database.
 
     Args:
@@ -146,8 +147,8 @@ def run_nmap(
 
     hosts = parse_nmap_xml(xml_content)
 
-    all_findings: List[Dict[str, object]] = []
-    all_services: List[Dict[str, object]] = []
+    all_findings: list[dict[str, object]] = []
+    all_services: list[dict[str, object]] = []
     total_ports_scanned = 0
     total_open_ports = 0
 
@@ -201,7 +202,7 @@ def run_nmap(
             all_findings.extend(findings)
 
     # Count by severity
-    severity_counts: Dict[str, int] = {name: 0 for name in SEVERITIES}
+    severity_counts: dict[str, int] = {name: 0 for name in SEVERITIES}
     for finding in all_findings:
         level = str(finding.get("severity", "")).lower()
         if level in severity_counts:
@@ -228,7 +229,7 @@ def run_nmap(
     }
 
 
-def format_nmap_report_json(data: Dict[str, object]) -> str:
+def format_nmap_report_json(data: dict[str, object]) -> str:
     """Format Nmap parser results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
@@ -238,7 +239,7 @@ def _escape(value: str) -> str:
     return value.replace("|", "\\|")
 
 
-def _finding_detail(finding: Dict[str, object]) -> str:
+def _finding_detail(finding: dict[str, object]) -> str:
     """Render the per-finding details line for Markdown output."""
     kind = str(finding.get("kind", ""))
     if kind == "service":
@@ -267,7 +268,7 @@ def _finding_detail(finding: Dict[str, object]) -> str:
     return ""
 
 
-def format_nmap_report_markdown(data: Dict[str, object]) -> str:
+def format_nmap_report_markdown(data: dict[str, object]) -> str:
     """Format Nmap parser results as Markdown."""
     lines = ["# ethscan Nmap Vulnerability Report", ""]
     lines.append(f"- **Input File:** {data['input_file']}")
@@ -330,7 +331,7 @@ def format_nmap_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_nmap_report_csv(data: Dict[str, object]) -> str:
+def format_nmap_report_csv(data: dict[str, object]) -> str:
     """Format Nmap parser results as CSV.
 
     Produces a header row followed by one row per matched CVE finding with

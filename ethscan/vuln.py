@@ -4,6 +4,7 @@ Cross-references detected services/versions (from ``service`` banners) and
 TLS/SSL data (from ``tls``/``ssl`` command output) against a small built-in
 CVE/weakness database and reports matches.
 """
+from __future__ import annotations
 
 import csv
 import hashlib
@@ -11,7 +12,6 @@ import hmac
 import io
 import json
 import re
-from typing import Dict, List, Optional, Tuple
 
 from ethscan.service import run_service
 
@@ -31,7 +31,7 @@ _HASHLIB_ALGORITHMS = {
 }
 
 
-def _hashlib_name(algorithm: str) -> Optional[str]:
+def _hashlib_name(algorithm: str) -> str | None:
     """Return the hashlib algorithm name for a canonical key, or None."""
     return _HASHLIB_ALGORITHMS.get(algorithm)
 
@@ -68,8 +68,8 @@ def _compute_peppered_hash(message: str, algorithm: str, pepper: str) -> str:
 def _transform_banner(
     banner: str,
     algorithm: str,
-    salt: Optional[str] = None,
-    pepper: Optional[str] = None,
+    salt: str | None = None,
+    pepper: str | None = None,
 ) -> str:
     """Apply an optional salt/pepper transformation to a banner before matching.
 
@@ -374,7 +374,7 @@ _HASHLIB_ALGORITHMS = {
 }
 
 
-def _hashlib_name(algorithm: str) -> Optional[str]:
+def _hashlib_name(algorithm: str) -> str | None:
     """Return the hashlib algorithm name for a canonical key, or None."""
     return _HASHLIB_ALGORITHMS.get(algorithm)
 
@@ -411,8 +411,8 @@ def _compute_peppered_hash(text: str, algorithm: str, pepper: str) -> str:
 def _compute_password_hash(
     text: str,
     algorithm: str,
-    salt: Optional[str] = None,
-    pepper: Optional[str] = None,
+    salt: str | None = None,
+    pepper: str | None = None,
 ) -> str:
     """Compute a (optionally salted/peppered) hash for a text input.
 
@@ -458,8 +458,8 @@ def _compute_password_hash(
 
 def _apply_salt_pepper_to_banner(
     banner: str,
-    salt: Optional[str],
-    pepper: Optional[str],
+    salt: str | None,
+    pepper: str | None,
     algorithm: str,
 ) -> str:
     """Apply a salt/pepper transformation to a service banner before matching.
@@ -486,12 +486,12 @@ def _apply_salt_pepper_to_banner(
         return banner
 
 
-_SEVERITY_RANK: Dict[str, int] = {
+_SEVERITY_RANK: dict[str, int] = {
     name: idx for idx, name in enumerate(reversed(SEVERITIES))
 }
 
 
-def _severity_rank(level: Optional[str]) -> Optional[int]:
+def _severity_rank(level: str | None) -> int | None:
     """Return the numeric rank for a severity label, or None if unknown.
 
     Higher rank means higher severity: critical=3, high=2, medium=1, low=0.
@@ -519,7 +519,7 @@ def _normalize_host(target: str) -> str:
     return (parsed.hostname or parsed.netloc or "").lower()
 
 
-def _extract_hosts_from_banner(banner: str) -> List[str]:
+def _extract_hosts_from_banner(banner: str) -> list[str]:
     """Extract potential hostnames and IP addresses from a service banner.
 
     Args:
@@ -530,7 +530,7 @@ def _extract_hosts_from_banner(banner: str) -> List[str]:
     """
     import re
 
-    hosts: List[str] = []
+    hosts: list[str] = []
     seen: set = set()
 
     # Pattern for hostnames (including subdomains)
@@ -557,7 +557,7 @@ def _extract_hosts_from_banner(banner: str) -> List[str]:
     return hosts
 
 
-def parse_banner(banner: str) -> Tuple[Optional[str], Optional[str]]:
+def parse_banner(banner: str) -> tuple[str | None, str | None]:
     """Extract the product name and version from a service banner.
 
     Args:
@@ -574,13 +574,13 @@ def parse_banner(banner: str) -> Tuple[Optional[str], Optional[str]]:
     return None, None
 
 
-def _version_tuple(version: str) -> Tuple[int, ...]:
+def _version_tuple(version: str) -> tuple[int, ...]:
     """Convert a version string into a comparable tuple of integers."""
     parts = re.findall(r"[0-9]+", str(version))
     return tuple(int(part) for part in parts) if parts else ()
 
 
-def version_in_range(version: str, spec: Dict[str, object]) -> bool:
+def version_in_range(version: str, spec: dict[str, object]) -> bool:
     """Check whether a version string falls within a range specification.
 
     Args:
@@ -614,9 +614,9 @@ def version_in_range(version: str, spec: Dict[str, object]) -> bool:
     return True
 
 
-def _finding(entry: Dict[str, object], **extra: object) -> Dict[str, object]:
+def _finding(entry: dict[str, object], **extra: object) -> dict[str, object]:
     """Build a finding dictionary from a database entry."""
-    finding: Dict[str, object] = {
+    finding: dict[str, object] = {
         "id": entry["id"],
         "kind": entry["kind"],
         "title": entry["title"],
@@ -628,10 +628,10 @@ def _finding(entry: Dict[str, object], **extra: object) -> Dict[str, object]:
 
 
 def match_service_vulns(
-    product: Optional[str],
-    version: Optional[str],
-    port: Optional[int] = None,
-) -> List[Dict[str, object]]:
+    product: str | None,
+    version: str | None,
+    port: int | None = None,
+) -> list[dict[str, object]]:
     """Match a detected product/version against the service CVE database.
 
     Args:
@@ -642,7 +642,7 @@ def match_service_vulns(
     Returns:
         List of matching vulnerability findings.
     """
-    findings: List[Dict[str, object]] = []
+    findings: list[dict[str, object]] = []
     if not product or not version:
         return findings
     for entry in SERVICE_VULNS:
@@ -656,8 +656,8 @@ def match_service_vulns(
 
 
 def match_protocol_vulns(
-    supported_versions: List[str],
-) -> List[Dict[str, object]]:
+    supported_versions: list[str],
+) -> list[dict[str, object]]:
     """Match supported TLS/SSL protocol versions against the weakness database.
 
     Args:
@@ -666,7 +666,7 @@ def match_protocol_vulns(
     Returns:
         List of matching vulnerability findings.
     """
-    findings: List[Dict[str, object]] = []
+    findings: list[dict[str, object]] = []
     for name in supported_versions:
         for entry in PROTOCOL_VULNS:
             if str(entry["protocol"]).lower() == str(name).lower():
@@ -675,8 +675,8 @@ def match_protocol_vulns(
 
 
 def match_cipher_vulns(
-    supported_ciphers: List[str],
-) -> List[Dict[str, object]]:
+    supported_ciphers: list[str],
+) -> list[dict[str, object]]:
     """Match supported cipher suites against the weak-cipher database.
 
     Args:
@@ -685,7 +685,7 @@ def match_cipher_vulns(
     Returns:
         List of matching vulnerability findings.
     """
-    findings: List[Dict[str, object]] = []
+    findings: list[dict[str, object]] = []
     for cipher in supported_ciphers:
         for entry in CIPHER_VULNS:
             if entry["cipher_pattern"].search(str(cipher)):
@@ -693,7 +693,7 @@ def match_cipher_vulns(
     return findings
 
 
-def match_certificate_vulns(cert_data: Optional[dict]) -> List[Dict[str, object]]:
+def match_certificate_vulns(cert_data: dict | None) -> list[dict[str, object]]:
     """Check parsed certificate data against the certificate weakness database.
 
     Args:
@@ -703,7 +703,7 @@ def match_certificate_vulns(cert_data: Optional[dict]) -> List[Dict[str, object]
     Returns:
         List of matching vulnerability findings.
     """
-    findings: List[Dict[str, object]] = []
+    findings: list[dict[str, object]] = []
     if not cert_data:
         return findings
 
@@ -715,18 +715,17 @@ def match_certificate_vulns(cert_data: Optional[dict]) -> List[Dict[str, object]
         if check == "key_size_below":
             if key_size is not None and key_size < entry["value"]:
                 findings.append(_finding(entry, key_size=key_size))
-        elif check == "signature_contains":
-            if entry["value"] in signature:
-                findings.append(
-                    _finding(
-                        entry,
-                        signature_algorithm=cert_data.get("signature_algorithm"),
-                    )
+        elif check == "signature_contains" and entry["value"] in signature:
+            findings.append(
+                _finding(
+                    entry,
+                    signature_algorithm=cert_data.get("signature_algorithm"),
                 )
+            )
     return findings
 
 
-def match_tls_vulns(tls_data: dict) -> List[Dict[str, object]]:
+def match_tls_vulns(tls_data: dict) -> list[dict[str, object]]:
     """Check ``tls`` command output for protocol and cipher weaknesses.
 
     Args:
@@ -736,13 +735,13 @@ def match_tls_vulns(tls_data: dict) -> List[Dict[str, object]]:
     Returns:
         List of matching vulnerability findings.
     """
-    findings: List[Dict[str, object]] = []
+    findings: list[dict[str, object]] = []
     findings.extend(match_protocol_vulns(tls_data.get("supported_versions") or []))
     findings.extend(match_cipher_vulns(tls_data.get("supported_ciphers") or []))
     return findings
 
 
-def match_ssl_vulns(ssl_data: dict) -> List[Dict[str, object]]:
+def match_ssl_vulns(ssl_data: dict) -> list[dict[str, object]]:
     """Check ``ssl`` command output for certificate weaknesses.
 
     Args:
@@ -756,20 +755,20 @@ def match_ssl_vulns(ssl_data: dict) -> List[Dict[str, object]]:
 
 def run_vuln(
     target: str,
-    ports: Optional[List[int]] = None,
+    ports: list[int] | None = None,
     timeout: float = DEFAULT_TIMEOUT,
     max_workers: int = DEFAULT_WORKERS,
-    services: Optional[dict] = None,
-    tls: Optional[dict] = None,
-    certificate: Optional[dict] = None,
-    severity: Optional[str] = None,
-    min_severity: Optional[str] = None,
+    services: dict | None = None,
+    tls: dict | None = None,
+    certificate: dict | None = None,
+    severity: str | None = None,
+    min_severity: str | None = None,
     recursive: bool = False,
     max_depth: int = DEFAULT_RECURSIVE_DEPTH,
-    salt: Optional[str] = None,
-    pepper: Optional[str] = None,
+    salt: str | None = None,
+    pepper: str | None = None,
     algorithm: str = "sha256",
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Check a target for known service, protocol, and certificate vulnerabilities.
 
     Args:
@@ -801,24 +800,24 @@ def run_vuln(
     """
     host = _normalize_host(target)
 
-    all_findings: List[Dict[str, object]] = []
-    all_notes: List[str] = []
-    recursive_hosts_scanned: List[str] = []
-    recursive_findings: List[Dict[str, object]] = []
+    all_findings: list[dict[str, object]] = []
+    all_notes: list[str] = []
+    recursive_hosts_scanned: list[str] = []
+    recursive_findings: list[dict[str, object]] = []
     scanned_hosts: set = set()
     scanned_hosts.add(host)
 
     # Track initial scan results for summary
-    initial_scan_results: Dict[str, object] = {}
+    initial_scan_results: dict[str, object] = {}
 
     def _scan_host(
         current_host: str,
         depth: int,
-        current_ports: Optional[List[int]] = None,
-        current_services: Optional[dict] = None,
-        current_tls: Optional[dict] = None,
-        current_certificate: Optional[dict] = None,
-    ) -> Dict[str, object]:
+        current_ports: list[int] | None = None,
+        current_services: dict | None = None,
+        current_tls: dict | None = None,
+        current_certificate: dict | None = None,
+    ) -> dict[str, object]:
         """Scan a single host and return its results including banners."""
         # Use provided data only for the initial host; for recursive hosts, run live detection
         if depth == 0:
@@ -835,9 +834,9 @@ def run_vuln(
                 current_host, ports=current_ports, timeout=timeout, max_workers=max_workers
             )
 
-        findings: List[Dict[str, object]] = []
+        findings: list[dict[str, object]] = []
         services_checked = 0
-        banners: List[str] = []
+        banners: list[str] = []
         for entry in svc_data.get("results") or []:
             banner = entry.get("banner") or ""
             if banner:
@@ -874,12 +873,12 @@ def run_vuln(
                     and _severity_rank(f.get("severity")) >= min_rank
                 ]
 
-        severity_counts: Dict[str, int] = {name: 0 for name in SEVERITIES}
+        severity_counts: dict[str, int] = {name: 0 for name in SEVERITIES}
         for finding in findings:
             level = str(finding["severity"])
             severity_counts[level] = severity_counts.get(level, 0) + 1
 
-        notes: List[str] = []
+        notes: list[str] = []
         if services_checked == 0:
             notes.append("No service banners detected")
         if not findings:
@@ -897,7 +896,7 @@ def run_vuln(
             "banners": banners,
         }
 
-    def _recursive_scan(current_host: str, depth: int) -> Dict[str, object]:
+    def _recursive_scan(current_host: str, depth: int) -> dict[str, object]:
         """Recursively scan a host and hosts discovered in its banners. Returns the scan result for current_host."""
         if depth > max_depth:
             return {}
@@ -915,7 +914,7 @@ def run_vuln(
 
         # Extract hosts from banners for next recursion level
         if depth < max_depth:
-            discovered_hosts: List[str] = []
+            discovered_hosts: list[str] = []
             for banner in result.get("banners", []):
                 discovered_hosts.extend(_extract_hosts_from_banner(banner))
 
@@ -950,7 +949,7 @@ def run_vuln(
         initial_scan_results["tls_checked"] = initial_result["tls_checked"]
         initial_scan_results["certificate_checked"] = initial_result["certificate_checked"]
 
-    severity_counts: Dict[str, int] = {name: 0 for name in SEVERITIES}
+    severity_counts: dict[str, int] = {name: 0 for name in SEVERITIES}
     for finding in all_findings:
         level = str(finding["severity"])
         severity_counts[level] = severity_counts.get(level, 0) + 1
@@ -979,12 +978,12 @@ def run_vuln(
     }
 
 
-def format_vuln_report_json(data: Dict[str, object]) -> str:
+def format_vuln_report_json(data: dict[str, object]) -> str:
     """Format vulnerability check results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_vuln_report_csv(data: Dict[str, object]) -> str:
+def format_vuln_report_csv(data: dict[str, object]) -> str:
     """Format vulnerability check results as CSV.
 
     Emits a header row followed by one row per finding with columns:
@@ -1020,7 +1019,7 @@ def format_vuln_report_csv(data: Dict[str, object]) -> str:
     return output.getvalue().rstrip("\r\n")
 
 
-def _finding_detail(finding: Dict[str, object]) -> str:
+def _finding_detail(finding: dict[str, object]) -> str:
     """Render the per-finding details line for Markdown output."""
     kind = str(finding.get("kind", ""))
     if kind == "service":
@@ -1051,7 +1050,7 @@ def _escape(value: str) -> str:
     return value.replace("|", "\\|")
 
 
-def format_vuln_report_markdown(data: Dict[str, object]) -> str:
+def format_vuln_report_markdown(data: dict[str, object]) -> str:
     """Format vulnerability check results as Markdown."""
     lines = ["# ethscan Vulnerability Report", ""]
     lines.append(f"- **Target:** {data['target']}")

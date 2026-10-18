@@ -1,4 +1,5 @@
 """Service/banner detection module for ethscan."""
+from __future__ import annotations
 
 import csv
 import io
@@ -6,7 +7,7 @@ import json
 import re
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
 DEFAULT_PORTS = [
     21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445,
@@ -105,7 +106,7 @@ COMMON_SERVICE_PORTS = {
 }
 
 
-def grab_banner(host: str, port: int, timeout: float) -> Tuple[int, Optional[str], Optional[str]]:
+def grab_banner(host: str, port: int, timeout: float) -> tuple[int, Optional[str], Optional[str]]:
     """Connect to a port and attempt to grab the banner.
 
     Args:
@@ -157,10 +158,10 @@ def grab_banner(host: str, port: int, timeout: float) -> Tuple[int, Optional[str
 
 def run_service(
     target: str,
-    ports: Optional[List[int]] = None,
+    ports: Optional[list[int]] = None,
     timeout: float = DEFAULT_TIMEOUT,
     max_workers: int = DEFAULT_WORKERS,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Run service/banner detection against a target.
 
     Args:
@@ -180,7 +181,7 @@ def run_service(
 
     port_list = ports if ports is not None else DEFAULT_PORTS
 
-    results: List[Dict[str, object]] = []
+    results: list[dict[str, object]] = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_port = {
             executor.submit(grab_banner, host, port, timeout): port for port in port_list
@@ -188,7 +189,7 @@ def run_service(
         for future in as_completed(future_to_port):
             port, banner, service = future.result()
             if banner or service:
-                entry: Dict[str, object] = {"port": port}
+                entry: dict[str, object] = {"port": port}
                 if banner:
                     entry["banner"] = banner[:500]
                 if service:
@@ -207,12 +208,12 @@ def run_service(
     }
 
 
-def format_service_report_json(data: Dict[str, object]) -> str:
+def format_service_report_json(data: dict[str, object]) -> str:
     """Format service detection results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_service_report_markdown(data: Dict[str, object]) -> str:
+def format_service_report_markdown(data: dict[str, object]) -> str:
     """Format service detection results as Markdown."""
     lines = ["# ethscan Service Detection Report", ""]
     lines.append(f"- **Target:** {data['target']}")
@@ -240,7 +241,7 @@ def format_service_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_service_report_csv(data: Dict[str, object]) -> str:
+def format_service_report_csv(data: dict[str, object]) -> str:
     """Format service detection results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

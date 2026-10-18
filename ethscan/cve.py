@@ -4,6 +4,7 @@ Queries the public NVD/CVE API for known vulnerabilities affecting detected
 service versions (provided via ``--services-file`` JSON output from the
 ``service`` command). Stdlib only with filesystem caching and offline fallback.
 """
+from __future__ import annotations
 
 import json
 import socket
@@ -12,7 +13,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional
 
 DEFAULT_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 DEFAULT_TIMEOUT = 10.0
@@ -48,7 +49,7 @@ def _resolve_host(host: str) -> Optional[str]:
         return None
 
 
-def _load_cache() -> Dict[str, Dict]:
+def _load_cache() -> dict[str, dict]:
     """Load the CVE cache from disk."""
     if not CACHE_FILE.exists():
         return {}
@@ -60,7 +61,7 @@ def _load_cache() -> Dict[str, Dict]:
         return {}
 
 
-def _save_cache(cache: Dict[str, Dict]) -> None:
+def _save_cache(cache: dict[str, dict]) -> None:
     """Save the CVE cache to disk."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     try:
@@ -70,7 +71,7 @@ def _save_cache(cache: Dict[str, Dict]) -> None:
         pass
 
 
-def _is_cache_valid(entry: Dict, ttl: int = CACHE_TTL) -> bool:
+def _is_cache_valid(entry: dict, ttl: int = CACHE_TTL) -> bool:
     """Check if a cache entry is still valid."""
     if not isinstance(entry, dict) or "timestamp" not in entry:
         return False
@@ -82,7 +83,7 @@ def _is_cache_valid(entry: Dict, ttl: int = CACHE_TTL) -> bool:
 
 def _fetch_cve_data(
     cve_id: str, timeout: float = DEFAULT_TIMEOUT, api_url: Optional[str] = None
-) -> Optional[Dict]:
+) -> Optional[dict]:
     """Fetch CVE details from the public NVD API."""
     base = (api_url or DEFAULT_API_URL).rstrip("/")
     url = f"{base}?cveId={urllib.parse.quote(cve_id)}"
@@ -103,7 +104,7 @@ def _get_cached_or_fetch(
     use_cache: bool,
     offline_fallback: bool,
     api_url: Optional[str],
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Get CVE data from cache or fetch from API."""
     cache = _load_cache() if use_cache else {}
 
@@ -135,7 +136,7 @@ def _get_cached_or_fetch(
     return data
 
 
-def _extract_cve_summary(cve_data: Dict[str, object]) -> Dict[str, object]:
+def _extract_cve_summary(cve_data: dict[str, object]) -> dict[str, object]:
     """Extract a normalized CVE summary from raw NVD API response."""
     vulns = (cve_data.get("vulnerabilities") or [])
     if not vulns:
@@ -187,7 +188,7 @@ def _extract_cve_summary(cve_data: Dict[str, object]) -> Dict[str, object]:
     }
 
 
-_SEVERITY_RANK: Dict[str, int] = {
+_SEVERITY_RANK: dict[str, int] = {
     name: idx for idx, name in enumerate(reversed(SEVERITIES))
 }
 
@@ -213,9 +214,9 @@ def run_cve(
     api_url: Optional[str] = None,
     severity: Optional[str] = None,
     min_severity: Optional[str] = None,
-    ports: Optional[List[int]] = None,
+    ports: Optional[list[int]] = None,
     profile: Optional[str] = None,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Query the NVD/CVE API for known vulnerabilities affecting TARGET's services.
 
     Args:
@@ -246,7 +247,7 @@ def run_cve(
         DEFAULT_API_URL = api_url.rstrip("/") + "/"
 
     host = _normalize_host(target)
-    notes: List[str] = []
+    notes: list[str] = []
 
     services = None
     if services_file:
@@ -264,7 +265,7 @@ def run_cve(
             host, ports=ports, timeout=service_timeout, max_workers=workers
         )
 
-    cve_entries: List[Dict[str, object]] = []
+    cve_entries: list[dict[str, object]] = []
     services_checked = 0
     for entry in services.get("results") or []:
         banner = entry.get("banner") or ""
@@ -308,7 +309,7 @@ def run_cve(
                     )
 
     if severity:
-        filtered: List[Dict[str, object]] = []
+        filtered: list[dict[str, object]] = []
         for entry in cve_entries:
             finding = entry.get("finding") or {}
             cve = entry.get("cve") or {}
@@ -320,7 +321,7 @@ def run_cve(
     if min_severity:
         min_rank = _severity_rank(min_severity)
         if min_rank is not None:
-            filtered_min: List[Dict[str, object]] = []
+            filtered_min: list[dict[str, object]] = []
             for entry in cve_entries:
                 finding = entry.get("finding") or {}
                 cve = entry.get("cve") or {}
@@ -330,7 +331,7 @@ def run_cve(
                     filtered_min.append(entry)
             cve_entries = filtered_min
 
-    severity_counts: Dict[str, int] = {name: 0 for name in SEVERITIES}
+    severity_counts: dict[str, int] = {name: 0 for name in SEVERITIES}
     for entry in cve_entries:
         finding = entry.get("finding") or {}
         cve = entry.get("cve") or {}
@@ -379,12 +380,12 @@ def _lookup_cve_id(product: str, version: str) -> Optional[str]:
     return None
 
 
-def format_cve_report_json(data: Dict[str, object]) -> str:
+def format_cve_report_json(data: dict[str, object]) -> str:
     """Format CVE lookup results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_cve_report_csv(data: Dict[str, object]) -> str:
+def format_cve_report_csv(data: dict[str, object]) -> str:
     """Format CVE lookup results as CSV."""
     import csv
     import io
@@ -427,7 +428,7 @@ def format_cve_report_csv(data: Dict[str, object]) -> str:
     return output.getvalue().rstrip("\r\n")
 
 
-def _finding_detail(finding: Dict[str, object]) -> str:
+def _finding_detail(finding: dict[str, object]) -> str:
     """Render the per-finding details line for Markdown output."""
     kind = str(finding.get("kind", ""))
     if kind == "service":
@@ -446,7 +447,7 @@ def _escape(value: str) -> str:
     return value.replace("|", "\\|")
 
 
-def format_cve_report_markdown(data: Dict[str, object]) -> str:
+def format_cve_report_markdown(data: dict[str, object]) -> str:
     """Format CVE lookup results as Markdown."""
     lines = ["# ethscan CVE Report", ""]
     lines.append(f"- **Target:** {data['target']}")

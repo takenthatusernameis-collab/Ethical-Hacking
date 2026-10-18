@@ -9,19 +9,20 @@ Offline-first FTP reconnaissance using only the Python standard library
 All network access is confined to a single helper, ``_connect``, which defaults
 to ``ftplib.FTP`` so tests can substitute a local fake FTP client.
 """
+from __future__ import annotations
 
 import csv
 import ftplib
 import io
 import json
 import socket
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional
 
 DEFAULT_PORT = 21
 DEFAULT_TIMEOUT = 3.0
 
 
-def _normalize_target(target: str) -> Tuple[str, int]:
+def _normalize_target(target: str) -> tuple[str, int]:
     """Parse a target into a bare host and port.
 
     Accepts ``host``, ``host:port``, and ``ftp://host:port`` forms.
@@ -82,7 +83,7 @@ def run_ftp(
     timeout: float = DEFAULT_TIMEOUT,
     check_anonymous: bool = True,
     connector=ftplib.FTP,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run FTP reconnaissance against *target*.
 
     Args:
@@ -98,7 +99,7 @@ def run_ftp(
     """
     host, parsed_port = _normalize_target(target)
     server_port = port if port is not None else parsed_port
-    results: Dict[str, Any] = {
+    results: dict[str, Any] = {
         "target": target,
         "host": host,
         "port": server_port,
@@ -146,12 +147,12 @@ def run_ftp(
     return results
 
 
-def format_ftp_report_json(data: Dict[str, Any]) -> str:
+def format_ftp_report_json(data: dict[str, Any]) -> str:
     """Format FTP reconnaissance results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_ftp_report_markdown(data: Dict[str, Any]) -> str:
+def format_ftp_report_markdown(data: dict[str, Any]) -> str:
     """Format FTP reconnaissance results as Markdown."""
     lines = ["# ethscan FTP Report", ""]
     lines.append(f"- **Target:** {data.get('target', '')}")
@@ -178,7 +179,7 @@ def format_ftp_report_markdown(data: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def format_ftp_report_csv(data: Dict[str, Any]) -> str:
+def format_ftp_report_csv(data: dict[str, Any]) -> str:
     """Format FTP reconnaissance results as CSV.
 
     Emits a single summary row per target with the header

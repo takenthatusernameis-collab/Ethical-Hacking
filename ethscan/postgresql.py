@@ -13,12 +13,13 @@ wire protocol (TCP ``5432``):
 All network access is confined to a single helper, ``_send_recv``, which
 defaults to a raw TCP socket so tests can substitute a local fake server.
 """
+from __future__ import annotations
 
 import csv
 import io
 import json
 import socket
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 DEFAULT_PORT = 5432
 DEFAULT_TIMEOUT = 3.0
@@ -28,7 +29,7 @@ DEFAULT_PROBES = ("startup",)
 _PG_PROTOCOL_VERSION_3_0 = 196608
 
 # Authentication type codes used in 'R' (Authentication) messages.
-_AUTH_TYPE_NAMES: Dict[int, str] = {
+_AUTH_TYPE_NAMES: dict[int, str] = {
     0: "Ok",
     1: "KerberosV5",
     2: "CleartextPassword",
@@ -44,7 +45,7 @@ _AUTH_TYPE_NAMES: Dict[int, str] = {
 }
 
 
-def _normalize_target(target: str) -> Tuple[str, int]:
+def _normalize_target(target: str) -> tuple[str, int]:
     """Parse a target into a bare host and integer port.
 
     Accepts bare hosts, ``host:port``, and ``postgresql://`` / ``postgres://``
@@ -111,7 +112,7 @@ def _send_recv(
     request: bytes,
     timeout: float,
     connector=None,
-) -> Tuple[Optional[bytes], Optional[str]]:
+) -> tuple[Optional[bytes], Optional[str]]:
     """Send bytes over TCP and return received bytes.
 
     Tests may provide a ``connector`` callable to inject a fake transport.
@@ -126,7 +127,7 @@ def _send_recv(
         with socket.create_connection((host, port), timeout=timeout) as sock:
             if request:
                 sock.sendall(request)
-            chunks: List[bytes] = []
+            chunks: list[bytes] = []
             try:
                 while True:
                     chunk = sock.recv(65536)
@@ -144,13 +145,13 @@ def _send_recv(
         return None, str(exc)
 
 
-def _parse_error_fields(body: bytes) -> Dict[str, str]:
+def _parse_error_fields(body: bytes) -> dict[str, str]:
     """Parse an ErrorResponse / NoticeResponse body into a field map.
 
     Each field is ``<type-byte><value>\0``; the body is terminated by a final
     ``\\0``.
     """
-    fields: Dict[str, str] = {}
+    fields: dict[str, str] = {}
     pos = 0
     n = len(body)
     while pos < n:
@@ -171,7 +172,7 @@ def _parse_error_fields(body: bytes) -> Dict[str, str]:
     return fields
 
 
-def _parse_startup_response(data: bytes) -> Dict[str, Any]:
+def _parse_startup_response(data: bytes) -> dict[str, Any]:
     """Parse the server greeting returned after a ``StartupMessage``.
 
     The response is a stream of length-prefixed messages (big-endian), each
@@ -181,7 +182,7 @@ def _parse_startup_response(data: bytes) -> Dict[str, Any]:
     messages, and the backend process id from ``BackendKeyData`` ('K')
     messages.
     """
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         "server_version": None,
         "auth_type_code": None,
         "auth_type_name": None,
@@ -244,9 +245,9 @@ def _parse_startup_response(data: bytes) -> Dict[str, Any]:
     return result
 
 
-def _assess_startup(startup: Dict[str, Any]) -> List[str]:
+def _assess_startup(startup: dict[str, Any]) -> list[str]:
     """Assess startup/greeting data and return findings."""
-    findings: List[str] = []
+    findings: list[str] = []
     version = startup.get("server_version")
     if version:
         findings.append(f"PostgreSQL server version: {version}")
@@ -284,9 +285,9 @@ def run_postgresql(
     target: str,
     port: Optional[int] = None,
     timeout: float = DEFAULT_TIMEOUT,
-    probes: Optional[List[str]] = None,
+    probes: Optional[list[str]] = None,
     connector=None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run PostgreSQL reconnaissance probes against *target*.
 
     Args:
@@ -332,7 +333,7 @@ def run_postgresql(
 
     norm_probes = [p.strip().lower() for p in probe_list if p.strip()]
 
-    startup_data: Dict[str, Any] = {}
+    startup_data: dict[str, Any] = {}
     version: Optional[str] = None
     accessible = False
     error: Optional[str] = None
@@ -368,7 +369,7 @@ def run_postgresql(
     }
 
 
-def format_postgresql_report_json(data: Dict[str, Any]) -> str:
+def format_postgresql_report_json(data: dict[str, Any]) -> str:
     """Format PostgreSQL reconnaissance results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
@@ -378,9 +379,9 @@ def _markdown_escape(text: object) -> str:
     return str(text).replace("|", "\\|").replace("\n", " ")
 
 
-def format_postgresql_report_markdown(data: Dict[str, Any]) -> str:
+def format_postgresql_report_markdown(data: dict[str, Any]) -> str:
     """Format PostgreSQL reconnaissance results as Markdown."""
-    lines: List[str] = []
+    lines: list[str] = []
     lines.append("# PostgreSQL Reconnaissance Report")
     lines.append("")
     lines.append(f"**Target:** {data.get('target', '')}")
@@ -436,7 +437,7 @@ def format_postgresql_report_markdown(data: Dict[str, Any]) -> str:
     return "\n".join(lines).rstrip("\n")
 
 
-def format_postgresql_report_csv(data: Dict[str, Any]) -> str:
+def format_postgresql_report_csv(data: dict[str, Any]) -> str:
     """Format PostgreSQL reconnaissance results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

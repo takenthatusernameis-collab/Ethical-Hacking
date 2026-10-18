@@ -5,10 +5,9 @@ import io
 import json
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Tuple
 
 
-def scan_port(host: str, port: int, timeout: float = 1.0) -> Tuple[int, bool]:
+def scan_port(host: str, port: int, timeout: float = 1.0) -> tuple[int, bool]:
     """Scan a single port on the target host.
 
     Args:
@@ -28,10 +27,10 @@ def scan_port(host: str, port: int, timeout: float = 1.0) -> Tuple[int, bool]:
 
 def scan_ports(
     host: str,
-    ports: List[int],
+    ports: list[int],
     timeout: float = 1.0,
     max_workers: int = 100,
-) -> List[Tuple[int, bool]]:
+) -> list[tuple[int, bool]]:
     """Scan multiple ports on the target host concurrently.
 
     Args:
@@ -53,7 +52,7 @@ def scan_ports(
     return sorted(results, key=lambda x: x[0])
 
 
-def parse_port_range(port_spec: str) -> List[int]:
+def parse_port_range(port_spec: str) -> list[int]:
     """Parse a port specification string into a list of ports.
 
     Supports formats like:
@@ -101,12 +100,12 @@ PROFILE_DEFAULTS = {
 }
 
 
-def get_common_ports() -> List[int]:
+def get_common_ports() -> list[int]:
     """Return list of common ports to scan."""
     return COMMON_PORTS.copy()
 
 
-def get_profile_ports(profile: str) -> List[int]:
+def get_profile_ports(profile: str) -> list[int]:
     """Return list of ports for the given profile.
 
     Args:
@@ -145,12 +144,12 @@ def get_profile_defaults(profile: str) -> dict:
     }
 
 
-def format_scan_report_json(data: Dict[str, object]) -> str:
+def format_scan_report_json(data: dict[str, object]) -> str:
     """Format scan results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_scan_report_markdown(data: Dict[str, object]) -> str:
+def format_scan_report_markdown(data: dict[str, object]) -> str:
     """Format scan results as Markdown."""
     lines = ["# ethscan Port Scan Report", ""]
     lines.append(f"- **Target:** {data['target']}")
@@ -172,7 +171,7 @@ def format_scan_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_scan_report_csv(data: Dict[str, object]) -> str:
+def format_scan_report_csv(data: dict[str, object]) -> str:
     """Format scan results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

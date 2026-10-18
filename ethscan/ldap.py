@@ -28,13 +28,14 @@ All network access is confined to a single helper, ``_send_recv``, so
 tests can inject a fake connector and exercise request building and
 response parsing without touching the network.
 """
+from __future__ import annotations
 
 import csv
 import io
 import json
 import socket
 import ssl
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 DEFAULT_PORT = 389
 DEFAULT_LDAPS_PORT = 636
@@ -66,7 +67,7 @@ FILTER_TAG_PRESENT = 0x87
 TAG_REFERRAL = 0x83
 
 # Common LDAP result codes (RFC 4511 section 4.1.10 and friends).
-LDAP_RESULT_CODES: Dict[int, str] = {
+LDAP_RESULT_CODES: dict[int, str] = {
     0: "success",
     1: "operationsError",
     2: "protocolError",
@@ -109,7 +110,7 @@ LDAP_RESULT_CODES: Dict[int, str] = {
     80: "other",
 }
 
-_OPERATION_NAMES: Dict[int, str] = {
+_OPERATION_NAMES: dict[int, str] = {
     LDAP_TAG_BIND_RESPONSE: "bindResponse",
     LDAP_TAG_SEARCH_RESULT_ENTRY: "searchResultEntry",
     LDAP_TAG_SEARCH_RESULT_DONE: "searchResultDone",
@@ -118,7 +119,7 @@ _OPERATION_NAMES: Dict[int, str] = {
 }
 
 
-def _normalize_target(target: str) -> Tuple[str, int]:
+def _normalize_target(target: str) -> tuple[str, int]:
     """Parse a target into a bare host and integer port.
 
     Accepts bare hosts (``192.168.1.5``), ``host:port``, and
@@ -177,7 +178,7 @@ def _int_bytes(value: int) -> bytes:
         raise ValueError("BER integer encoding supports non-negative values only")
     if value == 0:
         return b"\x00"
-    octets: List[int] = []
+    octets: list[int] = []
     while value > 0:
         octets.append(value & 0xFF)
         value >>= 8
@@ -193,7 +194,7 @@ def _ber_length(length: int) -> bytes:
         raise ValueError("negative BER length")
     if length < 0x80:
         return bytes([length])
-    octets: List[int] = []
+    octets: list[int] = []
     value = length
     while value > 0:
         octets.append(value & 0xFF)
@@ -272,7 +273,7 @@ def _build_root_dse_search(message_id: int = 2) -> bytes:
 # ---------------------------------------------------------------------------
 
 
-def _read_length(data: bytes, offset: int) -> Tuple[int, int]:
+def _read_length(data: bytes, offset: int) -> tuple[int, int]:
     """Read a definite-form BER length; return ``(length, next_offset)``."""
     if offset >= len(data):
         raise ValueError("truncated length")
@@ -287,7 +288,7 @@ def _read_length(data: bytes, offset: int) -> Tuple[int, int]:
     return int.from_bytes(data[offset + 1:offset + 1 + count], "big"), offset + 1 + count
 
 
-def _read_tlv(data: bytes, offset: int) -> Tuple[int, bytes, int]:
+def _read_tlv(data: bytes, offset: int) -> tuple[int, bytes, int]:
     """Read one TLV; return ``(tag, content, next_offset)``."""
     if offset >= len(data):
         raise ValueError("offset past end of data")
@@ -299,7 +300,7 @@ def _read_tlv(data: bytes, offset: int) -> Tuple[int, bytes, int]:
     return tag, data[pos:end], end
 
 
-def _parse_result_content(content: bytes, result: Dict[str, Any]) -> None:
+def _parse_result_content(content: bytes, result: dict[str, Any]) -> None:
     """Parse the shared BindResponse/SearchResultDone body.
 
     Body order (RFC 4511): optional version INTEGER, resultCode
@@ -333,12 +334,12 @@ def _parse_result_content(content: bytes, result: Dict[str, Any]) -> None:
         # Unknown elements (e.g. authResponse [7]) are ignored.
 
 
-def _parse_attribute(content: bytes) -> Dict[str, Any]:
+def _parse_attribute(content: bytes) -> dict[str, Any]:
     """Parse one RootDSE attribute: ``SEQUENCE { type, SET OF values }``."""
     type_tag, type_value, offset = _read_tlv(content, 0)
     if type_tag != TAG_OCTET_STRING:
         raise ValueError("malformed attribute description")
-    values: List[str] = []
+    values: list[str] = []
     while offset < len(content):
         set_tag, set_value, offset = _read_tlv(content, offset)
         if set_tag != TAG_SET:
@@ -351,9 +352,9 @@ def _parse_attribute(content: bytes) -> Dict[str, Any]:
     return {"type": type_value.decode("utf-8", errors="replace"), "values": values}
 
 
-def _parse_search_entry(content: bytes) -> Dict[str, Any]:
+def _parse_search_entry(content: bytes) -> dict[str, Any]:
     """Parse a ``SearchResultEntry``: ``{ objectName, attributes... }``."""
-    entry: Dict[str, Any] = {"dn": "", "attributes": {}}
+    entry: dict[str, Any] = {"dn": "", "attributes": {}}
     offset = 0
     dn_tag, dn_value, offset = _read_tlv(content, 0)
     if dn_tag == TAG_OCTET_STRING:
@@ -370,7 +371,7 @@ def _parse_search_entry(content: bytes) -> Dict[str, Any]:
     return entry
 
 
-def _parse_ldap_message(content: bytes, result: Dict[str, Any]) -> None:
+def _parse_ldap_message(content: bytes, result: dict[str, Any]) -> None:
     """Parse one LDAPMessage envelope and dispatch on the protocol op."""
     msg_id_tag, msg_id_value, offset = _read_tlv(content, 0)
     if msg_id_tag != TAG_INTEGER:
@@ -386,7 +387,7 @@ def _parse_ldap_message(content: bytes, result: Dict[str, Any]) -> None:
         result["entries"].append(_parse_search_entry(op_content))
 
 
-def _parse_ldap_response(data: Optional[bytes]) -> Dict[str, Any]:
+def _parse_ldap_response(data: Optional[bytes]) -> dict[str, Any]:
     """Parse a raw LDAP response buffer into a structured dict.
 
     A buffer may hold several LDAPMessages (e.g. a search response with
@@ -394,7 +395,7 @@ def _parse_ldap_response(data: Optional[bytes]) -> Dict[str, Any]:
     or non-LDAP input is reported via the ``error`` field instead of
     raising.
     """
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         "message_id": None,
         "protocol_op": None,
         "protocol_op_tag": None,
@@ -447,7 +448,7 @@ def _send_recv(
     timeout: float,
     connector=None,
     use_tls: bool = False,
-) -> Tuple[Optional[bytes], Optional[str]]:
+) -> tuple[Optional[bytes], Optional[str]]:
     """Send ``request`` to ``host:port`` and return ``(data, error)``.
 
     When ``connector`` is provided it is called as
@@ -487,7 +488,7 @@ def _send_recv(
 # ---------------------------------------------------------------------------
 
 
-def _build_banner(results: Dict[str, Any]) -> Optional[str]:
+def _build_banner(results: dict[str, Any]) -> Optional[str]:
     """Build a short human-readable banner from the probe results."""
     if not results.get("accessible"):
         return None
@@ -510,7 +511,7 @@ def run_ldap(
     timeout: float = DEFAULT_TIMEOUT,
     ldap_version: int = DEFAULT_LDAP_VERSION,
     connector=None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run LDAP reconnaissance against ``target``.
 
     Parameters mirror the CLI: ``target`` is a host, ``host:port``, or
@@ -530,7 +531,7 @@ def run_ldap(
     version = int(ldap_version)
     use_tls = _is_ldaps_target(target) or server_port == DEFAULT_LDAPS_PORT
 
-    results: Dict[str, Any] = {
+    results: dict[str, Any] = {
         "target": target,
         "host": host,
         "port": server_port,
@@ -598,7 +599,7 @@ def run_ldap(
         if parsed_search.get("error"):
             results["root_dse_error"] = parsed_search["error"]
         else:
-            merged: Dict[str, List[str]] = {}
+            merged: dict[str, list[str]] = {}
             for entry in parsed_search.get("entries") or []:
                 for attr, values in (entry.get("attributes") or {}).items():
                     merged.setdefault(attr, []).extend(values)
@@ -619,12 +620,12 @@ def run_ldap(
 # ---------------------------------------------------------------------------
 
 
-def format_ldap_report_json(results: Dict[str, Any]) -> str:
+def format_ldap_report_json(results: dict[str, Any]) -> str:
     """Format LDAP reconnaissance results as JSON."""
     return json.dumps(results, indent=2, default=str)
 
 
-def format_ldap_report_markdown(results: Dict[str, Any]) -> str:
+def format_ldap_report_markdown(results: dict[str, Any]) -> str:
     """Format LDAP reconnaissance results as Markdown."""
     lines = ["# ethscan LDAP Reconnaissance Report", ""]
     lines.append(f"- **Target:** {results.get('target', '')}")
@@ -695,7 +696,7 @@ def format_ldap_report_markdown(results: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def format_ldap_report_csv(results: Dict[str, Any]) -> str:
+def format_ldap_report_csv(results: dict[str, Any]) -> str:
     """Format LDAP reconnaissance results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

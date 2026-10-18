@@ -1,4 +1,5 @@
 """HTTP fuzzing module for ethscan."""
+from __future__ import annotations
 
 import csv
 import io
@@ -7,7 +8,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Optional
+from typing import Optional
 
 DEFAULT_WORDLIST = [
     "/admin",
@@ -31,7 +32,7 @@ DEFAULT_WORDLIST = [
 ]
 
 
-def load_wordlist(path: str) -> List[str]:
+def load_wordlist(path: str) -> list[str]:
     """Load wordlist from file, one path per line.
 
     Args:
@@ -60,7 +61,7 @@ def _join_url(base: str, path: str) -> str:
     return f"{base}/{path}"
 
 
-def fuzz_path(base_url: str, path: str, timeout: float = 5.0) -> Dict[str, object]:
+def fuzz_path(base_url: str, path: str, timeout: float = 5.0) -> dict[str, object]:
     """Send a single HTTP request to a path and return result.
 
     Args:
@@ -84,10 +85,10 @@ def fuzz_path(base_url: str, path: str, timeout: float = 5.0) -> Dict[str, objec
 
 def run_fuzz(
     target: str,
-    wordlist: Optional[List[str]] = None,
+    wordlist: Optional[list[str]] = None,
     timeout: float = 5.0,
     workers: int = 1,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Run HTTP fuzzing against target.
 
     Args:
@@ -102,7 +103,7 @@ def run_fuzz(
     base_url = _normalize_base_url(target)
     paths = wordlist if wordlist is not None else DEFAULT_WORDLIST
 
-    results: List[Dict[str, object]] = []
+    results: list[dict[str, object]] = []
 
     if workers <= 1:
         for path in paths:
@@ -132,12 +133,12 @@ def run_fuzz(
     }
 
 
-def format_fuzz_report_json(data: Dict[str, object]) -> str:
+def format_fuzz_report_json(data: dict[str, object]) -> str:
     """Format fuzz results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_fuzz_report_markdown(data: Dict[str, object]) -> str:
+def format_fuzz_report_markdown(data: dict[str, object]) -> str:
     """Format fuzz results as Markdown."""
     lines = ["# ethscan HTTP Fuzz Report", ""]
     lines.append(f"- **Target:** {data['target']}")
@@ -167,7 +168,7 @@ def format_fuzz_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_fuzz_report_csv(data: Dict[str, object]) -> str:
+def format_fuzz_report_csv(data: dict[str, object]) -> str:
     """Format fuzz results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

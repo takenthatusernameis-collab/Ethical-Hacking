@@ -33,6 +33,7 @@ context list (preauth integrity hash algorithm and encryption ciphers). This is
 what reveals the dialect on modern hosts with SMB1 disabled. No authentication
 exchange is performed; every network access flows through ``_send_recv``.
 """
+from __future__ import annotations
 
 import csv
 import io
@@ -40,7 +41,7 @@ import json
 import os
 import socket
 import struct
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 DEFAULT_PORT = 445
 DEFAULT_TIMEOUT = 3.0
@@ -62,7 +63,7 @@ SMB1_SECURITY_SIGNING_REQUIRED = 0x08  # message signing required
 # Default SMB1 dialects offered to the server, in preference order. The
 # negotiated DialectIndex is a 0-based index into this list; 0xFFFF means no
 # common dialect was agreed.
-DEFAULT_DIALECTS: Tuple[str, ...] = ("NT LM 0.12", "Samba", "Core", "CorePlus")
+DEFAULT_DIALECTS: tuple[str, ...] = ("NT LM 0.12", "Samba", "Core", "CorePlus")
 
 # Length of the SMB1 header (signature + command + status + flags + ids).
 _SMB1_HEADER_LEN = 32
@@ -84,7 +85,7 @@ SMB2_DIALECT_302 = 0x0302   # SMB 3.0.2
 SMB2_DIALECT_311 = 0x0311   # SMB 3.1.1
 SMB2_DIALECT_WILDCARD = 0x02FF
 
-DEFAULT_SMB2_DIALECTS: Tuple[int, ...] = (
+DEFAULT_SMB2_DIALECTS: tuple[int, ...] = (
     SMB2_DIALECT_002,
     SMB2_DIALECT_21,
     SMB2_DIALECT_30,
@@ -121,7 +122,7 @@ SMB2_CIPHER_AES128_GCM = 0x0002
 # Length of the SMB2 header (the fixed 64-byte envelope).
 _SMB2_HEADER_LEN = 64
 
-_SMB2_DIALECT_NAMES: Dict[int, str] = {
+_SMB2_DIALECT_NAMES: dict[int, str] = {
     SMB2_DIALECT_002: "SMB 2.0.2",
     SMB2_DIALECT_21: "SMB 2.1",
     SMB2_DIALECT_30: "SMB 3.0",
@@ -130,7 +131,7 @@ _SMB2_DIALECT_NAMES: Dict[int, str] = {
     SMB2_DIALECT_WILDCARD: "SMB 2.x (wildcard)",
 }
 
-_SMB2_CAPABILITY_FLAGS: List[Tuple[int, str]] = [
+_SMB2_CAPABILITY_FLAGS: list[tuple[int, str]] = [
     (SMB2_CAP_DFS, "dfs"),
     (SMB2_CAP_LEASING, "leasing"),
     (SMB2_CAP_LARGE_MTU, "large_mtu"),
@@ -140,23 +141,23 @@ _SMB2_CAPABILITY_FLAGS: List[Tuple[int, str]] = [
     (SMB2_CAP_ENCRYPTION, "encryption"),
 ]
 
-_SMB2_NEGOTIATE_CONTEXT_NAMES: Dict[int, str] = {
+_SMB2_NEGOTIATE_CONTEXT_NAMES: dict[int, str] = {
     SMB2_PREAUTH_INTEGRITY: "preauth_integrity",
     SMB2_ENCRYPTION_CAP: "encryption",
 }
 
-_SMB2_HASH_ALGORITHM_NAMES: Dict[int, str] = {
+_SMB2_HASH_ALGORITHM_NAMES: dict[int, str] = {
     SMB2_HASH_SHA512: "SHA-512",
     SMB2_HASH_SHA256: "SHA-256",
 }
 
-_SMB2_CIPHER_NAMES: Dict[int, str] = {
+_SMB2_CIPHER_NAMES: dict[int, str] = {
     SMB2_CIPHER_AES128_CCM: "AES-128-CCM",
     SMB2_CIPHER_AES128_GCM: "AES-128-GCM",
 }
 
 
-def _normalize_target(target: str) -> Tuple[str, int]:
+def _normalize_target(target: str) -> tuple[str, int]:
     """Parse a target into a bare host and integer port.
 
     Accepts bare hosts (``192.168.1.5``), ``host:port``, and
@@ -202,7 +203,7 @@ def _send_recv(
     request: bytes,
     timeout: float,
     connector=None,
-) -> Tuple[Optional[bytes], Optional[str]]:
+) -> tuple[Optional[bytes], Optional[str]]:
     """Send ``request`` to ``host:port`` and return ``(data, error)``.
 
     When ``connector`` is provided it is called as
@@ -231,7 +232,7 @@ def _send_recv(
 
 
 def _build_smb1_negotiate_request(
-    dialects: Tuple[str, ...] = DEFAULT_DIALECTS,
+    dialects: tuple[str, ...] = DEFAULT_DIALECTS,
 ) -> bytes:
     """Build a raw SMB1 ``SMB_COM_NEGOTIATE`` request.
 
@@ -268,14 +269,14 @@ def _build_smb1_negotiate_request(
 
 def _parse_smb_response(
     data: Optional[bytes],
-    dialects: Tuple[str, ...] = DEFAULT_DIALECTS,
-) -> Dict[str, Any]:
+    dialects: tuple[str, ...] = DEFAULT_DIALECTS,
+) -> dict[str, Any]:
     """Parse an SMB response, returning negotiated dialect/security info.
 
     Handles a well-formed SMB1 ``SMB_COM_NEGOTIATE`` response. A non-SMB or
     truncated response is reported via the ``error`` field instead of raising.
     """
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         "protocol": None,
         "command": None,
         "status": None,
@@ -334,7 +335,7 @@ def _parse_smb_response(
     # SecurityMode is a single byte immediately after DialectIndex (offset 35).
     security_mode = data[35]
     result["security_mode"] = security_mode
-    flags: List[str] = []
+    flags: list[str] = []
     if security_mode & SMB1_SECURITY_USER:
         result["user_security"] = True
         flags.append("user_security")
@@ -361,7 +362,7 @@ def _parse_smb_response(
     return result
 
 
-def _build_banner(parsed: Dict[str, Any]) -> Optional[str]:
+def _build_banner(parsed: dict[str, Any]) -> Optional[str]:
     """Build a short human-readable banner from a parsed SMB response."""
     if parsed.get("protocol") != "SMB1":
         return None
@@ -414,7 +415,7 @@ def _build_smb2_preauth_integrity_context(salt: bytes) -> bytes:
 
 
 def _build_smb2_negotiate_request(
-    dialects: Tuple[int, ...] = DEFAULT_SMB2_DIALECTS,
+    dialects: tuple[int, ...] = DEFAULT_SMB2_DIALECTS,
     security_mode: int = SMB2_SIGNING_ENABLED,
     capabilities: int = 0,
     client_guid: bytes = b"\x00" * 16,
@@ -483,20 +484,20 @@ def _build_smb2_negotiate_request(
     return bytes(buf)
 
 
-def _parse_smb2_negotiate_contexts(data: bytes, ctx_offset: int) -> List[Dict[str, Any]]:
+def _parse_smb2_negotiate_contexts(data: bytes, ctx_offset: int) -> list[dict[str, Any]]:
     """Parse the SMB2 negotiate-context list referenced by ``ctx_offset``.
 
     ``ctx_offset`` is measured from the start of the SMB2 header (i.e. byte 0
     of ``data``). Each context is 8-byte aligned. Unknown context types are
     preserved with their raw hex so nothing is silently dropped.
     """
-    contexts: List[Dict[str, Any]] = []
+    contexts: list[dict[str, Any]] = []
     pos = ctx_offset
     while pos + 8 <= len(data):
         ctx_type = struct.unpack("<H", data[pos:pos + 2])[0]
         data_len = struct.unpack("<H", data[pos + 2:pos + 4])[0]
         ctx_data = data[pos + 8:pos + 8 + data_len]
-        entry: Dict[str, Any] = {
+        entry: dict[str, Any] = {
             "type": ctx_type,
             "type_name": _SMB2_NEGOTIATE_CONTEXT_NAMES.get(ctx_type),
             "detail": None,
@@ -511,13 +512,13 @@ def _parse_smb2_negotiate_contexts(data: bytes, ctx_offset: int) -> List[Dict[st
     return contexts
 
 
-def _parse_preauth_integrity_context(ctx_data: bytes) -> Dict[str, Any]:
+def _parse_preauth_integrity_context(ctx_data: bytes) -> dict[str, Any]:
     """Decode an SMB2_PREAUTH_INTEGRITY_CAPABILITIES sub-structure."""
     if len(ctx_data) < 4:
         return {}
     hash_count = struct.unpack("<H", ctx_data[0:2])[0]
     salt_length = struct.unpack("<H", ctx_data[2:4])[0]
-    algos: List[Any] = []
+    algos: list[Any] = []
     off = 4
     available = (len(ctx_data) - 4) // 2
     for _ in range(min(hash_count, available)):
@@ -526,12 +527,12 @@ def _parse_preauth_integrity_context(ctx_data: bytes) -> Dict[str, Any]:
     return {"hash_algorithms": algos, "salt_length": salt_length}
 
 
-def _parse_encryption_capabilities(ctx_data: bytes) -> Dict[str, Any]:
+def _parse_encryption_capabilities(ctx_data: bytes) -> dict[str, Any]:
     """Decode an SMB2_ENCRYPTION_CAPABILITIES sub-structure."""
     if len(ctx_data) < 2:
         return {}
     cipher_count = struct.unpack("<H", ctx_data[0:2])[0]
-    ciphers: List[Any] = []
+    ciphers: list[Any] = []
     off = 2
     available = (len(ctx_data) - 2) // 2
     for _ in range(min(cipher_count, available)):
@@ -540,20 +541,20 @@ def _parse_encryption_capabilities(ctx_data: bytes) -> Dict[str, Any]:
     return {"ciphers": ciphers}
 
 
-def _decode_smb2_capabilities(capabilities: int) -> List[str]:
+def _decode_smb2_capabilities(capabilities: int) -> list[str]:
     return [name for bit, name in _SMB2_CAPABILITY_FLAGS if capabilities & bit]
 
 
 def _parse_smb2_response(
     data: Optional[bytes],
-    dialects: Tuple[int, ...] = DEFAULT_SMB2_DIALECTS,
-) -> Dict[str, Any]:
+    dialects: tuple[int, ...] = DEFAULT_SMB2_DIALECTS,
+) -> dict[str, Any]:
     """Parse an SMB2 ``SMB2_NEGOTIATE`` response.
 
     Returns negotiated dialect/security info. A non-SMB2 or truncated response
     is reported via the ``error`` field instead of raising.
     """
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         "protocol": None,
         "command": None,
         "status": None,
@@ -632,7 +633,7 @@ def _parse_smb2_response(
     return result
 
 
-def _build_smb2_banner(parsed: Dict[str, Any]) -> Optional[str]:
+def _build_smb2_banner(parsed: dict[str, Any]) -> Optional[str]:
     """Build a short human-readable banner from a parsed SMB2 response."""
     if parsed.get("protocol") != "SMB2":
         return None
@@ -657,9 +658,9 @@ def run_smb2(
     target: str,
     port: Optional[int] = None,
     timeout: float = DEFAULT_TIMEOUT,
-    dialects: Tuple[int, ...] = DEFAULT_SMB2_DIALECTS,
+    dialects: tuple[int, ...] = DEFAULT_SMB2_DIALECTS,
     connector=None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run an SMB2/SMB3 ``SMB2_NEGOTIATE`` probe against ``target``.
 
     Performs a single dialect-negotiation round and decodes the negotiated
@@ -670,7 +671,7 @@ def run_smb2(
     host, parsed_port = _normalize_target(target)
     server_port = port if port is not None else parsed_port
 
-    results: Dict[str, Any] = {
+    results: dict[str, Any] = {
         "target": target,
         "host": host,
         "port": server_port,
@@ -728,11 +729,11 @@ def run_smb(
     target: str,
     port: Optional[int] = None,
     timeout: float = DEFAULT_TIMEOUT,
-    dialects: Optional[Tuple[str, ...]] = None,
+    dialects: Optional[tuple[str, ...]] = None,
     smb2: bool = False,
-    smb2_dialects: Optional[Tuple[int, ...]] = None,
+    smb2_dialects: Optional[tuple[int, ...]] = None,
     connector=None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run SMB reconnaissance probes against ``target``.
 
     Always performs the SMB1 ``SMB_COM_NEGOTIATE`` probe described above. When
@@ -747,7 +748,7 @@ def run_smb(
     server_port = port if port is not None else parsed_port
     dial = tuple(dialects) if dialects else DEFAULT_DIALECTS
 
-    results: Dict[str, Any] = {
+    results: dict[str, Any] = {
         "target": target,
         "host": host,
         "port": server_port,
@@ -796,12 +797,12 @@ def run_smb(
     return results
 
 
-def format_smb_report_json(results: Dict[str, Any]) -> str:
+def format_smb_report_json(results: dict[str, Any]) -> str:
     """Format SMB reconnaissance results as JSON."""
     return json.dumps(results, indent=2, default=str)
 
 
-def format_smb_report_markdown(results: Dict[str, Any]) -> str:
+def format_smb_report_markdown(results: dict[str, Any]) -> str:
     """Format SMB reconnaissance results as Markdown."""
     lines = ["# ethscan SMB Reconnaissance Report", ""]
     lines.append(f"- **Target:** {results.get('target', '')}")
@@ -872,7 +873,7 @@ def format_smb_report_markdown(results: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def format_smb_report_csv(results: Dict[str, Any]) -> str:
+def format_smb_report_csv(results: dict[str, Any]) -> str:
     """Format SMB reconnaissance results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

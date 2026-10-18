@@ -5,11 +5,12 @@ Combines:
 - fuzz: HTTP path discovery via wordlist
 - ssl: SSL/TLS certificate inspection
 """
+from __future__ import annotations
 
 import csv
 import io
 import json
-from typing import Dict, List, Optional
+from typing import Optional
 
 from ethscan.fuzz import (
     run_fuzz,
@@ -28,13 +29,13 @@ def _normalize_url(target: str) -> str:
 
 def run_urlcheck(
     target: str,
-    checks: List[str],
-    wordlist: Optional[List[str]] = None,
+    checks: list[str],
+    wordlist: Optional[list[str]] = None,
     fuzz_paths: bool = True,
     port: int = 443,
     timeout: float = 5.0,
     workers: int = 10,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Run consolidated web assessment against target.
 
     Args:
@@ -50,7 +51,7 @@ def run_urlcheck(
         Structured results with sections for web, fuzz, ssl, and summary.
     """
     normalized_target = _normalize_url(target)
-    results: Dict[str, object] = {
+    results: dict[str, object] = {
         "target": target,
         "normalized_target": normalized_target,
         "checks_requested": checks,
@@ -104,12 +105,12 @@ def run_urlcheck(
     return results
 
 
-def format_urlcheck_report_json(data: Dict[str, object]) -> str:
+def format_urlcheck_report_json(data: dict[str, object]) -> str:
     """Format urlcheck results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_urlcheck_report_markdown(data: Dict[str, object]) -> str:
+def format_urlcheck_report_markdown(data: dict[str, object]) -> str:
     """Format urlcheck results as Markdown."""
     lines = ["# ethscan Consolidated Web Assessment Report", ""]
     lines.append(f"- **Target:** {data['target']}")
@@ -242,7 +243,7 @@ def format_urlcheck_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_urlcheck_report_csv(data: Dict[str, object]) -> str:
+def format_urlcheck_report_csv(data: dict[str, object]) -> str:
     """Format urlcheck results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

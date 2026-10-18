@@ -1,9 +1,10 @@
 """Combined report generation: port scan plus password audit."""
+from __future__ import annotations
 
 import csv
 import io
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from ethscan.passwords import audit_passwords
 from ethscan.scanner import (
@@ -31,7 +32,7 @@ CSV_COLUMNS = [
 ]
 
 
-def _parse_ports(ports: str) -> List[int]:
+def _parse_ports(ports: str) -> list[int]:
     if ports.lower() == "common":
         return get_common_ports()
     if ports.lower() == "all":
@@ -68,7 +69,7 @@ def _resolve_ports_and_defaults(
     return port_list, timeout, workers
 
 
-def _load_passwords(audit_file: Optional[str]) -> List[str]:
+def _load_passwords(audit_file: Optional[str]) -> list[str]:
     if not audit_file:
         return []
     with open(audit_file, "r", encoding="utf-8") as handle:
@@ -79,10 +80,10 @@ VALID_SORT_KEYS = ("score", "verdict", "length")
 
 
 def _sort_audit_results(
-    results: List[Dict[str, Any]],
+    results: list[dict[str, Any]],
     sort_by: Optional[str],
     sort_desc: bool,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Return a sorted copy of the audit results.
 
     Args:
@@ -96,7 +97,7 @@ def _sort_audit_results(
     if sort_by not in VALID_SORT_KEYS:
         return list(results)
 
-    def sort_key(item: Dict[str, Any]) -> Any:
+    def sort_key(item: dict[str, Any]) -> Any:
         value = item.get(sort_by)
         if sort_by == "verdict":
             # Verdicts are strings; sort alphabetically (case-insensitive).
@@ -120,7 +121,7 @@ def run_report(
     salt: Optional[str] = None,
     pepper: Optional[str] = None,
     algorithm: str = "sha256",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run a port scan and an optional password audit, returning combined report data.
 
     Args:
@@ -204,12 +205,12 @@ def run_report(
     }
 
 
-def format_report_json(data: Dict[str, Any]) -> str:
+def format_report_json(data: dict[str, Any]) -> str:
     """Render the combined report as JSON."""
     return json.dumps(data, indent=2)
 
 
-def format_report_markdown(data: Dict[str, Any]) -> str:
+def format_report_markdown(data: dict[str, Any]) -> str:
     """Render the combined report as Markdown."""
     lines = ["# ethscan Report", ""]
 
@@ -260,7 +261,7 @@ def format_report_markdown(data: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def format_report_csv(data: Dict[str, Any]) -> str:
+def format_report_csv(data: dict[str, Any]) -> str:
     """Render the combined report as CSV.
 
     Both sections share one table with a ``section`` discriminator column

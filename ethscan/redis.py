@@ -14,19 +14,20 @@ Offline-first Redis reconnaissance using only the Python standard library
 All network access is confined to a single helper, ``_send_recv``, which
 defaults to a raw TCP socket so tests can substitute a local fake server.
 """
+from __future__ import annotations
 
 import csv
 import io
 import json
 import socket
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 DEFAULT_PORT = 6379
 DEFAULT_TIMEOUT = 3.0
 DEFAULT_PROBES = ("ping", "info", "config")
 
 
-def _normalize_target(target: str) -> Tuple[str, int]:
+def _normalize_target(target: str) -> tuple[str, int]:
     """Parse a target into a bare host and port.
 
     Accepts ``host``, ``host:port``, and ``redis://host:port`` forms.
@@ -72,7 +73,7 @@ def _build_resp_array(*args: str) -> bytes:
 
     RESP: *<num>\r\n followed by bulk strings $<len>\r\n<data>\r\n for each arg.
     """
-    parts: List[bytes] = []
+    parts: list[bytes] = []
     parts.append(("*" + str(len(args)) + "\r\n").encode("ascii"))
     for arg in args:
         b = arg.encode("utf-8") if isinstance(arg, str) else bytes(arg)
@@ -88,7 +89,7 @@ def _parse_resp_simple_string(line: bytes) -> str:
     return line.decode("utf-8", errors="replace")
 
 
-def _parse_resp_bulk_string(data: bytes) -> Tuple[Optional[str], int]:
+def _parse_resp_bulk_string(data: bytes) -> tuple[Optional[str], int]:
     """Parse a bulk string starting at data[0:].
 
     Returns (value, consumed_bytes). For null bulk string ($-1\r\n), returns (None, 5).
@@ -113,7 +114,7 @@ def _parse_resp_bulk_string(data: bytes) -> Tuple[Optional[str], int]:
         return None, 0
 
 
-def _parse_resp(data: bytes) -> Tuple[Optional[Any], int]:
+def _parse_resp(data: bytes) -> tuple[Optional[Any], int]:
     """Parse a RESP response starting from data.
 
     Returns (parsed_value, consumed_bytes). Handles simple strings (+), integers (:),
@@ -149,7 +150,7 @@ def _parse_resp(data: bytes) -> Tuple[Optional[Any], int]:
                 return None, 0
             count = int(data[1:idx])
             pos = idx + 2
-            items: List[Any] = []
+            items: list[Any] = []
             for _ in range(count):
                 if pos >= len(data):
                     return None, 0
@@ -178,7 +179,7 @@ def _send_recv(
     request: bytes,
     timeout: float,
     connector=None,
-) -> Tuple[Optional[bytes], Optional[str]]:
+) -> tuple[Optional[bytes], Optional[str]]:
     """Send a TCP request and receive the response (injectable for tests)."""
     if connector is not None:
         return connector(host, port, request, timeout)
@@ -201,12 +202,12 @@ def _send_recv(
             pass
 
 
-def _parse_info(data: bytes) -> Dict[str, str]:
+def _parse_info(data: bytes) -> dict[str, str]:
     """Parse Redis INFO response into a dict.
 
     INFO returns a bulk string with lines like "key:value\r\n".
     """
-    info: Dict[str, str] = {}
+    info: dict[str, str] = {}
     try:
         resp, _ = _parse_resp(data)
         if isinstance(resp, str):
@@ -225,12 +226,12 @@ def _parse_info(data: bytes) -> Dict[str, str]:
     return info
 
 
-def _parse_config(data: bytes) -> Dict[str, str]:
+def _parse_config(data: bytes) -> dict[str, str]:
     """Parse CONFIG GET * response.
 
     Returns a dict of key->value from the array of bulk strings.
     """
-    config: Dict[str, str] = {}
+    config: dict[str, str] = {}
     try:
         resp, _ = _parse_resp(data)
         if isinstance(resp, list) and len(resp) % 2 == 0:
@@ -244,9 +245,9 @@ def _parse_config(data: bytes) -> Dict[str, str]:
     return config
 
 
-def _assess_dangerous(config: Dict[str, str]) -> List[str]:
+def _assess_dangerous(config: dict[str, str]) -> list[str]:
     """Identify dangerous Redis configurations."""
-    findings: List[str] = []
+    findings: list[str] = []
     bind = config.get("bind", "")
     if bind and ("0.0.0.0" in bind):
         findings.append("bind is set to 0.0.0.0 (exposed to network)")
@@ -266,9 +267,9 @@ def run_redis(
     target: str,
     port: Optional[int] = None,
     timeout: float = DEFAULT_TIMEOUT,
-    probes: Optional[List[str]] = None,
+    probes: Optional[list[str]] = None,
     connector=None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run Redis reconnaissance against *target*.
 
     Args:
@@ -288,7 +289,7 @@ def run_redis(
 
     probe_list = list(probes) if probes else list(DEFAULT_PROBES)
 
-    results: Dict[str, Any] = {
+    results: dict[str, Any] = {
         "target": target,
         "host": host,
         "port": server_port,
@@ -352,7 +353,7 @@ def run_redis(
     return results
 
 
-def format_redis_report_json(data: Dict[str, Any]) -> str:
+def format_redis_report_json(data: dict[str, Any]) -> str:
     """Format Redis reconnaissance results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
@@ -362,7 +363,7 @@ def _markdown_escape(text: object) -> str:
     return str(text).replace("|", "\\|").replace("\n", " ")
 
 
-def format_redis_report_markdown(data: Dict[str, Any]) -> str:
+def format_redis_report_markdown(data: dict[str, Any]) -> str:
     """Format Redis reconnaissance results as Markdown."""
     lines = ["# ethscan Redis Reconnaissance Report", ""]
     lines.append(f"- **Target:** {data.get('target', '')}")
@@ -413,7 +414,7 @@ def format_redis_report_markdown(data: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def format_redis_report_csv(data: Dict[str, Any]) -> str:
+def format_redis_report_csv(data: dict[str, Any]) -> str:
     """Format Redis reconnaissance results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

@@ -17,13 +17,14 @@ performs:
 All network access is confined to a single helper, ``_send_recv``, which
 defaults to a raw UDP socket so tests can substitute a local fake server.
 """
+from __future__ import annotations
 
 import csv
 import io
 import json
 import socket
 import struct
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 DEFAULT_PORT = 137
 DEFAULT_TIMEOUT = 3.0
@@ -109,7 +110,7 @@ _SUFFIX_FILE_SERVER = 0x20
 # ---------------------------------------------------------------------------
 
 
-def _normalize_target(target: str) -> Tuple[str, int]:
+def _normalize_target(target: str) -> tuple[str, int]:
     """Parse a target into a bare host and port.
 
     Accepts ``host``, ``host:port``, and ``netbios://host:port`` forms.
@@ -173,7 +174,7 @@ def _encode_qname(name: str, suffix: int = DEFAULT_SUFFIX) -> bytes:
     return bytes([len(chars)]) + chars + b"\x00"
 
 
-def _decode_name_chars(chars: bytes) -> Tuple[str, int]:
+def _decode_name_chars(chars: bytes) -> tuple[str, int]:
     """Decode 32 first-level-encoded chars back into (name, suffix).
 
     Each pair of chars is a byte ``(ord(c) - 0x41)`` for each nibble.
@@ -228,13 +229,13 @@ def _build_nbns_query(
 # ---------------------------------------------------------------------------
 
 
-def _parse_dns_name(data: bytes, offset: int) -> Tuple[str, int]:
+def _parse_dns_name(data: bytes, offset: int) -> tuple[str, int]:
     """Parse a DNS-style (possibly compressed) name starting at *offset*.
 
     Returns ``(name, next_offset)``. Handles first-level encoded NetBIOS
     labels and DNS compression pointers (``0xC0``).
     """
-    labels: List[bytes] = []
+    labels: list[bytes] = []
     next_offset = offset
     jumped = False
     jumps = 0
@@ -275,7 +276,7 @@ def _parse_dns_name(data: bytes, offset: int) -> Tuple[str, int]:
     return "", next_offset
 
 
-def _parse_name_flags(flags: int) -> Dict[str, Any]:
+def _parse_name_flags(flags: int) -> dict[str, Any]:
     """Decode the 16-bit NODE_NAME_FLAGS field of an NBSTAT name entry."""
     return {
         "group": bool(flags & NAME_FLAGS_GROUP),
@@ -292,7 +293,7 @@ def _parse_name_flags(flags: int) -> Dict[str, Any]:
     }
 
 
-def _parse_nbtstat_rdata(rdata: bytes) -> Dict[str, Any]:
+def _parse_nbtstat_rdata(rdata: bytes) -> dict[str, Any]:
     """Parse the RDATA of an NBSTAT (node status) resource record.
 
     Layout (RFC 1002 section 4.2.18): ``NUM_NAMES(1)`` followed by that many
@@ -305,7 +306,7 @@ def _parse_nbtstat_rdata(rdata: bytes) -> Dict[str, Any]:
 
     num_names = rdata[0]
     offset = 1
-    names: List[Dict[str, Any]] = []
+    names: list[dict[str, Any]] = []
 
     for _ in range(num_names):
         if offset + 18 > len(rdata):
@@ -344,7 +345,7 @@ def _skip_question(data: bytes, offset: int, qdcount: int) -> int:
     return offset
 
 
-def _parse_nbns_response(data: bytes) -> Dict[str, Any]:
+def _parse_nbns_response(data: bytes) -> dict[str, Any]:
     """Parse an NBNS message (response expected) into a dict.
 
     Returns a dict with ``transaction_id``, ``flags`` (``is_response``,
@@ -371,9 +372,9 @@ def _parse_nbns_response(data: bytes) -> Dict[str, Any]:
     if qdcount:
         offset = _skip_question(data, offset, qdcount)
 
-    answers: List[Dict[str, Any]] = []
+    answers: list[dict[str, Any]] = []
     mac: Optional[str] = None
-    names: List[Dict[str, Any]] = []
+    names: list[dict[str, Any]] = []
 
     for _ in range(ancount):
         if offset >= len(data):
@@ -391,7 +392,7 @@ def _parse_nbns_response(data: bytes) -> Dict[str, Any]:
         rdata = data[offset:offset + rdlength]
         offset += rdlength
 
-        answer: Dict[str, Any] = {
+        answer: dict[str, Any] = {
             "type": rr_type,
             "class": rr_class,
             "ttl": ttl,
@@ -448,7 +449,7 @@ def _send_recv(
     request: bytes,
     timeout: float,
     connector=None,
-) -> Tuple[Optional[bytes], Optional[str]]:
+) -> tuple[Optional[bytes], Optional[str]]:
     """Send a UDP NBNS request and receive the response (injectable for tests)."""
     if connector is not None:
         return connector(host, port, request, timeout)
@@ -472,7 +473,7 @@ def _send_recv(
 # ---------------------------------------------------------------------------
 
 
-def _derive_assessment(names: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _derive_assessment(names: list[dict[str, Any]]) -> dict[str, Any]:
     """Build heuristic signals from a parsed name table."""
     is_server = False
     hostname: Optional[str] = None
@@ -503,7 +504,7 @@ def run_netbios(
     name: str = DEFAULT_NAME,
     suffix: int = DEFAULT_SUFFIX,
     connector=None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run NetBIOS (NBNS) NODE STATUS reconnaissance against *target*.
 
     Args:
@@ -521,7 +522,7 @@ def run_netbios(
     host, parsed_port = _normalize_target(target)
     server_port = port if port is not None else parsed_port
 
-    results: Dict[str, Any] = {
+    results: dict[str, Any] = {
         "target": target,
         "host": host,
         "port": server_port,
@@ -581,7 +582,7 @@ def run_netbios(
 # ---------------------------------------------------------------------------
 
 
-def format_netbios_report_json(data: Dict[str, Any]) -> str:
+def format_netbios_report_json(data: dict[str, Any]) -> str:
     """Format NetBIOS reconnaissance results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
@@ -591,7 +592,7 @@ def _escape_markdown(value: Any) -> str:
     return str(value).replace("|", "\\|")
 
 
-def format_netbios_report_markdown(data: Dict[str, Any]) -> str:
+def format_netbios_report_markdown(data: dict[str, Any]) -> str:
     """Format NetBIOS reconnaissance results as Markdown."""
     lines = ["# ethscan NetBIOS Report", ""]
     lines.append(f"- **Target:** {_escape_markdown(data.get('target', ''))}")
@@ -652,7 +653,7 @@ def format_netbios_report_markdown(data: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def format_netbios_report_csv(data: Dict[str, Any]) -> str:
+def format_netbios_report_csv(data: dict[str, Any]) -> str:
     """Format NetBIOS reconnaissance results as CSV.
 
     Emits a header row plus one row per NetBIOS name entry (including a
@@ -693,7 +694,7 @@ def format_netbios_report_csv(data: Dict[str, Any]) -> str:
     names = data.get("names") or []
     num_names = data.get("num_names", len(names))
 
-    def _name_fields(entry: Dict[str, Any]) -> List[Any]:
+    def _name_fields(entry: dict[str, Any]) -> list[Any]:
         flags = entry.get("flags") or {}
         return [
             entry.get("name", ""),

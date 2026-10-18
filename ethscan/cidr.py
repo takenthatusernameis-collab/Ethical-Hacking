@@ -6,11 +6,12 @@ IP version, and membership testing for a ``--contains`` IP.
 
 Fully stdlib-only and offline.
 """
+from __future__ import annotations
 
 import csv
 import io
 import ipaddress
-from typing import Dict, List, Optional
+from typing import Optional
 
 
 def _normalize_cidr(value: str) -> str:
@@ -39,7 +40,7 @@ def _is_ipv4(network: ipaddress._BaseNetwork) -> bool:
     return network.version == 4
 
 
-def _format_network_info(network: ipaddress._BaseNetwork) -> Dict[str, object]:
+def _format_network_info(network: ipaddress._BaseNetwork) -> dict[str, object]:
     """Build the structured network-info dictionary for a network object."""
     is_v4 = _is_ipv4(network)
 
@@ -95,9 +96,9 @@ def _contains_ip(network: ipaddress._BaseNetwork, ip: str) -> bool:
 
 
 def _subtract_networks(
-    minuend: List[ipaddress._BaseNetwork],
-    subtrahend: List[ipaddress._BaseNetwork],
-) -> List[ipaddress._BaseNetwork]:
+    minuend: list[ipaddress._BaseNetwork],
+    subtrahend: list[ipaddress._BaseNetwork],
+) -> list[ipaddress._BaseNetwork]:
     """Subtract subtrahend networks from minuend networks.
 
     Returns a list of networks representing the address ranges in minuend
@@ -108,7 +109,7 @@ def _subtract_networks(
     if not subtrahend:
         return sorted(minuend, key=lambda n: n.network_address)
 
-    result: List[ipaddress._BaseNetwork] = []
+    result: list[ipaddress._BaseNetwork] = []
     for m_net in sorted(minuend, key=lambda n: n.network_address):
         remaining = [m_net]
         for s_net in sorted(subtrahend, key=lambda n: n.network_address):
@@ -138,7 +139,7 @@ def run_cidr(
     cidr: str,
     contains: Optional[str] = None,
     diff: Optional[str] = None,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Compute network calculations for a CIDR.
 
     Args:
@@ -155,7 +156,7 @@ def run_cidr(
     network = ipaddress.ip_network(normalized, strict=False)
     info = _format_network_info(network)
 
-    result: Dict[str, object] = {
+    result: dict[str, object] = {
         "cidr": normalized,
         "ip_version": "IPv4" if _is_ipv4(network) else "IPv6",
         "network": info,
@@ -183,7 +184,7 @@ def run_cidr(
     return result
 
 
-def format_cidr_report_json(data: Dict[str, object]) -> str:
+def format_cidr_report_json(data: dict[str, object]) -> str:
     """Format CIDR results as JSON."""
     import json
 
@@ -195,7 +196,7 @@ def _escape(value: str) -> str:
     return value.replace("|", "\\|")
 
 
-def format_cidr_report_markdown(data: Dict[str, object]) -> str:
+def format_cidr_report_markdown(data: dict[str, object]) -> str:
     """Format CIDR results as Markdown."""
     lines = ["# ethscan CIDR Network Calculator Report", ""]
     lines.append(f"- **CIDR:** {data['cidr']}")
@@ -252,7 +253,7 @@ def format_cidr_report_markdown(data: Dict[str, object]) -> str:
         lines.append("")
 
     return "\n".join(lines)
-def format_cidr_report_csv(data: Dict[str, object]) -> str:
+def format_cidr_report_csv(data: dict[str, object]) -> str:
     """Format CIDR calculation results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

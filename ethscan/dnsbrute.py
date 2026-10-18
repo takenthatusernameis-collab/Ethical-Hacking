@@ -1,11 +1,12 @@
 """DNS brute force module for ethscan (AXFR attempt + subdomain brute force)."""
+from __future__ import annotations
 
 import csv
 import io
 import socket
 import struct
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 from urllib.parse import urlparse
 
 from ethscan.dns import resolve_a_records, resolve_aaaa_records, resolve_with_dnspython
@@ -82,7 +83,7 @@ def build_axfr_query(zone: str, query_id: int = DEFAULT_QUERY_ID) -> bytes:
     return struct.pack(">H", len(message)) + message
 
 
-def _parse_dns_name(data: bytes, offset: int) -> Tuple[str, int]:
+def _parse_dns_name(data: bytes, offset: int) -> tuple[str, int]:
     """Parse a (possibly compressed) DNS name starting at offset.
 
     Args:
@@ -93,7 +94,7 @@ def _parse_dns_name(data: bytes, offset: int) -> Tuple[str, int]:
         Tuple of (name, new_offset) where new_offset points past the
         name in the original message (after any compression pointer).
     """
-    labels: List[str] = []
+    labels: list[str] = []
     jumped = False
     end_offset = offset
     seen = set()
@@ -133,7 +134,7 @@ def _parse_dns_name(data: bytes, offset: int) -> Tuple[str, int]:
     return ".".join(labels), end_offset
 
 
-def parse_dns_response(data: bytes) -> Dict[str, object]:
+def parse_dns_response(data: bytes) -> dict[str, object]:
     """Parse a raw DNS response message.
 
     Args:
@@ -142,7 +143,7 @@ def parse_dns_response(data: bytes) -> Dict[str, object]:
     Returns:
         Dictionary with header fields and parsed answer records.
     """
-    result: Dict[str, object] = {
+    result: dict[str, object] = {
         "valid": False,
         "query_id": None,
         "response_code": None,
@@ -182,7 +183,7 @@ def parse_dns_response(data: bytes) -> Dict[str, object]:
         _, offset = _parse_dns_name(data, offset)
         offset += 4
 
-    answers: List[Dict[str, object]] = []
+    answers: list[dict[str, object]] = []
     for _ in range(answer_count):
         name, offset = _parse_dns_name(data, offset)
         if offset + 10 > len(data):
@@ -197,8 +198,8 @@ def parse_dns_response(data: bytes) -> Dict[str, object]:
 
 
 def _axfr_result(
-    nameserver: str, success: bool, records: List[str], error: Optional[str]
-) -> Dict[str, object]:
+    nameserver: str, success: bool, records: list[str], error: Optional[str]
+) -> dict[str, object]:
     """Build a single AXFR attempt result entry."""
     return {
         "nameserver": nameserver,
@@ -209,7 +210,7 @@ def _axfr_result(
     }
 
 
-def _extract_ns_records(records: List[str]) -> List[str]:
+def _extract_ns_records(records: list[str]) -> list[str]:
     """Extract NS record target hostnames from AXFR records.
 
     Args:
@@ -241,7 +242,7 @@ def query_axfr_raw(
     zone: str,
     timeout: float = DEFAULT_TIMEOUT,
     port: int = DNS_PORT,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Attempt a DNS zone transfer (AXFR) using a raw TCP socket.
 
     Args:
@@ -287,7 +288,7 @@ def _axfr_dnspython(
     nameserver: str,
     zone: str,
     timeout: float = DEFAULT_TIMEOUT,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Attempt a DNS zone transfer (AXFR) using dnspython.
 
     Args:
@@ -312,7 +313,7 @@ def _axfr_dnspython(
     except (dns.exception.DNSException, OSError, ValueError) as exc:
         return _axfr_result(nameserver, False, [], str(exc))
 
-    records: List[str] = []
+    records: list[str] = []
     for name in sorted(zone_obj.nodes.keys(), key=str):
         node = zone_obj.nodes[name]
         for rdataset in node.rdatasets:
@@ -328,7 +329,7 @@ def attempt_axfr(
     zone: str,
     timeout: float = DEFAULT_TIMEOUT,
     port: int = DNS_PORT,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Attempt a DNS zone transfer (AXFR) against a nameserver.
 
     Uses dnspython when available, falling back to a raw TCP socket
@@ -348,7 +349,7 @@ def attempt_axfr(
     return query_axfr_raw(nameserver, zone, timeout=timeout, port=port)
 
 
-def discover_nameservers(domain: str, timeout: float = DEFAULT_TIMEOUT) -> List[str]:
+def discover_nameservers(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str]:
     """Discover authoritative nameservers for a domain via NS lookup.
 
     Args:
@@ -365,11 +366,11 @@ def discover_nameservers(domain: str, timeout: float = DEFAULT_TIMEOUT) -> List[
     return sorted({value.rstrip(".") for value in values if value.strip()})
 
 
-def _resolve_label(label: str, domain: str, timeout: float, resolver: Optional[str] = None) -> Dict[str, object]:
+def _resolve_label(label: str, domain: str, timeout: float, resolver: Optional[str] = None) -> dict[str, object]:
     """Resolve a single subdomain label to its A and AAAA records."""
     hostname = f"{label}.{domain}"
-    a_records: List[str] = []
-    aaaa_records: List[str] = []
+    a_records: list[str] = []
+    aaaa_records: list[str] = []
     if resolver and DNS_AVAILABLE:
         try:
             dns_resolver = dns.resolver.Resolver()
@@ -402,14 +403,14 @@ def _resolve_label(label: str, domain: str, timeout: float, resolver: Optional[s
 
 def run_dnsbrute(
     target: str,
-    nameservers: Optional[List[str]] = None,
-    subdomains: Optional[List[str]] = None,
+    nameservers: Optional[list[str]] = None,
+    subdomains: Optional[list[str]] = None,
     timeout: float = DEFAULT_TIMEOUT,
     max_workers: int = 50,
     resolver: Optional[str] = None,
     recursive: bool = False,
     max_depth: int = DEFAULT_RECURSIVE_DEPTH,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Attempt AXFR zone transfers and brute-force subdomains for a target.
 
     Args:
@@ -439,10 +440,10 @@ def run_dnsbrute(
         ns_list = discover_nameservers(domain, timeout=timeout)
         ns_source = "lookup" if ns_list else "none"
 
-    axfr_results: List[Dict[str, object]] = []
-    recursive_axfr_results: List[Dict[str, object]] = []
+    axfr_results: list[dict[str, object]] = []
+    recursive_axfr_results: list[dict[str, object]] = []
 
-    def _run_axfr_for_zone(zone: str, ns_candidates: List[str], depth: int) -> None:
+    def _run_axfr_for_zone(zone: str, ns_candidates: list[str], depth: int) -> None:
         """Run AXFR attempts for a zone and optionally recurse."""
         if depth > max_depth:
             return
@@ -477,7 +478,7 @@ def run_dnsbrute(
     axfr_total_records = sum(entry["records_count"] for entry in axfr_results)
     recursive_total_records = sum(entry["records_count"] for entry in recursive_axfr_results)
 
-    results: List[Dict[str, object]] = []
+    results: list[dict[str, object]] = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_label = {
             executor.submit(_resolve_label, label, domain, timeout, resolver): label
@@ -510,7 +511,7 @@ def run_dnsbrute(
     }
 
 
-def format_dnsbrute_report_json(data: Dict[str, object]) -> str:
+def format_dnsbrute_report_json(data: dict[str, object]) -> str:
     """Format DNS brute force results as JSON."""
     import json
 
@@ -522,7 +523,7 @@ def _markdown_escape(text: object) -> str:
     return str(text).replace("|", "\\|").replace("\n", " ")
 
 
-def _format_records_table(lines: List[str], entries: List[Dict[str, object]]) -> None:
+def _format_records_table(lines: list[str], entries: list[dict[str, object]]) -> None:
     lines.append("| Subdomain | Hostname | A | AAAA |")
     lines.append("|-----------|----------|---|------|")
     for entry in entries:
@@ -537,7 +538,7 @@ def _format_records_table(lines: List[str], entries: List[Dict[str, object]]) ->
     lines.append("")
 
 
-def format_dnsbrute_report_markdown(data: Dict[str, object]) -> str:
+def format_dnsbrute_report_markdown(data: dict[str, object]) -> str:
     """Format DNS brute force results as Markdown."""
     lines = ["# ethscan DNS Brute Force Report", ""]
     lines.append(f"- **Target:** {data['target']}")
@@ -612,7 +613,7 @@ def format_dnsbrute_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def _dnsbrute_csv_header() -> List[str]:
+def _dnsbrute_csv_header() -> list[str]:
     """Return the CSV header row for dnsbrute output."""
     return [
         "target",
@@ -633,8 +634,8 @@ def _dnsbrute_csv_header() -> List[str]:
 
 
 def _dnsbrute_subdomain_row(
-    target: str, domain: str, entry: Dict[str, object]
-) -> List[str]:
+    target: str, domain: str, entry: dict[str, object]
+) -> list[str]:
     """Build a CSV row for a subdomain brute-force result."""
     a_records = entry.get("a") or []
     aaaa_records = entry.get("aaaa") or []
@@ -657,8 +658,8 @@ def _dnsbrute_subdomain_row(
 
 
 def _dnsbrute_axfr_row(
-    target: str, domain: str, entry: Dict[str, object], record: str, record_type: str
-) -> List[str]:
+    target: str, domain: str, entry: dict[str, object], record: str, record_type: str
+) -> list[str]:
     """Build a CSV row for an AXFR record (initial or recursive)."""
     return [
         target,
@@ -678,7 +679,7 @@ def _dnsbrute_axfr_row(
     ]
 
 
-def format_dnsbrute_report_csv(data: Dict[str, object]) -> str:
+def format_dnsbrute_report_csv(data: dict[str, object]) -> str:
     """Format dnsbrute results as CSV.
 
     Emits a header row followed by:

@@ -13,19 +13,20 @@ the Memcached text protocol (TCP 11211):
 All network access is confined to a single helper, ``_send_recv``, which
 defaults to a raw TCP socket so tests can substitute a local fake server.
 """
+from __future__ import annotations
 
 import csv
 import io
 import json
 import socket
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 DEFAULT_PORT = 11211
 DEFAULT_TIMEOUT = 3.0
 DEFAULT_PROBES = ("version", "stats")
 
 
-def _normalize_target(target: str) -> Tuple[str, int]:
+def _normalize_target(target: str) -> tuple[str, int]:
     """Parse a target into a bare host and integer port.
 
     Accepts bare hosts (``192.168.1.5``), ``host:port``, and
@@ -35,7 +36,6 @@ def _normalize_target(target: str) -> Tuple[str, int]:
     normalized = (target or "").strip()
     host: Optional[str] = None
     port: Optional[int] = None
-    scheme = ""
 
     if "://" in normalized:
         from urllib.parse import urlparse
@@ -43,7 +43,7 @@ def _normalize_target(target: str) -> Tuple[str, int]:
         parsed = urlparse(normalized)
         host = (parsed.hostname or "").strip()
         port = parsed.port
-        scheme = (parsed.scheme or "").lower()
+        (parsed.scheme or "").lower()
     else:
         host = normalized
         # IPv6 literal in brackets, optionally followed by :port.
@@ -77,7 +77,7 @@ def _send_recv(
     request: bytes,
     timeout: float,
     connector=None,
-) -> Tuple[Optional[bytes], Optional[str]]:
+) -> tuple[Optional[bytes], Optional[str]]:
     """Send a TCP request and receive the response (injectable for tests)."""
     if connector is not None:
         return connector(host, port, request, timeout)
@@ -122,14 +122,14 @@ def _parse_version_response(data: Optional[bytes]) -> Optional[str]:
     return None
 
 
-def _parse_stats_response(data: Optional[bytes]) -> Dict[str, str]:
+def _parse_stats_response(data: Optional[bytes]) -> dict[str, str]:
     """Parse a Memcached ``stats`` response into a dict of STAT lines.
 
     The response is a sequence of ``STAT <key> <value>`` lines terminated
     by ``END\\r\\n``. Only ``STAT`` lines are parsed; ``END`` and any
     other framing lines are ignored.
     """
-    stats: Dict[str, str] = {}
+    stats: dict[str, str] = {}
     if not data:
         return stats
     try:
@@ -167,9 +167,9 @@ def _coerce_int(value: str) -> Optional[int]:
         return None
 
 
-def _assess_stats(stats: Dict[str, str]) -> List[str]:
+def _assess_stats(stats: dict[str, str]) -> list[str]:
     """Identify noteworthy conditions from the parsed stats map."""
-    findings: List[str] = []
+    findings: list[str] = []
     if not stats:
         return findings
     if _coerce_int(stats.get("pid", "")) == 0:
@@ -192,11 +192,11 @@ def _assess_stats(stats: Dict[str, str]) -> List[str]:
     return findings
 
 
-def _build_banner(results: Dict[str, Any]) -> Optional[str]:
+def _build_banner(results: dict[str, Any]) -> Optional[str]:
     """Build a short human-readable banner from the probe results."""
     if not results.get("accessible"):
         return None
-    parts: List[str] = []
+    parts: list[str] = []
     version = results.get("version")
     if version:
         parts.append(f"memcached {version}")
@@ -218,9 +218,9 @@ def run_memcached(
     target: str,
     port: Optional[int] = None,
     timeout: float = DEFAULT_TIMEOUT,
-    probes: Optional[List[str]] = None,
+    probes: Optional[list[str]] = None,
     connector=None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run Memcached reconnaissance against *target*.
 
     Args:
@@ -243,7 +243,7 @@ def run_memcached(
         else list(DEFAULT_PROBES)
     )
 
-    results: Dict[str, Any] = {
+    results: dict[str, Any] = {
         "target": target,
         "host": host,
         "port": server_port,
@@ -286,7 +286,7 @@ def run_memcached(
     return results
 
 
-def format_memcached_report_json(data: Dict[str, Any]) -> str:
+def format_memcached_report_json(data: dict[str, Any]) -> str:
     """Format Memcached reconnaissance results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
@@ -296,7 +296,7 @@ def _markdown_escape(text: object) -> str:
     return str(text).replace("|", "\\|").replace("\n", " ")
 
 
-def format_memcached_report_markdown(data: Dict[str, Any]) -> str:
+def format_memcached_report_markdown(data: dict[str, Any]) -> str:
     """Format Memcached reconnaissance results as Markdown."""
     lines = ["# ethscan Memcached Reconnaissance Report", ""]
     lines.append(f"- **Target:** {data.get('target', '')}")
@@ -322,8 +322,8 @@ def format_memcached_report_markdown(data: Dict[str, Any]) -> str:
             "cmd_get", "cmd_set", "get_hits", "get_misses", "evictions",
             "bytes_read", "bytes_written", "connection_structures",
         ]
-        shown: Dict[str, str] = {}
-        others: Dict[str, str] = {}
+        shown: dict[str, str] = {}
+        others: dict[str, str] = {}
         for key, value in stats.items():
             if key in primary_keys:
                 shown[key] = value
@@ -362,7 +362,7 @@ def format_memcached_report_markdown(data: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def format_memcached_report_csv(data: Dict[str, Any]) -> str:
+def format_memcached_report_csv(data: dict[str, Any]) -> str:
     """Format Memcached reconnaissance results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

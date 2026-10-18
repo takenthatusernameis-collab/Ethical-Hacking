@@ -11,18 +11,20 @@ Wire Protocol (TCP 27017):
 All network access is confined to a single helper, ``_send_recv``, which
 defaults to a raw TCP socket so tests can substitute a local fake server.
 """
+from __future__ import annotations
+
 import csv
 import io
 import json
 import socket
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 DEFAULT_PORT = 27017
 DEFAULT_TIMEOUT = 3.0
 DEFAULT_PROBES = ("buildInfo",)
 
 
-def _normalize_target(target: str) -> Tuple[str, int]:
+def _normalize_target(target: str) -> tuple[str, int]:
     """Parse a target into a bare host and integer port.
 
     Accepts bare hosts, ``host:port``, and ``mongodb://host:port`` URLs.
@@ -66,7 +68,7 @@ def _send_recv(
     request: bytes,
     timeout: float,
     connector=None,
-) -> Tuple[Optional[bytes], Optional[str]]:
+) -> tuple[Optional[bytes], Optional[str]]:
     """Send bytes over TCP and return received bytes.
 
     Tests may provide a ``connector`` callable to inject a fake transport.
@@ -143,7 +145,7 @@ def _build_buildinfo_request() -> bytes:
     return _build_mongodb_message(request_id=1, response_to=0, opcode=OP_QUERY, data=query_part)
 
 
-def _parse_buildinfo_response(data: bytes) -> Dict[str, Any]:
+def _parse_buildinfo_response(data: bytes) -> dict[str, Any]:
     """Parse MongoDB buildInfo command response.
 
     Parses the OP_REPLY message and extracts the buildInfo document.
@@ -158,10 +160,10 @@ def _parse_buildinfo_response(data: bytes) -> Dict[str, Any]:
     # 4 bytes startingFrom
     # 4 bytes numberReturned
 
-    response_flags = int.from_bytes(data[0:4], byteorder='little')
-    cursor_id_lo = int.from_bytes(data[4:8], byteorder='little')
-    cursor_id_hi = int.from_bytes(data[8:12], byteorder='little')
-    starting_from = int.from_bytes(data[12:16], byteorder='little')
+    int.from_bytes(data[0:4], byteorder='little')
+    int.from_bytes(data[4:8], byteorder='little')
+    int.from_bytes(data[8:12], byteorder='little')
+    int.from_bytes(data[12:16], byteorder='little')
     number_returned = int.from_bytes(data[16:20], byteorder='little')
 
     # The actual documents start after the header (20 bytes)
@@ -208,9 +210,9 @@ def _parse_buildinfo_response(data: bytes) -> Dict[str, Any]:
     return result
 
 
-def _assess_buildinfo(buildinfo: Dict[str, Any]) -> List[str]:
+def _assess_buildinfo(buildinfo: dict[str, Any]) -> list[str]:
     """Assess buildInfo data and return findings."""
-    findings: List[str] = []
+    findings: list[str] = []
     version = buildinfo.get('version', '')
     if version:
         findings.append(f"MongoDB server version: {version}")
@@ -234,9 +236,9 @@ def run_mongodb(
     target: str,
     port: Optional[int] = None,
     timeout: float = DEFAULT_TIMEOUT,
-    probes: Optional[List[str]] = None,
+    probes: Optional[list[str]] = None,
     connector=None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run MongoDB reconnaissance probes against a target.
 
     Args:
@@ -280,9 +282,9 @@ def run_mongodb(
         }
 
     # Normalize probe names
-    norm_probes = [p.strip().lower() for p in probe_list if p.strip()]
+    [p.strip().lower() for p in probe_list if p.strip()]
 
-    buildinfo_data: Dict[str, Any] = {}
+    buildinfo_data: dict[str, Any] = {}
     accessible = False
     error: Optional[str] = None
     version: Optional[str] = None
@@ -319,14 +321,14 @@ def run_mongodb(
     }
 
 
-def format_mongodb_report_json(data: Dict[str, Any]) -> str:
+def format_mongodb_report_json(data: dict[str, Any]) -> str:
     """Format MongoDB reconnaissance results as JSON."""
     return json.dumps(data, indent=2, ensure_ascii=False)
 
 
-def format_mongodb_report_markdown(data: Dict[str, Any]) -> str:
+def format_mongodb_report_markdown(data: dict[str, Any]) -> str:
     """Format MongoDB reconnaissance results as Markdown."""
-    lines: List[str] = []
+    lines: list[str] = []
     lines.append("# MongoDB Reconnaissance Report")
     lines.append("")
     lines.append(f"**Target:** {data.get('target', '')}")
@@ -371,7 +373,7 @@ def format_mongodb_report_markdown(data: Dict[str, Any]) -> str:
     return "\n".join(lines).rstrip("\n")
 
 
-def format_mongodb_report_csv(data: Dict[str, Any]) -> str:
+def format_mongodb_report_csv(data: dict[str, Any]) -> str:
     """Format MongoDB reconnaissance results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

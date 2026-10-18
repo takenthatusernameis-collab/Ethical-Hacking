@@ -4,6 +4,7 @@ Resolves a MAC address to its vendor via OUI lookup using a public OUI
 database API (api.macvendors.com) with filesystem caching and offline
 fallback. Stdlib only.
 """
+from __future__ import annotations
 
 import csv
 import io
@@ -12,7 +13,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional
 
 DEFAULT_API_URL = "https://api.macvendors.com/"
 DEFAULT_TIMEOUT = 5.0
@@ -44,7 +45,7 @@ def _resolve_host(host: str) -> Optional[str]:
         return None
 
 
-def _load_cache() -> Dict[str, Dict]:
+def _load_cache() -> dict[str, dict]:
     """Load the MAC cache from disk."""
     if not CACHE_FILE.exists():
         return {}
@@ -56,7 +57,7 @@ def _load_cache() -> Dict[str, Dict]:
         return {}
 
 
-def _save_cache(cache: Dict[str, Dict]) -> None:
+def _save_cache(cache: dict[str, dict]) -> None:
     """Save the MAC cache to disk."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     try:
@@ -66,7 +67,7 @@ def _save_cache(cache: Dict[str, Dict]) -> None:
         pass
 
 
-def _is_cache_valid(entry: Dict, ttl: int = CACHE_TTL) -> bool:
+def _is_cache_valid(entry: dict, ttl: int = CACHE_TTL) -> bool:
     """Check if a cache entry is still valid."""
     if "timestamp" not in entry:
         return False
@@ -75,7 +76,7 @@ def _is_cache_valid(entry: Dict, ttl: int = CACHE_TTL) -> bool:
 
 def _fetch_mac_data(
     mac: str, timeout: float = DEFAULT_TIMEOUT, api_url: Optional[str] = None
-) -> Optional[Dict]:
+) -> Optional[dict]:
     """Fetch MAC vendor data from the public OUI API."""
     base = (api_url or DEFAULT_API_URL).rstrip("/") + "/"
     url = f"{base}{mac}"
@@ -94,7 +95,7 @@ def _get_cached_or_fetch(
     use_cache: bool,
     offline_fallback: bool,
     api_url: Optional[str],
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Get MAC vendor data from cache or fetch from API."""
     cache = _load_cache() if use_cache else {}
 
@@ -138,7 +139,7 @@ def run_mac(
     use_cache: bool = True,
     offline_fallback: bool = True,
     api_url: Optional[str] = None,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Look up the vendor for a MAC address (target).
 
     Args:
@@ -160,7 +161,7 @@ def run_mac(
 
     # If the target looks like a hostname or URL, try resolving to a MAC first
     # (only if it is not already a MAC address).
-    notes: List[str] = []
+    notes: list[str] = []
     if not _is_mac_address(mac):
         resolved_mac = _resolve_host(mac)
         if resolved_mac is not None:
@@ -213,12 +214,12 @@ def _is_mac_address(value: str) -> bool:
     return True
 
 
-def format_mac_report_json(data: Dict[str, object]) -> str:
+def format_mac_report_json(data: dict[str, object]) -> str:
     """Format MAC vendor results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_mac_report_markdown(data: Dict[str, object]) -> str:
+def format_mac_report_markdown(data: dict[str, object]) -> str:
     """Format MAC vendor results as Markdown."""
     lines = ["# ethscan MAC Vendor Lookup Report", ""]
     lines.append(f"- **Target:** {data['target']}")
@@ -259,7 +260,7 @@ def format_mac_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_mac_report_csv(data: Dict[str, object]) -> str:
+def format_mac_report_csv(data: dict[str, object]) -> str:
     """Format MAC vendor results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

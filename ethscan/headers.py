@@ -3,12 +3,11 @@
 import csv
 import io
 import json
-from typing import Dict
 
 from ethscan.web import _parse_url, check_security_headers, fetch_headers
 
 
-def run_headers(target: str, timeout: float = 5.0) -> Dict[str, object]:
+def run_headers(target: str, timeout: float = 5.0) -> dict[str, object]:
     """Run security headers check against TARGET.
 
     Args:
@@ -22,7 +21,7 @@ def run_headers(target: str, timeout: float = 5.0) -> Dict[str, object]:
     url = target if "://" in target.strip() else ("https://" + target.strip() if is_secure else "http://" + target.strip())
     headers = fetch_headers(url, timeout=timeout)
 
-    results: Dict[str, object] = {
+    results: dict[str, object] = {
         "target": target,
         "host": host,
         "port": port,
@@ -35,12 +34,12 @@ def run_headers(target: str, timeout: float = 5.0) -> Dict[str, object]:
     return results
 
 
-def format_headers_report_json(data: Dict[str, object]) -> str:
+def format_headers_report_json(data: dict[str, object]) -> str:
     """Format security headers check results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_headers_report_markdown(data: Dict[str, object]) -> str:
+def format_headers_report_markdown(data: dict[str, object]) -> str:
     """Format security headers check results as Markdown."""
     lines = ["# ethscan Security Headers Report", ""]
     lines.append(f"- **Target:** {data['target']}")
@@ -65,7 +64,7 @@ def format_headers_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_headers_report_csv(data: Dict[str, object]) -> str:
+def format_headers_report_csv(data: dict[str, object]) -> str:
     """Format security headers check results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

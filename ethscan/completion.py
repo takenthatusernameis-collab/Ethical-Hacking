@@ -8,7 +8,7 @@ names, option names, and option values.
 
 import csv
 import io
-from typing import Any, Dict, Tuple
+from typing import Any
 
 import click
 from click import shell_completion
@@ -17,7 +17,7 @@ from click import shell_completion
 DEFAULT_PROG_NAME = "ethscan"
 
 
-def _available_shells() -> Dict[str, Any]:
+def _available_shells() -> dict[str, Any]:
     """Return the mapping of supported shell names to click completion classes.
 
     Uses click's internal registry so the list always matches what click
@@ -32,7 +32,7 @@ def _available_shells() -> Dict[str, Any]:
                 "fish": shell_completion.FishComplete}
 
 
-def available_shells() -> Tuple[str, ...]:
+def available_shells() -> tuple[str, ...]:
     """Return the tuple of shell names that ethscan can generate completions for."""
     return tuple(sorted(_available_shells().keys()))
 
@@ -71,7 +71,7 @@ def run_completion(
     cli_obj: click.BaseCommand,
     shell: str,
     prog_name: str = DEFAULT_PROG_NAME,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Public entry point: build a structured completion report.
 
     Returns a dictionary with ``shell``, ``prog_name``, and ``script``
@@ -89,14 +89,14 @@ def run_completion(
     }
 
 
-def format_completion_report_json(result: Dict[str, Any]) -> str:
+def format_completion_report_json(result: dict[str, Any]) -> str:
     """Render a completion report as JSON."""
     import json
 
     return json.dumps(result, indent=2, default=str)
 
 
-def format_completion_report_markdown(result: Dict[str, Any]) -> str:
+def format_completion_report_markdown(result: dict[str, Any]) -> str:
     """Render a completion report as Markdown."""
     lines = [
         "# ethscan Shell Completion",
@@ -135,7 +135,7 @@ def format_completion_report_markdown(result: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def format_completion_report_csv(result: Dict[str, Any]) -> str:
+def format_completion_report_csv(result: dict[str, Any]) -> str:
     """Format completion report as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

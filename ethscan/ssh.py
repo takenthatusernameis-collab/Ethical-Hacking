@@ -1,11 +1,12 @@
 """SSH security assessment module for ethscan."""
+from __future__ import annotations
 
 import csv
 import io
 import json
 import socket
 import struct
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 try:
     import paramiko
@@ -130,7 +131,7 @@ def _send_kexinit(sock: socket.socket) -> None:
     """Send a minimal SSH_MSG_KEXINIT packet to trigger server's algorithm list."""
     cookie = b"\x00" * 16
 
-    def name_list(names: List[str]) -> bytes:
+    def name_list(names: list[str]) -> bytes:
         data = ",".join(names).encode("ascii")
         return struct.pack(">I", len(data)) + data
 
@@ -236,7 +237,7 @@ def _read_packet(sock: socket.socket) -> Optional[bytes]:
     return None
 
 
-def _parse_kexinit(payload: bytes) -> Dict[str, List[str]]:
+def _parse_kexinit(payload: bytes) -> dict[str, list[str]]:
     """Parse SSH_MSG_KEXINIT payload and extract algorithm lists."""
     if len(payload) < 17:  # msg_type(1) + cookie(16)
         return {}
@@ -270,7 +271,7 @@ def _parse_kexinit(payload: bytes) -> Dict[str, List[str]]:
     return results
 
 
-def _analyze_algorithms(algorithms: Dict[str, List[str]]) -> Dict[str, Any]:
+def _analyze_algorithms(algorithms: dict[str, list[str]]) -> dict[str, Any]:
     """Analyze algorithm lists for weak/deprecated algorithms."""
     kex = algorithms.get("kex_algorithms", [])
     host_keys = algorithms.get("server_host_key_algorithms", [])
@@ -308,7 +309,7 @@ def _analyze_algorithms(algorithms: Dict[str, List[str]]) -> Dict[str, Any]:
     return findings
 
 
-def _get_host_key_info_paramiko(host: str, port: int, timeout: float) -> Optional[Dict[str, Any]]:
+def _get_host_key_info_paramiko(host: str, port: int, timeout: float) -> Optional[dict[str, Any]]:
     """Get host key fingerprint and type using paramiko."""
     if not PARAMIKO_AVAILABLE:
         return None
@@ -331,7 +332,7 @@ def _get_host_key_info_paramiko(host: str, port: int, timeout: float) -> Optiona
         return None
 
 
-def _get_host_key_info_stdlib(sock: socket.socket) -> Optional[Dict[str, Any]]:
+def _get_host_key_info_stdlib(sock: socket.socket) -> Optional[dict[str, Any]]:
     """Attempt to extract host key info from KEXINIT response (limited without full KEX)."""
     return None
 
@@ -340,7 +341,7 @@ def run_ssh(
     target: str,
     port: Optional[int] = None,
     timeout: float = DEFAULT_TIMEOUT,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run SSH security assessment against a target.
 
     Args:
@@ -355,7 +356,7 @@ def run_ssh(
     host = _normalize_host(target)
     resolved_port = port if port is not None else _extract_port(target)
 
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         "target": target,
         "host": host,
         "port": resolved_port,
@@ -459,12 +460,12 @@ def run_ssh(
     return result
 
 
-def format_ssh_report_json(data: Dict[str, Any]) -> str:
+def format_ssh_report_json(data: dict[str, Any]) -> str:
     """Format SSH assessment results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_ssh_report_markdown(data: Dict[str, Any]) -> str:
+def format_ssh_report_markdown(data: dict[str, Any]) -> str:
     """Format SSH assessment results as Markdown."""
     lines = ["# ethscan SSH Security Assessment Report", ""]
     lines.append(f"- **Target:** {data['target']}")
@@ -483,7 +484,7 @@ def format_ssh_report_markdown(data: Dict[str, Any]) -> str:
         lines.append(f"- **Server Banner:** `{data['banner']}`")
         lines.append("")
 
-    def render_algo_section(title: str, algo_data: Dict[str, List[str]]) -> None:
+    def render_algo_section(title: str, algo_data: dict[str, list[str]]) -> None:
         lines.append(f"## {title}")
         if algo_data["supported"]:
             lines.append("### Supported Algorithms")
@@ -524,7 +525,7 @@ def format_ssh_report_markdown(data: Dict[str, Any]) -> str:
         lines.append("")
 
     return "\n".join(lines)
-def format_ssh_report_csv(data: Dict[str, object]) -> str:
+def format_ssh_report_csv(data: dict[str, object]) -> str:
     """Format SSH security assessment results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

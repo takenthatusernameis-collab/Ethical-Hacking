@@ -1,10 +1,11 @@
 """DNS record enumeration module for ethscan."""
+from __future__ import annotations
 
 import csv
 import io
 import socket
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, List, Optional
+from typing import Optional
 
 try:
     import dns.exception
@@ -42,7 +43,7 @@ def _normalize_domain(target: str) -> str:
     return netloc
 
 
-def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> List[str]:
+def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str]:
     """Resolve A records (IPv4 addresses) for a domain using stdlib.
 
     Args:
@@ -61,7 +62,7 @@ def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> List[str
         return []
 
 
-def resolve_aaaa_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> List[str]:
+def resolve_aaaa_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str]:
     """Resolve AAAA records (IPv6 addresses) for a domain using stdlib.
 
     Args:
@@ -82,7 +83,7 @@ def resolve_aaaa_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> List[
 
 def resolve_with_dnspython(
     domain: str, record_type: str, timeout: float = DEFAULT_TIMEOUT
-) -> List[str]:
+) -> list[str]:
     """Resolve DNS records using dnspython if available.
 
     Args:
@@ -109,11 +110,11 @@ def resolve_with_dnspython(
 
 def run_dns(
     target: str,
-    record_types: Optional[List[str]] = None,
+    record_types: Optional[list[str]] = None,
     server: Optional[str] = None,
     timeout: float = DEFAULT_TIMEOUT,
     workers: int = 1,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Enumerate DNS records for a target domain.
 
     Args:
@@ -155,7 +156,7 @@ def run_dns(
             return rtype, []
         return rtype, resolve_with_dnspython(domain, rtype, timeout)
 
-    results: Dict[str, List[str]] = {}
+    results: dict[str, list[str]] = {}
 
     if workers <= 1:
         for rtype in valid_types:
@@ -179,14 +180,14 @@ def run_dns(
     }
 
 
-def format_dns_report_json(data: Dict[str, object]) -> str:
+def format_dns_report_json(data: dict[str, object]) -> str:
     """Format DNS results as JSON."""
     import json
 
     return json.dumps(data, indent=2, default=str)
 
 
-def format_dns_report_markdown(data: Dict[str, object]) -> str:
+def format_dns_report_markdown(data: dict[str, object]) -> str:
     """Format DNS results as Markdown."""
     records = data["records"]
     lines = ["# ethscan DNS Record Enumeration Report", ""]
@@ -208,7 +209,7 @@ def format_dns_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_dns_report_csv(data: Dict[str, object]) -> str:
+def format_dns_report_csv(data: dict[str, object]) -> str:
     """Format DNS results as CSV.
 
     Emits a header row (``target,domain,record_type,record_value``) followed

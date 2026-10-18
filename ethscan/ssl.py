@@ -1,4 +1,5 @@
 """SSL/TLS certificate inspection module for ethscan."""
+from __future__ import annotations
 
 import csv
 import io

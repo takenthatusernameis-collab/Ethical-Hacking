@@ -1,4 +1,5 @@
 """TLS protocol/cipher enumeration module for ethscan."""
+from __future__ import annotations
 
 import csv
 import io
@@ -7,7 +8,7 @@ import socket
 import ssl
 import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Optional, Union
+from typing import Optional, Union
 
 DEFAULT_PORT = 443
 DEFAULT_TIMEOUT = 5.0
@@ -110,14 +111,14 @@ def _resolve_version(spec: VersionSpec) -> ssl.TLSVersion:
     raise ValueError(f"unknown TLS version: {spec!r}")
 
 
-def _resolve_versions(specs: List[VersionSpec]) -> List[ssl.TLSVersion]:
+def _resolve_versions(specs: list[VersionSpec]) -> list[ssl.TLSVersion]:
     """Resolve a list of TLS version specs, raising for unknown names.
 
     Raises:
         ValueError: If any spec does not name a known TLS version.
     """
-    resolved: List[ssl.TLSVersion] = []
-    unknown: List[str] = []
+    resolved: list[ssl.TLSVersion] = []
+    unknown: list[str] = []
     for spec in specs:
         try:
             resolved.append(_resolve_version(spec))
@@ -204,7 +205,7 @@ def probe_version(
     port: int,
     version: VersionSpec,
     timeout: float = DEFAULT_TIMEOUT,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Test whether a single TLS protocol version is supported.
 
     Args:
@@ -217,7 +218,7 @@ def probe_version(
         Result dict with version name, supported flag, negotiated
         cipher/protocol, and any error encountered.
     """
-    entry: Dict[str, object] = {
+    entry: dict[str, object] = {
         "version": _version_name(version),
         "supported": False,
         "error": None,
@@ -245,7 +246,7 @@ def probe_cipher(
     port: int,
     cipher: str,
     timeout: float = DEFAULT_TIMEOUT,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Test whether a single cipher suite is supported.
 
     Args:
@@ -258,7 +259,7 @@ def probe_cipher(
         Result dict with cipher name, supported flag, negotiated
         protocol version, and any error encountered.
     """
-    entry: Dict[str, object] = {
+    entry: dict[str, object] = {
         "cipher": cipher,
         "supported": False,
         "error": None,
@@ -291,10 +292,10 @@ def enumerate_tls(
     host: str,
     port: int = DEFAULT_PORT,
     timeout: float = DEFAULT_TIMEOUT,
-    versions: Optional[List[VersionSpec]] = None,
-    ciphers: Optional[List[str]] = None,
+    versions: Optional[list[VersionSpec]] = None,
+    ciphers: Optional[list[str]] = None,
     max_workers: int = DEFAULT_WORKERS,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Enumerate supported TLS protocol versions and cipher suites.
 
     Args:
@@ -317,8 +318,8 @@ def enumerate_tls(
     )
     cipher_list = list(COMMON_CIPHERS) if ciphers is None else list(ciphers)
 
-    version_results: List[Dict[str, object]] = []
-    cipher_results: List[Dict[str, object]] = []
+    version_results: list[dict[str, object]] = []
+    cipher_results: list[dict[str, object]] = []
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         version_futures = {
@@ -344,7 +345,7 @@ def enumerate_tls(
         str(result["cipher"]) for result in cipher_results if result["supported"]
     ]
 
-    notes: List[str] = []
+    notes: list[str] = []
     for name in supported_versions:
         if name in OBSOLETE_VERSIONS:
             notes.append(f"Obsolete protocol version supported: {name}")
@@ -372,10 +373,10 @@ def run_tls(
     target: str,
     port: int = DEFAULT_PORT,
     timeout: float = DEFAULT_TIMEOUT,
-    versions: Optional[List[VersionSpec]] = None,
-    ciphers: Optional[List[str]] = None,
+    versions: Optional[list[VersionSpec]] = None,
+    ciphers: Optional[list[str]] = None,
     max_workers: int = DEFAULT_WORKERS,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Enumerate supported TLS protocol versions and cipher suites for ``target``.
 
     Args:
@@ -406,12 +407,12 @@ def run_tls(
     return data
 
 
-def format_tls_report_json(data: Dict[str, object]) -> str:
+def format_tls_report_json(data: dict[str, object]) -> str:
     """Format TLS enumeration results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_tls_report_markdown(data: Dict[str, object]) -> str:
+def format_tls_report_markdown(data: dict[str, object]) -> str:
     """Format TLS enumeration results as Markdown."""
     lines = ["# ethscan TLS Enumeration Report", ""]
     lines.append(f"- **Target:** {data['target']}")
@@ -470,7 +471,7 @@ def format_tls_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_tls_report_csv(data: Dict[str, object]) -> str:
+def format_tls_report_csv(data: dict[str, object]) -> str:
     """Format TLS results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

@@ -3,13 +3,14 @@
 Decodes and analyzes JWT tokens without verifying the signature.
 Stdlib only; fully offline.
 """
+from __future__ import annotations
 
 import base64
 import csv
 import io
 import json
 import time
-from typing import Dict, List, Optional
+from typing import Optional
 
 KNOWN_ALGORITHMS = {
     "none": "none",
@@ -44,7 +45,7 @@ def _b64url_decode(segment: str) -> Optional[bytes]:
         return None
 
 
-def _decode_json_segment(segment: str) -> Optional[Dict]:
+def _decode_json_segment(segment: str) -> Optional[dict]:
     """Decode a base64url-encoded JSON object segment."""
     raw = _b64url_decode(segment)
     if raw is None:
@@ -56,7 +57,7 @@ def _decode_json_segment(segment: str) -> Optional[Dict]:
     return data if isinstance(data, dict) else None
 
 
-def parse_jwt(token: str) -> Dict[str, object]:
+def parse_jwt(token: str) -> dict[str, object]:
     """Parse a JWT into its segments without verifying the signature.
 
     Returns a dict with ``valid_structure``, ``parts``, ``header``,
@@ -98,7 +99,7 @@ def _format_value(value: object) -> str:
     return str(value)
 
 
-def run_jwt(token: str, now: Optional[float] = None) -> Dict[str, object]:
+def run_jwt(token: str, now: Optional[float] = None) -> dict[str, object]:
     """Inspect a JWT (JSON Web Token) without verifying the signature.
 
     Args:
@@ -112,7 +113,7 @@ def run_jwt(token: str, now: Optional[float] = None) -> Dict[str, object]:
     token = token.strip()
     parsed = parse_jwt(token)
 
-    result: Dict[str, object] = {
+    result: dict[str, object] = {
         "valid_structure": parsed["valid_structure"],
         "segment_count": parsed["parts"],
         "has_signature": parsed["has_signature"],
@@ -132,7 +133,7 @@ def run_jwt(token: str, now: Optional[float] = None) -> Dict[str, object]:
         "notes": [],
     }
 
-    findings: List[str] = []
+    findings: list[str] = []
 
     if not parsed["valid_structure"]:
         findings.append(
@@ -203,12 +204,12 @@ def run_jwt(token: str, now: Optional[float] = None) -> Dict[str, object]:
     return result
 
 
-def format_jwt_report_json(data: Dict[str, object]) -> str:
+def format_jwt_report_json(data: dict[str, object]) -> str:
     """Format JWT inspection results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_jwt_report_markdown(data: Dict[str, object]) -> str:
+def format_jwt_report_markdown(data: dict[str, object]) -> str:
     """Format JWT inspection results as Markdown."""
     lines = ["# ethscan JWT Inspection Report", ""]
     lines.append(f"- **Valid Structure:** {'Yes' if data['valid_structure'] else 'No'}")
@@ -288,7 +289,7 @@ def format_jwt_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_jwt_report_csv(data: Dict[str, object]) -> str:
+def format_jwt_report_csv(data: dict[str, object]) -> str:
     """Format JWT inspection results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

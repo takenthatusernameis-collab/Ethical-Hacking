@@ -1,8 +1,9 @@
 """Command-line interface for ethscan."""
+from __future__ import annotations
 
 import json
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import click
 
@@ -362,7 +363,7 @@ def cli(ctx, config_path: Optional[str]) -> None:
     known_commands = sorted(cli.commands.keys())
     for warning in validate_config(config, known_commands=known_commands):
         click.echo(f"Warning: {warning}", err=True)
-    default_map: Dict[str, Dict[str, Any]] = {}
+    default_map: dict[str, dict[str, Any]] = {}
     for name in cli.commands:
         default_map[name] = build_default_map(config, name)
     ctx.default_map = default_map
@@ -2736,10 +2737,9 @@ def cve(
     out_path: Optional[str],
 ) -> None:
     """Query the NVD/CVE API for known vulnerabilities affecting TARGET's services."""
-    services = None
     if services_file:
         with open(services_file, "r", encoding="utf-8") as handle:
-            services = json.load(handle)
+            json.load(handle)
 
     port_list = None
     if not services_file:
@@ -3052,7 +3052,7 @@ def radix(
     Use --diff to compute the set difference between two CIDR sets
     (addresses in --cidrs but not in --diff).
     """
-    cidrs: List[str] = []
+    cidrs: list[str] = []
 
     if cidr_file:
         with open(cidr_file, "r", encoding="utf-8") as f:
@@ -3317,7 +3317,7 @@ def config(
     chosen_format = output_fmt if output_fmt is not None else fmt
 
     if chosen_format == "json":
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "config_file": path,
             "defaults": loaded.get("defaults") or {},
             "commands": loaded.get("commands") or {},
@@ -3960,7 +3960,7 @@ def stale(
     out_path: Optional[str],
 ) -> None:
     """Detect stale DNS records (A/AAAA/CNAME) pointing to deallocated or unresolvable IPs."""
-    all_targets: List[str] = list(targets)
+    all_targets: list[str] = list(targets)
     if target_file:
         all_targets.extend(load_domains_from_file(target_file))
     if not all_targets:

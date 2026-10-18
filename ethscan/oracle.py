@@ -10,19 +10,21 @@ TNS (Transparent Network Substrate) protocol (TCP ``1521``):
 All network access is confined to a single helper, ``_send_recv``, which
 defaults to a raw TCP socket so tests can substitute a local fake server.
 """
+from __future__ import annotations
+
 import csv
 import io
 import json
 import socket
 import struct
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 DEFAULT_PORT = 1521
 DEFAULT_TIMEOUT = 3.0
 DEFAULT_PROBES = ("version",)
 
 
-def _normalize_target(target: str) -> Tuple[str, int]:
+def _normalize_target(target: str) -> tuple[str, int]:
     """Parse a target into a bare host and integer port.
 
     Accepts bare hosts, ``host:port``, and ``oracle://`` / ``tns://`` URLs.
@@ -158,7 +160,7 @@ def _send_recv(
     request: bytes,
     timeout: float,
     connector=None,
-) -> Tuple[Optional[bytes], Optional[str]]:
+) -> tuple[Optional[bytes], Optional[str]]:
     """Send bytes over TCP and return received bytes.
 
     Tests may provide a ``connector`` callable to inject a fake transport.
@@ -173,7 +175,7 @@ def _send_recv(
         with socket.create_connection((host, port), timeout=timeout) as sock:
             if request:
                 sock.sendall(request)
-            chunks: List[bytes] = []
+            chunks: list[bytes] = []
             try:
                 while True:
                     chunk = sock.recv(65536)
@@ -191,7 +193,7 @@ def _send_recv(
         return None, str(exc)
 
 
-def _parse_accept_response(data: bytes) -> Dict[str, Any]:
+def _parse_accept_response(data: bytes) -> dict[str, Any]:
     """Parse the server's Accept response.
 
     The Accept packet has the same TNS header as the Connect packet.
@@ -202,7 +204,7 @@ def _parse_accept_response(data: bytes) -> Dict[str, Any]:
 
     We'll extract that version and return it.
     """
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         "version": None,
         "error": None,
     }
@@ -243,7 +245,7 @@ def _parse_accept_response(data: bytes) -> Dict[str, Any]:
     return result
 
 
-def _parse_refuse_response(data: bytes) -> Dict[str, Any]:
+def _parse_refuse_response(data: bytes) -> dict[str, Any]:
     """Parse the server's Refuse response.
 
     The Refuse packet has the same TNS header.
@@ -256,7 +258,7 @@ def _parse_refuse_response(data: bytes) -> Dict[str, Any]:
 
     We'll extract the error message and try to get an error code if present.
     """
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         "error": None,
         "error_code": None,
     }
@@ -318,9 +320,9 @@ def _parse_refuse_response(data: bytes) -> Dict[str, Any]:
     return result
 
 
-def _assess_version(accept_resp: Dict[str, Any]) -> List[str]:
+def _assess_version(accept_resp: dict[str, Any]) -> list[str]:
     """Assess Accept response and return findings."""
-    findings: List[str] = []
+    findings: list[str] = []
     version = accept_resp.get("version")
     if version:
         findings.append(f"Oracle TNS server version: {version}")
@@ -335,9 +337,9 @@ def run_oracle(
     target: str,
     port: Optional[int] = None,
     timeout: float = DEFAULT_TIMEOUT,
-    probes: Optional[List[str]] = None,
+    probes: Optional[list[str]] = None,
     connector=None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run Oracle reconnaissance probes against *target*.
 
     Args:
@@ -380,7 +382,7 @@ def run_oracle(
 
     norm_probes = [p.strip().lower() for p in probe_list if p.strip()]
 
-    version_data: Dict[str, Any] = {}
+    version_data: dict[str, Any] = {}
     version: Optional[str] = None
     accessible = False
     error: Optional[str] = None
@@ -444,7 +446,7 @@ def run_oracle(
     }
 
 
-def format_oracle_report_json(data: Dict[str, Any]) -> str:
+def format_oracle_report_json(data: dict[str, Any]) -> str:
     """Format Oracle reconnaissance results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
@@ -454,9 +456,9 @@ def _markdown_escape(text: object) -> str:
     return str(text).replace("|", "\\|").replace("\n", " ")
 
 
-def format_oracle_report_markdown(data: Dict[str, Any]) -> str:
+def format_oracle_report_markdown(data: dict[str, Any]) -> str:
     """Format Oracle reconnaissance results as Markdown."""
-    lines: List[str] = []
+    lines: list[str] = []
     lines.append("# Oracle Reconnaissance Report")
     lines.append("")
     lines.append(f"**Target:** {data.get('target', '')}")
@@ -488,7 +490,7 @@ def format_oracle_report_markdown(data: Dict[str, Any]) -> str:
     return "\n".join(lines).rstrip("\n")
 
 
-def format_oracle_report_csv(data: Dict[str, Any]) -> str:
+def format_oracle_report_csv(data: dict[str, Any]) -> str:
     """Format Oracle reconnaissance results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

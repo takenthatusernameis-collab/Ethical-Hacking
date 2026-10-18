@@ -7,6 +7,7 @@ S3 endpoint is also recorded as an informational signal.
 
 Stdlib only.
 """
+from __future__ import annotations
 
 import csv
 import io
@@ -14,7 +15,7 @@ import socket
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Optional, Set
+from typing import Optional
 from urllib.parse import urlparse
 
 DEFAULT_TIMEOUT = 5.0
@@ -147,8 +148,8 @@ def _resolve_s3_endpoint(
 
 
 def _build_bucket_candidates(
-    target: str, wordlist: Optional[List[str]] = None
-) -> List[str]:
+    target: str, wordlist: Optional[list[str]] = None
+) -> list[str]:
     """Build a list of candidate bucket names from the target and wordlist.
 
     Args:
@@ -170,7 +171,7 @@ def _build_bucket_candidates(
     dash_name = base.replace(".", "-")
     apex = base.split(".")[0]
 
-    candidates: List[str] = [dash_name, apex, base]
+    candidates: list[str] = [dash_name, apex, base]
 
     for word in DEFAULT_BUCKET_NAMES:
         candidates.append(f"{dash_name}-{word}")
@@ -185,8 +186,8 @@ def _build_bucket_candidates(
             candidates.append(f"{cleaned}-{dash_name}")
             candidates.append(f"{dash_name}-{cleaned}")
 
-    seen: Set[str] = set()
-    unique: List[str] = []
+    seen: set[str] = set()
+    unique: list[str] = []
     for candidate in candidates:
         key = candidate.lower()
         if key not in seen and key:
@@ -197,7 +198,7 @@ def _build_bucket_candidates(
 
 def check_bucket_public(
     bucket_name: str, region: str = DEFAULT_REGION, timeout: float = DEFAULT_TIMEOUT
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Check if an S3 bucket exists and is publicly readable via HTTP.
 
     Args:
@@ -212,7 +213,7 @@ def check_bucket_public(
     url = _build_s3_url(bucket_name, region)
     dns_ip = _resolve_s3_endpoint(bucket_name, region, timeout)
 
-    result: Dict[str, object] = {
+    result: dict[str, object] = {
         "bucket": bucket_name,
         "region": region,
         "url": url,
@@ -255,11 +256,11 @@ def check_bucket_public(
 
 def run_s3(
     target: str,
-    wordlist: Optional[List[str]] = None,
+    wordlist: Optional[list[str]] = None,
     region: Optional[str] = None,
     timeout: float = DEFAULT_TIMEOUT,
     max_workers: int = DEFAULT_MAX_WORKERS,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Enumerate S3 buckets for a target and detect public access.
 
     Args:
@@ -282,7 +283,7 @@ def run_s3(
     domain = _normalize_target(target)
     candidates = _build_bucket_candidates(target, wordlist)
 
-    notes: List[str] = []
+    notes: list[str] = []
 
     if not candidates:
         notes.append("No bucket candidates could be derived from the target.")
@@ -304,9 +305,9 @@ def run_s3(
 
     regions = list(S3_REGIONS) if region == "all" else [region]
 
-    results: List[Dict[str, object]] = []
+    results: list[dict[str, object]] = []
 
-    def _probe(bucket_name: str, region_to_check: str) -> Dict[str, object]:
+    def _probe(bucket_name: str, region_to_check: str) -> dict[str, object]:
         return check_bucket_public(
             bucket_name, region=region_to_check, timeout=timeout
         )
@@ -349,7 +350,7 @@ def run_s3(
     }
 
 
-def format_s3_report_json(data: Dict[str, object]) -> str:
+def format_s3_report_json(data: dict[str, object]) -> str:
     """Format S3 enumeration results as JSON."""
     import json
 
@@ -361,7 +362,7 @@ def _escape(value: object) -> str:
     return str(value).replace("|", "\\|").replace("\n", " ")
 
 
-def format_s3_report_markdown(data: Dict[str, object]) -> str:
+def format_s3_report_markdown(data: dict[str, object]) -> str:
     """Format S3 enumeration results as Markdown."""
     lines = ["# ethscan S3 Bucket Enumeration Report", ""]
     lines.append(f"- **Target:** {data['target']}")
@@ -421,7 +422,7 @@ def format_s3_report_markdown(data: Dict[str, object]) -> str:
 
     return "\n".join(lines)
 
-def format_s3_report_csv(data: Dict[str, object]) -> str:
+def format_s3_report_csv(data: dict[str, object]) -> str:
     """Format S3 enumeration results as CSV.
 
     Emits a header row plus one row per bucket probe result (including a

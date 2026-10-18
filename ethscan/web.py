@@ -7,10 +7,9 @@ import socket
 import ssl
 import urllib.error
 import urllib.request
-from typing import Dict, List, Tuple
 
 # Recommended security headers and their importance.
-SECURITY_HEADERS: Dict[str, str] = {
+SECURITY_HEADERS: dict[str, str] = {
     "Content-Security-Policy": "Mitigates XSS and injection attacks.",
     "X-Content-Type-Options": "Prevents MIME type sniffing.",
     "X-Frame-Options": "Prevents clickjacking.",
@@ -21,7 +20,7 @@ SECURITY_HEADERS: Dict[str, str] = {
 }
 
 # Headers whose presence may indicate information disclosure.
-INFO_DISCLOSURE_HEADERS: Dict[str, str] = {
+INFO_DISCLOSURE_HEADERS: dict[str, str] = {
     "Server": "Reveals server software version.",
     "X-Powered-By": "Reveals technology stack.",
     "X-ASPNET-Version": "Reveals ASP.NET version.",
@@ -29,7 +28,7 @@ INFO_DISCLOSURE_HEADERS: Dict[str, str] = {
 }
 
 
-def _parse_url(target: str) -> Tuple[str, int, bool]:
+def _parse_url(target: str) -> tuple[str, int, bool]:
     """Parse a target URL into host, port, and secure flag.
 
     Args:
@@ -53,7 +52,7 @@ def _parse_url(target: str) -> Tuple[str, int, bool]:
     return host, port, is_secure
 
 
-def fetch_headers(target: str, timeout: float = 5.0) -> Dict[str, str]:
+def fetch_headers(target: str, timeout: float = 5.0) -> dict[str, str]:
     """Fetch HTTP response headers from ``target``.
 
     Args:
@@ -77,7 +76,7 @@ def fetch_headers(target: str, timeout: float = 5.0) -> Dict[str, str]:
         return {}
 
 
-def check_security_headers(headers: Dict[str, str]) -> Dict[str, object]:
+def check_security_headers(headers: dict[str, str]) -> dict[str, object]:
     """Check which recommended security headers are present or missing.
 
     Args:
@@ -86,8 +85,8 @@ def check_security_headers(headers: Dict[str, str]) -> Dict[str, object]:
     Returns:
         Dict with ``present``, ``missing``, and ``total`` counts.
     """
-    present: List[str] = []
-    missing: List[str] = []
+    present: list[str] = []
+    missing: list[str] = []
     for header, description in SECURITY_HEADERS.items():
         if header.lower() in headers:
             present.append(header)
@@ -102,7 +101,7 @@ def check_security_headers(headers: Dict[str, str]) -> Dict[str, object]:
     }
 
 
-def check_information_disclosure(headers: Dict[str, str]) -> List[Dict[str, str]]:
+def check_information_disclosure(headers: dict[str, str]) -> list[dict[str, str]]:
     """Detect headers that may leak server technology information.
 
     Args:
@@ -111,7 +110,7 @@ def check_information_disclosure(headers: Dict[str, str]) -> List[Dict[str, str]
     Returns:
         List of findings, each with ``header``, ``value``, and ``description``.
     """
-    findings: List[Dict[str, str]] = []
+    findings: list[dict[str, str]] = []
     for header, description in INFO_DISCLOSURE_HEADERS.items():
         if header.lower() in headers:
             findings.append(
@@ -124,7 +123,7 @@ def check_information_disclosure(headers: Dict[str, str]) -> List[Dict[str, str]
     return findings
 
 
-def check_ssl_configuration(host: str, port: int = 443, timeout: float = 5.0) -> Dict[str, object]:
+def check_ssl_configuration(host: str, port: int = 443, timeout: float = 5.0) -> dict[str, object]:
     """Check SSL/TLS certificate validity for ``host``.
 
     Args:
@@ -136,7 +135,7 @@ def check_ssl_configuration(host: str, port: int = 443, timeout: float = 5.0) ->
         Dict with ``valid``, ``subject``, ``issuer``, ``not_after``,
         ``days_remaining``, ``error`` (if any), and ``chain_length``.
     """
-    result: Dict[str, object] = {
+    result: dict[str, object] = {
         "valid": False,
         "subject": None,
         "issuer": None,
@@ -208,7 +207,7 @@ def check_ssl_configuration(host: str, port: int = 443, timeout: float = 5.0) ->
     return result
 
 
-def run_web_checks(target: str, checks: List[str], timeout: float = 5.0) -> Dict[str, object]:
+def run_web_checks(target: str, checks: list[str], timeout: float = 5.0) -> dict[str, object]:
     """Run the requested web application security checks.
 
     Args:
@@ -220,8 +219,8 @@ def run_web_checks(target: str, checks: List[str], timeout: float = 5.0) -> Dict
         Structured results keyed by check name.
     """
     host, port, is_secure = _parse_url(target)
-    results: Dict[str, object] = {"target": target, "host": host, "port": port, "secure": is_secure}
-    headers: Dict[str, str] = {}
+    results: dict[str, object] = {"target": target, "host": host, "port": port, "secure": is_secure}
+    headers: dict[str, str] = {}
 
     needs_headers = any(c in checks for c in ["headers", "info_disclosure", "security_headers"])
     if needs_headers:
@@ -244,12 +243,12 @@ def run_web_checks(target: str, checks: List[str], timeout: float = 5.0) -> Dict
     return results
 
 
-def format_web_report_json(data: Dict[str, object]) -> str:
+def format_web_report_json(data: dict[str, object]) -> str:
     """Format web check results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_web_report_markdown(data: Dict[str, object]) -> str:
+def format_web_report_markdown(data: dict[str, object]) -> str:
     """Format web check results as Markdown."""
     lines = ["# ethscan Web Security Report", ""]
     lines.append(f"- **Target:** {data['target']}")
@@ -309,7 +308,7 @@ def format_web_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_web_report_csv(data: Dict[str, object]) -> str:
+def format_web_report_csv(data: dict[str, object]) -> str:
     """Format web check results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

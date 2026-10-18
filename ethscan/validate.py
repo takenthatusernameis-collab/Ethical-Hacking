@@ -6,18 +6,19 @@ and CIDR network inputs offline, reusing ``parse_port_range`` from
 
 Fully stdlib-only and offline.
 """
+from __future__ import annotations
 
 import csv
 import io
 import ipaddress
 import json
-from typing import Dict, List, Optional
+from typing import Optional
 
 MAX_PORT = 65535
 MAX_EXPANDED_IPS = 256
 
 
-def _validate_port_spec(spec: str) -> Dict[str, object]:
+def _validate_port_spec(spec: str) -> dict[str, object]:
     """Validate and expand a single port specification string.
 
     Accepts comma-separated ports and ranges, e.g. ``"80,443,8000-9000"``.
@@ -36,7 +37,7 @@ def _validate_port_spec(spec: str) -> Dict[str, object]:
         }
 
     parts = [p.strip() for p in spec.split(",") if p.strip()]
-    parsed_ports: List[int] = []
+    parsed_ports: list[int] = []
     for part in parts:
         if "-" in part:
             start_str, end_str = part.split("-", 1)
@@ -109,7 +110,7 @@ def _validate_port_spec(spec: str) -> Dict[str, object]:
     }
 
 
-def _format_network_info(network: ipaddress._BaseNetwork) -> Dict[str, object]:
+def _format_network_info(network: ipaddress._BaseNetwork) -> dict[str, object]:
     """Build a structured network-info dictionary for a network object.
 
     Includes address range, netmask, broadcast, host range, and counts.
@@ -119,7 +120,7 @@ def _format_network_info(network: ipaddress._BaseNetwork) -> Dict[str, object]:
     is_v4 = network.version == 4
     total = network.num_addresses
 
-    info: Dict[str, object] = {
+    info: dict[str, object] = {
         "network_address": str(network.network_address),
         "netmask": str(network.netmask),
         "broadcast_address": str(network.broadcast_address) if is_v4 else None,
@@ -138,7 +139,7 @@ def _format_network_info(network: ipaddress._BaseNetwork) -> Dict[str, object]:
     return info
 
 
-def _validate_cidr(spec: str) -> Dict[str, object]:
+def _validate_cidr(spec: str) -> dict[str, object]:
     """Validate a single CIDR/network specification string.
 
     Accepts CIDR notation (``192.168.1.0/24``) or bare IPs (``192.168.1.1``,
@@ -185,7 +186,7 @@ def _validate_cidr(spec: str) -> Dict[str, object]:
 def run_validate(
     ports: Optional[str] = None,
     cidrs: Optional[str] = None,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Validate and expand port specifications and CIDR inputs.
 
     Args:
@@ -199,19 +200,19 @@ def run_validate(
         Structured results with per-spec validation, expanded values, a
         summary, and notes.
     """
-    port_results: List[Dict[str, object]] = []
+    port_results: list[dict[str, object]] = []
     if ports:
         port_results.append(_validate_port_spec(ports))
 
-    cidr_results: List[Dict[str, object]] = []
-    cidr_specs: List[str] = []
+    cidr_results: list[dict[str, object]] = []
+    cidr_specs: list[str] = []
     if cidrs:
         cidr_specs = [s.strip() for s in cidrs.split(",") if s.strip()]
         for spec in cidr_specs:
             cidr_results.append(_validate_cidr(spec))
 
     total_valid = all(r["valid"] for r in port_results + cidr_results) if (port_results or cidr_results) else False
-    notes: List[str] = []
+    notes: list[str] = []
     if not port_results and not cidr_results:
         notes.append("No port or CIDR specifications provided; nothing to validate.")
     if port_results:
@@ -241,7 +242,7 @@ def run_validate(
     }
 
 
-def format_validate_report_json(data: Dict[str, object]) -> str:
+def format_validate_report_json(data: dict[str, object]) -> str:
     """Format validation results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
@@ -251,12 +252,12 @@ def _escape(value: str) -> str:
     return value.replace("|", "\\|")
 
 
-def _ports_to_ranges(ports: List[int]) -> str:
+def _ports_to_ranges(ports: list[int]) -> str:
     """Render a list of ports as compact range strings (e.g. ``80,443,8000-8002``)."""
     if not ports:
         return ""
     sorted_ports = sorted(ports)
-    ranges: List[str] = []
+    ranges: list[str] = []
     start = prev = sorted_ports[0]
     for port in sorted_ports[1:]:
         if port == prev + 1:
@@ -276,7 +277,7 @@ def _ports_to_ranges(ports: List[int]) -> str:
 
 
 
-def format_validate_report_csv(data: Dict[str, object]) -> str:
+def format_validate_report_csv(data: dict[str, object]) -> str:
     """Format validation results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)
@@ -307,9 +308,9 @@ def format_validate_report_csv(data: Dict[str, object]) -> str:
         writer.writerow(["cidr", spec, valid, detail])
     return output.getvalue().rstrip("\r\n")
 
-def format_validate_report_markdown(data: Dict[str, object]) -> str:
+def format_validate_report_markdown(data: dict[str, object]) -> str:
     """Format validation results as Markdown."""
-    lines: List[str] = ["# ethscan Validate Report", ""]
+    lines: list[str] = ["# ethscan Validate Report", ""]
 
     summary = data.get("summary", {}) or {}
     lines.append("## Summary")

@@ -1,10 +1,11 @@
 """Subdomain enumeration module for ethscan."""
+from __future__ import annotations
 
 import csv
 import io
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Optional
 from urllib.parse import urlparse
 
 try:
@@ -48,7 +49,7 @@ DEFAULT_SUBDOMAINS = [
 DEFAULT_RECURSIVE_DEPTH = 2
 
 
-def load_subdomain_wordlist(path: str) -> List[str]:
+def load_subdomain_wordlist(path: str) -> list[str]:
     """Load a subdomain wordlist from file, one subdomain per line.
 
     Args:
@@ -83,7 +84,7 @@ def _normalize_domain(target: str) -> str:
 
 def resolve_subdomain(
     subdomain: str, domain: str, timeout: float = 2.0, resolver: Optional[str] = None
-) -> Tuple[str, Optional[str]]:
+) -> tuple[str, Optional[str]]:
     """Resolve a single subdomain to an IP address.
 
     Args:
@@ -116,13 +117,13 @@ def resolve_subdomain(
 
 def run_subdomains(
     target: str,
-    subdomains: Optional[List[str]] = None,
+    subdomains: Optional[list[str]] = None,
     timeout: float = 2.0,
     max_workers: int = 50,
     resolver: Optional[str] = None,
     recursive: bool = False,
     max_depth: int = DEFAULT_RECURSIVE_DEPTH,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Enumerate subdomains for a target domain.
 
     Args:
@@ -140,15 +141,15 @@ def run_subdomains(
     domain = _normalize_domain(target)
     labels = subdomains if subdomains is not None else DEFAULT_SUBDOMAINS
 
-    all_results: List[Dict[str, object]] = []
-    seen_hostnames: Set[str] = set()
-    per_depth_results: List[Dict[str, object]] = []
+    all_results: list[dict[str, object]] = []
+    seen_hostnames: set[str] = set()
+    per_depth_results: list[dict[str, object]] = []
 
     def _enumerate_depth(
-        current_labels: List[str], base_domain: str, depth: int
-    ) -> List[Dict[str, object]]:
+        current_labels: list[str], base_domain: str, depth: int
+    ) -> list[dict[str, object]]:
         """Enumerate subdomains at a specific depth."""
-        depth_results: List[Dict[str, object]] = []
+        depth_results: list[dict[str, object]] = []
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_label = {
                 executor.submit(
@@ -203,7 +204,7 @@ def run_subdomains(
 
             # Use the same labels for each base domain
             depth_labels = labels
-            depth_results: List[Dict[str, object]] = []
+            depth_results: list[dict[str, object]] = []
 
             for base_domain in base_domains:
                 base_results = _enumerate_depth(depth_labels, base_domain, depth)
@@ -246,14 +247,14 @@ def run_subdomains(
     }
 
 
-def format_subdomains_report_json(data: Dict[str, object]) -> str:
+def format_subdomains_report_json(data: dict[str, object]) -> str:
     """Format subdomain results as JSON."""
     import json
 
     return json.dumps(data, indent=2, default=str)
 
 
-def format_subdomains_report_markdown(data: Dict[str, object]) -> str:
+def format_subdomains_report_markdown(data: dict[str, object]) -> str:
     """Format subdomain results as Markdown."""
     lines = ["# ethscan Subdomain Enumeration Report", ""]
     lines.append(f"- **Target:** {data['target']}")
@@ -307,7 +308,7 @@ def format_subdomains_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_subdomains_report_csv(data: Dict[str, object]) -> str:
+def format_subdomains_report_csv(data: dict[str, object]) -> str:
     """Format subdomain results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

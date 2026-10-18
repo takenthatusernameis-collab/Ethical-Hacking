@@ -10,18 +10,20 @@ client/server protocol (TCP 3306):
 All network access is confined to a single helper, ``_send_recv``, which
 defaults to a raw TCP socket so tests can substitute a local fake server.
 """
+from __future__ import annotations
+
 import csv
 import io
 import json
 import socket
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 DEFAULT_PORT = 3306
 DEFAULT_TIMEOUT = 3.0
 DEFAULT_PROBES = ("handshake",)
 
 
-def _normalize_target(target: str) -> Tuple[str, int]:
+def _normalize_target(target: str) -> tuple[str, int]:
     """Parse a target into a bare host and integer port.
 
     Accepts bare hosts, ``host:port``, and ``mysql://host:port`` URLs.
@@ -65,7 +67,7 @@ def _send_recv(
     request: bytes,
     timeout: float,
     connector=None,
-) -> Tuple[Optional[bytes], Optional[str]]:
+) -> tuple[Optional[bytes], Optional[str]]:
     """Send bytes over TCP and return received bytes.
 
     Tests may provide a ``connector`` callable to inject a fake transport.
@@ -89,7 +91,7 @@ def _send_recv(
         return None, str(exc)
 
 
-def _parse_handshake(data: bytes) -> Dict[str, Any]:
+def _parse_handshake(data: bytes) -> dict[str, Any]:
     """Parse MySQL initial handshake packet (Protocol::HandshakeV10).
 
     Returns a dict with version/protocol/capabilities/charset/status if
@@ -114,7 +116,7 @@ def _parse_handshake(data: bytes) -> Dict[str, Any]:
     pos += 1
 
     # Null-terminated server version string
-    server_version_bytes: List[bytearray] = []
+    server_version_bytes: list[bytearray] = []
     while pos < len(payload):
         b = payload[pos]
         pos += 1
@@ -281,9 +283,9 @@ def _parse_handshake(data: bytes) -> Dict[str, Any]:
     }
 
 
-def _assess_handshake(handshake: Dict[str, Any]) -> List[str]:
+def _assess_handshake(handshake: dict[str, Any]) -> list[str]:
     """Assess handshake data and return findings."""
-    findings: List[str] = []
+    findings: list[str] = []
     version = handshake.get("server_version", "")
     if version:
         findings.append(f"MySQL/MariaDB server version: {version}")
@@ -312,9 +314,9 @@ def run_mysql(
     target: str,
     port: Optional[int] = None,
     timeout: float = DEFAULT_TIMEOUT,
-    probes: Optional[List[str]] = None,
+    probes: Optional[list[str]] = None,
     connector=None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run MySQL reconnaissance probes against a target.
 
     Args:
@@ -358,9 +360,9 @@ def run_mysql(
         }
 
     # Normalize probe names
-    norm_probes = [p.strip().lower() for p in probe_list if p.strip()]
+    [p.strip().lower() for p in probe_list if p.strip()]
 
-    handshake_data: Dict[str, Any] = {}
+    handshake_data: dict[str, Any] = {}
     accessible = False
     error: Optional[str] = None
     version: Optional[str] = None
@@ -398,14 +400,14 @@ def run_mysql(
     }
 
 
-def format_mysql_report_json(data: Dict[str, Any]) -> str:
+def format_mysql_report_json(data: dict[str, Any]) -> str:
     """Format MySQL reconnaissance results as JSON."""
     return json.dumps(data, indent=2, ensure_ascii=False)
 
 
-def format_mysql_report_markdown(data: Dict[str, Any]) -> str:
+def format_mysql_report_markdown(data: dict[str, Any]) -> str:
     """Format MySQL reconnaissance results as Markdown."""
-    lines: List[str] = []
+    lines: list[str] = []
     lines.append("# MySQL Reconnaissance Report")
     lines.append("")
     lines.append(f"**Target:** {data.get('target', '')}")
@@ -452,7 +454,7 @@ def format_mysql_report_markdown(data: Dict[str, Any]) -> str:
     return "\n".join(lines).rstrip("\n")
 
 
-def format_mysql_report_csv(data: Dict[str, Any]) -> str:
+def format_mysql_report_csv(data: dict[str, Any]) -> str:
     """Format MySQL reconnaissance results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

@@ -5,11 +5,12 @@ merging overlapping and adjacent (supernettable) networks into compact
 aggregate ranges. Fully offline and stdlib-only (uses the ``ipaddress``
 module).
 """
+from __future__ import annotations
 
 import csv
 import io
 import ipaddress
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
 
 def _normalize_cidr(value: str) -> str:
@@ -31,9 +32,9 @@ def _is_ipv4(network: ipaddress._BaseNetwork) -> bool:
     return network.version == 4
 
 
-def _parse_networks(values: List[str]) -> List[ipaddress._BaseNetwork]:
+def _parse_networks(values: list[str]) -> list[ipaddress._BaseNetwork]:
     """Parse and normalize a list of CIDR strings into network objects."""
-    networks: List[ipaddress._BaseNetwork] = []
+    networks: list[ipaddress._BaseNetwork] = []
     for raw in values:
         normalized = _normalize_cidr(raw)
         networks.append(ipaddress.ip_network(normalized, strict=False))
@@ -48,7 +49,7 @@ def _nth_bit(addr, bit_index: int, is_v4: bool) -> int:
     return (int(addr) >> (max_bits - 1 - bit_index)) & 1
 
 
-def _common_prefix_length(networks: List[ipaddress._BaseNetwork]) -> int:
+def _common_prefix_length(networks: list[ipaddress._BaseNetwork]) -> int:
     """Return the longest common prefix length shared by all networks."""
     if not networks:
         return 0
@@ -74,7 +75,7 @@ def _contains_ip(network: ipaddress._BaseNetwork, ip: str) -> bool:
     return addr in network
 
 
-def _contains_in_merged(merged: List[ipaddress._BaseNetwork], ip: str) -> Tuple[bool, Optional[str]]:
+def _contains_in_merged(merged: list[ipaddress._BaseNetwork], ip: str) -> tuple[bool, Optional[str]]:
     """Check whether an IP address belongs to any of the merged networks.
 
     Returns a tuple of (in_network, matched_network_str_or_None).
@@ -90,9 +91,9 @@ def _contains_in_merged(merged: List[ipaddress._BaseNetwork], ip: str) -> Tuple[
 
 
 def _subtract_networks(
-    minuend: List[ipaddress._BaseNetwork],
-    subtrahend: List[ipaddress._BaseNetwork],
-) -> List[ipaddress._BaseNetwork]:
+    minuend: list[ipaddress._BaseNetwork],
+    subtrahend: list[ipaddress._BaseNetwork],
+) -> list[ipaddress._BaseNetwork]:
     """Subtract subtrahend networks from minuend networks.
 
     Returns a list of networks representing the address ranges in minuend
@@ -103,7 +104,7 @@ def _subtract_networks(
     if not subtrahend:
         return sorted(minuend, key=lambda n: n.network_address)
 
-    result: List[ipaddress._BaseNetwork] = []
+    result: list[ipaddress._BaseNetwork] = []
     for m_net in sorted(minuend, key=lambda n: n.network_address):
         remaining = [m_net]
         for s_net in sorted(subtrahend, key=lambda n: n.network_address):
@@ -129,7 +130,7 @@ def _subtract_networks(
     return sorted(result, key=lambda n: n.network_address)
 
 
-def _merge_networks(networks: List[ipaddress._BaseNetwork]) -> List[ipaddress._BaseNetwork]:
+def _merge_networks(networks: list[ipaddress._BaseNetwork]) -> list[ipaddress._BaseNetwork]:
     """Merge overlapping and adjacent (supernettable) networks.
 
     Networks that overlap or can be combined into a single supernet are
@@ -139,7 +140,7 @@ def _merge_networks(networks: List[ipaddress._BaseNetwork]) -> List[ipaddress._B
     if not networks:
         return []
     sorted_nets = sorted(networks, key=lambda n: (n.network_address, -n.prefixlen))
-    merged: List[ipaddress._BaseNetwork] = []
+    merged: list[ipaddress._BaseNetwork] = []
     for net in sorted_nets:
         if not merged:
             merged.append(net)
@@ -177,10 +178,10 @@ def _common_prefix_of_pair(start, end, is_v4: bool) -> int:
 
 
 def _build_radix_node(
-    networks: List[ipaddress._BaseNetwork],
+    networks: list[ipaddress._BaseNetwork],
     depth: int = 0,
     max_depth: int = 64,
-) -> Optional[Dict[str, object]]:
+) -> Optional[dict[str, object]]:
     """Recursively build a radix tree node for a list of networks.
 
     Returns a dict with keys:
@@ -198,7 +199,7 @@ def _build_radix_node(
 
     # Keep each network as-is; the common prefix is used only to compute the
     # node's aggregate range and to partition children by the next bit.
-    deduped: List[ipaddress._BaseNetwork] = []
+    deduped: list[ipaddress._BaseNetwork] = []
     seen = set()
     for net in networks:
         key = (str(net.network_address), net.prefixlen)
@@ -219,7 +220,7 @@ def _build_radix_node(
     except ValueError:
         prefix_str = f"{start}/{range_prefix}"
 
-    node: Dict[str, object] = {
+    node: dict[str, object] = {
         "prefix": prefix_str,
         "start_address": str(start),
         "end_address": str(end),
@@ -233,8 +234,8 @@ def _build_radix_node(
     # have not reached the host prefix. Partition by the next bit after the
     # common prefix.
     if len(deduped) > 1 and prefix_len < max_bits:
-        left_nets: List[ipaddress._BaseNetwork] = []
-        right_nets: List[ipaddress._BaseNetwork] = []
+        left_nets: list[ipaddress._BaseNetwork] = []
+        right_nets: list[ipaddress._BaseNetwork] = []
         for net in networks:
             bit = _nth_bit(net.network_address, prefix_len, is_v4)
             if bit == 0:
@@ -251,7 +252,7 @@ def _build_radix_node(
     return node
 
 
-def _format_network_info(network: ipaddress._BaseNetwork) -> Dict[str, object]:
+def _format_network_info(network: ipaddress._BaseNetwork) -> dict[str, object]:
     """Build structured network info dict for a single network."""
     is_v4 = _is_ipv4(network)
     if is_v4:
@@ -297,12 +298,12 @@ def _format_network_info(network: ipaddress._BaseNetwork) -> Dict[str, object]:
 
 
 def run_radix(
-    cidrs: List[str],
+    cidrs: list[str],
     merge: bool = True,
     max_depth: int = 64,
     contains: Optional[str] = None,
-    diff: Optional[List[str]] = None,
-) -> Dict[str, object]:
+    diff: Optional[list[str]] = None,
+) -> dict[str, object]:
     """Build a radix tree visualization over a set of CIDR networks.
 
     Args:
@@ -334,7 +335,7 @@ def run_radix(
         else 0.0
     )
 
-    result: Dict[str, object] = {
+    result: dict[str, object] = {
         "cidrs": cidrs,
         "network_count": len(parsed),
         "merged_network_count": len(merged),
@@ -377,7 +378,7 @@ def run_radix(
     return result
 
 
-def format_radix_report_json(data: Dict[str, object]) -> str:
+def format_radix_report_json(data: dict[str, object]) -> str:
     """Format radix results as JSON."""
     import json
     return json.dumps(data, indent=2, default=str)
@@ -388,7 +389,7 @@ def _escape(value: str) -> str:
     return value.replace("|", "\\|")
 
 
-def _render_node_md(node: Dict[str, object], lines: List[str], depth: int = 0) -> None:
+def _render_node_md(node: dict[str, object], lines: list[str], depth: int = 0) -> None:
     """Recursively render a radix node as Markdown lines."""
     indent = "  " * depth
     prefix = node.get("prefix", "")
@@ -405,7 +406,7 @@ def _render_node_md(node: Dict[str, object], lines: List[str], depth: int = 0) -
             _render_node_md(child_node, lines, depth + 2)
 
 
-def format_radix_report_markdown(data: Dict[str, object]) -> str:
+def format_radix_report_markdown(data: dict[str, object]) -> str:
     """Format radix results as Markdown."""
     lines = ["# ethscan Radix Tree Report", ""]
     lines.append(f"- **Networks Provided:** {data['network_count']}")
@@ -472,7 +473,7 @@ def format_radix_report_markdown(data: Dict[str, object]) -> str:
 
     return "\n".join(lines)
 
-def format_radix_report_csv(data: Dict[str, object]) -> str:
+def format_radix_report_csv(data: dict[str, object]) -> str:
     """Format radix tree results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

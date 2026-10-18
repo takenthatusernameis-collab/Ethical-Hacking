@@ -3,11 +3,12 @@
 Runs multiple reconnaissance modules (subdomains, dns, whois, geo, trace)
 in sequence and produces a consolidated report.
 """
+from __future__ import annotations
 
 import csv
 import io
 import json
-from typing import Dict, List, Optional
+from typing import Optional
 
 from ethscan.dns import run_dns
 from ethscan.geo import run_geo
@@ -30,9 +31,9 @@ def _normalize_domain(target: str) -> str:
 
 def run_recon(
     target: str,
-    modules: Optional[List[str]] = None,
-    subdomains_wordlist: Optional[List[str]] = None,
-    dns_record_types: Optional[List[str]] = None,
+    modules: Optional[list[str]] = None,
+    subdomains_wordlist: Optional[list[str]] = None,
+    dns_record_types: Optional[list[str]] = None,
     dns_server: Optional[str] = None,
     whois_server: str = "whois.iana.org",
     whois_port: int = 43,
@@ -45,7 +46,7 @@ def run_recon(
     timeout: float = 5.0,
     max_workers: int = 50,
     resolver: Optional[str] = None,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Run multiple reconnaissance modules against a target.
 
     Args:
@@ -72,7 +73,7 @@ def run_recon(
     domain = _normalize_domain(target)
     enabled_modules = modules if modules is not None else DEFAULT_RECON_MODULES
 
-    results: Dict[str, object] = {
+    results: dict[str, object] = {
         "target": target,
         "domain": domain,
         "modules_run": [],
@@ -156,7 +157,7 @@ def run_recon(
     return results
 
 
-def format_recon_report_json(data: Dict[str, object]) -> str:
+def format_recon_report_json(data: dict[str, object]) -> str:
     """Format recon results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
@@ -166,7 +167,7 @@ def _markdown_escape(text: object) -> str:
     return str(text).replace("|", "\\|").replace("\n", " ")
 
 
-def format_recon_report_markdown(data: Dict[str, object]) -> str:
+def format_recon_report_markdown(data: dict[str, object]) -> str:
     """Format recon results as Markdown."""
     lines = ["# ethscan Reconnaissance Report", ""]
     lines.append(f"- **Target:** {data['target']}")
@@ -323,7 +324,7 @@ def format_recon_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_recon_report_csv(data: Dict[str, object]) -> str:
+def format_recon_report_csv(data: dict[str, object]) -> str:
     """Format recon results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

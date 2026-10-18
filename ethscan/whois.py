@@ -1,10 +1,11 @@
 """WHOIS lookup module for ethscan."""
+from __future__ import annotations
 
 import csv
 import io
 import re
 import socket
-from typing import Dict, List, Optional
+from typing import Optional
 from urllib.parse import urlparse
 
 DEFAULT_WHOIS_SERVER = "whois.iana.org"
@@ -57,7 +58,7 @@ def query_whois(
         sock.close()
 
 
-def parse_whois(raw: str) -> Dict[str, object]:
+def parse_whois(raw: str) -> dict[str, object]:
     """Parse key fields from a raw WHOIS response.
 
     Args:
@@ -67,7 +68,7 @@ def parse_whois(raw: str) -> Dict[str, object]:
         Dictionary with parsed fields: registrar, creation_date, expiration_date,
         nameservers, registrant_org, status_codes, raw.
     """
-    result: Dict[str, object] = {
+    result: dict[str, object] = {
         "registrar": None,
         "creation_date": None,
         "expiration_date": None,
@@ -160,7 +161,7 @@ def run_whois(
     timeout: float = DEFAULT_TIMEOUT,
     recursive: bool = False,
     max_depth: int = DEFAULT_RECURSIVE_DEPTH,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Perform a WHOIS lookup and return parsed results.
 
     Args:
@@ -181,7 +182,7 @@ def run_whois(
     raw = query_whois(target, server=server, port=port, timeout=timeout)
     parsed = parse_whois(raw)
 
-    result: Dict[str, object] = {
+    result: dict[str, object] = {
         "target": target,
         "server": server,
         "port": port,
@@ -195,8 +196,8 @@ def run_whois(
     if not recursive:
         return result
 
-    hops: List[Dict[str, object]] = []
-    seen_raw: List[str] = [raw]
+    hops: list[dict[str, object]] = []
+    seen_raw: list[str] = [raw]
     current_server = server
     current_port = port
 
@@ -226,7 +227,7 @@ def run_whois(
             break
 
         hop_parsed = parse_whois(hop_raw)
-        hop_entry: Dict[str, object] = {
+        hop_entry: dict[str, object] = {
             "depth": depth,
             "server": referral,
             "port": current_port,
@@ -251,14 +252,14 @@ def run_whois(
     return result
 
 
-def format_whois_report_json(data: Dict[str, object]) -> str:
+def format_whois_report_json(data: dict[str, object]) -> str:
     """Format WHOIS results as JSON."""
     import json
 
     return json.dumps(data, indent=2, default=str)
 
 
-def format_whois_report_markdown(data: Dict[str, object]) -> str:
+def format_whois_report_markdown(data: dict[str, object]) -> str:
     """Format WHOIS results as Markdown."""
     parsed = data["parsed"]
     lines = ["# ethscan WHOIS Lookup Report", ""]
@@ -325,7 +326,7 @@ def format_whois_report_markdown(data: Dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_whois_report_csv(data: Dict[str, object]) -> str:
+def format_whois_report_csv(data: dict[str, object]) -> str:
     """Format WHOIS results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)
