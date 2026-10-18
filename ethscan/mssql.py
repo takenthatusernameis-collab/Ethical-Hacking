@@ -385,7 +385,7 @@ def _parse_prelogin_response(data: bytes) -> dict[str, Any]:
     # Parse TDS header
     #   Type (1 byte), Flags (1 byte), Length (2 bytes), Channel ID (2 bytes), Packet Number (1 byte), Window (2 bytes)
     try:
-        tds_type, flags, msg_len, channel_id, packet_num, window = struct.unpack(
+        tds_type, _flags, msg_len, _channel_id, _packet_num, _window = struct.unpack(
             "!BBHHBH", data[:9]
         )
     except struct.error:

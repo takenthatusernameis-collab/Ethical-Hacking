@@ -214,7 +214,7 @@ def _parse_accept_response(data: bytes) -> dict[str, Any]:
 
     # Parse TNS header
     try:
-        pkt_len, chk_sum, pkt_type, reserved, hdr_chk_sum = struct.unpack(
+        _pkt_len, _chk_sum, pkt_type, _reserved, _hdr_chk_sum = struct.unpack(
             "!HHBBH", data[:8]
         )
     except struct.error:
@@ -268,7 +268,7 @@ def _parse_refuse_response(data: bytes) -> dict[str, Any]:
 
     # Parse TNS header
     try:
-        pkt_len, chk_sum, pkt_type, reserved, hdr_chk_sum = struct.unpack(
+        _pkt_len, _chk_sum, pkt_type, _reserved, _hdr_chk_sum = struct.unpack(
             "!HHBBH", data[:8]
         )
     except struct.error:
