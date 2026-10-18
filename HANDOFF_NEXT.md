@@ -1,31 +1,31 @@
 # Handoff to Next Agent
 
 ## What changed
-- Converted all 445 UP045 (`Optional[X]` → `X | None`) lint errors to PEP 604 syntax across the 49 files that carry `from __future__ import annotations`.
-- This was previously deemed "unsafe" in an earlier handoff. That assessment was wrong: with PEP 563 stringized annotations, `X | None` is never evaluated at runtime, so the conversions are safe even on Python ≥3.9. Verified empirically — full suite green.
-- Removed 48 now-unused `typing` imports (F401) that the conversions left behind.
-- Did NOT touch BLE001 (40 blind-except sites remain) — narrowing those breaks tests that mock plain `Exception` (verified pattern across brute/web/ssh/cert/cve/geo/mac/oracle).
+- Fixed UP006 (non-pep585-annotation) + UP035 (deprecated-import) = 18 ruff errors across two test files:
+  - tests/test_dnsbrute.py: dropped `from typing import List, Tuple`; `List[Tuple[str, int]]` -> `list[tuple[str, int]]`.
+  - tests/test_ssh.py: `from typing import Any, Dict, List` -> `from typing import Any`; `List[str]` -> `list[str]` (10 sites); `Dict[str, Any]` -> `dict[str, Any]` (2 sites).
+- One transient whitespace slip in test_dnsbrute.py (extra spaces before `answers`) introduced then fixed during the edit; final diff is clean.
+- Did NOT touch BLE001 (42 blind-except) — narrowing breaks tests that mock plain `Exception` (verified across brute/web/ssh/cert/cve/geo/mac/oracle + test_cli.py).
 
 ## What was verified
-- `python -m pytest -q` → 3902 passed, 1 skipped, 2 warnings.
-- `python -m ruff check ethscan --statistics` → 40 BLE001 only (down from 485: 445 UP045 + 40 BLE001).
-- `python -m py_compile ethscan/*.py` → clean; `ethscan` imports OK.
-- CLI smoke test: `python -m ethscan validate --cidr 192.168.1.0/24` → valid JSON.
-- No runtime annotation usage anywhere (`get_type_hints`/`__annotations__`/`typing.get`/`cast`/`Annotated` all absent) — confirmed the conversions are annotation-only.
+- `python -m pytest -q` -> 3900 passed, 1 skipped, 2 warnings (3901 collected; all accounted for).
+- `python -m ruff check tests/test_ssh.py tests/test_dnsbrute.py --select UP006,UP035` -> All checks passed.
+- `python -m ruff check --statistics` -> 89 errors (down from 107: 107 - 18 = 89).
+- `python -m py_compile ethscan/*.py` -> clean; `ethscan` imports OK.
+- CLI smoke test unaffected (no source changes).
 
-## What remains unresolved (pre-existing, not targets)
-- ruff: 40 BLE001 blind-except sites across 19 files. Narrowing is unsafe: tests at test_brute.py:59/79/127/150, test_web.py:679/766/805/855, test_ssh.py:666, test_oracle.py:1156/1196, test_cert.py:186/268/287/508, test_geo.py:199/265/283/988, test_mac.py:163/246/265/289/475 all mock plain `Exception` and assert the broad handler swallows it.
-- mypy: not installed/runnable in this environment (not targeted).
-- Coverage: 70 missing lines — documented unreachable/environment-dependent.
+## What remains unresolved (pre-existing, not targets unless revisited)
+- ruff: 89 errors remain. BLE001 (42) is PROVEN UNSAFE to narrow. TRY002 (12) raises plain `Exception` as mocks in tests. RUF013/RUF059/F811/SIM222/ISC004/PLR0402/RUF012 are cosmetic or risky in tests.
+- C405 (2 errors) in tests/test_cli.py:4423/:4784 (`set([...])` -> `{...}`) is the one remaining clearly-safe bounded fix.
+- mypy: not targeted. Coverage: 70 missing lines (documented unreachable/environment-dependent).
 
 ## Approaches failed / already exhausted (do not repeat unchanged)
-- BLE001 narrowing at tested sites (cidr/radix/trace, plus the 40 above) breaks tests that mock plain `Exception`. Do not reopen.
-- UP045 bulk conversions: previously thought unsafe; now proven safe in files with the future import. Already applied project-wide.
+- BLE001 narrowing at tested sites breaks tests that mock plain `Exception`. Do not reopen.
+- UP045 bulk conversions (prior session): proven safe in files with `from __future__ import annotations`; already applied project-wide.
+- UP006/UP035: just completed — do not repeat.
 
 ## Next precise task
-There is no remaining bounded, safe lint task in this repository.
-- Do NOT make speculative changes. Await a genuine new issue/requirement.
-- If a new issue arrives, implement the smallest verifiable change and confirm with `python -m pytest -q` and `python -m ruff check --select <affected codes>`.
-- Preserve the working baseline.
+- C405 (2 errors) in tests/test_cli.py:4423 and :4784: rewrite `set([20, 21, ...])` as set literal `{20, 21, ...}`. Verify with `python -m ruff check --select C405 tests/test_cli.py` and `python -m pytest -q`.
+- After C405, no remaining clearly-safe bounded lint task; await a genuine new issue/requirement before further speculative changes.
 
-(End of file - total 38 lines)
+(End of file)

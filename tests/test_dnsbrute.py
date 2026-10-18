@@ -5,7 +5,6 @@ import io
 import socket
 import struct
 import threading
-from typing import List, Tuple
 
 import pytest
 
@@ -36,7 +35,7 @@ def _encode_dns_name(name: str) -> bytes:
 
 
 def _build_dns_response(
-    query_id: int, rcode: int, answers: List[Tuple[str, int]]
+    query_id: int, rcode: int, answers: list[tuple[str, int]]
 ) -> bytes:
     header = struct.pack(
         ">HHHHHH", query_id, 0x8000 | rcode, 0, len(answers), 0, 0

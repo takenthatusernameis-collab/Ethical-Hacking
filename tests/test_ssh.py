@@ -3,7 +3,7 @@
 import socket
 import struct
 import types
-from typing import Any, Dict, List
+from typing import Any
 from unittest.mock import MagicMock
 
 from ethscan.ssh import (
@@ -173,7 +173,7 @@ def test_parse_kexinit_with_algorithms() -> None:
 
     cookie = b"\x00" * 16
 
-    def name_list(names: List[str]) -> bytes:
+    def name_list(names: list[str]) -> bytes:
         data = ",".join(names).encode("ascii")
         return struct.pack(">I", len(data)) + data
 
@@ -452,19 +452,19 @@ def test_format_ssh_report_csv_pipe_escaping() -> None:
 
 
 def _kexinit_response(
-    kex: List[str] = None,
-    host_keys: List[str] = None,
-    ciphers_c2s: List[str] = None,
-    ciphers_s2c: List[str] = None,
-    macs_c2s: List[str] = None,
-    macs_s2c: List[str] = None,
-    compressions: List[str] = None,
-    languages: List[str] = None,
+    kex: list[str] = None,
+    host_keys: list[str] = None,
+    ciphers_c2s: list[str] = None,
+    ciphers_s2c: list[str] = None,
+    macs_c2s: list[str] = None,
+    macs_s2c: list[str] = None,
+    compressions: list[str] = None,
+    languages: list[str] = None,
 ) -> bytes:
     """Build a valid SSH_MSG_KEXINIT server response (msg_type + cookie + name lists)."""
     cookie = b"\x00" * 16
 
-    def name_list(names: List[str]) -> bytes:
+    def name_list(names: list[str]) -> bytes:
         data = ",".join(names).encode("ascii")
         return struct.pack(">I", len(data)) + data
 
@@ -482,8 +482,8 @@ def _kexinit_response(
     return payload
 
 
-def _ssh_result(**overrides: Any) -> Dict[str, Any]:
-    data: Dict[str, Any] = {
+def _ssh_result(**overrides: Any) -> dict[str, Any]:
+    data: dict[str, Any] = {
         "target": "example.com",
         "host": "example.com",
         "port": 22,
