@@ -1,12 +1,14 @@
 # Handoff to Next Agent
 
 ## What changed
-- No code changes made. Working tree clean (HEAD: 9c43623).
+- No code changes made. All 5 candidate BLE001 narrowings were applied then reverted. Working tree clean (HEAD: 9c43623).
 
 ## What was verified
-- python -m pytest -q → 3902 passed, 1 skipped (green baseline).
-- python -m py_compile ethscan/*.py → clean; imports OK.
-- Inspected BLE001 sites in ethscan/cert.py:89 and ethscan/cve.py:97; both wrap multiple statements (network fetch + decode + JSON parsing). Narrowing exception types would change runtime behavior - not safe.
+- Audited all 42 BLE001 blind-except sites (prior handoff only inspected 2).
+- Attempted safe narrowing of 5 single-statement handlers (cidr.py:127, radix.py:122/154, trace.py:49/83).
+- All 5 reverted: tests mock the underlying calls (`address_exclude`, `socket.gethostbyname`) to raise plain `Exception` and assert the blind except swallows it. Narrowing broke 3 tests.
+- python -m pytest -q → 3902 passed, 1 skipped (baseline restored).
+- python -m ruff check ethscan --statistics → 489 errors unchanged.
 
 ## Repository completeness review
 - All 52 CLI commands invoked at CLI level in tests/test_cli.py.
@@ -14,13 +16,13 @@
 - Prior safe lint work exhausted (S112 converted; S110: 2 load-bearing in redis.py).
 
 ## What remains unresolved
-- ruff: 489 errors (445 UP045, 42 BLE001, 2 S110) - mostly unsafe to auto-fix; no bounded safe targets.
+- ruff: 489 errors (445 UP045, 42 BLE001, 2 S110). BLE001 narrowing proven unsafe (breaks 3 tests). No bounded safe targets.
 - mypy: ~522 errors in 42 files — not targeted.
 - Coverage: 70 missing lines (documented unreachable/environment-dependent).
 
 ## Approaches failed / already exhausted
+- BLE001 narrowing at 5 single-statement sites: FAILS — test suite injects plain Exception; narrowing breaks 3 tests. Reverted.
 - try-except-pass → contextlib.suppress: exhausted (S110 load-bearing in redis.py).
-- BLE001 narrowing at cert.py/cve.py: unsafe (multiple statements).
 - Bulk lint/type/coverage work: out of scope/unsafe.
 
 ## Next precise task

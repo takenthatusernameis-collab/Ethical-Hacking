@@ -6,7 +6,7 @@
 - Repository complete: all 52 CLI commands have CLI-level tests; README matches cli.py commands exactly.
 
 ## Repository state
-- Lint: 489 errors (445 UP045, 42 BLE001, 2 S110). Remaining BLE001 sites in cert.py/cve.py wrap multiple statements; narrowing would change runtime behavior. S110 in redis.py are load-bearing. No safe bounded lint tasks.
+- Lint: 489 errors (445 UP045, 42 BLE001, 2 S110). BLE001 narrowing attempted and proven unsafe (breaks 3 tests; see HANDOFF_NEXT.md). No safe bounded lint tasks.
 - No untested commands, no stale docs.
 
 ## Next precise task
