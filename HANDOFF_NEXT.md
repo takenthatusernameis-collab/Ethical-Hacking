@@ -25,7 +25,7 @@
 - UP006/UP035: just completed — do not repeat.
 
 ## Next precise task
-- C405 (2 errors) in tests/test_cli.py:4423 and :4784: rewrite `set([20, 21, ...])` as set literal `{20, 21, ...}`. Verify with `python -m ruff check --select C405 tests/test_cli.py` and `python -m pytest -q`.
+- C405 (2 errors) RESOLVED in tests/test_cli.py:4423 and :4784: rewrite `set([20, 21, ...])` as set literal `{20, 21, ...}`. Verify with `python -m ruff check --select C405 tests/test_cli.py` and `python -m pytest -q`.
 - After C405, no remaining clearly-safe bounded lint task; await a genuine new issue/requirement before further speculative changes.
 
 (End of file)

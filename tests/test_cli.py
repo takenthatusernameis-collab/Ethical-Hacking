@@ -4420,7 +4420,7 @@ def test_scan_profile_full(monkeypatch) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["scan", "--target", "example.com", "--profile", "full"])
     assert result.exit_code == 0
-    assert len(called_args["ports"]) == 1024 + 24 - len(set(range(1, 1025)) & set([20, 21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445, 993, 995, 1723, 3306, 3389, 5432, 5900, 8080, 8443, 8888]))
+    assert len(called_args["ports"]) == 1024 + 24 - len(set(range(1, 1025)) & {20, 21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445, 993, 995, 1723, 3306, 3389, 5432, 5900, 8080, 8443, 8888})
     assert called_args["timeout"] == 2.0
     assert called_args["max_workers"] == 50
 
@@ -4781,7 +4781,7 @@ def test_service_profile_full(monkeypatch) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["service", "--target", "example.com", "--profile", "full"])
     assert result.exit_code == 0
-    assert len(called_args["ports"]) == 1024 + 24 - len(set(range(1, 1025)) & set([20, 21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445, 993, 995, 1723, 3306, 3389, 5432, 5900, 8080, 8443, 8888]))
+    assert len(called_args["ports"]) == 1024 + 24 - len(set(range(1, 1025)) & {20, 21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445, 993, 995, 1723, 3306, 3389, 5432, 5900, 8080, 8443, 8888})
     assert called_args["timeout"] == 2.0
     assert called_args["max_workers"] == 50
 

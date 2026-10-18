@@ -11,7 +11,7 @@
 - No S110 errors remaining.
 
 ## Next precise task
-- C405 (2 errors) in tests/test_cli.py:4423 and :4784: rewrite `set([20, 21, 22, ...])` as set literal `{20, 21, 22, ...}`.
+- C405 (2 errors) RESOLVED in tests/test_cli.py:4423 and :4784: rewrite `set([20, 21, 22, ...])` as set literal `{20, 21, 22, ...}`.
 - Safe, bounded, mechanical. Verify with `python -m ruff check --select C405 tests/test_cli.py` and `python -m pytest -q`.
 - Do NOT reopen BLE001 narrowing (proven to break tests: tests mock plain `Exception` and assert the broad handler swallows it).
 - After C405, no remaining clearly-safe bounded lint task; await a genuine new issue/requirement.
