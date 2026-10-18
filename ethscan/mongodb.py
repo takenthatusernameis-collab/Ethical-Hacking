@@ -204,7 +204,7 @@ def _parse_buildinfo_response(data: bytes) -> dict[str, Any]:
                     try:
                         value = doc_data[str_start+4:str_start+4+str_len].decode('utf-8', errors='replace')
                         result[field.decode('utf-8')] = value
-                    except:
+                    except Exception:
                         pass
 
     return result
