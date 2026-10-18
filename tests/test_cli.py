@@ -16581,9 +16581,7 @@ def test_geo_output_format_csv_recursive_hops(monkeypatch) -> None:
     import csv as _csv
 
     rows = list(_csv.reader(result.output.strip().splitlines()))
-    assert rows[0] == "target,ip,country,region,city,lat,lon,isp,org,as_number,reverse_dns,cached,offline_fallback,hop,host,response_type,rtt_avg_ms".split(
-        ","
-    )
+    assert rows[0] == ["target", "ip", "country", "region", "city", "lat", "lon", "isp", "org", "as_number", "reverse_dns", "cached", "offline_fallback", "hop", "host", "response_type", "rtt_avg_ms"]
     # primary row + two hop rows
     assert len(rows) == 4
     # primary row: 13 geo cols + 4 empty hop transport cols

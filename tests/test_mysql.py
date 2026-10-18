@@ -784,7 +784,6 @@ def test_parse_handshake_payload_empty_after_trim():
     # we need payload non-empty but pos >= len(payload) - impossible since pos=0, len>0
     # But maybe payload is empty bytes? No. Alternative: craft so that after some ops?
     # Maybe not directly hittable as written; but let’s ensure code path exists
-    pass
 
 
 def test_parse_handshake_salt1_len_bounds():

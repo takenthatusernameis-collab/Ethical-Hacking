@@ -930,7 +930,6 @@ def test_parse_accept_response_corrupted_header():
     # struct.unpack('!HHBBH') needs 8 bytes - all good. To get struct.error we need odd cases?
     # Actually for 8 bytes it's always fine. Let us simulate by passing data that when parsed in context gives struct error?
     # Or just test the case where payload[:2] doesn't unpack as H if payload is empty? We already did.
-    pass
 
 
 def test_parse_refuse_response_bad_header():
@@ -1226,4 +1225,3 @@ def test_parse_refuse_response_decode_exception_direct():
     oracle._parse_refuse_response(header + payload)
     # This won't hit it. Let us patch _parse_refuse_response's internal behavior by
     # creating a custom test that forces the except
-    pass
