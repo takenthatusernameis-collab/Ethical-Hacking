@@ -13,7 +13,6 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Optional
 
 DEFAULT_API_URL = "https://api.macvendors.com/"
 DEFAULT_TIMEOUT = 5.0
@@ -35,7 +34,7 @@ def _normalize_target(target: str) -> str:
     return normalized
 
 
-def _resolve_host(host: str) -> Optional[str]:
+def _resolve_host(host: str) -> str | None:
     """Resolve a hostname to an IPv4 address, returning None on failure."""
     try:
         import socket
@@ -75,8 +74,8 @@ def _is_cache_valid(entry: dict, ttl: int = CACHE_TTL) -> bool:
 
 
 def _fetch_mac_data(
-    mac: str, timeout: float = DEFAULT_TIMEOUT, api_url: Optional[str] = None
-) -> Optional[dict]:
+    mac: str, timeout: float = DEFAULT_TIMEOUT, api_url: str | None = None
+) -> dict | None:
     """Fetch MAC vendor data from the public OUI API."""
     base = (api_url or DEFAULT_API_URL).rstrip("/") + "/"
     url = f"{base}{mac}"
@@ -94,7 +93,7 @@ def _get_cached_or_fetch(
     timeout: float,
     use_cache: bool,
     offline_fallback: bool,
-    api_url: Optional[str],
+    api_url: str | None,
 ) -> dict[str, object]:
     """Get MAC vendor data from cache or fetch from API."""
     cache = _load_cache() if use_cache else {}
@@ -138,7 +137,7 @@ def run_mac(
     timeout: float = DEFAULT_TIMEOUT,
     use_cache: bool = True,
     offline_fallback: bool = True,
-    api_url: Optional[str] = None,
+    api_url: str | None = None,
 ) -> dict[str, object]:
     """Look up the vendor for a MAC address (target).
 

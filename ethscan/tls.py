@@ -8,7 +8,7 @@ import socket
 import ssl
 import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional, Union
+from typing import Union
 
 DEFAULT_PORT = 443
 DEFAULT_TIMEOUT = 5.0
@@ -133,8 +133,8 @@ def _resolve_versions(specs: list[VersionSpec]) -> list[ssl.TLSVersion]:
 
 
 def _build_context(
-    version: Optional[ssl.TLSVersion] = None,
-    cipher: Optional[str] = None,
+    version: ssl.TLSVersion | None = None,
+    cipher: str | None = None,
 ) -> ssl.SSLContext:
     """Build an SSL context pinned to an optional version and/or cipher.
 
@@ -292,8 +292,8 @@ def enumerate_tls(
     host: str,
     port: int = DEFAULT_PORT,
     timeout: float = DEFAULT_TIMEOUT,
-    versions: Optional[list[VersionSpec]] = None,
-    ciphers: Optional[list[str]] = None,
+    versions: list[VersionSpec] | None = None,
+    ciphers: list[str] | None = None,
     max_workers: int = DEFAULT_WORKERS,
 ) -> dict[str, object]:
     """Enumerate supported TLS protocol versions and cipher suites.
@@ -373,8 +373,8 @@ def run_tls(
     target: str,
     port: int = DEFAULT_PORT,
     timeout: float = DEFAULT_TIMEOUT,
-    versions: Optional[list[VersionSpec]] = None,
-    ciphers: Optional[list[str]] = None,
+    versions: list[VersionSpec] | None = None,
+    ciphers: list[str] | None = None,
     max_workers: int = DEFAULT_WORKERS,
 ) -> dict[str, object]:
     """Enumerate supported TLS protocol versions and cipher suites for ``target``.

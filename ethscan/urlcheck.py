@@ -10,7 +10,6 @@ from __future__ import annotations
 import csv
 import io
 import json
-from typing import Optional
 
 from ethscan.fuzz import (
     run_fuzz,
@@ -30,7 +29,7 @@ def _normalize_url(target: str) -> str:
 def run_urlcheck(
     target: str,
     checks: list[str],
-    wordlist: Optional[list[str]] = None,
+    wordlist: list[str] | None = None,
     fuzz_paths: bool = True,
     port: int = 443,
     timeout: float = 5.0,

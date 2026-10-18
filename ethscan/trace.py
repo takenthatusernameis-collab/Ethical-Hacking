@@ -7,7 +7,7 @@ import io
 import json
 import socket
 import time
-from typing import Any, Optional
+from typing import Any
 
 DEFAULT_PORT = 80
 DEFAULT_MAX_HOPS = 30
@@ -37,7 +37,7 @@ def _normalize_host(target: str) -> str:
     return t
 
 
-def _fmt_rtt(rtt_ms: Optional[float]) -> str:
+def _fmt_rtt(rtt_ms: float | None) -> str:
     if rtt_ms is None:
         return "N/A"
     return f"{rtt_ms:.2f}ms"

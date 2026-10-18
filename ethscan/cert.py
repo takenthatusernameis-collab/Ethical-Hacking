@@ -14,7 +14,6 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Optional
 
 DEFAULT_API_URL = "https://crt.sh/"
 DEFAULT_TIMEOUT = 10.0
@@ -35,7 +34,7 @@ def _normalize_target(target: str) -> str:
     return host
 
 
-def _resolve_host(host: str) -> Optional[str]:
+def _resolve_host(host: str) -> str | None:
     """Resolve a hostname to an IPv4 address, returning None on failure."""
     try:
         return socket.gethostbyname(host)
@@ -73,8 +72,8 @@ def _is_cache_valid(entry: dict, ttl: int = CACHE_TTL) -> bool:
 
 
 def _fetch_cert_data(
-    domain: str, timeout: float = DEFAULT_TIMEOUT, api_url: Optional[str] = None
-) -> Optional[dict]:
+    domain: str, timeout: float = DEFAULT_TIMEOUT, api_url: str | None = None
+) -> dict | None:
     """Fetch certificate transparency data from the public API."""
     base = (api_url or DEFAULT_API_URL).rstrip("/") + "/"
     url = f"{base}?q=%25.{domain}&output=json"
@@ -95,7 +94,7 @@ def _get_cached_or_fetch(
     timeout: float,
     use_cache: bool,
     offline_fallback: bool,
-    api_url: Optional[str],
+    api_url: str | None,
 ) -> dict[str, object]:
     """Get cert data from cache or fetch from API."""
     cache = _load_cache() if use_cache else {}
@@ -153,7 +152,7 @@ def run_cert(
     timeout: float = DEFAULT_TIMEOUT,
     use_cache: bool = True,
     offline_fallback: bool = True,
-    api_url: Optional[str] = None,
+    api_url: str | None = None,
 ) -> dict[str, object]:
     """Search Certificate Transparency logs for TARGET.
 

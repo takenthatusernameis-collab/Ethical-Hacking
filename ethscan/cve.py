@@ -13,7 +13,6 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Optional
 
 DEFAULT_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 DEFAULT_TIMEOUT = 10.0
@@ -41,7 +40,7 @@ def _normalize_host(target: str) -> str:
     return (parsed.hostname or parsed.netloc or "").lower()
 
 
-def _resolve_host(host: str) -> Optional[str]:
+def _resolve_host(host: str) -> str | None:
     """Resolve a hostname to an IPv4 address, returning None on failure."""
     try:
         return socket.gethostbyname(host)
@@ -82,8 +81,8 @@ def _is_cache_valid(entry: dict, ttl: int = CACHE_TTL) -> bool:
 
 
 def _fetch_cve_data(
-    cve_id: str, timeout: float = DEFAULT_TIMEOUT, api_url: Optional[str] = None
-) -> Optional[dict]:
+    cve_id: str, timeout: float = DEFAULT_TIMEOUT, api_url: str | None = None
+) -> dict | None:
     """Fetch CVE details from the public NVD API."""
     base = (api_url or DEFAULT_API_URL).rstrip("/")
     url = f"{base}?cveId={urllib.parse.quote(cve_id)}"
@@ -103,7 +102,7 @@ def _get_cached_or_fetch(
     timeout: float,
     use_cache: bool,
     offline_fallback: bool,
-    api_url: Optional[str],
+    api_url: str | None,
 ) -> dict[str, object]:
     """Get CVE data from cache or fetch from API."""
     cache = _load_cache() if use_cache else {}
@@ -193,7 +192,7 @@ _SEVERITY_RANK: dict[str, int] = {
 }
 
 
-def _severity_rank(level: Optional[str]) -> Optional[int]:
+def _severity_rank(level: str | None) -> int | None:
     """Return the numeric rank for a severity label, or None if unknown.
 
     Higher rank means higher severity: critical=3, high=2, medium=1, low=0.
@@ -205,17 +204,17 @@ def _severity_rank(level: Optional[str]) -> Optional[int]:
 
 def run_cve(
     target: str,
-    services_file: Optional[str] = None,
+    services_file: str | None = None,
     timeout: float = DEFAULT_TIMEOUT,
     service_timeout: float = 3.0,
     workers: int = 50,
     use_cache: bool = True,
     offline_fallback: bool = True,
-    api_url: Optional[str] = None,
-    severity: Optional[str] = None,
-    min_severity: Optional[str] = None,
-    ports: Optional[list[int]] = None,
-    profile: Optional[str] = None,
+    api_url: str | None = None,
+    severity: str | None = None,
+    min_severity: str | None = None,
+    ports: list[int] | None = None,
+    profile: str | None = None,
 ) -> dict[str, object]:
     """Query the NVD/CVE API for known vulnerabilities affecting TARGET's services.
 
@@ -368,7 +367,7 @@ def run_cve(
     }
 
 
-def _lookup_cve_id(product: str, version: str) -> Optional[str]:
+def _lookup_cve_id(product: str, version: str) -> str | None:
     """Return a representative CVE id for a product/version, if known."""
     product_lower = str(product).lower()
     version_lower = str(version).lower()

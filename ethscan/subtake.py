@@ -10,7 +10,6 @@ import csv
 import io
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional
 from urllib.parse import urlparse
 
 try:
@@ -278,7 +277,7 @@ def _normalize_domain(target: str) -> str:
     return parsed.netloc.lower()
 
 
-def resolve_cname(hostname: str, timeout: float = 2.0, resolver: Optional[str] = None) -> Optional[str]:
+def resolve_cname(hostname: str, timeout: float = 2.0, resolver: str | None = None) -> str | None:
     """Resolve CNAME record for a hostname.
 
     Args:
@@ -312,7 +311,7 @@ def resolve_cname(hostname: str, timeout: float = 2.0, resolver: Optional[str] =
     return None
 
 
-def resolve_a_records(hostname: str, timeout: float = 2.0, resolver: Optional[str] = None) -> list[str]:
+def resolve_a_records(hostname: str, timeout: float = 2.0, resolver: str | None = None) -> list[str]:
     """Resolve A records (IPv4 addresses) for a hostname."""
     ips: list[str] = []
     if resolver and DNS_AVAILABLE:
@@ -336,7 +335,7 @@ def resolve_a_records(hostname: str, timeout: float = 2.0, resolver: Optional[st
     return ips
 
 
-def resolve_aaaa_records(hostname: str, timeout: float = 2.0, resolver: Optional[str] = None) -> list[str]:
+def resolve_aaaa_records(hostname: str, timeout: float = 2.0, resolver: str | None = None) -> list[str]:
     """Resolve AAAA records (IPv6 addresses) for a hostname."""
     ips: list[str] = []
     if resolver and DNS_AVAILABLE:
@@ -360,7 +359,7 @@ def resolve_aaaa_records(hostname: str, timeout: float = 2.0, resolver: Optional
     return ips
 
 
-def check_takeover_signature(cname: str, timeout: float = 5.0) -> Optional[dict[str, object]]:
+def check_takeover_signature(cname: str, timeout: float = 5.0) -> dict[str, object] | None:
     """Check if a CNAME points to a vulnerable service with takeover signature.
 
     Args:
@@ -383,7 +382,7 @@ def check_takeover_signature(cname: str, timeout: float = 5.0) -> Optional[dict[
     return None
 
 
-def check_http_fingerprint(hostname: str, timeout: float = 5.0) -> Optional[str]:
+def check_http_fingerprint(hostname: str, timeout: float = 5.0) -> str | None:
     """Check HTTP response for takeover fingerprint.
 
     Args:
@@ -410,10 +409,10 @@ def check_http_fingerprint(hostname: str, timeout: float = 5.0) -> Optional[str]
 
 def run_subtake(
     target: str,
-    subdomains: Optional[list[str]] = None,
+    subdomains: list[str] | None = None,
     timeout: float = 2.0,
     max_workers: int = 50,
-    resolver: Optional[str] = None,
+    resolver: str | None = None,
     http_timeout: float = 5.0,
 ) -> dict[str, object]:
     """Detect subdomain takeover vulnerabilities.

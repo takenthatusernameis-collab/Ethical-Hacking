@@ -10,7 +10,6 @@ import csv
 import hashlib
 import hmac
 import io
-from typing import Optional
 
 # Algorithms supported natively by hashlib on this platform.
 # Maps canonical key -> hashlib algorithm name.
@@ -179,9 +178,9 @@ def _compute_pbkdf2_hash(
 def _compute_password_hash(
     password: str,
     algorithm: str,
-    salt: Optional[str] = None,
-    pepper: Optional[str] = None,
-    iterations: Optional[int] = None,
+    salt: str | None = None,
+    pepper: str | None = None,
+    iterations: int | None = None,
 ) -> str:
     """Compute a (optionally salted/peppered/iterated) hash for a password.
 
@@ -251,7 +250,7 @@ def _compute_password_hash(
     return _compute_hash(password, algorithm)
 
 
-def _hashlib_name(algorithm: str) -> Optional[str]:
+def _hashlib_name(algorithm: str) -> str | None:
     """Return the hashlib algorithm name for a canonical key, or None."""
     return _HASHLIB_ALGORITHMS.get(algorithm)
 
@@ -296,7 +295,7 @@ _DIGEST_LENGTHS: dict[str, int] = {
 }
 
 
-def _infer_algorithm(digest: str) -> Optional[str]:
+def _infer_algorithm(digest: str) -> str | None:
     """Infer the algorithm from a hex digest's length.
 
     Args:
@@ -324,10 +323,10 @@ def _infer_algorithm(digest: str) -> Optional[str]:
 def run_check(
     password: str,
     digest: str,
-    algorithm: Optional[str] = None,
-    salt: Optional[str] = None,
-    pepper: Optional[str] = None,
-    iterations: Optional[int] = None,
+    algorithm: str | None = None,
+    salt: str | None = None,
+    pepper: str | None = None,
+    iterations: int | None = None,
 ) -> dict[str, object]:
     """Compare a plaintext password against a known hash digest.
 
@@ -348,10 +347,10 @@ def run_check(
         ``salt``, ``pepper``, ``iterations``, ``salt_value``, ``computed``,
         ``match``, ``error`` fields.
     """
-    error: Optional[str] = None
-    chosen_algorithm: Optional[str] = None
-    computed: Optional[str] = None
-    match: Optional[bool] = None
+    error: str | None = None
+    chosen_algorithm: str | None = None
+    computed: str | None = None
+    match: bool | None = None
 
     try:
         if algorithm:
@@ -393,9 +392,9 @@ def run_check(
 def run_hash(
     passwords: list[str],
     algorithm: str = "md5",
-    salt: Optional[str] = None,
-    pepper: Optional[str] = None,
-    iterations: Optional[int] = None,
+    salt: str | None = None,
+    pepper: str | None = None,
+    iterations: int | None = None,
 ) -> dict[str, object]:
     """Generate hashes for a list of passwords.
 

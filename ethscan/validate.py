@@ -12,7 +12,6 @@ import csv
 import io
 import ipaddress
 import json
-from typing import Optional
 
 MAX_PORT = 65535
 MAX_EXPANDED_IPS = 256
@@ -184,8 +183,8 @@ def _validate_cidr(spec: str) -> dict[str, object]:
 
 
 def run_validate(
-    ports: Optional[str] = None,
-    cidrs: Optional[str] = None,
+    ports: str | None = None,
+    cidrs: str | None = None,
 ) -> dict[str, object]:
     """Validate and expand port specifications and CIDR inputs.
 

@@ -32,7 +32,7 @@ from __future__ import annotations
 import csv
 import io
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 try:
     import yaml
@@ -56,7 +56,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
 }
 
 
-def _candidate_paths(explicit: Optional[str] = None) -> list[Path]:
+def _candidate_paths(explicit: str | None = None) -> list[Path]:
     """Return the list of config file paths to search.
 
     When ``explicit`` is provided it is prepended to the standard candidates.
@@ -75,7 +75,7 @@ def _candidate_paths(explicit: Optional[str] = None) -> list[Path]:
     return paths
 
 
-def find_config_file(explicit: Optional[str] = None) -> Optional[Path]:
+def find_config_file(explicit: str | None = None) -> Path | None:
     """Locate the first existing config file.
 
     Args:
@@ -93,7 +93,7 @@ def find_config_file(explicit: Optional[str] = None) -> Optional[Path]:
     return None
 
 
-def load_config(explicit: Optional[str] = None) -> dict[str, Any]:
+def load_config(explicit: str | None = None) -> dict[str, Any]:
     """Load and validate the ethscan configuration.
 
     Args:
@@ -219,7 +219,7 @@ def build_default_map(
     return _merge(defaults, overrides)
 
 
-def config_path_string(config: dict[str, Any]) -> Optional[str]:
+def config_path_string(config: dict[str, Any]) -> str | None:
     """Return the path of the loaded config file, or None."""
     path = config.get("_path")
     if isinstance(path, str):
@@ -227,7 +227,7 @@ def config_path_string(config: dict[str, Any]) -> Optional[str]:
     return None
 
 
-def validate_config(config: dict[str, Any], known_commands: Optional[list[str]] = None) -> list[str]:
+def validate_config(config: dict[str, Any], known_commands: list[str] | None = None) -> list[str]:
     """Validate a config dict and return a list of human-readable warnings.
 
     An empty list means the config is structurally valid. Warnings are

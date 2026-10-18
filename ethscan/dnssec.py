@@ -5,7 +5,6 @@ import csv
 import io
 import socket
 import struct
-from typing import Optional
 
 try:
     import dns.dnssec
@@ -161,7 +160,7 @@ def _query_udp(
     query: bytes,
     timeout: float = DEFAULT_TIMEOUT,
     port: int = DNS_PORT,
-) -> Optional[bytes]:
+) -> bytes | None:
     """Send a DNS query via UDP and return the response."""
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
@@ -178,7 +177,7 @@ def _query_tcp(
     query: bytes,
     timeout: float = DEFAULT_TIMEOUT,
     port: int = DNS_PORT,
-) -> Optional[bytes]:
+) -> bytes | None:
     """Send a DNS query via TCP and return the response."""
     try:
         with socket.create_connection((nameserver, port), timeout=timeout) as sock:
@@ -373,7 +372,7 @@ def _parse_ds_response(data: bytes, domain: str) -> dict[str, object]:
 
 def _query_dnskey_dnspython(
     domain: str,
-    server: Optional[str] = None,
+    server: str | None = None,
     timeout: float = DEFAULT_TIMEOUT,
 ) -> dict[str, object]:
     """Query DNSKEY records using dnspython."""
@@ -405,7 +404,7 @@ def _query_dnskey_dnspython(
 
 def _query_ds_dnspython(
     domain: str,
-    server: Optional[str] = None,
+    server: str | None = None,
     timeout: float = DEFAULT_TIMEOUT,
 ) -> dict[str, object]:
     """Query DS records using dnspython."""
@@ -437,7 +436,7 @@ def _query_ds_dnspython(
 
 def run_dnssec(
     target: str,
-    server: Optional[str] = None,
+    server: str | None = None,
     timeout: float = DEFAULT_TIMEOUT,
 ) -> dict[str, object]:
     """Validate DNSSEC for a target domain.

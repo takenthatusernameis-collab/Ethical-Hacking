@@ -10,7 +10,6 @@ import csv
 import io
 import json
 import time
-from typing import Optional
 
 KNOWN_ALGORITHMS = {
     "none": "none",
@@ -34,7 +33,7 @@ STANDARD_CLAIMS = ("iss", "sub", "aud", "exp", "iat", "nbf", "jti")
 LONG_LIVED_THRESHOLD_SECONDS = 365 * 24 * 3600  # 1 year
 
 
-def _b64url_decode(segment: str) -> Optional[bytes]:
+def _b64url_decode(segment: str) -> bytes | None:
     """Decode a base64url-encoded JWT segment."""
     if not segment:
         return None
@@ -45,7 +44,7 @@ def _b64url_decode(segment: str) -> Optional[bytes]:
         return None
 
 
-def _decode_json_segment(segment: str) -> Optional[dict]:
+def _decode_json_segment(segment: str) -> dict | None:
     """Decode a base64url-encoded JSON object segment."""
     raw = _b64url_decode(segment)
     if raw is None:
@@ -99,7 +98,7 @@ def _format_value(value: object) -> str:
     return str(value)
 
 
-def run_jwt(token: str, now: Optional[float] = None) -> dict[str, object]:
+def run_jwt(token: str, now: float | None = None) -> dict[str, object]:
     """Inspect a JWT (JSON Web Token) without verifying the signature.
 
     Args:

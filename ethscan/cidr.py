@@ -11,7 +11,6 @@ from __future__ import annotations
 import csv
 import io
 import ipaddress
-from typing import Optional
 
 
 def _normalize_cidr(value: str) -> str:
@@ -137,8 +136,8 @@ def _subtract_networks(
 
 def run_cidr(
     cidr: str,
-    contains: Optional[str] = None,
-    diff: Optional[str] = None,
+    contains: str | None = None,
+    diff: str | None = None,
 ) -> dict[str, object]:
     """Compute network calculations for a CIDR.
 

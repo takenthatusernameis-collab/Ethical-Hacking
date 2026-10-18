@@ -21,7 +21,7 @@ import csv
 import io
 import json
 import socket
-from typing import Any, Optional
+from typing import Any
 
 DEFAULT_PORT = 6379
 DEFAULT_TIMEOUT = 3.0
@@ -90,7 +90,7 @@ def _parse_resp_simple_string(line: bytes) -> str:
     return line.decode("utf-8", errors="replace")
 
 
-def _parse_resp_bulk_string(data: bytes) -> tuple[Optional[str], int]:
+def _parse_resp_bulk_string(data: bytes) -> tuple[str | None, int]:
     """Parse a bulk string starting at data[0:].
 
     Returns (value, consumed_bytes). For null bulk string ($-1\r\n), returns (None, 5).
@@ -115,7 +115,7 @@ def _parse_resp_bulk_string(data: bytes) -> tuple[Optional[str], int]:
         return None, 0
 
 
-def _parse_resp(data: bytes) -> tuple[Optional[Any], int]:
+def _parse_resp(data: bytes) -> tuple[Any | None, int]:
     """Parse a RESP response starting from data.
 
     Returns (parsed_value, consumed_bytes). Handles simple strings (+), integers (:),
@@ -180,7 +180,7 @@ def _send_recv(
     request: bytes,
     timeout: float,
     connector=None,
-) -> tuple[Optional[bytes], Optional[str]]:
+) -> tuple[bytes | None, str | None]:
     """Send a TCP request and receive the response (injectable for tests)."""
     if connector is not None:
         return connector(host, port, request, timeout)
@@ -260,9 +260,9 @@ def _assess_dangerous(config: dict[str, str]) -> list[str]:
 
 def run_redis(
     target: str,
-    port: Optional[int] = None,
+    port: int | None = None,
     timeout: float = DEFAULT_TIMEOUT,
-    probes: Optional[list[str]] = None,
+    probes: list[str] | None = None,
     connector=None,
 ) -> dict[str, Any]:
     """Run Redis reconnaissance against *target*.

@@ -5,7 +5,6 @@ import csv
 import io
 import socket
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional
 
 try:
     import dns.exception
@@ -110,8 +109,8 @@ def resolve_with_dnspython(
 
 def run_dns(
     target: str,
-    record_types: Optional[list[str]] = None,
-    server: Optional[str] = None,
+    record_types: list[str] | None = None,
+    server: str | None = None,
     timeout: float = DEFAULT_TIMEOUT,
     workers: int = 1,
 ) -> dict[str, object]:

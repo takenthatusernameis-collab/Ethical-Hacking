@@ -5,7 +5,6 @@ import csv
 import io
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional
 from urllib.parse import urlparse
 
 try:
@@ -83,8 +82,8 @@ def _normalize_domain(target: str) -> str:
 
 
 def resolve_subdomain(
-    subdomain: str, domain: str, timeout: float = 2.0, resolver: Optional[str] = None
-) -> tuple[str, Optional[str]]:
+    subdomain: str, domain: str, timeout: float = 2.0, resolver: str | None = None
+) -> tuple[str, str | None]:
     """Resolve a single subdomain to an IP address.
 
     Args:
@@ -117,10 +116,10 @@ def resolve_subdomain(
 
 def run_subdomains(
     target: str,
-    subdomains: Optional[list[str]] = None,
+    subdomains: list[str] | None = None,
     timeout: float = 2.0,
     max_workers: int = 50,
-    resolver: Optional[str] = None,
+    resolver: str | None = None,
     recursive: bool = False,
     max_depth: int = DEFAULT_RECURSIVE_DEPTH,
 ) -> dict[str, object]:

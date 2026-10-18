@@ -10,7 +10,6 @@ from __future__ import annotations
 import csv
 import io
 import ipaddress
-from typing import Optional
 
 
 def _normalize_cidr(value: str) -> str:
@@ -75,7 +74,7 @@ def _contains_ip(network: ipaddress._BaseNetwork, ip: str) -> bool:
     return addr in network
 
 
-def _contains_in_merged(merged: list[ipaddress._BaseNetwork], ip: str) -> tuple[bool, Optional[str]]:
+def _contains_in_merged(merged: list[ipaddress._BaseNetwork], ip: str) -> tuple[bool, str | None]:
     """Check whether an IP address belongs to any of the merged networks.
 
     Returns a tuple of (in_network, matched_network_str_or_None).
@@ -181,7 +180,7 @@ def _build_radix_node(
     networks: list[ipaddress._BaseNetwork],
     depth: int = 0,
     max_depth: int = 64,
-) -> Optional[dict[str, object]]:
+) -> dict[str, object] | None:
     """Recursively build a radix tree node for a list of networks.
 
     Returns a dict with keys:
@@ -301,8 +300,8 @@ def run_radix(
     cidrs: list[str],
     merge: bool = True,
     max_depth: int = 64,
-    contains: Optional[str] = None,
-    diff: Optional[list[str]] = None,
+    contains: str | None = None,
+    diff: list[str] | None = None,
 ) -> dict[str, object]:
     """Build a radix tree visualization over a set of CIDR networks.
 

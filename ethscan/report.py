@@ -4,7 +4,7 @@ from __future__ import annotations
 import csv
 import io
 import json
-from typing import Any, Optional
+from typing import Any
 
 from ethscan.passwords import audit_passwords
 from ethscan.scanner import (
@@ -44,7 +44,7 @@ def _resolve_ports_and_defaults(
     ports: str,
     timeout: float,
     workers: int,
-    profile: Optional[str],
+    profile: str | None,
 ) -> tuple:
     """Resolve the effective port list, timeout, and workers.
 
@@ -69,7 +69,7 @@ def _resolve_ports_and_defaults(
     return port_list, timeout, workers
 
 
-def _load_passwords(audit_file: Optional[str]) -> list[str]:
+def _load_passwords(audit_file: str | None) -> list[str]:
     if not audit_file:
         return []
     with open(audit_file, "r", encoding="utf-8") as handle:
@@ -81,7 +81,7 @@ VALID_SORT_KEYS = ("score", "verdict", "length")
 
 def _sort_audit_results(
     results: list[dict[str, Any]],
-    sort_by: Optional[str],
+    sort_by: str | None,
     sort_desc: bool,
 ) -> list[dict[str, Any]]:
     """Return a sorted copy of the audit results.
@@ -112,14 +112,14 @@ def run_report(
     ports: str = "common",
     timeout: float = 1.0,
     workers: int = 100,
-    audit_file: Optional[str] = None,
-    min_length: Optional[int] = None,
-    profile: Optional[str] = None,
+    audit_file: str | None = None,
+    min_length: int | None = None,
+    profile: str | None = None,
     open_only: bool = False,
-    sort_by: Optional[str] = None,
+    sort_by: str | None = None,
     sort_desc: bool = True,
-    salt: Optional[str] = None,
-    pepper: Optional[str] = None,
+    salt: str | None = None,
+    pepper: str | None = None,
     algorithm: str = "sha256",
 ) -> dict[str, Any]:
     """Run a port scan and an optional password audit, returning combined report data.

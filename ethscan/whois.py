@@ -5,7 +5,6 @@ import csv
 import io
 import re
 import socket
-from typing import Optional
 from urllib.parse import urlparse
 
 DEFAULT_WHOIS_SERVER = "whois.iana.org"
@@ -124,7 +123,7 @@ def parse_whois(raw: str) -> dict[str, object]:
     return result
 
 
-def extract_referral_server(raw: str) -> Optional[str]:
+def extract_referral_server(raw: str) -> str | None:
     """Extract a referral WHOIS server hostname from a raw WHOIS response.
 
     WHOIS responses often include a line pointing to the registrar's WHOIS

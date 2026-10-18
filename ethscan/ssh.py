@@ -7,7 +7,7 @@ import io
 import json
 import socket
 import struct
-from typing import Any, Optional
+from typing import Any
 
 try:
     import paramiko
@@ -116,7 +116,7 @@ def _extract_port(target: str, default: int = DEFAULT_PORT) -> int:
     return parsed.port or default
 
 
-def _ssh_banner_exchange(sock: socket.socket, timeout: float) -> Optional[str]:
+def _ssh_banner_exchange(sock: socket.socket, timeout: float) -> str | None:
     """Perform SSH banner exchange and return server banner."""
     sock.settimeout(timeout)
     try:
@@ -215,7 +215,7 @@ def _send_kexinit(sock: socket.socket) -> None:
     sock.sendall(packet_len + payload)
 
 
-def _read_packet(sock: socket.socket) -> Optional[bytes]:
+def _read_packet(sock: socket.socket) -> bytes | None:
     """Read a single SSH packet and return its payload."""
     try:
         length_bytes = sock.recv(4)
@@ -310,7 +310,7 @@ def _analyze_algorithms(algorithms: dict[str, list[str]]) -> dict[str, Any]:
     return findings
 
 
-def _get_host_key_info_paramiko(host: str, port: int, timeout: float) -> Optional[dict[str, Any]]:
+def _get_host_key_info_paramiko(host: str, port: int, timeout: float) -> dict[str, Any] | None:
     """Get host key fingerprint and type using paramiko."""
     if not PARAMIKO_AVAILABLE:
         return None
@@ -333,14 +333,14 @@ def _get_host_key_info_paramiko(host: str, port: int, timeout: float) -> Optiona
         return None
 
 
-def _get_host_key_info_stdlib(sock: socket.socket) -> Optional[dict[str, Any]]:
+def _get_host_key_info_stdlib(sock: socket.socket) -> dict[str, Any] | None:
     """Attempt to extract host key info from KEXINIT response (limited without full KEX)."""
     return None
 
 
 def run_ssh(
     target: str,
-    port: Optional[int] = None,
+    port: int | None = None,
     timeout: float = DEFAULT_TIMEOUT,
 ) -> dict[str, Any]:
     """Run SSH security assessment against a target.

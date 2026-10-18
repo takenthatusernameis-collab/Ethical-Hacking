@@ -20,7 +20,7 @@ import csv
 import io
 import json
 import socket
-from typing import Any, Optional
+from typing import Any
 
 DEFAULT_PORT = 11211
 DEFAULT_TIMEOUT = 3.0
@@ -35,8 +35,8 @@ def _normalize_target(target: str) -> tuple[str, int]:
     when none is supplied. IPv6 literals may be bracketed.
     """
     normalized = (target or "").strip()
-    host: Optional[str] = None
-    port: Optional[int] = None
+    host: str | None = None
+    port: int | None = None
 
     if "://" in normalized:
         from urllib.parse import urlparse
@@ -78,7 +78,7 @@ def _send_recv(
     request: bytes,
     timeout: float,
     connector=None,
-) -> tuple[Optional[bytes], Optional[str]]:
+) -> tuple[bytes | None, str | None]:
     """Send a TCP request and receive the response (injectable for tests)."""
     if connector is not None:
         return connector(host, port, request, timeout)
@@ -99,7 +99,7 @@ def _send_recv(
             sock.close()
 
 
-def _parse_version_response(data: Optional[bytes]) -> Optional[str]:
+def _parse_version_response(data: bytes | None) -> str | None:
     """Parse a ``VERSION <x.y.z>\\r\\n`` response into the version string."""
     if not data:
         return None
@@ -121,7 +121,7 @@ def _parse_version_response(data: Optional[bytes]) -> Optional[str]:
     return None
 
 
-def _parse_stats_response(data: Optional[bytes]) -> dict[str, str]:
+def _parse_stats_response(data: bytes | None) -> dict[str, str]:
     """Parse a Memcached ``stats`` response into a dict of STAT lines.
 
     The response is a sequence of ``STAT <key> <value>`` lines terminated
@@ -158,7 +158,7 @@ def _parse_stats_response(data: Optional[bytes]) -> dict[str, str]:
     return stats
 
 
-def _coerce_int(value: str) -> Optional[int]:
+def _coerce_int(value: str) -> int | None:
     """Best-effort integer coercion for stats values."""
     try:
         return int(value)
@@ -191,7 +191,7 @@ def _assess_stats(stats: dict[str, str]) -> list[str]:
     return findings
 
 
-def _build_banner(results: dict[str, Any]) -> Optional[str]:
+def _build_banner(results: dict[str, Any]) -> str | None:
     """Build a short human-readable banner from the probe results."""
     if not results.get("accessible"):
         return None
@@ -215,9 +215,9 @@ def _build_banner(results: dict[str, Any]) -> Optional[str]:
 
 def run_memcached(
     target: str,
-    port: Optional[int] = None,
+    port: int | None = None,
     timeout: float = DEFAULT_TIMEOUT,
-    probes: Optional[list[str]] = None,
+    probes: list[str] | None = None,
     connector=None,
 ) -> dict[str, Any]:
     """Run Memcached reconnaissance against *target*.

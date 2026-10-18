@@ -20,7 +20,7 @@ import csv
 import io
 import json
 import socket
-from typing import Any, Optional
+from typing import Any
 
 DEFAULT_PORT = 161
 DEFAULT_TIMEOUT = 3.0
@@ -394,7 +394,7 @@ def _send_recv(
     request: bytes,
     timeout: float,
     connector=None,
-) -> tuple[Optional[bytes], Optional[str]]:
+) -> tuple[bytes | None, str | None]:
     """Send a UDP request and receive the response (injectable for tests)."""
     if connector is not None:
         return connector(host, port, request, timeout)
@@ -444,7 +444,7 @@ def _probe_community(
         "version": None,
         "error": None,
     }
-    last_error: Optional[str] = None
+    last_error: str | None = None
 
     for version, version_label in ((1, "v2c"), (0, "v1")):
         request = _build_get_request(version, community, list(STANDARD_OIDS.values()))
@@ -478,9 +478,9 @@ def _probe_community(
 
 def run_snmp(
     target: str,
-    port: Optional[int] = None,
+    port: int | None = None,
     timeout: float = DEFAULT_TIMEOUT,
-    communities: Optional[list[str]] = None,
+    communities: list[str] | None = None,
     connector=None,
 ) -> dict[str, Any]:
     """Run SNMP reconnaissance against *target*.
@@ -515,7 +515,7 @@ def run_snmp(
         "error": None,
     }
 
-    first_error: Optional[str] = None
+    first_error: str | None = None
     for community in community_list:
         entry = _probe_community(host, server_port, community, timeout, connector)
         results["communities"].append(entry)

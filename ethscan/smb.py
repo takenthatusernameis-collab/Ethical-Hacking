@@ -42,7 +42,7 @@ import json
 import os
 import socket
 import struct
-from typing import Any, Optional
+from typing import Any
 
 DEFAULT_PORT = 445
 DEFAULT_TIMEOUT = 3.0
@@ -166,8 +166,8 @@ def _normalize_target(target: str) -> tuple[str, int]:
     port is supplied, ``DEFAULT_PORT`` (445) is used.
     """
     normalized = (target or "").strip()
-    host: Optional[str] = None
-    port: Optional[int] = None
+    host: str | None = None
+    port: int | None = None
 
     if "://" in normalized:
         from urllib.parse import urlparse
@@ -204,7 +204,7 @@ def _send_recv(
     request: bytes,
     timeout: float,
     connector=None,
-) -> tuple[Optional[bytes], Optional[str]]:
+) -> tuple[bytes | None, str | None]:
     """Send ``request`` to ``host:port`` and return ``(data, error)``.
 
     When ``connector`` is provided it is called as
@@ -267,7 +267,7 @@ def _build_smb1_negotiate_request(
 
 
 def _parse_smb_response(
-    data: Optional[bytes],
+    data: bytes | None,
     dialects: tuple[str, ...] = DEFAULT_DIALECTS,
 ) -> dict[str, Any]:
     """Parse an SMB response, returning negotiated dialect/security info.
@@ -361,7 +361,7 @@ def _parse_smb_response(
     return result
 
 
-def _build_banner(parsed: dict[str, Any]) -> Optional[str]:
+def _build_banner(parsed: dict[str, Any]) -> str | None:
     """Build a short human-readable banner from a parsed SMB response."""
     if parsed.get("protocol") != "SMB1":
         return None
@@ -418,7 +418,7 @@ def _build_smb2_negotiate_request(
     security_mode: int = SMB2_SIGNING_ENABLED,
     capabilities: int = 0,
     client_guid: bytes = b"\x00" * 16,
-    preauth_salt: Optional[bytes] = None,
+    preauth_salt: bytes | None = None,
 ) -> bytes:
     """Build a raw SMB2 ``SMB2_NEGOTIATE`` request.
 
@@ -545,7 +545,7 @@ def _decode_smb2_capabilities(capabilities: int) -> list[str]:
 
 
 def _parse_smb2_response(
-    data: Optional[bytes],
+    data: bytes | None,
     dialects: tuple[int, ...] = DEFAULT_SMB2_DIALECTS,
 ) -> dict[str, Any]:
     """Parse an SMB2 ``SMB2_NEGOTIATE`` response.
@@ -632,7 +632,7 @@ def _parse_smb2_response(
     return result
 
 
-def _build_smb2_banner(parsed: dict[str, Any]) -> Optional[str]:
+def _build_smb2_banner(parsed: dict[str, Any]) -> str | None:
     """Build a short human-readable banner from a parsed SMB2 response."""
     if parsed.get("protocol") != "SMB2":
         return None
@@ -655,7 +655,7 @@ def _build_smb2_banner(parsed: dict[str, Any]) -> Optional[str]:
 
 def run_smb2(
     target: str,
-    port: Optional[int] = None,
+    port: int | None = None,
     timeout: float = DEFAULT_TIMEOUT,
     dialects: tuple[int, ...] = DEFAULT_SMB2_DIALECTS,
     connector=None,
@@ -726,11 +726,11 @@ def run_smb2(
 
 def run_smb(
     target: str,
-    port: Optional[int] = None,
+    port: int | None = None,
     timeout: float = DEFAULT_TIMEOUT,
-    dialects: Optional[tuple[str, ...]] = None,
+    dialects: tuple[str, ...] | None = None,
     smb2: bool = False,
-    smb2_dialects: Optional[tuple[int, ...]] = None,
+    smb2_dialects: tuple[int, ...] | None = None,
     connector=None,
 ) -> dict[str, Any]:
     """Run SMB reconnaissance probes against ``target``.

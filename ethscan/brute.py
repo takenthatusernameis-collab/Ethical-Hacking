@@ -7,7 +7,6 @@ import io
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from ftplib import FTP
-from typing import Optional
 
 try:
     import paramiko
@@ -183,9 +182,9 @@ def _attempt_ssh(
 def run_brute(
     target: str,
     protocol: str = DEFAULT_PROTOCOL,
-    usernames: Optional[list[str]] = None,
-    passwords: Optional[list[str]] = None,
-    port: Optional[int] = None,
+    usernames: list[str] | None = None,
+    passwords: list[str] | None = None,
+    port: int | None = None,
     timeout: float = DEFAULT_TIMEOUT,
     max_workers: int = DEFAULT_WORKERS,
 ) -> dict[str, object]:

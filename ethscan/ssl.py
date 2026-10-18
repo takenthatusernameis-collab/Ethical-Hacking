@@ -7,7 +7,6 @@ import io
 import json
 import socket
 import ssl
-from typing import Optional
 
 DEFAULT_PORT = 443
 DEFAULT_TIMEOUT = 5.0
@@ -39,7 +38,7 @@ def _rdn_to_str(rdn: dict) -> str:
     return ", ".join(parts)
 
 
-def _estimate_key_size(public_key_info) -> Optional[int]:
+def _estimate_key_size(public_key_info) -> int | None:
     """Best-effort estimate of the public key size in bits."""
     try:
         if isinstance(public_key_info, dict):

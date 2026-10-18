@@ -10,7 +10,6 @@ import re
 import socket
 import struct
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional
 
 DEFAULT_TIMEOUT = 5.0
 DEFAULT_WORKERS = 10
@@ -113,7 +112,7 @@ def _checksum(data: bytes) -> int:
     return (~total) & 0xFFFF
 
 
-def _connect_tcp(host: str, port: int, timeout: float) -> tuple[bool, Optional[str], Optional[int]]:
+def _connect_tcp(host: str, port: int, timeout: float) -> tuple[bool, str | None, int | None]:
     """Open a standard TCP connection and report success/failure.
 
     Returns (connected, error_message, observed_rst_flag_or_None). The RST flag
@@ -369,10 +368,10 @@ def _match_os_from_behavior(behavior: dict[str, object]) -> list[str]:
 
 def run_osdetect(
     target: str,
-    ports: Optional[list[int]] = None,
+    ports: list[int] | None = None,
     timeout: float = DEFAULT_TIMEOUT,
     max_workers: int = DEFAULT_WORKERS,
-    banners: Optional[dict[int, str]] = None,
+    banners: dict[int, str] | None = None,
 ) -> dict[str, object]:
     """Run OS fingerprinting against a target using TCP/IP stack behavior.
 

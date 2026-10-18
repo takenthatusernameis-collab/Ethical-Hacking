@@ -24,7 +24,7 @@ import io
 import json
 import socket
 import struct
-from typing import Any, Optional
+from typing import Any
 
 DEFAULT_PORT = 137
 DEFAULT_TIMEOUT = 3.0
@@ -373,7 +373,7 @@ def _parse_nbns_response(data: bytes) -> dict[str, Any]:
         offset = _skip_question(data, offset, qdcount)
 
     answers: list[dict[str, Any]] = []
-    mac: Optional[str] = None
+    mac: str | None = None
     names: list[dict[str, Any]] = []
 
     for _ in range(ancount):
@@ -449,7 +449,7 @@ def _send_recv(
     request: bytes,
     timeout: float,
     connector=None,
-) -> tuple[Optional[bytes], Optional[str]]:
+) -> tuple[bytes | None, str | None]:
     """Send a UDP NBNS request and receive the response (injectable for tests)."""
     if connector is not None:
         return connector(host, port, request, timeout)
@@ -476,7 +476,7 @@ def _send_recv(
 def _derive_assessment(names: list[dict[str, Any]]) -> dict[str, Any]:
     """Build heuristic signals from a parsed name table."""
     is_server = False
-    hostname: Optional[str] = None
+    hostname: str | None = None
     is_domain_member = False
 
     for entry in names:
@@ -498,7 +498,7 @@ def _derive_assessment(names: list[dict[str, Any]]) -> dict[str, Any]:
 
 def run_netbios(
     target: str,
-    port: Optional[int] = None,
+    port: int | None = None,
     timeout: float = DEFAULT_TIMEOUT,
     name: str = DEFAULT_NAME,
     suffix: int = DEFAULT_SUFFIX,

@@ -17,7 +17,7 @@ import io
 import json
 import socket
 import struct
-from typing import Any, Optional
+from typing import Any
 
 DEFAULT_PORT = 123
 DEFAULT_TIMEOUT = 3.0
@@ -133,7 +133,7 @@ def _parse_time_response(data: bytes) -> dict[str, Any]:
     vn = (li_vn_mode >> 3) & 0x7
     mode = li_vn_mode & 0x7
 
-    def ntp_to_unix(ntp_ts: int) -> Optional[float]:
+    def ntp_to_unix(ntp_ts: int) -> float | None:
         if ntp_ts == 0:
             return None
         seconds = ntp_ts >> 32
@@ -236,7 +236,7 @@ def _send_recv(
     request: bytes,
     timeout: float,
     connector=None,
-) -> tuple[Optional[bytes], Optional[str]]:
+) -> tuple[bytes | None, str | None]:
     """Send a UDP request and receive the response (injectable for tests)."""
     if connector is not None:
         return connector(host, port, request, timeout)
@@ -257,7 +257,7 @@ def _send_recv(
 
 def run_ntp(
     target: str,
-    port: Optional[int] = None,
+    port: int | None = None,
     timeout: float = DEFAULT_TIMEOUT,
     check_monlist: bool = True,
     connector=None,

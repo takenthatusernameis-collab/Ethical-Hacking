@@ -12,7 +12,6 @@ import json
 import socket
 import struct
 import time
-from typing import Optional
 
 DEFAULT_COUNT = 4
 DEFAULT_TIMEOUT = 2.0
@@ -62,7 +61,7 @@ def _build_icmp_echo_request(identifier: int, sequence: int, payload: bytes = b"
     return header + payload
 
 
-def _parse_icmp_reply(data: bytes, expected_id: int) -> Optional[dict[str, object]]:
+def _parse_icmp_reply(data: bytes, expected_id: int) -> dict[str, object] | None:
     """Parse an ICMP Echo Reply packet.
 
     Returns a dict with keys: type, code, identifier, sequence, payload, error.
@@ -113,7 +112,7 @@ def _parse_icmp_reply(data: bytes, expected_id: int) -> Optional[dict[str, objec
     }
 
 
-def _try_create_raw_socket() -> Optional[socket.socket]:
+def _try_create_raw_socket() -> socket.socket | None:
     """Attempt to create a raw ICMP socket for sending/receiving echo requests.
 
     Returns the socket if available, or ``None`` if raw sockets are not
@@ -126,7 +125,7 @@ def _try_create_raw_socket() -> Optional[socket.socket]:
         return None
 
 
-def _resolve_host(host: str) -> Optional[str]:
+def _resolve_host(host: str) -> str | None:
     """Resolve a hostname to an IPv4 address, returning ``None`` on failure."""
     try:
         return socket.gethostbyname(host)
@@ -138,11 +137,11 @@ def probe_icmp(
     host: str,
     timeout: float = DEFAULT_TIMEOUT,
     ttl: int = DEFAULT_TTL,
-    raw_socket: Optional[socket.socket] = None,
+    raw_socket: socket.socket | None = None,
     identifier: int = 0,
     sequence: int = 0,
     payload: bytes = b"",
-    resolved_ip: Optional[str] = None,
+    resolved_ip: str | None = None,
     port: int = DEFAULT_PORT,
 ) -> dict[str, object]:
     """Send an ICMP Echo Request and wait for a reply.
@@ -287,7 +286,7 @@ def run_ping(
     timeout: float = DEFAULT_TIMEOUT,
     ttl: int = DEFAULT_TTL,
     port: int = DEFAULT_PORT,
-    raw_socket: Optional[socket.socket] = None,
+    raw_socket: socket.socket | None = None,
 ) -> dict[str, object]:
     """Run ICMP ping (or TCP fallback) against *target*.
 

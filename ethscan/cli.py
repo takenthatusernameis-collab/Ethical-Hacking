@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Optional
+from typing import Any
 
 import click
 
@@ -356,7 +356,7 @@ from ethscan.wifi import (
 )
 @click.version_option(__version__)
 @click.pass_context
-def cli(ctx, config_path: Optional[str]) -> None:
+def cli(ctx, config_path: str | None) -> None:
     """ethscan: ethical hacking toolkit."""
     config = load_config(config_path)
     ctx.obj = {"config": config, "config_path": config_path}
@@ -403,7 +403,7 @@ def cli(ctx, config_path: Optional[str]) -> None:
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def scan(target: str, ports: str, profile: Optional[str], timeout: float, workers: int, output_fmt: Optional[str], fmt: str, out_path: Optional[str]) -> None:
+def scan(target: str, ports: str, profile: str | None, timeout: float, workers: int, output_fmt: str | None, fmt: str, out_path: str | None) -> None:
     """Run a port scan against TARGET."""
     if profile:
         defaults = get_profile_defaults(profile)
@@ -514,13 +514,13 @@ def scan(target: str, ports: str, profile: Optional[str], timeout: float, worker
 )
 def audit(
     file: str,
-    min_length: Optional[int],
-    salt: Optional[str],
-    pepper: Optional[str],
+    min_length: int | None,
+    salt: str | None,
+    pepper: str | None,
     algorithm: str,
-    sort_by: Optional[str],
+    sort_by: str | None,
     sort_desc: bool,
-    output_fmt: Optional[str],
+    output_fmt: str | None,
     fmt: str,
     out_path: str,
 ) -> None:
@@ -662,18 +662,18 @@ def audit(
 def report(
     target: str,
     ports: str,
-    profile: Optional[str],
+    profile: str | None,
     timeout: float,
     workers: int,
     audit_file: str,
-    min_length: Optional[int],
-    salt: Optional[str],
-    pepper: Optional[str],
+    min_length: int | None,
+    salt: str | None,
+    pepper: str | None,
     algorithm: str,
     open_only: bool,
-    sort_by: Optional[str],
+    sort_by: str | None,
     sort_desc: bool,
-    output_fmt: Optional[str],
+    output_fmt: str | None,
     fmt: str,
     out_path: str,
 ) -> None:
@@ -741,7 +741,7 @@ def report(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def web(target: str, checks: str, timeout: float, fmt: str, output_fmt: Optional[str], out_path: str) -> None:
+def web(target: str, checks: str, timeout: float, fmt: str, output_fmt: str | None, out_path: str) -> None:
     """Run web application security checks against TARGET."""
     check_list = [c.strip() for c in checks.split(",") if c.strip()]
     valid = {"headers", "info_disclosure", "ssl"}
@@ -813,7 +813,7 @@ def fuzz(
     timeout: float,
     workers: int,
     fmt: str,
-    output_fmt: Optional[str],
+    output_fmt: str | None,
     out_path: str,
 ) -> None:
     """Run HTTP fuzzing against TARGET using a wordlist of paths."""
@@ -897,13 +897,13 @@ def fuzz(
 def subdomains(
     target: str,
     wordlist_path: str,
-    resolver: Optional[str],
+    resolver: str | None,
     recursive: bool,
     max_depth: int,
     timeout: float,
     workers: int,
     fmt: str,
-    output_fmt: Optional[str],
+    output_fmt: str | None,
     out_path: str,
 ) -> None:
     """Enumerate subdomains for TARGET."""
@@ -985,14 +985,14 @@ def subdomains(
 )
 def subtake(
     target: str,
-    wordlist_path: Optional[str],
-    resolver: Optional[str],
+    wordlist_path: str | None,
+    resolver: str | None,
     timeout: float,
     workers: int,
     http_timeout: float,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Detect subdomain takeover vulnerabilities for TARGET."""
     subdomains_list = (
@@ -1076,7 +1076,7 @@ def whois(
     recursive: bool,
     max_depth: int,
     fmt: str,
-    output_fmt: Optional[str],
+    output_fmt: str | None,
     out_path: str,
 ) -> None:
     """Run a WHOIS lookup for TARGET."""
@@ -1131,7 +1131,7 @@ def whois(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def headers(target: str, timeout: float, fmt: str, output_fmt: Optional[str], out_path: str) -> None:
+def headers(target: str, timeout: float, fmt: str, output_fmt: str | None, out_path: str) -> None:
     """Run security headers check against TARGET."""
     results = run_headers(target, timeout=timeout)
 
@@ -1271,12 +1271,12 @@ def dns(
 )
 def resolve(
     target: str,
-    record_types: Optional[str],
-    server: Optional[str],
+    record_types: str | None,
+    server: str | None,
     timeout: float,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Perform forward/reverse DNS resolution for TARGET."""
     types_list = None
@@ -1372,16 +1372,16 @@ def resolve(
 )
 def dnsbrute(
     target: str,
-    nameservers_option: Optional[str],
-    wordlist_path: Optional[str],
-    resolver: Optional[str],
+    nameservers_option: str | None,
+    wordlist_path: str | None,
+    resolver: str | None,
     recursive: bool,
     max_depth: int,
     timeout: float,
     workers: int,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Attempt AXFR zone transfer and brute-force subdomains for TARGET."""
     nameservers = (
@@ -1445,7 +1445,7 @@ def dnsbrute(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def ssl(target: str, port: int, timeout: float, fmt: str, output_fmt: Optional[str], out_path: str) -> None:
+def ssl(target: str, port: int, timeout: float, fmt: str, output_fmt: str | None, out_path: str) -> None:
     """Inspect the SSL/TLS certificate for TARGET."""
     results = run_ssl(target, port=port, timeout=timeout)
 
@@ -1507,12 +1507,12 @@ def tls(
     target: str,
     port: int,
     versions: str,
-    cipher_option: Optional[str],
+    cipher_option: str | None,
     timeout: float,
     workers: int,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Enumerate supported TLS protocol versions and cipher suites for TARGET."""
     version_list = [v.strip() for v in versions.split(",") if v.strip()]
@@ -1586,7 +1586,7 @@ def tls(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def service(target: str, ports: Optional[str], profile: Optional[str], timeout: float, workers: int, output_fmt: Optional[str], fmt: str, out_path: Optional[str]) -> None:
+def service(target: str, ports: str | None, profile: str | None, timeout: float, workers: int, output_fmt: str | None, fmt: str, out_path: str | None) -> None:
     """Detect services and grab banners on open ports (nmap-style)."""
     port_list = None
     if profile:
@@ -1715,22 +1715,22 @@ def service(target: str, ports: Optional[str], profile: Optional[str], timeout: 
 )
 def vuln(
     target: str,
-    ports: Optional[str],
-    services_file: Optional[str],
-    tls_file: Optional[str],
-    ssl_file: Optional[str],
-    severity: Optional[str],
-    min_severity: Optional[str],
+    ports: str | None,
+    services_file: str | None,
+    tls_file: str | None,
+    ssl_file: str | None,
+    severity: str | None,
+    min_severity: str | None,
     recursive: bool,
     max_depth: int,
-    salt: Optional[str],
-    pepper: Optional[str],
+    salt: str | None,
+    pepper: str | None,
     algorithm: str,
     timeout: float,
     workers: int,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Check TARGET for known service, protocol, and certificate vulnerabilities."""
     services = None
@@ -1833,14 +1833,14 @@ def vuln(
 def urlcheck(
     target: str,
     checks: str,
-    wordlist_path: Optional[str],
+    wordlist_path: str | None,
     fuzz_paths: bool,
     port: int,
     timeout: float,
     workers: int,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Run consolidated web assessment (headers, info disclosure, SSL, fuzzing, cert inspection)."""
     check_list = [c.strip() for c in checks.split(",") if c.strip()]
@@ -1936,14 +1936,14 @@ def urlcheck(
 def brute(
     target: str,
     protocol: str,
-    port: Optional[int],
-    user_file: Optional[str],
-    pass_file: Optional[str],
+    port: int | None,
+    user_file: str | None,
+    pass_file: str | None,
     timeout: float,
     workers: int,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Brute-force FTP or SSH login credentials against TARGET."""
     usernames = load_cred_wordlist(user_file) if user_file else None
@@ -2018,13 +2018,13 @@ def brute(
 )
 def osdetect(
     target: str,
-    ports: Optional[str],
-    banners_file: Optional[str],
+    ports: str | None,
+    banners_file: str | None,
     timeout: float,
     workers: int,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Fingerprint the target operating system using TCP/IP stack behavior."""
     port_list = None
@@ -2132,8 +2132,8 @@ def trace(
     recursive: bool,
     max_depth: int,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Run TCP traceroute against TARGET using TTL-incremented SYN probes."""
     results = run_trace(
@@ -2222,8 +2222,8 @@ def ping(
     ttl: int,
     tcp_port: int,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Run ICMP ping (or TCP connect fallback) against TARGET for host discovery."""
     results = run_ping(
@@ -2278,7 +2278,7 @@ def ping(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def wifi(interface: Optional[str], fmt: str, output_fmt: Optional[str], out_path: Optional[str]) -> None:
+def wifi(interface: str | None, fmt: str, output_fmt: str | None, out_path: str | None) -> None:
     """Scan for nearby Wi-Fi access points (Linux only)."""
     results = run_wifi(interface=interface)
 
@@ -2358,12 +2358,12 @@ def geo(
     timeout: float,
     no_cache: bool,
     no_offline_fallback: bool,
-    api_url: Optional[str],
+    api_url: str | None,
     recursive: bool,
     max_depth: int,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Look up IP geolocation for TARGET using a public API with caching."""
     results = run_geo(
@@ -2488,24 +2488,24 @@ def geo(
 )
 def recon(
     target: str,
-    modules: Optional[str],
-    subdomains_wordlist_path: Optional[str],
+    modules: str | None,
+    subdomains_wordlist_path: str | None,
     dns_record_types: str,
-    dns_server: Optional[str],
+    dns_server: str | None,
     whois_server: str,
     whois_port: int,
     no_geo_cache: bool,
     no_geo_offline_fallback: bool,
-    geo_api_url: Optional[str],
+    geo_api_url: str | None,
     trace_port: int,
     trace_max_hops: int,
     trace_probes_per_hop: int,
     timeout: float,
     workers: int,
-    resolver: Optional[str],
+    resolver: str | None,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Run multiple reconnaissance modules against TARGET and produce a consolidated report."""
     modules_list = (
@@ -2604,10 +2604,10 @@ def cert(
     timeout: float,
     no_cache: bool,
     no_offline_fallback: bool,
-    api_url: Optional[str],
+    api_url: str | None,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Search Certificate Transparency logs for certificates issued to TARGET."""
     results = run_cert(
@@ -2721,20 +2721,20 @@ def cert(
 )
 def cve(
     target: str,
-    services_file: Optional[str],
-    ports: Optional[str],
-    profile: Optional[str],
+    services_file: str | None,
+    ports: str | None,
+    profile: str | None,
     timeout: float,
     service_timeout: float,
     workers: int,
     no_cache: bool,
     no_offline_fallback: bool,
-    api_url: Optional[str],
-    severity: Optional[str],
-    min_severity: Optional[str],
+    api_url: str | None,
+    severity: str | None,
+    min_severity: str | None,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Query the NVD/CVE API for known vulnerabilities affecting TARGET's services."""
     if services_file:
@@ -2826,7 +2826,7 @@ def cve(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def cidr(cidr: str, contains: Optional[str], diff: Optional[str], fmt: str, output_fmt: Optional[str], out_path: Optional[str]) -> None:
+def cidr(cidr: str, contains: str | None, diff: str | None, fmt: str, output_fmt: str | None, out_path: str | None) -> None:
     """Compute network calculations for a CIDR (offline)."""
     results = run_cidr(cidr, contains=contains, diff=diff)
 
@@ -3033,15 +3033,15 @@ def hash_cmd(passwords, password_file, algorithm, salt, pepper, iterations, chec
     help="Output file path (default: stdout)",
 )
 def radix(
-    cidrs_option: Optional[str],
-    cidr_file: Optional[str],
-    diff_option: Optional[str],
+    cidrs_option: str | None,
+    cidr_file: str | None,
+    diff_option: str | None,
     no_merge: bool,
     max_depth: int,
-    contains: Optional[str],
+    contains: str | None,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Build a radix tree visualization over a set of CIDR networks.
 
@@ -3128,11 +3128,11 @@ def radix(
 )
 def dnssec(
     target: str,
-    server: Optional[str],
+    server: str | None,
     timeout: float,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Validate DNSSEC for TARGET domain."""
     results = run_dnssec(
@@ -3211,10 +3211,10 @@ def mac(
     timeout: float,
     no_cache: bool,
     no_offline_fallback: bool,
-    api_url: Optional[str],
+    api_url: str | None,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Look up MAC address vendor using the OUI database (api.macvendors.com) with caching."""
     results = run_mac(
@@ -3279,11 +3279,11 @@ def mac(
 @click.pass_context
 def config(
     ctx,
-    config_path: Optional[str],
-    init_path: Optional[str],
+    config_path: str | None,
+    init_path: str | None,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Inspect or initialize the ethscan configuration file."""
     from ethscan.config import dump_default_config
@@ -3416,7 +3416,7 @@ def config(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def jwt(token: Optional[str], fmt: str, output_fmt: Optional[str], out_path: Optional[str]) -> None:
+def jwt(token: str | None, fmt: str, output_fmt: str | None, out_path: str | None) -> None:
     """Inspect a JWT (JSON Web Token) without verifying the signature."""
     if token:
         token = token.strip()
@@ -3492,11 +3492,11 @@ def jwt(token: Optional[str], fmt: str, output_fmt: Optional[str], out_path: Opt
 )
 def completion(
     shell: str,
-    shell_option: Optional[str],
+    shell_option: str | None,
     prog_name: str,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Generate a shell completion script for ethscan.
 
@@ -3562,12 +3562,12 @@ def completion(
 )
 def memcached(
     target: str,
-    port: Optional[int],
+    port: int | None,
     timeout: float,
     probes: str,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Run Memcached reconnaissance (version and stats probes)."""
     probe_list = [p.strip().lower() for p in probes.split(",") if p.strip()] if probes else None
@@ -3629,12 +3629,12 @@ def memcached(
 )
 def mysql(
     target: str,
-    port: Optional[int],
+    port: int | None,
     timeout: float,
     probes: str,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Run MySQL reconnaissance (handshake/banner probe)."""
     probe_list = [p.strip().lower() for p in probes.split(",") if p.strip()] if probes else None
@@ -3694,12 +3694,12 @@ def mysql(
 )
 def mongodb(
     target: str,
-    port: Optional[int],
+    port: int | None,
     timeout: float,
     probes: str,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Run MongoDB reconnaissance (buildInfo/server info probe)."""
     probe_list = [p.strip().lower() for p in probes.split(",") if p.strip()] if probes else None
@@ -3759,12 +3759,12 @@ def mongodb(
 )
 def postgresql(
     target: str,
-    port: Optional[int],
+    port: int | None,
     timeout: float,
     probes: str,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Run PostgreSQL reconnaissance (wire-protocol startup probe)."""
     probe_list = [p.strip().lower() for p in probes.split(",") if p.strip()] if probes else None
@@ -3825,11 +3825,11 @@ def postgresql(
     help="Output file path (default: stdout)",
 )
 def validate(
-    ports: Optional[str],
-    cidrs: Optional[str],
+    ports: str | None,
+    cidrs: str | None,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Validate and expand port specifications and CIDR inputs (offline)."""
     chosen_format = output_fmt if output_fmt is not None else fmt
@@ -3881,8 +3881,8 @@ def validate(
 def nmap(
     input_file: str,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Parse Nmap XML scan output and cross-reference services against vulnerability database."""
     results = run_nmap(input_file)
@@ -3952,12 +3952,12 @@ def nmap(
 )
 def stale(
     targets: tuple,
-    target_file: Optional[str],
+    target_file: str | None,
     timeout: float,
     workers: int,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Detect stale DNS records (A/AAAA/CNAME) pointing to deallocated or unresolvable IPs."""
     all_targets: list[str] = list(targets)
@@ -4019,7 +4019,7 @@ def stale(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def ssh(target: str, port: Optional[int], timeout: float, fmt: str, output_fmt: Optional[str], out_path: Optional[str]) -> None:
+def ssh(target: str, port: int | None, timeout: float, fmt: str, output_fmt: str | None, out_path: str | None) -> None:
     """Assess SSH server security: enumerate algorithms, check for weak/deprecated ciphers, MACs, KEX, and host keys."""
     results = run_ssh(target, port=port, timeout=timeout)
 
@@ -4094,13 +4094,13 @@ def ssh(target: str, port: Optional[int], timeout: float, fmt: str, output_fmt: 
 )
 def s3(
     target: str,
-    wordlist_path: Optional[str],
+    wordlist_path: str | None,
     region: str,
     timeout: float,
     workers: int,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Enumerate AWS S3 buckets for TARGET and detect publicly accessible ones."""
     wordlist = load_subdomain_wordlist(wordlist_path) if wordlist_path else None
@@ -4183,14 +4183,14 @@ def s3(
 )
 def smtp(
     target: str,
-    port: Optional[int],
-    users: Optional[str],
+    port: int | None,
+    users: str | None,
     check_starttls: bool,
     check_relay: bool,
     timeout: float,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Run SMTP reconnaissance (banner, STARTTLS, VRFY user enumeration, open relay) for TARGET."""
     users_list = [u.strip() for u in users.split(",") if u.strip()] if users else None
@@ -4263,12 +4263,12 @@ def smtp(
 )
 def ftp(
     target: str,
-    port: Optional[int],
+    port: int | None,
     check_anonymous: bool,
     timeout: float,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Run FTP reconnaissance (banner grab + anonymous-login check) for TARGET."""
     results = run_ftp(
@@ -4338,12 +4338,12 @@ def ftp(
 )
 def ntp(
     target: str,
-    port: Optional[int],
+    port: int | None,
     check_monlist: bool,
     timeout: float,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Run NTP reconnaissance (time response + monlist amplification check) for TARGET."""
     results = run_ntp(
@@ -4411,12 +4411,12 @@ def ntp(
 )
 def snmp(
     target: str,
-    port: Optional[int],
-    communities: Optional[str],
+    port: int | None,
+    communities: str | None,
     timeout: float,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Run SNMP reconnaissance (community probing + system info) for TARGET."""
     community_list = None
@@ -4494,13 +4494,13 @@ def snmp(
 )
 def netbios(
     target: str,
-    port: Optional[int],
+    port: int | None,
     name: str,
-    suffix: Optional[int],
+    suffix: int | None,
     timeout: float,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Run NetBIOS (NBNS) NODE STATUS reconnaissance (names, flags, MAC)."""
     if suffix is None:
@@ -4566,12 +4566,12 @@ def netbios(
 )
 def smb(
     target: str,
-    port: Optional[int],
+    port: int | None,
     timeout: float,
     smb2: bool,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Run SMB dialect negotiation reconnaissance (SMB1 and optional SMB2/SMB3)."""
     results = run_smb(
@@ -4632,12 +4632,12 @@ if __name__ == "__main__":
 )
 def redis(
     target: str,
-    port: Optional[int],
+    port: int | None,
     timeout: float,
     probes: str,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Run Redis reconnaissance (ping, info, config)."""
     probe_list = [p.strip().lower() for p in probes.split(",") if p.strip()] if probes else list(DEFAULT_PROBES)
@@ -4700,12 +4700,12 @@ def redis(
 )
 def ldap(
     target: str,
-    port: Optional[int],
+    port: int | None,
     ldap_version: str,
     timeout: float,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Run LDAP anonymous bind and RootDSE reconnaissance."""
     results = run_ldap(
@@ -4764,12 +4764,12 @@ def ldap(
 )
 def mssql(
     target: str,
-    port: Optional[int],
+    port: int | None,
     timeout: float,
     probes: str,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Run MSSQL reconnaissance (TDS prelogin probe)."""
     probe_list = [p.strip().lower() for p in probes.split(",") if p.strip()] if probes else None
@@ -4829,12 +4829,12 @@ def mssql(
 )
 def oracle(
     target: str,
-    port: Optional[int],
+    port: int | None,
     timeout: float,
     probes: str,
     fmt: str,
-    output_fmt: Optional[str],
-    out_path: Optional[str],
+    output_fmt: str | None,
+    out_path: str | None,
 ) -> None:
     """Run Oracle reconnaissance (TNS connect probe)."""
     probe_list = [p.strip().lower() for p in probes.split(",") if p.strip()] if probes else None

@@ -8,7 +8,6 @@ from __future__ import annotations
 import csv
 import io
 import json
-from typing import Optional
 
 from ethscan.dns import run_dns
 from ethscan.geo import run_geo
@@ -31,21 +30,21 @@ def _normalize_domain(target: str) -> str:
 
 def run_recon(
     target: str,
-    modules: Optional[list[str]] = None,
-    subdomains_wordlist: Optional[list[str]] = None,
-    dns_record_types: Optional[list[str]] = None,
-    dns_server: Optional[str] = None,
+    modules: list[str] | None = None,
+    subdomains_wordlist: list[str] | None = None,
+    dns_record_types: list[str] | None = None,
+    dns_server: str | None = None,
     whois_server: str = "whois.iana.org",
     whois_port: int = 43,
     geo_use_cache: bool = True,
     geo_offline_fallback: bool = True,
-    geo_api_url: Optional[str] = None,
+    geo_api_url: str | None = None,
     trace_port: int = 80,
     trace_max_hops: int = 30,
     trace_probes_per_hop: int = 3,
     timeout: float = 5.0,
     max_workers: int = 50,
-    resolver: Optional[str] = None,
+    resolver: str | None = None,
 ) -> dict[str, object]:
     """Run multiple reconnaissance modules against a target.
 

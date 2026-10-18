@@ -19,7 +19,7 @@ import io
 import json
 import socket
 import time
-from typing import Any, Optional
+from typing import Any
 
 DEFAULT_PORT = 25
 DEFAULT_TIMEOUT = 2.0
@@ -29,7 +29,7 @@ RELAY_PROBE_DOMAIN = "ethscan.invalid"
 # VRFY response classification. A 3-digit SMTP code is mapped to a human label
 # and a boolean ``found`` flag (True when the server confirms knowledge of the
 # user). ``None`` means the response was inconclusive.
-_VRFY_LABELS: dict[str, tuple[Optional[bool], str]] = {
+_VRFY_LABELS: dict[str, tuple[bool | None, str]] = {
     "250": (None, "user known"),
     "251": (True, "user not local but will forward"),
     "252": (None, "user enumeration not allowed / will accept"),
@@ -153,7 +153,7 @@ def _connect(
     return connector((host, port), timeout)
 
 
-def _classify_vrfy(code: int) -> tuple[Optional[bool], str]:
+def _classify_vrfy(code: int) -> tuple[bool | None, str]:
     """Map an SMTP ``VRFY`` response code to ``(found, description)``."""
     key = str(code)
     if key in _VRFY_LABELS:
@@ -167,9 +167,9 @@ def _classify_vrfy(code: int) -> tuple[Optional[bool], str]:
 
 def run_smtp(
     target: str,
-    port: Optional[int] = None,
+    port: int | None = None,
     timeout: float = DEFAULT_TIMEOUT,
-    users: Optional[list[str]] = None,
+    users: list[str] | None = None,
     check_starttls: bool = True,
     check_relay: bool = True,
     ehlo_name: str = DEFAULT_EHLO_NAME,
@@ -208,7 +208,7 @@ def run_smtp(
         "error": None,
     }
 
-    sock: Optional[socket.socket] = None
+    sock: socket.socket | None = None
     try:
         sock = _connect(host, server_port, timeout, connector=connector)
         results["connected"] = True

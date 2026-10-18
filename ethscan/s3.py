@@ -16,7 +16,6 @@ import socket
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional
 from urllib.parse import urlparse
 
 DEFAULT_TIMEOUT = 5.0
@@ -121,7 +120,7 @@ def _build_s3_url(bucket_name: str, region: str) -> str:
 
 def _resolve_s3_endpoint(
     bucket_name: str, region: str, timeout: float = DEFAULT_TIMEOUT
-) -> Optional[str]:
+) -> str | None:
     """Resolve the S3 endpoint hostname to an IPv4 address (informational).
 
     Args:
@@ -147,7 +146,7 @@ def _resolve_s3_endpoint(
 
 
 def _build_bucket_candidates(
-    target: str, wordlist: Optional[list[str]] = None
+    target: str, wordlist: list[str] | None = None
 ) -> list[str]:
     """Build a list of candidate bucket names from the target and wordlist.
 
@@ -255,8 +254,8 @@ def check_bucket_public(
 
 def run_s3(
     target: str,
-    wordlist: Optional[list[str]] = None,
-    region: Optional[str] = None,
+    wordlist: list[str] | None = None,
+    region: str | None = None,
     timeout: float = DEFAULT_TIMEOUT,
     max_workers: int = DEFAULT_MAX_WORKERS,
 ) -> dict[str, object]:

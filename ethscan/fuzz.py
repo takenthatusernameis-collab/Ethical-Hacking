@@ -8,7 +8,6 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional
 
 DEFAULT_WORDLIST = [
     "/admin",
@@ -85,7 +84,7 @@ def fuzz_path(base_url: str, path: str, timeout: float = 5.0) -> dict[str, objec
 
 def run_fuzz(
     target: str,
-    wordlist: Optional[list[str]] = None,
+    wordlist: list[str] | None = None,
     timeout: float = 5.0,
     workers: int = 1,
 ) -> dict[str, object]:

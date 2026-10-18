@@ -7,7 +7,7 @@ import hmac
 import io
 import json
 import math
-from typing import Any, Optional
+from typing import Any
 
 # Common passwords sourced from well-known weak-password lists (offline).
 COMMON_PASSWORDS = {
@@ -39,7 +39,7 @@ _HASHLIB_ALGORITHMS = {
 }
 
 
-def _hashlib_name(algorithm: str) -> Optional[str]:
+def _hashlib_name(algorithm: str) -> str | None:
     """Return the hashlib algorithm name for a canonical key, or None."""
     return _HASHLIB_ALGORITHMS.get(algorithm)
 
@@ -76,8 +76,8 @@ def _compute_peppered_hash(password: str, algorithm: str, pepper: str) -> str:
 def _compute_password_hash(
     password: str,
     algorithm: str,
-    salt: Optional[str] = None,
-    pepper: Optional[str] = None,
+    salt: str | None = None,
+    pepper: str | None = None,
 ) -> str:
     """Compute a (optionally salted/peppered) hash for a password.
 
@@ -167,9 +167,9 @@ def has_repeated_patterns(password: str) -> bool:
 
 def evaluate_password(
     password: str,
-    min_length: Optional[int] = None,
-    salt: Optional[str] = None,
-    pepper: Optional[str] = None,
+    min_length: int | None = None,
+    salt: str | None = None,
+    pepper: str | None = None,
     algorithm: str = "sha256",
 ) -> dict[str, object]:
     """Evaluate a single password and return a structured report.
@@ -242,7 +242,7 @@ VALID_SORT_KEYS = ("score", "verdict", "length")
 
 def _sort_audit_pairs(
     results: list[tuple[str, dict[str, object]]],
-    sort_by: Optional[str],
+    sort_by: str | None,
     sort_desc: bool,
 ) -> list[tuple[str, dict[str, object]]]:
     """Return a sorted copy of the audit result pairs.
@@ -272,11 +272,11 @@ def _sort_audit_pairs(
 
 def audit_passwords(
     passwords: list[str],
-    min_length: Optional[int] = None,
-    sort_by: Optional[str] = None,
+    min_length: int | None = None,
+    sort_by: str | None = None,
     sort_desc: bool = True,
-    salt: Optional[str] = None,
-    pepper: Optional[str] = None,
+    salt: str | None = None,
+    pepper: str | None = None,
     algorithm: str = "sha256",
 ) -> list[tuple[str, dict[str, object]]]:
     """Audit a list of passwords.
@@ -306,11 +306,11 @@ def audit_passwords(
 def format_audit_report_json(
     passwords: list[str],
     results: list[tuple[str, dict[str, object]]],
-    min_length: Optional[int] = None,
-    sort_by: Optional[str] = None,
+    min_length: int | None = None,
+    sort_by: str | None = None,
     sort_desc: bool = True,
-    salt: Optional[str] = None,
-    pepper: Optional[str] = None,
+    salt: str | None = None,
+    pepper: str | None = None,
 ) -> str:
     """Render password audit results as a JSON string."""
     report = {
@@ -342,11 +342,11 @@ def format_audit_report_json(
 def format_audit_report_markdown(
     passwords: list[str],
     results: list[tuple[str, dict[str, object]]],
-    min_length: Optional[int] = None,
-    sort_by: Optional[str] = None,
+    min_length: int | None = None,
+    sort_by: str | None = None,
     sort_desc: bool = True,
-    salt: Optional[str] = None,
-    pepper: Optional[str] = None,
+    salt: str | None = None,
+    pepper: str | None = None,
 ) -> str:
     """Render password audit results as a Markdown string."""
     lines = ["# Password Audit Report", ""]
@@ -385,9 +385,9 @@ def format_audit_report_markdown(
 def format_audit_report_csv(
     passwords: list[str],
     results: list[tuple[str, dict[str, object]]],
-    min_length: Optional[int] = None,
-    salt: Optional[str] = None,
-    pepper: Optional[str] = None,
+    min_length: int | None = None,
+    salt: str | None = None,
+    pepper: str | None = None,
 ) -> str:
     """Render password audit results as a CSV string.
 

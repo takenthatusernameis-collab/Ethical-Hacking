@@ -9,7 +9,6 @@ import csv
 import io
 import json
 import xml.etree.ElementTree as ET
-from typing import Optional
 
 from ethscan.vuln import (
     SEVERITIES,
@@ -18,7 +17,7 @@ from ethscan.vuln import (
 )
 
 
-def _extract_text(element: Optional[ET.Element], default: str = "") -> str:
+def _extract_text(element: ET.Element | None, default: str = "") -> str:
     """Safely extract text from an XML element."""
     if element is not None and element.text:
         return element.text.strip()

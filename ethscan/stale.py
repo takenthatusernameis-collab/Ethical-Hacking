@@ -5,7 +5,6 @@ import csv
 import io
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional
 from urllib.parse import urlparse
 
 DEFAULT_TIMEOUT = 2.0
@@ -67,7 +66,7 @@ def resolve_aaaa_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[
         return []
 
 
-def resolve_cname(domain: str, timeout: float = DEFAULT_TIMEOUT) -> Optional[str]:
+def resolve_cname(domain: str, timeout: float = DEFAULT_TIMEOUT) -> str | None:
     """Resolve CNAME record for a domain using stdlib getaddrinfo (follows CNAME)."""
     try:
         socket.setdefaulttimeout(timeout)

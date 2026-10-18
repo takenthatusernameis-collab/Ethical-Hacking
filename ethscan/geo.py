@@ -13,7 +13,6 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Optional
 
 DEFAULT_API_URL = "http://ip-api.com/json/"
 DEFAULT_TIMEOUT = 5.0
@@ -53,7 +52,7 @@ def _normalize_target(target: str) -> str:
     return host
 
 
-def _resolve_host(host: str) -> Optional[str]:
+def _resolve_host(host: str) -> str | None:
     """Resolve a hostname to an IPv4 address, returning None on failure."""
     try:
         return socket.gethostbyname(host)
@@ -90,7 +89,7 @@ def _is_cache_valid(entry: dict, ttl: int = CACHE_TTL) -> bool:
     return (time.time() - entry["timestamp"]) < ttl
 
 
-def _fetch_geo_data(ip: str, timeout: float = DEFAULT_TIMEOUT) -> Optional[dict]:
+def _fetch_geo_data(ip: str, timeout: float = DEFAULT_TIMEOUT) -> dict | None:
     """Fetch geolocation data from the public API."""
     url = f"{DEFAULT_API_URL}{ip}?fields={','.join(FIELDS)}"
     req = urllib.request.Request(url, headers={"User-Agent": "ethscan/0.1"})
@@ -144,7 +143,7 @@ def run_geo(
     timeout: float = DEFAULT_TIMEOUT,
     use_cache: bool = True,
     offline_fallback: bool = True,
-    api_url: Optional[str] = None,
+    api_url: str | None = None,
     recursive: bool = False,
     max_depth: int = DEFAULT_MAX_DEPTH,
 ) -> dict[str, object]:
@@ -376,7 +375,7 @@ def _geo_csv_header() -> list[str]:
 
 
 def _geo_csv_row(
-    target: str, ip: object, geo: dict[str, object], hop: Optional[dict[str, object]] = None
+    target: str, ip: object, geo: dict[str, object], hop: dict[str, object] | None = None
 ) -> list[str]:
     """Build a single CSV row for a geolocation result (primary target or hop).
 

@@ -12,7 +12,6 @@ import json
 import platform
 import re
 import subprocess
-from typing import Optional
 
 
 def _is_linux() -> bool:
@@ -216,7 +215,7 @@ def _scan_interface(interface: str) -> list[dict]:
     return _run_iwlist_scan(interface)
 
 
-def run_wifi(interface: Optional[str] = None) -> dict:
+def run_wifi(interface: str | None = None) -> dict:
     """Run Wi-Fi reconnaissance.
 
     Args:

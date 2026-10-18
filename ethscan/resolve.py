@@ -5,7 +5,6 @@ import csv
 import io
 import ipaddress
 import socket
-from typing import Optional
 
 try:
     import dns.exception
@@ -92,7 +91,7 @@ def resolve_cname_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list
         return []
 
 
-def resolve_ptr_records(ip: str, timeout: float = DEFAULT_TIMEOUT, server: Optional[str] = None) -> list[str]:
+def resolve_ptr_records(ip: str, timeout: float = DEFAULT_TIMEOUT, server: str | None = None) -> list[str]:
     """Resolve PTR records (reverse DNS) for an IP address."""
     if not DNS_AVAILABLE:
         try:
@@ -117,7 +116,7 @@ def resolve_ptr_records(ip: str, timeout: float = DEFAULT_TIMEOUT, server: Optio
 
 
 def resolve_with_dnspython(
-    domain: str, record_type: str, timeout: float = DEFAULT_TIMEOUT, server: Optional[str] = None
+    domain: str, record_type: str, timeout: float = DEFAULT_TIMEOUT, server: str | None = None
 ) -> list[str]:
     """Resolve DNS records using dnspython if available."""
     if not DNS_AVAILABLE:
@@ -138,8 +137,8 @@ def resolve_with_dnspython(
 
 def run_resolve(
     target: str,
-    record_types: Optional[list[str]] = None,
-    server: Optional[str] = None,
+    record_types: list[str] | None = None,
+    server: str | None = None,
     timeout: float = DEFAULT_TIMEOUT,
 ) -> dict[str, object]:
     """Perform forward/reverse DNS resolution for a target.

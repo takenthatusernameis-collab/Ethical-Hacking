@@ -6,7 +6,6 @@ import io
 import socket
 import struct
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional
 from urllib.parse import urlparse
 
 from ethscan.dns import resolve_a_records, resolve_aaaa_records, resolve_with_dnspython
@@ -198,7 +197,7 @@ def parse_dns_response(data: bytes) -> dict[str, object]:
 
 
 def _axfr_result(
-    nameserver: str, success: bool, records: list[str], error: Optional[str]
+    nameserver: str, success: bool, records: list[str], error: str | None
 ) -> dict[str, object]:
     """Build a single AXFR attempt result entry."""
     return {
@@ -366,7 +365,7 @@ def discover_nameservers(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[
     return sorted({value.rstrip(".") for value in values if value.strip()})
 
 
-def _resolve_label(label: str, domain: str, timeout: float, resolver: Optional[str] = None) -> dict[str, object]:
+def _resolve_label(label: str, domain: str, timeout: float, resolver: str | None = None) -> dict[str, object]:
     """Resolve a single subdomain label to its A and AAAA records."""
     hostname = f"{label}.{domain}"
     a_records: list[str] = []
@@ -403,11 +402,11 @@ def _resolve_label(label: str, domain: str, timeout: float, resolver: Optional[s
 
 def run_dnsbrute(
     target: str,
-    nameservers: Optional[list[str]] = None,
-    subdomains: Optional[list[str]] = None,
+    nameservers: list[str] | None = None,
+    subdomains: list[str] | None = None,
     timeout: float = DEFAULT_TIMEOUT,
     max_workers: int = 50,
-    resolver: Optional[str] = None,
+    resolver: str | None = None,
     recursive: bool = False,
     max_depth: int = DEFAULT_RECURSIVE_DEPTH,
 ) -> dict[str, object]:

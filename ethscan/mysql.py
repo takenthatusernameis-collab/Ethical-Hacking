@@ -17,7 +17,7 @@ import csv
 import io
 import json
 import socket
-from typing import Any, Optional
+from typing import Any
 
 DEFAULT_PORT = 3306
 DEFAULT_TIMEOUT = 3.0
@@ -32,8 +32,8 @@ def _normalize_target(target: str) -> tuple[str, int]:
     literals may be bracketed.
     """
     normalized = (target or "").strip()
-    host: Optional[str] = None
-    port: Optional[int] = None
+    host: str | None = None
+    port: int | None = None
 
     if "://" in normalized:
         from urllib.parse import urlparse
@@ -68,7 +68,7 @@ def _send_recv(
     request: bytes,
     timeout: float,
     connector=None,
-) -> tuple[Optional[bytes], Optional[str]]:
+) -> tuple[bytes | None, str | None]:
     """Send bytes over TCP and return received bytes.
 
     Tests may provide a ``connector`` callable to inject a fake transport.
@@ -311,9 +311,9 @@ def _assess_handshake(handshake: dict[str, Any]) -> list[str]:
 
 def run_mysql(
     target: str,
-    port: Optional[int] = None,
+    port: int | None = None,
     timeout: float = DEFAULT_TIMEOUT,
-    probes: Optional[list[str]] = None,
+    probes: list[str] | None = None,
     connector=None,
 ) -> dict[str, Any]:
     """Run MySQL reconnaissance probes against a target.
@@ -363,8 +363,8 @@ def run_mysql(
 
     handshake_data: dict[str, Any] = {}
     accessible = False
-    error: Optional[str] = None
-    version: Optional[str] = None
+    error: str | None = None
+    version: str | None = None
 
     # For MySQL, the server sends handshake on connect; we don't need to send anything
     # So for handshake probe, just receive

@@ -17,7 +17,7 @@ import ftplib
 import io
 import json
 import socket
-from typing import Any, Optional
+from typing import Any
 
 DEFAULT_PORT = 21
 DEFAULT_TIMEOUT = 3.0
@@ -80,7 +80,7 @@ def _connect(
 
 def run_ftp(
     target: str,
-    port: Optional[int] = None,
+    port: int | None = None,
     timeout: float = DEFAULT_TIMEOUT,
     check_anonymous: bool = True,
     connector=ftplib.FTP,
@@ -113,7 +113,7 @@ def run_ftp(
         "error": None,
     }
 
-    client: Optional[Any] = None
+    client: Any | None = None
     try:
         try:
             client = _connect(host, server_port, timeout, connector=connector)

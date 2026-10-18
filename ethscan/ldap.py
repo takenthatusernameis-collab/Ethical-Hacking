@@ -36,7 +36,7 @@ import io
 import json
 import socket
 import ssl
-from typing import Any, Optional
+from typing import Any
 
 DEFAULT_PORT = 389
 DEFAULT_LDAPS_PORT = 636
@@ -129,8 +129,8 @@ def _normalize_target(target: str) -> tuple[str, int]:
     literals may be bracketed.
     """
     normalized = (target or "").strip()
-    host: Optional[str] = None
-    port: Optional[int] = None
+    host: str | None = None
+    port: int | None = None
     scheme = ""
 
     if "://" in normalized:
@@ -388,7 +388,7 @@ def _parse_ldap_message(content: bytes, result: dict[str, Any]) -> None:
         result["entries"].append(_parse_search_entry(op_content))
 
 
-def _parse_ldap_response(data: Optional[bytes]) -> dict[str, Any]:
+def _parse_ldap_response(data: bytes | None) -> dict[str, Any]:
     """Parse a raw LDAP response buffer into a structured dict.
 
     A buffer may hold several LDAPMessages (e.g. a search response with
@@ -449,7 +449,7 @@ def _send_recv(
     timeout: float,
     connector=None,
     use_tls: bool = False,
-) -> tuple[Optional[bytes], Optional[str]]:
+) -> tuple[bytes | None, str | None]:
     """Send ``request`` to ``host:port`` and return ``(data, error)``.
 
     When ``connector`` is provided it is called as
@@ -487,7 +487,7 @@ def _send_recv(
 # ---------------------------------------------------------------------------
 
 
-def _build_banner(results: dict[str, Any]) -> Optional[str]:
+def _build_banner(results: dict[str, Any]) -> str | None:
     """Build a short human-readable banner from the probe results."""
     if not results.get("accessible"):
         return None
@@ -506,7 +506,7 @@ def _build_banner(results: dict[str, Any]) -> Optional[str]:
 
 def run_ldap(
     target: str,
-    port: Optional[int] = None,
+    port: int | None = None,
     timeout: float = DEFAULT_TIMEOUT,
     ldap_version: int = DEFAULT_LDAP_VERSION,
     connector=None,

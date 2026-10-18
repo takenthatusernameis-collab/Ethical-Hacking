@@ -7,7 +7,6 @@ import json
 import re
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional
 
 DEFAULT_PORTS = [
     21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445,
@@ -106,7 +105,7 @@ COMMON_SERVICE_PORTS = {
 }
 
 
-def grab_banner(host: str, port: int, timeout: float) -> tuple[int, Optional[str], Optional[str]]:
+def grab_banner(host: str, port: int, timeout: float) -> tuple[int, str | None, str | None]:
     """Connect to a port and attempt to grab the banner.
 
     Args:
@@ -158,7 +157,7 @@ def grab_banner(host: str, port: int, timeout: float) -> tuple[int, Optional[str
 
 def run_service(
     target: str,
-    ports: Optional[list[int]] = None,
+    ports: list[int] | None = None,
     timeout: float = DEFAULT_TIMEOUT,
     max_workers: int = DEFAULT_WORKERS,
 ) -> dict[str, object]:
