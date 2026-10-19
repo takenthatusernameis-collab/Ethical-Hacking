@@ -511,7 +511,7 @@ def format_radix_report_csv(data: dict[str, object]) -> str:
             diff_cidr = diff_cidrs[0]
 
     for original in cidrs:
-        orig_net = ipaddress.ip_network(original)
+        orig_net = ipaddress.ip_network(original, strict=False)
         matched_merged = original
         for m_net in merged_networks:
             if orig_net.subnet_of(m_net):

@@ -762,6 +762,18 @@ def test_format_radix_report_csv_pipe_escaping() -> None:
     assert "192.168.1.0/24" in output
 
 
+def test_format_radix_report_csv_host_bits_set() -> None:
+    """CIDR with host bits set must not crash the CSV formatter (strict=False)."""
+    data = run_radix(["192.168.1.5/24", "10.0.0.0/24"])
+    output = format_radix_report_csv(data)
+
+    lines = [line.rstrip("\r") for line in output.strip().split("\n")]
+    assert lines[0] == "original_cidr,merged_cidr,compression_ratio"
+    # Original CIDR is preserved verbatim in the first column.
+    assert "192.168.1.5/24" in lines[1]
+    assert "10.0.0.0/24" in lines[2]
+
+
 # ---------------------------------------------------------------------------
 # _format_network_info
 # ---------------------------------------------------------------------------
