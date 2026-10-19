@@ -1,7 +1,7 @@
 # Next Task for Agent
 
 ## Status
-- Working tree on main (HEAD c6b6fc2, local only; ahead of origin/main by 2 commits: 19777ff + c6b6fc2).
+- Working tree on main (HEAD 5cba856, local only; ahead of origin/main by 3 commits: 19777ff + c6b6fc2 + 5cba856).
 - Working tree CLEAN.
 - Tests: 3906 passed, 1 skipped (green baseline).
 - Repository: 57 source files compile clean; 53 CLI commands register; `python -m ethscan --help`/`--version` OK.
@@ -16,6 +16,7 @@
 ## Current state of fixes
 - `,cover` artifact cleanup committed at 19777ff (113 files + .gitignore).
 - web.py dead-duplicate strptime removal committed at c6b6fc2 (1 line). Verified: `python -m pytest -q` -> 3906 passed, 1 skipped; `python -m ruff check ethscan tests` -> 44 errors unchanged; `python -m py_compile ethscan/*.py` clean.
+- ssl.py dead-duplicate strptime removal committed at 5cba856 (1 line). Verified: `python -m pytest -q` -> 3906 passed, 1 skipped; `python -m ruff check ethscan tests` -> 44 errors unchanged; `python -m py_compile ethscan/*.py` clean.
 - Pre-existing E303 too-many-blank-lines sites remain (e.g. ethscan/cli.py:3600, ethscan/validate.py:279, ethscan/cidr.py:255-256, and others); not regressions, left untouched.
 
 ## Next precise task
@@ -28,5 +29,3 @@
 4. Run lint: `python -m ruff check ethscan tests` (should report 44 errors unchanged).
 5. Confirm `python -m py_compile ethscan/*.py` passes and no unintended changes via `git diff --stat`.
 6. Do not claim checks passed without evidence.
-
-(End of file - total 33 lines)

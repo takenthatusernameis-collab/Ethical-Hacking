@@ -1,11 +1,12 @@
 # Handoff to Next Agent
 
 ## What changed
-- Removed one provably-dead duplicate line in `ethscan/web.py` `check_ssl_configuration` (was line 196):
+- Removed one provably-dead duplicate line in `ethscan/ssl.py` `inspect_certificate` (was line 224):
   `expiry = datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")`.
-- Evidence it was dead: on Python 3.12 `datetime.strptime(..., "%Z")` parses "GMT"/"UTC" but never attaches tzinfo, so line 196 reassigns `expiry` to the exact value computed on line 194. The following `expiry_tz = expiry.replace(tzinfo=timezone.utc)` uses only the first assignment's result. Confirmed empirically (`tzinfo: None` after parse). No behavior change.
-- Committed as c6b6fc2 "Remove provably-dead duplicate strptime in web.py SSL expiry parse" (1 file, 1 deletion).
-- Prior session's `,cover` artifact cleanup (113 files + .gitignore) was committed at 19777ff before this session.
+- Evidence it was dead: identical to the already-fixed `web.py` case — on Python 3.12 `datetime.strptime(..., "%Z")` parses "GMT"/"UTC" but never attaches tzinfo, so line 224 reassigns `expiry` to the exact value computed on line 222. The following `expiry_tz = expiry.replace(tzinfo=timezone.utc)` uses only the first assignment's result. Confirmed empirically (`tzinfo: None` after parse). No behavior change.
+- Committed as 5cba856 "Remove provably-dead duplicate strptime in ssl.py SSL expiry parse" (1 file, 1 deletion).
+- Prior session's web.py dead-duplicate strptime removal was committed at c6b6fc2 before this session.
+- Prior session's `,cover` artifact cleanup (113 files + .gitignore) was committed at 19777ff before that.
 
 ## What was actually verified
 - `python -m pytest -q` -> 3906 passed, 1 skipped (green baseline unchanged). Two pre-existing RuntimeWarnings about `ethscan.main`/`ethscan.__main__` in sys.modules from test_main.py (unrelated to this change).
@@ -20,7 +21,7 @@
 - Pre-existing E303 too-many-blank-lines sites remain (e.g. ethscan/cli.py:3600, ethscan/validate.py:279, ethscan/cidr.py:255-256, and others); not regressions, left untouched.
 
 ## Failed approaches / evidence
-- Searched for additional provably-dead duplicate lines via AST/line-diff scan: only the web.py strptime duplicate qualified. Other apparent "duplicate" lines in ssh.py are distinct payload appends (different variables), not dead.
+- Searched for additional provably-dead duplicate lines via AST/line-diff scan: only the web.py and ssl.py strptime duplicates qualified. Other apparent "duplicate" lines in ssh.py are distinct payload appends (different variables), not dead.
 - Lint scope: `ruff --select F` clean for ethscan/tests; E303 --preview shows only pre-existing non-regression sites. Not modifying to avoid unrelated churn.
 - Chosen task: remove the single provably-dead duplicate strptime (definitive proof: identical reassignment to a value whose tzinfo is provably None on the supported Python versions; behavior-preserving; fully verifiable).
 
