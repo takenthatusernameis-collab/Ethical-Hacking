@@ -6060,6 +6060,69 @@ def test_vuln_ports_option(monkeypatch) -> None:
     assert called_args["ports"] == [21, 22, 80]
 
 
+def test_vuln_ports_common_keyword(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+        min_severity=None,
+        recursive=False,
+        max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
+    ):
+        called_args["ports"] = ports
+        return {"target": target, "services_checked": 0, "findings": [], "finding_count": 0}
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["vuln", "--target", "example.com", "--ports", "common"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == [
+        20, 21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445,
+        993, 995, 1723, 3306, 3389, 5432, 5900, 8080, 8443, 8888,
+    ]
+
+
+def test_vuln_ports_all_keyword(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_vuln(
+        target,
+        ports=None,
+        timeout=3.0,
+        max_workers=50,
+        services=None,
+        tls=None,
+        certificate=None,
+        severity=None,
+        min_severity=None,
+        recursive=False,
+        max_depth=2,
+        salt=None,
+        pepper=None,
+        algorithm="sha256",
+    ):
+        called_args["ports"] = ports
+        return {"target": target, "services_checked": 0, "findings": [], "finding_count": 0}
+
+    monkeypatch.setattr("ethscan.cli.run_vuln", mock_run_vuln)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["vuln", "--target", "example.com", "--ports", "All"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == list(range(1, 65536))
+
+
 def test_vuln_workers_option(monkeypatch) -> None:
     called_args = {}
 
@@ -8382,6 +8445,51 @@ def test_osdetect_ports_option(monkeypatch) -> None:
     )
     assert result.exit_code == 0
     assert called_args["ports"] == [22, 80, 443]
+
+
+def test_osdetect_ports_common_keyword(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_osdetect(
+        target,
+        ports=None,
+        timeout=5.0,
+        max_workers=10,
+        banners=None,
+    ):
+        called_args["ports"] = ports
+        return {"target": target, "ports_probed": len(ports or []), "probes": [], "inferred_os": [], "inferred_os_count": 0, "notes": []}
+
+    monkeypatch.setattr("ethscan.cli.run_osdetect", mock_run_osdetect)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["osdetect", "--target", "example.com", "--ports", "common"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == [
+        20, 21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445,
+        993, 995, 1723, 3306, 3389, 5432, 5900, 8080, 8443, 8888,
+    ]
+
+
+def test_osdetect_ports_all_keyword(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_osdetect(
+        target,
+        ports=None,
+        timeout=5.0,
+        max_workers=10,
+        banners=None,
+    ):
+        called_args["ports"] = ports
+        return {"target": target, "ports_probed": len(ports or []), "probes": [], "inferred_os": [], "inferred_os_count": 0, "notes": []}
+
+    monkeypatch.setattr("ethscan.cli.run_osdetect", mock_run_osdetect)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["osdetect", "--target", "example.com", "--ports", "ALL"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == list(range(1, 65536))
 
 
 def test_osdetect_banners_file_option(tmp_path, monkeypatch) -> None:

@@ -1,18 +1,17 @@
 # TASK.md
 
-Date: 2026-10-19T16:05:00Z
-Status: `service` and `cve` now accept `common`/`all` port keywords consistently with `scan`/`report`.
+Date: 2026-10-19T16:45:00Z
+Status: `vuln` and `osdetect` now accept `common`/`all` port keywords consistently with `scan`/`service`/`cve`/`report`.
 
-## What changed
-- `ethscan/scanner.py`: added `resolve_port_list(ports, profile=None)` helper that resolves `common`/`all` (case-insensitive) and delegates other specs to `parse_port_range`; with a profile, `common` maps to the profile's port set and `all` to ports 1-65535, mirroring `scan`.
-- `ethscan/cli.py`: `service` and `cve` now use `resolve_port_list` instead of calling `parse_port_range` directly, in both the profile and non-profile branches. `--ports` help text updated to document the keywords.
-- `tests/test_scanner.py` (+9): unit tests for `resolve_port_list` (keywords, case-insensitivity, profile mapping, ranges, invalid input).
-- `tests/test_cli.py` (+12): CLI regression tests for `service`/`cve` with `--ports common`/`--ports all`, case-insensitive keywords, and `--profile` combinations.
+## What changed (this session)
+- `ethscan/cli.py`: `vuln` (~line 1777) and `osdetect` (~line 2056) now call `resolve_port_list(ports)` instead of `parse_port_range(ports)` directly, so `--ports common`/`--ports all` (case-insensitive) resolve instead of raising `ValueError: Invalid port number ...`.
+- `tests/test_cli.py` (+4): `test_vuln_ports_common_keyword`, `test_vuln_ports_all_keyword`, `test_osdetect_ports_common_keyword`, `test_osdetect_ports_all_keyword` — assert `run_vuln`/`run_osdetect` receive the resolved port list.
 
 ## Verification
-- Full suite: 3972 passed, 1 skipped (baseline 3954 + 18 new tests).
-- Lint: `ruff check ethscan tests` = 48 pre-existing errors, no new ones.
-- Reproduced the original failure (`service --ports all`/`common` and `cve --ports all`/`common` raised `ValueError: Invalid port number ...`); both now exit 0 with the correct port list.
+- Reproduced the original failure: `vuln --ports common` and `osdetect --ports all` exited 1 with `ValueError: Invalid port number 'common'/'all'`; both now exit 0 with the correct port list (via new mocked CLI tests).
+- New keyword tests pass: 14 passed for `common_keyword`/`all_keyword` filter; all 46 vuln/osdetect CLI tests pass.
+- Full suite: 3976 passed, 1 skipped.
+- Lint: `ruff check ethscan tests` = 48 errors, byte-identical to baseline; no new errors.
 
 ## Next
 See HANDOFF_NEXT.md for the remaining follow-up task.

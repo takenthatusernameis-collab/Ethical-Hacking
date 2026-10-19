@@ -1776,8 +1776,9 @@ def vuln(
 
     port_list = None
     if ports:
-        from ethscan.scanner import parse_port_range
-        port_list = parse_port_range(ports)
+        from ethscan.scanner import resolve_port_list
+
+        port_list = resolve_port_list(ports)
 
     results = run_vuln(
         target,
@@ -2055,8 +2056,9 @@ def osdetect(
     """Fingerprint the target operating system using TCP/IP stack behavior."""
     port_list = None
     if ports:
-        from ethscan.scanner import parse_port_range
-        port_list = parse_port_range(ports)
+        from ethscan.scanner import resolve_port_list
+
+        port_list = resolve_port_list(ports)
 
     banners = None
     if banners_file:
