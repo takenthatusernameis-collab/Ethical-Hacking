@@ -20967,6 +20967,7 @@ def test_cve_service_profile_override_workers_only(monkeypatch) -> None:
     assert called["timeout"] == 5.0
     assert called["ports"] == [80, 443]
     assert called["service_timeout"] == 0.5
+    assert called["workers"] == 200
 
 def test_cve_service_profile_no_ports(monkeypatch) -> None:
     called = {}
