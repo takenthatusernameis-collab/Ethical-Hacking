@@ -32,6 +32,14 @@
 - Bulk lint "fixes" without checking test impact.
 - Adding coverage tests for unreachable defensive branches (no behavior change, coverage tooling unreliable under pytest in this env).
 
+## Re-verification (2026-10-19, this session — no changes made)
+- `git status` → clean; `git stash list` → empty.
+- `python -m pytest -q` → 3902 passed, 1 skipped (baseline green).
+- `python -m ruff check ethscan/ tests/` → 46 errors, all documented intentional (33 BLE001, 12 TRY002, 1 PLR0402); do not touch.
+- `python -m py_compile ethscan/*.py` → clean; `python -m ethscan --help` OK (53 commands).
+- Coverage gaps in ethscan/radix.py (lines 149-150, 153-154, 158-161, 219-220) confirmed unreachable defensive code (mixed-version sort TypeError; collapse_addresses/ip_network won't raise for valid same-version inputs; overlapping same-version nets always collapse to one). No TODO/FIXME/BUG markers in ethscan/.
+- Grep for TODO|FIXME|XXX|HACK|BUG in ethscan/ → none.
+
 ## Next precise task
 - None. Await a genuine new issue/requirement (bug with failing test, feature with tests, or explicitly requested refactor with verification plan). No safe bounded task remains in the current baseline.
 - If a new issue arrives, implement the smallest verifiable change, run `python -m pytest -q` + targeted lint/py_compile, and preserve baseline.
