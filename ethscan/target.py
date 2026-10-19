@@ -90,6 +90,41 @@ def _host_of(target: str) -> str:
     return remainder
 
 
+
+def _path_of(target: str) -> str:
+    """Return the path+query portion of a raw target string.
+
+    The fragment (``#...``) is not sent to the server and is therefore not
+    validated here.
+    """
+    remainder = target.strip()
+    scheme = _SCHEME_RE.match(remainder)
+    if scheme is not None:
+        remainder = remainder[scheme.end():]
+    # Find start of path
+    slash = remainder.find('/')
+    if slash != -1:
+        # From slash to end, excluding fragment
+        fragment = remainder.find('#', slash)
+        if fragment != -1:
+            return remainder[slash:fragment]
+        return remainder[slash:]
+    query = remainder.find('?')
+    if query != -1:
+        fragment = remainder.find('#', query)
+        if fragment != -1:
+            return remainder[query:fragment]
+        return remainder[query:]
+    return ''
+
+
+def check_target_path(target: str) -> None:
+    """Reject a target whose path or query contains a space or control char."""
+    path_part = _path_of(target)
+    if path_part and _DISALLOWED_HOST_RE.search(path_part):
+        raise TargetSpecError("Target path contains a space or control character")
+
+
 def check_target_host(target: str) -> None:
     """Reject a target whose host contains a space or a control character.
 

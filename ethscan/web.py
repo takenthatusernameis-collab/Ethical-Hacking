@@ -9,7 +9,7 @@ import ssl
 import urllib.error
 import urllib.request
 
-from ethscan.target import check_target_host, url_port
+from ethscan.target import check_target_host, check_target_path, url_port
 
 # Recommended security headers and their importance.
 SECURITY_HEADERS: dict[str, str] = {
@@ -47,6 +47,7 @@ def _parse_url(target: str) -> tuple[str, int, bool]:
     if "://" not in normalized:
         normalized = "https://" + normalized
     check_target_host(normalized)
+    check_target_path(normalized)
     parsed = urllib.request.urlparse(normalized)
     host = parsed.hostname or "localhost"
     scheme = parsed.scheme.lower()
