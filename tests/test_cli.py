@@ -20938,24 +20938,25 @@ def test_hash_stdin_with_out_markdown(tmp_path) -> None:
 def test_cve_service_profile_override_ports(monkeypatch) -> None:
     called = {}
 
-    def mock_run_cve(target, services_file=None, port=None, timeout=3.0, max_workers=10, **kwargs):
+    def mock_run_cve(target, **kwargs):
         called["target"] = target
-        called["timeout"] = timeout
-        called["max_workers"] = max_workers
+        called.update(kwargs)
         return {"target": target, "services": []}
 
     monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
     runner = CliRunner()
     result = runner.invoke(cli, ["cve", "--target", "example.com", "--profile", "fast", "--ports", "80,443"])
     assert result.exit_code == 0
-    # fast profile defaults: timeout 0.5, workers 200 in general; but for service/cve context check
+    assert called["ports"] == [80, 443]
+    assert called["service_timeout"] == 0.5
+    assert called["workers"] == 200
 
 def test_cve_service_profile_override_workers_only(monkeypatch) -> None:
     called = {}
 
-    def mock_run_cve(target, services_file=None, port=None, timeout=3.0, max_workers=10, **kwargs):
-        called["timeout"] = timeout
-        called["max_workers"] = max_workers
+    def mock_run_cve(target, **kwargs):
+        called["target"] = target
+        called.update(kwargs)
         return {"target": target, "services": []}
 
     monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
@@ -20963,18 +20964,25 @@ def test_cve_service_profile_override_workers_only(monkeypatch) -> None:
     # Set timeout explicitly so it != default 3.0, workers remain 50 default
     result = runner.invoke(cli, ["cve", "--target", "example.com", "--profile", "fast", "--ports", "80,443", "--timeout", "5.0"])
     assert result.exit_code == 0
+    assert called["timeout"] == 5.0
+    assert called["ports"] == [80, 443]
+    assert called["service_timeout"] == 0.5
 
 def test_cve_service_profile_no_ports(monkeypatch) -> None:
     called = {}
 
-    def mock_run_cve(target, services_file=None, port=None, timeout=3.0, max_workers=10, **kwargs):
-        called["ports"] = kwargs.get("ports") if "ports" in kwargs else None
+    def mock_run_cve(target, **kwargs):
+        called["target"] = target
+        called.update(kwargs)
         return {"target": target, "services": []}
 
     monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
     runner = CliRunner()
     result = runner.invoke(cli, ["cve", "--target", "example.com", "--profile", "fast"])
     assert result.exit_code == 0
+    assert called["ports"] == [21, 22, 23, 25, 53, 80, 110, 139, 143, 443, 445, 993, 995, 3306, 3389, 5432, 8080, 8443]
+    assert called["service_timeout"] == 0.5
+    assert called["workers"] == 200
 
 
 def test_cve_profile_preserves_explicit_service_timeout_equal_to_cli_default(monkeypatch) -> None:
