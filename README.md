@@ -166,6 +166,20 @@ Try 'python -m ethscan web --help' for help.
 Error: Invalid value for '--target': Target host contains a space or control character
 ```
 
+The path and the query of a `--target` are validated the same way. A target
+whose path or query contains a space or a control character is rejected, but a
+fragment (`#...`) is not, because it is never sent to the server. This applies
+to the commands that send the raw target to the server (`web`, `headers`,
+`urlcheck`):
+
+```console
+$ python -m ethscan web --target "https://example.com/a b"
+Usage: python -m ethscan web [OPTIONS]
+Try 'python -m ethscan web --help' for help.
+
+Error: Invalid value for '--target': Target path contains a space or control character
+```
+
 The `validate` command is the exception: it reports invalid specifications
 inside its own JSON/CSV output and still exits 0. The same holds for the
 `mysql`, `mongodb`, `oracle`, `postgresql` and `mssql` commands, whose

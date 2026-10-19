@@ -297,3 +297,111 @@ def test_fuzz_reports_a_non_numeric_port_like_the_other_commands() -> None:
         fuzz._normalize_base_url("https://host:notaport")
     assert str(excinfo.value) == NON_NUMERIC_PORT_MESSAGE
 
+
+# --- A target whose path or query contains a space or a control character --
+
+PATH_ERROR_MESSAGE = "Target path contains a space or control character"
+
+HOSTILE_PATH_TARGETS = (
+    "https://example.com/a b",
+    "https://example.com/a\tb",
+    "https://example.com/a\nb",
+    "https://example.com/ho\x00st",
+    "https://example.com/path\x7f",
+    "https://example.com/?q=a b",
+    "https://example.com/?q=a\tb",
+    "http://example.com/a b",
+    "example.com/a b",
+)
+
+USABLE_PATH_TARGETS = (
+    "https://example.com/path",
+    "https://example.com/a%20b",
+    "https://example.com/?q=1",
+    "https://example.com/path?query=1",
+    "https://example.com/path#frag",
+    "https://example.com/path?query=1#frag",
+    "example.com",
+    "https://example.com",
+)
+
+
+def test_check_target_path_rejects_a_path_with_a_space() -> None:
+    """A path with a space is reported as an unusable target."""
+    from ethscan.target import check_target_path
+
+    with pytest.raises(TargetSpecError) as excinfo:
+        check_target_path("https://example.com/a b")
+    assert str(excinfo.value) == PATH_ERROR_MESSAGE
+
+
+def test_check_target_path_error_is_still_a_value_error() -> None:
+    """Existing ``except ValueError`` handlers keep working."""
+    from ethscan.target import check_target_path
+
+    with pytest.raises(ValueError):
+        check_target_path("https://example.com/a b")
+
+
+@pytest.mark.parametrize("target", HOSTILE_PATH_TARGETS)
+def test_check_target_path_rejects_every_hostile_path(target: str) -> None:
+    """A space or a control character in the path or query is always rejected."""
+    from ethscan.target import check_target_path
+
+    with pytest.raises(TargetSpecError) as excinfo:
+        check_target_path(target)
+    assert str(excinfo.value) == PATH_ERROR_MESSAGE
+
+
+@pytest.mark.parametrize("target", USABLE_PATH_TARGETS)
+def test_check_target_path_accepts_a_usable_path(target: str) -> None:
+    """A path that ``http.client`` accepts is not an error."""
+    from ethscan.target import check_target_path
+
+    check_target_path(target)
+
+
+def test_check_target_path_does_not_reject_a_fragment() -> None:
+    """The fragment is never sent to the server and must not be rejected."""
+    from ethscan.target import check_target_path
+
+    check_target_path("https://example.com/path#has space")
+    check_target_path("https://example.com/path#tab\there")
+
+
+def test_check_target_path_does_not_reject_a_percent_encoded_path() -> None:
+    """A percent-encoded path keeps working."""
+    from ethscan.target import check_target_path
+
+    check_target_path("https://example.com/a%20b")
+    check_target_path("https://example.com/%00encoded")
+
+
+def test_check_target_path_is_a_noop_for_a_bare_host() -> None:
+    """A target with no path has nothing to reject."""
+    from ethscan.target import check_target_path
+
+    check_target_path("example.com")
+    check_target_path("https://example.com")
+    check_target_path("")
+
+
+def test_the_url_modules_reject_a_hostile_path() -> None:
+    """web, headers and urlcheck refuse a target with an unusable path."""
+    from ethscan import web
+
+    for target in HOSTILE_PATH_TARGETS:
+        with pytest.raises(TargetSpecError) as excinfo:
+            web._parse_url(target)
+        assert str(excinfo.value) == PATH_ERROR_MESSAGE
+
+
+def test_the_url_modules_still_accept_the_valid_path_forms() -> None:
+    """The working target forms keep behaving exactly as before."""
+    from ethscan import web
+
+    assert web._parse_url("https://example.com/path") == ("example.com", 443, True)
+    assert web._parse_url("https://example.com/a%20b") == ("example.com", 443, True)
+    assert web._parse_url("https://example.com/?q=1") == ("example.com", 443, True)
+    assert web._parse_url("https://example.com/path#frag") == ("example.com", 443, True)
+

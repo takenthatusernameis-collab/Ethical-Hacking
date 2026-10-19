@@ -22381,3 +22381,125 @@ def test_the_hostile_host_message_is_the_same_for_every_command() -> None:
         messages.add(errors[0])
     assert len(messages) == 1, messages
 
+
+# --- A target whose path or query contains a space or a control character --
+#
+# ``http.client`` refuses such a request target with an
+# ``http.client.InvalidURL`` ("URL can't contain control characters. '/a b'"),
+# which derives from ``HTTPException`` and not from ``ValueError``. The error
+# therefore escaped the ``except ValueError`` handlers of the library and
+# reached the user as a raw traceback. The three commands that send the raw
+# target to the server now report it as a usage error instead.
+
+HOSTILE_PATH_COMMANDS = (
+    "web",
+    "headers",
+    "urlcheck",
+)
+
+HOSTILE_PATH_TARGETS = (
+    "https://example.com/a b",
+    "https://example.com/a\tb",
+    "https://example.com/?q=a b",
+    "https://example.com/?q=a\tb",
+    "http://example.com/a b",
+)
+
+PATH_ERROR_MESSAGE = "Target path contains a space or control character"
+
+
+def test_a_target_with_a_hostile_path_is_a_usage_error() -> None:
+    """A target whose path has a space must be rejected cleanly."""
+    runner = CliRunner()
+    for command in HOSTILE_PATH_COMMANDS:
+        for target in HOSTILE_PATH_TARGETS:
+            result = runner.invoke(cli, [command, "--target", target])
+            _assert_target_usage_error(result, f"{command} --target {target!r}")
+            assert PATH_ERROR_MESSAGE in result.output, result.output
+
+
+def test_a_hostile_path_usage_error_is_a_single_line() -> None:
+    """The failure must be a one-line error, not a multi-line traceback."""
+    runner = CliRunner()
+    for command in HOSTILE_PATH_COMMANDS:
+        result = runner.invoke(cli, [command, "--target", "https://example.com/a b"])
+        error_lines = [
+            line for line in result.output.splitlines() if line.startswith("Error:")
+        ]
+        assert len(error_lines) == 1, result.output
+        assert error_lines[0] == (
+            "Error: Invalid value for '--target': "
+            "Target path contains a space or control character"
+        )
+
+
+def test_the_documented_hostile_path_crashes_are_usage_errors() -> None:
+    """The invocations that used to dump a traceback must now be usage errors."""
+    runner = CliRunner()
+    for command in HOSTILE_PATH_COMMANDS:
+        result = runner.invoke(cli, [command, "--target", "https://example.com/a b"])
+        _assert_target_usage_error(result, command)
+
+
+def test_a_hostile_path_target_does_not_start_a_probe(monkeypatch) -> None:
+    """A rejected target must abort before any network access happens."""
+    import importlib
+
+    calls = []
+
+    def make_tripwire(module_name: str, attribute: str):
+        def tripwire(*args, **kwargs):
+            calls.append((module_name, attribute))
+            raise AssertionError("a probe was started for an invalid target")
+
+        return tripwire
+
+    transports = (
+        ("web", "fetch_headers"),
+        ("headers", "fetch_headers"),
+    )
+    for module_name, attribute in transports:
+        module = importlib.import_module(f"ethscan.{module_name}")
+        monkeypatch.setattr(module, attribute, make_tripwire(module_name, attribute))
+
+    runner = CliRunner()
+    for command in HOSTILE_PATH_COMMANDS:
+        result = runner.invoke(cli, [command, "--target", "https://example.com/a b"])
+        _assert_target_usage_error(result, command)
+    assert calls == [], "no probe may start for an invalid --target value"
+
+
+def test_a_valid_path_target_is_still_accepted(monkeypatch) -> None:
+    """A target with a usable path keeps working."""
+    import ethscan.headers
+    import ethscan.web
+
+    monkeypatch.setattr(ethscan.web, "fetch_headers", lambda *args, **kwargs: {})
+    monkeypatch.setattr(ethscan.headers, "fetch_headers", lambda *args, **kwargs: {})
+    runner = CliRunner()
+    for command in HOSTILE_PATH_COMMANDS:
+        for target in (
+            "https://example.com/path",
+            "https://example.com/a%20b",
+            "https://example.com/?q=1",
+            "https://example.com/path#frag",
+        ):
+            result = runner.invoke(
+                cli, [command, "--target", target, "--timeout", "0.2"]
+            )
+            assert result.exit_code == 0, f"{command} {target}: {result.output}"
+            assert "Invalid value for '--target'" not in result.output, result.output
+
+
+def test_the_hostile_path_message_is_the_same_for_every_command() -> None:
+    """One stable message, so the error does not depend on the command."""
+    runner = CliRunner()
+    messages = set()
+    for command in HOSTILE_PATH_COMMANDS:
+        result = runner.invoke(cli, [command, "--target", "https://example.com/a b"])
+        errors = [
+            line for line in result.output.splitlines() if line.startswith("Error:")
+        ]
+        messages.add(errors[0])
+    assert len(messages) == 1, messages
+

@@ -17,6 +17,12 @@ space or a control character: ``http.client`` refuses such a host with an
 from ``ValueError``, so it escapes the ``except ValueError`` handlers of the
 library and reaches the user as a raw traceback.
 
+:func:`check_target_path` does the same for a target whose path or query
+contains a space or a control character: ``http.client`` refuses such a
+request target with an ``http.client.InvalidURL`` for the same reason. The
+fragment (``#...``) is not sent to the server and is therefore not
+validated.
+
 The module is intentionally free of any click import: the translation from a
 library error to a click usage error happens in :mod:`ethscan.cli`.
 """
