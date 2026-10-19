@@ -247,6 +247,19 @@ def probe_icmp(
     send_sock.settimeout(timeout)
     try:
         err = send_sock.connect_ex((host, port))
+    except socket.gaierror as exc:
+        # The name itself cannot be resolved (connect_ex only swallows errors
+        # from connect(), not from getaddrinfo()). Report it as a failed probe
+        # instead of letting the exception escape the command.
+        rtt = (time.monotonic() - start) * 1000
+        return {
+            "ip": None,
+            "rtt_ms": round(rtt, 2),
+            "ttl": ttl,
+            "sequence": sequence,
+            "response_type": RESP_NO_RESPONSE,
+            "error": str(exc),
+        }
     finally:
         send_sock.close()
 

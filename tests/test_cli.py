@@ -9546,6 +9546,19 @@ def test_ping_help() -> None:
     assert "markdown" in result.output
 
 
+def test_ping_unresolvable_host_no_traceback() -> None:
+    """ping with an unresolvable host exits 0 and reports the failure in output."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["ping", "--target", "no-such-host.invalid.example.tld", "--count", "1", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Traceback (most recent call last)" not in result.output, result.output
+    assert result.exception is None, repr(result.exception)
+    assert "Could not resolve" in result.output, result.output
+
+
 def test_cli_help_lists_ping() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["--help"])

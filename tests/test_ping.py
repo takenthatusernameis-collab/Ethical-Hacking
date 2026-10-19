@@ -853,6 +853,44 @@ def test_run_ping_unresolvable_host() -> None:
         ping_mod._resolve_host = orig_resolve
 
 
+def test_probe_icmp_unresolvable_host_no_raw_socket() -> None:
+    """probe_icmp with an unresolvable host reports the failure instead of raising."""
+    result = probe_icmp(
+        "no-such-host.invalid.example.tld",
+        timeout=2.0,
+        ttl=64,
+        raw_socket=None,
+        identifier=12345,
+        sequence=1,
+        resolved_ip=None,
+    )
+    assert result["sequence"] == 1
+    assert result["ttl"] == 64
+    assert result["ip"] is None
+    assert result["response_type"] == RESP_NO_RESPONSE
+    assert isinstance(result["error"], str) and result["error"]
+
+
+def test_run_ping_unresolvable_host_reports_failure() -> None:
+    """run_ping with an unresolvable host returns structured results (no exception)."""
+    import ethscan.ping as ping_mod
+
+    orig_raw = ping_mod._try_create_raw_socket
+    ping_mod._try_create_raw_socket = lambda: None
+    try:
+        result = run_ping("no-such-host.invalid.example.tld", count=2, timeout=1.0)
+    finally:
+        ping_mod._try_create_raw_socket = orig_raw
+
+    assert result["ip"] is None
+    assert result["successful"] == 0
+    assert result["failed"] == 2
+    assert any("Could not resolve" in note for note in result["notes"])
+    for probe in result["probes"]:
+        assert probe["response_type"] == RESP_NO_RESPONSE
+        assert isinstance(probe["error"], str) and probe["error"]
+
+
 def test_run_ping_raw_socket_available(monkeypatch) -> None:
     class _TrueRawSocket:
         closed = False
