@@ -98,6 +98,17 @@ pip install -r requirements.txt
 python -m ethscan --help
 ```
 
+Invalid option values are reported as usage errors (exit code 2) instead of
+Python tracebacks. A malformed `--ports` specification, for example, gives:
+
+```console
+$ python -m ethscan scan --target 127.0.0.1 --ports bogus
+Usage: python -m ethscan scan [OPTIONS]
+Try 'python -m ethscan scan --help' for help.
+
+Error: Invalid value for '--ports': Invalid port number 'bogus'
+```
+
 ## Disclaimer
 
 This project is for **authorized security testing only**. Use only against

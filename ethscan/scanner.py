@@ -56,6 +56,16 @@ def scan_ports(
 MAX_PORT = 65535
 
 
+class PortSpecError(ValueError):
+    """Raised when a port specification cannot be parsed.
+
+    Subclasses :class:`ValueError` so that existing ``except ValueError``
+    handlers keep working, while letting the CLI layer distinguish an
+    invalid port specification from unrelated value errors and turn it into
+    a usage error.
+    """
+
+
 def parse_port_range(port_spec: str) -> list[int]:
     """Parse a port specification string into a list of ports.
 
@@ -72,35 +82,35 @@ def parse_port_range(port_spec: str) -> list[int]:
         Sorted list of unique port numbers.
 
     Raises:
-        ValueError: If a port is out of range (0-{max}), a range is inverted
+        PortSpecError: If a port is out of range (0-{max}), a range is inverted
             (start > end), or a token is non-numeric.
     """
     ports = set()
     for part in port_spec.split(","):
         part = part.strip()
         if not part:
-            raise ValueError(f"Empty port token in specification: {port_spec!r}")
+            raise PortSpecError(f"Empty port token in specification: {port_spec!r}")
         if "-" in part:
             start_str, end_str = part.split("-", 1)
             start_str = start_str.strip()
             end_str = end_str.strip()
             if not start_str or not end_str:
-                raise ValueError(
+                raise PortSpecError(
                     f"Invalid range {part!r}: missing start or end"
                 )
             try:
                 start = int(start_str)
                 end = int(end_str)
             except ValueError:
-                raise ValueError(
+                raise PortSpecError(
                     f"Invalid port number in range {part!r}"
                 )
             if start > end:
-                raise ValueError(
+                raise PortSpecError(
                     f"Invalid range {part!r}: start ({start}) > end ({end})"
                 )
             if not (0 <= start <= MAX_PORT and 0 <= end <= MAX_PORT):
-                raise ValueError(
+                raise PortSpecError(
                     f"Port out of range (0-{MAX_PORT}) in range {part!r}"
                 )
             ports.update(range(start, end + 1))
@@ -108,9 +118,9 @@ def parse_port_range(port_spec: str) -> list[int]:
             try:
                 port = int(part)
             except ValueError:
-                raise ValueError(f"Invalid port number {part!r}")
+                raise PortSpecError(f"Invalid port number {part!r}")
             if not (0 <= port <= MAX_PORT):
-                raise ValueError(f"Port {port} out of range (0-{MAX_PORT})")
+                raise PortSpecError(f"Port {port} out of range (0-{MAX_PORT})")
             ports.add(port)
     return sorted(ports)
 
@@ -132,7 +142,7 @@ def resolve_port_list(ports: str, profile: str | None = None) -> list[int]:
         Sorted list of unique port numbers.
 
     Raises:
-        ValueError: If the specification is invalid.
+        PortSpecError: If the specification is invalid.
     """
     ports_spec = ports.lower()
     if profile:

@@ -231,6 +231,7 @@ from ethscan.s3 import (
     run_s3,
 )
 from ethscan.scanner import (
+    PortSpecError,
     format_scan_report_csv,
     format_scan_report_json,
     format_scan_report_markdown,
@@ -369,6 +370,25 @@ def cli(ctx, config_path: str | None) -> None:
     ctx.default_map = default_map
 
 
+def _invalid_ports(exc: ValueError) -> click.BadParameter:
+    """Build the click usage error reported for an invalid ``--ports`` value."""
+    return click.BadParameter(str(exc), param_hint="'--ports'")
+
+
+def _resolve_ports(ports: str, profile: str | None = None) -> list[int]:
+    """Resolve a ``--ports`` specification into a list of ports.
+
+    An invalid specification is reported as a click usage error (exit code 2)
+    instead of an unhandled ``ValueError`` traceback. Every port-consuming
+    command funnels its ``--ports`` value through this helper so the
+    behaviour is identical everywhere.
+    """
+    try:
+        return resolve_port_list(ports, profile=profile)
+    except PortSpecError as exc:
+        raise _invalid_ports(exc) from exc
+
+
 @cli.command()
 @click.option("--target", required=True, help="Target host or IP address")
 @click.option(
@@ -408,10 +428,7 @@ def scan(ctx: click.Context, target: str, ports: str, profile: str | None, timeo
     """Run a port scan against TARGET."""
     if profile:
         defaults = get_profile_defaults(profile)
-        try:
-            port_list = resolve_port_list(ports, profile=profile)
-        except ValueError as exc:
-            raise click.BadParameter(str(exc), param_hint="'--ports'") from exc
+        port_list = _resolve_ports(ports, profile=profile)
         timeout_source = ctx.get_parameter_source("timeout")
         workers_source = ctx.get_parameter_source("workers")
         timeout_explicit = timeout_source in (ParameterSource.COMMANDLINE, ParameterSource.ENVIRONMENT, ParameterSource.DEFAULT_MAP)
@@ -421,10 +438,7 @@ def scan(ctx: click.Context, target: str, ports: str, profile: str | None, timeo
         if not workers_explicit:
             workers = defaults["workers"]
     else:
-        try:
-            port_list = resolve_port_list(ports)
-        except ValueError as exc:
-            raise click.BadParameter(str(exc), param_hint="'--ports'") from exc
+        port_list = _resolve_ports(ports)
 
     results = scan_ports(target, port_list, timeout=timeout, max_workers=workers)
 
@@ -688,23 +702,26 @@ def report(
     workers_source = ctx.get_parameter_source("workers")
     timeout_explicit = timeout_source in (ParameterSource.COMMANDLINE, ParameterSource.ENVIRONMENT, ParameterSource.DEFAULT_MAP)
     workers_explicit = workers_source in (ParameterSource.COMMANDLINE, ParameterSource.ENVIRONMENT, ParameterSource.DEFAULT_MAP)
-    report_data = run_report(
-        target,
-        ports,
-        timeout=timeout,
-        workers=workers,
-        audit_file=audit_file,
-        min_length=min_length,
-        profile=profile,
-        open_only=open_only,
-        sort_by=sort_by,
-        sort_desc=sort_desc,
-        salt=salt,
-        pepper=pepper,
-        algorithm=algorithm,
-        timeout_explicit=timeout_explicit,
-        workers_explicit=workers_explicit,
-    )
+    try:
+        report_data = run_report(
+            target,
+            ports,
+            timeout=timeout,
+            workers=workers,
+            audit_file=audit_file,
+            min_length=min_length,
+            profile=profile,
+            open_only=open_only,
+            sort_by=sort_by,
+            sort_desc=sort_desc,
+            salt=salt,
+            pepper=pepper,
+            algorithm=algorithm,
+            timeout_explicit=timeout_explicit,
+            workers_explicit=workers_explicit,
+        )
+    except PortSpecError as exc:
+        raise _invalid_ports(exc) from exc
 
     # --output-format takes precedence over the deprecated --format alias
     chosen_format = output_fmt if output_fmt is not None else fmt
@@ -1606,10 +1623,7 @@ def service(ctx: click.Context, target: str, ports: str | None, profile: str | N
     if profile:
         defaults = get_profile_defaults(profile)
         if ports:
-            try:
-                port_list = resolve_port_list(ports, profile=profile)
-            except ValueError as exc:
-                raise click.BadParameter(str(exc), param_hint="'--ports'") from exc
+            port_list = _resolve_ports(ports, profile=profile)
         else:
             port_list = get_profile_ports(profile)
         timeout_source = ctx.get_parameter_source("timeout")
@@ -1621,10 +1635,7 @@ def service(ctx: click.Context, target: str, ports: str | None, profile: str | N
         if not workers_explicit:
             workers = defaults["workers"]
     elif ports:
-        try:
-            port_list = resolve_port_list(ports)
-        except ValueError as exc:
-            raise click.BadParameter(str(exc), param_hint="'--ports'") from exc
+        port_list = _resolve_ports(ports)
 
     results = run_service(target, ports=port_list, timeout=timeout, max_workers=workers)
 
@@ -1772,10 +1783,7 @@ def vuln(
 
     port_list = None
     if ports:
-        try:
-            port_list = resolve_port_list(ports)
-        except ValueError as exc:
-            raise click.BadParameter(str(exc), param_hint="'--ports'") from exc
+        port_list = _resolve_ports(ports)
 
     results = run_vuln(
         target,
@@ -2054,10 +2062,7 @@ def osdetect(
     """Fingerprint the target operating system using TCP/IP stack behavior."""
     port_list = None
     if ports:
-        try:
-            port_list = resolve_port_list(ports)
-        except ValueError as exc:
-            raise click.BadParameter(str(exc), param_hint="'--ports'") from exc
+        port_list = _resolve_ports(ports)
 
     banners = None
     if banners_file:
@@ -2779,10 +2784,7 @@ def cve(
         if profile:
             defaults = get_profile_defaults(profile)
             if ports:
-                try:
-                    port_list = resolve_port_list(ports, profile=profile)
-                except ValueError as exc:
-                    raise click.BadParameter(str(exc), param_hint="'--ports'") from exc
+                port_list = _resolve_ports(ports, profile=profile)
             else:
                 port_list = get_profile_ports(profile)
             timeout_source = ctx.get_parameter_source("service_timeout")
@@ -2794,10 +2796,7 @@ def cve(
             if not workers_explicit:
                 workers = defaults["workers"]
         elif ports:
-            try:
-                port_list = resolve_port_list(ports)
-            except ValueError as exc:
-                raise click.BadParameter(str(exc), param_hint="'--ports'") from exc
+            port_list = _resolve_ports(ports)
 
     results = run_cve(
         target,

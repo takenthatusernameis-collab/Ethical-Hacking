@@ -21575,3 +21575,153 @@ def test_hash_multiple_algorithms_with_out(tmp_path) -> None:
     result = runner.invoke(cli, ['hash', '--file', str(pw), '--algorithm', 'md5', '--algorithm', 'sha256', '--format', 'json', '--out', str(out)])
     assert result.exit_code == 0
     assert out.exists()
+
+
+# --- invalid --ports handling -------------------------------------------------
+#
+# A malformed --ports value must be reported as a click usage error (exit
+# code 2, one-line message) instead of an unhandled ValueError traceback.
+
+PORT_CONSUMING_COMMANDS = ("scan", "report", "service", "cve", "vuln", "osdetect")
+
+# Commands that also accept --profile, so the profile branch of the port
+# resolution needs its own coverage.
+PROFILE_AWARE_PORT_COMMANDS = ("scan", "report", "service", "cve")
+
+INVALID_PORT_SPECS = (
+    ("bogus", "Invalid port number 'bogus'"),
+    ("70000", "Port 70000 out of range (0-65535)"),
+    ("100-50", "Invalid range '100-50': start (100) > end (50)"),
+    ("80-", "Invalid range '80-': missing start or end"),
+    ("80,abc", "Invalid port number 'abc'"),
+)
+
+
+def _assert_ports_usage_error(result, command: str) -> None:
+    """Assert that ``result`` is a clean click usage error for --ports."""
+    assert result.exit_code == 2, (
+        f"{command}: expected exit code 2, got {result.exit_code}\n{result.output}"
+    )
+    assert "Error: Invalid value for '--ports':" in result.output, (
+        f"{command}: missing usage error message\n{result.output}"
+    )
+    assert "Traceback (most recent call last)" not in result.output, (
+        f"{command}: leaked a traceback\n{result.output}"
+    )
+    assert not isinstance(result.exception, ValueError), (
+        f"{command}: leaked {result.exception!r} instead of a usage error"
+    )
+
+
+def test_invalid_ports_is_a_usage_error_for_every_port_command() -> None:
+    """Every port-consuming command must reject a bad --ports value cleanly."""
+    runner = CliRunner()
+    for command in PORT_CONSUMING_COMMANDS:
+        result = runner.invoke(
+            cli, [command, "--target", "127.0.0.1", "--ports", "bogus"]
+        )
+        _assert_ports_usage_error(result, command)
+        assert "Invalid port number 'bogus'" in result.output
+
+
+def test_invalid_ports_under_a_profile_is_a_usage_error() -> None:
+    """The profile branch of the port resolution must reject bad input too."""
+    runner = CliRunner()
+    for command in PROFILE_AWARE_PORT_COMMANDS:
+        for profile in ("fast", "normal", "full"):
+            result = runner.invoke(
+                cli,
+                [
+                    command,
+                    "--target",
+                    "127.0.0.1",
+                    "--ports",
+                    "bogus",
+                    "--profile",
+                    profile,
+                ],
+            )
+            _assert_ports_usage_error(result, f"{command} --profile {profile}")
+            assert "Invalid port number 'bogus'" in result.output
+
+
+def test_invalid_ports_reports_the_specific_reason() -> None:
+    """The usage error must name the offending token and the reason."""
+    runner = CliRunner()
+    for spec, reason in INVALID_PORT_SPECS:
+        result = runner.invoke(
+            cli, ["scan", "--target", "127.0.0.1", "--ports", spec]
+        )
+        _assert_ports_usage_error(result, f"scan --ports {spec!r}")
+        assert reason in result.output, f"{spec!r}: missing {reason!r}\n{result.output}"
+
+
+def test_invalid_ports_usage_error_is_a_single_line() -> None:
+    """The failure must be a one-line error, not a multi-line traceback."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "127.0.0.1", "--ports", "bogus"])
+    error_lines = [
+        line for line in result.output.splitlines() if line.startswith("Error:")
+    ]
+    assert len(error_lines) == 1, result.output
+    assert error_lines[0] == (
+        "Error: Invalid value for '--ports': Invalid port number 'bogus'"
+    )
+
+
+def test_port_commands_are_exactly_the_documented_set() -> None:
+    """Guard the set of commands that declare a --ports parameter.
+
+    A new port-consuming command must be added to the guard above so that
+    its invalid-input behaviour stays covered.
+    """
+    port_commands = {
+        name
+        for name, command in cli.commands.items()
+        if any(param.name == "ports" for param in command.params)
+    }
+    assert port_commands == {
+        "scan",
+        "report",
+        "service",
+        "cve",
+        "vuln",
+        "osdetect",
+        "validate",
+    }
+
+
+def test_library_modules_stay_free_of_click() -> None:
+    """The scanner/validator/report modules must not depend on click.
+
+    Only the CLI layer may translate library errors into usage errors.
+    """
+    import ast
+    import pathlib
+
+    package = pathlib.Path(__file__).resolve().parent.parent / "ethscan"
+    for name in ("scanner.py", "validate.py", "report.py"):
+        tree = ast.parse((package / name).read_text(encoding="utf-8"))
+        imported = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported.update(alias.name.split(".")[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported.add(node.module.split(".")[0])
+        assert "click" not in imported, f"{name} must not import click"
+
+
+def test_invalid_ports_does_not_call_the_scanner(monkeypatch) -> None:
+    """A rejected --ports value must abort before any scanning happens."""
+    calls = []
+
+    def mock_scan_ports(*args, **kwargs):
+        calls.append((args, kwargs))
+        return []
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "127.0.0.1", "--ports", "bogus"])
+    _assert_ports_usage_error(result, "scan")
+    assert calls == [], "scanning must not start for an invalid --ports value"

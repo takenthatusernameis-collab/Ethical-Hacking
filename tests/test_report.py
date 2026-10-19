@@ -6,6 +6,7 @@ import json
 import tempfile
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
 from ethscan.cli import cli
@@ -1178,3 +1179,35 @@ def test_format_report_csv_with_salt_pepper() -> None:
     assert rows[0][12] == "pepper"
     assert rows[1][11] == "true"
     assert rows[1][12] == "true"
+
+def test_run_report_invalid_ports_raises_port_spec_error() -> None:
+    """The library must raise a plain port error, not a click exception.
+
+    The CLI boundary is responsible for turning this into a usage error;
+    the report module itself must stay usable as a library.
+    """
+    from ethscan.scanner import PortSpecError
+
+    with pytest.raises(PortSpecError):
+        run_report("127.0.0.1", "bogus", timeout=0.1, workers=10)
+
+
+def test_resolve_ports_and_defaults_invalid_ports_raises_port_spec_error() -> None:
+    """The same holds for the profile-aware resolution helper."""
+    from ethscan.report import _resolve_ports_and_defaults
+    from ethscan.scanner import PortSpecError
+
+    with pytest.raises(PortSpecError):
+        _resolve_ports_and_defaults("bogus", 1.0, 100, None)
+
+    with pytest.raises(PortSpecError):
+        _resolve_ports_and_defaults("bogus", 1.0, 100, "fast")
+
+
+def test_report_command_invalid_ports_is_a_usage_error() -> None:
+    """The report command must report a bad --ports value as a usage error."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["report", "--target", "127.0.0.1", "--ports", "bogus"])
+    assert result.exit_code == 2, result.output
+    assert "Error: Invalid value for '--ports':" in result.output
+    assert "Traceback (most recent call last)" not in result.output

@@ -6,6 +6,7 @@ from ethscan.scanner import (
     COMMON_PORTS,
     FAST_PORTS,
     FULL_PORTS,
+    PortSpecError,
     format_scan_report_csv,
     format_scan_report_json,
     format_scan_report_markdown,
@@ -308,3 +309,36 @@ def test_format_scan_report_csv_empty() -> None:
     }
     output = format_scan_report_csv(data)
     assert output.strip() == "port,open"
+
+def test_port_spec_error_is_a_value_error() -> None:
+    """PortSpecError must stay catchable as a ValueError.
+
+    The CLI layer relies on the dedicated type to tell an invalid port
+    specification apart from unrelated value errors, but existing callers
+    that catch ValueError must keep working.
+    """
+    assert issubclass(PortSpecError, ValueError)
+
+
+def test_parse_port_range_raises_port_spec_error() -> None:
+    """An invalid specification must raise the dedicated error type."""
+    with pytest.raises(PortSpecError):
+        parse_port_range("bogus")
+
+
+def test_parse_port_range_errors_are_value_errors() -> None:
+    """The dedicated error type must not break plain ValueError handling."""
+    with pytest.raises(ValueError):
+        parse_port_range("70000")
+
+
+def test_resolve_port_list_raises_port_spec_error() -> None:
+    """resolve_port_list must surface the dedicated error type as well."""
+    with pytest.raises(PortSpecError):
+        resolve_port_list("bogus")
+
+
+def test_resolve_port_list_with_profile_raises_port_spec_error() -> None:
+    """The profile branch must surface the dedicated error type as well."""
+    with pytest.raises(PortSpecError):
+        resolve_port_list("bogus", profile="fast")

@@ -1,29 +1,70 @@
 # NEXT_TASK.md
 
-## Status (2026-10-19T16:05:00Z)
-- Prior agent task (`vuln`/`osdetect` accept `common`/`all`): already complete and committed before this session (`a02db83`, `de7931c`).
-- This session: `scan` now resolves port keywords through `resolve_port_list(ports, profile=profile)`; `report.py` was switched to the same helper; the six function-local `resolve_port_list` imports in `cli.py` were replaced by the module-level import; `vuln`/`osdetect` `--ports` help and five README entries now document the `common`/`all` keywords. Verified: 40/40 old-vs-new port-resolution cases identical, full suite 3980 passed/1 skipped, ruff output byte-identical to baseline (48 errors).
-- Current state: `resolve_port_list` in `ethscan/scanner.py` is the only implementation of port-keyword resolution in the package; `scan`, `report`, `service`, `cve`, `vuln`, `osdetect` all use it.
+## Status (2026-10-19T17:05:00Z)
+- Prior agent task (invalid `--ports` -> click usage error): **complete**. The
+  production code was already in `c7cbe2a`; this session added the missing
+  tests, consolidated the eight duplicated `try/except` blocks in
+  `ethscan/cli.py` into one `_resolve_ports` helper, removed the `click`
+  dependency from `ethscan/report.py`, and added a dedicated `PortSpecError`
+  to `ethscan/scanner.py`.
+- Verified: 240/240 CLI invocations byte-identical before and after the
+  refactor; unit-level keyword harness 0 mismatches; full suite 3995
+  passed/1 skipped; ruff output byte-identical to the baseline (48 errors).
 
 ## Next task (bounded, high-value)
-Invalid `--ports` input still crashes with a raw Python traceback instead of a clean CLI error. Convert it into a proper click usage error for every port-consuming command.
+Invalid CIDR input still crashes with a raw Python traceback instead of a
+clean CLI error. Convert it into a proper click usage error for the `cidr`
+and `radix` commands.
 
 Evidence (reproduced on `main` at this commit):
 ```
-$ python -m ethscan scan --target 127.0.0.1 --ports bogus
-ValueError: Invalid port number 'bogus'      # full traceback, exit code 1
-$ python -m ethscan service --target 127.0.0.1 --ports bogus   # same
-$ python -m ethscan vuln    --target 127.0.0.1 --ports bogus   # same
-$ python -m ethscan osdetect --target 127.0.0.1 --ports bogus  # same
-$ python -m ethscan cve     --target 127.0.0.1 --ports bogus   # same
-$ python -m ethscan report  --target 127.0.0.1 --ports bogus   # same
+$ python -m ethscan cidr --cidr bogus
+ValueError: 'bogus/128' does not appear to be an IPv4 or IPv6 network   # traceback, exit 1
+$ python -m ethscan cidr --cidr 192.168.1.0/24 --diff bogus
+ValueError: 'bogus/128' does not appear to be an IPv4 or IPv6 network   # traceback, exit 1
+$ python -m ethscan radix --cidrs bogus
+ValueError: 'bogus/128' does not appear to be an IPv4 or IPv6 network   # traceback, exit 1
+$ python -m ethscan radix --cidrs 192.168.1.0/24 --diff bogus
+ValueError: 'bogus/128' does not appear to be an IPv4 or IPv6 network   # traceback, exit 1
 ```
-All six commands exit 1 and dump a traceback; a click `BadParameter`/`UsageError` should give exit code 2 and a one-line message such as `Error: Invalid value for '--ports': Invalid port number 'bogus'`.
+All four exit 1 and dump a traceback; a click `BadParameter` should give exit
+code 2 and a one-line message such as
+`Error: Invalid value for '--cidr': 'bogus/128' does not appear to be an IPv4 or IPv6 network`.
 
 Implementation notes:
-- `ethscan/scanner.py:resolve_port_list` and `parse_port_range` raise `ValueError`; do not change their signatures — the CLI layer should translate the error.
-- Wrap the `resolve_port_list(...)` call sites in `ethscan/cli.py` (`scan`, `service`, `cve`, `vuln`, `osdetect`) and in `ethscan/report.py` (`_resolve_ports_and_defaults`, used by the `report` command) so a `ValueError` becomes `click.BadParameter(str(exc), param_hint="'--ports'")` (or `click.UsageError`).
-- `ethscan/report.py` is a non-CLI module, so either translate the error at the `report` command boundary in `cli.py` or import `click` there — keep the scanner/validator modules free of click.
-- Do not change accepted values: `common`, `all` (case-insensitive), and comma-separated lists/ranges keep working exactly as now.
+- Follow the pattern established this session: a dedicated error type that
+  subclasses `ValueError` (so library callers keep working), raised by the
+  parsing helper, translated to `click.BadParameter` **only** in
+  `ethscan/cli.py`.
+  - `ethscan/cidr.py:16` `_normalize_cidr` raises `ValueError("Empty CIDR
+    value")` and lets `ipaddress.ip_network` raise `ValueError`.
+  - `ethscan/radix.py:15` `_normalize_cidr` is a near-identical duplicate of
+    the `cidr.py` one; `ethscan/radix.py:34` `_parse_networks` and
+    `ethscan/radix.py:39` raise `ValueError` for a bad entry.
+  - `ethscan/cidr.py:147` (`run_cidr`) and `ethscan/cidr.py:165` (the
+    `--diff` branch) are the `cidr` call sites; `ethscan/radix.py:312`
+    (`run_radix`) and `ethscan/radix.py:352` (the `--diff` branch) are the
+    `radix` ones.
+  - `ethscan/cidr.py` and `ethscan/radix.py` are stdlib-only leaf modules with
+    no `ethscan` imports, so consolidating the two copies of `_normalize_cidr`
+    (one importing the other, or a small shared helper) introduces no import
+    cycle.
+- Do **not** change the `ethscan validate` command: it intentionally reports
+  invalid CIDR specs inside its JSON/CSV output (exit code 0), not as a usage
+  error. `ethscan/validate.py` has its own `_validate_cidr` and must keep
+  that contract.
+- Do **not** change `--contains`: `cidr --contains bogus` and
+  `radix --contains bogus` legitimately answer "not a member" (exit code 0)
+  and are not errors.
+- The `ethscan/validate.py` module docstring claims it "reuses
+  `parse_port_range` from `ethscan.scanner`", but it actually re-implements
+  the parsing inline with slightly different messages (e.g. "Port out of range
+  (0-65535)" vs the scanner's "Port out of range (0-65535) in range '...'",
+  and empty tokens are skipped instead of being an error). Either fix the
+  docstring or make the claim true — decide explicitly and note the choice.
 
-Verification: `python -m pytest tests/test_cli.py -q` plus new tests asserting exit code 2, the `Error: Invalid value for '--ports'` message, and the absence of a traceback for one command per port-consuming command; `ruff check ethscan tests` must stay at 48 pre-existing errors with no new ones.
+Verification: `python -m pytest tests/test_cli.py tests/test_cidr.py tests/test_radix.py -q`
+plus new tests asserting exit code 2, an
+`Error: Invalid value for '--cidr'/'--cidrs'/'--diff'` message, and the absence
+of a traceback for each of the four failing invocations; `ruff check ethscan tests`
+must stay at 48 pre-existing errors with no new ones.
