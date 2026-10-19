@@ -1,19 +1,18 @@
 # Task
-Date: 2026-10-19T04:00:00Z
-Status: clean baseline (test_hash.py restored and committed)
+Date: 2026-10-19T05:20:00Z
+Status: dead-code removal committed (5e2fe0f)
 Branch: main
 
 Completed
-- Restored `tests/test_hash.py` (1174 lines, 126 tests) deleted in commit ef8c549. Recovered byte-identical from the `tests/test_hash.py,cover` coverage artifact committed alongside the deletion.
-- Committed restored test file (d4c45ce); docs updated to reflect state (bef2c0f).
-- Verified baseline: 3904 passed, 1 skipped; 53 CLI commands register; `python -m ethscan --help` and `--version` OK; py_compile clean; ruff reports 44 intentional errors (test_hash.py is ruff-clean).
-- `ethscan/hash.py` coverage 98% (remaining misses: MD4-unavailable platform branches lines 34-35, 60, 83; NTLM+PBKDF2+pepper HMAC error path line 226 — environment-dependent).
+- Removed provably-dead duplicate `_hashlib_name`/`_compute_peppered_hash` definitions in `ethscan/vuln.py` (original lines 34-65, overridden at import by identical live definitions at lines 343/348).
+- Verified: `__code__.co_firstlineno` now reports 343/348; full suite `python -m pytest -q` -> 3906 passed, 1 skipped; `python -m ruff check ethscan tests` -> 44 errors unchanged; `git diff --stat` -> only vuln.py, 34 deletions.
+- Committed as 5e2fe0f.
 
 Current state
 - Working tree: clean.
-- Lint: 44 intentional errors (30 BLE001 in source, 12 TRY002 in tests, 2 PLR0402 in tests/test_brute.py) — unchanged, unsafe to fix.
+- Lint: 44 intentional errors (30 BLE001 in source, 12 TRY002 in tests, 2 PLR0402 in tests/test_brute.py) — unchanged.
 - Coverage: ethscan source ~99%; hash.py 98%.
 
 Notes
 - No new task assigned. Await a genuine new issue/requirement. Do not touch the 44 documented lint violations.
-- Proactive task selection was attempted this session: every remaining ethscan coverage gap was investigated and found non-closable without violating constraints (see HANDOFF_NEXT.md "What remains unresolved" and "Failed approaches"). No code changes were made; baseline preserved.
+- All remaining ethscan coverage gaps are environmental, network-dependent, unreachable defensive code (catalogued in HANDOFF_NEXT.md). No bounded, behavior-preserving, verifiable task remains within constraints.
