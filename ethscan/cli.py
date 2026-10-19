@@ -2742,8 +2742,12 @@ def cve(
 ) -> None:
     """Query the NVD/CVE API for known vulnerabilities affecting TARGET's services."""
     if services_file:
-        with open(services_file, "r", encoding="utf-8") as handle:
-            json.load(handle)
+        try:
+            with open(services_file, "r", encoding="utf-8") as handle:
+                json.load(handle)
+        except json.JSONDecodeError as exc:
+            click.echo(f"Failed to read services file: {exc}", err=True)
+            return
 
     port_list = None
     if not services_file:
