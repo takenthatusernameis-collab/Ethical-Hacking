@@ -408,7 +408,10 @@ def scan(ctx: click.Context, target: str, ports: str, profile: str | None, timeo
     """Run a port scan against TARGET."""
     if profile:
         defaults = get_profile_defaults(profile)
-        port_list = resolve_port_list(ports, profile=profile)
+        try:
+            port_list = resolve_port_list(ports, profile=profile)
+        except ValueError as exc:
+            raise click.BadParameter(str(exc), param_hint="'--ports'") from exc
         timeout_source = ctx.get_parameter_source("timeout")
         workers_source = ctx.get_parameter_source("workers")
         timeout_explicit = timeout_source in (ParameterSource.COMMANDLINE, ParameterSource.ENVIRONMENT, ParameterSource.DEFAULT_MAP)
@@ -418,7 +421,10 @@ def scan(ctx: click.Context, target: str, ports: str, profile: str | None, timeo
         if not workers_explicit:
             workers = defaults["workers"]
     else:
-        port_list = resolve_port_list(ports)
+        try:
+            port_list = resolve_port_list(ports)
+        except ValueError as exc:
+            raise click.BadParameter(str(exc), param_hint="'--ports'") from exc
 
     results = scan_ports(target, port_list, timeout=timeout, max_workers=workers)
 
@@ -1600,7 +1606,10 @@ def service(ctx: click.Context, target: str, ports: str | None, profile: str | N
     if profile:
         defaults = get_profile_defaults(profile)
         if ports:
-            port_list = resolve_port_list(ports, profile=profile)
+            try:
+                port_list = resolve_port_list(ports, profile=profile)
+            except ValueError as exc:
+                raise click.BadParameter(str(exc), param_hint="'--ports'") from exc
         else:
             port_list = get_profile_ports(profile)
         timeout_source = ctx.get_parameter_source("timeout")
@@ -1612,7 +1621,10 @@ def service(ctx: click.Context, target: str, ports: str | None, profile: str | N
         if not workers_explicit:
             workers = defaults["workers"]
     elif ports:
-        port_list = resolve_port_list(ports)
+        try:
+            port_list = resolve_port_list(ports)
+        except ValueError as exc:
+            raise click.BadParameter(str(exc), param_hint="'--ports'") from exc
 
     results = run_service(target, ports=port_list, timeout=timeout, max_workers=workers)
 
@@ -1760,7 +1772,10 @@ def vuln(
 
     port_list = None
     if ports:
-        port_list = resolve_port_list(ports)
+        try:
+            port_list = resolve_port_list(ports)
+        except ValueError as exc:
+            raise click.BadParameter(str(exc), param_hint="'--ports'") from exc
 
     results = run_vuln(
         target,
@@ -2039,7 +2054,10 @@ def osdetect(
     """Fingerprint the target operating system using TCP/IP stack behavior."""
     port_list = None
     if ports:
-        port_list = resolve_port_list(ports)
+        try:
+            port_list = resolve_port_list(ports)
+        except ValueError as exc:
+            raise click.BadParameter(str(exc), param_hint="'--ports'") from exc
 
     banners = None
     if banners_file:
@@ -2761,7 +2779,10 @@ def cve(
         if profile:
             defaults = get_profile_defaults(profile)
             if ports:
-                port_list = resolve_port_list(ports, profile=profile)
+                try:
+                    port_list = resolve_port_list(ports, profile=profile)
+                except ValueError as exc:
+                    raise click.BadParameter(str(exc), param_hint="'--ports'") from exc
             else:
                 port_list = get_profile_ports(profile)
             timeout_source = ctx.get_parameter_source("service_timeout")
@@ -2773,7 +2794,10 @@ def cve(
             if not workers_explicit:
                 workers = defaults["workers"]
         elif ports:
-            port_list = resolve_port_list(ports)
+            try:
+                port_list = resolve_port_list(ports)
+            except ValueError as exc:
+                raise click.BadParameter(str(exc), param_hint="'--ports'") from exc
 
     results = run_cve(
         target,

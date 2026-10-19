@@ -6,6 +6,8 @@ import io
 import json
 from typing import Any
 
+import click
+
 from ethscan.passwords import audit_passwords
 from ethscan.scanner import (
     get_profile_defaults,
@@ -31,7 +33,10 @@ CSV_COLUMNS = [
 
 
 def _parse_ports(ports: str) -> list[int]:
-    return resolve_port_list(ports)
+    try:
+        return resolve_port_list(ports)
+    except ValueError as exc:
+        raise click.BadParameter(str(exc), param_hint="'--ports'") from exc
 
 
 def _resolve_ports_and_defaults(
@@ -52,7 +57,10 @@ def _resolve_ports_and_defaults(
     """
     if profile:
         defaults = get_profile_defaults(profile)
-        port_list = resolve_port_list(ports, profile=profile)
+        try:
+            port_list = resolve_port_list(ports, profile=profile)
+        except ValueError as exc:
+            raise click.BadParameter(str(exc), param_hint="'--ports'") from exc
         if timeout_explicit is None and workers_explicit is None:
             if timeout == 1.0:
                 timeout = defaults["timeout"]
