@@ -559,6 +559,43 @@ def test_resolve_ports_and_defaults_profile_explicit_timeout_workers() -> None:
     assert workers == 50
 
 
+def test_resolve_ports_and_defaults_profile_with_all_ports_keyword() -> None:
+    """An explicit ``--ports all`` must survive a profile override.
+
+    The profile branch used to forward the raw keyword to
+    ``parse_port_range()``, raising ``ValueError: invalid literal for int()
+    with base 10: 'all'``.
+    """
+    from ethscan.report import _resolve_ports_and_defaults
+
+    port_list, timeout, workers = _resolve_ports_and_defaults(
+        "all", 1.0, 100, "fast"
+    )
+    assert port_list == list(range(1, 65536))
+    # The profile still supplies its own timeout/worker defaults.
+    assert timeout == 0.5
+    assert workers == 200
+
+
+def test_resolve_ports_and_defaults_profile_ports_keyword_is_case_insensitive() -> None:
+    """``COMMON``/``All`` must behave like their lowercase counterparts."""
+    from ethscan.report import _resolve_ports_and_defaults
+
+    port_list, timeout, workers = _resolve_ports_and_defaults(
+        "COMMON", 1.0, 100, "fast"
+    )
+    assert len(port_list) == 18
+    assert timeout == 0.5
+    assert workers == 200
+
+    port_list, timeout, workers = _resolve_ports_and_defaults(
+        "All", 1.0, 100, "fast"
+    )
+    assert port_list == list(range(1, 65536))
+    assert timeout == 0.5
+    assert workers == 200
+
+
 def test_run_report_profile_fast() -> None:
     data = run_report("127.0.0.1", "common", timeout=0.1, workers=10, profile="fast")
     assert data["scan"]["profile"] == "fast"

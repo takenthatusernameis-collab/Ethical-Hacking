@@ -518,7 +518,7 @@ def test_run_urlcheck_fuzz_findings_counted(monkeypatch) -> None:
     monkeypatch.setattr(
         urlcheck_module,
         "run_fuzz",
-        lambda target, wordlist=None, timeout=5.0: {
+        lambda target, wordlist=None, timeout=5.0, workers=1: {
             "target": target,
             "base_url": target,
             "paths_tested": 2,
@@ -541,6 +541,50 @@ def test_run_urlcheck_fuzz_findings_counted(monkeypatch) -> None:
     )
     assert results["summary"]["total_findings"] == 2
     assert results["fuzz"]["findings"][0]["path"] == "/admin"
+
+
+def test_run_urlcheck_forwards_workers_to_fuzz(monkeypatch) -> None:
+    """The requested worker count must reach ``run_fuzz``.
+
+    ``run_fuzz`` was called without ``workers``, so fuzzing always ran
+    single-threaded while the report advertised the requested count.
+    """
+    import ethscan.urlcheck as urlcheck_module
+
+    captured: dict[str, object] = {}
+
+    def mock_run_fuzz(target, wordlist=None, timeout=5.0, workers=1):
+        captured["workers"] = workers
+        return {
+            "target": target,
+            "base_url": target,
+            "paths_tested": 0,
+            "findings": [],
+            "all_results": [],
+        }
+
+    monkeypatch.setattr(
+        urlcheck_module,
+        "run_web_checks",
+        lambda target, checks, timeout=5.0: {
+            "target": target,
+            "host": "example.com",
+            "secure": True,
+            "security_headers": {
+                "present": [],
+                "missing": [],
+                "total": 7,
+                "present_count": 7,
+                "missing_count": 0,
+            },
+            "information_disclosure": [],
+        },
+    )
+    monkeypatch.setattr(urlcheck_module, "run_fuzz", mock_run_fuzz)
+
+    results = run_urlcheck("https://example.com", ["headers"], workers=7)
+    assert captured["workers"] == 7
+    assert results["workers"] == 7
 
 
 def test_format_urlcheck_report_markdown_web_ssl_error() -> None:

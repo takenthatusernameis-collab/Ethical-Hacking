@@ -105,6 +105,11 @@ def get_common_ports() -> list[int]:
     return COMMON_PORTS.copy()
 
 
+def get_all_ports() -> list[int]:
+    """Return the full list of TCP ports (1-65535) to scan."""
+    return list(range(1, 65536))
+
+
 def get_profile_ports(profile: str) -> list[int]:
     """Return list of ports for the given profile.
 

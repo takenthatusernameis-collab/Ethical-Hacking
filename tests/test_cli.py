@@ -4465,6 +4465,75 @@ def test_scan_profile_override_timeout_workers(monkeypatch) -> None:
     assert called_args["max_workers"] == 10
 
 
+def test_scan_profile_with_all_ports_keyword(monkeypatch) -> None:
+    """``--profile`` combined with an explicit ``--ports all`` must not crash.
+
+    The profile branch used to feed the keyword straight into
+    ``parse_port_range()``, raising ``ValueError: invalid literal for int()
+    with base 10: 'all'`` instead of scanning the full port range.
+    """
+    called_args = {}
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        called_args["host"] = host
+        called_args["ports"] = ports
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return [(p, False) for p in ports]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--profile", "fast", "--ports", "all"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == list(range(1, 65536))
+
+
+def test_scan_profile_ports_keyword_is_case_insensitive(monkeypatch) -> None:
+    """``--ports COMMON`` must resolve like ``--ports common`` under a profile."""
+    called_args = {}
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        called_args["ports"] = ports
+        return [(p, False) for p in ports]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--profile", "fast", "--ports", "COMMON"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == [21, 22, 23, 25, 53, 80, 110, 139, 143, 443, 445, 993, 995, 3306, 3389, 5432, 8080, 8443]
+
+
+def test_report_profile_with_all_ports_keyword(monkeypatch) -> None:
+    """The ``report`` command shares the profile/ports resolution logic."""
+    called_args = {}
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        called_args["ports"] = ports
+        return [(p, False) for p in ports]
+
+    monkeypatch.setattr("ethscan.report.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["report", "--target", "example.com", "--profile", "fast", "--ports", "all"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == list(range(1, 65536))
+
+
+def test_scan_workers_zero_rejected_with_usage_error() -> None:
+    """``--workers 0`` must be a clean usage error, not an unhandled ValueError.
+
+    ``ThreadPoolExecutor`` rejects ``max_workers=0`` with
+    ``ValueError: max_workers must be greater than 0``, which escaped as a
+    raw traceback because the option was declared as a plain ``int``.
+    """
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--workers", "0"])
+    assert result.exit_code == 2
+    assert "not in the range" in result.output
+
+
 def test_scan_help_shows_format_out() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["scan", "--help"])

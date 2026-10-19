@@ -62,7 +62,12 @@ def generate_completion_script(
     shell (e.g. ``ethscan``); it is embedded in the generated script.
     """
     complete_cls = _completion_class_for(shell)
-    complete_var = f"_{prog_name.upper()}_COMPLETE"
+    # Click derives the completion environment variable at runtime by
+    # replacing "-" and "." with "_" before upper-casing (click/core.py).
+    # The generated script must use the same name or the completion can
+    # never be triggered.
+    sanitized_name = prog_name.replace("-", "_").replace(".", "_")
+    complete_var = f"_{sanitized_name.upper()}_COMPLETE"
     complete = complete_cls(cli_obj, {}, prog_name, complete_var)
     return complete.source()
 

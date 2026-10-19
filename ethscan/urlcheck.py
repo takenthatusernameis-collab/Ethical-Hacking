@@ -64,7 +64,9 @@ def run_urlcheck(
     results["web"] = web_results
 
     if fuzz_paths:
-        fuzz_results = run_fuzz(normalized_target, wordlist=wordlist, timeout=timeout)
+        fuzz_results = run_fuzz(
+            normalized_target, wordlist=wordlist, timeout=timeout, workers=workers
+        )
         results["fuzz"] = fuzz_results
     else:
         results["fuzz"] = None

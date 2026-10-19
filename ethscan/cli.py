@@ -233,6 +233,7 @@ from ethscan.scanner import (
     format_scan_report_csv,
     format_scan_report_json,
     format_scan_report_markdown,
+    get_all_ports,
     get_common_ports,
     get_profile_defaults,
     get_profile_ports,
@@ -382,7 +383,7 @@ def cli(ctx, config_path: str | None) -> None:
     help="Scan profile: fast (top ~18 ports), normal (common ports), full (1-1024 + common). Overrides --ports, --timeout, --workers unless explicitly set.",
 )
 @click.option("--timeout", default=1.0, type=float, help="Connection timeout in seconds")
-@click.option("--workers", default=100, type=int, help="Maximum concurrent workers")
+@click.option("--workers", default=100, type=click.IntRange(min=1), help="Maximum concurrent workers")
 @click.option(
     "--output-format",
     "output_fmt",
@@ -407,8 +408,11 @@ def scan(target: str, ports: str, profile: str | None, timeout: float, workers: 
     """Run a port scan against TARGET."""
     if profile:
         defaults = get_profile_defaults(profile)
-        if ports == "common":
+        ports_spec = ports.lower()
+        if ports_spec == "common":
             port_list = get_profile_ports(profile)
+        elif ports_spec == "all":
+            port_list = get_all_ports()
         else:
             port_list = parse_port_range(ports)
         if timeout == 1.0:
@@ -418,7 +422,7 @@ def scan(target: str, ports: str, profile: str | None, timeout: float, workers: 
     elif ports.lower() == "common":
         port_list = get_common_ports()
     elif ports.lower() == "all":
-        port_list = list(range(1, 65536))
+        port_list = get_all_ports()
     else:
         port_list = parse_port_range(ports)
 
@@ -592,7 +596,7 @@ def audit(
     help="Scan profile: fast (top ~18 ports), normal (common ports), full (1-1024 + common). Overrides --ports, --timeout, --workers unless explicitly set.",
 )
 @click.option("--timeout", default=1.0, type=float, help="Connection timeout in seconds")
-@click.option("--workers", default=100, type=int, help="Maximum concurrent workers")
+@click.option("--workers", default=100, type=click.IntRange(min=1), help="Maximum concurrent workers")
 @click.option(
     "--audit-file",
     "audit_file",
@@ -783,7 +787,7 @@ def web(target: str, checks: str, timeout: float, fmt: str, output_fmt: str | No
 @click.option(
     "--workers",
     default=1,
-    type=int,
+    type=click.IntRange(min=1),
     help="Number of concurrent workers (default: 1).",
 )
 @click.option(
@@ -870,7 +874,7 @@ def fuzz(
 @click.option(
     "--workers",
     default=50,
-    type=int,
+    type=click.IntRange(min=1),
     help="Maximum concurrent DNS resolution workers",
 )
 @click.option(
@@ -959,7 +963,7 @@ def subdomains(
 @click.option(
     "--workers",
     default=50,
-    type=int,
+    type=click.IntRange(min=1),
     help="Maximum concurrent DNS resolution workers",
 )
 @click.option("--http-timeout", default=5.0, type=float, help="HTTP request timeout for fingerprinting in seconds")
@@ -1169,7 +1173,7 @@ def headers(target: str, timeout: float, fmt: str, output_fmt: str | None, out_p
 @click.option(
     "--workers",
     default=1,
-    type=int,
+    type=click.IntRange(min=1),
     help="Number of concurrent workers for parallel record type resolution (default: 1).",
 )
 @click.option(
@@ -1346,7 +1350,7 @@ def resolve(
 @click.option(
     "--workers",
     default=50,
-    type=int,
+    type=click.IntRange(min=1),
     help="Maximum concurrent DNS resolution workers",
 )
 @click.option(
@@ -1481,7 +1485,7 @@ def ssl(target: str, port: int, timeout: float, fmt: str, output_fmt: str | None
     help="Comma-separated list of cipher suites to test. Defaults to a built-in common list.",
 )
 @click.option("--timeout", default=5.0, type=float, help="Connection timeout in seconds")
-@click.option("--workers", default=10, type=int, help="Maximum concurrent probe workers")
+@click.option("--workers", default=10, type=click.IntRange(min=1), help="Maximum concurrent probe workers")
 @click.option(
     "--output-format",
     "output_fmt",
@@ -1565,7 +1569,7 @@ def tls(
     help="Scan profile: fast (top ~18 ports), normal (common ports), full (1-1024 + common). Overrides --ports, --timeout, --workers unless explicitly set.",
 )
 @click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
-@click.option("--workers", default=50, type=int, help="Maximum concurrent workers")
+@click.option("--workers", default=50, type=click.IntRange(min=1), help="Maximum concurrent workers")
 @click.option(
     "--output-format",
     "output_fmt",
@@ -1692,7 +1696,7 @@ def service(target: str, ports: str | None, profile: str | None, timeout: float,
     help="Hash algorithm for salted/peppered banner matching (default: sha256).",
 )
 @click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
-@click.option("--workers", default=50, type=int, help="Maximum concurrent workers")
+@click.option("--workers", default=50, type=click.IntRange(min=1), help="Maximum concurrent workers")
 @click.option(
     "--output-format",
     "output_fmt",
@@ -1808,7 +1812,7 @@ def vuln(
 )
 @click.option("--port", default=443, type=int, help="TLS port for SSL certificate inspection (default: 443)")
 @click.option("--timeout", default=5.0, type=float, help="Request timeout in seconds")
-@click.option("--workers", default=10, type=int, help="Maximum concurrent workers for fuzzing")
+@click.option("--workers", default=10, type=click.IntRange(min=1), help="Maximum concurrent workers for fuzzing")
 @click.option(
     "--output-format",
     "output_fmt",
@@ -1912,7 +1916,7 @@ def urlcheck(
     help="Path to passwords wordlist (one per line). Uses built-in default if omitted.",
 )
 @click.option("--timeout", default=5.0, type=float, help="Connection timeout in seconds")
-@click.option("--workers", default=10, type=int, help="Maximum concurrent workers")
+@click.option("--workers", default=10, type=click.IntRange(min=1), help="Maximum concurrent workers")
 @click.option(
     "--output-format",
     "output_fmt",
@@ -1994,7 +1998,7 @@ def brute(
     help="JSON file with 'service' command output (port -> banner mapping) to cross-reference OS signatures.",
 )
 @click.option("--timeout", default=5.0, type=float, help="Connection timeout in seconds")
-@click.option("--workers", default=10, type=int, help="Maximum concurrent probe workers")
+@click.option("--workers", default=10, type=click.IntRange(min=1), help="Maximum concurrent probe workers")
 @click.option(
     "--output-format",
     "output_fmt",
@@ -2458,7 +2462,7 @@ def geo(
 @click.option(
     "--workers",
     default=50,
-    type=int,
+    type=click.IntRange(min=1),
     help="Maximum concurrent workers for subdomain enumeration",
 )
 @click.option(
@@ -2671,7 +2675,7 @@ def cert(
 @click.option(
     "--workers",
     default=50,
-    type=int,
+    type=click.IntRange(min=1),
     help="Maximum concurrent workers for live service detection (default: 50)",
 )
 @click.option(
@@ -3927,7 +3931,7 @@ def nmap(
 @click.option(
     "--workers",
     default=DEFAULT_MAX_WORKERS,
-    type=int,
+    type=click.IntRange(min=1),
     help="Maximum concurrent workers for resolution.",
 )
 @click.option(
@@ -4068,7 +4072,7 @@ def ssh(target: str, port: int | None, timeout: float, fmt: str, output_fmt: str
 @click.option(
     "--workers",
     default=20,
-    type=int,
+    type=click.IntRange(min=1),
     help="Maximum concurrent HTTP probes (default: 20)",
 )
 @click.option(

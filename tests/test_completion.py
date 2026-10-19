@@ -118,6 +118,26 @@ def test_generate_completion_script_custom_prog_name() -> None:
     assert "_mytool_completion" in script
 
 
+@pytest.mark.parametrize("prog_name", ["my-tool", "my.tool", "my-tool.v2"])
+@pytest.mark.parametrize("shell", ["bash", "zsh", "fish"])
+def test_generate_completion_script_uses_click_env_var_name(
+    prog_name: str, shell: str
+) -> None:
+    """The completion env var must match the one click's runtime reads.
+
+    Click derives the variable at runtime by replacing ``-`` and ``.`` with
+    ``_`` before upper-casing (``click/core.py``).  A script that sets
+    ``_MY-TOOL_COMPLETE`` can therefore never be triggered, so the emitted
+    completion is dead code for any hyphenated or dotted program name.
+    """
+    cli_obj = _make_cli()
+    script = generate_completion_script(cli_obj, shell, prog_name=prog_name)
+    sanitized = prog_name.replace("-", "_").replace(".", "_")
+    expected_var = f"_{sanitized.upper()}_COMPLETE"
+    assert expected_var in script
+    assert f"_{prog_name.upper()}_COMPLETE" not in script
+
+
 def test_generate_completion_script_invalid_shell_raises() -> None:
     cli_obj = _make_cli()
     with pytest.raises(ValueError):
