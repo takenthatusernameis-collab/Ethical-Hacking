@@ -2,7 +2,7 @@
 
 ## What changed
 - Removed provably-dead duplicate code block in `ethscan/vuln.py` (duplicate `_HASHLIB_ALGORITHMS` and the early `_transform_banner` definition). Committed as f2d4599.
-- Removed provably-dead IPv4 loop + `ipv4_pattern` in `_extract_hosts_from_banner` (`ethscan/vuln.py:498-513`): `hostname_pattern` matches all IPv4 dotted-quads and adds them to `seen` first (verified empirically: 0 mismatches across sample banners), so the `if ip not in seen` body never executed. IPs are still captured via the hostname loop. Behavior-preserving cleanup, 10 deletions, vuln.py only. NOT committed; change sits in working tree.
+- Removed provably-dead IPv4 loop + `ipv4_pattern` in `_extract_hosts_from_banner` (`ethscan/vuln.py:498-513`): `hostname_pattern` matches all IPv4 dotted-quads and adds them to `seen` first (verified empirically: 0 mismatches across sample banners), so the `if ip not in seen` body never executed. IPs are still captured via the hostname loop. Behavior-preserving cleanup, 10 deletions, vuln.py only. Committed as f2d4599; working tree clean.
 
 ## What was verified
 - `python -m pytest -q` -> 3906 passed, 1 skipped (green baseline; includes `test_extract_hosts_from_banner_ip`/`multiple`/`dedup` which still pass because IPs are captured by the hostname loop).
