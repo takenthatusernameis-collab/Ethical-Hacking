@@ -9,10 +9,12 @@ from ethscan.scanner import (
     format_scan_report_csv,
     format_scan_report_json,
     format_scan_report_markdown,
+    get_all_ports,
     get_common_ports,
     get_profile_defaults,
     get_profile_ports,
     parse_port_range,
+    resolve_port_list,
     scan_port,
     scan_ports,
 )
@@ -147,6 +149,44 @@ def test_get_profile_defaults_full() -> None:
 def test_get_profile_defaults_invalid() -> None:
     with pytest.raises(ValueError, match="Unknown profile: invalid"):
         get_profile_defaults("invalid")
+
+
+def test_resolve_port_list_common_keyword() -> None:
+    assert resolve_port_list("common") == get_common_ports()
+
+
+def test_resolve_port_list_all_keyword() -> None:
+    assert resolve_port_list("all") == get_all_ports()
+
+
+def test_resolve_port_list_keywords_are_case_insensitive() -> None:
+    assert resolve_port_list("COMMON") == COMMON_PORTS
+    assert resolve_port_list("Common") == COMMON_PORTS
+    assert resolve_port_list("ALL") == list(range(1, 65536))
+    assert resolve_port_list("All") == list(range(1, 65536))
+
+
+def test_resolve_port_list_ranges_still_work() -> None:
+    assert resolve_port_list("80,443,8000-9000") == [80, 443] + list(range(8000, 9001))
+
+
+def test_resolve_port_list_common_with_profile_uses_profile_ports() -> None:
+    assert resolve_port_list("common", profile="fast") == FAST_PORTS
+    assert resolve_port_list("common", profile="normal") == COMMON_PORTS
+    assert resolve_port_list("common", profile="full") == FULL_PORTS
+
+
+def test_resolve_port_list_all_with_profile_uses_all_ports() -> None:
+    assert resolve_port_list("all", profile="fast") == list(range(1, 65536))
+
+
+def test_resolve_port_list_explicit_range_with_profile() -> None:
+    assert resolve_port_list("22,80", profile="fast") == [22, 80]
+
+
+def test_resolve_port_list_invalid_keyword_rejected() -> None:
+    with pytest.raises(ValueError):
+        resolve_port_list("abc")
 
 
 def test_format_scan_report_json() -> None:

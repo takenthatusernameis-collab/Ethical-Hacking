@@ -1,40 +1,21 @@
 # HANDOFF_NEXT.md
 
 ## Summary
-Closed out the prior agent's assignment (regression tests for the profile-explicitness behavior) and, in
-doing so, found and fixed the remaining instance of that bug: the `report` command still replaced an
-explicit `--timeout`/`--workers` with the profile defaults whenever the value happened to equal the
-option's built-in default (`report --profile fast --timeout 1.0` ran with `0.5`). The `report.py` helper
-already supported explicit flags; the CLI simply never passed them.
+Closed out the prior agent's assignment: made `service` and `cve` accept the `common` and `all` port keywords consistently with `scan` and `report`.
 
 ## Changes
-- `ethscan/cli.py`: `report` detects explicit `--timeout`/`--workers` via Click's `ParameterSource`
-  (COMMANDLINE / ENVIRONMENT / DEFAULT_MAP) and forwards them to `run_report()`.
-- `ethscan/report.py`: `run_report()` accepts optional `timeout_explicit` / `workers_explicit` and
-  forwards them to `_resolve_ports_and_defaults`. `None` keeps the legacy sentinel behaviour, so direct
-  API callers are unaffected.
-- `tests/test_cli.py` (+14), `tests/test_report.py` (+4): regression tests for `scan`, `service`, `cve`,
-  `report` covering (a) explicit values equal to the built-in default surviving a profile, (b)
-  config-file values (`default_map`) surviving a profile, (c) profile defaults still applying when
-  nothing was specified.
+- `ethscan/scanner.py`: new `resolve_port_list(ports, profile=None)` helper — `common`/`all` (case-insensitive); with a profile, `common` → profile ports, `all` → 1-65535; otherwise `common` → common ports, `all` → 1-65535; anything else → `parse_port_range`. Added `from __future__ import annotations` (needed for the `str | None` annotation on py>=3.9).
+- `ethscan/cli.py`: `service` (~line 1608) and `cve` (~line 2746) now call `resolve_port_list` instead of `parse_port_range(ports)` directly, in both profile and non-profile branches. `--ports` help text updated to document the keywords, matching `scan`/`report`.
+- `tests/test_scanner.py` (+9): unit tests for the helper.
+- `tests/test_cli.py` (+12): CLI tests for `service`/`cve` covering `--ports common`/`all`, case-insensitive keywords, and `--profile fast`/`normal` combinations.
 
 ## Verification
-- Full suite: 3954 passed, 1 skipped (baseline 3936 + 18 new). No regressions.
-- Lint: `ruff check ethscan tests` output byte-identical to the pre-change baseline; no new errors.
-- The new tests are proven to catch the regression: reintroducing the old sentinel comparison fails 9 of
-  them; reverting the source to `36f9f9e` fails the 3 new `report` tests.
-- The README's documented config example (`timeout: 1.0`, `workers: 100`) now survives `--profile fast`.
+- Full suite: 3972 passed, 1 skipped (baseline 3954 + 18 new). No regressions.
+- Lint: `ruff check ethscan tests` = 48 pre-existing errors, byte-identical to baseline; no new errors.
+- Original failure reproduced and fixed: `service --ports all/common` and `cve --ports all/common` previously exited 1 with `ValueError: Invalid port number 'all'/'common'`; both now exit 0 with the correct port list (verified via the new CLI tests with mocked `run_service`/`run_cve`).
 
 ## Unresolved
-- `service` and `cve` still crash with an unhandled `ValueError` on `--ports all` / `--ports common`
-  (`scan` and `report` handle both keywords). Evidence and scope guidance are in NEXT_TASK.md.
-- The three pre-existing `cve` profile tests (`test_cve_service_profile_override_ports`,
-  `test_cve_service_profile_override_workers_only`, `test_cve_service_profile_no_ports`) assert
-  essentially nothing: their mock captures `timeout`/`max_workers`, but the CLI actually passes
-  `service_timeout`/`workers`, so the captured values are always the mock's own defaults. They can be
-  tightened to assert the real arguments.
+- The three pre-existing `cve` profile tests (`test_cve_service_profile_override_ports`, `test_cve_service_profile_override_workers_only`, `test_cve_service_profile_no_ports` at tests/test_cli.py:20822+) assert essentially nothing: their mock captures `timeout`/`max_workers`, but the CLI passes `service_timeout`/`workers`, so captured values are always the mock defaults. They can be tightened to assert the real arguments.
 
 ## Next agent task
-Make `service` and `cve` accept the `common` and `all` port keywords consistently with `scan` and
-`report` (see NEXT_TASK.md for the reproduction table, the exact call sites, and the reference
-implementation to mirror).
+Tighten the three pre-existing `cve` profile tests in tests/test_cli.py so they assert the arguments `run_cve` is actually called with (`service_timeout`, `workers`, `ports`), e.g. `cve --profile fast --ports common` must pass `ports == FAST_PORTS` and `service_timeout == 0.5`. Small, self-contained, verifiable with the existing suite.

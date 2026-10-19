@@ -5163,6 +5163,122 @@ def test_service_profile_full_preserves_explicit_timeout_and_workers(monkeypatch
     assert called_args["max_workers"] == 50
 
 
+def test_service_ports_common_keyword(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_service(target, ports=None, timeout=3.0, max_workers=50):
+        called_args["ports"] = ports
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": len(ports) if ports else 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["service", "--target", "example.com", "--ports", "common"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == [
+        20, 21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445,
+        993, 995, 1723, 3306, 3389, 5432, 5900, 8080, 8443, 8888,
+    ]
+
+
+def test_service_ports_all_keyword(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_service(target, ports=None, timeout=3.0, max_workers=50):
+        called_args["ports"] = ports
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": len(ports) if ports else 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["service", "--target", "example.com", "--ports", "all"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == list(range(1, 65536))
+
+
+def test_service_ports_common_keyword_case_insensitive(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_service(target, ports=None, timeout=3.0, max_workers=50):
+        called_args["ports"] = ports
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": len(ports) if ports else 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["service", "--target", "example.com", "--ports", "COMMON"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == [
+        20, 21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445,
+        993, 995, 1723, 3306, 3389, 5432, 5900, 8080, 8443, 8888,
+    ]
+
+
+def test_service_profile_with_common_keyword(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_service(target, ports=None, timeout=3.0, max_workers=50):
+        called_args["ports"] = ports
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": len(ports) if ports else 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["service", "--target", "example.com", "--profile", "fast", "--ports", "common"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == [21, 22, 23, 25, 53, 80, 110, 139, 143, 443, 445, 993, 995, 3306, 3389, 5432, 8080, 8443]
+
+
+def test_service_profile_with_all_keyword(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_service(target, ports=None, timeout=3.0, max_workers=50):
+        called_args["ports"] = ports
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": len(ports) if ports else 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["service", "--target", "example.com", "--profile", "normal", "--ports", "all"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == list(range(1, 65536))
+
+
 def test_tls_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["tls", "--help"])
@@ -20955,6 +21071,219 @@ def test_cve_profile_applies_defaults_when_not_explicit(monkeypatch) -> None:
     assert result.exit_code == 0
     assert called["service_timeout"] == 0.5
     assert called["workers"] == 200
+
+
+def test_cve_ports_common_keyword(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cve(
+        target,
+        services_file=None,
+        timeout=10.0,
+        service_timeout=3.0,
+        workers=50,
+        use_cache=True,
+        offline_fallback=True,
+        api_url=None,
+        severity=None,
+        min_severity=None,
+        ports=None,
+        profile=None,
+    ):
+        called_args["ports"] = ports
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "ports": ports,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cve", "--target", "example.com", "--ports", "common"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == [
+        20, 21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445,
+        993, 995, 1723, 3306, 3389, 5432, 5900, 8080, 8443, 8888,
+    ]
+
+
+def test_cve_ports_all_keyword(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cve(
+        target,
+        services_file=None,
+        timeout=10.0,
+        service_timeout=3.0,
+        workers=50,
+        use_cache=True,
+        offline_fallback=True,
+        api_url=None,
+        severity=None,
+        min_severity=None,
+        ports=None,
+        profile=None,
+    ):
+        called_args["ports"] = ports
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "ports": ports,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cve", "--target", "example.com", "--ports", "all"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == list(range(1, 65536))
+
+
+def test_cve_ports_common_keyword_case_insensitive(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cve(
+        target,
+        services_file=None,
+        timeout=10.0,
+        service_timeout=3.0,
+        workers=50,
+        use_cache=True,
+        offline_fallback=True,
+        api_url=None,
+        severity=None,
+        min_severity=None,
+        ports=None,
+        profile=None,
+    ):
+        called_args["ports"] = ports
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "ports": ports,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cve", "--target", "example.com", "--ports", "All"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == list(range(1, 65536))
+
+
+def test_cve_profile_with_common_keyword(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cve(
+        target,
+        services_file=None,
+        timeout=10.0,
+        service_timeout=3.0,
+        workers=50,
+        use_cache=True,
+        offline_fallback=True,
+        api_url=None,
+        severity=None,
+        min_severity=None,
+        ports=None,
+        profile=None,
+    ):
+        called_args["ports"] = ports
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "ports": ports,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cve", "--target", "example.com", "--profile", "fast", "--ports", "common"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == [21, 22, 23, 25, 53, 80, 110, 139, 143, 443, 445, 993, 995, 3306, 3389, 5432, 8080, 8443]
+
+
+def test_cve_profile_with_all_keyword(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_cve(
+        target,
+        services_file=None,
+        timeout=10.0,
+        service_timeout=3.0,
+        workers=50,
+        use_cache=True,
+        offline_fallback=True,
+        api_url=None,
+        severity=None,
+        min_severity=None,
+        ports=None,
+        profile=None,
+    ):
+        called_args["ports"] = ports
+        return {
+            "target": target,
+            "host": target,
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "ports": ports,
+            "services_checked": 0,
+            "cve_entries": [],
+            "cve_count": 0,
+            "severity_counts": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cve", "--target", "example.com", "--profile", "normal", "--ports", "all"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == list(range(1, 65536))
 
 
 def test_radix_no_cidrs_error() -> None:

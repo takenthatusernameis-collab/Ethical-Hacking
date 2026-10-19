@@ -1,4 +1,5 @@
 """Port scanner module for ethscan."""
+from __future__ import annotations
 
 import csv
 import io
@@ -112,6 +113,38 @@ def parse_port_range(port_spec: str) -> list[int]:
                 raise ValueError(f"Port {port} out of range (0-{MAX_PORT})")
             ports.add(port)
     return sorted(ports)
+
+
+def resolve_port_list(ports: str, profile: str | None = None) -> list[int]:
+    """Resolve a port specification into a list of ports.
+
+    Supports the ``common`` and ``all`` keywords (case-insensitive) as well as
+    comma-separated lists and ranges via :func:`parse_port_range`. When a
+    profile is supplied, ``common`` resolves to that profile's port set and
+    ``all`` resolves to every port 1-65535; without a profile, ``common``
+    resolves to the common ports and ``all`` to every port.
+
+    Args:
+        ports: Port specification ('common', 'all', or comma-separated list/ranges).
+        profile: Optional scan profile ('fast', 'normal', 'full').
+
+    Returns:
+        Sorted list of unique port numbers.
+
+    Raises:
+        ValueError: If the specification is invalid.
+    """
+    ports_spec = ports.lower()
+    if profile:
+        if ports_spec == "common":
+            return get_profile_ports(profile)
+        if ports_spec == "all":
+            return get_all_ports()
+    if ports_spec == "common":
+        return get_common_ports()
+    if ports_spec == "all":
+        return get_all_ports()
+    return parse_port_range(ports)
 
 
 COMMON_PORTS = [

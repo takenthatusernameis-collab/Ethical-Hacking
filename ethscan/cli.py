@@ -1575,7 +1575,8 @@ def tls(
 @click.option("--target", required=True, help="Target host or URL (e.g. example.com or https://example.com)")
 @click.option(
     "--ports",
-    help="Ports to scan: comma-separated list/ranges (e.g., '21,22,80,443,8000-9000'). Defaults to common ports.",
+    help="Ports to scan: 'common', 'all', or comma-separated list/ranges "
+    "(e.g., '21,22,80,443,8000-9000'). Defaults to common ports.",
 )
 @click.option(
     "--profile",
@@ -1611,8 +1612,9 @@ def service(ctx: click.Context, target: str, ports: str | None, profile: str | N
     if profile:
         defaults = get_profile_defaults(profile)
         if ports:
-            from ethscan.scanner import parse_port_range
-            port_list = parse_port_range(ports)
+            from ethscan.scanner import resolve_port_list
+
+            port_list = resolve_port_list(ports, profile=profile)
         else:
             port_list = get_profile_ports(profile)
         timeout_source = ctx.get_parameter_source("timeout")
@@ -1624,8 +1626,9 @@ def service(ctx: click.Context, target: str, ports: str | None, profile: str | N
         if not workers_explicit:
             workers = defaults["workers"]
     elif ports:
-        from ethscan.scanner import parse_port_range
-        port_list = parse_port_range(ports)
+        from ethscan.scanner import resolve_port_list
+
+        port_list = resolve_port_list(ports)
 
     results = run_service(target, ports=port_list, timeout=timeout, max_workers=workers)
 
@@ -2673,8 +2676,8 @@ def cert(
 )
 @click.option(
     "--ports",
-    help="Ports to scan for live service detection: comma-separated list/ranges "
-    "(e.g., '21,22,80'). Defaults to common ports.",
+    help="Ports to scan for live service detection: 'common', 'all', or "
+    "comma-separated list/ranges (e.g., '21,22,80'). Defaults to common ports.",
 )
 @click.option(
     "--profile",
@@ -2775,8 +2778,9 @@ def cve(
         if profile:
             defaults = get_profile_defaults(profile)
             if ports:
-                from ethscan.scanner import parse_port_range
-                port_list = parse_port_range(ports)
+                from ethscan.scanner import resolve_port_list
+
+                port_list = resolve_port_list(ports, profile=profile)
             else:
                 port_list = get_profile_ports(profile)
             timeout_source = ctx.get_parameter_source("service_timeout")
@@ -2788,8 +2792,9 @@ def cve(
             if not workers_explicit:
                 workers = defaults["workers"]
         elif ports:
-            from ethscan.scanner import parse_port_range
-            port_list = parse_port_range(ports)
+            from ethscan.scanner import resolve_port_list
+
+            port_list = resolve_port_list(ports)
 
     results = run_cve(
         target,
