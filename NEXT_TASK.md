@@ -1,36 +1,62 @@
 # NEXT_TASK.md
 
-## Status (2026-10-19T15:20:00Z)
-- Task from prior agent: fix `resolve --server` ignored for CNAME lookups — completed and verified (previous session + this context)
-- Current: fixed profile sentinel-override bug (explicit CLI `--timeout`/`--workers` clobbered by profile defaults) in CLI (scan/service/cve) using Click parameter source detection; also updated report.py to accept explicit flags while preserving backward compatibility. All existing tests still pass (3936 passed, 1 skipped). No regressions.
-- Lint baseline unchanged (48 intentional errors). No new lint errors introduced in touched files.
+## Status (2026-10-19T16:05:00Z)
+- Task from prior agent: add regression tests for the profile-explicitness behavior — done (18 new tests).
+  While verifying them I found the `report` command still had the *unfixed* half of the profile bug, so I
+  fixed that too (it was the exact case the prior agent had already prepared the plumbing for in
+  `report.py` but never wired up).
+- Current state: `scan`, `service`, `cve` and `report` all treat an explicitly supplied
+  `--timeout`/`--workers` (CLI flag, env var, or config-file value) as overriding the profile defaults —
+  including when the value happens to equal the option's built-in default.
 
 ## What changed
-- `ethscan/cli.py`: added `ParameterSource` import, `@click.pass_context` on scan/service/cve, detect if timeout/workers/service_timeout were explicitly passed via CLI/ENV/DEFAULT_MAP; only apply profile defaults when not explicit.
-- `ethscan/report.py`: `_resolve_ports_and_defaults` now accepts optional `timeout_explicit`/`workers_explicit` booleans (defaulting to legacy behavior) so callers can signal explicitness.
+- `ethscan/cli.py`: `report` uses `ctx.get_parameter_source("timeout"/"workers")` and passes
+  `timeout_explicit` / `workers_explicit` to `run_report()`.
+- `ethscan/report.py`: `run_report()` gained the two optional flags and forwards them to
+  `_resolve_ports_and_defaults`.
+- `tests/test_cli.py` (+14), `tests/test_report.py` (+4): regression tests.
 
 ## Verification
-- CLI tests: 855 passed
-- Full suite: 3936 passed, 1 skipped
-- Targeted verification:
-  - `scan --profile fast` → timeout 0.5, workers 200 (profile defaults)
-  - `scan --profile fast --timeout 1.0` → timeout 1.0 preserved
-  - `scan --profile full --workers 100` → workers 100 preserved
-  - `scan --profile full` → timeout 2.0, workers 50
-  - `service --profile fast --timeout 1.0` → timeout 1.0 preserved
-  - `service --profile full --workers 30` → workers 30 preserved
-  - `cve --profile fast --service-timeout 1.0` → service_timeout 1.0 preserved
-  - `cve --profile fast --workers 100` → workers 100 preserved
+- Full suite: 3954 passed, 1 skipped (baseline 3936 + 18 new). Lint output identical to baseline.
+- Regression-catching proof: reintroducing the sentinel comparison fails 9 of the new CLI tests; reverting
+  the source to `36f9f9e` fails the 3 new `report` tests.
 
 ## Next task (bounded, high-value)
-Investigate and fix `scan --ports all` with profile interaction semantics if any; or add tests for `service/cve --ports all` with profiles? Or alternatively look at a small remaining issue: in CLI scan, when profile is set, if user passes `--ports all`, we correctly take all ports (not profile ports). Also in report.py when explicit flags not given, it falls back to sentinel logic - consistent. Another potential issue: when ports are explicitly specified (not 'common'), does profile override timeout/workers regardless? Yes per current logic. But maybe add explicit regression tests for the report module's new explicit flags if called that way.
+**Make `service` and `cve` accept the `common` and `all` port keywords, like `scan` and `report` already do.**
 
-But looking at the test suite more - there might be a useful small fix. Let us look for another issue: in CLI scan, when profile is given and ports is not 'common' and not 'all', we parse ports as given - correct. Also the profile's help text says "Overrides --ports, --timeout, --workers unless explicitly set." So ports behavior is: if ports is 'common' (default when using profile?), or if not explicitly changed? The logic: if profile and ports_spec=='common', use profile ports. If user explicitly gives other ports, we use those ports - so ports can be overridden by explicit specification. That matches. The fix is correct.
+Evidence (reproduced with mocked network, exit code 1 = unhandled `ValueError`, raw traceback):
 
-Another small thing - the handoff said "thread the resulting booleans into `report.py::_resolve_ports_and_defaults` as optional keyword args defaulting to today's behaviour" - done. Also maybe the `run_report` in report.py could accept/forward? Let us check - does run_report need updating? Looking at how it's called. The current signature takes timeout/workers as values; if someone wants to signal explicitness from outside, they can't with current signature. But the handoff only mentioned threading booleans into _resolve_ports_and_defaults. That matches what we did.
+| command                              | result                                              |
+|--------------------------------------|-----------------------------------------------------|
+| `scan --ports all`                   | exit=0                                              |
+| `scan --ports common`                | exit=0                                              |
+| `report --ports all`                 | exit=0                                              |
+| `service --ports all`                | exit=1 `ValueError: Invalid port number 'all'`      |
+| `service --ports common`             | exit=1 `ValueError: Invalid port number 'common'`   |
+| `service --profile fast --ports common` | exit=1 `ValueError: Invalid port number 'common'` |
+| `cve --ports all`                    | exit=1 `ValueError: Invalid port number 'all'`      |
+| `cve --ports common`                 | exit=1 `ValueError: Invalid port number 'common'`   |
+| `cve --profile fast --ports common`  | exit=1 `ValueError: Invalid port number 'common'`   |
 
-A good bounded next task: add regression tests for the report module with explicit flags? Or fix any remaining sentinel logic. Let us look around - also in cve, when services_file is provided, profile logic is skipped - correct. Also in CLI, for scan/service/cve we handle correctly.
+Root cause: `ethscan/cli.py` `service` (~line 1605) and `cve` (~line 2769) call
+`parse_port_range(ports)` directly, while `scan` (~line 414) and `report.py::_parse_ports` special-case
+`"common"` / `"all"` first.
 
-Another task: there might be an issue where if user sets timeout via env var or default_map, we correctly treat as explicit. That matches the handoff's requirement.
+Scope guidance:
+- The `service` / `cve` `--ports` help text currently does **not** mention the keywords
+  (`"Ports to scan: comma-separated list/ranges ..."`), so supporting them is a small feature
+  extension — update the help text to match `scan`/`report` if you add them.
+- `scan` already has the reference implementation and tests to mirror:
+  `tests/test_cli.py::test_scan_profile_with_all_ports_keyword` and
+  `::test_scan_profile_ports_keyword_is_case_insensitive`.
+- `ethscan/scanner.py` already provides `get_common_ports()` and `get_all_ports()`; the `service`/`cve`
+  code just needs to use them, and the keywords should be case-insensitive to match `scan`.
+- Keep the change small: a shared helper (e.g. in `ethscan/scanner.py`) used by `service`/`cve` is
+  preferable to duplicating the branch three more times.
+- Add tests in `tests/test_cli.py` for `service` and `cve` (both with and without `--profile`), plus a
+  `tests/test_report.py`-style unit test if a helper is introduced.
 
-Alternatively, let us add the regression tests that the handoff mentioned? The handoff said "Add regression tests that fail before the fix..." but didn't specify exact test locations. Maybe add to test_cli.py? Let us look up test patterns - maybe add tests like test_scan_profile_preserves_explicit_timeout etc. Let us add a couple of focused regression tests. Let us look at how other profile tests are named.
+Alternative smaller next task (if the keyword extension is judged out of scope): convert the unhandled
+`ValueError` from `parse_port_range` into a clean Click usage error (exit code 2 + message) in
+`service`/`cve`, so a bad `--ports` value no longer surfaces as a raw traceback. That alone is a
+user-facing improvement but does not make the keywords work.
