@@ -44,6 +44,8 @@ import socket
 import struct
 from typing import Any
 
+from ethscan.target import TargetSpecError
+
 DEFAULT_PORT = 445
 DEFAULT_TIMEOUT = 3.0
 
@@ -193,7 +195,7 @@ def _normalize_target(target: str) -> tuple[str, int]:
                 port = port or int(rest)
 
     if not host:
-        raise ValueError(f"Could not parse host from target {target!r}")
+        raise TargetSpecError(f"Could not parse host from target {target!r}")
 
     return host, int(port) if port else DEFAULT_PORT
 
@@ -935,6 +937,7 @@ __all__ = [
     "SMB2_SIGNING_ENABLED",
     "SMB2_SIGNING_REQUIRED",
     "SMB_COM_NEGOTIATE",
+    "TargetSpecError",
     "_build_smb1_negotiate_request",
     "_build_smb2_banner",
     "_build_smb2_negotiate_request",

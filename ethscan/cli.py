@@ -1,8 +1,10 @@
 """Command-line interface for ethscan."""
 from __future__ import annotations
 
+import functools
 import json
 import os
+from collections.abc import Callable
 from typing import Any
 
 import click
@@ -302,6 +304,7 @@ from ethscan.subtake import (
     format_subtake_report_markdown,
     run_subtake,
 )
+from ethscan.target import TargetSpecError
 from ethscan.tls import (
     format_tls_report_csv,
     format_tls_report_json,
@@ -421,6 +424,34 @@ def _check_cidrs(values: list[str], param: str) -> None:
         parse_cidrs(values)
     except (CidrSpecError, RadixSpecError) as exc:
         raise _invalid_cidr(exc, param) from exc
+
+
+def _invalid_target(exc: ValueError) -> click.BadParameter:
+    """Build the click usage error reported for an invalid ``--target`` value."""
+    return click.BadParameter(str(exc), param_hint="'--target'")
+
+
+def _target_usage_errors(func: Callable[..., Any]) -> Callable[..., Any]:
+    """Turn an unparsable ``--target`` into a click usage error.
+
+    The library raises :class:`~ethscan.target.TargetSpecError` when a target
+    string does not contain a usable host. Commands that treat an unparsable
+    target as a failed probe report it inside their own output and are
+    unaffected; the others would otherwise die with a raw traceback, so the
+    error becomes a click usage error (exit code 2) at the CLI boundary.
+
+    The library modules stay free of click: this is the only place where the
+    translation happens.
+    """
+
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return func(*args, **kwargs)
+        except TargetSpecError as exc:
+            raise _invalid_target(exc) from exc
+
+    return wrapper
 
 
 @cli.command()
@@ -3645,6 +3676,7 @@ def completion(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
+@_target_usage_errors
 def memcached(
     target: str,
     port: int | None,
@@ -4266,6 +4298,7 @@ def s3(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
+@_target_usage_errors
 def smtp(
     target: str,
     port: int | None,
@@ -4346,6 +4379,7 @@ def smtp(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
+@_target_usage_errors
 def ftp(
     target: str,
     port: int | None,
@@ -4421,6 +4455,7 @@ def ftp(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
+@_target_usage_errors
 def ntp(
     target: str,
     port: int | None,
@@ -4494,6 +4529,7 @@ def ntp(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
+@_target_usage_errors
 def snmp(
     target: str,
     port: int | None,
@@ -4577,6 +4613,7 @@ def snmp(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
+@_target_usage_errors
 def netbios(
     target: str,
     port: int | None,
@@ -4649,6 +4686,7 @@ def netbios(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
+@_target_usage_errors
 def smb(
     target: str,
     port: int | None,
@@ -4713,6 +4751,7 @@ def smb(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
+@_target_usage_errors
 def redis(
     target: str,
     port: int | None,
@@ -4781,6 +4820,7 @@ def redis(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
+@_target_usage_errors
 def ldap(
     target: str,
     port: int | None,

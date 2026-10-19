@@ -130,6 +130,18 @@ Try 'python -m ethscan radix --help' for help.
 Error: Invalid value for '--cidrs': Cannot mix IPv4 and IPv6 networks in a single radix tree
 ```
 
+A `--target` that does not contain a usable host is rejected the same way by
+the protocol commands (`redis`, `memcached`, `ntp`, `snmp`, `ftp`, `ldap`,
+`netbios`, `smb`, `smtp`):
+
+```console
+$ python -m ethscan redis --target ""
+Usage: python -m ethscan redis [OPTIONS]
+Try 'python -m ethscan redis --help' for help.
+
+Error: Invalid value for '--target': Could not parse host from target ''
+```
+
 The `validate` command is the exception: it reports invalid specifications
 inside its own JSON/CSV output and still exits 0.
 

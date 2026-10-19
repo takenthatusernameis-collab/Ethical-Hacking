@@ -22,6 +22,8 @@ import json
 import socket
 from typing import Any
 
+from ethscan.target import TargetSpecError
+
 DEFAULT_PORT = 161
 DEFAULT_TIMEOUT = 3.0
 DEFAULT_COMMUNITIES = ("public", "private", "default", "")
@@ -143,7 +145,7 @@ def _normalize_target(target: str) -> tuple[str, int]:
             host = host[1:-1]
 
     if not host:
-        raise ValueError(f"Could not parse host from target {target!r}")
+        raise TargetSpecError(f"Could not parse host from target {target!r}")
 
     return host, int(port) if port else DEFAULT_PORT
 

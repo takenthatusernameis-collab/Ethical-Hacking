@@ -38,6 +38,8 @@ import socket
 import ssl
 from typing import Any
 
+from ethscan.target import TargetSpecError
+
 DEFAULT_PORT = 389
 DEFAULT_LDAPS_PORT = 636
 DEFAULT_TIMEOUT = 3.0
@@ -157,7 +159,7 @@ def _normalize_target(target: str) -> tuple[str, int]:
                 port = port or int(rest)
 
     if not host:
-        raise ValueError(f"Could not parse host from target {target!r}")
+        raise TargetSpecError(f"Could not parse host from target {target!r}")
 
     default_port = DEFAULT_LDAPS_PORT if scheme == "ldaps" else DEFAULT_PORT
     return host, int(port) if port else default_port
@@ -754,6 +756,7 @@ __all__ = [
     "LDAP_TAG_SEARCH_REQUEST",
     "LDAP_TAG_SEARCH_RESULT_DONE",
     "LDAP_TAG_SEARCH_RESULT_ENTRY",
+    "TargetSpecError",
     "_build_bind_request",
     "_build_root_dse_search",
     "_normalize_target",

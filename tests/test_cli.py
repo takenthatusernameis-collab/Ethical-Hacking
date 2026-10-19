@@ -21692,7 +21692,7 @@ def test_port_commands_are_exactly_the_documented_set() -> None:
 
 
 def test_library_modules_stay_free_of_click() -> None:
-    """The scanner/validator/report/cidr/radix modules must not depend on click.
+    """The library modules must not depend on click.
 
     Only the CLI layer may translate library errors into usage errors.
     """
@@ -21700,7 +21700,29 @@ def test_library_modules_stay_free_of_click() -> None:
     import pathlib
 
     package = pathlib.Path(__file__).resolve().parent.parent / "ethscan"
-    for name in ("scanner.py", "validate.py", "report.py", "cidr.py", "radix.py"):
+    names = [
+        "scanner.py",
+        "validate.py",
+        "report.py",
+        "cidr.py",
+        "radix.py",
+        "target.py",
+        "redis.py",
+        "memcached.py",
+        "ntp.py",
+        "snmp.py",
+        "ftp.py",
+        "ldap.py",
+        "netbios.py",
+        "smb.py",
+        "smtp.py",
+        "mysql.py",
+        "mongodb.py",
+        "oracle.py",
+        "postgresql.py",
+        "mssql.py",
+    ]
+    for name in names:
         tree = ast.parse((package / name).read_text(encoding="utf-8"))
         imported = set()
         for node in ast.walk(tree):
@@ -21908,3 +21930,157 @@ def test_invalid_cidr_does_not_run_the_calculation(monkeypatch) -> None:
     result = runner.invoke(cli, ["radix", "--cidrs", "bogus"])
     _assert_cidr_usage_error(result, "radix", "--cidrs")
     assert calls == [], "no calculation may start for an invalid CIDR value"
+
+
+# --- invalid --target handling -----------------------------------------------
+#
+# A target that does not contain a usable host must be reported as a click
+# usage error (exit code 2, one-line message) instead of an unhandled
+# ValueError traceback.
+
+TARGET_USAGE_ERROR_COMMANDS = (
+    "redis",
+    "memcached",
+    "ntp",
+    "snmp",
+    "ftp",
+    "ldap",
+    "netbios",
+    "smb",
+    "smtp",
+)
+
+# These commands treat an unparsable target as a failed probe and report it
+# inside their own output (exit code 0). Their contract is left alone.
+TARGET_PROBE_FAILURE_COMMANDS = (
+    "mysql",
+    "mongodb",
+    "oracle",
+    "postgresql",
+    "mssql",
+)
+
+UNUSABLE_TARGETS = (
+    "",
+    "   ",
+    "://no-host",
+    "redis://",
+    ":6379",
+)
+
+
+def _assert_target_usage_error(result, command: str) -> None:
+    """Assert that ``result`` is a clean click usage error for --target."""
+    assert result.exit_code == 2, (
+        f"{command}: expected exit code 2, got {result.exit_code}\n{result.output}"
+    )
+    assert "Error: Invalid value for '--target':" in result.output, (
+        f"{command}: missing usage error message\n{result.output}"
+    )
+    assert "Traceback (most recent call last)" not in result.output, (
+        f"{command}: leaked a traceback\n{result.output}"
+    )
+    assert not isinstance(result.exception, ValueError), (
+        f"{command}: leaked {result.exception!r} instead of a usage error"
+    )
+
+
+def test_invalid_target_is_a_usage_error_for_every_target_command() -> None:
+    """Every target-consuming command must reject a bad --target cleanly."""
+    runner = CliRunner()
+    for command in TARGET_USAGE_ERROR_COMMANDS:
+        for target in UNUSABLE_TARGETS:
+            result = runner.invoke(cli, [command, "--target", target])
+            _assert_target_usage_error(result, f"{command} --target {target!r}")
+            assert "Could not parse host from target" in result.output, result.output
+
+
+def test_the_nine_documented_target_crashes_are_usage_errors() -> None:
+    """The invocations that used to dump a traceback must now be usage errors."""
+    runner = CliRunner()
+    for command in TARGET_USAGE_ERROR_COMMANDS:
+        result = runner.invoke(cli, [command, "--target", ""])
+        _assert_target_usage_error(result, command)
+
+
+def test_invalid_target_usage_error_is_a_single_line() -> None:
+    """The failure must be a one-line error, not a multi-line traceback."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["redis", "--target", ""])
+    error_lines = [
+        line for line in result.output.splitlines() if line.startswith("Error:")
+    ]
+    assert len(error_lines) == 1, result.output
+    assert error_lines[0] == (
+        "Error: Invalid value for '--target': Could not parse host from target ''"
+    )
+
+
+def test_invalid_target_names_the_offending_value() -> None:
+    """The usage error must quote the value that could not be parsed."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["redis", "--target", "://no-host"])
+    _assert_target_usage_error(result, "redis --target '://no-host'")
+    assert "Could not parse host from target '://no-host'" in result.output
+
+
+def test_probe_failure_commands_still_report_the_error_in_their_output() -> None:
+    """The five commands that report a failed probe keep their contract."""
+    runner = CliRunner()
+    for command in TARGET_PROBE_FAILURE_COMMANDS:
+        result = runner.invoke(cli, [command, "--target", ""])
+        assert result.exit_code == 0, f"{command}: {result.output}"
+        payload = json.loads(result.output)
+        assert payload["accessible"] is False, f"{command}: {result.output}"
+        assert payload["error"] == "Could not parse host from target ''", (
+            f"{command}: {result.output}"
+        )
+
+
+def test_invalid_target_does_not_start_a_probe(monkeypatch) -> None:
+    """A rejected --target must abort before any network access happens."""
+    import importlib
+
+    calls = []
+
+    def make_tripwire(module_name: str, attribute: str):
+        def tripwire(*args, **kwargs):
+            calls.append((module_name, attribute))
+            raise AssertionError("a probe was started for an invalid target")
+
+        return tripwire
+
+    transports = (
+        ("redis", "_send_recv"),
+        ("memcached", "_send_recv"),
+        ("ntp", "_send_recv"),
+        ("snmp", "_send_recv"),
+        ("ftp", "_connect"),
+        ("ldap", "_send_recv"),
+        ("netbios", "_send_recv"),
+        ("smb", "_send_recv"),
+        ("smtp", "_connect"),
+    )
+    for module_name, attribute in transports:
+        module = importlib.import_module(f"ethscan.{module_name}")
+        monkeypatch.setattr(module, attribute, make_tripwire(module_name, attribute))
+
+    runner = CliRunner()
+    for command in TARGET_USAGE_ERROR_COMMANDS:
+        result = runner.invoke(cli, [command, "--target", ""])
+        _assert_target_usage_error(result, command)
+    assert calls == [], "no probe may start for an invalid --target value"
+
+
+def test_a_usable_target_is_still_accepted() -> None:
+    """Valid targets keep working and are not reported as usage errors."""
+    runner = CliRunner()
+    for command in TARGET_USAGE_ERROR_COMMANDS:
+        for target in ("127.0.0.1", "127.0.0.1:6379", "[::1]:6379"):
+            result = runner.invoke(
+                cli, [command, "--target", target, "--timeout", "0.2"]
+            )
+            assert result.exit_code == 0, (
+                f"{command} --target {target!r}: {result.output}"
+            )
+            assert "Invalid value for '--target'" not in result.output, result.output

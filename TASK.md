@@ -1,80 +1,79 @@
 # TASK.md
 
-Date: 2026-10-19T19:40:00Z
-Status: an invalid CIDR is now a clean click usage error in the `cidr` and
-`radix` commands, the translation lives in exactly one place, the library
-modules are free of click, and a radix tree over mixed IPv4/IPv6 networks is
-rejected instead of crashing.
+Date: 2026-10-19T21:05:00Z
+Status: a `--target` that contains no usable host is now a clean click usage
+error (exit code 2) in the nine protocol commands that used to dump a
+traceback, the translation lives in exactly one place, the library modules
+stay free of click, and the five commands that report a failed probe keep
+their contract.
 
 ## What changed (this session)
-- `ethscan/cidr.py`: `_normalize_cidr` was promoted to the public
-  `normalize_cidr`, with `_normalize_cidr` kept as an alias so existing
-  callers keep working. The dedicated `CidrSpecError(ValueError)` (added in
-  the previous session) is raised by it and therefore by `run_cidr`.
-- `ethscan/radix.py`:
-  - the duplicated `_normalize_cidr` was deleted; the module now uses
-    `ethscan.cidr.normalize_cidr` (`_normalize_cidr` stays as an alias).
-  - new `RadixSpecError(ValueError)`.
-  - `_parse_networks` was promoted to the public `parse_cidrs` (old name kept
-    as an alias). It now also rejects a list that mixes IPv4 and IPv6
-    networks, because a radix tree is built over a single address family.
+- **new** `ethscan/target.py`: holds `TargetSpecError(ValueError)`, the
+  shared error type for an unusable target. The module is deliberately
+  click-free.
+- `ethscan/{redis,memcached,ntp,snmp,ftp,ldap,netbios,smb,smtp,mysql,mongodb,oracle,postgresql,mssql}.py`
+  (14 modules): the duplicated `_normalize_target` helpers now raise
+  `TargetSpecError` instead of a bare `ValueError`. The parsers themselves
+  were **not** consolidated - they differ (some use `host.find("]:")`, some
+  `host.endswith("]")`) and that is a separate refactor.
+  `TargetSpecError` is a `ValueError` subclass, so the five modules that
+  already catch `ValueError` around the probe keep working unchanged.
+  `memcached.py`, `ldap.py` and `smb.py` list it in `__all__`.
 - `ethscan/cli.py`:
-  - new `_invalid_cidr(exc, param)` and `_check_cidr(value, param)` (one
-    value) plus `_check_cidrs(values, param)` (a list, which also rejects
-    mixed address families). Both translate the library errors into a click
-    usage error; `param` names the option the value came from.
-  - the `cidr` command checks `--cidr` and `--diff`.
-  - the `radix` command checks `--cidr-file`, `--cidrs` and `--diff`.
-- `ethscan/validate.py`: the module docstring no longer claims the module
-  reuses `parse_port_range` from `ethscan.scanner` (it does not). The
-  docstring now states that the port specifications are parsed inline and why.
-  The `validate` command's behaviour is unchanged.
-- `README.md`: the Usage section documents the CIDR usage errors, the
-  mixed-family rejection, and that `validate` keeps reporting invalid
-  specifications inside its own output.
-- `tests/test_cli.py` (+13): usage errors for `cidr --cidr`, `cidr --diff`,
-  `radix --cidrs`, `radix --diff` and `radix --cidr-file`; the four
-  invocations that used to dump a traceback; a single-line error; mixed
-  families rejected; a diff in the other family still accepted; `--contains`
-  still not an error; `validate` still reports inside its output; no
-  calculation starts for a rejected value. The existing
+  - new `_invalid_target(exc)` builds `click.BadParameter(..., param_hint="'--target'")`.
+  - new `_target_usage_errors` decorator translates a `TargetSpecError`
+    into that usage error. It is applied to exactly the nine commands that
+    used to crash (`redis`, `memcached`, `ntp`, `snmp`, `ftp`, `ldap`,
+    `netbios`, `smb`, `smtp`).
+- `README.md`: the Usage section documents the `--target` usage error and
+  names the nine commands it applies to.
+- `tests/test_target.py` (new, 49 tests): the error type is a `ValueError`
+  subclass, all 14 modules raise it for every unusable target, all 14 still
+  raise it as a `ValueError`, valid targets are unaffected, and the five
+  probe-failure modules still report the error inside their own output.
+- `tests/test_cli.py` (+7): usage error for each of the nine commands and
+  each of the five unusable target values; the nine previously-crashing
+  invocations; a single-line error; the offending value quoted in the
+  message; the five probe-failure commands still exit 0 and still report the
+  error in their JSON output; no transport helper is reached for a rejected
+  target; usable targets are still accepted. The existing
   `test_library_modules_stay_free_of_click` guard now also covers
-  `cidr.py` and `radix.py`.
-- `tests/test_cidr.py` (+7) and `tests/test_radix.py` (+8): the new error
-  types are `ValueError` subclasses, the parsers raise them, the private
-  aliases point at the public functions, and a diff in the other address
-  family is accepted.
+  `target.py` and the 14 protocol modules.
 
 ## Verification
-- Behavioural equivalence: a 243-invocation harness (valid and invalid CIDRs
-  for `cidr` and `radix`, all three output formats, `--contains` values,
-  `--cidr-file` inputs, mixed families, and the `validate` command) was
-  captured before and after the change by stashing the work tree. **178 of
-  243 invocations are byte-identical**; 62 are exactly the intended
-  conversions (a raw traceback with exit code 1 became a one-line usage
-  error with exit code 2); the remaining 3 differ only in the temporary
-  file path recorded in argv (stdout and stderr are byte-identical). No
-  stdout changed in any invocation. The `validate` command is byte-identical
-  in all 8 of its invocations.
-- Full suite: **4024 passed, 1 skipped** (baseline 3995 + 29 new). No
-  regressions.
-- Lint: `python -m ruff check ethscan tests --output-format concise` reports
-  the same 48 pre-existing errors as the baseline (no new ones), verified by
-  diffing the rule set against a `git stash`ed tree.
-- Manual: all four previously-crashing invocations now print
-  `Error: Invalid value for '--cidr'/'--cidrs'/'--diff': ...` and exit 2.
+- **Behavioural equivalence**: a 196-invocation harness (14 commands x
+  10 target values, plus 3 output formats and `--help` per command) was
+  captured from a pristine `git archive HEAD` tree in `/tmp` and from the
+  working tree, and compared byte for byte. **151 of 196 invocations are
+  byte-identical**; the other **45 are exactly the intended conversions**
+  (9 commands x 5 unusable targets: stdout byte-identical, exit code 1 ->
+  2, stderr changed from a raw traceback to a one-line usage error).
+  **No invocation differs in any other way** - in particular the five
+  probe-failure commands are byte-identical in all 14 of their invocations
+  and every usable target is byte-identical.
+- **Full suite**: **4080 passed, 1 skipped** (baseline 4024 + 56 new).
+  No regressions.
+- **Lint**: `python -m ruff check ethscan tests --output-format concise`
+  reports the same 48 pre-existing errors as the baseline; the rule set is
+  byte-identical when the line numbers are normalised (the only diff is the
+  two-line import shift in the 14 protocol modules).
+- **Manual**: all nine previously-crashing invocations now print
+  `Error: Invalid value for '--target': Could not parse host from target ''`
+  and exit 2 instead of dumping a traceback and exiting 1.
 
 ## Unresolved / deliberate non-changes
-- The `validate` command still reports invalid specifications inside its
-  JSON/CSV output with exit code 0. That is its documented contract.
-- `radix` still cannot build a tree over mixed address families; it now
-  rejects the input with a usage error instead of a `TypeError` traceback.
-  Supporting both families in one tree would need a per-family tree and is
-  out of scope.
-- `ethscan/validate.py` still parses port specifications inline rather than
-  reusing `parse_port_range`. Making the claim true would change the
-  per-token error messages and the handling of empty tokens, and therefore
-  the `validate` output contract, so the docstring was corrected instead.
+- The five probe-failure commands (`mysql`, `mongodb`, `oracle`,
+  `postgresql`, `mssql`) still report an unparsable target inside their
+  JSON output with exit code 0. That is their documented contract, so it
+  was left alone.
+- The 14 `_normalize_target` copies are still not consolidated; only the
+  exception type changed. The copies differ in how they detect a bracketed
+  IPv6 literal, so a consolidation would change behaviour and is a separate
+  task.
+- `ethscan/target.py` currently holds only the error type. A shared
+  normaliser was deliberately not added: it would change the behaviour of
+  the five probe-failure commands and of the `host:` / `host:port` edge
+  cases.
 - The 48 pre-existing ruff errors are unrelated to this work and were
   deliberately left alone.
 

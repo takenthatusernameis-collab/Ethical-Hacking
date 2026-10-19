@@ -21,6 +21,8 @@ import socket
 import time
 from typing import Any
 
+from ethscan.target import TargetSpecError
+
 DEFAULT_PORT = 25
 DEFAULT_TIMEOUT = 2.0
 DEFAULT_EHLO_NAME = "ethscan"
@@ -71,7 +73,7 @@ def _normalize_target(target: str) -> tuple[str, int]:
             host = host[1:-1]
 
     if not host:
-        raise ValueError(f"Could not parse host from target {target!r}")
+        raise TargetSpecError(f"Could not parse host from target {target!r}")
 
     return host, int(port) if port else DEFAULT_PORT
 
