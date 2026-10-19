@@ -1,11 +1,11 @@
 # Next Task for Agent
 
 ## Status
-- Working tree: clean (commit b1fd085/18a131a lineage; HEAD b1fd085).
+- Working tree: clean except for the committed vuln.py blank-line fix (see below).
 - Tests: 3906 passed, 1 skipped (green baseline).
 - Repository: 53 CLI commands register on import; `python -m ethscan --help` and `--version` OK.
 - Lint: 44 ruff errors (30 BLE001 in source, 12 TRY002 in tests, 2 PLR0402 in tests/test_brute.py) — all intentional/unsafe to fix per prior handoff; unchanged.
-- This session (2026-10-19): `ruff check --select F ethscan tests` -> clean (no unused imports/declarations); `ruff check --select B ethscan` -> 6 cosmetic source issues (unenforced by default baseline, flagged unsafe, no demonstrated bug); hash.py gaps environmental (MD4 unavailable). No bounded task found within constraints.
+- This session (2026-10-19): found and fixed a genuine regression — 3 blank lines before `_SEVERITY_RANK` in `ethscan/vuln.py` (introduced by the previous `_transform_banner` restoration in f2d4599). Collapsed to 2. Verified with `ruff check --select E303 --preview ethscan/vuln.py` -> clean. `ruff check --select F ethscan tests` -> clean. No other bounded task found within constraints.
 
 ## Constraints (do not touch)
 - Do not modify code to "fix" the 44 documented ruff errors (BLE001/TRY002/PLR0402).
@@ -14,8 +14,8 @@
 
 ## Next precise task
 - None assigned. Await a genuine new issue/requirement (bug fix with failing test, feature with tests, or explicitly requested refactor with verification plan).
-- This session inspected the repository and found no bounded, high-value, behavior-preserving task that can be implemented and verified without violating the above constraints. All remaining coverage gaps are environmental, network-dependent, unreachable defensive code, or potential dead code lacking definitive proof.
-- Previous dead-code removals (duplicate code block and dead IPv4 loop in `ethscan/vuln.py`) are complete and committed (f2d4599, integrated through 18a131a).
+- This session inspected the repository and found no bounded, high-value, behavior-preserving task that can be implemented and verified without violating the above constraints, other than the one regression fix already applied. All remaining coverage gaps are environmental, network-dependent, unreachable defensive code, or potential dead code lacking definitive proof.
+- Previous dead-code removals (duplicate code block and dead IPv4 loop in `ethscan/vuln.py`) are complete and committed (f2d4599, integrated through 18a131a, b1fd085, 7eaabe7).
 
 ## Verification checklist (if selecting a task)
 1. Run relevant focused tests.

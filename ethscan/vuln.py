@@ -443,7 +443,6 @@ def _transform_banner(
     return banner
 
 
-
 _SEVERITY_RANK: dict[str, int] = {
     name: idx for idx, name in enumerate(reversed(SEVERITIES))
 }
