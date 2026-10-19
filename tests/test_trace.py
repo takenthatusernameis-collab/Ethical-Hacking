@@ -5,7 +5,10 @@ import json
 import socket
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from ethscan import trace
+from ethscan.target import TargetSpecError
 
 
 def test_normalize_host():
@@ -545,3 +548,54 @@ def test_trace_single_raw_socket_unavailable_note():
             mock_probe.side_effect = Exception("raw")
             with contextlib.suppress(Exception):
                 trace._trace_single("t", 80, 1, 0.1, 1)
+
+
+# --- A target without a usable host ----------------------------------------
+
+UNUSABLE_TRACE_TARGETS = (
+    "",
+    "   ",
+    "http://",
+    "https://",
+    "/",
+)
+
+
+def test_run_trace_rejects_a_target_without_a_host():
+    """An unusable target is reported as an unusable target."""
+    for target in UNUSABLE_TRACE_TARGETS:
+        with pytest.raises(TargetSpecError) as excinfo:
+            trace.run_trace(target)
+        assert str(excinfo.value) == "Invalid target"
+
+
+def test_run_trace_error_is_still_a_value_error():
+    """Existing ``except ValueError`` handlers keep working."""
+    with pytest.raises(ValueError):
+        trace.run_trace("")
+
+
+@patch("ethscan.trace._probe_once")
+@patch("ethscan.trace.socket.gethostbyname")
+def test_run_trace_does_not_resolve_an_unusable_target(mock_gethost, mock_probe):
+    """No name lookup and no probe happen for an unusable target."""
+    with pytest.raises(ValueError):
+        trace.run_trace("")
+    mock_gethost.assert_not_called()
+    mock_probe.assert_not_called()
+
+
+def test_run_trace_accepts_the_working_target_forms():
+    """The valid target forms keep behaving exactly as before."""
+    with patch("ethscan.trace.socket.gethostbyname") as mock_gethost:
+        mock_gethost.return_value = "1.1.1.1"
+        with patch.object(trace, "_probe_once") as mock_probe:
+            mock_probe.return_value = {
+                "hop_ip": None,
+                "rtt_ms": None,
+                "reached": False,
+                "error": None,
+            }
+            for target in ("example.com", "example.com:80", "http://example.com/"):
+                res = trace.run_trace(target, max_hops=1, probes_per_hop=1)
+                assert res["target"] == "example.com"

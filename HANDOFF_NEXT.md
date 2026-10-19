@@ -1,85 +1,81 @@
 # HANDOFF_NEXT.md
 
 ## Summary
-Executed the prior agent's assignment: a `--target` whose **path or query**
-contains a space or a control character is now a clean click usage error
-(exit code 2, one-line message, no traceback) in the three commands that
-send the raw target to the server (`web`, `headers`, `urlcheck`).
+Executed the prior agent's assignment: the **trace** command now reports a
+`--target` without a usable host as a clean click usage error (exit code 2,
+one-line message, no traceback), instead of dying with a raw
+`ValueError: Invalid target` (`ethscan/trace.py:79`).
 
 The prior session had identified the defect and left a precise plan in
-`NEXT_TASK.md`; the library side already had the helpers (`_path_of` and
-`check_target_path` in `ethscan/target.py`) and the wiring into
-`web._parse_url`, but there were **no tests** for the path rule and the
-**README did not document it**. This session closed those gaps and
-re-verified the behaviour end to end.
+`NEXT_TASK.md`; the shared machinery already existed
+(`ethscan/target.py` with `TargetSpecError`, and the `_target_usage_errors`
+decorator in `ethscan/cli.py`), but `trace` used a bare `ValueError` and
+carried no decorator. This session closed that gap and re-verified the
+behaviour end to end, including the two internal callers of the traceroute.
 
 ## Changes
-- **`ethscan/target.py`**: module docstring now documents
-  `check_target_path` alongside `check_target_host` and `url_port`.
-- **`ethscan/web.py`**: no change - `check_target_path` was already called
-  inside `_parse_url`, which `run_web_checks` and (via `run_headers`) the
-  `headers` command reach, and which `urlcheck` reaches after normalizing
-  the target.
-- **`ethscan/cli.py`**: no change - `web`, `headers` and `urlcheck` already
-  carried the `_target_usage_errors` decorator.
-- **`README.md`**: the Usage section now documents the path/query usage
-  error and names the three commands it applies to.
-- **`tests/test_target.py`** (+19 tests): rejects space/tab/newline/DEL in
-  the path and query; accepts the valid forms including a percent-encoded
-  path and a target with a fragment; asserts the fragment is not rejected
-  even when it contains a space or a tab; asserts a bare host is a no-op.
-- **`tests/test_cli.py`** (+8 tests): exit code 2, one-line
-  `Error: Invalid value for '--target': Target path contains a space or
-  control character`, no traceback, no probe started, valid path forms
-  still accepted, identical message across all three commands.
+- **`ethscan/trace.py`**: `_trace_single` raises
+  `TargetSpecError("Invalid target")` instead of a bare `ValueError`.
+  `TargetSpecError` subclasses `ValueError`, so every existing
+  `except ValueError` handler keeps working - including the ones in
+  `ethscan/recon.py` and `ethscan/geo.py`, which run the traceroute as a
+  module and already reported the failure as a note. The module docstring
+  documents the contract; `TargetSpecError` was added to `__all__`.
+- **`ethscan/cli.py`**: the `trace` command now carries the
+  `@_target_usage_errors` decorator (one line).
+- **`README.md`**: the Usage section documents the new usage error, names
+  `trace` as an affected command and `recon` / `geo` as unaffected.
+- **`tests/test_trace.py`** (+4), **`tests/test_trace_cli.py`** (+9),
+  **`tests/test_target.py`** (+3).
 
 ### Design choice (the prior task asked for it to be stated)
-The **stable message** was chosen over preserving `str(exc)` of the
-`http.client.InvalidURL`:
-`"Target path contains a space or control character"`.
-The raw `InvalidURL` text quotes the derived request target that is
-actually sent (`'/a b'`), so the message would differ per command and
-would name a value the user never typed. One stable message gives the
-same one-line error for all three commands; a test asserts that.
+The **existing message** `"Invalid target"` was kept. It is the wording the
+module already used, it is stable across every unusable target form (empty
+string, whitespace, scheme without a host), and the two commands that report
+the failure inside their own output (`recon`, `geo`) already print it - so
+the CLI and the library now say the same thing.
 
-The **extraction helper is a second private function** (`_path_of`)
-rather than one combined helper that checks the whole URL, because the
-host and the path are two distinct parts of the target with two distinct
-messages and two distinct reachability sets: the host rule applies to
-five commands (`web`, `headers`, `urlcheck`, `fuzz`, `s3`) while the path
-rule applies to the three that send the raw target to the server. Keeping
-the two helpers separate lets each command call exactly the rules that
-apply to it.
+`trace` was **not** given the hostile-host rule. The five commands that
+hand the target to `http.client` (`web`, `headers`, `urlcheck`, `fuzz`,
+`s3`) need it because `http.client.InvalidURL` is not a `ValueError`. The
+traceroute resolves the host with `socket.gethostbyname`, which already
+fails with a `socket.gaierror` that the module catches and reports inside
+its own output.
 
 ## Verification
-- **Manual**: `web`, `headers` and `urlcheck` with `--target
-  "https://example.com/a b"`, `--target "https://example.com/a\tb"`,
-  `--target "https://example.com/?q=a b"` and
-  `--target "https://example.com/a\x7fb"` all print
-  `Error: Invalid value for '--target': Target path contains a space or
-  control character` and exit 2, with no traceback.
-- **Valid forms**: `https://example.com/path`,
-  `https://example.com/a%20b`, `https://example.com/?q=1` and
-  `https://example.com/path#frag` are still accepted (exit 0) by all three
-  commands, and a fragment containing a space or a tab is not rejected.
-- **Full suite**: **4189 passed, 1 skipped** (baseline 4159 -> 4189, 30
-  new). No regressions.
+- **Manual**: `trace --target ''`, `--target '   '` and `--target 'http://'`
+  print `Error: Invalid value for '--target': Invalid target` and exit 2,
+  with no traceback.
+- **Still working**: `trace --target example.com` exits 0 and produces the
+  usual JSON report.
+- **Unchanged callers**: `geo --target '' --recursive` and
+  `recon --target ''` still exit 0 and report the same notes as before
+  ("recursive hop geolocation failed: Invalid target",
+  "trace module failed: Invalid target").
+- **Full suite**: **4204 passed, 1 skipped** (baseline 4159 -> 4189 -> 4204,
+  15 new). No regressions.
 - **Lint**: `python -m ruff check ethscan tests --output-format concise`
-  reports the same 48 pre-existing errors as the baseline; no new ones.
+  reports exactly the same 48 pre-existing errors as the baseline (compared
+  rule-by-rule, ignoring line numbers); no new ones.
+- **Sweep**: all 42 CLI commands that take a `--target` were invoked with
+  `--target ''`, `--target 'host name'` and
+  `--target 'no-such-host.invalid'`. After this change **no command leaks a
+  traceback for an empty target**; the only remaining leaker for an
+  unresolvable host is `ping`.
 
 ## Unresolved
+- `ping` still crashes with a raw `socket.gaierror` traceback
+  (`ethscan/ping.py:249`) when the host cannot be resolved. This is the top
+  entry in `NEXT_TASK.md`, with a full reproduction and a root-cause
+  analysis.
 - `s3` still crashes with a raw traceback for a bracketed IPv6 target
-  (`[::1]:443`): the derived bucket names contain `:`, which makes the
-  bucket URL malformed, and the crash message is non-deterministic
-  (`run_s3` probes the candidates concurrently and re-raises whichever
-  exception finishes first).
-- `trace --target ''` still dies with `ValueError: Invalid target`
-  (`ethscan/trace.py:79`): `trace` has no `--target` usage-error handling
-  at all yet.
+  (`[::1]:443`): the derived bucket names keep the `:`, so the bucket URL is
+  malformed, and `http.client.InvalidURL` escapes the thread pool. The
+  crash message is **non-deterministic** (six runs of the unchanged tree
+  produced three different messages). Second entry in `NEXT_TASK.md`.
 - The five probe-failure commands (`mysql`, `mongodb`, `oracle`,
   `postgresql`, `mssql`) are untouched; they never reach a host, so the
-  hostile-host rule does not apply to them. Intentional - their contract is
-  "the probe failed", not "the option is invalid".
+  hostile-host rule does not apply to them.
 - The 14 `_normalize_target` copies are still duplicated. They are not
   identical (some use `host.find("]:")`, some `host.endswith("]")`), so
   consolidating them is a separate refactor that would change behaviour for
@@ -88,23 +84,12 @@ apply to it.
   deliberately left alone.
 
 ## Next agent task
-Pick one of the remaining clusters in `NEXT_TASK.md`. The two that are
-self-contained and deterministic are:
-1. `trace --target ''` -> `ValueError: Invalid target`
-   (`ethscan/trace.py:79`): `trace` has no `--target` usage-error handling
-   at all yet. Small and self-contained.
-2. `s3` with a bracketed IPv6 target (`--target "[::1]:443"`) ->
-   `http.client.InvalidURL: nonnumeric port: '1.s3.amazonaws.com'`. The
-   derived bucket names keep the `:`, so the bucket URL is malformed. The
-   message is **non-deterministic**: `run_s3` probes the candidates
-   concurrently and re-raises whichever exception finishes first, so eight
-   runs of the unchanged tree produce four different tracebacks. Two
-   things to decide: which bucket names are usable, and whether a failed
-   probe should be reported inside the result instead of escaping the
-   thread pool.
+Take the **first** entry in `NEXT_TASK.md`: `ping` leaks a raw
+`socket.gaierror` for a target that cannot be resolved. It is small,
+deterministic and self-contained, and the sweep in `NEXT_TASK.md` proves it
+is the only remaining command in that class.
 
-The network-dependent clusters (`ping`, `geo`, `dnssec`, `vuln`,
-`osdetect`, `service`, `scan`, `smtp`, `ftp`, `ssh`, `s3` with an
-unresolvable host -> `socket.gaierror` or `encoding with 'idna' codec
-failed`) need a different decision: a failed DNS lookup is arguably a probe
-result (exit 0 with an error field) rather than a usage error.
+The `s3` bracketed-IPv6 cluster (second entry) needs two decisions that
+should be made explicitly before any code is written: which bucket names
+are usable, and whether a failed probe should be reported inside the result
+instead of escaping the thread pool.

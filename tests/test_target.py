@@ -405,3 +405,34 @@ def test_the_url_modules_still_accept_the_valid_path_forms() -> None:
     assert web._parse_url("https://example.com/?q=1") == ("example.com", 443, True)
     assert web._parse_url("https://example.com/path#frag") == ("example.com", 443, True)
 
+
+# --- A target without a usable host in the traceroute -----------------------
+
+TRACE_ERROR_MESSAGE = "Invalid target"
+
+
+def test_trace_rejects_a_target_without_a_host() -> None:
+    """The traceroute reports an unusable target as an unusable target."""
+    from ethscan import trace
+
+    for target in ("", "   ", "http://", "https://", "/"):
+        with pytest.raises(TargetSpecError) as excinfo:
+            trace.run_trace(target)
+        assert str(excinfo.value) == TRACE_ERROR_MESSAGE
+
+
+def test_trace_error_is_still_a_value_error() -> None:
+    """Existing ``except ValueError`` handlers keep working."""
+    from ethscan import trace
+
+    with pytest.raises(ValueError):
+        trace.run_trace("")
+
+
+def test_trace_still_accepts_the_working_target_forms() -> None:
+    """The valid target forms keep behaving exactly as before."""
+    from ethscan import trace
+
+    assert trace._normalize_host("example.com") == "example.com"
+    assert trace._normalize_host("example.com:80") == "example.com"
+    assert trace._normalize_host("http://example.com/") == "example.com"

@@ -186,6 +186,19 @@ inside its own JSON/CSV output and still exits 0. The same holds for the
 contract is "the probe failed" rather than "the option is invalid": they
 report an unusable target inside their own output and still exit 0.
 
+The `trace` command rejects a target without a usable host the same way:
+
+```console
+$ python -m ethscan trace --target ""
+Usage: python -m ethscan trace [OPTIONS]
+Try 'python -m ethscan trace --help' for help.
+
+Error: Invalid value for '--target': Invalid target
+```
+
+The `recon` and `geo` commands run the traceroute as one of their modules,
+so they report the same problem in their own output and still exit 0.
+
 ## Disclaimer
 
 This project is for **authorized security testing only**. Use only against

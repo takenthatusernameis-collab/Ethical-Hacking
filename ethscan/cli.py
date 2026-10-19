@@ -2224,6 +2224,7 @@ def osdetect(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
+@_target_usage_errors
 def trace(
     target: str,
     port: int,

@@ -1,4 +1,9 @@
-"""TCP traceroute using TTL-incremented probes (stdlib-only)."""
+"""TCP traceroute using TTL-incremented probes (stdlib-only).
+
+A target that does not contain a usable host is rejected with a
+:class:`~ethscan.target.TargetSpecError`, so the CLI can report it as a
+usage error instead of letting a raw traceback escape.
+"""
 from __future__ import annotations
 
 import contextlib
@@ -9,6 +14,8 @@ import socket
 import time
 from typing import Any
 
+from ethscan.target import TargetSpecError
+
 DEFAULT_PORT = 80
 DEFAULT_MAX_HOPS = 30
 DEFAULT_TIMEOUT = 2.0
@@ -16,6 +23,7 @@ DEFAULT_PROBES_PER_HOP = 3
 DEFAULT_MAX_DEPTH = 2
 
 __all__ = [
+    "TargetSpecError",
     "format_trace_report_json",
     "format_trace_report_markdown",
     "run_trace",
@@ -73,10 +81,16 @@ def _trace_single(
     timeout: float,
     probes_per_hop: int,
 ) -> dict[str, Any]:
-    """Trace a single target and return the result."""
+    """Trace a single target and return the result.
+
+    Raises:
+        TargetSpecError: If the target does not contain a usable host. The
+            error is a :class:`ValueError` subclass, so callers that treat
+            an unusable target as a failed probe keep working unchanged.
+    """
     host = _normalize_host(target)
     if not host:
-        raise ValueError("Invalid target")
+        raise TargetSpecError("Invalid target")
 
     try:
         dst_ip = socket.gethostbyname(host)
