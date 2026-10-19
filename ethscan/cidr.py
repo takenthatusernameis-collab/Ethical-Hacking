@@ -13,6 +13,16 @@ import io
 import ipaddress
 
 
+class CidrSpecError(ValueError):
+    """Raised when a CIDR specification cannot be parsed.
+
+    Subclasses :class:`ValueError` so that existing ``except ValueError``
+    handlers keep working, while letting the CLI layer distinguish an invalid
+    CIDR specification from unrelated value errors and turn it into a usage
+    error.
+    """
+
+
 def _normalize_cidr(value: str) -> str:
     """Normalize a CIDR string, ensuring a network address.
 
@@ -21,16 +31,22 @@ def _normalize_cidr(value: str) -> str:
 
     Returns:
         Canonical CIDR string with network address and prefix length.
+
+    Raises:
+        CidrSpecError: If the value is empty or is not a valid IPv4/IPv6 network.
     """
     value = value.strip()
     if not value:
-        raise ValueError("Empty CIDR value")
+        raise CidrSpecError("Empty CIDR value")
 
     if "/" not in value:
         # Bare IP: treat as a single-host network
         value = value + ("/32" if "." in value else "/128")
 
-    network = ipaddress.ip_network(value, strict=False)
+    try:
+        network = ipaddress.ip_network(value, strict=False)
+    except ValueError as exc:
+        raise CidrSpecError(str(exc)) from exc
     return str(network)
 
 

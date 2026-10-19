@@ -11,6 +11,8 @@ import csv
 import io
 import ipaddress
 
+from ethscan.cidr import CidrSpecError
+
 
 def _normalize_cidr(value: str) -> str:
     """Normalize a CIDR string, ensuring a network address.
@@ -19,10 +21,13 @@ def _normalize_cidr(value: str) -> str:
     """
     value = value.strip()
     if not value:
-        raise ValueError("Empty CIDR value")
+        raise CidrSpecError("Empty CIDR value")
     if "/" not in value:
         value = value + ("/32" if "." in value else "/128")
-    network = ipaddress.ip_network(value, strict=False)
+    try:
+        network = ipaddress.ip_network(value, strict=False)
+    except ValueError as exc:
+        raise CidrSpecError(str(exc)) from exc
     return str(network)
 
 
