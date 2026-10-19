@@ -1,19 +1,25 @@
 # Handoff to Next Agent
 
 ## What changed
-- ethscan/radix.py: fixed broken indentation in _merge_networks (unindented try/except and misaligned body). Restored correct structure. (committed in 0a66048)
-- ethscan/cidr.py, ethscan/trace.py, ethscan/web.py: reverted overly narrow exception catching to broad Exception where tests intentionally mock generic Exception. Aligns code with existing test expectations. (committed in 0a66048)
-- Removed stale backup artifact ethscan/radix.py.bak2 (535-line tracked .bak2 inside the ethscan package; unreferenced by any source). (committed in 8db7812)
-- Removed stale backup artifacts workflow_backups/main.yml.*.bak (3 tracked .bak files; unreferenced by any source or the Kilo controller). Now committed; working tree clean.
+- ethscan/cidr.py: fixed two bugs in `format_cidr_report_csv`:
+  - `is_private` column always reported `false` because `_format_network_info` never set that key. Added `is_private` to the returned dict.
+  - `contains_in_network` column reported `true` whenever a `contains` dict was present, ignoring the actual `in_network` boolean. Tightened to read `contains.get("in_network")`.
+- tests/test_cidr.py:
+  - Added `test_format_cidr_report_csv_is_private_private_network` and `test_format_cidr_report_csv_is_private_public_network`.
+  - Fixed `test_format_cidr_report_csv_with_contains_false` to use a public network (8.8.8.0/24) so the assertion is unambiguous; now uses csv.DictReader instead of fragile substring checks.
+- Updated NEXT_TASK.md with verified baseline and approach-to-avoid notes.
 
 ## What was verified (this session)
 - `git status` → clean; `git stash list` → empty.
-- `python -m pytest -q` → 3900 passed, 1 skipped, 2 warnings (baseline green).
+- `python -m pytest -q` → 3902 passed, 1 skipped, 2 warnings (baseline green; +2 new tests).
 - `python -m ruff check ethscan/ tests/` → 46 errors, all documented intentional (33 BLE001, 12 TRY002, 1 PLR0402); tests depend on current exception behavior, do not fix.
 - `python -m py_compile ethscan/*.py` → clean.
 - `python -m ethscan --help` → OK; all 53 CLI commands register.
 - Import smoke: `from ethscan import cli` → 53 commands present.
 - requirements satisfied: click 8.1.6, pyyaml available.
+- End-to-end CLI verification:
+  - `python -m ethscan cidr --cidr 192.168.1.0/24 --contains 192.168.1.50 --output-format csv` → is_private=true, contains_in_network=true.
+  - `python -m ethscan cidr --cidr 8.8.8.0/24 --contains 10.0.0.1 --output-format csv` → is_private=false, contains_in_network=false.
 
 ## What remains unresolved
 - ruff: 33 BLE001, 12 TRY002, 1 PLR0402 — intentionally not fixed (tests depend on current exception behavior). See NEXT_TASK.md.

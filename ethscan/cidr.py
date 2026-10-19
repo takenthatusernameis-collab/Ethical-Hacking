@@ -82,6 +82,7 @@ def _format_network_info(network: ipaddress._BaseNetwork) -> dict[str, object]:
         "usable_host_count": usable_hosts,
         "total_addresses": network.num_addresses,
         "prefixlen": network.prefixlen,
+        "is_private": network.is_private,
     }
 
 
@@ -288,7 +289,7 @@ def format_cidr_report_csv(data: dict[str, object]) -> str:
         network.get("last_host", ""),
         "true" if network.get("is_private") else "false",
         contains.get("ip", "") if isinstance(contains, dict) else (contains or ""),
-        "true" if (isinstance(contains, dict) and contains.get("in_network")) else ("true" if contains else "false" if isinstance(contains, dict) else ""),
+        "true" if (isinstance(contains, dict) and contains.get("in_network")) else "false",
         diff.get("difference_network_count", "") if diff else "",
         diff.get("difference", [""])[0] if diff and diff.get("difference") else "",
         diff.get("difference", [""])[-1] if diff and diff.get("difference") else "",

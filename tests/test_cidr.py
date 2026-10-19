@@ -474,12 +474,16 @@ def test_format_cidr_report_csv_with_contains() -> None:
 
 
 def test_format_cidr_report_csv_with_contains_false() -> None:
-    data = run_cidr("192.168.1.0/24", contains="10.0.0.1")
-    output = format_cidr_report_csv(data)
+    """CSV reports contains_in_network=false when the IP is outside the network."""
+    import csv
+    import io
 
-    lines = [line.rstrip("\r") for line in output.strip().split("\n")]
-    assert "10.0.0.1" in lines[1]
-    assert "false" in lines[1]
+    data = run_cidr("8.8.8.0/24", contains="10.0.0.1")
+    output = format_cidr_report_csv(data)
+    reader = csv.DictReader(io.StringIO(output))
+    row = next(reader)
+    assert row["contains_ip"] == "10.0.0.1"
+    assert row["contains_in_network"] == "false"
 
 
 def test_format_cidr_report_csv_with_diff() -> None:
@@ -496,6 +500,30 @@ def test_format_cidr_report_csv_pipe_escaping() -> None:
 
     # With QUOTE_MINIMAL, pipe characters don't require quoting
     assert "255|255|255|0" in output
+
+
+def test_format_cidr_report_csv_is_private_private_network() -> None:
+    """CSV is_private column should report true for private networks."""
+    import csv
+    import io
+
+    data = run_cidr("192.168.1.0/24")
+    output = format_cidr_report_csv(data)
+    reader = csv.DictReader(io.StringIO(output))
+    row = next(reader)
+    assert row["is_private"] == "true"
+
+
+def test_format_cidr_report_csv_is_private_public_network() -> None:
+    """CSV is_private column should report false for public networks."""
+    import csv
+    import io
+
+    data = run_cidr("8.8.8.8/32")
+    output = format_cidr_report_csv(data)
+    reader = csv.DictReader(io.StringIO(output))
+    row = next(reader)
+    assert row["is_private"] == "false"
 
 # Additional tests for coverage
 
