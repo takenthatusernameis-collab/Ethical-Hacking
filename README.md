@@ -144,7 +144,7 @@ Error: Invalid value for '--target': Could not parse host from target ''
 
 A `--target` whose port is not a number is rejected the same way. This
 applies to the protocol commands above and to the commands that read the
-target as a URL (`web`, `headers`, `urlcheck`, `ssh`):
+target as a URL (`web`, `headers`, `urlcheck`, `ssh`, `fuzz`):
 
 ```console
 $ python -m ethscan web --target "host:notaport"
@@ -152,6 +152,18 @@ Usage: python -m ethscan web [OPTIONS]
 Try 'python -m ethscan web --help' for help.
 
 Error: Invalid value for '--target': Port could not be cast to integer value as 'notaport'
+```
+
+A `--target` whose host contains a space or a control character is rejected
+the same way. This applies to the commands that turn a target into a host
+(`web`, `headers`, `urlcheck`, `fuzz`, `s3`):
+
+```console
+$ python -m ethscan web --target "host name"
+Usage: python -m ethscan web [OPTIONS]
+Try 'python -m ethscan web --help' for help.
+
+Error: Invalid value for '--target': Target host contains a space or control character
 ```
 
 The `validate` command is the exception: it reports invalid specifications

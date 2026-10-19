@@ -1,90 +1,119 @@
 # TASK.md
 
-Date: 2026-10-19T23:40:00Z
-Status: a `--target` whose **port is not a number** is now a clean click usage
-error (exit code 2) in the thirteen commands that used to dump a traceback,
-the translation still lives in exactly one place, the library modules stay
-free of click, and the five commands that report a failed probe keep their
-contract and their exact error wording.
+Date: 2026-10-19T23:55:00Z
+Status: a `--target` whose **host contains a space or a control character** is
+now a clean click usage error (exit code 2) in the five commands that turn a
+target into a host, the rule lives in exactly one place, the library modules
+stay free of click, and every valid target form keeps its previous
+behaviour byte for byte.
 
 ## What changed (this session)
-- **`ethscan/target.py`**: new public helper `url_port(parsed)`. It returns
-  the port of a parsed URL and re-raises the bare `ValueError` that
-  `urllib.parse` raises for a non-numeric or out-of-range port as a
-  `TargetSpecError`, **with the original message text unchanged**
-  (`"Port could not be cast to integer value as 'notaport'"`). The module
-  stays click-free.
-- **14 protocol modules** (`redis`, `memcached`, `ntp`, `snmp`, `ftp`,
-  `ldap`, `netbios`, `smb`, `smtp`, `mysql`, `mongodb`, `oracle`,
-  `postgresql`, `mssql`): the single `port = parsed.port` access in each
-  `_normalize_target` now calls `url_port(parsed)`. **Nothing else changed** -
-  the duplicated parsers were deliberately not consolidated, and the
-  `host:` / bracketed-IPv6 edge cases keep their current behaviour.
-- **`ethscan/web.py`**: `_parse_url` uses `url_port(parsed)` for both the
-  https (443) and http (80) default. The empty-host -> `localhost` mapping
-  and the scheme handling are unchanged.
-- **`ethscan/ssh.py`**: `_extract_port` uses `url_port(parsed)`. The
-  lower-casing of the host in `_normalize_host` is unchanged.
-- **`ethscan/cli.py`**: the existing `_target_usage_errors` decorator (and
-  its `_invalid_target` helper) is now also attached to the four commands
-  that read the target as a URL: `web`, `headers`, `urlcheck`, `ssh`. The
-  nine protocol commands already carried it, so they needed **no CLI
-  change**.
-- **`README.md`**: the Usage section documents the new usage error and
-  names the thirteen commands it applies to.
-- **`tests/test_target.py`** (+40 tests): `url_port` returns the port, returns
-  `None` for a URL without a port, raises `TargetSpecError` for a
-  non-numeric port and for an out-of-range port, and the error is still a
-  `ValueError`; all 14 protocol modules raise it for a URL with a bad port
-  and still parse a valid port; the five probe-failure modules still report
-  the **unchanged** error string; `web._parse_url` and `ssh._extract_port`
-  raise it and still parse valid ports.
-- **`tests/test_cli.py`** (+9 tests): exit code 2, an
-  `Error: Invalid value for '--target': ...` message and the absence of a
-  traceback for each of the thirteen commands and each of the bad-port
-  targets; a single-line error; no transport helper is reached for a
-  rejected target; the five probe-failure commands still exit 0 and still
-  report the error in their JSON output; `s3` is unaffected; valid targets
-  are still accepted and still report the requested port. The existing
-  `test_library_modules_stay_free_of_click` guard now also covers `web.py`
-  and `ssh.py`.
+- **`ethscan/target.py`**: new public helper `check_target_host(target)`. It
+  reads the **authority** of the raw target (the part between the scheme and
+  the path, the query or the fragment) and raises `TargetSpecError` with the
+  message `"Target host contains a space or control character"` when that
+  part contains a character matched by `[\x00-\x20\x7f]` - the C0 control
+  characters, the space and DEL, which is exactly what `http.client`
+  refuses. The module still imports no click.
+  The authority is read from the **raw target text** and not from
+  `urllib.parse`, because `urlsplit` silently removes tab, carriage return
+  and newline characters: `urlparse("https://host\tname").hostname` is
+  `"hostname"`, while the host that is actually sent over the network is
+  `"host\tname"`. A private `_host_of(target)` does the extraction.
+- **`ethscan/web.py`** (`_parse_url`), **`ethscan/fuzz.py`**
+  (`_normalize_base_url`) and **`ethscan/s3.py`** (`_normalize_target`): the
+  three places that turn a target into a host now call
+  `check_target_host`. The empty-host -> `localhost` mapping of
+  `web._parse_url`, the lower-casing of `s3._normalize_target` and the
+  `scheme://netloc` construction of `fuzz._normalize_base_url` are unchanged.
+- **`ethscan/fuzz.py`**: `_normalize_base_url` now also calls the existing
+  `url_port(parsed)`, so `fuzz` rejects a target whose port is not a number
+  with the same message and the same exit code as the other fourteen
+  commands. This was the "adjacent variant" of the previous session's task
+  and it was **included** on purpose (see the design notes below).
+- **`ethscan/cli.py`**: the existing `_target_usage_errors` decorator is now
+  also attached to `fuzz` and `s3`. `web`, `headers` and `urlcheck` already
+  carried it, so they needed **no CLI change**.
+- **`README.md`**: the Usage section documents the new usage error and names
+  the five commands it applies to.
+- **`tests/test_target.py`** (+29 tests) and **`tests/test_cli.py`**
+  (+16 tests, plus `fuzz` added to the two existing non-numeric-port
+  command tuples).
+
+## Design choice (the task asked for it to be stated)
+The **stable message** was chosen over preserving `str(exc)` of the
+`http.client.InvalidURL`:
+`"Target host contains a space or control character"`.
+The raw `InvalidURL` text quotes the host that is actually sent, and for
+`s3` that host is a *derived* bucket name
+(`'host name-cdn.s3.amazonaws.com'`), so the message would differ per
+command and would name a value the user never typed. One stable message
+gives the same one-line error for all five commands; a test asserts that.
+The port variant keeps the `urllib.parse` wording
+(`"Port could not be cast to integer value as 'notaport'"`), because that
+is the message the other fourteen commands already report.
+
+The **fuzz port variant was included**. `fuzz` hands the whole URL to
+`http.client` instead of reading `urllib.parse`'s port property, so it
+raised its own `InvalidURL: nonnumeric port: 'notaport'`. Validating the
+parsed netloc in `fuzz._normalize_base_url` (host **and** port) covers both
+fuzz variants in one place and makes `fuzz` behave like `web`, `headers`
+and `urlcheck`, which already rejected a non-numeric port.
 
 ## Verification
-- **Behavioural equivalence**: a 289-invocation harness (19 commands x 11
-  target values, plus 3 output formats and `--help` per command) was
-  captured twice from a pristine `git archive HEAD` tree in `/tmp` and once
-  from the working tree, and compared byte for byte. **234 are
-  byte-identical**; **43 are exactly the intended conversions** (13
-  commands x 3 scheme-qualified bad-port targets, plus the 4 URL commands
-  x a bare `host:notaport` target: stdout byte-identical, exit code 1 ->
-  2, stderr changed from a raw traceback to a one-line usage error).
-  **0 unexpected differences.** 12 invocations (all `s3`, which makes real
-  AWS requests) are not reproducible even between the two baseline runs and
-  were excluded; `s3.py` itself is untouched by this change.
-- **Full suite**: **4129 passed, 1 skipped** (baseline 4080 -> 4129, 49
+- **Behavioural equivalence**: a 320-invocation harness (19 commands x 11
+  target values, 5 commands x 3 hostile-host targets, a bare
+  `host:notaport` target for the five URL-based commands, 3 output formats
+  and `--help` per command) was captured **twice** from a pristine
+  `git archive HEAD` tree in `/tmp/ethscan_before` and once from the
+  working tree, and compared byte for byte.
+  **288 are byte-identical**; **16 are exactly the intended conversions**
+  (14 traceback -> usage error, plus 2 report -> usage error, see below);
+  **0 differences that this change caused**. 14 invocations (all `s3`,
+  which makes real AWS requests) are not reproducible even between the two
+  baseline runs and were excluded from the comparison.
+  Two further `s3` invocations (`--target "[::1]:443"` and
+  `--target "[::1]:6379"`) differ only in *which* bucket candidate raised
+  first. That is **pre-existing non-determinism**: eight runs of the
+  **unchanged** tree produce four different tracebacks for the same
+  command, because `run_s3` probes the candidates concurrently and
+  re-raises whichever exception finishes first. The exit code (1) and the
+  stdout are identical before and after.
+- **Full suite**: **4159 passed, 1 skipped** (baseline 4129 -> 4159, 30
   new). No regressions.
 - **Lint**: `python -m ruff check ethscan tests --output-format concise`
   reports the same 48 pre-existing errors as the baseline; the rule set is
-  identical once line numbers are normalised.
-- **Manual**: all thirteen previously-crashing invocations now print
-  `Error: Invalid value for '--target': Port could not be cast to integer
-  value as 'notaport'` and exit 2 instead of dumping a traceback and
-  exiting 1.
+  identical once line numbers are normalised (`diff` of the normalised
+  output is empty).
+- **Manual**: all fifteen previously-crashing invocations now print
+  `Error: Invalid value for '--target': Target host contains a space or
+  control character` and exit 2.
 
 ## Unresolved / deliberate non-changes
+- Two `fuzz` invocations changed from *exit 0 with a report* to *exit 2
+  with a usage error*, and this is intended:
+  - `fuzz --target "host<TAB>name"`: before, `urlsplit` dropped the tab, so
+    the fuzzer silently scanned a **different** host (`hostname`) and
+    reported DNS errors for it. It is now rejected.
+  - `fuzz --target "redis://host:notaport"`: before, the unknown URL scheme
+    was reported per path and the command exited 0. It is now the same
+    usage error the other fourteen commands give.
+- The **path and query** of a target are still not validated. A target
+  whose path contains a space (`https://example.com/a b`) still dies with
+  a raw `http.client.InvalidURL: URL can't contain control characters.
+  '/a b'` traceback in `web`, `headers` and `urlcheck`. That is the same
+  family of defect but a different component, and the task deliberately
+  scoped this change to the host. See `NEXT_TASK.md`.
+- `s3` still crashes with a raw traceback for a bracketed IPv6 target
+  (`[::1]:443`): the derived bucket names contain `:`, which makes the
+  bucket URL malformed. Pre-existing, not touched here, and it is the
+  second entry in `NEXT_TASK.md`.
+- `trace --target ''` still dies with `ValueError: Invalid target`
+  (`ethscan/trace.py:79`): `trace` has no `--target` usage-error handling
+  at all yet. Third entry in `NEXT_TASK.md`.
 - The five probe-failure commands (`mysql`, `mongodb`, `oracle`,
-  `postgresql`, `mssql`) still report an unusable target inside their JSON
-  output with exit code 0, with the **unchanged** error string. That is
-  their documented contract, so it was left alone.
-- `s3` never reads the port of the target, so it is unaffected by a
-  non-numeric port and keeps exiting 0.
-- `fuzz` is **not** fixed: it does not go through `urllib.parse`'s port
-  property, it hands the URL to `http.client`, which raises its own
-  `InvalidURL`. That is a separate variant, see `NEXT_TASK.md`.
-- The 14 `_normalize_target` copies are still not consolidated; only the
-  port access changed. The copies differ in how they detect a bracketed
-  IPv6 literal, so a consolidation would change behaviour and is a separate
-  task.
+  `postgresql`, `mssql`) are untouched; they never reach a host, so the
+  hostile-host rule does not apply to them.
 - The 48 pre-existing ruff errors are unrelated to this work and were
   deliberately left alone.
 

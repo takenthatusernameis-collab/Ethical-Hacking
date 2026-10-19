@@ -902,6 +902,7 @@ def web(target: str, checks: str, timeout: float, fmt: str, output_fmt: str | No
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
+@_target_usage_errors
 def fuzz(
     target: str,
     wordlist_path: str,
@@ -4213,6 +4214,7 @@ def ssh(target: str, port: int | None, timeout: float, fmt: str, output_fmt: str
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
+@_target_usage_errors
 def s3(
     target: str,
     wordlist_path: str | None,

@@ -8,6 +8,12 @@ catching it as an ordinary :class:`ValueError`.
 A target whose *port* is not a number is the same kind of problem:
 ``urllib.parse`` raises a bare ``ValueError`` for it, which
 :func:`url_port` re-raises as a :class:`TargetSpecError`.
+
+A target whose *host* contains a space or a control character is the same
+kind of problem too: ``http.client`` refuses such a host with an
+``http.client.InvalidURL``, which derives from ``HTTPException`` and not
+from ``ValueError``, so :func:`check_target_host` reports it as a
+:class:`TargetSpecError` before the request is made.
 """
 
 import importlib
@@ -15,7 +21,7 @@ from urllib.parse import urlparse
 
 import pytest
 
-from ethscan.target import TargetSpecError, url_port
+from ethscan.target import TargetSpecError, check_target_host, url_port
 
 TARGET_MODULES = (
     "redis",
@@ -183,4 +189,111 @@ def test_web_and_ssh_still_parse_a_valid_port() -> None:
     assert web._parse_url("example.com") == ("example.com", 443, True)
     assert ssh._extract_port("ssh://example.com:2222") == 2222
     assert ssh._extract_port("example.com") == 22
+
+
+# --- A target whose host contains a space or a control character ------------
+
+HOST_ERROR_MESSAGE = "Target host contains a space or control character"
+
+HOSTILE_HOST_TARGETS = (
+    "host name",
+    "host\tname",
+    "host\nname",
+    "ho\x00st",
+    "host\x7fname",
+    "https://host name",
+    "http://host name",
+    "https://host\tname",
+    "host name:8443",
+    "https://host name:8443",
+)
+
+USABLE_HOST_TARGETS = (
+    "host",
+    "host:443",
+    "http://host",
+    "https://host:8443",
+    "[::1]:443",
+    "example.com/path",
+    "https://example.com/path?query=1",
+)
+
+
+def test_check_target_host_rejects_a_host_with_a_space() -> None:
+    """A host with a space is reported as an unusable target."""
+    with pytest.raises(TargetSpecError) as excinfo:
+        check_target_host("host name")
+    assert str(excinfo.value) == HOST_ERROR_MESSAGE
+
+
+def test_check_target_host_error_is_still_a_value_error() -> None:
+    """Existing ``except ValueError`` handlers keep working."""
+    with pytest.raises(ValueError):
+        check_target_host("host name")
+
+
+@pytest.mark.parametrize("target", HOSTILE_HOST_TARGETS)
+def test_check_target_host_rejects_every_hostile_host(target: str) -> None:
+    """A space or a control character in the host is always rejected."""
+    with pytest.raises(TargetSpecError) as excinfo:
+        check_target_host(target)
+    assert str(excinfo.value) == HOST_ERROR_MESSAGE
+
+
+@pytest.mark.parametrize("target", USABLE_HOST_TARGETS)
+def test_check_target_host_accepts_a_usable_host(target: str) -> None:
+    """A host that ``http.client`` accepts is not an error."""
+    check_target_host(target)
+
+
+def test_a_control_character_is_found_although_urlsplit_removes_it() -> None:
+    """The check reads the raw target, not the parsed one.
+
+    ``urllib.parse`` silently drops tab, carriage return and newline
+    characters, so a parsed host can look clean while the host that is
+    actually sent over the network is not.
+    """
+    assert urlparse("https://host\tname").hostname == "hostname"
+    with pytest.raises(TargetSpecError):
+        check_target_host("https://host\tname")
+
+
+def test_the_url_modules_reject_a_hostile_host() -> None:
+    """web, fuzz and s3 refuse a target with an unusable host."""
+    from ethscan import fuzz, s3, web
+
+    parsers = (web._parse_url, fuzz._normalize_base_url, s3._normalize_target)
+    for parser in parsers:
+        for target in HOSTILE_HOST_TARGETS:
+            with pytest.raises(TargetSpecError) as excinfo:
+                parser(target)
+            assert str(excinfo.value) == HOST_ERROR_MESSAGE
+
+
+def test_the_url_modules_still_accept_the_valid_target_forms() -> None:
+    """The working target forms keep behaving exactly as before."""
+    from ethscan import fuzz, s3, web
+
+    assert web._parse_url("example.com") == ("example.com", 443, True)
+    assert web._parse_url("http://example.com:8080") == ("example.com", 8080, False)
+    assert web._parse_url("https://example.com:8443") == ("example.com", 8443, True)
+    assert web._parse_url("https://[::1]:443") == ("::1", 443, True)
+    assert web._parse_url("") == ("localhost", 443, True)
+    assert fuzz._normalize_base_url("example.com") == "https://example.com"
+    assert fuzz._normalize_base_url("http://example.com") == "http://example.com"
+    assert fuzz._normalize_base_url("https://example.com:8443") == (
+        "https://example.com:8443"
+    )
+    assert s3._normalize_target("Example.com") == "example.com"
+    assert s3._normalize_target("https://Example.com/path") == "example.com"
+    assert s3._normalize_target("127.0.0.1:8443") == "127.0.0.1"
+
+
+def test_fuzz_reports_a_non_numeric_port_like_the_other_commands() -> None:
+    """fuzz hands the URL to ``http.client``, so a bad port is rejected."""
+    from ethscan import fuzz
+
+    with pytest.raises(TargetSpecError) as excinfo:
+        fuzz._normalize_base_url("https://host:notaport")
+    assert str(excinfo.value) == NON_NUMERIC_PORT_MESSAGE
 

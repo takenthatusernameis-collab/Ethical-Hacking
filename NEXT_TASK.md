@@ -1,114 +1,120 @@
 # NEXT_TASK.md
 
-## Status (2026-10-19T23:40:00Z)
-- Prior agent task (a `--target` whose **port is not a number** -> click
-  usage error): **complete**.
-- Prior agent tasks (invalid `--ports`, invalid CIDR, unusable `--target`)
-  were already complete when this session started.
-- Verified: 289-invocation CLI harness, 234 byte-identical, 43 exactly the
-  intended traceback -> usage-error conversions, 0 unexpected differences;
-  full suite 4129 passed / 1 skipped; ruff rule set identical to the
-  baseline (48 pre-existing errors).
+## Status (2026-10-19T23:55:00Z)
+- Prior agent task (a `--target` whose **host contains a space or a control
+  character** -> click usage error): **complete**.
+- Prior agent tasks (non-numeric port, invalid `--ports`, invalid CIDR,
+  unusable `--target`) were already complete when this session started.
+- Verified: 320-invocation CLI harness, 288 byte-identical, 16 exactly the
+  intended conversions, 0 differences caused by the change; full suite
+  4159 passed / 1 skipped; ruff rule set identical to the baseline (48
+  pre-existing errors).
 
 ## Next task (bounded, high-value)
 
-A `--target` whose **host contains a space or a control character** still
-crashes with a raw Python traceback. Make it a clean click usage error
-(exit code 2), reusing the machinery this project already has
-(`TargetSpecError` in `ethscan/target.py`, `_target_usage_errors` in
+The **path and query** of a `--target` are still not validated. A target
+whose path contains a space or a control character still crashes with a
+raw Python traceback. Make it a clean click usage error (exit code 2),
+reusing the machinery this project already has (`TargetSpecError` and
+`check_target_host` in `ethscan/target.py`, `_target_usage_errors` in
 `ethscan/cli.py`).
 
-Evidence (re-verified on `main` at this commit, after the non-numeric-port
+Evidence (re-verified on `main` at this commit, after the hostile-host
 work above):
 ```
-$ python -m ethscan web --target "host name"
+$ python -m ethscan web --target "https://example.com/a b"
 ...
-http.client.InvalidURL: URL can't contain control characters. 'host name' (found at least ' ')   # traceback, exit 1
+http.client.InvalidURL: URL can't contain control characters. '/a b' (found at least ' ')   # traceback, exit 1
+
+$ python -m ethscan headers --target "https://example.com/?q=a b"
+http.client.InvalidURL: URL can't contain control characters. '/?q=a b' (found at least ' ')
+
+$ python -m ethscan urlcheck --target "https://example.com/a b"
+http.client.InvalidURL: URL can't contain control characters. '/a b' (found at least ' ')
 ```
-Reproduces for `headers`, `web`, `fuzz`, `urlcheck` and `s3`:
-```
-$ python -m ethscan headers --target "host name"
-$ python -m ethscan fuzz    --target "host name"
-$ python -m ethscan urlcheck --target "host name"
-$ python -m ethscan s3      --target "host name"
-```
-For `s3` the quoted host is the *derived* bucket name
-(`'host name-backups.s3.amazonaws.com'`), because `s3` turns the target
-host into candidate bucket names.
+`fuzz` is **not** affected: `_normalize_base_url` keeps only
+`scheme://netloc`, so the path is never sent. A percent-encoded path
+(`https://example.com/a%20b`) already works and must keep working.
 
 ### Origin
-`http.client._validate_host` (CPython 3.12,
-`/usr/lib/python3.12/http/client.py:1318`) raises
-`http.client.InvalidURL` when the host contains a character matched by
-`_contains_disallowed_url_pchar_re` (`[\x00-\x20\x7f]`, i.e. control
-characters, space and DEL). `InvalidURL` derives from `HTTPException`,
-**not** from `ValueError`, so the existing `except ValueError` handlers in
-the library do not catch it.
+`http.client.HTTPConnection.putrequest` -> `_validate_path` refuses a
+request target that contains a character matched by
+`_contains_disallowed_url_pchar_re` (`[\x00-\x20\x7f]`, i.e. the control
+characters, the space and DEL) with
+`InvalidURL("URL can't contain control characters. %r")`. `InvalidURL`
+derives from `HTTPException`, **not** from `ValueError`, so the existing
+`except ValueError` handlers in the library do not catch it.
 
 Reachability per command:
-- `headers`, `web`, `urlcheck`: `ethscan/web.py:_parse_url` ->
-  `fetch_headers` -> `urllib.request.urlopen` ->
-  `http.client.HTTPConnection.__init__` -> `_validate_host`.
-- `fuzz`: `ethscan/fuzz.py:_normalize_base_url` (which builds
-  `f"{parsed.scheme}://{parsed.netloc}"`) -> `fuzz_path` -> `urlopen`.
-- `s3`: `ethscan/s3.py` builds `https://<bucket>.s3.amazonaws.com/` from
-  the target host -> `check_bucket_public` -> `urlopen`.
+- `web`, `headers`, `urlcheck`: the **raw** target is what is sent -
+  `web.run_web_checks` and `headers.run_headers` build the request URL
+  from `target.strip()` (`ethscan/web.py:230`, `ethscan/headers.py:21`),
+  and `urlcheck` reaches the same code through `run_web_checks`. The host
+  of that URL is already validated by `check_target_host` (previous
+  session); the path and the query are not.
+- `fuzz`: unaffected, the path is dropped by `_normalize_base_url`.
 
 ### Scope
-- **Fix**: validate the *host* the module parsed out of the target and
-  raise `TargetSpecError` when it contains a character outside
-  `[^\x00-\x20\x7f]`. Put the check in `ethscan/target.py` next to
-  `url_port` (for example a `check_target_host(host)` helper) so there is
-  a single rule, and call it from the three places that turn a target into
-  a host: `ethscan/web.py:_parse_url`, `ethscan/fuzz.py:_normalize_base_url`
-  and `ethscan/s3.py:_normalize_host`.
-- **CLI**: `web`, `headers` and `urlcheck` already carry
-  `@_target_usage_errors`. `fuzz` and `s3` need it added.
-- Decide the message deliberately and write it down: either preserve
-  `str(exc)` of the `InvalidURL` (which differs per command because `s3`
-  quotes a derived bucket name), or use one stable message such as
-  `"Target host contains a space or control character"`. Prefer the
-  stable message for `s3`; say which one was chosen in `TASK.md`.
-- **Adjacent variant, same family** (decide whether to include it):
-  `fuzz` hands the whole URL to `http.client`, so a non-numeric port in a
-  `fuzz` target raises a *different* `InvalidURL`:
-  ```
-  $ python -m ethscan fuzz --target "https://host:notaport"
-  http.client.InvalidURL: nonnumeric port: 'notaport'
-  ```
-  Validating the parsed netloc in `ethscan/fuzz.py:_normalize_base_url`
-  (host **and** port) covers both fuzz variants in one place.
-- Do **not** change the working forms: `host`, `host:443`,
-  `http://host`, `https://host:8443`, `[::1]:443`. `web.py:_parse_url`
-  maps an empty host to `"localhost"`, `ssh.py:_normalize_host` lowercases
-  the host, and `s3.py` lowercases the host - all three must stay as they
-  are.
-- Do **not** change `--port` handling, and do **not** bundle in the other
-  traceback clusters listed below.
+- **Fix**: validate the **path and query** of the raw target the same way
+  the host is validated today, and raise `TargetSpecError` when they
+  contain a character matched by `[\x00-\x20\x7f]`. Put the rule next to
+  `check_target_host` in `ethscan/target.py` - the extraction helper
+  `_host_of(target)` already splits a raw target into scheme, authority,
+  path, query and fragment, so the natural shape is a second helper
+  (for example `check_target_path(target)`) that reuses it, or one
+  combined helper that checks the whole URL. Decide and write the choice
+  down in `TASK.md`.
+- **Message**: the previous session chose the **stable** message over
+  `str(exc)` of the `InvalidURL`, because the raw text quotes the derived
+  value that is actually sent. Keep that discipline here; a message such
+  as `"Target path contains a space or control character"` fits the
+  existing one. The commands must all report the **same** one line.
+- The **fragment** (`#...`) is never sent to the server, so it must not be
+  rejected; the **userinfo** and the **port** are part of the authority and
+  are already covered by `check_target_host` and `url_port`.
+- Do **not** change the working forms: `host`, `host:443`, `http://host`,
+  `https://host:8443`, `[::1]:443`, `https://example.com/path`,
+  `https://example.com/a%20b`, `https://example.com/?q=1`. The
+  empty-host -> `localhost` mapping of `web._parse_url` and the
+  lower-casing of `s3._normalize_target` must stay as they are.
+- Do **not** bundle in the other clusters listed below.
 
 ### Verification
 - New tests asserting exit code 2, an
   `Error: Invalid value for '--target': ...` message and the absence of a
-  traceback for each affected command, with targets such as
-  `"host name"`, `"host\tname"` and `"https://host name"`.
+  traceback for `web`, `headers` and `urlcheck`, with targets such as
+  `"https://example.com/a b"`, `"https://example.com/a\tb"` and
+  `"https://example.com/?q=a b"`.
 - A regression test that the valid target forms are still accepted and
-  behave exactly as before (host, host:port, scheme URLs, bracketed IPv6),
-  and that `s3` and `fuzz` still exit 0 for a normal target.
+  behave exactly as before, including a percent-encoded path and a target
+  with a fragment.
 - `python -m pytest tests/test_cli.py -q` and the full suite.
 - `python -m ruff check ethscan tests` must stay at 48 pre-existing errors
   with no new ones.
 - A before/after CLI harness over the affected commands x a set of target
   values to prove the valid cases are byte-identical. The harness used for
-  the last two sessions is at `/tmp/port_harness.py`; a pristine copy of the
-  base tree can be recreated with
+  the last three sessions is at `/tmp/host_harness.py`, with
+  `/tmp/compare_host_harness.py` for the comparison; a pristine copy of
+  the base tree can be recreated with
   `git archive HEAD | tar -x -C /tmp/ethscan_before`.
   Note: `s3` invocations make real AWS requests and are **not reproducible
   between two runs of the same tree** - capture the baseline twice and
-  exclude the invocations that differ between the two baseline runs.
+  exclude the invocations that differ between the two baseline runs. The
+  `s3` command also has a pre-existing non-deterministic crash for a
+  bracketed IPv6 target (see below); do not count it as a regression.
 
 ## Other traceback clusters (found, re-verified, not fixed - do not bundle them in)
 A survey of every command with hostile option values found these remaining
 raw-traceback defects. They are separate tasks; pick one at a time.
+- `s3` with a bracketed IPv6 target (`--target "[::1]:443"`) ->
+  `http.client.InvalidURL: nonnumeric port: '1.s3.amazonaws.com'`. The
+  derived bucket names keep the `:`, so the bucket URL is malformed. The
+  message is **non-deterministic**: `run_s3` probes the candidates
+  concurrently and re-raises whichever exception finishes first, so eight
+  runs of the unchanged tree produce four different tracebacks. Two
+  things to decide: which bucket names are usable, and whether a failed
+  probe should be reported inside the result instead of escaping the
+  thread pool.
 - `ping`, `geo`, `dnssec`, `vuln`, `osdetect`, `service`, `scan`, `smtp`,
   `ftp`, `ssh`, `s3` with an unresolvable host -> `socket.gaierror` or
   `encoding with 'idna' codec failed`. These are network-dependent, so they

@@ -21723,6 +21723,8 @@ def test_library_modules_stay_free_of_click() -> None:
         "mssql.py",
         "web.py",
         "ssh.py",
+        "fuzz.py",
+        "s3.py",
     ]
     for name in names:
         tree = ast.parse((package / name).read_text(encoding="utf-8"))
@@ -22106,6 +22108,7 @@ NON_NUMERIC_PORT_COMMANDS = (
     "headers",
     "urlcheck",
     "ssh",
+    "fuzz",
 )
 
 # A scheme-qualified target is rejected by all of the commands above.
@@ -22117,7 +22120,7 @@ NON_NUMERIC_PORT_TARGETS = (
 
 # These commands also read a bare ``host:port`` target as a URL, so a
 # non-numeric port is rejected there too.
-NON_NUMERIC_PORT_BARE_COMMANDS = ("web", "headers", "urlcheck", "ssh")
+NON_NUMERIC_PORT_BARE_COMMANDS = ("web", "headers", "urlcheck", "ssh", "fuzz")
 
 NON_NUMERIC_PORT_MESSAGE = "Port could not be cast to integer value as 'notaport'"
 
@@ -22183,6 +22186,7 @@ def test_a_non_numeric_port_target_does_not_start_a_probe(monkeypatch) -> None:
         ("web", "fetch_headers"),
         ("headers", "fetch_headers"),
         ("ssh", "_ssh_banner_exchange"),
+        ("fuzz", "fuzz_path"),
     )
     for module_name, attribute in transports:
         module = importlib.import_module(f"ethscan.{module_name}")
@@ -22241,4 +22245,139 @@ def test_a_valid_port_is_still_reported_in_the_output() -> None:
         payload = json.loads(result.output)
         assert payload["port"] == 1234, f"{command}: {result.output}"
         assert payload["host"] == "127.0.0.1", f"{command}: {result.output}"
+
+
+# --- A target whose host contains a space or a control character -----------
+#
+# ``http.client`` refuses such a host with an ``http.client.InvalidURL``,
+# which derives from ``HTTPException`` and not from ``ValueError``. The
+# error therefore escaped the ``except ValueError`` handlers of the library
+# and reached the user as a raw traceback. The five commands that turn a
+# target into a host now report it as a usage error instead.
+
+HOSTILE_HOST_COMMANDS = (
+    "web",
+    "headers",
+    "urlcheck",
+    "fuzz",
+    "s3",
+)
+
+HOSTILE_HOST_TARGETS = (
+    "host name",
+    "host\tname",
+    "https://host name",
+)
+
+HOST_ERROR_MESSAGE = "Target host contains a space or control character"
+
+
+def test_a_target_with_a_hostile_host_is_a_usage_error() -> None:
+    """A target whose host has a space must be rejected cleanly."""
+    runner = CliRunner()
+    for command in HOSTILE_HOST_COMMANDS:
+        for target in HOSTILE_HOST_TARGETS:
+            result = runner.invoke(cli, [command, "--target", target])
+            _assert_target_usage_error(result, f"{command} --target {target!r}")
+            assert HOST_ERROR_MESSAGE in result.output, result.output
+
+
+def test_a_hostile_host_usage_error_is_a_single_line() -> None:
+    """The failure must be a one-line error, not a multi-line traceback."""
+    runner = CliRunner()
+    for command in HOSTILE_HOST_COMMANDS:
+        result = runner.invoke(cli, [command, "--target", "host name"])
+        error_lines = [
+            line for line in result.output.splitlines() if line.startswith("Error:")
+        ]
+        assert len(error_lines) == 1, result.output
+        assert error_lines[0] == (
+            "Error: Invalid value for '--target': "
+            "Target host contains a space or control character"
+        )
+
+
+def test_the_documented_hostile_host_crashes_are_usage_errors() -> None:
+    """The invocations that used to dump a traceback must now be usage errors."""
+    runner = CliRunner()
+    for command in HOSTILE_HOST_COMMANDS:
+        result = runner.invoke(cli, [command, "--target", "host name"])
+        _assert_target_usage_error(result, command)
+
+
+def test_a_hostile_host_target_does_not_start_a_probe(monkeypatch) -> None:
+    """A rejected target must abort before any network access happens."""
+    import importlib
+
+    calls = []
+
+    def make_tripwire(module_name: str, attribute: str):
+        def tripwire(*args, **kwargs):
+            calls.append((module_name, attribute))
+            raise AssertionError("a probe was started for an invalid target")
+
+        return tripwire
+
+    transports = (
+        ("web", "fetch_headers"),
+        ("headers", "fetch_headers"),
+        ("fuzz", "fuzz_path"),
+        ("s3", "check_bucket_public"),
+    )
+    for module_name, attribute in transports:
+        module = importlib.import_module(f"ethscan.{module_name}")
+        monkeypatch.setattr(module, attribute, make_tripwire(module_name, attribute))
+
+    runner = CliRunner()
+    for command in HOSTILE_HOST_COMMANDS:
+        result = runner.invoke(cli, [command, "--target", "host name"])
+        _assert_target_usage_error(result, command)
+    assert calls == [], "no probe may start for an invalid --target value"
+
+
+def test_a_valid_host_target_is_still_accepted(monkeypatch) -> None:
+    """A target with a usable host keeps working."""
+    monkeypatch.setattr(
+        "ethscan.cli.run_s3",
+        lambda *args, **kwargs: {"target": "example.com", "buckets": [], "notes": []},
+    )
+    runner = CliRunner()
+    for command in HOSTILE_HOST_COMMANDS:
+        result = runner.invoke(
+            cli, [command, "--target", "127.0.0.1:1234", "--timeout", "0.2"]
+        )
+        assert result.exit_code == 0, f"{command}: {result.output}"
+        assert "Invalid value for '--target'" not in result.output, result.output
+
+
+def test_a_valid_host_is_still_reported_in_the_output() -> None:
+    """The host of a valid target is still parsed and reported as before."""
+    runner = CliRunner()
+    for command in ("web", "headers"):
+        result = runner.invoke(
+            cli, [command, "--target", "127.0.0.1:1234", "--timeout", "0.2"]
+        )
+        assert result.exit_code == 0, f"{command}: {result.output}"
+        payload = json.loads(result.output)
+        assert payload["host"] == "127.0.0.1", f"{command}: {result.output}"
+
+    result = runner.invoke(
+        cli, ["urlcheck", "--target", "127.0.0.1:1234", "--timeout", "0.2"]
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["web"]["host"] == "127.0.0.1", result.output
+
+
+def test_the_hostile_host_message_is_the_same_for_every_command() -> None:
+    """One stable message, so the error does not depend on the command."""
+    runner = CliRunner()
+    messages = set()
+    for command in HOSTILE_HOST_COMMANDS:
+        result = runner.invoke(cli, [command, "--target", "host name"])
+        errors = [
+            line for line in result.output.splitlines() if line.startswith("Error:")
+        ]
+        messages.add(errors[0])
+    assert len(messages) == 1, messages
 

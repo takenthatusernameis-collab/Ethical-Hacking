@@ -18,6 +18,8 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse
 
+from ethscan.target import check_target_host
+
 DEFAULT_TIMEOUT = 5.0
 DEFAULT_MAX_WORKERS = 20
 DEFAULT_REGION = "us-east-1"
@@ -99,10 +101,14 @@ def _normalize_target(target: str) -> str:
 
     Returns:
         Lowercased hostname / netloc without scheme or path.
+
+    Raises:
+        TargetSpecError: If the target carries an unusable host.
     """
     normalized = target.strip()
     if "://" not in normalized:
         normalized = "https://" + normalized
+    check_target_host(normalized)
     parsed = urlparse(normalized)
     return (parsed.hostname or parsed.netloc or "").lower()
 

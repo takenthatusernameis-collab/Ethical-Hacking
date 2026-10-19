@@ -9,6 +9,8 @@ import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from ethscan.target import check_target_host, url_port
+
 DEFAULT_WORDLIST = [
     "/admin",
     "/login",
@@ -45,11 +47,17 @@ def load_wordlist(path: str) -> list[str]:
 
 
 def _normalize_base_url(target: str) -> str:
-    """Normalize target to a base URL with scheme."""
+    """Normalize target to a base URL with scheme.
+
+    Raises:
+        TargetSpecError: If the target carries an unusable host or port.
+    """
     normalized = target.strip()
     if "://" not in normalized:
         normalized = "https://" + normalized
+    check_target_host(normalized)
     parsed = urllib.parse.urlparse(normalized)
+    url_port(parsed)
     return f"{parsed.scheme}://{parsed.netloc}"
 
 

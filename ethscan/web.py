@@ -9,7 +9,7 @@ import ssl
 import urllib.error
 import urllib.request
 
-from ethscan.target import url_port
+from ethscan.target import check_target_host, url_port
 
 # Recommended security headers and their importance.
 SECURITY_HEADERS: dict[str, str] = {
@@ -39,10 +39,14 @@ def _parse_url(target: str) -> tuple[str, int, bool]:
 
     Returns:
         Tuple of (host, port, is_secure).
+
+    Raises:
+        TargetSpecError: If the target carries an unusable host or port.
     """
     normalized = target.strip()
     if "://" not in normalized:
         normalized = "https://" + normalized
+    check_target_host(normalized)
     parsed = urllib.request.urlparse(normalized)
     host = parsed.hostname or "localhost"
     scheme = parsed.scheme.lower()
