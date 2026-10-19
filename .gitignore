@@ -16,3 +16,4 @@ env/
 node_modules/
 .coverage
 .coverage.*
+*,cover
