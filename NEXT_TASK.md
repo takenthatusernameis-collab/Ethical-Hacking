@@ -1,13 +1,20 @@
 # NEXT_TASK.md
 
-## Status (2026-10-19T19:41:00Z)
-- Prior agent task (a `--target` whose **path or query** contains a space or
-  a control character -> click usage error): **complete**.
-- This session's task (`trace --target ''` -> `ValueError: Invalid target`):
-  **complete**. `trace` now reports the unusable target as a click usage
-  error (exit code 2).
-- Verified: 4204 passed / 1 skipped; ruff rule set identical to the baseline
-  (48 pre-existing errors, no new ones).
+## Status (2026-10-19T23:09:00Z)
+- Prior agent task (`--target` path/query with a space or control character
+  -> click usage error): **complete**.
+- `trace --target ''` -> `ValueError: Invalid target`: **complete** (click
+  usage error, exit code 2).
+- `ping` with an unresolvable host -> raw `socket.gaierror`: **complete**.
+  Fixed in commit `9a86aa0` (`ethscan/ping.py:250` catches `socket.gaierror`
+  and returns a `NO-RESPONSE` probe with the resolver error in `error`).
+  Verified: `--target no-such-host.invalid` and `--target 'host name'` both
+  exit 0 with structured output; `example.com` still exits 0.
+- Verified: **4207 passed / 1 skipped**; ruff rule set identical to the
+  baseline (48 pre-existing errors, no new ones).
+
+These docs were written before commit `9a86aa0` and listed `ping` as
+unresolved; that is stale. `ping` is resolved. See `HANDOFF_NEXT.md`.
 
 ## Sweep of every `--target` command (new evidence)
 
@@ -37,9 +44,9 @@ Result after this session:
 
 | input | traceback leaked by |
 |---|---|
-| `--target ''` | **none** |
-| `--target 'host name'` | `ping` (`socket.gaierror`) |
-| `--target 'no-such-host.invalid'` | `ping` (`socket.gaierror`) |
+| `--target ''` | none |
+| `--target 'host name'` | none (`ping` fixed) |
+| `--target 'no-such-host.invalid'` | none (`ping` fixed) |
 
 For `--target ''` the eleven commands that exit 2 are the ten protocol
 commands (`redis`, `memcached`, `ntp`, `snmp`, `ftp`, `ldap`, `netbios`,
@@ -48,84 +55,27 @@ problem inside its own output.
 
 ## Remaining tasks (bounded, high-value)
 
-### 1. `ping` with an unresolvable host -> raw `socket.gaierror` traceback
-**This is the next task.** It is the only remaining command that leaks an
-exception for an unresolvable host.
+### 1. `s3` with a bracketed IPv6 target -> `http.client.InvalidURL` traceback
+**This is the next task.** `--target "[::1]:443"` crashes, exit 1, with a
+raw traceback (`ethscan/s3.py`). Full reproduction, root-cause analysis and
+the two decisions to make before writing code are in `HANDOFF_NEXT.md`.
 
-Reproduction:
+In short: `_normalize_target("[::1]:443")` returns `"::1"`; `_build_bucket_candidates`
+derives `::1`, `::1-backup`, `backup-::1`, ...; `check_bucket_public`
+catches `HTTPError`/`(URLError, socket.timeout, OSError)` but not
+`http.client.InvalidURL`, which escapes `future.result()` in `run_s3`.
+Non-deterministic across runs.
 
-```console
-$ python -m ethscan ping --target no-such-host.invalid
-...
-  File "/home/runner/work/Ethical-Hacking/Ethical-Hacking/ethscan/ping.py", line 249, in probe_icmp
-    err = send_sock.connect_ex((host, port))
-socket.gaierror: [Errno -2] Name or service not known
-EXIT=1
-```
+Suggested minimal fix shape: in `check_bucket_public` extend the `except (...)`
+clause (`ethscan/s3.py:255`) to include `http.client.HTTPException` and set
+`result["error"] = str(exc)`, so a malformed S3 URL yields a failed probe
+result instead of escaping. Verify `python -m ethscan s3 --target '[::1]:443'`
+exits 0 with per-bucket `error` results and no traceback; add a test.
 
-Root cause (already analysed, no guesswork needed):
-- `run_ping` (`ethscan/ping.py:305`) computes `ip = _resolve_host(host)`.
-  `_resolve_host` returns `None` for a name that does not resolve.
-- When `ip is None`, `run_ping` already appends the note
-  `"Could not resolve host {host!r} to an IPv4 address"` - the module
-  clearly intends to *report* the failure, not to crash.
-- But `run_ping` still calls `probe_icmp(host, ...)` (line 330). In the
-  TCP fallback path `probe_icmp` does
-  `err = send_sock.connect_ex((host, port))` (line 249).
-  `connect_ex` returns an error code for a *failed connect*, but it
-  **raises** `socket.gaierror` when the name itself cannot be resolved, and
-  that exception is not caught.
-
-Suggested shape of the fix (keep it inside the library, no click import):
-catch `socket.gaierror` around the `connect_ex` call and return the same
-"no response" result shape the function already returns for a failed
-connect, with the resolver error in the `error` field. The command then
-exits 0 and reports the failure inside its own output, matching the
-contract of every other probe command.
-
-Constraints:
-- `ping` needs **no** `TargetSpecError` and **no** `_target_usage_errors`
-  decorator: an unresolvable host is a probe failure, not an invalid
-  option. Do not turn it into a usage error.
-- Keep the existing `"Could not resolve host ..."` note.
-- Keep the raw-ICMP path unchanged.
-- Add a test that `run_ping` with an unresolvable host exits 0 and reports
-  the failure in its output (no traceback).
-
-### 2. `s3` with a bracketed IPv6 target -> `http.client.InvalidURL:
-nonnumeric port: '1.s3.amazonaws.com'`
-`--target "[::1]:443"` crashes. Two things to decide before writing code:
-
-1. **Which bucket names are usable.** `_normalize_target("[::1]:443")`
-   returns `"::1"` (`urlparse(...).hostname`). `_build_bucket_candidates`
-   then derives `"::1"`, `"::1-backup"`, `"backup-::1"`, ... - none of which
-   is a valid S3 bucket name (S3 bucket names are DNS-compliant: lowercase
-   letters, digits and hyphens, 3-63 characters). The question is whether
-   invalid candidates are filtered out (which would make the target produce
-   zero candidates and take the existing
-   `"No bucket candidates could be derived from the target."` path) or
-   reported.
-2. **Whether a failed probe should be reported inside the result.**
-   `check_bucket_public` catches `urllib.error.HTTPError` and
-   `(urllib.error.URLError, socket.timeout, OSError)`, but
-   `http.client.InvalidURL` derives from `HTTPException` and is not one of
-   those, so it escapes. `run_s3` calls `future.result()` in the main
-   thread, so the exception escapes the whole command.
-
-Evidence for the non-determinism (six runs of the unchanged tree):
-```
-nonnumeric port: '1.s3.amazonaws.com'
-nonnumeric port: '1-backup.s3.amazonaws.com'
-nonnumeric port: '1-backups.s3.amazonaws.com'
-```
-The candidates are probed concurrently, so whichever thread finishes first
-re-raises first. Any fix must make the outcome deterministic.
-
-### 3. Other network-dependent failures
-`s3` with an unresolvable host (`socket.gaierror` or
-`encoding with 'idna' codec failed`) was in the old list. The sweep above
-shows that **no other command** leaks an exception for an unresolvable
-host, so this is now part of cluster 2 only.
+### 2. Other network-dependent failures
+None remain for `--target ''` / `--target 'host name'` / `--target
+'no-such-host.invalid'` after the `ping` fix. The `s3` bracketed-IPv6 crash
+is the only remaining `--target` leak.
 
 ## Verified working forms (do not break)
 - `host`, `host:443`, `http://host`, `https://host:8443`, `[::1]:443`

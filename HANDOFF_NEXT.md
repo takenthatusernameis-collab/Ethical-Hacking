@@ -1,95 +1,39 @@
 # HANDOFF_NEXT.md
 
 ## Summary
-Executed the prior agent's assignment: the **trace** command now reports a
-`--target` without a usable host as a clean click usage error (exit code 2,
-one-line message, no traceback), instead of dying with a raw
-`ValueError: Invalid target` (`ethscan/trace.py:79`).
+The **trace** command now reports a `--target` without a usable host as a clean click usage error (exit code 2, one-line message, no traceback), instead of dying with a raw `ValueError: Invalid target` (`ethscan/trace.py:79`).
 
-The prior session had identified the defect and left a precise plan in
-`NEXT_TASK.md`; the shared machinery already existed
-(`ethscan/target.py` with `TargetSpecError`, and the `_target_usage_errors`
-decorator in `ethscan/cli.py`), but `trace` used a bare `ValueError` and
-carried no decorator. This session closed that gap and re-verified the
-behaviour end to end, including the two internal callers of the traceroute.
+**`ping` is also done** (committed in `9a86aa0`, after these docs were written): `probe_icmp` catches `socket.gaierror` around `connect_ex` (`ethscan/ping.py:250`) and returns a `NO-RESPONSE` probe with the resolver error in `error`, so `ping --target <unresolvable>` exits 0 and reports the failure inside its JSON output. Verified: `--target no-such-host.invalid` and `--target 'host name'` both exit 0; `example.com` still exits 0. Full suite: **4207 passed, 1 skipped**. Covered by `tests/test_ping.py` and `tests/test_cli.py`.
 
-## Changes
-- **`ethscan/trace.py`**: `_trace_single` raises
-  `TargetSpecError("Invalid target")` instead of a bare `ValueError`.
-  `TargetSpecError` subclasses `ValueError`, so every existing
-  `except ValueError` handler keeps working - including the ones in
-  `ethscan/recon.py` and `ethscan/geo.py`, which run the traceroute as a
-  module and already reported the failure as a note. The module docstring
-  documents the contract; `TargetSpecError` was added to `__all__`.
-- **`ethscan/cli.py`**: the `trace` command now carries the
-  `@_target_usage_errors` decorator (one line).
-- **`README.md`**: the Usage section documents the new usage error, names
-  `trace` as an affected command and `recon` / `geo` as unaffected.
-- **`tests/test_trace.py`** (+4), **`tests/test_trace_cli.py`** (+9),
-  **`tests/test_target.py`** (+3).
+These handoff files were written before commit `9a86aa0` and listed `ping` as unresolved; that is stale. `ping` is resolved. No code changed this session — only verification and doc correction.
 
-### Design choice (the prior task asked for it to be stated)
-The **existing message** `"Invalid target"` was kept. It is the wording the
-module already used, it is stable across every unusable target form (empty
-string, whitespace, scheme without a host), and the two commands that report
-the failure inside their own output (`recon`, `geo`) already print it - so
-the CLI and the library now say the same thing.
+## Remaining tasks
 
-`trace` was **not** given the hostile-host rule. The five commands that
-hand the target to `http.client` (`web`, `headers`, `urlcheck`, `fuzz`,
-`s3`) need it because `http.client.InvalidURL` is not a `ValueError`. The
-traceroute resolves the host with `socket.gethostbyname`, which already
-fails with a `socket.gaierror` that the module catches and reports inside
-its own output.
+### 1. `s3` with a bracketed IPv6 target -> `http.client.InvalidURL` traceback (next agent task)
+`--target "[::1]:443"` crashes, exit 1, with a raw traceback (`ethscan/s3.py`). Root cause:
+- `_normalize_target("[::1]:443")` returns `"::1"` (`urlparse(...).hostname` strips brackets).
+- `_build_bucket_candidates("::1")` derives candidates like `::1`, `::1-backup`, `backup-::1` — all contain `:`, so the S3 URL `https://::1.s3.amazonaws.com/` is malformed.
+- `check_bucket_public` (`ethscan/s3.py:203`) catches `HTTPError`, `(URLError, socket.timeout, OSError)`, but `http.client.InvalidURL` (an `HTTPException`, not `OSError`) escapes.
+- `run_s3` calls `future.result()` in the main thread, so the exception escapes the whole command. Non-deterministic (which concurrent thread re-raises first).
 
-## Verification
-- **Manual**: `trace --target ''`, `--target '   '` and `--target 'http://'`
-  print `Error: Invalid value for '--target': Invalid target` and exit 2,
-  with no traceback.
-- **Still working**: `trace --target example.com` exits 0 and produces the
-  usual JSON report.
-- **Unchanged callers**: `geo --target '' --recursive` and
-  `recon --target ''` still exit 0 and report the same notes as before
-  ("recursive hop geolocation failed: Invalid target",
-  "trace module failed: Invalid target").
-- **Full suite**: **4204 passed, 1 skipped** (baseline 4159 -> 4189 -> 4204,
-  15 new). No regressions.
-- **Lint**: `python -m ruff check ethscan tests --output-format concise`
-  reports exactly the same 48 pre-existing errors as the baseline (compared
-  rule-by-rule, ignoring line numbers); no new ones.
-- **Sweep**: all 42 CLI commands that take a `--target` were invoked with
-  `--target ''`, `--target 'host name'` and
-  `--target 'no-such-host.invalid'`. After this change **no command leaks a
-  traceback for an empty target**; the only remaining leaker for an
-  unresolvable host is `ping`.
+Confirmed reproduction:
+```
+$ python -m ethscan s3 --target '[::1]:443'
+...
+http.client.InvalidURL: nonnumeric port: '1.s3.amazonaws.com'
+EXIT=1
+```
 
-## Unresolved
-- `ping` still crashes with a raw `socket.gaierror` traceback
-  (`ethscan/ping.py:249`) when the host cannot be resolved. This is the top
-  entry in `NEXT_TASK.md`, with a full reproduction and a root-cause
-  analysis.
-- `s3` still crashes with a raw traceback for a bracketed IPv6 target
-  (`[::1]:443`): the derived bucket names keep the `:`, so the bucket URL is
-  malformed, and `http.client.InvalidURL` escapes the thread pool. The
-  crash message is **non-deterministic** (six runs of the unchanged tree
-  produced three different messages). Second entry in `NEXT_TASK.md`.
-- The five probe-failure commands (`mysql`, `mongodb`, `oracle`,
-  `postgresql`, `mssql`) are untouched; they never reach a host, so the
-  hostile-host rule does not apply to them.
-- The 14 `_normalize_target` copies are still duplicated. They are not
-  identical (some use `host.find("]:")`, some `host.endswith("]")`), so
-  consolidating them is a separate refactor that would change behaviour for
-  the `host:` and bracketed-IPv6 edge cases.
-- The 48 pre-existing ruff errors are unrelated to this work and were
-  deliberately left alone.
+Two decisions must be made explicitly before writing code:
 
-## Next agent task
-Take the **first** entry in `NEXT_TASK.md`: `ping` leaks a raw
-`socket.gaierror` for a target that cannot be resolved. It is small,
-deterministic and self-contained, and the sweep in `NEXT_TASK.md` proves it
-is the only remaining command in that class.
+1. **Which bucket names are usable.** S3 bucket names are DNS-compliant (lowercase letters, digits, hyphens, 3–63 chars). `::1` and `::1-backup` are not valid. Options: (a) filter invalid candidates out → zero candidates → existing `"No bucket candidates could be derived from the target."` path; (b) keep them and let each probe report an error. Option (a) matches the existing empty-candidates path; option (b) preserves per-candidate signal.
 
-The `s3` bracketed-IPv6 cluster (second entry) needs two decisions that
-should be made explicitly before any code is written: which bucket names
-are usable, and whether a failed probe should be reported inside the result
-instead of escaping the thread pool.
+2. **Whether a failed probe should be reported inside the result.** `check_bucket_public` already reports `HTTPError`/`URLError`/`socket.timeout`/`OSError` inside the result dict's `error` field. Add `http.client.InvalidURL` (or `http.client.HTTPException`) to that except tuple (`ethscan/s3.py:255`) so a malformed S3 URL yields a failed probe result instead of escaping `future.result()`. This makes the outcome deterministic and matches every other probe command. Do NOT turn it into a usage error — for `s3` a malformed/unresolvable target is a probe failure, not an invalid option.
+
+Suggested minimal fix shape: in `check_bucket_public`, extend the `except (...)` clause at `ethscan/s3.py:255` to include `http.client.HTTPException` (import `http.client`), setting `result["error"] = str(exc)`. Verify with `python -m ethscan s3 --target '[::1]:443'` → exit 0, JSON with per-bucket `error` results and no traceback; add a test that `run_s3`/`check_bucket_public` with `[::1]:443` returns structured results (no exception).
+
+## Unchanged / deliberate non-changes
+- `ping` needs no `TargetSpecError` / `_target_usage_errors` decorator (probe failure, not a usage error).
+- The 48 pre-existing ruff errors are unrelated and left alone.
+- The 14 `_normalize_target` copies remain duplicated (separate refactor; they differ on `host:` / bracketed-IPv6 edge cases).
+- `web`, `headers`, `urlcheck`, `fuzz` already report probe failures inside output; `s3` is the one that still escapes.
