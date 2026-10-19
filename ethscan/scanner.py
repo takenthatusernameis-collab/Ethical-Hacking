@@ -52,6 +52,9 @@ def scan_ports(
     return sorted(results, key=lambda x: x[0])
 
 
+MAX_PORT = 65535
+
+
 def parse_port_range(port_spec: str) -> list[int]:
     """Parse a port specification string into a list of ports.
 
@@ -66,15 +69,48 @@ def parse_port_range(port_spec: str) -> list[int]:
 
     Returns:
         Sorted list of unique port numbers.
+
+    Raises:
+        ValueError: If a port is out of range (0-{max}), a range is inverted
+            (start > end), or a token is non-numeric.
     """
     ports = set()
     for part in port_spec.split(","):
         part = part.strip()
+        if not part:
+            raise ValueError(f"Empty port token in specification: {port_spec!r}")
         if "-" in part:
-            start, end = part.split("-", 1)
-            ports.update(range(int(start), int(end) + 1))
+            start_str, end_str = part.split("-", 1)
+            start_str = start_str.strip()
+            end_str = end_str.strip()
+            if not start_str or not end_str:
+                raise ValueError(
+                    f"Invalid range {part!r}: missing start or end"
+                )
+            try:
+                start = int(start_str)
+                end = int(end_str)
+            except ValueError:
+                raise ValueError(
+                    f"Invalid port number in range {part!r}"
+                )
+            if start > end:
+                raise ValueError(
+                    f"Invalid range {part!r}: start ({start}) > end ({end})"
+                )
+            if not (0 <= start <= MAX_PORT and 0 <= end <= MAX_PORT):
+                raise ValueError(
+                    f"Port out of range (0-{MAX_PORT}) in range {part!r}"
+                )
+            ports.update(range(start, end + 1))
         else:
-            ports.add(int(part))
+            try:
+                port = int(part)
+            except ValueError:
+                raise ValueError(f"Invalid port number {part!r}")
+            if not (0 <= port <= MAX_PORT):
+                raise ValueError(f"Port {port} out of range (0-{MAX_PORT})")
+            ports.add(port)
     return sorted(ports)
 
 

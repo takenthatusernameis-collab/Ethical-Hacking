@@ -42,6 +42,36 @@ def test_parse_port_range_duplicates() -> None:
     assert parse_port_range("80,80,443") == [80, 443]
 
 
+def test_parse_port_range_out_of_range_high() -> None:
+    """A port above 65535 must be rejected, not silently scanned."""
+    with pytest.raises(ValueError):
+        parse_port_range("70000")
+
+
+def test_parse_port_range_out_of_range_negative() -> None:
+    """A negative port must be rejected, not silently scanned."""
+    with pytest.raises(ValueError):
+        parse_port_range("-1")
+
+
+def test_parse_port_range_inverted_range() -> None:
+    """An inverted range (start > end) must be rejected, not silently empty."""
+    with pytest.raises(ValueError):
+        parse_port_range("100-50")
+
+
+def test_parse_port_range_non_numeric() -> None:
+    """A non-numeric token must be rejected with a clear error."""
+    with pytest.raises(ValueError):
+        parse_port_range("abc")
+
+
+def test_parse_port_range_missing_range_end() -> None:
+    """A range missing its end (e.g. ``80-``) must be rejected."""
+    with pytest.raises(ValueError):
+        parse_port_range("80-")
+
+
 def test_get_common_ports() -> None:
     ports = get_common_ports()
     assert isinstance(ports, list)
