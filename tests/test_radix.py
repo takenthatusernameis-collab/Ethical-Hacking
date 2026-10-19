@@ -211,6 +211,23 @@ def test_merge_networks_sorted() -> None:
     assert str(merged[1]) == "192.168.1.0/24"
 
 
+def test_merge_networks_overlap_larger_successor() -> None:
+    nets = [
+        ipaddress.ip_network("192.168.1.128/25"),
+        ipaddress.ip_network("192.168.1.0/24"),
+    ]
+    merged = _merge_networks(nets)
+    assert len(merged) == 1
+    assert str(merged[0]) == "192.168.1.0/24"
+
+
+def test_build_radix_node_max_depth() -> None:
+    from ethscan.radix import _build_radix_node
+
+    nets = [ipaddress.ip_network("192.168.1.0/24")]
+    assert _build_radix_node(nets, depth=65, max_depth=64) is None
+    assert _build_radix_node([], depth=0, max_depth=64) is None
+
 # ---------------------------------------------------------------------------
 # run_radix
 # ---------------------------------------------------------------------------
