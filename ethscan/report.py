@@ -46,6 +46,8 @@ def _resolve_ports_and_defaults(
     timeout: float,
     workers: int,
     profile: str | None,
+    timeout_explicit: bool | None = None,
+    workers_explicit: bool | None = None,
 ) -> tuple:
     """Resolve the effective port list, timeout, and workers.
 
@@ -64,10 +66,16 @@ def _resolve_ports_and_defaults(
             port_list = get_all_ports()
         else:
             port_list = parse_port_range(ports)
-        if timeout == 1.0:
-            timeout = defaults["timeout"]
-        if workers == 100:
-            workers = defaults["workers"]
+        if timeout_explicit is None and workers_explicit is None:
+            if timeout == 1.0:
+                timeout = defaults["timeout"]
+            if workers == 100:
+                workers = defaults["workers"]
+        else:
+            if timeout_explicit is False:
+                timeout = defaults["timeout"]
+            if workers_explicit is False:
+                workers = defaults["workers"]
     else:
         port_list = _parse_ports(ports)
     return port_list, timeout, workers

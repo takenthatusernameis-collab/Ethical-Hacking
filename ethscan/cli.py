@@ -6,6 +6,7 @@ import os
 from typing import Any
 
 import click
+from click.core import ParameterSource
 
 from ethscan import __version__
 from ethscan.brute import (
@@ -404,7 +405,8 @@ def cli(ctx, config_path: str | None) -> None:
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def scan(target: str, ports: str, profile: str | None, timeout: float, workers: int, output_fmt: str | None, fmt: str, out_path: str | None) -> None:
+@click.pass_context
+def scan(ctx: click.Context, target: str, ports: str, profile: str | None, timeout: float, workers: int, output_fmt: str | None, fmt: str, out_path: str | None) -> None:
     """Run a port scan against TARGET."""
     if profile:
         defaults = get_profile_defaults(profile)
@@ -415,9 +417,13 @@ def scan(target: str, ports: str, profile: str | None, timeout: float, workers: 
             port_list = get_all_ports()
         else:
             port_list = parse_port_range(ports)
-        if timeout == 1.0:
+        timeout_source = ctx.get_parameter_source("timeout")
+        workers_source = ctx.get_parameter_source("workers")
+        timeout_explicit = timeout_source in (ParameterSource.COMMANDLINE, ParameterSource.ENVIRONMENT, ParameterSource.DEFAULT_MAP)
+        workers_explicit = workers_source in (ParameterSource.COMMANDLINE, ParameterSource.ENVIRONMENT, ParameterSource.DEFAULT_MAP)
+        if not timeout_explicit:
             timeout = defaults["timeout"]
-        if workers == 100:
+        if not workers_explicit:
             workers = defaults["workers"]
     elif ports.lower() == "common":
         port_list = get_common_ports()
@@ -1590,7 +1596,8 @@ def tls(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-def service(target: str, ports: str | None, profile: str | None, timeout: float, workers: int, output_fmt: str | None, fmt: str, out_path: str | None) -> None:
+@click.pass_context
+def service(ctx: click.Context, target: str, ports: str | None, profile: str | None, timeout: float, workers: int, output_fmt: str | None, fmt: str, out_path: str | None) -> None:
     """Detect services and grab banners on open ports (nmap-style)."""
     port_list = None
     if profile:
@@ -1600,9 +1607,13 @@ def service(target: str, ports: str | None, profile: str | None, timeout: float,
             port_list = parse_port_range(ports)
         else:
             port_list = get_profile_ports(profile)
-        if timeout == 3.0:
+        timeout_source = ctx.get_parameter_source("timeout")
+        workers_source = ctx.get_parameter_source("workers")
+        timeout_explicit = timeout_source in (ParameterSource.COMMANDLINE, ParameterSource.ENVIRONMENT, ParameterSource.DEFAULT_MAP)
+        workers_explicit = workers_source in (ParameterSource.COMMANDLINE, ParameterSource.ENVIRONMENT, ParameterSource.DEFAULT_MAP)
+        if not timeout_explicit:
             timeout = defaults["timeout"]
-        if workers == 50:
+        if not workers_explicit:
             workers = defaults["workers"]
     elif ports:
         from ethscan.scanner import parse_port_range
@@ -2723,7 +2734,9 @@ def cert(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
+@click.pass_context
 def cve(
+    ctx: click.Context,
     target: str,
     services_file: str | None,
     ports: str | None,
@@ -2758,9 +2771,13 @@ def cve(
                 port_list = parse_port_range(ports)
             else:
                 port_list = get_profile_ports(profile)
-            if service_timeout == 3.0:
+            timeout_source = ctx.get_parameter_source("service_timeout")
+            workers_source = ctx.get_parameter_source("workers")
+            timeout_explicit = timeout_source in (ParameterSource.COMMANDLINE, ParameterSource.ENVIRONMENT, ParameterSource.DEFAULT_MAP)
+            workers_explicit = workers_source in (ParameterSource.COMMANDLINE, ParameterSource.ENVIRONMENT, ParameterSource.DEFAULT_MAP)
+            if not timeout_explicit:
                 service_timeout = defaults["timeout"]
-            if workers == 50:
+            if not workers_explicit:
                 workers = defaults["workers"]
         elif ports:
             from ethscan.scanner import parse_port_range
