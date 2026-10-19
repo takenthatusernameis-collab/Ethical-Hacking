@@ -19158,7 +19158,7 @@ def test_redis_default_is_json(monkeypatch) -> None:
     assert result.exit_code == 0
     try:
         json.loads(result.output)
-    except Exception:
+    except json.JSONDecodeError:
         assert False, "Default should be JSON"
 
 
@@ -19297,7 +19297,7 @@ def test_smb_default_is_json(monkeypatch) -> None:
     assert result.exit_code == 0
     try:
         json.loads(result.output)
-    except Exception:
+    except json.JSONDecodeError:
         assert False, "Default should be JSON"
 
 
@@ -19490,7 +19490,7 @@ def test_ldap_default_is_json(monkeypatch) -> None:
     assert result.exit_code == 0
     try:
         json.loads(result.output)
-    except Exception:
+    except json.JSONDecodeError:
         assert False, "Default should be JSON"
 
 
