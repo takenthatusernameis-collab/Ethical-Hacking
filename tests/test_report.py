@@ -559,6 +559,74 @@ def test_resolve_ports_and_defaults_profile_explicit_timeout_workers() -> None:
     assert workers == 50
 
 
+def test_resolve_ports_and_defaults_explicit_flags_preserve_sentinel_values() -> None:
+    """Explicit flags must win even when the value equals the sentinel default.
+
+    The sentinel comparison against the built-in defaults (``1.0``/``100``)
+    replaced an explicitly supplied value with the profile default, so the
+    caller has to be able to state explicitly that a value was chosen.
+    """
+    from ethscan.report import _resolve_ports_and_defaults
+
+    port_list, timeout, workers = _resolve_ports_and_defaults(
+        "common", 1.0, 100, "fast", True, True
+    )
+    assert len(port_list) == 18
+    assert timeout == 1.0
+    assert workers == 100
+
+
+def test_resolve_ports_and_defaults_explicit_flags_false_use_profile_defaults() -> None:
+    """``False`` means "not explicit", so the profile default applies."""
+    from ethscan.report import _resolve_ports_and_defaults
+
+    port_list, timeout, workers = _resolve_ports_and_defaults(
+        "common", 1.0, 100, "fast", False, False
+    )
+    assert len(port_list) == 18
+    assert timeout == 0.5
+    assert workers == 200
+
+
+def test_resolve_ports_and_defaults_explicit_flags_are_independent() -> None:
+    """A timeout and a worker count can be explicit independently of each other."""
+    from ethscan.report import _resolve_ports_and_defaults
+
+    port_list, timeout, workers = _resolve_ports_and_defaults(
+        "common", 7.5, 100, "fast", True, False
+    )
+    assert len(port_list) == 18
+    assert timeout == 7.5
+    assert workers == 200
+
+
+def test_run_report_forwards_explicit_flags(monkeypatch) -> None:
+    """``run_report`` must pass the explicitness flags through to the scan."""
+    import ethscan.report as report_module
+    from ethscan.report import run_report
+
+    called = {}
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        called["timeout"] = timeout
+        called["max_workers"] = max_workers
+        return [(p, False) for p in ports]
+
+    monkeypatch.setattr(report_module, "scan_ports", mock_scan_ports)
+
+    run_report(
+        "127.0.0.1",
+        "common",
+        timeout=1.0,
+        workers=100,
+        profile="fast",
+        timeout_explicit=True,
+        workers_explicit=True,
+    )
+    assert called["timeout"] == 1.0
+    assert called["max_workers"] == 100
+
+
 def test_resolve_ports_and_defaults_profile_with_all_ports_keyword() -> None:
     """An explicit ``--ports all`` must survive a profile override.
 

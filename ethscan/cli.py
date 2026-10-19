@@ -669,7 +669,9 @@ def audit(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
+@click.pass_context
 def report(
+    ctx: click.Context,
     target: str,
     ports: str,
     profile: str | None,
@@ -688,6 +690,10 @@ def report(
     out_path: str,
 ) -> None:
     """Generate a report combining port scan and password audit results."""
+    timeout_source = ctx.get_parameter_source("timeout")
+    workers_source = ctx.get_parameter_source("workers")
+    timeout_explicit = timeout_source in (ParameterSource.COMMANDLINE, ParameterSource.ENVIRONMENT, ParameterSource.DEFAULT_MAP)
+    workers_explicit = workers_source in (ParameterSource.COMMANDLINE, ParameterSource.ENVIRONMENT, ParameterSource.DEFAULT_MAP)
     report_data = run_report(
         target,
         ports,
@@ -702,6 +708,8 @@ def report(
         salt=salt,
         pepper=pepper,
         algorithm=algorithm,
+        timeout_explicit=timeout_explicit,
+        workers_explicit=workers_explicit,
     )
 
     # --output-format takes precedence over the deprecated --format alias

@@ -1306,6 +1306,77 @@ def test_report_profile_override_timeout_workers(tmp_path) -> None:
     assert data["scan"]["profile"] == "fast"
 
 
+def test_report_profile_preserves_explicit_timeout_equal_to_cli_default(monkeypatch) -> None:
+    """An explicit ``--timeout`` must survive a profile even when it equals the
+    option's built-in default.
+
+    ``report`` shares the profile logic of ``scan``/``service``; the
+    sentinel comparison against the default (``1.0``) used to replace an
+    explicit ``--timeout 1.0`` with the profile's ``0.5`` timeout.
+    """
+    called_args = {}
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return [(p, False) for p in ports]
+
+    monkeypatch.setattr("ethscan.report.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["report", "--target", "127.0.0.1", "--profile", "fast", "--timeout", "1.0", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    assert called_args["timeout"] == 1.0
+    # Workers were not given, so the profile default still applies.
+    assert called_args["max_workers"] == 200
+
+
+def test_report_profile_preserves_explicit_workers_equal_to_cli_default(monkeypatch) -> None:
+    """The same regression applies to ``--workers`` and its sentinel (``100``)."""
+    called_args = {}
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return [(p, False) for p in ports]
+
+    monkeypatch.setattr("ethscan.report.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["report", "--target", "127.0.0.1", "--profile", "fast", "--workers", "100", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    assert called_args["max_workers"] == 100
+    # Timeout was not given, so the profile default still applies.
+    assert called_args["timeout"] == 0.5
+
+
+def test_report_profile_applies_defaults_when_not_explicit(monkeypatch) -> None:
+    """Without explicit flags the profile still supplies timeout and workers."""
+    called_args = {}
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return [(p, False) for p in ports]
+
+    monkeypatch.setattr("ethscan.report.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["report", "--target", "127.0.0.1", "--profile", "fast", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    assert called_args["timeout"] == 0.5
+    assert called_args["max_workers"] == 200
+
+
 def test_report_profile_disabled_by_default(tmp_path) -> None:
     password_file = tmp_path / "passwords.txt"
     password_file.write_text("password\n")
@@ -4505,6 +4576,102 @@ def test_scan_profile_ports_keyword_is_case_insensitive(monkeypatch) -> None:
     assert called_args["ports"] == [21, 22, 23, 25, 53, 80, 110, 139, 143, 443, 445, 993, 995, 3306, 3389, 5432, 8080, 8443]
 
 
+def test_scan_profile_preserves_explicit_timeout_equal_to_cli_default(monkeypatch) -> None:
+    """An explicit ``--timeout`` must survive a profile even when it equals the
+    option's built-in default.
+
+    The profile branch used to compare the timeout against the sentinel
+    default (``1.0``) instead of asking Click whether the value was
+    explicitly supplied, so ``scan --profile fast --timeout 1.0`` silently
+    ran with the profile's ``0.5`` timeout.
+    """
+    called_args = {}
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return [(p, False) for p in ports]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--profile", "fast", "--timeout", "1.0"])
+    assert result.exit_code == 0
+    assert called_args["timeout"] == 1.0
+    # Workers were not given, so the profile default still applies.
+    assert called_args["max_workers"] == 200
+
+
+def test_scan_profile_preserves_explicit_workers_equal_to_cli_default(monkeypatch) -> None:
+    """The same regression applies to ``--workers`` and its sentinel (``100``)."""
+    called_args = {}
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return [(p, False) for p in ports]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--profile", "fast", "--workers", "100"])
+    assert result.exit_code == 0
+    assert called_args["max_workers"] == 100
+    # Timeout was not given, so the profile default still applies.
+    assert called_args["timeout"] == 0.5
+
+
+def test_scan_profile_full_preserves_explicit_timeout_and_workers(monkeypatch) -> None:
+    """Explicit values must win over a profile whose defaults differ."""
+    called_args = {}
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return [(p, False) for p in ports]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["scan", "--target", "example.com", "--profile", "full", "--timeout", "1.0", "--workers", "100"],
+    )
+    assert result.exit_code == 0
+    assert called_args["timeout"] == 1.0
+    assert called_args["max_workers"] == 100
+
+
+def test_scan_profile_preserves_config_file_timeout_and_workers(tmp_path, monkeypatch) -> None:
+    """Config-file defaults must also survive a profile.
+
+    ``--config`` values reach the command through Click's ``default_map``,
+    so they are as explicit as a command-line flag and must not be replaced
+    by the profile defaults. The values below deliberately match the
+    options' built-in defaults so the sentinel comparison cannot hide the
+    regression.
+    """
+    config_file = tmp_path / "ethscan.yaml"
+    config_file.write_text("defaults:\n  timeout: 1.0\n  workers: 100\n")
+    called_args = {}
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return [(p, False) for p in ports]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["--config", str(config_file), "scan", "--target", "example.com", "--profile", "fast"],
+    )
+    assert result.exit_code == 0
+    assert called_args["timeout"] == 1.0
+    assert called_args["max_workers"] == 100
+
+
 def test_report_profile_with_all_ports_keyword(monkeypatch) -> None:
     """The ``report`` command shares the profile/ports resolution logic."""
     called_args = {}
@@ -4907,6 +5074,93 @@ def test_service_profile_override_timeout_workers(monkeypatch) -> None:
     assert called_args["ports"] == [21, 22, 23, 25, 53, 80, 110, 139, 143, 443, 445, 993, 995, 3306, 3389, 5432, 8080, 8443]
     assert called_args["timeout"] == 5.0
     assert called_args["max_workers"] == 10
+
+
+def test_service_profile_preserves_explicit_timeout_equal_to_cli_default(monkeypatch) -> None:
+    """An explicit ``--timeout`` must survive a profile even when it equals the
+    option's built-in default.
+
+    The profile branch used to compare the timeout against the sentinel
+    default (``3.0``) instead of asking Click whether the value was
+    explicitly supplied, so ``service --profile fast --timeout 3.0`` silently
+    ran with the profile's ``0.5`` timeout.
+    """
+    called_args = {}
+
+    def mock_run_service(target, ports=None, timeout=3.0, max_workers=50):
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": len(ports) if ports else 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["service", "--target", "example.com", "--profile", "fast", "--timeout", "3.0"])
+    assert result.exit_code == 0
+    assert called_args["timeout"] == 3.0
+    # Workers were not given, so the profile default still applies.
+    assert called_args["max_workers"] == 200
+
+
+def test_service_profile_preserves_explicit_workers_equal_to_cli_default(monkeypatch) -> None:
+    """The same regression applies to ``--workers`` and its sentinel (``50``)."""
+    called_args = {}
+
+    def mock_run_service(target, ports=None, timeout=3.0, max_workers=50):
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": len(ports) if ports else 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["service", "--target", "example.com", "--profile", "fast", "--workers", "50"])
+    assert result.exit_code == 0
+    assert called_args["max_workers"] == 50
+    # Timeout was not given, so the profile default still applies.
+    assert called_args["timeout"] == 0.5
+
+
+def test_service_profile_full_preserves_explicit_timeout_and_workers(monkeypatch) -> None:
+    """Explicit values must win over a profile whose defaults differ."""
+    called_args = {}
+
+    def mock_run_service(target, ports=None, timeout=3.0, max_workers=50):
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return {
+            "target": target,
+            "host": "example.com",
+            "timeout": timeout,
+            "ports_scanned": len(ports) if ports else 0,
+            "services_found": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_service", mock_run_service)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["service", "--target", "example.com", "--profile", "full", "--timeout", "3.0", "--workers", "50"],
+    )
+    assert result.exit_code == 0
+    assert called_args["timeout"] == 3.0
+    assert called_args["max_workers"] == 50
 
 
 def test_tls_help() -> None:
@@ -20605,6 +20859,103 @@ def test_cve_service_profile_no_ports(monkeypatch) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["cve", "--target", "example.com", "--profile", "fast"])
     assert result.exit_code == 0
+
+
+def test_cve_profile_preserves_explicit_service_timeout_equal_to_cli_default(monkeypatch) -> None:
+    """An explicit ``--service-timeout`` must survive a profile even when it
+    equals the option's built-in default.
+
+    The profile branch used to compare the timeout against the sentinel
+    default (``3.0``) instead of asking Click whether the value was
+    explicitly supplied, so ``cve --profile fast --service-timeout 3.0``
+    silently ran with the profile's ``0.5`` timeout.
+    """
+    called = {}
+
+    def mock_run_cve(target, **kwargs):
+        called["service_timeout"] = kwargs.get("service_timeout")
+        called["workers"] = kwargs.get("workers")
+        return {"target": target, "services": []}
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cve", "--target", "example.com", "--profile", "fast", "--service-timeout", "3.0"],
+    )
+    assert result.exit_code == 0
+    assert called["service_timeout"] == 3.0
+    # Workers were not given, so the profile default still applies.
+    assert called["workers"] == 200
+
+
+def test_cve_profile_preserves_explicit_workers_equal_to_cli_default(monkeypatch) -> None:
+    """The same regression applies to ``--workers`` and its sentinel (``50``)."""
+    called = {}
+
+    def mock_run_cve(target, **kwargs):
+        called["service_timeout"] = kwargs.get("service_timeout")
+        called["workers"] = kwargs.get("workers")
+        return {"target": target, "services": []}
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cve", "--target", "example.com", "--profile", "fast", "--workers", "50"],
+    )
+    assert result.exit_code == 0
+    assert called["workers"] == 50
+    # Service timeout was not given, so the profile default still applies.
+    assert called["service_timeout"] == 0.5
+
+
+def test_cve_profile_full_preserves_explicit_service_timeout_and_workers(monkeypatch) -> None:
+    """Explicit values must win over a profile whose defaults differ."""
+    called = {}
+
+    def mock_run_cve(target, **kwargs):
+        called["service_timeout"] = kwargs.get("service_timeout")
+        called["workers"] = kwargs.get("workers")
+        return {"target": target, "services": []}
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "cve",
+            "--target",
+            "example.com",
+            "--profile",
+            "full",
+            "--service-timeout",
+            "3.0",
+            "--workers",
+            "50",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called["service_timeout"] == 3.0
+    assert called["workers"] == 50
+
+
+def test_cve_profile_applies_defaults_when_not_explicit(monkeypatch) -> None:
+    """Without explicit flags the profile still supplies timeout and workers."""
+    called = {}
+
+    def mock_run_cve(target, **kwargs):
+        called["service_timeout"] = kwargs.get("service_timeout")
+        called["workers"] = kwargs.get("workers")
+        return {"target": target, "services": []}
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cve", "--target", "example.com", "--profile", "fast"])
+    assert result.exit_code == 0
+    assert called["service_timeout"] == 0.5
+    assert called["workers"] == 200
+
 
 def test_radix_no_cidrs_error() -> None:
     runner = CliRunner()

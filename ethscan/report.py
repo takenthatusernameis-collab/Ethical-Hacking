@@ -133,6 +133,8 @@ def run_report(
     salt: str | None = None,
     pepper: str | None = None,
     algorithm: str = "sha256",
+    timeout_explicit: bool | None = None,
+    workers_explicit: bool | None = None,
 ) -> dict[str, Any]:
     """Run a port scan and an optional password audit, returning combined report data.
 
@@ -151,12 +153,18 @@ def run_report(
         salt: Optional salt prepended to each password before audit evaluation.
         pepper: Optional pepper used as HMAC key for peppered audit evaluation.
         algorithm: Hash algorithm for salted/peppered audit (default: sha256).
+        timeout_explicit: True when ``timeout`` was explicitly supplied by the
+            caller. When False the profile default replaces it; when None
+            (the default) legacy sentinel behaviour is used.
+        workers_explicit: True when ``workers`` was explicitly supplied by the
+            caller. When False the profile default replaces it; when None
+            (the default) legacy sentinel behaviour is used.
 
     Returns:
         Combined report dict with ``scan`` and ``audit`` sections.
     """
     port_list, timeout, workers = _resolve_ports_and_defaults(
-        ports, timeout, workers, profile
+        ports, timeout, workers, profile, timeout_explicit, workers_explicit
     )
 
     scan_results = scan_ports(target, port_list, timeout=timeout, max_workers=workers)
