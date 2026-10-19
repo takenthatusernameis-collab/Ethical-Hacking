@@ -4847,6 +4847,59 @@ def test_scan_ports_all(monkeypatch) -> None:
     result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "all"])
     assert result.exit_code == 0
     assert len(called_args["ports"]) == 65535
+
+
+def test_scan_ports_common_keyword(monkeypatch) -> None:
+    """``--ports common`` without a profile must resolve to the common ports."""
+    called_args = {}
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        called_args["host"] = host
+        called_args["ports"] = ports
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return [(p, False) for p in ports[:2]]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "common"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == [20, 21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445, 993, 995, 1723, 3306, 3389, 5432, 5900, 8080, 8443, 8888]
+
+
+def test_scan_ports_common_keyword_is_case_insensitive(monkeypatch) -> None:
+    """``--ports COMMON`` must resolve like ``--ports common`` without a profile."""
+    called_args = {}
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        called_args["ports"] = ports
+        return [(p, False) for p in ports[:2]]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "COMMON"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == [20, 21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445, 993, 995, 1723, 3306, 3389, 5432, 5900, 8080, 8443, 8888]
+
+
+def test_scan_ports_explicit_list_without_profile(monkeypatch) -> None:
+    """An explicit port list must still win over the keyword handling."""
+    called_args = {}
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        called_args["ports"] = ports
+        return [(p, False) for p in ports]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "80,443,8000-8002"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == [80, 443, 8000, 8001, 8002]
+
+
 def test_scan_help_shows_output_format() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["scan", "--help"])
@@ -4855,6 +4908,28 @@ def test_scan_help_shows_output_format() -> None:
     assert "json" in result.output
     assert "markdown" in result.output
     assert "csv" in result.output
+
+
+def test_port_aware_commands_document_common_and_all_keywords() -> None:
+    """Every scanning command must advertise the port keywords it accepts.
+
+    ``validate`` is excluded on purpose: it expands literal port
+    specifications for offline validation and does not accept keywords.
+    """
+    port_commands = {
+        name: command
+        for name, command in cli.commands.items()
+        if any(param.name == "ports" for param in command.params)
+    }
+    assert {"scan", "report", "service", "cve", "vuln", "osdetect"} <= set(port_commands)
+
+    for name, command in port_commands.items():
+        if name == "validate":
+            continue
+        ports_param = next(param for param in command.params if param.name == "ports")
+        help_text = (ports_param.help or "").lower()
+        assert "'common'" in help_text, f"{name} --ports help omits the 'common' keyword"
+        assert "'all'" in help_text, f"{name} --ports help omits the 'all' keyword"
 
 
 def test_service_csv_output(monkeypatch) -> None:

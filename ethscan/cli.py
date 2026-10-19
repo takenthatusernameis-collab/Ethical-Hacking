@@ -234,11 +234,9 @@ from ethscan.scanner import (
     format_scan_report_csv,
     format_scan_report_json,
     format_scan_report_markdown,
-    get_all_ports,
-    get_common_ports,
     get_profile_defaults,
     get_profile_ports,
-    parse_port_range,
+    resolve_port_list,
     scan_ports,
 )
 from ethscan.service import (
@@ -410,13 +408,7 @@ def scan(ctx: click.Context, target: str, ports: str, profile: str | None, timeo
     """Run a port scan against TARGET."""
     if profile:
         defaults = get_profile_defaults(profile)
-        ports_spec = ports.lower()
-        if ports_spec == "common":
-            port_list = get_profile_ports(profile)
-        elif ports_spec == "all":
-            port_list = get_all_ports()
-        else:
-            port_list = parse_port_range(ports)
+        port_list = resolve_port_list(ports, profile=profile)
         timeout_source = ctx.get_parameter_source("timeout")
         workers_source = ctx.get_parameter_source("workers")
         timeout_explicit = timeout_source in (ParameterSource.COMMANDLINE, ParameterSource.ENVIRONMENT, ParameterSource.DEFAULT_MAP)
@@ -425,12 +417,8 @@ def scan(ctx: click.Context, target: str, ports: str, profile: str | None, timeo
             timeout = defaults["timeout"]
         if not workers_explicit:
             workers = defaults["workers"]
-    elif ports.lower() == "common":
-        port_list = get_common_ports()
-    elif ports.lower() == "all":
-        port_list = get_all_ports()
     else:
-        port_list = parse_port_range(ports)
+        port_list = resolve_port_list(ports)
 
     results = scan_ports(target, port_list, timeout=timeout, max_workers=workers)
 
@@ -1612,8 +1600,6 @@ def service(ctx: click.Context, target: str, ports: str | None, profile: str | N
     if profile:
         defaults = get_profile_defaults(profile)
         if ports:
-            from ethscan.scanner import resolve_port_list
-
             port_list = resolve_port_list(ports, profile=profile)
         else:
             port_list = get_profile_ports(profile)
@@ -1626,8 +1612,6 @@ def service(ctx: click.Context, target: str, ports: str | None, profile: str | N
         if not workers_explicit:
             workers = defaults["workers"]
     elif ports:
-        from ethscan.scanner import resolve_port_list
-
         port_list = resolve_port_list(ports)
 
     results = run_service(target, ports=port_list, timeout=timeout, max_workers=workers)
@@ -1658,8 +1642,8 @@ def service(ctx: click.Context, target: str, ports: str | None, profile: str | N
 )
 @click.option(
     "--ports",
-    help="Ports to scan for service detection: comma-separated list/ranges "
-    "(e.g., '21,22,80'). Defaults to common ports.",
+    help="Ports to scan for vulnerability checks: 'common', 'all', or "
+    "comma-separated list/ranges (e.g., '21,22,80'). Defaults to common ports.",
 )
 @click.option(
     "--services-file",
@@ -1776,8 +1760,6 @@ def vuln(
 
     port_list = None
     if ports:
-        from ethscan.scanner import resolve_port_list
-
         port_list = resolve_port_list(ports)
 
     results = run_vuln(
@@ -2012,7 +1994,8 @@ def brute(
 )
 @click.option(
     "--ports",
-    help="Ports to probe: comma-separated list/ranges (e.g., '22,80,443'). Defaults to common ports.",
+    help="Ports to probe: 'common', 'all', or comma-separated list/ranges "
+    "(e.g., '22,80,443'). Defaults to common ports.",
 )
 @click.option(
     "--banners-file",
@@ -2056,8 +2039,6 @@ def osdetect(
     """Fingerprint the target operating system using TCP/IP stack behavior."""
     port_list = None
     if ports:
-        from ethscan.scanner import resolve_port_list
-
         port_list = resolve_port_list(ports)
 
     banners = None
@@ -2780,8 +2761,6 @@ def cve(
         if profile:
             defaults = get_profile_defaults(profile)
             if ports:
-                from ethscan.scanner import resolve_port_list
-
                 port_list = resolve_port_list(ports, profile=profile)
             else:
                 port_list = get_profile_ports(profile)
@@ -2794,8 +2773,6 @@ def cve(
             if not workers_explicit:
                 workers = defaults["workers"]
         elif ports:
-            from ethscan.scanner import resolve_port_list
-
             port_list = resolve_port_list(ports)
 
     results = run_cve(

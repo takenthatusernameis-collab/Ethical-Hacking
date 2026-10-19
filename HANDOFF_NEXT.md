@@ -1,22 +1,29 @@
 # HANDOFF_NEXT.md
 
 ## Summary
-Closed out the prior agent's assignment (already committed before this session): `service` and `cve` accept `common`/`all` port keywords consistently with `scan`/`report`; the three pre-existing `cve` profile tests were already tightened in commits de7931c/a02db83 and pass with real assertions.
+Executed the prior agent's assignment: `scan` (ethscan/cli.py:408-421) now resolves port keywords through the shared `resolve_port_list` helper instead of its own `if/elif` chain. Behaviour is identical, and the keyword logic now exists in exactly one place in the package.
 
-This session: extended the same keyword handling to `vuln` and `osdetect`, which still called `parse_port_range` directly and crashed on `--ports common`/`--ports all`.
+While consolidating, two adjacent duplications were removed at the same time (same helper, no behaviour change): `ethscan/report.py` (`_parse_ports`, `_resolve_ports_and_defaults`) and the six function-local `from ethscan.scanner import resolve_port_list` imports in `ethscan/cli.py`.
 
 ## Changes
-- `ethscan/scanner.py`: `resolve_port_list(ports, profile=None)` helper (from prior session) — `common`/`all` case-insensitive; profile-aware mapping; delegates to `parse_port_range` otherwise.
-- `ethscan/cli.py`: `vuln` (~line 1777) and `osdetect` (~line 2056) now call `resolve_port_list(ports)` instead of `parse_port_range(ports)`. `scan`, `service`, `cve`, `report` were already keyword-capable.
-- `tests/test_cli.py` (+4): CLI regression tests for `vuln`/`osdetect` with `--ports common`/`--ports all`/`--ports ALL`, asserting the resolved port list reaches `run_vuln`/`run_osdetect`.
+- `ethscan/cli.py`:
+  - `scan` uses `resolve_port_list(ports, profile=profile)` (profile branch) and `resolve_port_list(ports)` (no profile).
+  - Module-level import of `resolve_port_list`; dropped `get_all_ports`, `get_common_ports`, `parse_port_range` (now unused in this module) and the six function-local `resolve_port_list` imports in `service`/`cve`/`vuln`/`osdetect`.
+  - `vuln` and `osdetect` `--ports` help text now advertises the `common`/`all` keywords they already accepted.
+- `ethscan/report.py`: `_parse_ports` and `_resolve_ports_and_defaults` delegate to `resolve_port_list`; the private helper names are kept so existing tests and callers are unaffected.
+- `README.md`: the `service`, `vuln`, `report`, `osdetect` and `cve` entries now state that `--ports` accepts `common`/`all` or comma-separated ranges.
+- `tests/test_cli.py` (+4): `test_scan_ports_common_keyword`, `test_scan_ports_common_keyword_is_case_insensitive`, `test_scan_ports_explicit_list_without_profile`, `test_port_aware_commands_document_common_and_all_keywords` (the last one is a guard that every `--ports` option except `validate` documents both keywords).
 
 ## Verification
-- Reproduced the original failure: `vuln --ports common` and `osdetect --ports all` exited 1 with `ValueError: Invalid port number 'common'/'all'`; both now exit 0 with the correct port list.
-- Full suite: 3976 passed, 1 skipped (baseline 3954 + 18 prior + 4 new). No regressions.
-- Lint: `ruff check ethscan tests` = 48 errors, byte-identical to baseline; no new errors.
+- Equivalence harness: the old inline `scan` logic and `resolve_port_list` were compared over 40 `ports` x `profile` combinations (`common`/`COMMON`/`Common`, `all`/`ALL`, explicit lists, ranges, and profiles `fast`/`normal`/`full` plus no profile) — 0 mismatches, identical port lists and identical raised errors.
+- Full suite: 3980 passed, 1 skipped (baseline 3976 + 4 new). No regressions.
+- Lint: `ruff check ethscan tests` = 48 errors; the concise output is byte-identical to a clean `git archive HEAD` export of the pre-change tree (no new errors, none removed).
+- Smoke test: `python -m ethscan scan --target 127.0.0.1 --ports common --output-format json` exits 0 and scans 24 ports.
 
 ## Unresolved
-- `scan` (cli.py:409-433) resolves `common`/`all` with a manual if/elif chain instead of `resolve_port_list`; behavior is correct but the keyword logic is duplicated in two places.
+- Invalid `--ports` input (`--ports bogus`) still produces a raw `ValueError` traceback and exit code 1 in all six port-consuming commands (`scan`, `report`, `service`, `cve`, `vuln`, `osdetect`); it should be a click usage error (exit code 2, `Error: Invalid value for '--ports': ...`).
+- `ethscan validate --ports common` reports "One or more specifications were invalid" — intentional, since `validate` expands literal port specifications and does not accept keywords.
+- The 48 pre-existing ruff errors are unrelated to this work and were deliberately left alone (no new errors introduced).
 
 ## Next agent task
-Refactor `scan` in ethscan/cli.py:409-433 to use `resolve_port_list(ports, profile=profile)` so keyword resolution lives in one place (identical behavior: profile+common → profile ports, profile+all → 1-65535, no-profile+common → common ports, no-profile+all → 1-65535, anything else → parse_port_range). Verify with `python -m pytest tests/test_cli.py -q -k "scan"` and `ruff check ethscan tests` (must remain 48 pre-existing errors, no new ones). Small, self-contained, low-risk.
+Implement the invalid-`--ports` usage-error handling described in `NEXT_TASK.md`: translate the `ValueError` raised by `resolve_port_list`/`parse_port_range` into a click `BadParameter`/`UsageError` at the CLI boundary for `scan`, `report`, `service`, `cve`, `vuln` and `osdetect`, with tests asserting exit code 2, a single-line error message and no traceback. Keep `ethscan/scanner.py` and `ethscan/validate.py` free of click.

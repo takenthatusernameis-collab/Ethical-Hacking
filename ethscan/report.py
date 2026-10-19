@@ -8,11 +8,8 @@ from typing import Any
 
 from ethscan.passwords import audit_passwords
 from ethscan.scanner import (
-    get_all_ports,
-    get_common_ports,
     get_profile_defaults,
-    get_profile_ports,
-    parse_port_range,
+    resolve_port_list,
     scan_ports,
 )
 
@@ -34,11 +31,7 @@ CSV_COLUMNS = [
 
 
 def _parse_ports(ports: str) -> list[int]:
-    if ports.lower() == "common":
-        return get_common_ports()
-    if ports.lower() == "all":
-        return get_all_ports()
-    return parse_port_range(ports)
+    return resolve_port_list(ports)
 
 
 def _resolve_ports_and_defaults(
@@ -59,13 +52,7 @@ def _resolve_ports_and_defaults(
     """
     if profile:
         defaults = get_profile_defaults(profile)
-        ports_spec = ports.lower()
-        if ports_spec == "common":
-            port_list = get_profile_ports(profile)
-        elif ports_spec == "all":
-            port_list = get_all_ports()
-        else:
-            port_list = parse_port_range(ports)
+        port_list = resolve_port_list(ports, profile=profile)
         if timeout_explicit is None and workers_explicit is None:
             if timeout == 1.0:
                 timeout = defaults["timeout"]
