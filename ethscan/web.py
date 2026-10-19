@@ -9,6 +9,8 @@ import ssl
 import urllib.error
 import urllib.request
 
+from ethscan.target import url_port
+
 # Recommended security headers and their importance.
 SECURITY_HEADERS: dict[str, str] = {
     "Content-Security-Policy": "Mitigates XSS and injection attacks.",
@@ -46,10 +48,10 @@ def _parse_url(target: str) -> tuple[str, int, bool]:
     scheme = parsed.scheme.lower()
     if scheme == "https":
         is_secure = True
-        port = parsed.port or 443
+        port = url_port(parsed) or 443
     else:
         is_secure = False
-        port = parsed.port or 80
+        port = url_port(parsed) or 80
     return host, port, is_secure
 
 

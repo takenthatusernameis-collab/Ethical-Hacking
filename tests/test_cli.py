@@ -21721,6 +21721,8 @@ def test_library_modules_stay_free_of_click() -> None:
         "oracle.py",
         "postgresql.py",
         "mssql.py",
+        "web.py",
+        "ssh.py",
     ]
     for name in names:
         tree = ast.parse((package / name).read_text(encoding="utf-8"))
@@ -22084,3 +22086,159 @@ def test_a_usable_target_is_still_accepted() -> None:
                 f"{command} --target {target!r}: {result.output}"
             )
             assert "Invalid value for '--target'" not in result.output, result.output
+
+
+# --- A --target whose port is not a number ---------------------------------
+
+# Every one of these commands reads the port out of a parsed URL, so a port
+# that is not a number is rejected before any probe starts.
+NON_NUMERIC_PORT_COMMANDS = (
+    "redis",
+    "memcached",
+    "ntp",
+    "snmp",
+    "ftp",
+    "ldap",
+    "netbios",
+    "smb",
+    "smtp",
+    "web",
+    "headers",
+    "urlcheck",
+    "ssh",
+)
+
+# A scheme-qualified target is rejected by all of the commands above.
+NON_NUMERIC_PORT_TARGETS = (
+    "redis://host:notaport",
+    "https://host:notaport",
+    "http://host:notaport",
+)
+
+# These commands also read a bare ``host:port`` target as a URL, so a
+# non-numeric port is rejected there too.
+NON_NUMERIC_PORT_BARE_COMMANDS = ("web", "headers", "urlcheck", "ssh")
+
+NON_NUMERIC_PORT_MESSAGE = "Port could not be cast to integer value as 'notaport'"
+
+
+def test_a_non_numeric_port_target_is_a_usage_error() -> None:
+    """A target whose port is not a number must be rejected cleanly."""
+    runner = CliRunner()
+    for command in NON_NUMERIC_PORT_COMMANDS:
+        for target in NON_NUMERIC_PORT_TARGETS:
+            result = runner.invoke(cli, [command, "--target", target])
+            _assert_target_usage_error(result, f"{command} --target {target!r}")
+            assert NON_NUMERIC_PORT_MESSAGE in result.output, result.output
+
+
+def test_a_non_numeric_port_bare_target_is_a_usage_error() -> None:
+    """A bare ``host:port`` target with a bad port is rejected as well."""
+    runner = CliRunner()
+    for command in NON_NUMERIC_PORT_BARE_COMMANDS:
+        result = runner.invoke(cli, [command, "--target", "host:notaport"])
+        _assert_target_usage_error(result, f"{command} --target 'host:notaport'")
+        assert NON_NUMERIC_PORT_MESSAGE in result.output, result.output
+
+
+def test_the_documented_non_numeric_port_crashes_are_usage_errors() -> None:
+    """The invocations that used to dump a traceback must now be usage errors."""
+    runner = CliRunner()
+    for command in NON_NUMERIC_PORT_COMMANDS:
+        result = runner.invoke(cli, [command, "--target", "redis://host:notaport"])
+        _assert_target_usage_error(result, command)
+
+
+def test_a_non_numeric_port_usage_error_is_a_single_line() -> None:
+    """The failure must be a one-line error, not a multi-line traceback."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["web", "--target", "host:notaport"])
+    error_lines = [
+        line for line in result.output.splitlines() if line.startswith("Error:")
+    ]
+    assert len(error_lines) == 1, result.output
+    assert error_lines[0] == (
+        "Error: Invalid value for '--target': "
+        "Port could not be cast to integer value as 'notaport'"
+    )
+
+
+def test_a_non_numeric_port_target_does_not_start_a_probe(monkeypatch) -> None:
+    """A rejected target must abort before any network access happens."""
+    import importlib
+
+    calls = []
+
+    def make_tripwire(module_name: str, attribute: str):
+        def tripwire(*args, **kwargs):
+            calls.append((module_name, attribute))
+            raise AssertionError("a probe was started for an invalid target")
+
+        return tripwire
+
+    transports = (
+        ("redis", "_send_recv"),
+        # ``web`` and ``urlcheck`` reach the network through the web module,
+        # ``headers`` through its own copy of the helper.
+        ("web", "fetch_headers"),
+        ("headers", "fetch_headers"),
+        ("ssh", "_ssh_banner_exchange"),
+    )
+    for module_name, attribute in transports:
+        module = importlib.import_module(f"ethscan.{module_name}")
+        monkeypatch.setattr(module, attribute, make_tripwire(module_name, attribute))
+
+    runner = CliRunner()
+    for command in NON_NUMERIC_PORT_COMMANDS:
+        result = runner.invoke(cli, [command, "--target", "redis://host:notaport"])
+        _assert_target_usage_error(result, command)
+    assert calls == [], "no probe may start for an invalid --target value"
+
+
+def test_probe_failure_commands_still_report_a_non_numeric_port() -> None:
+    """The five commands that report a failed probe keep their contract."""
+    runner = CliRunner()
+    for command in TARGET_PROBE_FAILURE_COMMANDS:
+        result = runner.invoke(cli, [command, "--target", "mysql://host:notaport"])
+        assert result.exit_code == 0, f"{command}: {result.output}"
+        payload = json.loads(result.output)
+        assert payload["accessible"] is False, f"{command}: {result.output}"
+        assert payload["error"] == NON_NUMERIC_PORT_MESSAGE, f"{command}: {result.output}"
+
+
+def test_s3_ignores_a_non_numeric_port(monkeypatch) -> None:
+    """s3 never reads the port of the target, so it is unaffected."""
+
+    def mock_run_s3(*args, **kwargs):
+        return {"target": "example.com", "buckets": [], "notes": []}
+
+    monkeypatch.setattr("ethscan.cli.run_s3", mock_run_s3)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["s3", "--target", "https://host:notaport"])
+    assert result.exit_code == 0, result.output
+    assert "Invalid value for '--target'" not in result.output, result.output
+
+
+def test_a_valid_port_target_is_still_accepted() -> None:
+    """A target with a real port keeps working."""
+    runner = CliRunner()
+    for command in NON_NUMERIC_PORT_COMMANDS:
+        result = runner.invoke(
+            cli, [command, "--target", "127.0.0.1:1234", "--timeout", "0.2"]
+        )
+        assert result.exit_code == 0, f"{command}: {result.output}"
+        assert "Invalid value for '--target'" not in result.output, result.output
+
+
+def test_a_valid_port_is_still_reported_in_the_output() -> None:
+    """The port of a valid target is still parsed and reported as before."""
+    runner = CliRunner()
+    for command in ("web", "headers", "ssh"):
+        result = runner.invoke(
+            cli, [command, "--target", "127.0.0.1:1234", "--timeout", "0.2"]
+        )
+        assert result.exit_code == 0, f"{command}: {result.output}"
+        payload = json.loads(result.output)
+        assert payload["port"] == 1234, f"{command}: {result.output}"
+        assert payload["host"] == "127.0.0.1", f"{command}: {result.output}"
+

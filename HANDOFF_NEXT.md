@@ -1,78 +1,92 @@
 # HANDOFF_NEXT.md
 
 ## Summary
-Executed the prior agent's assignment: an empty or host-less `--target` is
-now a clean click usage error (exit code 2, one-line message, no traceback)
-in the nine protocol commands `redis`, `memcached`, `ntp`, `snmp`, `ftp`,
-`ldap`, `netbios`, `smb` and `smtp`.
+Executed the prior agent's assignment: a `--target` whose **port is not a
+number** is now a clean click usage error (exit code 2, one-line message, no
+traceback) in the thirteen commands that used to dump a traceback.
 
 The prior session had already identified the defect and left a precise plan
-in `NEXT_TASK.md`; the library side had not been touched, so all nine
-invocations still dumped a `ValueError: Could not parse host from target ''`
+in `NEXT_TASK.md`; the library side had not been touched, so every
+`redis://host:notaport`-style invocation still dumped a
+`ValueError: Port could not be cast to integer value as 'notaport'`
 traceback and exited 1.
 
 ## Changes
-- **new** `ethscan/target.py`: `TargetSpecError(ValueError)`, the shared
-  error type for "this target string has no usable host". The module holds
-  nothing else and imports no click.
-- 14 protocol modules (`redis`, `memcached`, `ntp`, `snmp`, `ftp`, `ldap`,
-  `netbios`, `smb`, `smtp`, `mysql`, `mongodb`, `oracle`, `postgresql`,
-  `mssql`): their duplicated `_normalize_target` helpers now raise
-  `TargetSpecError` instead of a bare `ValueError`. **Only the exception
-  type changed** - the parsers were not consolidated, as instructed.
-- `ethscan/cli.py`: `_invalid_target(exc)` builds the
-  `click.BadParameter(..., param_hint="'--target'")`; the
-  `_target_usage_errors` decorator applies it. The decorator is attached to
-  exactly the nine commands that used to crash.
-- `README.md`: the Usage section documents the new usage error.
-- `tests/test_target.py` (new, 49 tests) and `tests/test_cli.py` (+7).
+- **`ethscan/target.py`**: new public helper `url_port(parsed)`. It returns
+  the port of a parsed URL and re-raises the bare `ValueError` that
+  `urllib.parse` raises for a non-numeric or out-of-range port as a
+  `TargetSpecError`, **with the original message text unchanged**. The
+  module still imports no click.
+- **14 protocol modules** (`redis`, `memcached`, `ntp`, `snmp`, `ftp`,
+  `ldap`, `netbios`, `smb`, `smtp`, `mysql`, `mongodb`, `oracle`,
+  `postgresql`, `mssql`): the single `port = parsed.port` access in each
+  `_normalize_target` now calls `url_port(parsed)`. **Nothing else changed** -
+  the parsers were not consolidated, as instructed, and the `host:` /
+  bracketed-IPv6 edge cases keep their current behaviour.
+- **`ethscan/web.py`** (`_parse_url`) and **`ethscan/ssh.py`**
+  (`_extract_port`): the same one-line swap. The empty-host ->
+  `localhost` mapping, the scheme handling and the lower-casing of the host
+  are unchanged.
+- **`ethscan/cli.py`**: the existing `_target_usage_errors` decorator is now
+  also attached to `web`, `headers`, `urlcheck` and `ssh`. The nine
+  protocol commands already carried it, so they needed **no CLI change**.
+- **`README.md`**: the Usage section documents the new usage error.
+- **`tests/test_target.py`** (+40 tests) and **`tests/test_cli.py`**
+  (+9 tests).
 
 ### Design choice (the prior task asked for it to be stated)
-A **single shared error type in a new module** `ethscan/target.py` was
-chosen over giving each protocol module its own error class. Reasons:
-`TargetSpecError` subclasses `ValueError`, so the five modules that already
-catch `ValueError` around the probe (and report the failure inside their
-JSON output) keep working with no change at all; and the CLI has exactly
-one import and one `except` clause instead of a tuple of 14 exception types.
+The port access was **not** wrapped in a `try/except ValueError` at each of
+the 16 call sites. Instead a single shared helper `url_port(parsed)` was
+added to `ethscan/target.py`, next to the existing `TargetSpecError`.
+Reasons: it keeps the "a bad port is an unusable target" rule in one place
+instead of 16 copies of it; it keeps the *original* `ValueError` message
+(the helper re-raises `str(exc)` verbatim), so the five modules that report
+a failed probe keep the exact wording they report today; and the CLI still
+has exactly one `except` clause, because `TargetSpecError` is a
+`ValueError` subclass and is caught by the existing
+`except ValueError` handlers in those five modules with no change at all.
 
-The translation itself lives in one place: `_target_usage_errors` in
+The translation itself still lives in one place: `_target_usage_errors` in
 `ethscan/cli.py`. No library module imports click - the existing
 `test_library_modules_stay_free_of_click` guard was extended to cover
-`target.py` and all 14 protocol modules so this cannot regress.
+`web.py` and `ssh.py` so this cannot regress.
 
 ## Verification
-- **Behavioural equivalence**: a 196-invocation harness (14 commands x 10
-  target values, plus `--output-format json|markdown|csv` and `--help` per
-  command) was captured from a pristine `git archive HEAD` tree and from the
-  working tree, then compared byte for byte.
-  **151 of 196 invocations are byte-identical**; the other **45 are exactly
-  the intended conversions** (9 commands x 5 unusable targets: stdout
-  byte-identical, exit code 1 -> 2, stderr changed from a raw traceback to
-  a one-line usage error). **No invocation differs in any other way** - the
-  five probe-failure commands are byte-identical in all 14 of their
-  invocations, and every usable target (`127.0.0.1`, `127.0.0.1:6379`,
-  `redis://127.0.0.1:6379`, `[::1]:6379`, `localhost`) is byte-identical.
-- **Full suite**: 4080 passed, 1 skipped (baseline 4024 -> 4080, 56 new).
+- **Behavioural equivalence**: a 289-invocation harness (19 commands x 11
+  target values, plus 3 output formats and `--help` per command) was
+  captured **twice** from a pristine `git archive HEAD` tree in `/tmp` and
+  once from the working tree, then compared byte for byte.
+  **234 of 289 are byte-identical**; **43 are exactly the intended
+  conversions** (13 commands x 3 scheme-qualified bad-port targets, plus
+  the 4 URL commands x a bare `host:notaport` target: stdout byte-identical,
+  exit code 1 -> 2, stderr changed from a raw traceback to a one-line usage
+  error). **0 unexpected differences.** 12 invocations (all `s3`, which
+  makes real AWS requests) are not reproducible even between the two
+  baseline runs and were excluded from the comparison; `s3.py` is untouched
+  by this change.
+- **Full suite**: 4129 passed, 1 skipped (baseline 4080 -> 4129, 49 new).
   No regressions.
 - **Lint**: `python -m ruff check ethscan tests --output-format concise`
   reports the same 48 pre-existing errors as the baseline; the rule set is
-  identical once line numbers are normalised (the only diff is the two-line
-  import shift in the 14 protocol modules).
-- **Manual**: all nine previously-crashing invocations now print
-  `Error: Invalid value for '--target': Could not parse host from target ''`
-  and exit 2.
+  identical once line numbers are normalised.
+- **Manual**: all thirteen previously-crashing invocations now print
+  `Error: Invalid value for '--target': Port could not be cast to integer
+  value as 'notaport'` and exit 2.
 
 ## Unresolved
 - The five probe-failure commands (`mysql`, `mongodb`, `oracle`,
-  `postgresql`, `mssql`) still report an unparsable target inside their
-  JSON output with exit code 0. Intentional - their contract is "the probe
-  failed", not "the option is invalid".
+  `postgresql`, `mssql`) still report an unusable target inside their JSON
+  output with exit code 0, with the **unchanged** error string. Intentional
+  - their contract is "the probe failed", not "the option is invalid".
+- `fuzz` still dies with `http.client.InvalidURL` for a bad port or a
+  space in the target: it never touches `urllib.parse`'s port property, it
+  hands the URL to `http.client`. Left alone deliberately - see
+  `NEXT_TASK.md`.
+- `s3` is unaffected: it never reads the port of the target.
 - The 14 `_normalize_target` copies are still duplicated. They are not
   identical (some use `host.find("]:")`, some `host.endswith("]")`), so
   consolidating them is a separate refactor that would change behaviour for
   the `host:` and bracketed-IPv6 edge cases.
-- `ethscan/target.py` holds only the error type. A shared normaliser was
-  deliberately not added.
 - The 48 pre-existing ruff errors are unrelated to this work and were
   deliberately left alone.
 - The remaining raw-traceback clusters listed in `NEXT_TASK.md` were
@@ -80,10 +94,11 @@ The translation itself lives in one place: `_target_usage_errors` in
   bundled into this change.
 
 ## Next agent task
-Implement the "host:port with a non-numeric port" cluster described in
-`NEXT_TASK.md`: `headers`, `web`, `urlcheck` and `ssh` die with a raw
-`ValueError: Port could not be cast to integer value as ':not::an::ip::'`
-traceback (exit 1) when the `--target` looks like `host:port` but the port
-is not a number. Turn it into a click usage error at the CLI boundary,
-mirroring the `_check_cidr` / `CidrSpecError` and `_target_usage_errors` /
-`TargetSpecError` patterns already established.
+Implement the "host contains a space or a control character" cluster
+described in `NEXT_TASK.md`: `headers`, `web`, `fuzz`, `urlcheck` and `s3`
+die with a raw
+`http.client.InvalidURL: URL can't contain control characters. 'host name'`
+traceback (exit 1) when the `--target` contains a space. Turn it into a
+click usage error at the CLI boundary, mirroring the `_check_cidr` /
+`CidrSpecError`, `url_port` / `TargetSpecError` and `_target_usage_errors`
+patterns already established.

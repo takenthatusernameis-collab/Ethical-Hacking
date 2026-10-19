@@ -142,8 +142,23 @@ Try 'python -m ethscan redis --help' for help.
 Error: Invalid value for '--target': Could not parse host from target ''
 ```
 
+A `--target` whose port is not a number is rejected the same way. This
+applies to the protocol commands above and to the commands that read the
+target as a URL (`web`, `headers`, `urlcheck`, `ssh`):
+
+```console
+$ python -m ethscan web --target "host:notaport"
+Usage: python -m ethscan web [OPTIONS]
+Try 'python -m ethscan web --help' for help.
+
+Error: Invalid value for '--target': Port could not be cast to integer value as 'notaport'
+```
+
 The `validate` command is the exception: it reports invalid specifications
-inside its own JSON/CSV output and still exits 0.
+inside its own JSON/CSV output and still exits 0. The same holds for the
+`mysql`, `mongodb`, `oracle`, `postgresql` and `mssql` commands, whose
+contract is "the probe failed" rather than "the option is invalid": they
+report an unusable target inside their own output and still exit 0.
 
 ## Disclaimer
 

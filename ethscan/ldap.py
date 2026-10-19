@@ -38,7 +38,7 @@ import socket
 import ssl
 from typing import Any
 
-from ethscan.target import TargetSpecError
+from ethscan.target import TargetSpecError, url_port
 
 DEFAULT_PORT = 389
 DEFAULT_LDAPS_PORT = 636
@@ -140,7 +140,7 @@ def _normalize_target(target: str) -> tuple[str, int]:
 
         parsed = urlparse(normalized)
         host = (parsed.hostname or "").strip()
-        port = parsed.port
+        port = url_port(parsed)
         scheme = (parsed.scheme or "").lower()
     else:
         host = normalized

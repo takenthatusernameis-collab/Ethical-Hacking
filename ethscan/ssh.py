@@ -9,6 +9,8 @@ import socket
 import struct
 from typing import Any
 
+from ethscan.target import url_port
+
 try:
     import paramiko
     PARAMIKO_AVAILABLE = True
@@ -113,7 +115,7 @@ def _extract_port(target: str, default: int = DEFAULT_PORT) -> int:
     from urllib.parse import urlparse
 
     parsed = urlparse(target)
-    return parsed.port or default
+    return url_port(parsed) or default
 
 
 def _ssh_banner_exchange(sock: socket.socket, timeout: float) -> str | None:

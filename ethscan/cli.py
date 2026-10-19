@@ -835,6 +835,7 @@ def report(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
+@_target_usage_errors
 def web(target: str, checks: str, timeout: float, fmt: str, output_fmt: str | None, out_path: str) -> None:
     """Run web application security checks against TARGET."""
     check_list = [c.strip() for c in checks.split(",") if c.strip()]
@@ -1225,6 +1226,7 @@ def whois(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
+@_target_usage_errors
 def headers(target: str, timeout: float, fmt: str, output_fmt: str | None, out_path: str) -> None:
     """Run security headers check against TARGET."""
     results = run_headers(target, timeout=timeout)
@@ -1927,6 +1929,7 @@ def vuln(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
+@_target_usage_errors
 def urlcheck(
     target: str,
     checks: str,
@@ -4136,6 +4139,7 @@ def stale(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
+@_target_usage_errors
 def ssh(target: str, port: int | None, timeout: float, fmt: str, output_fmt: str | None, out_path: str | None) -> None:
     """Assess SSH server security: enumerate algorithms, check for weak/deprecated ciphers, MACs, KEX, and host keys."""
     results = run_ssh(target, port=port, timeout=timeout)

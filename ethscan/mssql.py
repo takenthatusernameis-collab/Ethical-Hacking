@@ -21,7 +21,7 @@ import socket
 import struct
 from typing import Any
 
-from ethscan.target import TargetSpecError
+from ethscan.target import TargetSpecError, url_port
 
 DEFAULT_PORT = 1433
 DEFAULT_TIMEOUT = 3.0
@@ -202,7 +202,7 @@ def _normalize_target(target: str) -> tuple[str, int]:
         parsed = urlparse(normalized)
         # urlparse already unwraps bracketed IPv6 and splits the port.
         host = (parsed.hostname or "").strip()
-        port = parsed.port
+        port = url_port(parsed)
     else:
         host = normalized
         # Only interpret host[:port] / bracketed IPv6 when no scheme was given.
