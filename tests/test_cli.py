@@ -13925,6 +13925,56 @@ def test_resolve_custom_types(monkeypatch) -> None:
     assert captured["record_types"] == ["A", "PTR"]
 
 
+def test_resolve_server_option_reaches_cname_resolver(monkeypatch) -> None:
+    """End-to-end: `resolve --server` must configure the CNAME lookup resolver."""
+    from ethscan import resolve as resolve_mod
+
+    created: list[object] = []
+
+    class DummyAnswer:
+        def __str__(self):
+            return "target.example.com"
+
+    class DummyResolver:
+        def __init__(self):
+            self.timeout = None
+            self.lifetime = None
+            self.nameservers = None
+            created.append(self)
+
+        def resolve(self, domain, rtype):
+            assert rtype == "CNAME"
+            return [DummyAnswer()]
+
+    class FakeDns:
+        exception = type("exception", (), {"DNSException": Exception})
+        resolver = type("resolver", (), {"Resolver": DummyResolver})
+
+    monkeypatch.setattr(resolve_mod, "DNS_AVAILABLE", True)
+    monkeypatch.setattr(resolve_mod, "dns", FakeDns(), raising=False)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "resolve",
+            "--target",
+            "example.com",
+            "--types",
+            "CNAME",
+            "--server",
+            "1.1.1.1",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["records"]["CNAME"] == ["target.example.com"]
+    assert len(created) == 1
+    assert created[0].nameservers == ["1.1.1.1"]
+
+
 def test_resolve_unknown_types_rejected() -> None:
     runner = CliRunner()
     result = runner.invoke(

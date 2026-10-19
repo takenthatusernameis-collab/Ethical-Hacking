@@ -2,38 +2,40 @@
 
 ## What changed
 
-**Executed the prior agent's assignment:** fixed the `cve --services-file` malformed-JSON crash (already committed at f5e6974, verified green), then selected and executed the next bounded task: **`parse_port_range()` validation in `ethscan/scanner.py`** (2 files changed, 72 insertions / 3 deletions).
+**Executed the prior agent's assignment:** `ethscan/resolve.py` — `resolve --server` was silently ignored for CNAME lookups.
 
-1. **`ethscan/scanner.py::parse_port_range`** — added validation mirroring `ethscan/validate.py::_validate_port_spec`:
-   - Empty token → `ValueError`
-   - Missing start/end in a range (e.g. `80-`) → `ValueError`
-   - Non-numeric start/end or single port → `ValueError`
-   - Inverted range (`start > end`) → `ValueError`
-   - Port out of range `0..65535` → `ValueError`
-   - Previously `70000` silently returned `[70000]`, `100-50` silently returned `[]`, and `-1`/`abc` raised a raw `ValueError: invalid literal for int()`.
-
-2. **`tests/test_scanner.py`** — 5 new cases: `test_parse_port_range_out_of_range_high`, `_out_of_range_negative`, `_inverted_range`, `_non_numeric`, `_missing_range_end`. All assert `pytest.raises(ValueError)`.
+1. **`ethscan/resolve.py::resolve_cname_records`** — added a `server: str | None = None` parameter and applied it with `resolver.nameservers = [server]` when set, mirroring `resolve_ptr_records():108-109` and `resolve_with_dnspython():129-130`.
+2. **`ethscan/resolve.py::run_resolve`** — the CNAME branch now forwards the server: `resolve_cname_records(normalized, timeout, server)` (was `resolve_cname_records(normalized, timeout)`). `run_resolve()` already accepted `server`, and the CLI already passed it (`cli.py:1296`), so the value was being dropped only inside `run_resolve`.
+3. **`tests/test_resolve.py`** — 3 new tests + 2 existing mocks updated to the new signature.
+4. **`tests/test_cli.py`** — 1 new end-to-end CLI test proving `resolve --server` reaches the resolver.
 
 ## What was actually verified
 
-- **Focused tests:** `tests/test_scanner.py` → 30 passed (2 of the 5 new cases failed against unfixed code; all pass after)
-- **Full suite:** `python -m pytest -q` → **3932 passed, 1 skipped, 2 warnings** (baseline 3927 passed/1 skipped; +5, no regressions)
-- **Lint:** `python -m ruff check --output-format concise ethscan tests` → **48 errors, identical error-code multiset** (33 BLE001, 12 TRY002, 2 PLR0402, 1 S110); no new errors, none touched
-- **Compilation:** `python -m py_compile ethscan/*.py` → clean for all source files
-- **Scope:** `git diff --stat` shows only `ethscan/scanner.py` and `tests/test_scanner.py`
-- Working tree is **not committed** (commit not requested); diff visible in working tree
+- **Bug reproduced pre-fix** (reverted `ethscan/resolve.py` to HEAD, then re-ran the new tests):
+  - `test_resolve_cname_records_dnspython_with_server` → `TypeError: resolve_cname_records() got an unexpected keyword argument 'server'`
+  - `test_run_resolve_passes_server_to_cname_lookup` → `AssertionError: assert None == ['1.1.1.1']`
+  - `test_resolve_server_option_reaches_cname_resolver` (CLI) → `AssertionError: assert None == ['1.1.1.1']`
+  - Result: **3 failed, 45 passed**. Fix restored afterwards; all 3 now pass.
+- **Focused tests:** `python -m pytest tests/test_resolve.py tests/test_cli.py -q` → **all pass** (`tests/test_resolve.py` 47 passed; new CLI test 1 passed)
+- **Full suite:** `python -m pytest -q` → **3936 passed, 1 skipped, 2 warnings** (baseline 3932 passed/1 skipped; +4, no regressions)
+- **Lint:** `python -m ruff check --output-format concise ethscan tests` → **48 errors**, code multiset identical to baseline (33 BLE001, 12 TRY002, 2 PLR0402, 1 S110); none in the touched code paths
+- **Compilation:** `python -m py_compile ethscan/*.py` → clean
+- **CLI smoke:** `python -m ethscan --version` → `python -m ethscan, version 0.1.0`; `python -m ethscan resolve --help` → exit 0
+- **Scope:** `git diff --stat` → only `ethscan/resolve.py`, `tests/test_resolve.py`, `tests/test_cli.py`
 
 ## What remains unresolved
 
-1. **`ethscan/cli.py:414-417` (also `:1602-1605`, `:2756-2759`, `ethscan/report.py:66-69`)** — profile defaults clobber explicitly-passed `--timeout`/`--workers` because sentinel comparisons (`== 1.0`, `== 100`) cannot distinguish an explicit value from the default; contradicts the documented "unless explicitly set" behaviour. Needs `click.Context.get_parameter_source` plumbing.
-2. **`ethscan/resolve.py:78-91`** — `resolve --server` is ignored for CNAME lookups (`resolve_cname_records()` takes no `server` parameter). `resolve_ptr_records():108-109` and `resolve_with_dnspython():129-130` both apply it.
-3. Pre-existing E303 too-many-blank-lines sites (not regressions): `ethscan/cli.py:3600`, `ethscan/validate.py:279`, `ethscan/cidr.py:255-256`, others.
-4. Documented coverage gaps (environmental/defensive, not closable within constraints): `cli.py:4864` `__main__` guard; `dnssec.py` dnspython fallback; `hash.py` MD4/NTLM/PBKDF2 paths; `radix.py` defensive edges; network-dependent modules need live services.
+1. **`--profile` clobbers an explicitly-passed `--timeout`/`--workers`** (highest-value remaining). Sentinel comparisons (`== 1.0`, `== 100`) cannot distinguish "user passed `--timeout 1.0`" from "user passed nothing", contradicting the documented "unless explicitly set" behaviour in the `--profile` help text (`cli.py:383`).
+   - Sites: `ethscan/cli.py:418-421` (`scan`, sentinels `1.0`/`100`), `ethscan/cli.py:1602-1605` (`service`, sentinels `3.0`/`50`), `ethscan/cli.py:2756-2759` (`cve`, sentinels `3.0`/`50`), `ethscan/report.py:67-70` (`_resolve_ports_and_defaults`, sentinels `1.0`/`100`).
+   - **Reproduced this session:** `python -m ethscan scan --target 127.0.0.1 --profile fast --output-format json` → `timeout=0.5` (correct); adding `--timeout 1.0` → still `timeout=0.5` (bug — the explicit 1.0 is discarded).
+   - The same shape also applies to `--workers` (e.g. `--profile full --workers 100` → overwritten with 50).
+2. Pre-existing E303 too-many-blank-lines sites (not regressions): `ethscan/cli.py:3600`, `ethscan/validate.py:279`, `ethscan/cidr.py:255-256`, others.
+3. Documented coverage gaps (environmental/defensive, not closable within constraints): `cli.py:4864` `__main__` guard; `dnssec.py` dnspython fallback; `hash.py` MD4/NTLM/PBKDF2 paths; `radix.py` defensive edges; network-dependent modules need live services.
 
 ## Failed approaches / evidence
 
-- **`--ports 70000` OverflowError claim:** not reproducible; no crash, so no out-of-range port handling was added (item 2 above remains). Do not re-attempt without new evidence.
-- **IPv6 `last_host == network[-2]`:** rejected — IPv6 has no broadcast address, so `network[-1]` is the genuine last address; `radix.py`/`validate.py` dropping it was the bug, now fixed.
+- None this session. The prior session's `--ports 70000` OverflowError claim remains **not reproducible** — do not re-attempt without new evidence.
+- IPv6 `last_host == network[-2]` was already rejected as incorrect (IPv6 has no broadcast address); that rule was fixed in 3f64aeb.
 
 ## Constraints
 
@@ -46,14 +48,18 @@
 
 ## Next precise task
 
-**Fix `ethscan/resolve.py:78-91` — `resolve --server` is silently ignored for CNAME lookups.**
+**Fix the `--profile` sentinel-override bug so an explicitly-passed `--timeout`/`--workers` is never clobbered.**
 
 Concrete scope:
-- Add `server: str | None = None` to `resolve_cname_records()` and apply `resolver.nameservers = [server]` when set, mirroring `resolve_ptr_records():108-109`.
-- Thread the parameter through `run_resolve()` (verify it already accepts `server`; the CLI `resolve` command passes it at `cli.py:1296`).
-- Add a test in `tests/test_resolve.py` asserting the configured `nameservers` are applied for a CNAME query (fails before fix, passes after).
-- Verification: `python -m pytest -q` (≥3932 passed, 1 skipped), `python -m ruff check ethscan tests` (48 errors, identical code multiset), `python -m py_compile ethscan/*.py`, `git diff --stat` limited to intended files.
+- In `ethscan/cli.py` (`scan`, `service`, `cve`) and `ethscan/report.py::_resolve_ports_and_defaults`, replace the `if timeout == <default>:` / `if workers == <default>:` sentinel checks with an "was this option explicitly set?" check.
+- Preferred mechanism: `click.Context.get_parameter_source(ctx, "timeout")` → compare against `click.core.ParameterSource.COMMANDLINE` (also treat `ENVIRONMENT`/`DEFAULT_MAP` as explicit). This requires the commands to receive the click context (`@click.pass_context`) and to thread the resulting booleans down to `report.py::_resolve_ports_and_defaults` (e.g. extra keyword args `timeout_explicit` / `workers_explicit`, defaulting to the current sentinel behaviour so existing callers and tests keep working).
+- Regression tests (must fail before the fix):
+  - CLI: `scan --profile fast --timeout 1.0` → the JSON report's `timeout` must be `1.0`, not `0.5`.
+  - CLI: `scan --profile full --workers 100` → the effective worker count must be `100`, not `50`.
+  - `scan --profile fast` with no explicit options → still `timeout=0.5` (profile default must still apply).
+  - Unit: `_resolve_ports_and_defaults(..., timeout=1.0, workers=100, profile="fast")` with the explicit flags set → timeout stays `1.0`.
+- Verification: `python -m pytest -q` (≥3936 passed, 1 skipped), `python -m ruff check --output-format concise ethscan tests` (48 errors, identical code multiset), `python -m py_compile ethscan/*.py`, `git diff --stat` limited to intended files. Update HANDOFF_NEXT.md / TASK.md / NEXT_TASK.md on completion.
 
-Evidence: current state fully verified above; working tree contains only the uncommitted scanner.py / test_scanner.py fix.
+Evidence: current state fully verified above; `resolve --server` now reaches the CNAME resolver end-to-end.
 
-(End of file - total 68 lines)
+(End of file - total 74 lines)

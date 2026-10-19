@@ -75,7 +75,9 @@ def resolve_aaaa_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[
         return []
 
 
-def resolve_cname_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str]:
+def resolve_cname_records(
+    domain: str, timeout: float = DEFAULT_TIMEOUT, server: str | None = None
+) -> list[str]:
     """Resolve CNAME records using dnspython if available."""
     if not DNS_AVAILABLE:
         return []
@@ -84,6 +86,8 @@ def resolve_cname_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list
         resolver = dns.resolver.Resolver()
         resolver.timeout = timeout
         resolver.lifetime = timeout
+        if server:
+            resolver.nameservers = [server]
 
         answers = resolver.resolve(domain, "CNAME")
         return sorted({str(rdata) for rdata in answers})
@@ -181,7 +185,7 @@ def run_resolve(
         elif rtype_upper == "AAAA":
             results["AAAA"] = resolve_aaaa_records(normalized, timeout)
         elif rtype_upper == "CNAME":
-            results["CNAME"] = resolve_cname_records(normalized, timeout)
+            results["CNAME"] = resolve_cname_records(normalized, timeout, server)
         elif rtype_upper == "PTR":
             results["PTR"] = resolve_ptr_records(normalized, timeout, server)
         elif rtype_upper in all_supported:

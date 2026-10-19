@@ -184,7 +184,7 @@ def test_run_resolve_domain_defaults(monkeypatch) -> None:
     def mock_resolve_aaaa(domain, timeout=2.0):
         return ["2606:2800:220:1:248:1893:25c8:1946"]
 
-    def mock_resolve_cname(domain, timeout=2.0):
+    def mock_resolve_cname(domain, timeout=2.0, server=None):
         return ["example.com"]
 
     monkeypatch.setattr("ethscan.resolve.resolve_a_records", mock_resolve_a)
@@ -291,7 +291,7 @@ def test_run_resolve_url_target(monkeypatch) -> None:
     def mock_resolve_aaaa(domain, timeout=2.0):
         return ["2606:2800:220:1:248:1893:25c8:1946"]
 
-    def mock_resolve_cname(domain, timeout=2.0):
+    def mock_resolve_cname(domain, timeout=2.0, server=None):
         return []
 
     monkeypatch.setattr("ethscan.resolve.resolve_a_records", mock_resolve_a)
@@ -482,6 +482,107 @@ def test_resolve_cname_records_dnspython_exception() -> None:
         assert result == []
     finally:
         resolve.DNS_AVAILABLE = orig
+
+
+def test_resolve_cname_records_dnspython_with_server(monkeypatch) -> None:
+    """resolve_cname_records must apply the custom resolver to the CNAME query."""
+    from ethscan import resolve
+
+    created: list[object] = []
+
+    class DummyAnswer:
+        def __str__(self):
+            return "target.example.com"
+
+    class DummyResolver:
+        def __init__(self):
+            self.timeout = None
+            self.lifetime = None
+            self.nameservers = None
+            created.append(self)
+
+        def resolve(self, domain, rtype):
+            assert rtype == "CNAME"
+            return [DummyAnswer()]
+
+    class FakeDns:
+        exception = type("exception", (), {"DNSException": Exception})
+        resolver = type("resolver", (), {"Resolver": DummyResolver})
+
+    monkeypatch.setattr(resolve, "DNS_AVAILABLE", True)
+    monkeypatch.setattr(resolve, "dns", FakeDns(), raising=False)
+
+    result = resolve.resolve_cname_records("example.com", timeout=1.0, server="1.1.1.1")
+    assert result == ["target.example.com"]
+    assert len(created) == 1
+    assert created[0].nameservers == ["1.1.1.1"]
+
+
+def test_resolve_cname_records_dnspython_without_server_keeps_default(monkeypatch) -> None:
+    """Without a custom server the CNAME lookup must keep the system resolvers."""
+    from ethscan import resolve
+
+    created: list[object] = []
+
+    class DummyAnswer:
+        def __str__(self):
+            return "target.example.com"
+
+    class DummyResolver:
+        def __init__(self):
+            self.timeout = None
+            self.lifetime = None
+            self.nameservers = None
+            created.append(self)
+
+        def resolve(self, domain, rtype):
+            return [DummyAnswer()]
+
+    class FakeDns:
+        exception = type("exception", (), {"DNSException": Exception})
+        resolver = type("resolver", (), {"Resolver": DummyResolver})
+
+    monkeypatch.setattr(resolve, "DNS_AVAILABLE", True)
+    monkeypatch.setattr(resolve, "dns", FakeDns(), raising=False)
+
+    result = resolve.resolve_cname_records("example.com", timeout=1.0)
+    assert result == ["target.example.com"]
+    assert len(created) == 1
+    assert created[0].nameservers is None
+
+
+def test_run_resolve_passes_server_to_cname_lookup(monkeypatch) -> None:
+    """run_resolve must forward the custom server to the CNAME resolver."""
+    from ethscan import resolve
+
+    created: list[object] = []
+
+    class DummyAnswer:
+        def __str__(self):
+            return "target.example.com"
+
+    class DummyResolver:
+        def __init__(self):
+            self.timeout = None
+            self.lifetime = None
+            self.nameservers = None
+            created.append(self)
+
+        def resolve(self, domain, rtype):
+            assert rtype == "CNAME"
+            return [DummyAnswer()]
+
+    class FakeDns:
+        exception = type("exception", (), {"DNSException": Exception})
+        resolver = type("resolver", (), {"Resolver": DummyResolver})
+
+    monkeypatch.setattr(resolve, "DNS_AVAILABLE", True)
+    monkeypatch.setattr(resolve, "dns", FakeDns(), raising=False)
+
+    results = resolve.run_resolve("example.com", record_types=["CNAME"], server="1.1.1.1", timeout=1.0)
+    assert results["records"]["CNAME"] == ["target.example.com"]
+    assert len(created) == 1
+    assert created[0].nameservers == ["1.1.1.1"]
 
 
 def test_resolve_ptr_records_dnspython_success() -> None:
