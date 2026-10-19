@@ -31,40 +31,6 @@ _HASHLIB_ALGORITHMS = {
 }
 
 
-def _hashlib_name(algorithm: str) -> str | None:
-    """Return the hashlib algorithm name for a canonical key, or None."""
-    return _HASHLIB_ALGORITHMS.get(algorithm)
-
-
-def _compute_peppered_hash(message: str, algorithm: str, pepper: str) -> str:
-    """Compute an HMAC keyed hash of ``message`` using the pepper as the key.
-
-    Only algorithms backed by a direct hashlib name (md5, sha1, sha256,
-    sha512) can be used for HMAC.
-
-    Args:
-        message: Plaintext message (the HMAC message).
-        algorithm: Canonical algorithm key.
-        pepper: Secret pepper value (the HMAC key).
-
-    Returns:
-        Hex digest of ``HMAC(pepper, message, algorithm)``.
-
-    Raises:
-        ValueError: If the algorithm cannot be expressed as a hashlib name.
-    """
-    name = _hashlib_name(algorithm)
-    if name is None:
-        raise ValueError(
-            f"Algorithm '{algorithm}' does not support HMAC (peppered hashing)."
-        )
-    return hmac.new(
-        pepper.encode("utf-8"),
-        message.encode("utf-8"),
-        name,
-    ).hexdigest()
-
-
 def _transform_banner(
     banner: str,
     algorithm: str,
