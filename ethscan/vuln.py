@@ -495,22 +495,12 @@ def _extract_hosts_from_banner(banner: str) -> list[str]:
     hostname_pattern = re.compile(
         r"\b([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+)\b"
     )
-    # Pattern for IPv4 addresses
-    ipv4_pattern = re.compile(
-        r"\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b"
-    )
 
     for match in hostname_pattern.finditer(banner):
         host = match.group(1).lower()
         if host not in seen and not host.startswith("www.") and len(host) > 3:
             seen.add(host)
             hosts.append(host)
-
-    for match in ipv4_pattern.finditer(banner):
-        ip = match.group(0)
-        if ip not in seen:
-            seen.add(ip)
-            hosts.append(ip)
 
     return hosts
 

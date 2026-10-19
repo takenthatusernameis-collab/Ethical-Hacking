@@ -1,7 +1,7 @@
 # Next Task for Agent
 
 ## Status
-- Working tree: clean after commit f2d4599.
+- Working tree: modified (`ethscan/vuln.py`, -10 lines, uncommitted).
 - Tests: 3906 passed, 1 skipped (green baseline; re-verified).
 - Repository: 53 CLI commands register on import; `python -m ethscan --help` and `--version` OK.
 - Lint: 44 ruff errors (30 BLE001 in source, 12 TRY002 in tests, 2 PLR0402 in tests/test_brute.py) — all intentional/unsafe to fix per prior handoff; unchanged.
@@ -15,7 +15,7 @@
 ## Next precise task
 - None assigned. Await a genuine new issue/requirement (bug fix with failing test, feature with tests, or explicitly requested refactor with verification plan).
 - This session inspected the repository and found no bounded, high-value, behavior-preserving task that can be implemented and verified without violating the above constraints. All remaining coverage gaps are environmental, network-dependent, unreachable defensive code, or provably dead code (catalogued in HANDOFF_NEXT.md).
-- The most recent change (commit f2d4599) removed a duplicate dead code block in vuln.py while preserving API compatibility.
+- The most recent change removed a duplicate dead code block and a dead IPv4 loop in vuln.py while preserving API compatibility (uncommitted; see git diff).
 
 ## Verification checklist (if selecting a task)
 1. Run relevant focused tests.
