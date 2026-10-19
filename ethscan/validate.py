@@ -1,8 +1,13 @@
 """Validation module for ethscan.
 
 Validates and expands port specifications (comma-separated lists and ranges)
-and CIDR network inputs offline, reusing ``parse_port_range`` from
-:mod:`ethscan.scanner` and the stdlib ``ipaddress`` module.
+and CIDR network inputs offline, using the stdlib ``ipaddress`` module.
+
+Port specifications are parsed inline rather than by reusing
+``parse_port_range`` from :mod:`ethscan.scanner`: the ``validate`` command
+reports each specification's error inside its own output instead of failing
+the whole run, and it needs the per-token error messages that the inline
+parser produces.
 
 Fully stdlib-only and offline.
 """

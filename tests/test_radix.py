@@ -4,7 +4,11 @@ import ipaddress
 import json
 from pathlib import Path
 
+import pytest
+
+from ethscan.cidr import CidrSpecError
 from ethscan.radix import (
+    RadixSpecError,
     _common_prefix_length,
     _common_prefix_of_pair,
     _contains_in_merged,
@@ -12,9 +16,11 @@ from ethscan.radix import (
     _merge_networks,
     _normalize_cidr,
     _nth_bit,
+    _parse_networks,
     format_radix_report_csv,
     format_radix_report_json,
     format_radix_report_markdown,
+    parse_cidrs,
     run_radix,
 )
 
@@ -848,3 +854,58 @@ def test_format_radix_report_markdown_diff_invalid_network() -> None:
     assert "## Set Difference" in output
     assert "not-a-network" in output
     assert "?" in output
+
+
+# ---------------------------------------------------------------------------
+# Invalid radix specifications
+# ---------------------------------------------------------------------------
+
+
+def test_radix_spec_error_is_a_value_error() -> None:
+    """RadixSpecError must stay catchable as a plain ValueError."""
+    assert issubclass(RadixSpecError, ValueError)
+
+
+def test_parse_cidrs_raises_cidr_spec_error_for_invalid_values() -> None:
+    """An invalid CIDR raises the dedicated error, not a bare ValueError."""
+    with pytest.raises(CidrSpecError):
+        parse_cidrs(["bogus"])
+
+
+def test_parse_cidrs_raises_radix_spec_error_for_mixed_families() -> None:
+    """A radix tree covers one address family, so mixing them is an error."""
+    with pytest.raises(RadixSpecError):
+        parse_cidrs(["192.168.1.0/24", "2001:db8::/32"])
+
+
+def test_parse_cidrs_accepts_a_single_family() -> None:
+    networks = parse_cidrs(["192.168.1.0/24", "10.0.0.0/8"])
+    assert [str(n) for n in networks] == ["192.168.1.0/24", "10.0.0.0/8"]
+
+
+def test_private_alias_is_the_same_function() -> None:
+    """The old private name stays available as an alias of the public one."""
+    assert _parse_networks is parse_cidrs
+
+
+def test_run_radix_raises_cidr_spec_error_for_invalid_cidrs() -> None:
+    """The library propagates CidrSpecError; the CLI does the translating."""
+    with pytest.raises(CidrSpecError):
+        run_radix(["bogus"])
+
+
+def test_run_radix_raises_cidr_spec_error_for_invalid_diff() -> None:
+    with pytest.raises(CidrSpecError):
+        run_radix(["192.168.1.0/24"], diff=["bogus"])
+
+
+def test_run_radix_raises_radix_spec_error_for_mixed_families() -> None:
+    with pytest.raises(RadixSpecError):
+        run_radix(["192.168.1.0/24", "2001:db8::/32"])
+
+
+def test_run_radix_accepts_a_diff_from_the_other_address_family() -> None:
+    """The diff set may use the other family; only one set may mix them."""
+    result = run_radix(["192.168.1.0/24"], diff=["2001:db8::/32"])
+    assert result["diff"]["diff_cidrs"] == ["2001:db8::/32"]
+    assert result["diff"]["difference"] == ["192.168.1.0/24"]

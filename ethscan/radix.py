@@ -2,8 +2,8 @@
 
 Builds a binary radix tree (Patricia trie) over a set of CIDR networks,
 merging overlapping and adjacent (supernettable) networks into compact
-aggregate ranges. Fully offline and stdlib-only (uses the ``ipaddress``
-module).
+aggregate ranges. Fully offline; depends only on the stdlib ``ipaddress``
+module and the shared CIDR helpers in :mod:`ethscan.cidr`.
 """
 from __future__ import annotations
 
@@ -11,24 +11,20 @@ import csv
 import io
 import ipaddress
 
-from ethscan.cidr import CidrSpecError
+from ethscan.cidr import normalize_cidr
+
+# Backwards-compatible alias for the previous private name.
+_normalize_cidr = normalize_cidr
 
 
-def _normalize_cidr(value: str) -> str:
-    """Normalize a CIDR string, ensuring a network address.
+class RadixSpecError(ValueError):
+    """Raised when a radix tree specification mixes IP address families.
 
-    Bare IPs are treated as /32 (IPv4) or /128 (IPv6).
+    Subclasses :class:`ValueError` so that existing ``except ValueError``
+    handlers keep working, while letting the CLI layer distinguish an invalid
+    radix specification from unrelated value errors and turn it into a usage
+    error.
     """
-    value = value.strip()
-    if not value:
-        raise CidrSpecError("Empty CIDR value")
-    if "/" not in value:
-        value = value + ("/32" if "." in value else "/128")
-    try:
-        network = ipaddress.ip_network(value, strict=False)
-    except ValueError as exc:
-        raise CidrSpecError(str(exc)) from exc
-    return str(network)
 
 
 def _is_ipv4(network: ipaddress._BaseNetwork) -> bool:
@@ -36,13 +32,29 @@ def _is_ipv4(network: ipaddress._BaseNetwork) -> bool:
     return network.version == 4
 
 
-def _parse_networks(values: list[str]) -> list[ipaddress._BaseNetwork]:
-    """Parse and normalize a list of CIDR strings into network objects."""
+def parse_cidrs(values: list[str]) -> list[ipaddress._BaseNetwork]:
+    """Parse and normalize a list of CIDR strings into network objects.
+
+    A radix tree is built over a single address family, so a list that mixes
+    IPv4 and IPv6 networks is rejected instead of failing later on.
+
+    Raises:
+        CidrSpecError: If a value is not a valid CIDR/network specification.
+        RadixSpecError: If the values mix IPv4 and IPv6 networks.
+    """
     networks: list[ipaddress._BaseNetwork] = []
     for raw in values:
-        normalized = _normalize_cidr(raw)
+        normalized = normalize_cidr(raw)
         networks.append(ipaddress.ip_network(normalized, strict=False))
+    if len({net.version for net in networks}) > 1:
+        raise RadixSpecError(
+            "Cannot mix IPv4 and IPv6 networks in a single radix tree"
+        )
     return networks
+
+
+# Backwards-compatible alias for the previous private name.
+_parse_networks = parse_cidrs
 
 
 def _nth_bit(addr, bit_index: int, is_v4: bool) -> int:
@@ -314,7 +326,7 @@ def run_radix(
         Structured results with parsed networks, merged networks, radix tree
         node, summary counts, optional membership test, and optional diff.
     """
-    parsed = _parse_networks(cidrs)
+    parsed = parse_cidrs(cidrs)
 
     if merge:
         merged = _merge_networks(parsed)
@@ -354,7 +366,7 @@ def run_radix(
         }
 
     if diff is not None:
-        diff_parsed = _parse_networks(diff)
+        diff_parsed = parse_cidrs(diff)
         if merge:
             diff_merged = _merge_networks(diff_parsed)
         else:

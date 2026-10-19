@@ -109,6 +109,30 @@ Try 'python -m ethscan scan --help' for help.
 Error: Invalid value for '--ports': Invalid port number 'bogus'
 ```
 
+The same applies to the CIDR options of the `cidr` and `radix` commands:
+
+```console
+$ python -m ethscan cidr --cidr bogus
+Usage: python -m ethscan cidr [OPTIONS]
+Try 'python -m ethscan cidr --help' for help.
+
+Error: Invalid value for '--cidr': 'bogus/128' does not appear to be an IPv4 or IPv6 network
+```
+
+A `radix` tree covers a single address family, so mixing IPv4 and IPv6
+networks in one `--cidrs` list is rejected as well:
+
+```console
+$ python -m ethscan radix --cidrs 192.168.1.0/24,2001:db8::/32
+Usage: python -m ethscan radix [OPTIONS]
+Try 'python -m ethscan radix --help' for help.
+
+Error: Invalid value for '--cidrs': Cannot mix IPv4 and IPv6 networks in a single radix tree
+```
+
+The `validate` command is the exception: it reports invalid specifications
+inside its own JSON/CSV output and still exits 0.
+
 ## Disclaimer
 
 This project is for **authorized security testing only**. Use only against

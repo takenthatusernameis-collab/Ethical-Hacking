@@ -21692,7 +21692,7 @@ def test_port_commands_are_exactly_the_documented_set() -> None:
 
 
 def test_library_modules_stay_free_of_click() -> None:
-    """The scanner/validator/report modules must not depend on click.
+    """The scanner/validator/report/cidr/radix modules must not depend on click.
 
     Only the CLI layer may translate library errors into usage errors.
     """
@@ -21700,7 +21700,7 @@ def test_library_modules_stay_free_of_click() -> None:
     import pathlib
 
     package = pathlib.Path(__file__).resolve().parent.parent / "ethscan"
-    for name in ("scanner.py", "validate.py", "report.py"):
+    for name in ("scanner.py", "validate.py", "report.py", "cidr.py", "radix.py"):
         tree = ast.parse((package / name).read_text(encoding="utf-8"))
         imported = set()
         for node in ast.walk(tree):
@@ -21725,3 +21725,186 @@ def test_invalid_ports_does_not_call_the_scanner(monkeypatch) -> None:
     result = runner.invoke(cli, ["scan", "--target", "127.0.0.1", "--ports", "bogus"])
     _assert_ports_usage_error(result, "scan")
     assert calls == [], "scanning must not start for an invalid --ports value"
+
+
+# --- invalid CIDR handling ---------------------------------------------------
+#
+# A malformed CIDR must be reported as a click usage error (exit code 2,
+# one-line message) instead of an unhandled ValueError/TypeError traceback.
+
+INVALID_CIDR_SPECS = (
+    ("bogus", "'bogus/128' does not appear to be an IPv4 or IPv6 network"),
+    ("192.168.1.0/33", "'192.168.1.0/33' does not appear to be an IPv4 or IPv6 network"),
+    ("192.168.1.0/abc", "'192.168.1.0/abc' does not appear to be an IPv4 or IPv6 network"),
+    ("999.999.999.999/24", "'999.999.999.999/24' does not appear to be an IPv4 or IPv6 network"),
+)
+
+
+def _assert_cidr_usage_error(result, command: str, param: str) -> None:
+    """Assert that ``result`` is a clean click usage error for a CIDR option."""
+    assert result.exit_code == 2, (
+        f"{command}: expected exit code 2, got {result.exit_code}\n{result.output}"
+    )
+    assert f"Error: Invalid value for '{param}':" in result.output, (
+        f"{command}: missing usage error message\n{result.output}"
+    )
+    assert "Traceback (most recent call last)" not in result.output, (
+        f"{command}: leaked a traceback\n{result.output}"
+    )
+    assert not isinstance(result.exception, ValueError), (
+        f"{command}: leaked {result.exception!r} instead of a usage error"
+    )
+
+
+def test_invalid_cidr_is_a_usage_error_for_the_cidr_command() -> None:
+    """An invalid --cidr value must be a clean click usage error."""
+    runner = CliRunner()
+    for spec, reason in INVALID_CIDR_SPECS:
+        result = runner.invoke(cli, ["cidr", "--cidr", spec])
+        _assert_cidr_usage_error(result, f"cidr --cidr {spec!r}", "--cidr")
+        assert reason in result.output, f"{spec!r}: missing {reason!r}\n{result.output}"
+
+
+def test_invalid_cidr_is_a_usage_error_for_the_cidr_diff_option() -> None:
+    """An invalid --diff value must name the --diff option."""
+    runner = CliRunner()
+    for spec, reason in INVALID_CIDR_SPECS:
+        result = runner.invoke(cli, ["cidr", "--cidr", "192.168.1.0/24", "--diff", spec])
+        _assert_cidr_usage_error(result, f"cidr --diff {spec!r}", "--diff")
+        assert reason in result.output, f"{spec!r}: missing {reason!r}\n{result.output}"
+
+
+def test_invalid_cidr_is_a_usage_error_for_the_radix_command() -> None:
+    """An invalid --cidrs value must be a clean click usage error."""
+    runner = CliRunner()
+    for spec, reason in INVALID_CIDR_SPECS:
+        result = runner.invoke(cli, ["radix", "--cidrs", spec])
+        _assert_cidr_usage_error(result, f"radix --cidrs {spec!r}", "--cidrs")
+        assert reason in result.output, f"{spec!r}: missing {reason!r}\n{result.output}"
+
+
+def test_invalid_cidr_is_a_usage_error_for_the_radix_diff_option() -> None:
+    """An invalid --diff value must name the --diff option."""
+    runner = CliRunner()
+    for spec, reason in INVALID_CIDR_SPECS:
+        result = runner.invoke(
+            cli, ["radix", "--cidrs", "192.168.1.0/24", "--diff", spec]
+        )
+        _assert_cidr_usage_error(result, f"radix --diff {spec!r}", "--diff")
+        assert reason in result.output, f"{spec!r}: missing {reason!r}\n{result.output}"
+
+
+def test_invalid_cidr_usage_error_is_a_single_line() -> None:
+    """The failure must be a one-line error, not a multi-line traceback."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cidr", "--cidr", "bogus"])
+    error_lines = [
+        line for line in result.output.splitlines() if line.startswith("Error:")
+    ]
+    assert len(error_lines) == 1, result.output
+    assert error_lines[0] == (
+        "Error: Invalid value for '--cidr': "
+        "'bogus/128' does not appear to be an IPv4 or IPv6 network"
+    )
+
+
+def test_the_four_documented_cidr_crashes_are_usage_errors() -> None:
+    """The invocations that used to dump a traceback must now be usage errors."""
+    runner = CliRunner()
+    cases = (
+        (["cidr", "--cidr", "bogus"], "--cidr"),
+        (["cidr", "--cidr", "192.168.1.0/24", "--diff", "bogus"], "--diff"),
+        (["radix", "--cidrs", "bogus"], "--cidrs"),
+        (["radix", "--cidrs", "192.168.1.0/24", "--diff", "bogus"], "--diff"),
+    )
+    for args, param in cases:
+        result = runner.invoke(cli, args)
+        _assert_cidr_usage_error(result, " ".join(args), param)
+
+
+def test_invalid_cidr_in_a_cidr_file_is_a_usage_error(tmp_path) -> None:
+    """A bad CIDR inside a --cidr-file must name the --cidr-file option."""
+    cidr_file = tmp_path / "cidrs.txt"
+    cidr_file.write_text("192.168.1.0/24\nbogus\n", encoding="utf-8")
+    runner = CliRunner()
+    result = runner.invoke(cli, ["radix", "--cidr-file", str(cidr_file)])
+    _assert_cidr_usage_error(result, "radix --cidr-file", "--cidr-file")
+
+
+def test_mixed_address_families_are_a_usage_error_for_radix() -> None:
+    """A radix tree covers one address family; mixing them is a usage error."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["radix", "--cidrs", "192.168.1.0/24,2001:db8::/32"]
+    )
+    _assert_cidr_usage_error(result, "radix --cidrs", "--cidrs")
+    assert "Cannot mix IPv4 and IPv6 networks" in result.output, result.output
+
+
+def test_mixed_address_families_in_a_radix_diff_are_a_usage_error() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["radix", "--cidrs", "192.168.1.0/24", "--diff", "10.0.0.0/8,2001:db8::/32"],
+    )
+    _assert_cidr_usage_error(result, "radix --diff", "--diff")
+    assert "Cannot mix IPv4 and IPv6 networks" in result.output, result.output
+
+
+def test_a_diff_from_the_other_address_family_is_accepted() -> None:
+    """Only one set may mix families; a diff in the other family is valid."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["cidr", "--cidr", "192.168.1.0/24", "--diff", "2001:db8::/32"]
+    )
+    assert result.exit_code == 0, result.output
+    result = runner.invoke(
+        cli, ["radix", "--cidrs", "192.168.1.0/24", "--diff", "2001:db8::/32"]
+    )
+    assert result.exit_code == 0, result.output
+
+
+def test_an_invalid_contains_value_is_not_a_usage_error() -> None:
+    """--contains answers 'not a member'; it is not an error."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["cidr", "--cidr", "192.168.1.0/24", "--contains", "bogus"]
+    )
+    assert result.exit_code == 0, result.output
+    result = runner.invoke(
+        cli, ["radix", "--cidrs", "192.168.1.0/24", "--contains", "bogus"]
+    )
+    assert result.exit_code == 0, result.output
+
+
+def test_validate_still_reports_invalid_cidrs_inside_its_output() -> None:
+    """The validate command keeps reporting bad CIDRs in its own output."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["validate", "--cidr", "bogus"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["cidrs"][0]["valid"] is False
+    assert "does not appear to be an IPv4 or IPv6 network" in payload["cidrs"][0]["error"]
+
+
+def test_invalid_cidr_does_not_run_the_calculation(monkeypatch) -> None:
+    """A rejected CIDR value must abort before any calculation happens."""
+    calls = []
+
+    def mock_run_cidr(*args, **kwargs):
+        calls.append(("cidr", args, kwargs))
+        return {}
+
+    def mock_run_radix(*args, **kwargs):
+        calls.append(("radix", args, kwargs))
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_cidr", mock_run_cidr)
+    monkeypatch.setattr("ethscan.cli.run_radix", mock_run_radix)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cidr", "--cidr", "bogus"])
+    _assert_cidr_usage_error(result, "cidr", "--cidr")
+    result = runner.invoke(cli, ["radix", "--cidrs", "bogus"])
+    _assert_cidr_usage_error(result, "radix", "--cidrs")
+    assert calls == [], "no calculation may start for an invalid CIDR value"

@@ -4,7 +4,10 @@ import ipaddress
 import json
 from unittest.mock import patch
 
+import pytest
+
 from ethscan.cidr import (
+    CidrSpecError,
     _contains_ip,
     _format_network_info,
     _normalize_cidr,
@@ -12,6 +15,7 @@ from ethscan.cidr import (
     format_cidr_report_csv,
     format_cidr_report_json,
     format_cidr_report_markdown,
+    normalize_cidr,
     run_cidr,
 )
 
@@ -770,3 +774,48 @@ def test_cidr_subtract_some_remaining_overlap_some_not() -> None:
     # s1 splits m into pieces; then s2 overlaps some pieces but not others
     # r_net pieces not overlapping s2 hits lines 122-123
     assert len(res) > 0
+
+
+# ---------------------------------------------------------------------------
+# Invalid CIDR specifications
+# ---------------------------------------------------------------------------
+
+
+def test_cidr_spec_error_is_a_value_error() -> None:
+    """CidrSpecError must stay catchable as a plain ValueError."""
+    assert issubclass(CidrSpecError, ValueError)
+
+
+def test_normalize_cidr_raises_cidr_spec_error_for_invalid_values() -> None:
+    """An invalid CIDR raises the dedicated error, not a bare ValueError."""
+    for value in ("bogus", "192.168.1.0/33", "192.168.1.0/abc", "999.999.999.999/24"):
+        with pytest.raises(CidrSpecError):
+            normalize_cidr(value)
+
+
+def test_normalize_cidr_raises_cidr_spec_error_for_empty_value() -> None:
+    with pytest.raises(CidrSpecError):
+        normalize_cidr("   ")
+
+
+def test_private_alias_is_the_same_function() -> None:
+    """The old private name stays available as an alias of the public one."""
+    assert _normalize_cidr is normalize_cidr
+
+
+def test_run_cidr_raises_cidr_spec_error_for_invalid_cidr() -> None:
+    """The library propagates CidrSpecError; the CLI does the translating."""
+    with pytest.raises(CidrSpecError):
+        run_cidr("bogus")
+
+
+def test_run_cidr_raises_cidr_spec_error_for_invalid_diff() -> None:
+    with pytest.raises(CidrSpecError):
+        run_cidr("192.168.1.0/24", diff="bogus")
+
+
+def test_run_cidr_accepts_a_diff_from_the_other_address_family() -> None:
+    """A set difference against the other family is valid, not an error."""
+    result = run_cidr("192.168.1.0/24", diff="2001:db8::/32")
+    assert result["diff"]["diff_cidr"] == "2001:db8::/32"
+    assert result["diff"]["difference"] == ["192.168.1.0/24"]

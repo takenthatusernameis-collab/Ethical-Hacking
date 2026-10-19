@@ -23,9 +23,11 @@ from ethscan.cert import (
     run_cert,
 )
 from ethscan.cidr import (
+    CidrSpecError,
     format_cidr_report_csv,
     format_cidr_report_json,
     format_cidr_report_markdown,
+    normalize_cidr,
     run_cidr,
 )
 from ethscan.completion import (
@@ -194,9 +196,11 @@ from ethscan.postgresql import (
     run_postgresql,
 )
 from ethscan.radix import (
+    RadixSpecError,
     format_radix_report_csv,
     format_radix_report_json,
     format_radix_report_markdown,
+    parse_cidrs,
     run_radix,
 )
 from ethscan.recon import (
@@ -387,6 +391,36 @@ def _resolve_ports(ports: str, profile: str | None = None) -> list[int]:
         return resolve_port_list(ports, profile=profile)
     except PortSpecError as exc:
         raise _invalid_ports(exc) from exc
+
+
+def _invalid_cidr(exc: ValueError, param: str) -> click.BadParameter:
+    """Build the click usage error reported for an invalid CIDR value."""
+    return click.BadParameter(str(exc), param_hint=param)
+
+
+def _check_cidr(value: str, param: str) -> None:
+    """Validate a CIDR specification, reporting failures as a usage error.
+
+    An invalid specification is reported as a click usage error (exit code 2)
+    instead of an unhandled ``CidrSpecError`` traceback. ``param`` names the
+    option the value came from, so the message points at the right input.
+    """
+    try:
+        normalize_cidr(value)
+    except CidrSpecError as exc:
+        raise _invalid_cidr(exc, param) from exc
+
+
+def _check_cidrs(values: list[str], param: str) -> None:
+    """Validate a list of CIDR specifications, reporting failures as usage errors.
+
+    Besides invalid values, a list that mixes IPv4 and IPv6 networks is
+    rejected: a radix tree is built over a single address family.
+    """
+    try:
+        parse_cidrs(values)
+    except (CidrSpecError, RadixSpecError) as exc:
+        raise _invalid_cidr(exc, param) from exc
 
 
 @cli.command()
@@ -2868,6 +2902,10 @@ def cve(
 )
 def cidr(cidr: str, contains: str | None, diff: str | None, fmt: str, output_fmt: str | None, out_path: str | None) -> None:
     """Compute network calculations for a CIDR (offline)."""
+    _check_cidr(cidr, "'--cidr'")
+    if diff is not None:
+        _check_cidr(diff, "'--diff'")
+
     results = run_cidr(cidr, contains=contains, diff=diff)
 
     chosen_format = output_fmt if output_fmt is not None else fmt
@@ -3093,22 +3131,29 @@ def radix(
     (addresses in --cidrs but not in --diff).
     """
     cidrs: list[str] = []
+    file_cidrs: list[str] = []
+    option_cidrs: list[str] = []
 
     if cidr_file:
         with open(cidr_file, "r", encoding="utf-8") as f:
             file_cidrs = [line.strip() for line in f if line.strip() and not line.strip().startswith("#")]
-            cidrs.extend(file_cidrs)
+        cidrs.extend(file_cidrs)
 
     if cidrs_option:
-        cidrs.extend([c.strip() for c in cidrs_option.split(",") if c.strip()])
+        option_cidrs = [c.strip() for c in cidrs_option.split(",") if c.strip()]
+        cidrs.extend(option_cidrs)
 
     if not cidrs:
         click.echo("Error: at least one CIDR network is required (via --cidrs or --cidr-file).", err=True)
         raise SystemExit(1)
 
+    _check_cidrs(file_cidrs, "'--cidr-file'")
+    _check_cidrs(option_cidrs, "'--cidrs'")
+
     diff_cidrs = None
     if diff_option is not None:
         diff_cidrs = [c.strip() for c in diff_option.split(",") if c.strip()]
+        _check_cidrs(diff_cidrs, "'--diff'")
 
     results = run_radix(
         cidrs,

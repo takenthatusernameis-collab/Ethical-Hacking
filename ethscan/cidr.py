@@ -23,7 +23,7 @@ class CidrSpecError(ValueError):
     """
 
 
-def _normalize_cidr(value: str) -> str:
+def normalize_cidr(value: str) -> str:
     """Normalize a CIDR string, ensuring a network address.
 
     Args:
@@ -48,6 +48,10 @@ def _normalize_cidr(value: str) -> str:
     except ValueError as exc:
         raise CidrSpecError(str(exc)) from exc
     return str(network)
+
+
+# Backwards-compatible alias for the previous private name.
+_normalize_cidr = normalize_cidr
 
 
 def _is_ipv4(network: ipaddress._BaseNetwork) -> bool:
