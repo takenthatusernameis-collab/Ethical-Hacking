@@ -171,47 +171,48 @@ def run_cert(
     if api_url:
         DEFAULT_API_URL = api_url
 
-    domain = _normalize_target(target)
-    ip = _resolve_host(domain)
+    try:
+        domain = _normalize_target(target)
+        ip = _resolve_host(domain)
 
-    notes: list[str] = []
+        notes: list[str] = []
 
-    if ip is None:
-        notes.append(f"Could not resolve host {domain!r} to an IPv4 address")
-        return {
+        if ip is None:
+            notes.append(f"Could not resolve host {domain!r} to an IPv4 address")
+            return {
+                "target": target,
+                "domain": domain,
+                "ip": None,
+                "timeout": timeout,
+                "use_cache": use_cache,
+                "offline_fallback": offline_fallback,
+                "cert_data": None,
+                "subdomains": [],
+                "notes": notes,
+            }
+
+        cert_data = _get_cached_or_fetch(domain, timeout, use_cache, offline_fallback, api_url)
+        subdomains = _extract_subdomains(cert_data)
+
+        if cert_data.get("cached"):
+            notes.append("Result served from cache")
+        if cert_data.get("offline_fallback"):
+            notes.append("API unavailable; used stale cached data (offline fallback)")
+
+        result = {
             "target": target,
             "domain": domain,
-            "ip": None,
+            "ip": ip,
             "timeout": timeout,
             "use_cache": use_cache,
             "offline_fallback": offline_fallback,
-            "cert_data": None,
-            "subdomains": [],
+            "cert_data": cert_data,
+            "subdomains": subdomains,
             "notes": notes,
         }
-
-    cert_data = _get_cached_or_fetch(domain, timeout, use_cache, offline_fallback, api_url)
-    subdomains = _extract_subdomains(cert_data)
-
-    if cert_data.get("cached"):
-        notes.append("Result served from cache")
-    if cert_data.get("offline_fallback"):
-        notes.append("API unavailable; used stale cached data (offline fallback)")
-
-    result = {
-        "target": target,
-        "domain": domain,
-        "ip": ip,
-        "timeout": timeout,
-        "use_cache": use_cache,
-        "offline_fallback": offline_fallback,
-        "cert_data": cert_data,
-        "subdomains": subdomains,
-        "notes": notes,
-    }
-
-    DEFAULT_API_URL = original_api
-    return result
+        return result
+    finally:
+        DEFAULT_API_URL = original_api
 
 
 def format_cert_report_json(data: dict[str, object]) -> str:

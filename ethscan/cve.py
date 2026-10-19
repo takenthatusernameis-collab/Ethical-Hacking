@@ -245,126 +245,170 @@ def run_cve(
     if api_url:
         DEFAULT_API_URL = api_url.rstrip("/") + "/"
 
-    host = _normalize_host(target)
-    notes: list[str] = []
+    try:
+        host = _normalize_host(target)
+        notes: list[str] = []
 
-    services = None
-    if services_file:
-        try:
-            with open(services_file, "r", encoding="utf-8") as handle:
-                services = json.load(handle)
-        except (json.JSONDecodeError, OSError) as exc:
-            notes.append(f"Failed to read services file: {exc}")
-            services = None
+        services = None
+        if services_file:
+            try:
+                with open(services_file, "r", encoding="utf-8") as handle:
+                    services = json.load(handle)
+            except (json.JSONDecodeError, OSError) as exc:
+                notes.append(f"Failed to read services file: {exc}")
+                services = None
 
-    if services is None:
-        from ethscan.service import run_service
+        if services is None:
+            try:
+                try:
+                    from ethscan.service import run_service as _rs
+                    run_service = _rs
+                except Exception:
+                    import ethscan.service as _svc
+                    run_service = _svc.run_service
 
-        services = run_service(
-            host, ports=ports, timeout=service_timeout, max_workers=workers
-        )
-
-    cve_entries: list[dict[str, object]] = []
-    services_checked = 0
-    for entry in services.get("results") or []:
-        banner = entry.get("banner") or ""
-        product, version = parse_banner(banner)
-        port = entry.get("port")
-        services_checked += 1
-
-        # Cross-reference against the built-in CVE/weakness database so offline
-        # results are still useful even when the NVD API is unreachable.
-        builtin_findings = match_service_vulns(product, version, port=port)
-        for finding in builtin_findings:
-            cve_entries.append(
-                {
-                    "source": "builtin",
-                    "port": port,
-                    "product": product,
-                    "version": version,
-                    "finding": finding,
-                }
-            )
-
-        if product and version:
-            cve_id = _lookup_cve_id(product, version)
-            if cve_id:
-                cve_data = _get_cached_or_fetch(
-                    cve_id, timeout, use_cache, offline_fallback, api_url
+                service_result = run_service(
+                    target,
+                    ports=ports,
+                    timeout=service_timeout,
+                    max_workers=workers,
                 )
-                summary = _extract_cve_summary(cve_data) if cve_data else {}
-                if summary:
-                    cve_entries.append(
-                        {
-                            "source": "nvd",
-                            "port": port,
-                            "product": product,
-                            "version": version,
-                            "cve_id": cve_id,
-                            "cve": summary,
-                            "cached": bool(cve_data.get("cached")),
-                            "offline_fallback": bool(cve_data.get("offline_fallback")),
-                        }
+                services = {
+                    "target": service_result.get("target"),
+                    "services": service_result.get("services", service_result.get("results", [])),
+                    "service_count": service_result.get("service_count", service_result.get("services_found", 0)),
+                    "notes": service_result.get("notes", []),
+                    "results": service_result.get("results", service_result.get("services", [])),
+                }
+                if service_result.get("notes"):
+                    for sn in service_result["notes"]:
+                        notes.append(f"service: {sn}")
+            except Exception as exc:
+                notes.append(f"Service detection failed: {exc}")
+                services = {"target": target, "services": []}
+
+        service_list = None
+        if isinstance(services, dict):
+            if services.get("services"):
+                service_list = services.get("services")
+            elif services.get("results"):
+                service_list = services.get("results")
+            else:
+                service_list = []
+        else:
+            service_list = []
+        cve_entries: list[dict[str, object]] = []
+        services_checked = 0
+
+        items = service_list
+        if isinstance(items, dict):
+            items = items.get("services") or items.get("results") or []
+
+        if items is None:
+            items = []
+        for entry in items:
+            if not isinstance(entry, dict):
+                continue
+            banner = entry.get("banner") or ""
+            product, version = parse_banner(banner)
+            port = entry.get("port")
+            services_checked += 1
+
+            builtin_findings = match_service_vulns(product, version, port=port)
+            for finding in builtin_findings:
+                cve_entries.append(
+                    {
+                        "source": "builtin",
+                        "port": port,
+                        "product": product,
+                        "version": version,
+                        "finding": finding,
+                        "cve": finding,
+                    }
+                )
+
+            try:
+                cve_id = _lookup_cve_id(product, version)
+                if cve_id:
+                    cve_data = _get_cached_or_fetch(
+                        cve_id, timeout, use_cache, offline_fallback, api_url
                     )
+                    summary = _extract_cve_summary(cve_data) if cve_data else {}
+                    if summary:
+                        cve_entries.append(
+                            {
+                                "source": "nvd",
+                                "port": port,
+                                "product": product,
+                                "version": version,
+                                "cve_id": cve_id,
+                                "cve": summary,
+                                "cached": bool(cve_data.get("cached")),
+                                "offline_fallback": bool(cve_data.get("offline_fallback")),
+                            }
+                        )
+            except Exception:
+                pass
 
-    if severity:
-        filtered: list[dict[str, object]] = []
-        for entry in cve_entries:
-            finding = entry.get("finding") or {}
-            cve = entry.get("cve") or {}
-            sev = finding.get("severity") or cve.get("severity")
-            if sev and str(sev).lower() == severity:
-                filtered.append(entry)
-        cve_entries = filtered
-
-    if min_severity:
-        min_rank = _severity_rank(min_severity)
-        if min_rank is not None:
-            filtered_min: list[dict[str, object]] = []
+        if severity:
+            filtered: list[dict[str, object]] = []
             for entry in cve_entries:
                 finding = entry.get("finding") or {}
                 cve = entry.get("cve") or {}
-                level = finding.get("severity") or cve.get("severity")
-                rank = _severity_rank(level)
-                if rank is not None and rank >= min_rank:
-                    filtered_min.append(entry)
-            cve_entries = filtered_min
+                sev = finding.get("severity") or cve.get("severity")
+                if sev and str(sev).lower() == severity:
+                    filtered.append(entry)
+            cve_entries = filtered
 
-    severity_counts: dict[str, int] = {name: 0 for name in SEVERITIES}
-    for entry in cve_entries:
-        finding = entry.get("finding") or {}
-        cve = entry.get("cve") or {}
-        level = finding.get("severity") or cve.get("severity")
-        if level:
-            severity_counts[str(level).lower()] = severity_counts.get(
-                str(level).lower(), 0
-            ) + 1
+        if min_severity:
+            min_rank = _severity_rank(min_severity)
+            if min_rank is not None:
+                filtered_min: list[dict[str, object]] = []
+                for entry in cve_entries:
+                    finding = entry.get("finding") or {}
+                    cve = entry.get("cve") or {}
+                    level = finding.get("severity") or cve.get("severity")
+                    rank = _severity_rank(level)
+                    if rank is not None and rank >= min_rank:
+                        filtered_min.append(entry)
+                cve_entries = filtered_min
 
-    if services_checked == 0:
-        notes.append("No service banners detected")
-    if not cve_entries:
-        notes.append("No CVEs matched")
+        severity_counts: dict[str, int] = {name: 0 for name in SEVERITIES}
+        for entry in cve_entries:
+            finding = entry.get("finding") or {}
+            cve = entry.get("cve") or {}
+            level = finding.get("severity") or cve.get("severity")
+            if level:
+                severity_counts[str(level).lower()] = severity_counts.get(
+                    str(level).lower(), 0
+                ) + 1
 
-    DEFAULT_API_URL = original_api
-    return {
-        "target": target,
-        "host": host,
-        "timeout": timeout,
-        "service_timeout": service_timeout,
-        "workers": workers,
-        "use_cache": use_cache,
-        "offline_fallback": offline_fallback,
-        "api_url": api_url,
-        "severity_filter": severity,
-        "min_severity_filter": min_severity,
-        "ports": ports,
-        "profile": profile,
-        "services_checked": services_checked,
-        "cve_entries": cve_entries,
-        "cve_count": len(cve_entries),
-        "severity_counts": severity_counts,
-        "notes": notes,
-    }
+        if services_checked == 0:
+            notes.append("No service banners detected")
+        if not cve_entries:
+            notes.append("No CVEs matched")
+
+        return {
+            "target": target,
+            "host": host,
+            "timeout": timeout,
+            "service_timeout": service_timeout,
+            "workers": workers,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "api_url": api_url,
+            "severity_filter": severity,
+            "min_severity_filter": min_severity,
+            "ports": ports,
+            "profile": profile,
+            "services_checked": services_checked,
+            "cve_entries": cve_entries,
+            "cve_count": len(cve_entries),
+            "severity_counts": severity_counts,
+            "notes": notes,
+        }
+    finally:
+        DEFAULT_API_URL = original_api
 
 
 def _lookup_cve_id(product: str, version: str) -> str | None:

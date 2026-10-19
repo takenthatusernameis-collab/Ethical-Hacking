@@ -166,88 +166,89 @@ def run_geo(
     if api_url:
         DEFAULT_API_URL = api_url.rstrip("/") + "/"
 
-    host = _normalize_target(target)
-    ip = _resolve_host(host)
+    try:
+        host = _normalize_target(target)
+        ip = _resolve_host(host)
 
-    notes: list[str] = []
+        notes: list[str] = []
 
-    if ip is None:
-        notes.append(f"Could not resolve host {host!r} to an IPv4 address")
-        return {
+        if ip is None:
+            notes.append(f"Could not resolve host {host!r} to an IPv4 address")
+            return {
+                "target": target,
+                "host": host,
+                "ip": None,
+                "timeout": timeout,
+                "use_cache": use_cache,
+                "offline_fallback": offline_fallback,
+                "recursive": recursive,
+                "max_depth": max_depth,
+                "geolocation": None,
+                "hops": [],
+                "hop_count": 0,
+                "notes": notes,
+            }
+
+        geo_data = _get_cached_or_fetch(ip, timeout, use_cache, offline_fallback)
+
+        if geo_data.get("cached"):
+            notes.append("Result served from cache")
+        if geo_data.get("offline_fallback"):
+            notes.append("API unavailable; used stale cached data (offline fallback)")
+
+        hops: list[dict[str, object]] = []
+        hop_count = 0
+
+        if recursive:
+            try:
+                from ethscan.trace import run_trace
+
+                trace_result = run_trace(
+                    target,
+                    timeout=timeout,
+                    max_hops=max_depth,
+                )
+                seen_ips: set = set()
+                for hop in trace_result.get("hops", []):
+                    hop_ip = hop.get("ip")
+                    if not hop_ip or hop_ip in seen_ips:
+                        continue
+                    seen_ips.add(hop_ip)
+                    hop_geo = _get_cached_or_fetch(hop_ip, timeout, use_cache, offline_fallback)
+                    hops.append(
+                        {
+                            "hop": hop.get("hop"),
+                            "ip": hop_ip,
+                            "host": hop.get("host"),
+                            "response_type": hop.get("response_type"),
+                            "rtt_avg_ms": hop.get("rtt_avg_ms"),
+                            "geolocation": hop_geo,
+                        }
+                    )
+                hop_count = len(hops)
+                if trace_result.get("notes"):
+                    for trace_note in trace_result["notes"]:
+                        notes.append(f"traceroute: {trace_note}")
+            except Exception as exc:
+                notes.append(f"recursive hop geolocation failed: {exc}")
+
+        result = {
             "target": target,
             "host": host,
-            "ip": None,
+            "ip": ip,
             "timeout": timeout,
             "use_cache": use_cache,
             "offline_fallback": offline_fallback,
             "recursive": recursive,
             "max_depth": max_depth,
-            "geolocation": None,
-            "hops": [],
-            "hop_count": 0,
+            "geolocation": geo_data,
+            "hops": hops,
+            "hop_count": hop_count,
             "notes": notes,
         }
-
-    geo_data = _get_cached_or_fetch(ip, timeout, use_cache, offline_fallback)
-
-    if geo_data.get("cached"):
-        notes.append("Result served from cache")
-    if geo_data.get("offline_fallback"):
-        notes.append("API unavailable; used stale cached data (offline fallback)")
-
-    hops: list[dict[str, object]] = []
-    hop_count = 0
-
-    if recursive:
-        try:
-            from ethscan.trace import run_trace
-
-            trace_result = run_trace(
-                target,
-                timeout=timeout,
-                max_hops=max_depth,
-            )
-            seen_ips: set = set()
-            for hop in trace_result.get("hops", []):
-                hop_ip = hop.get("ip")
-                if not hop_ip or hop_ip in seen_ips:
-                    continue
-                seen_ips.add(hop_ip)
-                hop_geo = _get_cached_or_fetch(hop_ip, timeout, use_cache, offline_fallback)
-                hops.append(
-                    {
-                        "hop": hop.get("hop"),
-                        "ip": hop_ip,
-                        "host": hop.get("host"),
-                        "response_type": hop.get("response_type"),
-                        "rtt_avg_ms": hop.get("rtt_avg_ms"),
-                        "geolocation": hop_geo,
-                    }
-                )
-            hop_count = len(hops)
-            if trace_result.get("notes"):
-                for trace_note in trace_result["notes"]:
-                    notes.append(f"traceroute: {trace_note}")
-        except Exception as exc:
-            notes.append(f"recursive hop geolocation failed: {exc}")
-
-    result = {
-        "target": target,
-        "host": host,
-        "ip": ip,
-        "timeout": timeout,
-        "use_cache": use_cache,
-        "offline_fallback": offline_fallback,
-        "recursive": recursive,
-        "max_depth": max_depth,
-        "geolocation": geo_data,
-        "hops": hops,
-        "hop_count": hop_count,
-        "notes": notes,
-    }
-
-    DEFAULT_API_URL = original_api
-    return result
+        return result
+    finally:
+        DEFAULT_API_URL = original_api
 
 
 def format_geo_report_json(data: dict[str, object]) -> str:
