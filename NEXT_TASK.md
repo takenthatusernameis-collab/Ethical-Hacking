@@ -2,10 +2,11 @@
 
 ## Status
 - Working tree: clean.
-- Tests: 3906 passed, 1 skipped (green baseline).
+- Tests: 3906 passed, 1 skipped (green baseline; re-verified this session).
 - Repository: 53 CLI commands register on import; `python -m ethscan --help` and `--version` OK.
-- Lint: 44 ruff errors (30 BLE001 in source, 12 TRY002 in tests, 2 PLR0402 in tests/test_brute.py) — all intentional/unsafe to fix per prior handoff.
+- Lint: 44 ruff errors (30 BLE001 in source, 12 TRY002 in tests, 2 PLR0402 in tests/test_brute.py) — all intentional/unsafe to fix per prior handoff; re-verified unchanged this session.
 - Coverage: ethscan source ~99%; `ethscan/hash.py` 98%.
+- Dead-code proof (this session): `ethscan/vuln.py` `_compute_peppered_hash.__code__.co_firstlineno == 382` and `_hashlib_name.__code__.co_firstlineno == 377`; the identical first definitions at lines 34/39 are overridden at import and provably dead. REMOVAL BLOCKED: requires an explicit request/go-ahead (none given this session).
 
 ## Constraints (do not touch)
 - Do not modify code to "fix" the 44 documented ruff errors (BLE001/TRY002/PLR0402) — they are behavior-dependent on existing tests.
