@@ -16,3 +16,4 @@ Current state
 
 Notes
 - No new task assigned. Await a genuine new issue/requirement. Do not touch the 44 documented lint violations.
+- Proactive task selection was attempted this session: every remaining ethscan coverage gap was investigated and found non-closable without violating constraints (see HANDOFF_NEXT.md "What remains unresolved" and "Failed approaches"). No code changes were made; baseline preserved.
