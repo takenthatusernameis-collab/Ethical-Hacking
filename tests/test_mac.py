@@ -382,6 +382,29 @@ def test_run_mac_hostname_unresolvable(monkeypatch) -> None:
     assert any("Could not resolve" in note for note in result["notes"])
 
 
+def test_run_mac_unresolvable_restores_default_api_url(monkeypatch) -> None:
+    """run_mac must restore DEFAULT_API_URL even on the early-return path.
+
+    A custom --api-url is stored into the module-level DEFAULT_API_URL at the
+    top of run_mac, but the early-return branch (unresolvable host) returned
+    before the restoration at the bottom, leaking the caller's API URL into
+    subsequent lookups.
+    """
+    import ethscan.mac as macmod
+
+    monkeypatch.setattr("ethscan.mac._resolve_host", lambda h: None)
+    original = macmod.DEFAULT_API_URL
+
+    run_mac(
+        "nonexistent.invalid.domain.tld",
+        timeout=1.0,
+        use_cache=False,
+        api_url="https://custom.example.com",
+    )
+
+    assert macmod.DEFAULT_API_URL == original
+
+
 def test_run_mac_success(monkeypatch) -> None:
     mock_urlopen = MagicMock()
     mock_urlopen.__enter__.return_value.read.return_value = b"Cisco Systems"

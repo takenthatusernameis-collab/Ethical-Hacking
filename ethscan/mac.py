@@ -156,49 +156,50 @@ def run_mac(
     if api_url:
         DEFAULT_API_URL = api_url
 
-    mac = _normalize_target(target)
+    try:
+        mac = _normalize_target(target)
 
-    # If the target looks like a hostname or URL, try resolving to a MAC first
-    # (only if it is not already a MAC address).
-    notes: list[str] = []
-    if not _is_mac_address(mac):
-        resolved_mac = _resolve_host(mac)
-        if resolved_mac is not None:
-            notes.append(f"Resolved host {mac!r} to {resolved_mac}")
-            mac = resolved_mac
-        else:
-            notes.append(f"Could not resolve host {mac!r} to a MAC address")
-            return {
-                "target": target,
-                "mac": None,
-                "oui": None,
-                "timeout": timeout,
-                "use_cache": use_cache,
-                "offline_fallback": offline_fallback,
-                "mac_data": None,
-                "notes": notes,
-            }
+        # If the target looks like a hostname or URL, try resolving to a MAC first
+        # (only if it is not already a MAC address).
+        notes: list[str] = []
+        if not _is_mac_address(mac):
+            resolved_mac = _resolve_host(mac)
+            if resolved_mac is not None:
+                notes.append(f"Resolved host {mac!r} to {resolved_mac}")
+                mac = resolved_mac
+            else:
+                notes.append(f"Could not resolve host {mac!r} to a MAC address")
+                return {
+                    "target": target,
+                    "mac": None,
+                    "oui": None,
+                    "timeout": timeout,
+                    "use_cache": use_cache,
+                    "offline_fallback": offline_fallback,
+                    "mac_data": None,
+                    "notes": notes,
+                }
 
-    mac_data = _get_cached_or_fetch(mac, timeout, use_cache, offline_fallback, api_url)
+        mac_data = _get_cached_or_fetch(mac, timeout, use_cache, offline_fallback, api_url)
 
-    if mac_data.get("cached"):
-        notes.append("Result served from cache")
-    if mac_data.get("offline_fallback"):
-        notes.append("API unavailable; used stale cached data (offline fallback)")
+        if mac_data.get("cached"):
+            notes.append("Result served from cache")
+        if mac_data.get("offline_fallback"):
+            notes.append("API unavailable; used stale cached data (offline fallback)")
 
-    result = {
-        "target": target,
-        "mac": mac,
-        "oui": _extract_oui(mac),
-        "timeout": timeout,
-        "use_cache": use_cache,
-        "offline_fallback": offline_fallback,
-        "mac_data": mac_data,
-        "notes": notes,
-    }
-
-    DEFAULT_API_URL = original_api
-    return result
+        result = {
+            "target": target,
+            "mac": mac,
+            "oui": _extract_oui(mac),
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "mac_data": mac_data,
+            "notes": notes,
+        }
+        return result
+    finally:
+        DEFAULT_API_URL = original_api
 
 
 def _is_mac_address(value: str) -> bool:
