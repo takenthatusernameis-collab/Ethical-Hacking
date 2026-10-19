@@ -1,25 +1,32 @@
 # Next Task for Agent
 
 ## Status
-- Working tree: clean except for the committed vuln.py blank-line fix (see below).
+- Working tree: clean on main (HEAD a4a0d04).
 - Tests: 3906 passed, 1 skipped (green baseline).
-- Repository: 53 CLI commands register on import; `python -m ethscan --help` and `--version` OK.
-- Lint: 44 ruff errors (30 BLE001 in source, 12 TRY002 in tests, 2 PLR0402 in tests/test_brute.py) — all intentional/unsafe to fix per prior handoff; unchanged.
-- This session (2026-10-19): found and fixed a genuine regression — 3 blank lines before `_SEVERITY_RANK` in `ethscan/vuln.py` (introduced by the previous `_transform_banner` restoration in f2d4599). Collapsed to 2. Verified with `ruff check --select E303 --preview ethscan/vuln.py` -> clean. `ruff check --select F ethscan tests` -> clean. No other bounded task found within constraints.
+- Repository: 57 source files compile clean; 53 CLI commands register; `python -m ethscan --help` and `--version` OK.
+- Lint: 44 ruff errors (30 BLE001 in source, 12 TRY002 in tests, 2 PLR0402 in tests/test_brute.py) — intentional/unsafe to fix per constraints; unchanged.
 
 ## Constraints (do not touch)
 - Do not modify code to "fix" the 44 documented ruff errors (BLE001/TRY002/PLR0402).
 - Preserve baseline; avoid speculative refactors touching those lint exceptions.
 - Do not introduce network-dependent tests, dnspython/MD4-dependent tests.
+- Only remove provably-dead code if definitive proof exists.
+
+## Current state of fixes
+- vuln.py E303 regression fixed in a4a0d04 (collapsed 3 blank lines before `_SEVERITY_RANK` to 2). Verified with `ruff check --select E303 --preview ethscan/vuln.py` -> clean.
+- Pre-existing E303 too-many-blank-lines sites remain (e.g. ethscan/cli.py:3600, ethscan/validate.py:279 and others); not regressions, left untouched.
 
 ## Next precise task
-- None assigned. Await a genuine new issue/requirement (bug fix with failing test, feature with tests, or explicitly requested refactor with verification plan).
-- This session inspected the repository and found no bounded, high-value, behavior-preserving task that can be implemented and verified without violating the above constraints, other than the one regression fix already applied. All remaining coverage gaps are environmental, network-dependent, unreachable defensive code, or potential dead code lacking definitive proof.
-- Previous dead-code removals (duplicate code block and dead IPv4 loop in `ethscan/vuln.py`) are complete and committed (f2d4599, integrated through 18a131a, b1fd085, 7eaabe7).
+- No prior task remains uncompleted; no assignment exists in TASK.md/HANDOFF_NEXT.md/NEXT_TASK.md.
+- Await a genuine new issue/requirement (bug fix with failing test, feature with tests, or explicitly requested refactor with verification plan).
+- If proactively selecting a task, only pursue something behavior-preserving and verifiably correct: e.g. remove provably-dead code only if definitive proof is found AND full verification remains possible without touching the 44 documented lint violations. No such candidate was identified this session.
 
 ## Verification checklist (if selecting a task)
-1. Run relevant focused tests.
-2. Run full suite: `python -m pytest -q` (must remain green; expect 3906 passed, 1 skipped).
-3. Run lint: `python -m ruff check ethscan tests` (should report 44 errors unchanged).
-4. Confirm no unintended changes via `git diff --stat`.
-5. Ensure `python -m py_compile ethscan/*.py` passes.
+1. Reproduce the smallest failure when applicable; verify prerequisites.
+2. Run relevant focused tests.
+3. Run full suite: `python -m pytest -q` (must remain green; expect 3906 passed, 1 skipped).
+4. Run lint: `python -m ruff check ethscan tests` (should report 44 errors unchanged).
+5. Confirm `python -m py_compile ethscan/*.py` passes and no unintended changes via `git diff --stat`.
+6. Do not claim checks passed without evidence.
+
+(End of file)
