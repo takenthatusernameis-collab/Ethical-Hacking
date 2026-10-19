@@ -1,11 +1,11 @@
 # Next Task for Agent
 
 ## Status
-- Working tree: clean (commit 18a131a).
+- Working tree: clean (commit b1fd085/18a131a lineage; HEAD b1fd085).
 - Tests: 3906 passed, 1 skipped (green baseline).
 - Repository: 53 CLI commands register on import; `python -m ethscan --help` and `--version` OK.
 - Lint: 44 ruff errors (30 BLE001 in source, 12 TRY002 in tests, 2 PLR0402 in tests/test_brute.py) — all intentional/unsafe to fix per prior handoff; unchanged.
-- Coverage: ethscan source ~99%; `ethscan/hash.py` 98%.
+- This session (2026-10-19): `ruff check --select F ethscan tests` -> clean (no unused imports/declarations); `ruff check --select B ethscan` -> 6 cosmetic source issues (unenforced by default baseline, flagged unsafe, no demonstrated bug); hash.py gaps environmental (MD4 unavailable). No bounded task found within constraints.
 
 ## Constraints (do not touch)
 - Do not modify code to "fix" the 44 documented ruff errors (BLE001/TRY002/PLR0402).

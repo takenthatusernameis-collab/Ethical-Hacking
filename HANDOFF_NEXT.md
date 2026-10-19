@@ -9,6 +9,7 @@
 - `python -m py_compile ethscan/*.py` -> clean.
 - `python -m ethscan --help` and `--version` OK (53 commands register).
 - `git diff --stat` -> no changes (working tree clean).
+- This session (2026-10-19): `ruff check --select F ethscan tests` -> clean (no unused imports/declarations). `ruff check --select B ethscan` -> 6 cosmetic source issues (unenforced by default baseline, flagged unsafe, no demonstrated bug); test-only B issues out of scope. hash.py uncovered lines (:34-35, :60, :83, :226) confirmed environmental (MD4 unavailable on this OpenSSL build).
 - Previous dead-code removals in `ethscan/vuln.py` (duplicate code block and dead IPv4 loop) remain in place and tests still pass.
 
 ## What remains unresolved (coverage gaps, none closable without violating constraints)
@@ -20,6 +21,7 @@
 
 ## Failed approaches (documented)
 - Searching for additional provably-dead code found no candidates meeting the "definitive proof" criterion (other unreachable code is defensive/unreachable in specific contexts but not provably dead in all cases). Removing such code risks changing behavior without test coverage.
+- This session (2026-10-19): `ruff check --select F ethscan tests` -> clean (no unused imports/declarations anywhere; definitive negative evidence on dead imports). `ruff check --select B ethscan` -> 6 cosmetic source issues (3x B904 exception-chaining style in cli.py, 3x B007 unused loop variables in dns.py/osdetect.py/trace.py); all are unenforced by the project's default lint baseline, flagged "unsafe" by ruff, and no demonstrated bug/test failure. `ruff check --select B tests` -> 42 test-only issues (out of scope). None qualify as a bounded high-value fix.
 
 ## Next precise task
 - No prior task remains uncompleted. Await a genuine new issue/requirement (bug fix with failing test, feature with tests, or explicitly requested refactor with verification plan).
