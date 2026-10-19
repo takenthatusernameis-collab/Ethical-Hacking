@@ -1323,3 +1323,23 @@ def test_format_dnssec_report_markdown_ds_query_failed_unknown_error():
     }
     out = format_dnssec_report_markdown(data)
     assert "*Query failed: unknown error*" in out
+
+
+def test_dnssec_import_error(monkeypatch):
+    """Test DNS_AVAILABLE is False when dns modules are missing."""
+    import sys
+    from importlib import reload
+
+    # Remove dns modules if present
+    for mod in list(sys.modules):
+        if mod.startswith("dns."):
+            monkeypatch.delitem(sys.modules, mod, raising=False)
+    monkeypatch.setitem(sys.modules, "dns", None)
+    sys.modules.pop("ethscan.dnssec", None)
+
+    try:
+        import ethscan.dnssec as dnssec_mod
+        reload(dnssec_mod)
+        assert dnssec_mod.DNS_AVAILABLE is False
+    finally:
+        sys.modules.pop("ethscan.dnssec", None)

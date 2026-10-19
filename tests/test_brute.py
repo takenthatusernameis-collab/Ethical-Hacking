@@ -511,3 +511,27 @@ def test_paramiko_import_error(monkeypatch) -> None:
             sys.modules["paramiko"] = original
         else:
             sys.modules.pop("paramiko", None)
+
+
+def test_paramiko_import_success(monkeypatch):
+    """Test that PARAMIKO_AVAILABLE is True when paramiko is importable."""
+    import sys
+    from importlib import reload
+
+    # Simulate paramiko being importable
+    fake_paramiko = type(sys)("paramiko")
+    original = sys.modules.get("paramiko")
+    monkeypatch.setitem(sys.modules, "paramiko", fake_paramiko)
+    sys.modules.pop("ethscan.brute", None)
+
+    try:
+        import ethscan.brute as brute
+        reload(brute)
+        assert brute.PARAMIKO_AVAILABLE is True
+        assert brute.paramiko is fake_paramiko
+    finally:
+        sys.modules.pop("ethscan.brute", None)
+        if original is not None:
+            sys.modules["paramiko"] = original
+        else:
+            sys.modules.pop("paramiko", None)

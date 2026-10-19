@@ -1,0 +1,314 @@
+> """Combined report generation: port scan plus password audit."""
+> from __future__ import annotations
+
+> import csv
+> import io
+> import json
+> from typing import Any
+
+> from ethscan.passwords import audit_passwords
+> from ethscan.scanner import (
+>     get_common_ports,
+>     get_profile_defaults,
+>     get_profile_ports,
+>     parse_port_range,
+>     scan_ports,
+> )
+
+> CSV_COLUMNS = [
+>     "section",
+>     "port",
+>     "open",
+>     "password",
+>     "length",
+>     "entropy",
+>     "common",
+>     "patterns",
+>     "too_short",
+>     "score",
+>     "verdict",
+>     "salt",
+>     "pepper",
+> ]
+
+
+> def _parse_ports(ports: str) -> list[int]:
+>     if ports.lower() == "common":
+>         return get_common_ports()
+>     if ports.lower() == "all":
+>         return list(range(1, 65536))
+>     return parse_port_range(ports)
+
+
+> def _resolve_ports_and_defaults(
+>     ports: str,
+>     timeout: float,
+>     workers: int,
+>     profile: str | None,
+> ) -> tuple:
+>     """Resolve the effective port list, timeout, and workers.
+
+>     Mirrors the profile logic in ``scan``/``service``: a profile overrides
+>     ``--ports``/``--timeout``/``--workers`` unless the corresponding CLI
+>     option was explicitly set. ``--ports`` can still override the profile's
+>     port selection; ``--timeout``/``--workers`` can still override the
+>     profile defaults.
+>     """
+>     if profile:
+>         defaults = get_profile_defaults(profile)
+>         if ports == "common":
+>             port_list = get_profile_ports(profile)
+>         else:
+>             port_list = parse_port_range(ports)
+>         if timeout == 1.0:
+>             timeout = defaults["timeout"]
+>         if workers == 100:
+>             workers = defaults["workers"]
+>     else:
+>         port_list = _parse_ports(ports)
+>     return port_list, timeout, workers
+
+
+> def _load_passwords(audit_file: str | None) -> list[str]:
+>     if not audit_file:
+>         return []
+>     with open(audit_file, "r", encoding="utf-8") as handle:
+>         return [line.strip() for line in handle if line.strip()]
+
+
+> VALID_SORT_KEYS = ("score", "verdict", "length")
+
+
+> def _sort_audit_results(
+>     results: list[dict[str, Any]],
+>     sort_by: str | None,
+>     sort_desc: bool,
+> ) -> list[dict[str, Any]]:
+>     """Return a sorted copy of the audit results.
+
+>     Args:
+>         results: Audit result dicts (each with ``score``/``verdict``/``length``).
+>         sort_by: Field to sort by ('score', 'verdict', or 'length'); None keeps order.
+>         sort_desc: When True, sort descending.
+
+>     Returns:
+>         A new list sorted in place-safe order.
+>     """
+>     if sort_by not in VALID_SORT_KEYS:
+>         return list(results)
+
+>     def sort_key(item: dict[str, Any]) -> Any:
+>         value = item.get(sort_by)
+>         if sort_by == "verdict":
+              # Verdicts are strings; sort alphabetically (case-insensitive).
+>             return str(value).lower()
+>         return value
+
+>     return sorted(results, key=sort_key, reverse=sort_desc)
+
+
+> def run_report(
+>     target: str,
+>     ports: str = "common",
+>     timeout: float = 1.0,
+>     workers: int = 100,
+>     audit_file: str | None = None,
+>     min_length: int | None = None,
+>     profile: str | None = None,
+>     open_only: bool = False,
+>     sort_by: str | None = None,
+>     sort_desc: bool = True,
+>     salt: str | None = None,
+>     pepper: str | None = None,
+>     algorithm: str = "sha256",
+> ) -> dict[str, Any]:
+>     """Run a port scan and an optional password audit, returning combined report data.
+
+>     Args:
+>         target: Target host (URL or bare IP/hostname).
+>         ports: Port specification ('common', 'all', or comma-separated list/ranges).
+>         timeout: Connection timeout in seconds.
+>         workers: Maximum concurrent workers.
+>         audit_file: Optional path to a file with one password per line.
+>         min_length: Optional minimum length threshold passed to the password audit.
+>         profile: Optional scan profile ('fast', 'normal', 'full') that overrides
+>             ports/timeout/workers unless explicitly set.
+>         open_only: If True, filter scan results to open ports only in output.
+>         sort_by: Optional audit sort field ('score', 'verdict', 'length').
+>         sort_desc: When True (default), sort descending.
+>         salt: Optional salt prepended to each password before audit evaluation.
+>         pepper: Optional pepper used as HMAC key for peppered audit evaluation.
+>         algorithm: Hash algorithm for salted/peppered audit (default: sha256).
+
+>     Returns:
+>         Combined report dict with ``scan`` and ``audit`` sections.
+>     """
+>     port_list, timeout, workers = _resolve_ports_and_defaults(
+>         ports, timeout, workers, profile
+>     )
+
+>     scan_results = scan_ports(target, port_list, timeout=timeout, max_workers=workers)
+>     open_ports = [port for port, is_open in scan_results if is_open]
+
+>     passwords = _load_passwords(audit_file)
+>     audit_results = (
+>         audit_passwords(
+>             passwords,
+>             min_length=min_length,
+>             salt=salt,
+>             pepper=pepper,
+>             algorithm=algorithm,
+>         )
+>         if passwords
+>         else []
+>     )
+
+>     scan_details = [{"port": port, "open": is_open} for port, is_open in scan_results]
+>     if open_only:
+>         scan_details = [d for d in scan_details if d["open"]]
+
+>     audit_result_dicts = [
+>         {
+>             "password": pwd,
+>             "length": eval_data["length"],
+>             "entropy": eval_data["entropy"],
+>             "common": eval_data["common"],
+>             "patterns": eval_data["patterns"],
+>             "too_short": eval_data.get("too_short", False),
+>             "score": eval_data["score"],
+>             "verdict": eval_data["verdict"],
+>             "salt": eval_data.get("salt", False),
+>             "pepper": eval_data.get("pepper", False),
+>         }
+>         for pwd, eval_data in audit_results
+>     ]
+>     audit_result_dicts = _sort_audit_results(audit_result_dicts, sort_by, sort_desc)
+
+>     return {
+>         "scan": {
+>             "target": target,
+>             "profile": profile,
+>             "ports_scanned": len(port_list),
+>             "open_ports": open_ports,
+>             "details": scan_details,
+>             "open_only": open_only,
+>         },
+>         "audit": {
+>             "passwords_audited": len(passwords),
+>             "min_length": min_length,
+>             "salt": bool(salt),
+>             "pepper": bool(pepper),
+>             "sort_by": sort_by,
+>             "sort_desc": sort_desc,
+>             "results": audit_result_dicts,
+>         },
+>     }
+
+
+> def format_report_json(data: dict[str, Any]) -> str:
+>     """Render the combined report as JSON."""
+>     return json.dumps(data, indent=2)
+
+
+> def format_report_markdown(data: dict[str, Any]) -> str:
+>     """Render the combined report as Markdown."""
+>     lines = ["# ethscan Report", ""]
+
+>     scan = data["scan"]
+>     lines.append("## Port Scan")
+>     lines.append(f"- **Target:** {scan['target']}")
+>     lines.append(f"- **Ports Scanned:** {scan['ports_scanned']}")
+>     lines.append(
+>         f"- **Open Ports:** {', '.join(map(str, scan['open_ports'])) if scan['open_ports'] else 'None'}"
+>     )
+>     lines.append(f"- **Open Only:** {'Yes' if scan.get('open_only') else 'No'}")
+>     lines.append("")
+>     lines.append("| Port | Status |")
+>     lines.append("|------|--------|")
+>     for detail in scan["details"]:
+>         status = "Open" if detail["open"] else "Closed"
+>         lines.append(f"| {detail['port']} | {status} |")
+>     lines.append("")
+
+>     audit = data["audit"]
+>     lines.append("## Password Audit")
+>     lines.append(f"- **Passwords Audited:** {audit['passwords_audited']}")
+>     if audit.get("min_length") is not None:
+>         lines.append(f"- **Min Length:** {audit['min_length']}")
+>     if audit.get("salt"):
+>         lines.append("- **Salt:** applied (prepended to password)")
+>     if audit.get("pepper"):
+>         lines.append("- **Pepper:** applied (HMAC key)")
+>     if audit.get("sort_by"):
+>         direction = "Descending" if audit.get("sort_desc") else "Ascending"
+>         lines.append(f"- **Sorted By:** {audit['sort_by']} ({direction})")
+>     lines.append("")
+>     if audit["results"]:
+>         lines.append("| Password | Length | Entropy | Common | Patterns | Too Short | Score | Verdict |")
+>         lines.append("|----------|--------|---------|--------|----------|-----------|-------|---------|")
+>         for result in audit["results"]:
+>             too_short = "Yes" if result.get("too_short", False) else "No"
+>             lines.append(
+>                 f"| {result['password']!r} | {result['length']} | {result['entropy']} | "
+>                 f"{'Yes' if result['common'] else 'No'} | {'Yes' if result['patterns'] else 'No'} | "
+>                 f"{too_short} | "
+>                 f"{result['score']} | {result['verdict']} |"
+>             )
+>     else:
+>         lines.append("*No passwords provided for audit.*")
+>     lines.append("")
+
+>     return "\n".join(lines)
+
+
+> def format_report_csv(data: dict[str, Any]) -> str:
+>     """Render the combined report as CSV.
+
+>     Both sections share one table with a ``section`` discriminator column
+>     (``scan`` rows carry port/open, ``audit`` rows carry the password fields),
+>     so the output stays a single valid CSV document that any CSV reader can
+>     filter by section.
+>     """
+>     output = io.StringIO()
+>     writer = csv.writer(output)
+>     writer.writerow(CSV_COLUMNS)
+
+>     for detail in data["scan"]["details"]:
+>         writer.writerow(
+>             [
+>                 "scan",
+>                 detail["port"],
+>                 "true" if detail["open"] else "false",
+>                 "",
+>                 "",
+>                 "",
+>                 "",
+>                 "",
+>                 "",
+>                 "",
+>                 "",
+>                 "",
+>                 "",
+>             ]
+>         )
+
+>     for result in data["audit"]["results"]:
+>         writer.writerow(
+>             [
+>                 "audit",
+>                 "",
+>                 "",
+>                 result["password"],
+>                 result["length"],
+>                 result["entropy"],
+>                 "true" if result["common"] else "false",
+>                 "true" if result["patterns"] else "false",
+>                 "true" if result.get("too_short", False) else "false",
+>                 result["score"],
+>                 result["verdict"],
+>                 "true" if result.get("salt", False) else "false",
+>                 "true" if result.get("pepper", False) else "false",
+>             ]
+>         )
+
+>     return output.getvalue().rstrip("\r\n")
