@@ -72,8 +72,7 @@ def test_format_network_info_ipv4_basic() -> None:
     assert info["broadcast_address"] == "192.168.1.255"
     assert info["wildcard_mask"] == "0.0.0.255"
     assert info["first_host"] == "192.168.1.1"
-    # Implementation uses network[-1] which includes broadcast address
-    assert info["last_host"] == "192.168.1.255"
+    assert info["last_host"] == "192.168.1.254"
     assert info["usable_host_count"] == 254
     assert info["total_addresses"] == 256
     assert info["prefixlen"] == 24
@@ -87,6 +86,8 @@ def test_format_network_info_ipv4_31() -> None:
 
     assert info["network_address"] == "192.168.1.0"
     assert info["broadcast_address"] == "192.168.1.1"
+    assert info["first_host"] == "192.168.1.1"
+    assert info["last_host"] == "192.168.1.1"
     assert info["usable_host_count"] == 0
     assert info["total_addresses"] == 2
 
@@ -115,7 +116,9 @@ def test_format_network_info_ipv6_basic() -> None:
     assert info["broadcast_address"] is None
     # Implementation uses network.hostmask which for /32 gives 96 bits of 1s
     assert info["wildcard_mask"] == "::ffff:ffff:ffff:ffff:ffff:ffff"
-    assert info["usable_host_count"] == network.num_addresses - 2
+    assert info["first_host"] == "2001:db8::1"
+    assert info["last_host"] == "2001:db8:ffff:ffff:ffff:ffff:ffff:ffff"
+    assert info["usable_host_count"] == network.num_addresses - 1
 
 
 def test_format_network_info_ipv6_128() -> None:
@@ -129,6 +132,42 @@ def test_format_network_info_ipv6_128() -> None:
     assert info["last_host"] == "2001:db8::1"
     assert info["usable_host_count"] == 0
     assert info["total_addresses"] == 1
+
+
+def test_format_network_info_ipv4_last_host_excludes_broadcast() -> None:
+    """IPv4 last_host must be the last usable host, never the broadcast."""
+
+    network = ipaddress.ip_network("192.168.1.0/24")
+    info = _format_network_info(network)
+
+    assert info["broadcast_address"] == "192.168.1.255"
+    assert info["first_host"] == "192.168.1.1"
+    assert info["last_host"] == "192.168.1.254"
+    assert info["usable_host_count"] == 254
+
+
+def test_format_network_info_ipv6_last_host_is_final_address() -> None:
+    """IPv6 has no broadcast address, so last_host is the final address."""
+
+    network = ipaddress.ip_network("2001:db8::/64")
+    info = _format_network_info(network)
+
+    assert info["broadcast_address"] is None
+    assert info["first_host"] == "2001:db8::1"
+    assert info["last_host"] == "2001:db8::ffff:ffff:ffff:ffff"
+    assert info["usable_host_count"] == network.num_addresses - 1
+
+
+def test_format_network_info_ipv6_127_usable_count() -> None:
+    """IPv6 /127 keeps both addresses usable; count excludes only the network."""
+
+    network = ipaddress.ip_network("2001:db8::/127")
+    info = _format_network_info(network)
+
+    assert info["first_host"] == "2001:db8::1"
+    assert info["last_host"] == "2001:db8::1"
+    assert info["usable_host_count"] == 1
+    assert info["total_addresses"] == 2
 
 
 # ---------------------------------------------------------------------------

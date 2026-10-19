@@ -240,6 +240,8 @@ def test_format_network_info_ipv6_no_broadcast() -> None:
     info = _format_network_info(network)
     assert info["broadcast_address"] is None
     assert info["network_address"] == "2001:db8::"
+    assert info["first_host"] == "2001:db8::1"
+    assert info["last_host"] == "2001:db8:ffff:ffff:ffff:ffff:ffff:ffff"
 
 
 # ---------------------------------------------------------------------------

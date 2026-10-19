@@ -814,7 +814,7 @@ def test_format_network_info_ipv6_large() -> None:
     info = _format_network_info(ipaddress.ip_network("2001:db8::/64"))
     assert info["broadcast_address"] is None
     assert info["first_host"] == "2001:db8::1"
-    assert info["usable_host_count"] == ipaddress.ip_network("2001:db8::/64").num_addresses - 2
+    assert info["usable_host_count"] == ipaddress.ip_network("2001:db8::/64").num_addresses - 1
 
 
 def test_format_network_info_ipv6_single() -> None:
@@ -833,7 +833,7 @@ def test_format_network_info_ipv6_pair() -> None:
     info = _format_network_info(ipaddress.ip_network("2001:db8::/127"))
     assert info["first_host"] == "2001:db8::1"
     assert info["last_host"] == "2001:db8::1"
-    assert info["usable_host_count"] == 0
+    assert info["usable_host_count"] == 1
 
 
 # ---------------------------------------------------------------------------
