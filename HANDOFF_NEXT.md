@@ -129,21 +129,44 @@ bugs that were found live in a *text* protocol, so that is where the
 remaining surface is. A server's answer here is text or JSON, and the
 operations that fail on it are string operations, not buffer offsets.
 
-Candidates, with the current line numbers:
+### Result of that sweep (complete)
+
+The sweep was run and it found **two** bugs, both in the dnspython answer
+sets of the DNS modules, and both are the same shape as the netbios bug:
+an index into a list that can be empty, where the failure mode
+(`IndexError`) is not the type the module's guard catches
+(`dns.exception.DNSException, OSError, ValueError`).
+
+- **`ethscan/subtake.py:298-303`** and **`ethscan/subdomains.py:102-107`**:
+  `resolve_cname` and `resolve_subdomain` read `answers[0]` from the result
+  of `dns_resolver.resolve(...)`. A server that answers an A or CNAME query
+  with no records returns an empty list, and `str(answers[0])` raised
+  `IndexError: list index out of range`. Both now return the module's
+  documented failure signal (`None`, or `(subdomain, None)`) when the
+  answer set is empty, and `IndexError` was added to the guard. The fix is
+  committed as `fix(dns): an empty dnspython answer set no longer crashes
+  the command` (`7f0c7b0`).
+
+The rest of the candidate list was inspected and is clean:
 
 | Module | Surface | Note |
 | --- | --- | --- |
-| `whois.py` | `parse_whois` (61), `extract_referral_server` (127) | regex over the raw answer; check `re` group handling and the `sorted({...})` of the nameserver set |
-| `web.py` | `fetch_headers` (69), `check_security_headers` (98), `check_information_disclosure` (123) | the header dict comes from the server; check every value that is used as a number or sliced |
-| `headers.py` | `run_headers` (10) | same header dict, reported to the user |
-| `cert.py` | `_fetch_cert_data` (97) | the JSON answer of an API; check the keys that are used as a number (`float(entry["timestamp"])`) and the nested `cert.get("subject", ())` iteration (`item[0]`/`item[1]`) |
-| `cve.py` | `_fetch_cve_data` (101) | the same shape as `cert.py`: `vulns[0]`, `descriptions[0].get("value")`, `entries[0].get("cvssData")` |
-| `geo.py` | `_fetch_geo_data` (115) | the same shape as `cert.py` |
-| `jwt.py` | `_decode_json_segment` (47), `parse_jwt` (59) | the segments come from a token the server handed out |
-| `mac.py` | `_fetch_mac_data` (99) | the same shape as `cert.py`; the vendor text is now the replaced text (see above) |
-| `s3.py` | `check_bucket_public` (241) | the status code drives the result; check the `urllib`/`http.client` error types |
-| `urlcheck.py` | `run_urlcheck` (29) | the redirect chain and the body of the answer |
-| `subtake.py`, `stale.py`, `subdomains.py`, `resolve.py`, `dns.py` | the `dnspython` answer sets | `answers[0]` raises `IndexError` on an empty answer set, which is not a `ValueError` and is not caught by the `except (dns.exception.DNSException, OSError, ValueError)` clauses |
+| `whois.py` | `parse_whois` (61), `extract_referral_server` (127) | regex over the raw answer; `match.group(1)` is only used when `re.search` matched, and the `sorted({...})` of the nameserver set iterates a `re.findall` list that is always iterable. No unguarded index or uncaught exception type. |
+| `web.py` | `fetch_headers` (69), `check_security_headers` (98), `check_information_disclosure` (123) | the header dict comes from `urllib`; every value is used as a string. `check_ssl_configuration` already guards `cert.get("subject", ())` with `isinstance(item, tuple) and len(item) >= 2` and catches the `strptime` failure. |
+| `headers.py` | `run_headers` (10) | delegates to `web.py`; nothing of its own. |
+| `cert.py` | `_fetch_cert_data` (97) | the JSON answer is validated with `isinstance(data, list)` before iteration; `_extract_subdomains` skips entries that are not dicts. No `float(entry["timestamp"])` site is reachable from a server answer (only from the cache, which the module itself wrote and validates). |
+| `cve.py` | `_fetch_cve_data` (101) | `vulns[0]` is guarded by `if not vulns: return {}` and `isinstance(first, dict)`; `descriptions[0]` is guarded by `if not description and descriptions and isinstance(descriptions[0], dict)`. |
+| `geo.py` | `_fetch_geo_data` (115) | the JSON answer is only consumed after `data.get("status") == "success"`; no numeric cast of a server value. |
+| `jwt.py` | `_decode_json_segment` (47), `parse_jwt` (59) | the segments come from a token the user typed, not a server; `parts[0]`/`parts[1]` are guarded by the `len(parts) in (2, 3)` check. |
+| `mac.py` | `_fetch_mac_data` (99) | the vendor text is a plain string; no numeric cast. |
+| `s3.py` | `check_bucket_public` (241) | the status code is read with `response.getcode()` and matched against literal constants; the `HTTPError`/`URLError`/`HTTPException` clauses are exhaustive for the urllib failure modes. |
+| `urlcheck.py` | `run_urlcheck` (29) | delegates to `web`, `fuzz`, `ssl`; no parser of its own. |
+| `subtake.py`, `stale.py`, `subdomains.py`, `resolve.py`, `dns.py` | the `dnspython` answer sets | `subtake.resolve_cname` and `subdomains.resolve_subdomain` are now fixed. `subtake.resolve_a_records`/`resolve_aaaa_records`, `resolve.resolve_cname_records`/`resolve_ptr_records`/`resolve_with_dnspython`, `dns.resolve_with_dnspython`, and `dnsbrute` iterate the answer set with a generator (`sorted({str(rdata) for rdata in answers})`), so an empty set yields `[]` and never indexes. |
+
+The only remaining unguarded `answers[0]` sites in `ethscan/` are the two
+that were fixed this session. The binary-protocol sweep recorded above
+and the text/HTTP sweep recorded here together cover every parser in
+`ethscan/`.
 
 Method that found this session's two bugs (keep it): read the parser and
 ask *what operation on the server's text can fail with an exception the
