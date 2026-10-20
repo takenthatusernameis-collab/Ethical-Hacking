@@ -1,96 +1,88 @@
 # TASK.md
 
-Date: 2026-10-20T13:40:00Z
-Status: the **content** of the input files of the CLI is hardened. A file
-whose content is hostile (bytes that are not valid UTF-8, a null byte, a
-line that holds a space, a JSON file that is not JSON, an XML file that is
-not XML) used to leak **7 different tracebacks** in **19 commands**; it now
-leaks **none**.
+Date: 2026-10-20T19:15:40Z
+Status: the **values that the config file holds** are hardened and are now
+covered by a permanent sweep. A config value of the wrong type used to leak
+**5 different tracebacks** in the commands that read one; it now leaks
+**none** and is reported as a usage error that names the option and the
+config file.
 
-The path of a file option was already covered (a missing file or a directory
-is a usage error, see `tests/test_file_option_sweep.py`). The content of the
-file was not.
+The path of a file option was covered before (`tests/test_file_option_sweep.py`)
+and the content of a file was covered before that
+(`tests/test_file_content_sweep.py`). The values of the config file were not:
+nothing kept them from being of a type that click cannot convert.
 
 ## What changed
 
-### 1. A file that holds bytes that are not valid UTF-8
-- **Root cause:** every text file was read with `open(path, "r",
-  encoding="utf-8")`, which raises a `UnicodeDecodeError` for a byte that is
-  not valid UTF-8. The error is a `ValueError` and not an `OSError`, so it
-  reached the user as a raw traceback in **14 commands** (`audit`, `brute`,
-  `config`, `cve`, `dnsbrute`, `fuzz`, `hash`, `nmap`, `osdetect`, `radix`,
-  `recon`, `report`, `s3`, `stale`, `subdomains`, `subtake`, `urlcheck`,
-  `vuln`).
-- **`ethscan/fileio.py`** (new): the shared readers of the input files.
-  `read_text()` and `read_lines()` decode leniently (the bytes that cannot be
-  decoded are replaced), `load_json()` reads a JSON file, `is_utf8()` reports
-  whether a file holds valid UTF-8.
-- **Every text loader** now uses the shared reader: `brute`, `fuzz`, `hash`,
-  `stale`, `subdomains`, `report`, `config` and the two readers of the CLI
-  (`audit --file`, `radix --cidr-file`).
-- The **standard input** of the commands that read one (`audit`, `hash`,
-  `jwt`) is read leniently as well (`ethscan/cli.py`: `_read_stdin_text`).
-- A file that holds **credentials** (`--file`, `--user-file`, `--pass-file`,
-  `--audit-file`) is refused instead, because its content cannot be read
-  without changing the credentials it holds: a mangled password would be
-  hashed silently (`ethscan/cli.py`: `_require_utf8`, a usage error).
+### 1. A config value that click cannot convert
+- **Root cause:** a config value reaches an option through click's
+  `default_map`, and click's converters only ever expect the text that a
+  command line delivers. A value that is a mapping (or a sequence) made click
+  raise an unhandled `TypeError` (or `AttributeError`) instead of reporting a
+  usage error. Five different tracebacks were reachable:
+  `int()` (an integer option), `float()` (a float option), the `in` test of a
+  `Choice` (an unhashable mapping), `os.stat()` (a file option) and
+  `value.strip()` (a boolean option).
+- **`ethscan/cli.py`**: the default map of a command is now a
+  `_CheckedDefaultMap` (a `dict` subclass). It hands a value out only after
+  the value has been checked against the option it belongs to, so a value of
+  the wrong type is a usage error (**exit 2**) that names the option and the
+  config file:
+  `Invalid value for '--workers' in the config file /home/u/ethscan.yaml: expected a text value, got {'a': 1}.`
+- The check is **lazy on purpose**: click looks a default up only for the
+  options that the command line did not fill, so a config value is checked
+  exactly when it is used. A value that the command line overrides is none of
+  the command's business, which keeps the documented rule true ("CLI
+  arguments always take precedence over config values").
 
-### 2. A JSON file that is not JSON (or that is not an object)
-- **Root cause:** the JSON files (`--services-file`, `--tls-file`,
-  `--ssl-file`, `--banners-file`) were read with a bare `json.load()`, so a
-  file that is not JSON raised a `json.JSONDecodeError` (a traceback), and a
-  file that holds a list or a string raised an `AttributeError` when the
-  command called `.get()` on it.
-- **`ethscan/cli.py`**: the new `_load_json_file()` reports a file that is not
-  valid JSON (or that does not hold an object) as a usage error (**exit 2**)
-  that names the option. The `cve` command reported the same problem before
-  (on stderr, exit 0) and now uses the same report as the other commands.
+### 2. A config value that is of the wrong type for its option
+- **Root cause:** a value of the right *kind* but the wrong *type* was
+  converted by click itself, which accepts a few types that the command line
+  cannot deliver: `workers: 5.5` became `5` (the command line refuses
+  `--workers 5.5`), and `salt: 5` stayed the integer `5` instead of the text
+  `"5"`.
+- **`ethscan/cli.py`**: a config value is turned into the text that click
+  would read from the command line before it is checked, so the two ways of
+  passing a value behave the same.
 
-### 3. An Nmap XML file that is not XML
-- **Root cause:** `ET.fromstring()` raises a `ParseError` for a file that is
-  not XML, and `int(port_elem.get("portid", 0))` raised a `ValueError` for a
-  port whose id is not a number.
-- **`ethscan/nmap.py`**: `parse_nmap_xml()` raises the new `NmapParseError`,
-  which the CLI reports as a usage error (**exit 2**). A port whose id is not
-  a number (or is out of range) is skipped, so one bad port does not abort
-  the report of the other ports.
-
-### 4. A wordlist entry that cannot be requested or resolved
-- **Root cause:** `http.client.InvalidURL` (raised for a path that holds a
-  space or a control character) derives from `HTTPException` and not from
-  `ValueError`, so it escaped the `except` of `fuzz_path` (a traceback in
-  `fuzz` and `urlcheck`). `socket.gethostbyname()` refuses a name that holds
-  a null byte with a `TypeError`, which escaped the `except` of
-  `resolve_subdomain` (a traceback in `subdomains`).
-- **`ethscan/fuzz.py`**: `fuzz_path()` catches `http.client.HTTPException`
-  and reports the path as a failed probe, the same way `ethscan/s3.py`
-  already did.
-- **`ethscan/subdomains.py`**: `resolve_subdomain()` catches the `TypeError`
-  and reports the label as unresolved.
+### 3. A permanent sweep
+- **`tests/test_config_value_sweep.py`** (new): walks every option of every
+  command and writes a config file that holds a value of the wrong type for
+  it, once in the section of the command itself and once in the global
+  `defaults` that every command inherits. The command must report a usage
+  error (exit code 2) that names the option, and must never leak a
+  traceback. It also keeps the three rules that surround the check: a valid
+  value is used, a broken value of another command is not this command's
+  business, and a command line argument still wins over a broken config
+  value.
 
 ## Verification
 
-- Full suite: **4484 passed, 45 skipped** (before: 4439 passed, 10 skipped;
-  the new sweep adds 18 cases and skips the 35 commands that have no input
-  file option).
-- Ruff: `ruff check ethscan/ tests/` → **All checks passed** (the 3 errors
-  that the previous session left in `tests/test_file_option_sweep.py` are
-  fixed as well).
+- Full suite: **4537 passed, 48 skipped** (before: 4484 passed, 45 skipped;
+  the new sweep adds 54 cases and skips the 3 commands that need a network
+  round trip).
+- Ruff: `ruff check ethscan/ tests/` → **All checks passed**.
 - `git diff --check`: clean.
-- The new permanent sweep `tests/test_file_content_sweep.py` walks every
-  input file option of every command (18 commands, 4 hostile contents each)
-  and asserts that no traceback leaks. Before the fix **all 18 commands
-  failed**; now all of them pass.
-- The standard input of `audit`, `hash` and `jwt` is read leniently (the
-  traceback is gone).
+- The new permanent sweep `tests/test_config_value_sweep.py` is a real
+  regression test: with the production code reverted (`git stash push --
+  ethscan/`) **50 of its 54 cases fail**, 68 of them with a leaked
+  traceback.
+- The command line still wins over the config file: `ethscan --config
+  ethscan.yaml redis --port 22` runs with the port 22 even when the config
+  file holds a `port: 99999`.
 
 ## Remaining
 
-- The `cve` command still reports a file it cannot read inside its own
-  output when it is used as a library (`ethscan/cve.py`: the `notes` entry
-  "Failed to read services file"). The CLI reports it as a usage error
+- The cache files of the `geo`, `cert` and `mac` commands
+  (`~/.cache/ethscan/*.json`) are still read without a guard: a cache file
+  that is not valid UTF-8, a cache entry that is not a mapping, or a
+  timestamp that is not a number still leaks a traceback. See
+  `HANDOFF_NEXT.md` for the reproduction and the task.
+- The `cve` command still reports a services file it cannot read inside its
+  own output when it is used as a library (`ethscan/cve.py`: the `notes`
+  entry "Failed to read services file"). The CLI reports it as a usage error
   before the module runs, so the note is only reachable for a direct API
   user.
-- The options that hold a *value* read from the environment or from the
-  config file were not touched by this task; the config file already
-  reports a value of the wrong type as a usage error.
+- A config file whose `defaults` or `commands` section is not a mapping is
+  still a warning, not a usage error (the existing contract of
+  `ethscan/config.py`: `validate_config`).

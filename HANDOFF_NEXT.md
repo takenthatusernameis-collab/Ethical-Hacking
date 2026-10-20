@@ -2,85 +2,115 @@
 
 ## What changed this session
 
-- Hardened the **content** of the input files of the CLI (the path was
-  already covered by `tests/test_file_option_sweep.py`).
-- **New module `ethscan/fileio.py`**: the shared readers of the input files
-  (`read_text`, `read_lines`, `load_json`, `is_utf8`). The text readers
-  decode leniently, so a file with a byte that is not valid UTF-8 is used as
-  far as it can be read instead of raising a `UnicodeDecodeError`.
-- Every text loader now uses the shared reader: `ethscan/{brute,fuzz,hash,
-  stale,subdomains,report,config}.py` and the two readers of the CLI
-  (`audit --file`, `radix --cidr-file`).
-- The standard input of `audit`, `hash` and `jwt` is read leniently
-  (`ethscan/cli.py`: `_read_stdin_text`).
-- The credential files (`--file`, `--user-file`, `--pass-file`,
-  `--audit-file`) are refused when they are not valid UTF-8
-  (`ethscan/cli.py`: `_require_utf8`), because a mangled password would
-  otherwise be hashed silently.
-- The JSON files (`--services-file`, `--tls-file`, `--ssl-file`,
-  `--banners-file`) report a file that is not JSON, or that does not hold an
-  object, as a usage error that names the option (`ethscan/cli.py`:
-  `_load_json_file`). The `cve` command reported the same problem before on
-  stderr with exit 0 and now uses the same report as the other commands.
-- The Nmap XML file (`--input-file`) reports a file that is not XML as a
-  usage error, and a port whose id is not a number is skipped
-  (`ethscan/nmap.py`: `NmapParseError`).
-- The probes survive a hostile entry: `http.client.InvalidURL` is a failed
-  probe in `fuzz`/`urlcheck` (`ethscan/fuzz.py`), a null byte in a label is
-  an unresolved label in `subdomains` (`ethscan/subdomains.py`).
-- Fixed the 3 ruff errors that the previous session left in
-  `tests/test_file_option_sweep.py` (`ruff check ethscan/ tests/` failed
-  before this session, it passes now).
+- The **values that the config file holds** are now checked against the
+  option they belong to (`ethscan/cli.py`).
+  - The default map of a command is a `_CheckedDefaultMap` (a `dict`
+    subclass). It hands a value out only after the value has been checked
+    against the option, so a value of the wrong type is a usage error
+    (**exit 2**) that names the option and the config file.
+  - A value that click cannot convert (a mapping or a sequence for a single
+    option) used to leak **5 different tracebacks**: `int()` (an integer
+    option), `float()` (a float option), the `in` test of a `Choice` (an
+    unhashable mapping), `os.stat()` (a file option) and `value.strip()` (a
+    boolean option). It now leaks none.
+  - The check is **lazy on purpose**: click looks a default up only for the
+    options that the command line did not fill, so a config value is checked
+    exactly when it is used. A value that the command line overrides is none
+    of the command's business, which keeps the rule of the README true
+    ("CLI arguments always take precedence over config values").
+  - A config value is turned into the text that click would read from the
+    command line before it is checked, so the two ways of passing a value
+    behave the same: `workers: 5.5` is refused like `--workers 5.5` is, and
+    `salt: 5` is the text `"5"` and not the integer `5`.
+- **New permanent sweep `tests/test_config_value_sweep.py`**: every option of
+  every command gets a config file that holds a value of the wrong type for
+  it, once in the section of the command itself and once in the global
+  `defaults` that every command inherits. The command must report a usage
+  error (exit code 2) that names the option, and must never leak a
+  traceback. Three more tests keep the rules around the check: a valid value
+  is used, a broken value of another command is not this command's business,
+  and a command line argument still wins over a broken config value.
 
 ## What was actually verified
 
 - `python -m ruff check ethscan/ tests/` → All checks passed
-- `python -m pytest -q` → 4484 passed, 45 skipped, 2 warnings (before:
-  4439 passed, 10 skipped)
-- `python -m pytest tests/test_file_content_sweep.py -q` → 18 passed, 35
+- `python -m pytest -q` → 4537 passed, 48 skipped, 2 warnings (before:
+  4484 passed, 45 skipped)
+- `python -m pytest tests/test_config_value_sweep.py -q` → 54 passed, 3
   skipped. The sweep is a real regression test: with the production code
-  reverted (`git stash push -- ethscan/`) all 18 commands fail with the
-  `UnicodeDecodeError` they used to leak.
-- `python -m pytest tests/test_fileio.py tests/test_nmap.py tests/test_fuzz.py
-  tests/test_subdomains.py -q` → 107 passed
+  reverted (`git stash push -- ethscan/`) **50 of its 54 cases fail**, 68 of
+  them with a leaked traceback.
+- `python -m pytest tests/test_config.py tests/test_cli.py -q` → 1022 passed
 - `git diff --check` → clean
 
 ## What remains unresolved
 
-- None from the current task. Every input file option of every command and
-  every standard input is covered by a test that fails when a traceback
-  leaks.
-- `ethscan/cve.py` still reports a services file it cannot read as a `notes`
-  entry. That path is only reachable for a direct API user now (the CLI
-  reports the problem as a usage error before the module runs). It was left
-  alone on purpose: it is the module's own contract.
-- The values that the config file or the environment hold are not part of
-  this task. They were probed and a value of the wrong type is already a
-  usage error.
+- The **cache files** of the `geo`, `cert` and `mac` commands
+  (`~/.cache/ethscan/geo_cache.json`, `cert_cache.json`, `mac_cache.json`)
+  are still read without a guard. This is the next task (see below).
+- The `cve` command still reports a services file it cannot read as a
+  `notes` entry when it is used as a library (`ethscan/cve.py`). The CLI
+  reports it as a usage error before the module runs, so the note is only
+  reachable for a direct API user. It was left alone on purpose: it is the
+  module's own contract.
+- A config file whose `defaults` or `commands` section is not a mapping is
+  still a warning and not a usage error (`ethscan/config.py`:
+  `validate_config`). That is the existing contract and was left alone.
 
 ## Approaches that failed and why
 
-- None. Every change was verified with a test that fails without it.
+- The first implementation checked the config values in the callback of the
+  `cli` group, before the command ran. It was correct but too strict: it
+  refused a broken config value even when the command line overrode it,
+  which contradicts the rule of the README ("CLI arguments always take
+  precedence over config values"), and it made `ethscan --config ethscan.yaml
+  config` unusable for a config file whose `format` is broken. The check was
+  moved into the default map, which click consults only for the options that
+  the command line did not fill.
+- Click's `Context.lookup_default` is the only place where a default is
+  handed out, and it is called only for an option that the command line did
+  not fill. A `dict` subclass for the default map was used instead of a
+  `Context` subclass, because a `Context` subclass would have to be set on
+  every command of the group, while the default map is built in one place.
 
 ## One precise next task
 
-Add a permanent sweep for the **values that the config file holds**, and
-assert that a config value of the wrong type is refused for every command
-that has a matching option.
+Harden the **content of the cache files** of the `geo`, `cert` and `mac`
+commands, and keep it that way with a test.
 
 Evidence and constraints:
 
-- The config file (`ethscan.yaml`, or the path of `--config`) is read by
-  every command (`ethscan/config.py`: `load_config`, `build_default_map`).
-  A value of the wrong type (`workers: many`, `timeout: abc`, `format:
-  bogus`, `severity: extreme`) is already reported as a usage error (exit 2)
-  - that was probed for `scan`, `web`, `dns`, `hash`, `trace` and `cve` in
-  this session - but **no test keeps it that way**, so a change in the
-  default-map plumbing could silently bring the tracebacks back.
-- The same kind of sweep already exists for the options themselves
-  (`tests/test_option_sweep.py`, `tests/test_file_option_sweep.py`,
-  `tests/test_file_content_sweep.py`): add the config file as a fourth
-  source of hostile input and assert that no command leaks a traceback.
-- Constraints: keep the existing contracts (a config value that is out of
-  range or of the wrong type is a usage error, exit 2), do not change the
-  schema of the config file, and keep the library free of click.
+- The three modules read their cache with a bare `open(..., encoding=
+  "utf-8")` and `json.load` (`ethscan/geo.py:70`, `ethscan/cert.py:52`,
+  `ethscan/mac.py`, function `_load_cache`). The `except` clause catches
+  `json.JSONDecodeError` and `OSError`, but **not** a `UnicodeDecodeError`
+  (a `ValueError`), so a cache file that is not valid UTF-8 leaks a
+  traceback.
+- `_is_cache_valid` (`ethscan/geo.py:87`, `ethscan/cert.py:69`,
+  `ethscan/mac.py`) does `"timestamp" not in entry` and
+  `time.time() - entry["timestamp"]` without a type check, so a cache entry
+  that is not a mapping, or a timestamp that is not a number, leaks a
+  `TypeError`. The same happens where the entry is copied with
+  `dict(cache[domain])`.
+- Reproduction (4 different tracebacks, exit code 1, all of them on stderr):
+  ```bash
+  HOME=$(mktemp -d) mkdir -p "$HOME/.cache/ethscan"
+  printf '\xff\xfe not utf-8' > "$HOME/.cache/ethscan/geo_cache.json"
+  HOME=$HOME python -m ethscan geo --target 127.0.0.1   # UnicodeDecodeError
+  printf '{"127.0.0.1": 5}'            > "$HOME/.cache/ethscan/geo_cache.json"
+  HOME=$HOME python -m ethscan geo --target 127.0.0.1   # TypeError: argument of type 'int' is not iterable
+  printf '{"127.0.0.1": {"timestamp": "soon"}}' > "$HOME/.cache/ethscan/geo_cache.json"
+  HOME=$HOME python -m ethscan geo --target 127.0.0.1   # TypeError: unsupported operand type(s) for -: 'float' and 'str'
+  printf '{"127.0.0.1": [1, 2]}'       > "$HOME/.cache/ethscan/geo_cache.json"
+  HOME=$HOME python -m ethscan geo --target 127.0.0.1   # TypeError: cannot convert dictionary update sequence element #0 to a sequence
+  ```
+  The same three cache files are read by `cert` and `mac`.
+- The fix belongs in the three modules: read the cache with
+  `ethscan/fileio.load_json` (which decodes leniently, so a file with a
+  stray byte is used as far as it can be read) and treat a cache file that
+  is not a JSON object, an entry that is not a mapping, or a timestamp that
+  is not a number, as an empty cache. That is the contract the cache file
+  already has for a file that is not JSON.
+- Constraints: the cache is written by the toolkit itself, so a broken cache
+  must never be fatal - it is an empty cache, not a usage error. Keep the
+  library free of click, and do not change the format of the cache file.

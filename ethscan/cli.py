@@ -38,6 +38,7 @@ from ethscan.completion import (
 )
 from ethscan.config import (
     build_default_map,
+    config_path_string,
     format_config_report_csv,
     load_config,
     validate_config,
@@ -395,9 +396,117 @@ def cli(ctx, config_path: str | None) -> None:
     for warning in validate_config(config, known_commands=known_commands):
         click.echo(f"Warning: {warning}", err=True)
     default_map: dict[str, dict[str, Any]] = {}
-    for name in cli.commands:
-        default_map[name] = build_default_map(config, name)
+    config_file = config_path_string(config)
+    for name, command in cli.commands.items():
+        default_map[name] = _CheckedDefaultMap(
+            command, config_file, build_default_map(config, name)
+        )
     ctx.default_map = default_map
+
+
+# A config value is a scalar in YAML: text, a number or a boolean. A mapping
+# or a sequence is never a valid value for a single option, and click's own
+# converters raise an unhandled TypeError (or AttributeError) for one.
+_CONFIG_SCALAR_TYPES = (str, int, float, bool)
+
+
+def _config_value_error(
+    param: click.Parameter,
+    detail: str,
+    path: str | None,
+) -> click.UsageError:
+    """Build the usage error reported for a config value that cannot be used."""
+    where = f" in the config file {path}" if path else " in the config"
+    return click.UsageError(
+        f"Invalid value for {param.get_error_hint(None)}{where}: {detail}"
+    )
+
+
+def _config_value_text(
+    param: click.Parameter,
+    value: Any,
+    path: str | None,
+) -> Any:
+    """Return a config value as the text click would read from the command line.
+
+    Click only ever sees text on the command line, so the config value is
+    turned into text as well. That keeps the two ways of passing a value the
+    same: a config value of ``5.5`` for an integer option is refused exactly
+    like ``--workers 5.5`` on the command line.
+    """
+    if param.multiple:
+        items = value if isinstance(value, (list, tuple)) else [value]
+        texts = []
+        for item in items:
+            if not isinstance(item, _CONFIG_SCALAR_TYPES):
+                raise _config_value_error(
+                    param, f"expected a list of text values, got {item!r}.", path
+                )
+            texts.append(str(item))
+        return tuple(texts)
+    if not isinstance(value, _CONFIG_SCALAR_TYPES):
+        raise _config_value_error(
+            param, f"expected a text value, got {value!r}.", path
+        )
+    return str(value)
+
+
+def _check_config_value(
+    param: click.Parameter,
+    value: Any,
+    path: str | None,
+) -> Any:
+    """Return the config value of an option, checked against that option.
+
+    The value is checked the way click checks a value that was typed on the
+    command line, so a config value can never be of a type that the option
+    does not accept. A value that does not fit is reported as a usage error
+    (exit code 2) that names the option and the config file.
+    """
+    text = _config_value_text(param, value, path)
+    try:
+        # The context is only used to describe the option in an error
+        # message, and the option knows its own name.
+        param.type_cast_value(None, text)
+    except click.UsageError as exc:
+        raise _config_value_error(param, exc.message, path) from exc
+    return text
+
+
+class _CheckedDefaultMap(dict):
+    """The default map of a command, checking the config values it hands out.
+
+    Click looks a default up only for the options that the command line did
+    not fill, so a config value is checked exactly when it is used: a value
+    that the command line overrides is none of the command's business.
+    """
+
+    def __init__(
+        self,
+        command: click.Command,
+        path: str | None,
+        values: dict[str, Any],
+    ) -> None:
+        super().__init__(values)
+        self._command = command
+        self._path = path
+
+    def get(self, name: str, default: Any = None) -> Any:
+        """Return the config value of an option, checked against the option."""
+        value = super().get(name, default)
+        if value is None:
+            return value
+        param = self._param(name)
+        if param is None:
+            return value
+        return _check_config_value(param, value, self._path)
+
+    def _param(self, name: str) -> click.Parameter | None:
+        """Return the option a config value belongs to, if there is one."""
+        for param in self._command.params:
+            if param.name == name:
+                return param
+        return None
 
 
 def _invalid_ports(exc: ValueError) -> click.BadParameter:
