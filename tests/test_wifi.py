@@ -102,6 +102,34 @@ def test_parse_proc_net_wireless_unparseable_numbers(tmp_path) -> None:
     assert result[0]["interface"] == "wlan1"
 
 
+def test_parse_proc_net_wireless_not_utf8(tmp_path) -> None:
+    """A file with a byte that is not valid UTF-8 is read leniently."""
+    content = (
+        b"Inter-| sta-|   Quality        |   Discarded packets               | Missed | WE\n"
+        b" face | tus | link level noise |  nwid  crypt   frag  retry   misc | beacon | 22\n"
+        b" wlan0: 0000  45.  -45.  -256    0      0   0   0   0        0 \xff bad\n"
+    )
+    f = tmp_path / "wireless"
+    f.write_bytes(content)
+    result = _parse_proc_net_wireless(str(f))
+    assert len(result) == 1
+    assert result[0]["interface"] == "wlan0"
+
+
+def test_parse_proc_net_wireless_null_byte(tmp_path) -> None:
+    """A file with a null byte is read leniently."""
+    content = (
+        b"Inter-| sta-|   Quality        |   Discarded packets               | Missed | WE\n"
+        b" face | tus | link level noise |  nwid  crypt   frag  retry   misc | beacon | 22\n"
+        b" wlan0: 0000  45.  -45.  -256    0      0   0   0   0        0 \x00 bad\n"
+    )
+    f = tmp_path / "wireless"
+    f.write_bytes(content)
+    result = _parse_proc_net_wireless(str(f))
+    assert len(result) == 1
+    assert result[0]["interface"] == "wlan0"
+
+
 # ---------------------------------------------------------------------------
 # iwlist scan parsing
 # ---------------------------------------------------------------------------

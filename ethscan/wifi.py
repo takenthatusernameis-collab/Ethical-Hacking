@@ -13,6 +13,8 @@ import platform
 import re
 import subprocess
 
+from ethscan.fileio import read_text
+
 
 def _is_linux() -> bool:
     """Check if running on Linux."""
@@ -20,11 +22,22 @@ def _is_linux() -> bool:
 
 
 def _parse_proc_net_wireless(filepath: str = "/proc/net/wireless") -> list[dict]:
-    """Parse /proc/net/wireless for interface status."""
+    """Parse /proc/net/wireless for interface status.
+
+    The file is read leniently: a byte that is not valid UTF-8 is replaced
+    instead of raising, so a hostile or mangled file is used as far as it can
+    be read and the command reports what it makes of the result.
+
+    Args:
+        filepath: Path to the file.
+
+    Returns:
+        The interfaces parsed from the file, or an empty list when it cannot
+        be read.
+    """
     interfaces: list[dict] = []
     try:
-        with open(filepath, "r") as f:
-            lines = f.readlines()
+        lines = read_text(filepath).split("\n")
     except OSError:
         return interfaces
 

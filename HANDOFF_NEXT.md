@@ -2,63 +2,49 @@
 
 ## What changed this session
 
-- **`ethscan/cve.py:271-277`**: the `--services-file` of the `cve` command is
-  now read with `ethscan.fileio.load_json` (lenient UTF-8 decode,
-  `errors="replace"`) instead of a strict `open(..., encoding="utf-8")` +
-  `json.load`. The existing `except (json.JSONDecodeError, OSError)` clause is
-  kept, so a file that is not JSON is still reported in the `notes` of the
-  result and a file that cannot be decoded is read as far as it can be read.
-- **`tests/test_cve.py`**: new `test_run_cve_services_file_not_utf8` — a
-  services file with a byte that is not UTF-8 is read without leaking a
-  traceback and its decoded content is used.
+- **`ethscan/wifi.py:22-38`**: `_parse_proc_net_wireless` now reads its file
+  with `ethscan.fileio.read_text` (lenient UTF-8 decode, `errors="replace"`)
+  instead of a bare `open(filepath, "r")` + `readlines()`. A file with a byte
+  that is not valid UTF-8 (or a null byte) no longer leaks a
+  `UnicodeDecodeError`; the line is used as far as it can be read and the
+  malformed interface row is skipped by the existing `except (ValueError,
+  IndexError)` clause. The `except OSError` clause is preserved, so a missing
+  or unreadable file still returns `[]` as before.
+- **`tests/test_wifi.py`**: new `test_parse_proc_net_wireless_not_utf8` and
+  `test_parse_proc_net_wireless_null_byte` write hostile bytes to the file and
+  assert the valid interface row is still parsed with no traceback.
+
+The prior handoff tasks were already complete (both `cve` tests existed and
+passed), so this session picked a new bounded task from the same hostile-file
+sweep: `wifi` was the last module reading an input file with a strict default
+encoding.
 
 ## What was actually verified
 
-- Reproduction from the previous handoff now **exits 0 with no traceback**
-  (before: `UnicodeDecodeError: 'utf-8' codec can't decode byte 0xff` at
-  `ethscan/cve.py:274`, exit 1).
+- Reproduction before the fix: `_parse_proc_net_wireless` on a file holding
+  `b"... \xff bad\n"` raised `UnicodeDecodeError: 'utf-8' codec can't decode
+  byte 0xff ...`. After the fix it returns the valid interface row with no
+  exception.
 - `python -m ruff check ethscan/ tests/` → **All checks passed**.
-- `python -m pytest tests/test_cve.py -q` → **59 passed**.
-- `python -m pytest -q` → **4558 passed, 48 skipped, 2 warnings** (before:
-  4557 passed, 48 skipped; the new test adds 1 case).
+- `python -m pytest tests/test_wifi.py -q` → **44 passed** (was 42).
+- `python -m pytest -q` → **4561 passed, 48 skipped, 2 warnings** (was 4559).
 - `git diff --check` → clean.
-- A grep of `ethscan/` for `open(...encoding="utf-8")` + `json.load` found **no
-  remaining** strict reads of this class; the services file was the last one.
 
 ## What remains unresolved
 
-- The **`cve` library still reports a services file it cannot read as a
-  `notes` entry** ("Failed to read services file", `ethscan/cve.py`). The CLI
-  reports it as a usage error (exit 2) before the module runs, so the note is
-  only reachable for a direct API user. Left alone on purpose: it is the
-  module's own contract.
-- A config file whose `defaults` or `commands` section is not a mapping is
-  still a warning, not a usage error (`ethscan/config.py`: `validate_config`).
-  Left alone: existing contract.
+- Nothing open. The baseline is clean.
 
 ## Approaches that failed and why
 
-- None. The fix is a one-line swap to the already-imported `load_json`, using
-  the same `except` clause, so the module contract is preserved.
+- None. The fix is a one-line swap to the already-imported `read_text`, reusing
+  the existing `except OSError` clause and the existing number-parsing
+  tolerance, so the module contract is preserved.
 
 ## One precise next task
 
-Add a **subprocess-level CLI regression test** proving
-`cve --services-file <file-with-a-non-utf8-byte>` exits 0 and prints no
-traceback. Current coverage is library-level only; the file-content sweep
-(`tests/test_file_content_sweep.py`) cannot see this leak because the CLI
-pre-reads the file leniently before the module reads it.
-
-Evidence and constraints:
-
-- Reproduction (exit 0, no traceback after the fix):
-  ```bash
-  D=$(mktemp -d)
-  printf '{"services": [{"port": 80, "banner": "Apache/2.4 \xff bad"}]}' > "$D/services.json"
-  python -m ethscan cve --target 127.0.0.1 --services-file "$D/services.json"
-  ```
-- Run the CLI as a subprocess (or via CliRunner over the full `cli()` entry
-  point), not `run_cve` directly, so it guards against CLI/module drift.
-- Constraints: keep the `notes` entry contract; keep the CLI usage-error
-  (exit 2) for an unusable services file; do not change the services file's
-  content.
+No open task. If you need to pick a new one, sweep for the next strict file
+read. A grep of `ethscan/` for `open(...encoding="utf-8")` + `json.load`
+found **no remaining** strict reads of that class, and the only remaining
+default-encoding `open(...).read*()` call was the `wifi` one just fixed.
+Everything else is either a write (cache/output files, safe to be strict) or a
+network `urllib` response.
