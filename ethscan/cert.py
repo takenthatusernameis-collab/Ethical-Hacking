@@ -103,8 +103,11 @@ def _fetch_cert_data(
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "ethscan/0.1"})
         with urllib.request.urlopen(req, timeout=timeout) as response:
-            raw = response.read().decode("utf-8")
-        data = json.loads(raw)
+            raw = response.read().decode("utf-8", errors="replace")
+        try:
+            data = json.loads(raw)
+        except (ValueError, TypeError):
+            return None
         if not isinstance(data, list):
             return None
         return {"domain": domain, "entries": data, "count": len(data)}

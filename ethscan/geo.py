@@ -118,7 +118,10 @@ def _fetch_geo_data(ip: str, timeout: float = DEFAULT_TIMEOUT) -> dict | None:
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "ethscan/0.1"})
         with urllib.request.urlopen(req, timeout=timeout) as response:
-            data = json.loads(response.read().decode("utf-8"))
+            try:
+                data = json.loads(response.read().decode("utf-8", errors="replace"))
+            except (ValueError, TypeError):
+                return None
         if data.get("status") == "success":
             data["timestamp"] = time.time()
             return data

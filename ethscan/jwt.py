@@ -50,7 +50,7 @@ def _decode_json_segment(segment: str) -> dict | None:
     if raw is None:
         return None
     try:
-        data = json.loads(raw.decode("utf-8"))
+        data = json.loads(raw.decode("utf-8", errors="replace"))
     except (UnicodeDecodeError, json.JSONDecodeError):
         return None
     return data if isinstance(data, dict) else None

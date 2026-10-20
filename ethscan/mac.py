@@ -105,7 +105,7 @@ def _fetch_mac_data(
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "ethscan/0.1"})
         with urllib.request.urlopen(req, timeout=timeout) as response:
-            raw = response.read().decode("utf-8")
+            raw = response.read().decode("utf-8", errors="replace")
         return {"mac": mac, "vendor": raw, "timestamp": time.time()}
     except Exception:  # noqa: BLE001 - urlopen can raise any failure; swallow to None
         return None

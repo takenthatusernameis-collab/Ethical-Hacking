@@ -107,7 +107,10 @@ def _fetch_cve_data(
     req = urllib.request.Request(url, headers={"User-Agent": "ethscan/0.1"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as response:
-            data = json.loads(response.read().decode("utf-8"))
+            try:
+                data = json.loads(response.read().decode("utf-8", errors="replace"))
+            except (ValueError, TypeError):
+                return None
         if not isinstance(data, dict):
             return None
         return data
