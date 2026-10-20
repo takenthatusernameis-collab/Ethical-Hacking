@@ -1,32 +1,33 @@
 # NEXT_TASK.md
 
-## Status (2026-10-20T00:40:00Z)
-- Prior agent task (the `s3` bracketed-IPv6 crash): **complete** (see
-  `TASK.md` of that session).
-- The task this session inherited (a port out of range in the **bare**
-  `host:port` form) is **complete for all 14 commands** that parse such a
-  target. The previous session had fixed 7 of them in the code but left
-  them untested and undocumented; the other 7 silently connected to the
-  **wrong port** and are fixed now.
-- A second crash in the same expression (a port text that `int()` refuses)
-  is fixed as well.
-- Verified: **4272 passed / 1 skipped**; ruff rule set identical to the
-  baseline (48 pre-existing errors, no new ones).
-- The `--target` leak list is empty for the inputs of the sweep below.
+## Status (2026-10-20T08:20:00Z)
+- Prior agent task (the explicit **`--port` option**): **complete**. The
+  range check itself was already in the code (`click.IntRange(0, 65535)` on
+  all 24 port options), but it was **untested and undocumented**; this
+  session verified it end to end and added the regression tests (including
+  an invariant test that every port option of the CLI is range-checked and
+  a tripwire test that a rejected port starts no connection).
+- The three classes of the wider backlog (a percent-encoded control
+  character in the host, a userinfo part in the authority, a host that is
+  not a valid host name) are **fixed as well**.
+- Verified: **4319 passed / 1 skipped**; ruff rule set identical to the
+  baseline (48 pre-existing errors, no new ones); `git diff --check` clean.
+- The `--target` leak list is empty for the inputs of the sweep below
+  (462 invocations, 0 leaked tracebacks).
 
 ## The port fix in one paragraph
-`ethscan/target.py` now owns the validation of a hand-parsed port:
-`check_port()` accepts the port as a number **or as the text of a number**,
-converts the text itself (so text that `int()` refuses becomes a
-`TargetSpecError` and not a raw `ValueError`) and refuses anything outside
-0-65535 with `Port out of range 0-65535`. All 14 protocol modules call it
-in the branch that parses the port of a bare `host:port` target, so the
-bare form and the scheme-qualified form (`redis://host:99999`, which was
-already refused by `url_port()`) are now refused the same way.
+All 24 port options of the CLI (`--port`, and `ping --tcp-port`,
+`recon --trace-port`, `recon --whois-port`) are declared as
+`click.IntRange(0, 65535)`, so click refuses a value outside 0-65535
+before the command runs, with **exit 2** and the single line
+`Error: Invalid value for '--port': 99999 is not in the range 0<=x<=65535.`
+The same check applies to a port that comes from the **config file**
+(`commands: {redis: {port: 99999}}`), because click validates the default
+map as well.
 
 ## Sweep of every `--target` command (current evidence)
 
-All 42 CLI commands that take a `--target` were invoked with four
+All 42 CLI commands that take a `--target` were invoked with eleven
 hostile inputs. Reproduce with:
 
 ```python
@@ -38,9 +39,12 @@ cmds = ("brute cert cve dns dnsbrute dnssec ftp fuzz geo headers ldap mac "
         "memcached mongodb mssql mysql netbios ntp oracle osdetect ping "
         "postgresql recon redis report resolve s3 scan service smb smtp snmp "
         "ssh ssl subdomains subtake tls trace urlcheck vuln web whois").split()
+targets = ("....", "%00", "http://user:pass@example.com", "host name",
+           "host\tname", "https://example.com/a b", "redis://host:notaport",
+           "host:99999", "http://example.com/ho\x00st", "https://host\tname", "")
 
 for c in cmds:
-    for target in ("", "host name", "no-such-host.invalid", "[::1]:443"):
+    for target in targets:
         res = runner.invoke(cli.cli, [c, "--target", target])
         exc = res.exception
         leaked = exc is not None and not isinstance(exc, SystemExit)
@@ -48,53 +52,47 @@ for c in cmds:
             print(c, repr(target), res.exit_code, type(exc).__name__, exc)
 ```
 
-Result: **no traceback leaked** (168 invocations).
-
-The port-aware sweep of this session (20 commands x 12 targets, including
-`example.com:99999`, `example.com:65536`, `example.com:²`,
-`[::1]:99999`, `http://example.com:99999` and
-`host:99999999999999999999`) also leaked **0 tracebacks** in 240
-invocations.
+Result: **no traceback leaked** (462 invocations).
 
 ## Remaining tasks (bounded, high-value)
 
-### 1. The explicit `--port` option is not range-checked (next task)
-23 commands take a port as an option (`--port`, and `ping --tcp-port`,
-`recon --trace-port`, `recon --whois-port`). Every one of them uses
-`type=int` without a range, so an out-of-range value reaches the socket
-layer:
+### 1. The `--timeout` option is not range-checked (next task)
+Every command that takes a `--timeout` uses `type=float` without a range,
+so a negative timeout reaches the socket layer, where `socket.settimeout()`
+refuses it:
 
 ```
-$ python -m ethscan redis --target 127.0.0.1 --port 99999
+$ python -m ethscan redis --target 127.0.0.1 --timeout -1
   File ".../ethscan/redis.py", line 193, in _send_recv
-    sock.connect((host, port))
-OverflowError: connect(): port must be 0-65535.
+    sock.settimeout(timeout)
+ValueError: Timeout value out of range
 EXIT=1
 ```
 
-**10 commands leak a traceback**: `ldap`, `memcached`, `redis`, `smb`
-(`connect()`), `netbios`, `ntp`, `snmp` (`sendto()`), `ping` (`--tcp-port`,
-`connect_ex()`), `trace` and `whois` (`connect()`).
+**9 commands leak a traceback** with `--timeout -1`: `ldap`, `memcached`,
+`netbios`, `ntp`, `redis`, `smb`, `snmp`, `trace` and `whois`.
 
-**12 commands probe the wrong port silently**: `brute`, `ftp`, `mongodb`,
-`mssql`, `mysql`, `oracle`, `postgresql`, `smtp`, `ssh`, `ssl`, `tls`,
-`urlcheck` - `socket.getaddrinfo()` wraps a port above 65535, so
-`--port 99999` is probed on port **34463**. `recon --trace-port` and
-`recon --whois-port` pass the value on to the same modules.
+**`whois` leaks a second one** with `--timeout 0`:
+`BlockingIOError: [Errno 115] Operation now in progress` (it puts the
+socket in non-blocking mode and waits for the answer itself).
 
-Root cause and the suggested fix shape (one `click.IntRange(0, 65535)`
-per option) are in `HANDOFF_NEXT.md`.
+Reproduce with:
 
-### 2. Backlog from the wider sweep (still reproduces, 21 invocations)
-A wider sweep found three more classes of leaked traceback. They are not
-the next task; the evidence and the affected commands are in
-`HANDOFF_NEXT.md` ("Backlog found by the same sweep").
+```python
+for c in cmds:
+    for value in ("-1", "0"):
+        res = runner.invoke(cli.cli, [c, "--target", "127.0.0.1", "--timeout", value])
+        exc = res.exception
+        if exc is not None and not isinstance(exc, SystemExit):
+            print(c, value, type(exc).__name__, exc)
+```
 
-| input | commands | error |
-|---|---|---|
-| `--target '....'` | `cert`, `dnssec`, `ftp`, `geo`, `mac`, `osdetect`, `ping`, `report`, `scan`, `service`, `smtp`, `ssh`, `vuln` (13) | `UnicodeError: label empty or too long` |
-| `--target '%00'` | `fuzz`, `headers`, `urlcheck`, `web` (4) | `InvalidURL: URL can't contain control characters. '\x00'` |
-| `--target 'http://user:pass@example.com'` | `fuzz`, `headers`, `urlcheck`, `web` (4) | `InvalidURL: nonnumeric port: 'pass@example.com'` |
+Root cause and the suggested fix shape are in `HANDOFF_NEXT.md`.
+
+### 2. Backlog from the wider sweep
+The three classes that were in the backlog of the previous session are
+**fixed** (percent-encoded control character, userinfo, invalid host
+name). Nothing from that sweep leaks any more.
 
 ## Verified working forms (do not break)
 - `host`, `host:443`, `host:65535`, `http://host`, `https://host:8443`,
@@ -110,3 +108,9 @@ the next task; the evidence and the affected commands are in
   valid candidate before requesting it.
 - All 14 protocol modules still parse `host:1234`, `host:65535` and
   `[::1]:443` to the same values as before.
+- A target with a userinfo (`http://user:pass@example.com`) is scanned as
+  `example.com` (the credentials are dropped), the way whois, mongodb and
+  ssh already did it.
+- A host that is not a valid host name (`....`) is reported as a failed
+  probe (**exit 0**), exactly like a host that cannot be resolved
+  (`no-such-host.invalid`).

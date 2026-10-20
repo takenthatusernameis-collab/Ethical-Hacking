@@ -206,7 +206,9 @@ def _resolve_nameservers(domain: str, timeout: float) -> list[str]:
         results = socket.getaddrinfo(domain, DNS_PORT, socket.AF_INET, socket.SOCK_DGRAM)
         ips = sorted({r[4][0] for r in results})
         return ips
-    except (socket.timeout, socket.gaierror, OSError):
+    # A domain that is not a valid host name ("....") raises a UnicodeError,
+    # which is a ValueError, when the resolver encodes it.
+    except (socket.timeout, socket.gaierror, OSError, ValueError):
         return []
 
 

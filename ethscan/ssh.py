@@ -451,7 +451,9 @@ def run_ssh(
         result["error"] = "Connection timeout"
     except ConnectionRefusedError:
         result["error"] = "Connection refused"
-    except OSError as exc:
+    # A host that is not a valid host name ("....") raises a UnicodeError,
+    # which is a ValueError, when the resolver encodes it.
+    except (OSError, ValueError) as exc:
         result["error"] = f"Connection error: {exc}"
     finally:
         if sock:

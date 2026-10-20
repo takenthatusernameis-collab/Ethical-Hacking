@@ -22669,3 +22669,411 @@ def test_the_hostile_path_message_is_the_same_for_every_command() -> None:
         messages.add(errors[0])
     assert len(messages) == 1, messages
 
+
+# --- A --port option whose value is out of range ---------------------------
+#
+# The explicit port option was declared as ``type=int`` without a range, so
+# the value reached the socket layer. Ten commands died with an
+# ``OverflowError`` traceback ("connect(): port must be 0-65535.") and the
+# rest silently probed the port that ``socket.getaddrinfo()`` returns for a
+# port above 65535 (99999 was probed on 34463). Every port option is now
+# declared as ``click.IntRange(0, 65535)``, so click refuses the value before
+# the command runs.
+
+# The commands that carry a single ``--port`` option.
+PORT_OPTION_COMMANDS = (
+    "brute",
+    "ftp",
+    "ldap",
+    "memcached",
+    "mongodb",
+    "mssql",
+    "mysql",
+    "netbios",
+    "ntp",
+    "oracle",
+    "postgresql",
+    "redis",
+    "smb",
+    "smtp",
+    "snmp",
+    "ssh",
+    "ssl",
+    "tls",
+    "trace",
+    "urlcheck",
+    "whois",
+)
+
+# ``ping`` and ``recon`` name their port option differently.
+PING_PORT_OPTION = "--tcp-port"
+RECON_PORT_OPTIONS = ("--trace-port", "--whois-port")
+
+OUT_OF_RANGE_PORT_VALUES = ("65536", "99999", "-1", "99999999999999999999")
+
+PORT_RANGE_MESSAGE = "is not in the range 0<=x<=65535"
+
+
+def _port_option_pairs() -> list[tuple[str, str]]:
+    """Return every (command, port option) pair of the CLI."""
+    pairs = [(command, "--port") for command in PORT_OPTION_COMMANDS]
+    pairs.append(("ping", PING_PORT_OPTION))
+    pairs.extend(("recon", option) for option in RECON_PORT_OPTIONS)
+    return pairs
+
+
+def _assert_port_usage_error(result, command: str) -> None:
+    """Assert that ``result`` is a clean click usage error for a port option."""
+    assert result.exit_code == 2, (
+        f"{command}: expected exit code 2, got {result.exit_code}\n{result.output}"
+    )
+    assert "Error: Invalid value for" in result.output, (
+        f"{command}: missing usage error message\n{result.output}"
+    )
+    assert "Traceback (most recent call last)" not in result.output, (
+        f"{command}: leaked a traceback\n{result.output}"
+    )
+    assert isinstance(result.exception, SystemExit), (
+        f"{command}: leaked {result.exception!r} instead of a usage error"
+    )
+
+
+def test_every_port_option_of_the_cli_is_range_checked() -> None:
+    """No command may declare a port option that is not range-checked."""
+    import click
+
+    checked = 0
+    for name, command in cli.commands.items():
+        for param in command.params:
+            if "port" not in param.name or param.name == "ports":
+                continue
+            assert isinstance(param.type, click.IntRange), (
+                f"{name} --{param.name} is not range-checked"
+            )
+            assert (param.type.min, param.type.max) == (0, 65535), (
+                f"{name} --{param.name} allows {param.type.min}-{param.type.max}"
+            )
+            assert param.type.clamp is False, (
+                f"{name} --{param.name} clamps the value instead of refusing it"
+            )
+            checked += 1
+    assert checked == len(_port_option_pairs()), (
+        f"{checked} port options in the CLI, {len(_port_option_pairs())} in the test"
+    )
+
+
+def test_an_out_of_range_port_option_is_a_usage_error() -> None:
+    """A port option outside 0-65535 must be rejected before the command runs."""
+    runner = CliRunner()
+    for command, option in _port_option_pairs():
+        for value in OUT_OF_RANGE_PORT_VALUES:
+            result = runner.invoke(
+                cli, [command, "--target", "127.0.0.1", option, value]
+            )
+            _assert_port_usage_error(result, f"{command} {option} {value}")
+            assert f"Error: Invalid value for '{option}':" in result.output, (
+                f"{command} {option} {value}: wrong option named\n{result.output}"
+            )
+            assert PORT_RANGE_MESSAGE in result.output, (
+                f"{command} {option} {value}: wrong message\n{result.output}"
+            )
+
+
+def test_an_out_of_range_port_option_is_a_single_line_error() -> None:
+    """The failure must be a one-line error, not a multi-line traceback."""
+    runner = CliRunner()
+    for command, option in _port_option_pairs():
+        result = runner.invoke(
+            cli, [command, "--target", "127.0.0.1", option, "99999"]
+        )
+        error_lines = [
+            line for line in result.output.splitlines() if line.startswith("Error:")
+        ]
+        assert len(error_lines) == 1, f"{command} {option}: {result.output}"
+        assert error_lines[0] == (
+            f"Error: Invalid value for '{option}': 99999 {PORT_RANGE_MESSAGE}."
+        ), f"{command} {option}: {result.output}"
+
+
+def test_an_out_of_range_port_option_does_not_start_a_probe(monkeypatch) -> None:
+    """A rejected port must abort before any network access happens."""
+    import socket
+
+    def tripwire(*args, **kwargs):
+        raise AssertionError("a connection was started for an invalid port")
+
+    monkeypatch.setattr(socket.socket, "connect", tripwire)
+    monkeypatch.setattr(socket.socket, "connect_ex", tripwire)
+    monkeypatch.setattr(socket.socket, "sendto", tripwire)
+    monkeypatch.setattr(socket, "getaddrinfo", tripwire)
+
+    runner = CliRunner()
+    for command, option in _port_option_pairs():
+        result = runner.invoke(
+            cli, [command, "--target", "127.0.0.1", option, "99999"]
+        )
+        _assert_port_usage_error(result, f"{command} {option}")
+
+
+def test_an_out_of_range_port_in_the_config_file_is_a_usage_error(tmp_path) -> None:
+    """A port that comes from the config file is range-checked as well."""
+    runner = CliRunner()
+    config = tmp_path / "ethscan.yaml"
+    config.write_text("commands:\n  redis:\n    port: 99999\n")
+    result = runner.invoke(
+        cli, ["--config", str(config), "redis", "--target", "127.0.0.1"]
+    )
+    _assert_port_usage_error(result, "redis (config)")
+    assert PORT_RANGE_MESSAGE in result.output, result.output
+
+    config.write_text("defaults:\n  port: 99999\n")
+    result = runner.invoke(
+        cli, ["--config", str(config), "redis", "--target", "127.0.0.1"]
+    )
+    _assert_port_usage_error(result, "redis (global config)")
+    assert PORT_RANGE_MESSAGE in result.output, result.output
+
+
+def test_a_valid_port_option_is_still_used_for_the_probe() -> None:
+    """A port inside the range still reaches the probe unchanged."""
+    runner = CliRunner()
+    for port in (0, 1, 65535):
+        result = runner.invoke(
+            cli,
+            ["redis", "--target", "127.0.0.1", "--port", str(port), "--timeout", "0.2"],
+        )
+        assert result.exit_code == 0, f"redis --port {port}: {result.output}"
+        payload = json.loads(result.output)
+        assert payload["port"] == port, f"redis --port {port}: {result.output}"
+
+
+def test_a_valid_port_option_is_handed_to_the_probe(monkeypatch) -> None:
+    """The value of the port option is forwarded to the probe unchanged."""
+    captured = {}
+
+    def fake_ping(target, **kwargs):
+        captured["ping"] = kwargs.get("port")
+        return {}
+
+    def fake_recon(target, **kwargs):
+        captured["recon"] = (kwargs.get("whois_port"), kwargs.get("trace_port"))
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_ping", fake_ping)
+    monkeypatch.setattr("ethscan.cli.run_recon", fake_recon)
+    monkeypatch.setattr("ethscan.cli.format_ping_report_json", lambda results: "{}")
+    monkeypatch.setattr("ethscan.cli.format_recon_report_json", lambda results: "{}")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ping", "--target", "127.0.0.1", "--tcp-port", "1234"])
+    assert result.exit_code == 0, result.output
+    assert captured["ping"] == 1234, captured
+
+    result = runner.invoke(
+        cli,
+        [
+            "recon",
+            "--target",
+            "example.com",
+            "--whois-port",
+            "1234",
+            "--trace-port",
+            "4321",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["recon"] == (1234, 4321), captured
+
+
+def test_the_port_option_message_is_the_same_for_every_command() -> None:
+    """One stable message, so the error does not depend on the command."""
+    runner = CliRunner()
+    messages = set()
+    for command, option in _port_option_pairs():
+        result = runner.invoke(
+            cli, [command, "--target", "127.0.0.1", option, "99999"]
+        )
+        errors = [
+            line for line in result.output.splitlines() if line.startswith("Error:")
+        ]
+        messages.add(errors[0].split(": ", 2)[-1])
+    assert len(messages) == 1, messages
+
+
+# --- A target whose host carries a percent-encoded control character -------
+#
+# ``urllib.request`` decodes the percent escapes of the host before it uses
+# it, so the host that reaches ``http.client`` carries a control character
+# that the raw target does not show. ``http.client`` refuses such a host
+# with an ``http.client.InvalidURL``, which derives from ``HTTPException``
+# and not from ``ValueError``, so it escaped the library and reached the
+# user as a raw traceback.
+
+URL_TARGET_COMMANDS = (
+    "web",
+    "headers",
+    "urlcheck",
+    "fuzz",
+)
+
+PERCENT_ENCODED_HOST_TARGETS = (
+    "%00",
+    "%09host",
+    "%20host",
+    "https://%00",
+    "http://host%00:8443",
+)
+
+
+def test_a_target_with_a_percent_encoded_host_is_a_usage_error() -> None:
+    """A host that decodes to a control character must be rejected cleanly."""
+    runner = CliRunner()
+    for command in URL_TARGET_COMMANDS:
+        for target in PERCENT_ENCODED_HOST_TARGETS:
+            result = runner.invoke(cli, [command, "--target", target])
+            _assert_target_usage_error(result, f"{command} --target {target!r}")
+            assert "Target host contains a space or control character" in result.output, (
+                f"{command} --target {target!r}: wrong message\n{result.output}"
+            )
+
+
+def test_a_target_with_a_percent_encoded_host_does_not_start_a_probe(
+    monkeypatch,
+) -> None:
+    """A rejected target must abort before any network access happens."""
+    import urllib.request
+
+    def tripwire(*args, **kwargs):
+        raise AssertionError("a request was started for an invalid target")
+
+    monkeypatch.setattr(urllib.request, "urlopen", tripwire)
+
+    runner = CliRunner()
+    for command in URL_TARGET_COMMANDS:
+        result = runner.invoke(cli, [command, "--target", "%00"])
+        _assert_target_usage_error(result, command)
+
+
+# --- A target whose authority carries a userinfo part ----------------------
+#
+# ``urllib.request`` keeps the userinfo in the host it connects to, and
+# ``http.client`` then reads the text after the last colon of that host as
+# the port ("user:pass@example.com" -> port "pass@example.com"). The
+# credentials are of no use to the toolkit, so the host is used without
+# them, the way the whois, mongodb and ssh modules already do it.
+
+USERINFO_TARGET = "http://user:pass@example.com"
+
+
+def test_a_target_with_a_userinfo_is_not_a_traceback(monkeypatch) -> None:
+    """The credentials of the target are dropped, not sent to the host."""
+    import urllib.request
+
+    requested = []
+
+    class FakeResponse:
+        def __init__(self):
+            self.headers = {"Server": "test"}
+            self.status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def fake_urlopen(request, timeout=None):
+        requested.append(request.full_url)
+        return FakeResponse()
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+
+    runner = CliRunner()
+    for command in URL_TARGET_COMMANDS:
+        result = runner.invoke(cli, [command, "--target", USERINFO_TARGET])
+        assert result.exit_code == 0, f"{command}: {result.output}"
+        assert "Traceback (most recent call last)" not in result.output, (
+            f"{command}: leaked a traceback\n{result.output}"
+        )
+    assert requested, "no request was made"
+    for url in requested:
+        assert "@" not in url, f"the userinfo was sent: {url}"
+        assert "example.com" in url, url
+
+
+def test_a_target_with_a_userinfo_reports_the_host_without_it(monkeypatch) -> None:
+    """The reported host is the host the request was sent to."""
+    import urllib.request
+
+    class FakeResponse:
+        def __init__(self):
+            self.headers = {"Server": "test"}
+            self.status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def fake_urlopen(request, timeout=None):
+        return FakeResponse()
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["web", "--target", USERINFO_TARGET, "--checks", "headers"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["host"] == "example.com", result.output
+
+    result = runner.invoke(cli, ["fuzz", "--target", USERINFO_TARGET])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["base_url"] == "http://example.com", result.output
+
+
+# --- A target whose host is not a valid host name -------------------------
+#
+# The resolver encodes a host name as IDNA before it looks it up, and it
+# raises a UnicodeError for a name with an empty label ("...."). That error
+# is a ValueError and not an OSError, so the narrow ``except`` clauses of
+# the library did not catch it and it reached the user as a raw traceback.
+# Such a host is now reported the way every host that cannot be resolved is
+# reported: as a failed probe inside the output.
+
+MALFORMED_HOST_COMMANDS = (
+    "cert",
+    "dnssec",
+    "ftp",
+    "geo",
+    "mac",
+    "osdetect",
+    "ping",
+    "report",
+    "scan",
+    "service",
+    "smtp",
+    "ssh",
+    "vuln",
+)
+
+MALFORMED_HOST_TARGETS = ("....", "example..com")
+
+
+def test_a_malformed_host_is_a_failed_probe_and_not_a_traceback() -> None:
+    """A host that cannot be encoded is reported like an unresolvable host."""
+    runner = CliRunner()
+    for command in MALFORMED_HOST_COMMANDS:
+        for target in MALFORMED_HOST_TARGETS:
+            result = runner.invoke(cli, [command, "--target", target])
+            assert result.exit_code == 0, (
+                f"{command} --target {target!r}: exit code {result.exit_code}\n"
+                f"{result.output}"
+            )
+            assert "Traceback (most recent call last)" not in result.output, (
+                f"{command} --target {target!r}: leaked a traceback\n{result.output}"
+            )
+            assert result.exception is None, (
+                f"{command} --target {target!r}: leaked {result.exception!r}"
+            )

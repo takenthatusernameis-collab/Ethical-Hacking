@@ -38,7 +38,9 @@ def _resolve_host(host: str) -> str | None:
     """Resolve a hostname to an IPv4 address, returning None on failure."""
     try:
         return socket.gethostbyname(host)
-    except (socket.gaierror, socket.herror):
+    # A host that is not a valid host name ("....") raises a UnicodeError,
+    # which is a ValueError, when the resolver encodes it.
+    except (socket.gaierror, socket.herror, ValueError):
         return None
 
 

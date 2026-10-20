@@ -40,7 +40,9 @@ def _resolve_host(host: str) -> str | None:
         import socket
 
         return socket.gethostbyname(host)
-    except (socket.gaierror, socket.herror):
+    # A host that is not a valid host name ("....") raises a UnicodeError,
+    # which is a ValueError, when the resolver encodes it.
+    except (socket.gaierror, socket.herror, ValueError):
         return None
 
 

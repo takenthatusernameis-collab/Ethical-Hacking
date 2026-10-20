@@ -220,7 +220,9 @@ def run_smtp(
         except (socket.timeout, OSError) as exc:
             results["error"] = f"banner read failed: {exc}"
             return results
-    except (socket.timeout, OSError) as exc:
+    # A host that is not a valid host name ("....") raises a UnicodeError,
+    # which is a ValueError, when the resolver encodes it.
+    except (socket.timeout, OSError, ValueError) as exc:
         results["error"] = f"connection failed: {exc}"
         if sock is not None:
             sock.close()

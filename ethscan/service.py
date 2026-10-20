@@ -139,7 +139,9 @@ def grab_banner(host: str, port: int, timeout: float) -> tuple[int, str | None, 
                 except (socket.timeout, OSError):
                     pass
 
-    except (socket.timeout, ConnectionRefusedError, OSError):
+    # A host that is not a valid host name ("....") raises a UnicodeError,
+    # which is a ValueError, when the resolver encodes it.
+    except (socket.timeout, ConnectionRefusedError, OSError, ValueError):
         pass
 
     detected_service = None

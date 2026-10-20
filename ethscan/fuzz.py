@@ -9,7 +9,7 @@ import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from ethscan.target import check_target_host, url_port
+from ethscan.target import check_target_host, strip_userinfo, url_port
 
 DEFAULT_WORDLIST = [
     "/admin",
@@ -49,6 +49,10 @@ def load_wordlist(path: str) -> list[str]:
 def _normalize_base_url(target: str) -> str:
     """Normalize target to a base URL with scheme.
 
+    The userinfo of the target is dropped: ``urllib.request`` would keep it
+    in the host it connects to, and ``http.client`` would read the text
+    after the last colon of that host as the port.
+
     Raises:
         TargetSpecError: If the target carries an unusable host or port.
     """
@@ -58,7 +62,7 @@ def _normalize_base_url(target: str) -> str:
     check_target_host(normalized)
     parsed = urllib.parse.urlparse(normalized)
     url_port(parsed)
-    return f"{parsed.scheme}://{parsed.netloc}"
+    return f"{parsed.scheme}://{strip_userinfo(parsed.netloc)}"
 
 
 def _join_url(base: str, path: str) -> str:

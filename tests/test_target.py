@@ -13,7 +13,14 @@ A target whose *host* contains a space or a control character is the same
 kind of problem too: ``http.client`` refuses such a host with an
 ``http.client.InvalidURL``, which derives from ``HTTPException`` and not
 from ``ValueError``, so :func:`check_target_host` reports it as a
-:class:`TargetSpecError` before the request is made.
+:class:`TargetSpecError` before the request is made. The host is checked
+after its percent escapes are decoded as well, because ``urllib.request``
+decodes them before it uses the host.
+
+A target whose *authority* carries a userinfo part is the same kind of
+problem: ``urllib.request`` keeps the userinfo in the host it connects to,
+and ``http.client`` then reads the text after the last colon of that host
+as the port. :func:`strip_userinfo` drops it.
 """
 
 import importlib
@@ -21,7 +28,13 @@ from urllib.parse import urlparse
 
 import pytest
 
-from ethscan.target import TargetSpecError, check_port, check_target_host, url_port
+from ethscan.target import (
+    TargetSpecError,
+    check_port,
+    check_target_host,
+    strip_userinfo,
+    url_port,
+)
 
 TARGET_MODULES = (
     "redis",
@@ -386,6 +399,162 @@ def test_fuzz_reports_a_non_numeric_port_like_the_other_commands() -> None:
     with pytest.raises(TargetSpecError) as excinfo:
         fuzz._normalize_base_url("https://host:notaport")
     assert str(excinfo.value) == NON_NUMERIC_PORT_MESSAGE
+
+
+# --- A target whose host carries a percent-encoded control character -------
+#
+# ``urllib.request`` decodes the percent escapes of the host before it uses
+# it, so a host that looks harmless in its raw form ("%00") carries a
+# control character in the host that is actually sent over the network.
+# ``http.client`` refuses such a host with an ``http.client.InvalidURL``.
+
+PERCENT_ENCODED_HOST_TARGETS = (
+    "%00",
+    "%09host",
+    "%20host",
+    "host%00",
+    "host%00:443",
+    "https://%00",
+    "https://%00/path",
+    "http://host%00:8443",
+)
+
+
+@pytest.mark.parametrize("target", PERCENT_ENCODED_HOST_TARGETS)
+def test_check_target_host_rejects_a_percent_encoded_host(target: str) -> None:
+    """A host that carries a control character once decoded is rejected."""
+    with pytest.raises(TargetSpecError) as excinfo:
+        check_target_host(target)
+    assert str(excinfo.value) == HOST_ERROR_MESSAGE
+
+
+def test_check_target_host_accepts_a_harmless_percent_escape() -> None:
+    """A percent escape that decodes to a harmless character is accepted."""
+    check_target_host("example%2Ecom")
+    check_target_host("https://example%2Ecom/path")
+
+
+def test_the_url_modules_reject_a_percent_encoded_host() -> None:
+    """web, fuzz and s3 refuse a host that decodes to a control character."""
+    from ethscan import fuzz, s3, web
+
+    parsers = (web._parse_url, fuzz._normalize_base_url, s3._normalize_target)
+    for parser in parsers:
+        for target in PERCENT_ENCODED_HOST_TARGETS:
+            with pytest.raises(TargetSpecError) as excinfo:
+                parser(target)
+            assert str(excinfo.value) == HOST_ERROR_MESSAGE
+
+
+# --- A target whose authority carries a userinfo part ----------------------
+#
+# ``urllib.request`` keeps the userinfo in the host it connects to, and
+# ``http.client`` then reads the text after the last colon of that host as
+# the port ("user:pass@example.com" -> port "pass@example.com"). The
+# credentials are of no use to the toolkit, so the host is used without
+# them, the way the whois, mongodb and ssh modules already do it.
+
+USERINFO_TARGETS = (
+    ("http://user:pass@example.com", "http://example.com"),
+    ("https://user:pass@example.com/path?q=1#frag", "https://example.com/path?q=1#frag"),
+    ("https://user@example.com", "https://example.com"),
+    ("user:pass@example.com", "example.com"),
+    ("https://example.com", "https://example.com"),
+    ("https://example.com/path", "https://example.com/path"),
+    ("https://example.com:8443", "https://example.com:8443"),
+    ("https://[::1]:443", "https://[::1]:443"),
+    ("https://example.com/a@b", "https://example.com/a@b"),
+    ("example.com", "example.com"),
+)
+
+
+@pytest.mark.parametrize("target,expected", USERINFO_TARGETS)
+def test_strip_userinfo_removes_only_the_userinfo(target: str, expected: str) -> None:
+    """The userinfo is dropped, everything else is kept as it is."""
+    assert strip_userinfo(target) == expected
+
+
+def test_the_url_modules_use_the_host_without_the_userinfo() -> None:
+    """web and fuzz use the host of a target that carries a userinfo."""
+    from ethscan import fuzz, web
+
+    assert web._parse_url("http://user:pass@example.com") == ("example.com", 80, False)
+    assert fuzz._normalize_base_url("http://user:pass@example.com") == (
+        "http://example.com"
+    )
+    assert fuzz._normalize_base_url("https://user:pass@example.com:8443") == (
+        "https://example.com:8443"
+    )
+
+
+def test_fetch_headers_drops_the_userinfo_of_the_target(monkeypatch) -> None:
+    """The request must not carry the credentials of the target."""
+    from ethscan import web
+
+    captured = {}
+
+    class FakeResponse:
+        def __init__(self):
+            self.headers = {"Server": "test"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def fake_urlopen(request, timeout=None):
+        captured["url"] = request.full_url
+        return FakeResponse()
+
+    monkeypatch.setattr(web.urllib.request, "urlopen", fake_urlopen)
+    headers = web.fetch_headers("http://user:pass@example.com/path")
+    assert captured["url"] == "http://example.com/path"
+    assert headers == {"server": "test"}
+
+
+# --- A target whose host is not a valid host name -------------------------
+#
+# The resolver encodes a host name as IDNA before it looks it up, and it
+# raises a UnicodeError for a name with an empty label ("...."). That error
+# is a ValueError and not an OSError, so the narrow ``except`` clauses of
+# the library did not catch it and it reached the user as a raw traceback.
+# Such a host is now reported the way every host that cannot be resolved is
+# reported: as a failed probe inside the output.
+
+MALFORMED_HOSTS = ("....", "example..com")
+
+RESOLVE_HOST_MODULES = ("cert", "geo", "mac", "ping")
+
+
+@pytest.mark.parametrize("module_name", RESOLVE_HOST_MODULES)
+@pytest.mark.parametrize("host", MALFORMED_HOSTS)
+def test_the_resolve_host_helpers_report_a_malformed_host(module_name: str, host: str) -> None:
+    """A host that cannot be encoded is reported as an unresolvable host."""
+    module = importlib.import_module(f"ethscan.{module_name}")
+    assert module._resolve_host(host) is None
+
+
+def test_the_connection_helpers_report_a_malformed_host() -> None:
+    """A host that cannot be encoded is reported as a failed connection."""
+    from ethscan import osdetect, scanner, service
+
+    assert scanner.scan_port("....", 80, timeout=0.2) == (80, False)
+    port, banner, service_name = service.grab_banner("....", 80, 0.2)
+    assert (port, banner, service_name) == (80, None, None)
+    connected, error, rst = osdetect._connect_tcp("....", 80, 0.2)
+    assert connected is False
+    assert error is not None
+    assert rst is None
+
+
+@pytest.mark.parametrize("module_name", ("ftp", "smtp", "ssh"))
+def test_the_protocol_modules_report_a_malformed_host(module_name: str) -> None:
+    """A host that cannot be encoded is reported as a failed probe."""
+    module = importlib.import_module(f"ethscan.{module_name}")
+    run = getattr(module, f"run_{module_name}")
+    results = run("....", timeout=0.2)
+    assert results["error"], results
 
 
 # --- A target whose path or query contains a space or a control character --

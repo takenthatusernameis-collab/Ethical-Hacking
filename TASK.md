@@ -1,61 +1,98 @@
 # TASK.md
 
-Date: 2026-10-20T00:40:00Z
-Status: the **out-of-range port in the bare `host:port` form** is fixed
-for **all 14 commands** that parse such a target, not only for the seven
-the previous session found. The same expression had a second crash
-(`str.isdigit()` accepts text that `int()` refuses), which is fixed too.
-A third, related surface was found and measured but deliberately left
-alone: the explicit `--port` option (next task, `HANDOFF_NEXT.md`).
+Date: 2026-10-20T08:20:00Z
+Status: the **explicit `--port` option** is range-checked and, for the first
+time, **covered by tests** (the fix itself was already in the code, but
+untested and undocumented). The three classes of the wider sweep that were
+left in the backlog - a **percent-encoded control character** in the host, a
+**userinfo part** in the authority and a **host that is not a valid host
+name** - are fixed as well, so the sweep over all 42 commands and 11
+hostile targets no longer leaks a single traceback.
 
 ## What changed
-- **`ethscan/target.py`**
-  - `check_port(port)` now accepts the port as a **number or as the text**
-    of a number (`int | str`), converts the text itself and raises
-    `TargetSpecError` for text that `int()` refuses. The range check
-    (0-65535) and the message `Port out of range 0-65535` are unchanged.
-- **`ethscan/{redis,ldap,memcached,netbios,ntp,smb,snmp}.py`**
-  (completed from the previous session, which had left them without
-  tests): the hand-parsed port of the bare `host:port` form now goes
-  through `check_port()`.
-- **`ethscan/{ftp,smtp,mysql,mongodb,postgresql,mssql,oracle}.py`** (new)
-  - the same seven modules parse the port of a bare `host:port` target by
-    hand as well; they now call `check_port()` too. Before the change they
-    did **not** crash, they silently connected to the **wrong port**:
-    `socket.getaddrinfo()` wraps a port above 65535, so
-    `example.com:99999` was probed on port **34463**.
-- All 14 modules pass the port text to `check_port()` instead of calling
-  `int()` at the call site.
+
+### 1. The `--port` option (the task of the previous session)
+- The 24 port options of the CLI (`--port`, `--tcp-port`, `--trace-port`,
+  `--whois-port`) were already declared as `click.IntRange(0, 65535)`.
+  This session **verified** that and added the missing regression tests:
+  - `tests/test_cli.py`: every command with a port option refuses
+    `65536`, `99999`, `-1` and `99999999999999999999` with **exit 2** and
+    the single line
+    `Error: Invalid value for '--port': 99999 is not in the range 0<=x<=65535.`
+  - an invariant test that **every** port option of the CLI is an
+    `IntRange(0, 65535)` that does not clamp, so a command added later
+    cannot slip through without a range check;
+  - a tripwire test that no connection is started for a rejected value
+    (`socket.socket.connect`, `connect_ex`, `sendto` and
+    `socket.getaddrinfo` are replaced);
+  - the same check for a port that comes from the **config file**
+    (`commands: {redis: {port: 99999}}`), which click validates as well;
+  - a test that a valid port is still used for the probe (`0`, `1`, `65535`).
+- No source change was needed for this part.
+
+### 2. A percent-encoded control character in the host (`--target '%00'`)
+- **Root cause:** `urllib.request` decodes the percent escapes of the host
+  before it uses it (`urllib/request.py`: `self.host = unquote(self.host)`),
+  so a host that looks harmless in its raw form carries a control character
+  in the host that reaches `http.client`, which refuses it with an
+  `InvalidURL` (not a `ValueError`, so it escaped the library).
+- **`ethscan/target.py`**: `check_target_host()` now checks the host twice -
+  as it is written and after its percent escapes are decoded. The message
+  (`Target host contains a space or control character`) is unchanged.
+- `web`, `headers`, `urlcheck` and `fuzz` now report the target as a usage
+  error (**exit 2**).
+
+### 3. A userinfo part in the authority (`--target 'http://user:pass@example.com'`)
+- **Root cause:** `urllib.request` keeps the userinfo in the host it
+  connects to, and `http.client` then reads the text after the last colon
+  of that host as the port (`InvalidURL: nonnumeric port: 'pass@example.com'`).
+- **`ethscan/target.py`**: new `strip_userinfo(url)` helper that drops the
+  userinfo and keeps the scheme, the host, the port, the path, the query and
+  the fragment exactly as they are.
+- **`ethscan/web.py`** (`fetch_headers`) and **`ethscan/fuzz.py`**
+  (`_normalize_base_url`) use it, the way the whois, mongodb and ssh modules
+  already used the host without the userinfo.
+- The target is now scanned as `example.com` instead of crashing.
+
+### 4. A host that is not a valid host name (`--target '....'`)
+- **Root cause:** the resolver encodes a host name as IDNA and raises a
+  `UnicodeError` for a name with an empty label. `UnicodeError` is a
+  `ValueError` and not an `OSError`, so the narrow `except` clauses of the
+  library did not catch it.
+- **`ethscan/{cert,geo,mac,ping}.py`**: `_resolve_host()` catches
+  `ValueError` as well.
+- **`ethscan/dnssec.py`**: `_resolve_nameservers()` catches `ValueError`.
+- **`ethscan/{scanner,service}.py`**: the connection catches `ValueError`.
+- **`ethscan/{osdetect,ssh}.py`**: the connection error catches `ValueError`.
+- **`ethscan/{smtp,ftp}.py`**: the connection failure catches `ValueError`.
+- Such a host is now reported the way **every host that cannot be resolved**
+  is reported: as a failed probe inside the output (**exit 0**), not as a
+  usage error.
 
 ## Verification
-- `python -m ethscan <cmd> --target 'example.com:99999'` for the 9 commands
-  with a usage-error contract (`redis`, `ldap`, `memcached`, `netbios`,
-  `ntp`, `smb`, `snmp`, `ftp`, `smtp`) -> **exit 2**, one-line
-  `Error: Invalid value for '--target': Port out of range 0-65535`.
-- The same target for the 5 commands with a probe-failure contract
-  (`mysql`, `mongodb`, `postgresql`, `mssql`, `oracle`) -> **exit 0** with
-  `"error": "Port out of range 0-65535"` in the output, exactly like the
-  scheme-qualified form of the same target.
-- `python -m ethscan redis --target 'example.com:²'` (a superscript digit:
-  `str.isdigit()` accepts it, `int()` refuses it) -> **exit 2**,
-  `Error: Invalid value for '--target': Invalid port '²'` (before the
-  change: a raw `ValueError` traceback).
-- The valid forms are unchanged: `host`, `host:1234`, `host:65535`,
-  `[::1]:443` and the scheme forms parse to the same values in all 14
-  modules.
-- Full suite: **4272 passed, 1 skipped** (4215 before + 57 new tests).
-  Ruff: the same **48** pre-existing errors, no new ones.
-- Sweep: 20 target-consuming commands x 12 hostile targets = **240
-  invocations, 0 leaked tracebacks**.
+- Full suite: **4319 passed, 1 skipped** (4272 before + 47 new tests).
+- Ruff: the same **48** pre-existing errors, **no new ones**
+  (`ruff check ethscan/ tests/`).
+- `git diff --check`: clean.
+- Sweep: **42 commands x 11 hostile targets = 462 invocations, 0 leaked
+  tracebacks** (the 11 timeouts of the sweep are the commands that probe a
+  real host: `brute`, `snmp`, `ssh` and `trace` need more than 15 s in this
+  sandbox, with or without a change).
+- **Mutation checks** (the fix was reverted and the tests were run again):
+  - reverting the three port options to `type=int` fails 6 of the 8 new
+    port tests and reproduces the original
+    `OverflowError('connect(): port must be 0-65535.')`;
+  - reverting the decoded-host check and the userinfo strip fails 15 of the
+    new tests (4 of them at the CLI level);
+  - every new test of the malformed-host class fails without the
+    `ValueError` in the `except` clauses.
 
 ## Remaining
-- The explicit **`--port` option** is still not range-checked: 9 commands
-  leak an `OverflowError` traceback (`ldap`, `memcached`, `redis`, `smb`,
-  `netbios`, `ntp`, `snmp`, `trace`, `whois`) and 12 commands silently
-  probe the wrapped port. Evidence and the suggested fix are in
-  `HANDOFF_NEXT.md`.
-- The backlog of the wider sweep is unchanged and still reproduces: a host
-  of only dots (`UnicodeError`, 13 commands), a percent-encoded NUL
-  (`InvalidURL`, 4 commands) and a URL with userinfo (`InvalidURL`, 4
-  commands). See `HANDOFF_NEXT.md`.
+- The **`--timeout` option is not range-checked**: `--timeout -1` leaks a
+  raw `ValueError: Timeout value out of range` in **9** commands (`ldap`,
+  `memcached`, `netbios`, `ntp`, `redis`, `smb`, `snmp`, `trace`,
+  `whois`) and `--timeout 0` leaks a `BlockingIOError` in `whois`.
+  Evidence and the suggested fix are in `HANDOFF_NEXT.md`.
 - The 48 pre-existing ruff errors are unrelated and left alone.
+- The `--ports` option (the plural form) is validated in every command that
+  has it - checked in this session, no change needed.

@@ -22,7 +22,9 @@ def scan_port(host: str, port: int, timeout: float = 1.0) -> tuple[int, bool]:
     try:
         with socket.create_connection((host, port), timeout=timeout):
             return port, True
-    except (socket.timeout, ConnectionRefusedError, OSError):
+    # A host that is not a valid host name ("....") raises a UnicodeError,
+    # which is a ValueError, when the resolver encodes it.
+    except (socket.timeout, ConnectionRefusedError, OSError, ValueError):
         return port, False
 
 

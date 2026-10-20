@@ -127,7 +127,9 @@ def run_ftp(
             except ftplib.Error as exc:
                 results["error"] = f"banner read failed: {exc}"
                 return results
-        except (socket.timeout, OSError, ftplib.Error) as exc:
+        # A host that is not a valid host name ("....") raises a UnicodeError,
+        # which is a ValueError, when the resolver encodes it.
+        except (socket.timeout, OSError, ftplib.Error, ValueError) as exc:
             results["error"] = f"connection failed: {exc}"
             return results
 

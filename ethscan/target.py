@@ -15,7 +15,13 @@ cannot be turned into an integer, and that error is re-raised here as a
 space or a control character: ``http.client`` refuses such a host with an
 ``http.client.InvalidURL``, which derives from ``HTTPException`` and not
 from ``ValueError``, so it escapes the ``except ValueError`` handlers of the
-library and reaches the user as a raw traceback.
+library and reaches the user as a raw traceback. The host is checked after
+its percent escapes are decoded as well, because ``urllib.request`` decodes
+them before the host is used.
+
+:func:`strip_userinfo` removes the userinfo part of the authority of a URL:
+``urllib.request`` keeps it in the host it connects to, and ``http.client``
+then reads the text after the last colon of that host as the port.
 
 :func:`check_target_path` does the same for a target whose path or query
 contains a space or a control character: ``http.client`` refuses such a
@@ -29,7 +35,7 @@ library error to a click usage error happens in :mod:`ethscan.cli`.
 from __future__ import annotations
 
 import re
-from urllib.parse import SplitResult
+from urllib.parse import SplitResult, unquote
 
 # The characters that ``http.client`` refuses in a URL: the C0 control
 # characters, the space and DEL.
@@ -126,6 +132,40 @@ def _host_of(target: str) -> str:
     return remainder
 
 
+def strip_userinfo(url: str) -> str:
+    """Return ``url`` without the userinfo part of its authority.
+
+    ``urllib.request`` keeps the userinfo in the host it connects to, and
+    ``http.client`` then reads the text after the last colon of that host as
+    the port: the target ``http://user:pass@example.com`` is refused with
+    "InvalidURL: nonnumeric port: 'pass@example.com'". The credentials are
+    of no use to the toolkit, so they are dropped and the host is used, the
+    way the whois, mongodb and ssh modules already do it.
+
+    Only the userinfo is removed: the scheme, the host, the port, the path,
+    the query and the fragment are kept exactly as they are.
+
+    Args:
+        url: A URL, with or without a scheme.
+
+    Returns:
+        The URL without its userinfo, unchanged when it carries none.
+    """
+    scheme, separator, remainder = url.partition("://")
+    if not separator:
+        scheme, remainder = "", url
+    end = len(remainder)
+    for delimiter in ("/", "?", "#"):
+        index = remainder.find(delimiter)
+        if index != -1 and index < end:
+            end = index
+    authority = remainder[:end]
+    if "@" not in authority:
+        return url
+    host = authority.rsplit("@", 1)[1]
+    return f"{scheme}{separator}{host}{remainder[end:]}"
+
+
 
 def _path_of(target: str) -> str:
     """Return the path+query portion of a raw target string.
@@ -169,6 +209,11 @@ def check_target_host(target: str) -> None:
     newline characters, so a parsed host can look clean while the host that
     is actually sent over the network is not.
 
+    The percent escapes of the host are decoded before the host is checked,
+    because ``urllib.request`` decodes them as well: a host that looks
+    harmless in its raw form (``%00``) carries a control character once it
+    is decoded, and ``http.client`` refuses such a host.
+
     A host with a space or a control character is refused by
     ``http.client``, which raises an ``http.client.InvalidURL``. That error
     derives from ``HTTPException`` and not from ``ValueError``, so it
@@ -180,7 +225,12 @@ def check_target_host(target: str) -> None:
             accepted as well.
 
     Raises:
-        TargetSpecError: If the host contains a space or a control character.
+        TargetSpecError: If the host contains a space or a control
+            character, also when they only appear once the percent escapes
+            of the host are decoded.
     """
-    if _DISALLOWED_HOST_RE.search(_host_of(target)):
+    authority = _host_of(target)
+    if _DISALLOWED_HOST_RE.search(authority):
+        raise TargetSpecError("Target host contains a space or control character")
+    if _DISALLOWED_HOST_RE.search(unquote(authority)):
         raise TargetSpecError("Target host contains a space or control character")

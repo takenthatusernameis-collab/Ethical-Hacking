@@ -9,7 +9,12 @@ import ssl
 import urllib.error
 import urllib.request
 
-from ethscan.target import check_target_host, check_target_path, url_port
+from ethscan.target import (
+    check_target_host,
+    check_target_path,
+    strip_userinfo,
+    url_port,
+)
 
 # Recommended security headers and their importance.
 SECURITY_HEADERS: dict[str, str] = {
@@ -63,6 +68,11 @@ def _parse_url(target: str) -> tuple[str, int, bool]:
 def fetch_headers(target: str, timeout: float = 5.0) -> dict[str, str]:
     """Fetch HTTP response headers from ``target``.
 
+    The userinfo of the target is dropped before the request is made:
+    ``urllib.request`` would keep it in the host it connects to, and
+    ``http.client`` would read the text after the last colon of that host
+    as the port.
+
     Args:
         target: URL to request.
         timeout: Connection timeout in seconds.
@@ -71,7 +81,7 @@ def fetch_headers(target: str, timeout: float = 5.0) -> dict[str, str]:
         Dictionary of lowercase header names to values.
     """
     try:
-        request = urllib.request.Request(target, method="HEAD")
+        request = urllib.request.Request(strip_userinfo(target), method="HEAD")
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return {key.lower(): value for key, value in response.headers.items()}
     except urllib.error.HTTPError as exc:
