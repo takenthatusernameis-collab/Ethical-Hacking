@@ -881,6 +881,31 @@ def test_resolve_cname_dnspython_exception_returns_none(monkeypatch) -> None:
         _restore_subtake(monkeypatch)
 
 
+def test_resolve_cname_dnspython_empty_answer_set(monkeypatch) -> None:
+    """A CNAME query that returns no answer is a failed lookup, not a crash.
+
+    ``str(answers[0])`` on an empty list raises ``IndexError``, which is not a
+    ``ValueError`` and is not caught by the guard that lists the exception
+    types the resolver raises. A server that answers a CNAME query with no
+    records must be reported the way any other failed lookup is reported.
+    """
+    subtake_mod = _reload_subtake(monkeypatch)
+    try:
+        class _Resolver:
+            def __init__(self):
+                self.timeout = None
+                self.lifetime = None
+                self.nameservers = None
+
+            def resolve(self, hostname, rdtype):
+                return []
+
+        monkeypatch.setattr(subtake_mod.dns.resolver, "Resolver", _Resolver)
+        assert subtake_mod.resolve_cname("example.com", timeout=1.0, resolver="8.8.8.8") is None
+    finally:
+        _restore_subtake(monkeypatch)
+
+
 def test_resolve_a_records_dnspython_success(monkeypatch) -> None:
     """resolve_a_records returns sorted unique IPs via dnspython when resolver given (lines 318-325)."""
     subtake_mod = _reload_subtake(monkeypatch)

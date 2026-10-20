@@ -654,3 +654,45 @@ def test_resolve_subdomain_with_resolver_valueerror(monkeypatch) -> None:
     )
     assert subdomain == "www"
     assert ip is None
+
+
+def test_resolve_subdomain_with_resolver_empty_answer_set(monkeypatch) -> None:
+    """A dnspython answer set that is empty is a failed lookup, not a crash.
+
+    ``str(answers[0])`` on an empty list raises ``IndexError``, which is not a
+    ``ValueError`` and is not caught by the guard that lists the exception
+    types the resolver raises. A server that answers an A query with no
+    records (or that the toolkit's resolver treats as such) must be reported
+    the way any other failed lookup is reported.
+    """
+    import types
+
+    import ethscan.subdomains as sub
+
+    class FakeResolver:
+        def __init__(self):
+            self.timeout = None
+            self.lifetime = None
+            self.nameservers = []
+
+        def resolve(self, hostname, rdtype):
+            return []
+
+    fake_dns = types.ModuleType("dns")
+    fake_dns.resolver = types.ModuleType("dns.resolver")
+    fake_dns.resolver.Resolver = FakeResolver
+    fake_dns.exception = types.ModuleType("dns.exception")
+
+    class _DNSException(Exception):
+        pass
+
+    fake_dns.exception.DNSException = _DNSException
+
+    monkeypatch.setattr(sub, "dns", fake_dns)
+    monkeypatch.setattr(sub, "DNS_AVAILABLE", True)
+
+    subdomain, ip = resolve_subdomain(
+        "www", "example.com", timeout=1.0, resolver="8.8.8.8"
+    )
+    assert subdomain == "www"
+    assert ip is None

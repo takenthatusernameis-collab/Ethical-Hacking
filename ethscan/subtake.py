@@ -296,8 +296,10 @@ def resolve_cname(hostname: str, timeout: float = 2.0, resolver: str | None = No
             dns_resolver.lifetime = timeout
             dns_resolver.nameservers = [resolver]
             answers = dns_resolver.resolve(hostname, "CNAME")
+            if not answers:
+                return None
             return str(answers[0]).rstrip(".")
-        except (dns.exception.DNSException, OSError, ValueError):
+        except (dns.exception.DNSException, OSError, ValueError, IndexError):
             return None
 
     try:

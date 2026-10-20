@@ -100,8 +100,10 @@ def resolve_subdomain(
             dns_resolver.lifetime = timeout
             dns_resolver.nameservers = [resolver]
             answers = dns_resolver.resolve(hostname, "A")
+            if not answers:
+                return subdomain, None
             return subdomain, str(answers[0])
-        except (dns.exception.DNSException, OSError, ValueError, TypeError):
+        except (dns.exception.DNSException, OSError, ValueError, TypeError, IndexError):
             return subdomain, None
     try:
         socket.setdefaulttimeout(timeout)
