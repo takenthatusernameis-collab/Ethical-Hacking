@@ -54,13 +54,17 @@ class _FakeSMTPHandler(socketserver.BaseRequestHandler):
             upper = raw.upper()
 
             if upper.startswith(("EHLO", "HELO")):
-                caps = cfg.get("capabilities", ["STARTTLS", "8BITMIME"])
-                greet = cfg.get("greeting", "fake.smtp.example")
-                resp_lines = [f"250-{greet}"]
-                for cap in caps:
-                    resp_lines.append(f"250-{cap}")
-                resp_lines.append("250 OK")
-                s.sendall(("\r\n".join(resp_lines) + "\r\n").encode("utf-8"))
+                raw_ehlo = cfg.get("ehlo_response")
+                if raw_ehlo is not None:
+                    s.sendall(raw_ehlo)
+                else:
+                    caps = cfg.get("capabilities", ["STARTTLS", "8BITMIME"])
+                    greet = cfg.get("greeting", "fake.smtp.example")
+                    resp_lines = [f"250-{greet}"]
+                    for cap in caps:
+                        resp_lines.append(f"250-{cap}")
+                    resp_lines.append("250 OK")
+                    s.sendall(("\r\n".join(resp_lines) + "\r\n").encode("utf-8"))
 
             elif upper.startswith("STARTTLS"):
                 s.sendall(b"220 Ready to start TLS\r\n")
@@ -71,7 +75,11 @@ class _FakeSMTPHandler(socketserver.BaseRequestHandler):
                 s.sendall(f"{code} {user} status\r\n".encode())
 
             elif upper.startswith("MAIL FROM"):
-                s.sendall(b"250 2.1.0 sender ok\r\n")
+                raw_mail = cfg.get("mail_response")
+                if raw_mail is not None:
+                    s.sendall(raw_mail)
+                else:
+                    s.sendall(b"250 2.1.0 sender ok\r\n")
 
             elif upper.startswith("RCPT TO"):
                 if cfg.get("open_relay", False):
@@ -1059,3 +1067,122 @@ def test_outer_except_closes_sock_on_failure_after_connect_succeeds() -> None:
     finally:
         smtp_mod._connect = orig_connect
         smtp_mod._send_command = orig_send
+
+
+# ---------------------------------------------------------------------------
+# A hostile answer: a status line that is not a valid SMTP reply
+# ---------------------------------------------------------------------------
+
+
+#: A status line whose code is written with Unicode superscript digits.
+#: ``str.isdigit`` accepts them, ``int`` refuses them.
+HOSTILE_SUPERSCRIPT_CODE = "²²² 5.7.1 blocked\r\n".encode()
+
+#: An EHLO answer whose capability line holds no word after the separator.
+HOSTILE_BLANK_CAPABILITY = b"250-   \r\n250 OK\r\n"
+
+
+class _ScriptedSock:
+    """A socket stand-in that replays a fixed list of server answers."""
+
+    def __init__(self, answers):
+        self.answers = list(answers)
+        self.sent = b""
+        self.closed = False
+
+    def settimeout(self, _timeout):
+        pass
+
+    def send(self, data):
+        self.sent += data
+        return len(data)
+
+    def recv(self, _size):
+        if not self.answers:
+            return b""
+        return self.answers.pop(0)
+
+    def close(self):
+        self.closed = True
+
+
+def test_parse_smtp_response_superscript_code_is_not_a_reply_code() -> None:
+    """A code that ``int`` refuses is reported as no code at all."""
+    code, message, complete = _parse_smtp_response(["²²² 5.7.1 blocked"])
+    assert code == 0
+    assert message == "5.7.1 blocked"
+    assert complete is True
+
+
+def test_parse_smtp_response_plain_code_is_unchanged() -> None:
+    """An ordinary ASCII reply code is still read as a number."""
+    assert _parse_smtp_response(["250 OK"])[0] == 250
+
+
+def test_run_smtp_hostile_superscript_code_does_not_leak_a_traceback() -> None:
+    """A hostile status line is answered with a result, not with a traceback."""
+    sock = _ScriptedSock([
+        b"220 fake ESMTP\r\n",
+        b"250-fake\r\n250 OK\r\n",
+        HOSTILE_SUPERSCRIPT_CODE,
+    ])
+
+    results = run_smtp("127.0.0.1", connector=lambda addr, timeout: sock)
+
+    assert results["error"] is None
+    assert results["open_relay"] is False
+    assert sock.closed is True
+
+
+def test_run_smtp_hostile_capability_line_does_not_leak_a_traceback() -> None:
+    """An EHLO line without a keyword does not crash the command."""
+    sock = _ScriptedSock([
+        b"220 fake ESMTP\r\n",
+        HOSTILE_BLANK_CAPABILITY,
+        b"250 2.1.0 sender ok\r\n",
+        b"554 5.7.1 relay not permitted\r\n",
+    ])
+
+    results = run_smtp("127.0.0.1", connector=lambda addr, timeout: sock)
+
+    assert results["error"] is None
+    assert results["ehlo_success"] is True
+    assert results["capabilities"] == []
+    assert results["open_relay"] is False
+
+
+def test_run_smtp_hostile_server_does_not_leak_a_traceback(fake_smtp) -> None:
+    """A hostile server on the wire is answered with a result."""
+    host, port, server = fake_smtp
+    server.smtp_config["ehlo_response"] = HOSTILE_BLANK_CAPABILITY
+    server.smtp_config["mail_response"] = HOSTILE_SUPERSCRIPT_CODE
+
+    results = run_smtp(f"{host}:{port}", timeout=5.0)
+
+    assert results["error"] is None
+    assert results["capabilities"] == []
+    assert results["open_relay"] is False
+
+
+def test_smtp_command_hostile_server_does_not_leak_a_traceback() -> None:
+    """The command line answers a hostile server without leaking a traceback."""
+    from unittest.mock import patch
+
+    from click.testing import CliRunner
+
+    from ethscan import smtp
+    from ethscan.cli import cli
+
+    sock = _ScriptedSock([
+        b"220 fake ESMTP\r\n",
+        HOSTILE_BLANK_CAPABILITY,
+        HOSTILE_SUPERSCRIPT_CODE,
+    ])
+    runner = CliRunner()
+    with patch.object(smtp, "_connect", return_value=sock):
+        result = runner.invoke(cli, ["smtp", "--target", "192.168.1.100", "--timeout", "2"])
+    exc = result.exception
+    assert exc is None or isinstance(exc, SystemExit), (
+        f"the smtp command leaked a traceback: {type(exc).__name__}: {exc}"
+    )
+    assert result.exit_code == 0

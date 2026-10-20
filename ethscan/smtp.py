@@ -76,6 +76,20 @@ def _normalize_target(target: str) -> tuple[str, int]:
     return host, int(port) if port else DEFAULT_PORT
 
 
+def _reply_code(line: str) -> int:
+    """Return the three-digit reply code of an SMTP status line.
+
+    A reply code is three ASCII digits (RFC 5321). ``str.isdigit`` also
+    accepts the Unicode superscript digits, which ``int`` refuses, so the
+    code is only read when the text is ASCII. A status line that is not a
+    valid reply code is reported as ``0``, like any other non-numeric line.
+    """
+    prefix = line[:3]
+    if not prefix.isascii() or not prefix.isdigit():
+        return 0
+    return int(prefix)
+
+
 def _parse_smtp_response(lines: list[str]) -> tuple[int, str, bool]:
     """Parse the first line of an SMTP response list.
 
@@ -85,7 +99,7 @@ def _parse_smtp_response(lines: list[str]) -> tuple[int, str, bool]:
     if not lines:
         return 0, "", False
     first = lines[0]
-    code = int(first[:3]) if first[:3].isdigit() else 0
+    code = _reply_code(first)
     sep = first[3:4] if len(first) > 3 else ""
     message = first[4:] if len(first) > 4 else ""
     complete = sep == " "
@@ -239,7 +253,13 @@ def run_smtp(
                 for idx, line in enumerate(resp):
                     if len(line) <= 4:
                         continue
-                    kw = line[4:].split()[0]
+                    # A line that holds no word after the separator ("250-   ")
+                    # carries no keyword, so it is skipped instead of being
+                    # read at a fixed index into an empty list.
+                    words = line[4:].split()
+                    if not words:
+                        continue
+                    kw = words[0]
                     if kw.upper() == "OK" or idx == 0:
                         continue
                     if kw:
@@ -293,6 +313,10 @@ def run_smtp(
         # Politely close.
         with contextlib.suppress(socket.timeout, OSError):
             _send_command(sock, "QUIT", timeout)
+    # A hostile server must never crash the command: whatever it sends is
+    # reported through the "error" field, like the other protocol modules.
+    except Exception as exc:  # noqa: BLE001 - a remote answer must not raise
+        results["error"] = f"smtp probe failed: {exc}"
     finally:
         if sock is not None:
             sock.close()
