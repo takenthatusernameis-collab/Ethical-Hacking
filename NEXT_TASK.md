@@ -30,7 +30,7 @@ it. A permanent sweep keeps it that way.
 ## Verification
 
 - `python -m ruff check ethscan/ tests/` → **All checks passed**
-- `python -m pytest -q` → **4537 passed, 48 skipped, 2 warnings**
+- `python -m pytest -q` → **4538 passed, 48 skipped, 2 warnings**
 - `python -m pytest tests/test_config_value_sweep.py -q` → **54 passed, 3
   skipped** (the new permanent sweep; with the production code reverted 50 of
   them fail)

@@ -34,7 +34,7 @@
 ## What was actually verified
 
 - `python -m ruff check ethscan/ tests/` → All checks passed
-- `python -m pytest -q` → 4537 passed, 48 skipped, 2 warnings (before:
+- `python -m pytest -q` → 4538 passed, 48 skipped, 2 warnings (before:
   4484 passed, 45 skipped)
 - `python -m pytest tests/test_config_value_sweep.py -q` → 54 passed, 3
   skipped. The sweep is a real regression test: with the production code

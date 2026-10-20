@@ -58,7 +58,7 @@ nothing kept them from being of a type that click cannot convert.
 
 ## Verification
 
-- Full suite: **4537 passed, 48 skipped** (before: 4484 passed, 45 skipped;
+- Full suite: **4538 passed, 48 skipped** (before: 4484 passed, 45 skipped;
   the new sweep adds 54 cases and skips the 3 commands that need a network
   round trip).
 - Ruff: `ruff check ethscan/ tests/` → **All checks passed**.
