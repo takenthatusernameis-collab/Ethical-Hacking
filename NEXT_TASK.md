@@ -1,6 +1,7 @@
 # NEXT_TASK.md
 
-## Status (2026-10-20T10:40:00Z)
+## Status (2026-10-20T11:35:00Z)
+
 - The **hostile option sweep** of the CLI is **complete**. A sweep over
   every string option and every file option of all 42 commands used to leak
   **110 tracebacks**; it now leaks **none**.
@@ -9,19 +10,26 @@
   (`--api-url 'not a url'`), a file option that points at a missing file or
   a directory, a WHOIS server that cannot be reached, an output path that
   cannot be written and a nameserver whose label is too long.
-- Verified: **4342 passed / 1 skipped**; ruff rule set identical to the
-  baseline (48 pre-existing errors, no new ones); `git diff --check` clean.
+- Verified: **4389 passed / 7 skipped** (4342/1 before + 47 new); ruff rule
+  set identical to the baseline (48 pre-existing errors, no new ones);
+  `git diff --check` clean.
+- The **permanent sweep test** asked for in the previous handoff is **done**:
+  `tests/test_option_sweep.py` walks every string option of every command
+  with a small hostile value set and a 5s per-invocation timeout. It passes
+  **47 / 6 skipped in 9.2s** and keeps the "no traceback leak" guarantee
+  alive for a new option that is added later.
 
 ## The URL fix in one paragraph
+
 `urllib.parse.urlparse` raises a bare `ValueError` (`Invalid IPv6 URL`) for
-a URL whose authority holds an unmatched bracket. The error is a
-`ValueError` and not an `OSError`, so the narrow `except` clauses of the
-library did not catch it and it reached the user as a raw traceback in 36 of
-the 42 target commands. `ethscan/target.py` now has a `parse_url(url)`
-helper that re-raises it as a `TargetSpecError`, every target normalizer
-uses that helper, and `ethscan/cli.py` translates the error into the click
-usage error for **every** command (a group class, not a per-command
-decorator, so a command added later cannot leak it either).
+a URL whose authority holds an unmatched bracket. The error is a `ValueError`
+and not an `OSError`, so the narrow `except` clauses of the library did not
+catch it and it reached the user as a raw traceback in 36 of the 42 target
+commands. `ethscan/target.py` now has a `parse_url(url)` helper that re-raises
+it as a `TargetSpecError`, every target normalizer uses that helper, and
+`ethscan/cli.py` translates the error into the click usage error for **every**
+command (a group class, not a per-command decorator, so a command added later
+cannot leak it either).
 
 ## Sweep of every option (current evidence)
 
@@ -60,26 +68,26 @@ for name, cmd in sorted(cli.cli.commands.items()):
                     print(name, p.opts[0], repr(value), type(res.exception).__name__)
 ```
 
-Result: **no traceback leaked** (973 invocations for the string options, 225
-for the file options).
+Result: **no traceback leaked** (196 invocations for the string options, 225
+for the file options). The permanent version of the string sweep is
+`tests/test_option_sweep.py` (47 passed, 6 skipped, 9.2s).
 
 ## Remaining tasks (bounded, high-value)
 
 ### 1. The 48 pre-existing ruff errors
 Most of them are `BLE001` (a broad `except Exception`) and `TRY002` (a
 `raise Exception` in a test). They are unrelated to the behaviour of the
-toolkit and were deferred by three earlier sessions, because fixing them
-means reviewing 48 places in the code. Two of them are auto-fixable
+toolkit and were deferred by four sessions, because fixing them means
+reviewing 48 places in the code. Two of them are auto-fixable
 (`PLR0402` in `tests/test_brute.py`).
 
-### 2. A permanent sweep test
-The hostile sweep of this session lives outside the repository (it is a
-script, not a test), because it needs a per-invocation timeout and takes
-about twenty minutes. A **short** version of it (the string options of the
-commands that are fast, with a small value set) would fit into the suite
-and would keep the guarantee alive. The per-class regression tests that
-were added to `tests/test_cli.py` and `tests/test_target.py` cover the six
-root causes; they do not cover a **new** option that is added later.
+### 2. A permanent sweep test for the file options
+The file-option sweep is still a script outside the repository (it needs a
+per-invocation timeout and covers 225 invocations). The string options are now
+covered permanently by `tests/test_option_sweep.py`; the file options are
+pinned by the per-option regression tests in `tests/test_cli.py`
+(`test_a_file_option_with_a_missing_file_is_a_usage_error` and
+`test_a_file_option_with_a_directory_is_a_usage_error`).
 
 ## Verified working forms (do not break)
 - `host`, `host:443`, `host:65535`, `http://host`, `https://host:8443`,
