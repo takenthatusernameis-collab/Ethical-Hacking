@@ -44,7 +44,7 @@ import socket
 import struct
 from typing import Any
 
-from ethscan.target import TargetSpecError, url_port
+from ethscan.target import TargetSpecError, check_port, url_port
 
 DEFAULT_PORT = 445
 DEFAULT_TIMEOUT = 3.0
@@ -192,7 +192,7 @@ def _normalize_target(target: str) -> tuple[str, int]:
             base, _, rest = host.rpartition(":")
             if rest.isdigit():
                 host = base
-                port = port or int(rest)
+                port = port or check_port(int(rest))
 
     if not host:
         raise TargetSpecError(f"Could not parse host from target {target!r}")

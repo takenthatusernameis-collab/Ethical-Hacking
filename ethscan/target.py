@@ -74,6 +74,23 @@ def url_port(parsed: SplitResult) -> int | None:
         raise TargetSpecError(str(exc)) from exc
 
 
+def check_port(port: int) -> int:
+    """Raise ``TargetSpecError`` when a port is outside 0-65535.
+
+    Args:
+        port: The candidate port number.
+
+    Returns:
+        The port number when it is in range.
+
+    Raises:
+        TargetSpecError: If the port is outside 0-65535.
+    """
+    if port < 0 or port > 65535:
+        raise TargetSpecError("Port out of range 0-65535")
+    return port
+
+
 def _host_of(target: str) -> str:
     """Return the authority part of a raw target string.
 
