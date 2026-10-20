@@ -1,6 +1,8 @@
 """Tests for the ethscan cve command."""
 
 import json
+import subprocess
+import sys
 import urllib.error
 
 from ethscan.cve import (
@@ -1180,3 +1182,25 @@ def test_format_cve_report_markdown_cached_offline_flags() -> None:
     output = format_cve_report_markdown(data)
     assert "- **Cached:** Yes" in output
     assert "- **Offline Fallback:** Yes" in output
+
+
+def test_cli_cve_services_file_non_utf8_no_traceback(tmp_path: object) -> None:
+    """CLI must not leak a traceback when --services-file contains non-UTF-8 bytes."""
+
+    d = tmp_path / "svc"  # type: ignore
+    d.mkdir()
+    services_file = d / "services.json"  # type: ignore
+    # Write invalid UTF-8 bytes
+    services_file.write_bytes(b'{"services": [{"port": 80, "banner": "Apache/2.4 \xff bad"}]}')
+
+    result = subprocess.run(
+        [sys.executable, "-m", "ethscan", "cve", "--target", "127.0.0.1", "--services-file", str(services_file)],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0
+    combined = (result.stdout or "") + (result.stderr or "")
+    assert "Traceback" not in combined
+    assert "UnicodeDecodeError" not in combined
