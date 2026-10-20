@@ -58,6 +58,16 @@ TARGET = "127.0.0.1"
 # peaks around 2.5s when its target triggers a DNS lookup).
 PER_INVOCATION_TIMEOUT = 5
 
+# Commands that resolve a name for every candidate and therefore wait for the
+# full DNS timeout when the resolver does not answer. They stay in the sweep
+# (their options are swept like every other command) but they get a longer
+# per-invocation timeout: with the short one the sweep failed on a slow
+# resolver, although the command itself exits cleanly.
+DNS_COMMANDS = frozenset({"subdomains"})
+
+# Per-invocation timeout for the commands of DNS_COMMANDS, in seconds.
+DNS_COMMAND_TIMEOUT = 20
+
 
 def _string_params(cmd: Any) -> list:
     """Return the string-typed options of a command that have a CLI flag."""
@@ -96,17 +106,18 @@ def test_every_string_option_refuses_hostile_values(name: str) -> None:
 
     signal.signal(signal.SIGALRM, _alarm)
     runner = CliRunner()
+    timeout = DNS_COMMAND_TIMEOUT if name in DNS_COMMANDS else PER_INVOCATION_TIMEOUT
     try:
         for param in params:
             for value in HOSTILE_VALUES:
                 args = _build_args(name, param, value)
-                signal.setitimer(signal.ITIMER_REAL, PER_INVOCATION_TIMEOUT)
+                signal.setitimer(signal.ITIMER_REAL, timeout)
                 try:
                     result = runner.invoke(cli.cli, args)
                 except _Timeout:
                     pytest.fail(
                         f"{name} {param.opts[0]} {value!r} timed out after "
-                        f"{PER_INVOCATION_TIMEOUT}s"
+                        f"{timeout}s"
                     )
                 finally:
                     signal.setitimer(signal.ITIMER_REAL, 0)
