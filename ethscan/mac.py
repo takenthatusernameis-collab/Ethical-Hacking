@@ -9,11 +9,13 @@ from __future__ import annotations
 import csv
 import io
 import json
+import math
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 
+from ethscan.fileio import load_json
 from ethscan.target import parse_url
 
 DEFAULT_API_URL = "https://api.macvendors.com/"
@@ -47,15 +49,23 @@ def _resolve_host(host: str) -> str | None:
 
 
 def _load_cache() -> dict[str, dict]:
-    """Load the MAC cache from disk."""
+    """Load the MAC cache from disk.
+
+    The cache is written by the toolkit itself, so a cache file that cannot be
+    used is an empty cache and never an error: it is read leniently, so a
+    file that holds a stray byte is used as far as it can be read, and only
+    the entries that are mappings are returned, so that the callers can copy
+    them without a type check.
+    """
     if not CACHE_FILE.exists():
         return {}
     try:
-        with open(CACHE_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, dict) else {}
-    except (json.JSONDecodeError, OSError):
+        data = load_json(str(CACHE_FILE))
+    except (ValueError, OSError):
         return {}
+    if not isinstance(data, dict):
+        return {}
+    return {key: entry for key, entry in data.items() if isinstance(entry, dict)}
 
 
 def _save_cache(cache: dict[str, dict]) -> None:
@@ -69,10 +79,21 @@ def _save_cache(cache: dict[str, dict]) -> None:
 
 
 def _is_cache_valid(entry: dict, ttl: int = CACHE_TTL) -> bool:
-    """Check if a cache entry is still valid."""
-    if "timestamp" not in entry:
+    """Check if a cache entry is still valid.
+
+    An entry that is not a mapping, or whose timestamp is not a finite
+    number, is never fresh: it is stale data that must not be served as a
+    current result.
+    """
+    if not isinstance(entry, dict) or "timestamp" not in entry:
         return False
-    return (time.time() - entry["timestamp"]) < ttl
+    try:
+        timestamp = float(entry["timestamp"])
+    except (TypeError, ValueError):
+        return False
+    if not math.isfinite(timestamp):
+        return False
+    return (time.time() - timestamp) < ttl
 
 
 def _fetch_mac_data(

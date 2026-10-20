@@ -86,6 +86,21 @@ commands:
 
 CLI arguments always take precedence over config values. Use `ethscan config --init PATH` to write a sample config file, or `ethscan config` to inspect the loaded configuration.
 
+## Caching
+
+The `geo`, `cert`, `mac` and `cve` commands keep a cache in `~/.cache/ethscan`
+(`geo_cache.json`, `cert_cache.json`, `mac_cache.json`, `cve_cache.json`) so
+that a lookup is not repeated while the API is reachable. Use `--no-cache` to
+turn the cache off, and `--no-offline-fallback` to stop a stale entry from
+being used when the API cannot be reached.
+
+The cache is written by ethscan itself, so a cache file that cannot be used is
+never an error: a file that is not valid JSON, that is not a JSON object, that
+holds an entry that is not a mapping, or that holds a timestamp that is not a
+finite number is treated as an empty cache. An entry that cannot be checked is
+never served as fresh; it can only be used as stale data through the offline
+fallback, which says so in the output.
+
 ## Requirements
 
 ```bash
