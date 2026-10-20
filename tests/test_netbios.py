@@ -190,6 +190,19 @@ def test_decode_name_chars_odd_length_raises() -> None:
         _decode_name_chars(b"A" * 31)
 
 
+def test_decode_name_chars_too_short_raises() -> None:
+    """A name that is too short to hold a suffix byte is malformed.
+
+    A first-level name is 32 chars: 15 name bytes and one suffix byte. A
+    shorter (but even) name used to be decoded into fewer than 16 bytes and
+    the suffix byte was then read out of range.
+    """
+    with pytest.raises(ValueError):
+        _decode_name_chars(b"A" * 30)
+    with pytest.raises(ValueError):
+        _decode_name_chars(b"A" * 2)
+
+
 # ---------------------------------------------------------------------------
 # _build_nbns_query
 # ---------------------------------------------------------------------------
@@ -935,3 +948,66 @@ def test_send_recv_real_and_errors():
     with patch("ethscan.netbios.socket.socket", return_value=ErrSock()):
         data, err = _send_recv("h", 137, b"req", 1.0)
         assert err == "boom"
+
+
+# ---------------------------------------------------------------------------
+# A hostile answer: a name that is too short to be a first-level name
+# ---------------------------------------------------------------------------
+
+
+def _short_name_response() -> bytes:
+    """Build an NBNS response whose question name is 2 bytes long.
+
+    The name is even in length, so it passes the parity check, but it holds
+    fewer than the 16 bytes a first-level name needs.
+    """
+    header = struct.pack("!HHHHHH", 0x1234, 0x8500, 1, 0, 0, 0)
+    question = b"\x02AB\x00" + struct.pack("!HH", RR_TYPE_NBSTAT, RR_CLASS_IN)
+    return header + question
+
+
+def test_parse_dns_name_short_name_is_reported_as_text() -> None:
+    """A name that is too short to be first-level encoded is reported as text."""
+    name, offset = _parse_dns_name(b"\x02AB\x00", 0)
+    assert name == "AB"
+    assert offset == 4
+
+
+def test_parse_nbns_response_short_question_name_does_not_raise() -> None:
+    """A short question name is parsed, it does not raise an IndexError."""
+    parsed = _parse_nbns_response(_short_name_response())
+    assert parsed["question_count"] == 1
+    assert parsed["answer_count"] == 0
+    assert parsed["names"] == []
+
+
+def test_run_netbios_hostile_short_name_does_not_leak_a_traceback() -> None:
+    """A hostile answer is answered with a result, not with a traceback."""
+
+    def connector(host, port, request, timeout):
+        return _short_name_response(), None
+
+    results = run_netbios("192.168.1.100", timeout=1.0, connector=connector)
+    assert results["names"] == []
+    assert results["mac"] is None
+
+
+def test_netbios_command_hostile_short_name_does_not_leak_a_traceback() -> None:
+    """The command line answers a hostile packet without leaking a traceback."""
+    from unittest.mock import patch
+
+    from click.testing import CliRunner
+
+    from ethscan import netbios
+    from ethscan.cli import cli
+
+    runner = CliRunner()
+    with patch.object(
+        netbios, "_send_recv", return_value=(_short_name_response(), None)
+    ):
+        result = runner.invoke(cli, ["netbios", "--target", "192.168.1.100"])
+    exc = result.exception
+    assert exc is None or isinstance(exc, SystemExit), (
+        f"the netbios command leaked a traceback: {type(exc).__name__}: {exc}"
+    )
+    assert result.exit_code == 0

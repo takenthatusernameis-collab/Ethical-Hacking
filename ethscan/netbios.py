@@ -177,10 +177,16 @@ def _encode_qname(name: str, suffix: int = DEFAULT_SUFFIX) -> bytes:
 def _decode_name_chars(chars: bytes) -> tuple[str, int]:
     """Decode 32 first-level-encoded chars back into (name, suffix).
 
-    Each pair of chars is a byte ``(ord(c) - 0x41)`` for each nibble.
+    Each pair of chars is a byte ``(ord(c) - 0x41)`` for each nibble. A name
+    that is too short to hold the 15 name bytes and the suffix byte is
+    malformed: it raises ``ValueError`` like every other malformed name.
     """
     if len(chars) % 2 != 0:
         raise ValueError("first-level name must have an even length")
+    if len(chars) < 32:
+        raise ValueError(
+            f"first-level name must have at least 32 chars, got {len(chars)}"
+        )
     raw = bytearray()
     for i in range(0, len(chars), 2):
         high = chars[i] - 0x41
