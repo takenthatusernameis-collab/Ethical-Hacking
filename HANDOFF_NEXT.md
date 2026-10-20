@@ -8,13 +8,13 @@ closed the three classes of the wider sweep backlog.
 
 | task | state |
 |---|---|
-| explicit `--port` option range check | **complete** (the range check was already in the code, the tests were missing) |
+| explicit `--port` option range check | **complete** (the range check was already in the code; the tests were missing and were added) |
 | `--target '%00'` (percent-encoded control character in the host) | **complete** |
 | `--target 'http://user:pass@example.com'` (userinfo in the authority) | **complete** |
 | `--target '....'` (host that is not a valid host name) | **complete** |
-| `--timeout` option range check | **open - the next task** |
+| `--timeout` option range check | **complete** |
 
-Verified: **4319 passed / 1 skipped** (4272 before + 47 new tests), ruff
+Verified: **4323 passed / 1 skipped** (4319 before + 4 new tests), ruff
 identical to the baseline (48 pre-existing errors, no new ones),
 `git diff --check` clean, and a sweep of **42 commands x 11 hostile targets
 = 462 invocations with 0 leaked tracebacks**.
@@ -146,72 +146,37 @@ malformed host now behaves the same as a missing one.
 
 ## The next task: the `--timeout` option is not range-checked
 
-43 CLI options are declared as `@click.option("--timeout", ..., type=float)`
-without a range. A negative timeout reaches the socket layer, where
-`socket.settimeout()` refuses it:
+**DONE in this session.**
 
-```
-$ python -m ethscan redis --target 127.0.0.1 --timeout -1
-  File ".../ethscan/redis.py", line 191, in _send_recv
-    sock.settimeout(timeout)
-ValueError: Timeout value out of range
-EXIT=1
-```
+All 43 `--timeout` CLI options were changed from `type=float` to
+`click.FloatRange(min=0.001)` (`ethscan/cli.py`), so click refuses a negative
+or zero timeout before the command runs, with exit 2 and a single line
+`Error: Invalid value for '--timeout': <value> is not in the range x>=0.001.`.
 
-**9 commands leak a traceback** with `--timeout -1`: `ldap`, `memcached`,
-`netbios`, `ntp`, `redis`, `smb`, `snmp`, `trace` and `whois`. The sites are
-`sock.settimeout(timeout)` in `ethscan/redis.py:191`, `ethscan/ldap.py:467`,
-`ethscan/memcached.py:89`, `ethscan/netbios.py:460`, `ethscan/ntp.py:247`,
-`ethscan/smb.py:220`, `ethscan/snmp.py:405`, `ethscan/trace.py:62` and
-`ethscan/whois.py:43`.
+- The lower bound is `0.001`: `min=0` would still allow `--timeout 0`,
+  which puts the whois socket into non-blocking mode and leaks
+  `BlockingIOError: [Errno 115] Operation now in progress`.
+- Every default timeout (2.0, 3.0, 5.0, 10.0, DEFAULT_TIMEOUT) is >= 0.001,
+  so no valid default is rejected.
+- `--http-timeout` (subtake) and `--service-timeout` were deliberately left
+  as `type=float`: neither leaks a traceback (`--http-timeout -1` exits 0;
+  `--service-timeout` is not a `service` option -- `service` uses `--timeout`).
 
-**`whois` leaks a second one** with `--timeout 0`:
-`BlockingIOError: [Errno 115] Operation now in progress` at
-`ethscan/whois.py:45` (`sock.connect()`), because a timeout of 0 is legal
-for `socket.settimeout()` and puts the socket in non-blocking mode.
-
-Reproduce with:
-
-```python
-from click.testing import CliRunner
-from ethscan import cli
-
-runner = CliRunner()
-cmds = ("brute cert cve dns dnsbrute dnssec ftp fuzz geo headers ldap mac "
-        "memcached mongodb mssql mysql netbios ntp oracle osdetect ping "
-        "postgresql recon redis report resolve s3 scan service smb smtp snmp "
-        "ssh ssl subdomains subtake tls trace urlcheck vuln web whois").split()
-
-for c in cmds:
-    for value in ("-1", "0"):
-        res = runner.invoke(cli.cli, [c, "--target", "127.0.0.1", "--timeout", value])
-        exc = res.exception
-        if exc is not None and not isinstance(exc, SystemExit):
-            print(c, value, type(exc).__name__, exc)
-```
-
-**Suggested fix shape:** the same shape as the `--port` fix - give the
-`--timeout` option a range (`click.FloatRange(min=...)`) so click refuses
-the value before the command runs, with exit 2 and a one-line error. Two
-points to decide:
-
-- the lower bound: `min=0` fixes the negative value but leaves the
-  `--timeout 0` case of `whois` open (0 is a legal socket timeout), so the
-  bound has to exclude 0 (e.g. `min=0.001`) or `whois` has to read from a
-  socket that is not in non-blocking mode;
-- 8 of the 9 commands (`redis`, `ldap`, `memcached`, `netbios`, `ntp`,
-  `smb`, `snmp`, `trace`) are decorated with `@_target_usage_errors` and
-  have a usage-error contract; `whois` is **not** decorated and reports a
-  failed probe in its output instead. A range check on the **option** works
-  for both, because click validates the option before the command function
-  runs - the result is exit 2 in every case. A check inside the modules
-  instead would have to follow the contract of each command.
-
-Verify with `python -m ethscan <cmd> --target 127.0.0.1 --timeout -1` ->
-exit 2 and a one-line error for the commands above, that the valid timeouts
-(`0.5`, `5.0`) keep working, and add one CLI test that loops over the
-commands with a timeout option - the shape of
-`test_an_out_of_range_port_option_is_a_usage_error` in `tests/test_cli.py`.
+Verification:
+- `python -m pytest -q` -> **4323 passed, 1 skipped** (4319 before + 4 new
+  timeout tests).
+- `python -m ruff check ethscan/ tests/` -> same **48** pre-existing errors,
+  no new ones; touched files (`ethscan/cli.py`, `tests/test_cli.py`) are
+  clean.
+- `git diff --check` -> clean.
+- `--timeout -1` and `--timeout 0` now return exit 2 with a one-line error
+  for all 43 commands; valid timeouts (`0.001`, `0.5`, `5.0`, `10.0`) still
+  work (redis returns exit 0, no traceback).
+- 4 new tests in `tests/test_cli.py`:
+  `test_every_timeout_option_of_the_cli_is_range_checked`,
+  `test_an_out_of_range_timeout_option_is_a_usage_error`,
+  `test_an_out_of_range_timeout_option_is_a_single_line_error`,
+  `test_a_valid_timeout_option_is_still_used`.
 
 ## Unchanged / deliberate non-changes
 - The valid target forms are untouched: `host`, `host:1234`, `host:65535`,

@@ -56,38 +56,21 @@ Result: **no traceback leaked** (462 invocations).
 
 ## Remaining tasks (bounded, high-value)
 
-### 1. The `--timeout` option is not range-checked (next task)
-Every command that takes a `--timeout` uses `type=float` without a range,
-so a negative timeout reaches the socket layer, where `socket.settimeout()`
-refuses it:
+### 1. The `--timeout` option is not range-checked
 
-```
-$ python -m ethscan redis --target 127.0.0.1 --timeout -1
-  File ".../ethscan/redis.py", line 193, in _send_recv
-    sock.settimeout(timeout)
-ValueError: Timeout value out of range
-EXIT=1
-```
+**DONE.** All 43 `--timeout` CLI options were changed from `type=float` to
+`click.FloatRange(min=0.001)` (`ethscan/cli.py`), so click refuses a negative
+or zero timeout before the command runs, with exit 2 and a single-line
+`Error: Invalid value for '--timeout': ... is not in the range x>=0.001.`.
 
-**9 commands leak a traceback** with `--timeout -1`: `ldap`, `memcached`,
-`netbios`, `ntp`, `redis`, `smb`, `snmp`, `trace` and `whois`.
+Previously `--timeout -1` leaked a `ValueError: Timeout value out of range`
+traceback in `ldap`, `memcached`, `netbios`, `ntp`, `redis`, `smb`, `snmp`,
+`trace` and `whois`, and `--timeout 0` leaked a `BlockingIOError` in `whois`.
 
-**`whois` leaks a second one** with `--timeout 0`:
-`BlockingIOError: [Errno 115] Operation now in progress` (it puts the
-socket in non-blocking mode and waits for the answer itself).
-
-Reproduce with:
-
-```python
-for c in cmds:
-    for value in ("-1", "0"):
-        res = runner.invoke(cli.cli, [c, "--target", "127.0.0.1", "--timeout", value])
-        exc = res.exception
-        if exc is not None and not isinstance(exc, SystemExit):
-            print(c, value, type(exc).__name__, exc)
-```
-
-Root cause and the suggested fix shape are in `HANDOFF_NEXT.md`.
+Verified: `python -m pytest -q` -> **4323 passed, 1 skipped** (4 new timeout
+tests added to `tests/test_cli.py`); ruff unchanged (48 pre-existing errors,
+no new ones); `git diff --check` clean; `--timeout -1`/`0` return exit 2 for
+all 43 commands and valid timeouts (`0.001`, `0.5`, `5.0`, `10.0`) still work.
 
 ### 2. Backlog from the wider sweep
 The three classes that were in the backlog of the previous session are

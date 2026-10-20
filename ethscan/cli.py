@@ -466,7 +466,7 @@ def _target_usage_errors(func: Callable[..., Any]) -> Callable[..., Any]:
     type=click.Choice(["fast", "normal", "full"]),
     help="Scan profile: fast (top ~18 ports), normal (common ports), full (1-1024 + common). Overrides --ports, --timeout, --workers unless explicitly set.",
 )
-@click.option("--timeout", default=1.0, type=float, help="Connection timeout in seconds")
+@click.option("--timeout", default=1.0, type=click.FloatRange(min=0.001), help="Connection timeout in seconds")
 @click.option("--workers", default=100, type=click.IntRange(min=1), help="Maximum concurrent workers")
 @click.option(
     "--output-format",
@@ -674,7 +674,7 @@ def audit(
     type=click.Choice(["fast", "normal", "full"]),
     help="Scan profile: fast (top ~18 ports), normal (common ports), full (1-1024 + common). Overrides --ports, --timeout, --workers unless explicitly set.",
 )
-@click.option("--timeout", default=1.0, type=float, help="Connection timeout in seconds")
+@click.option("--timeout", default=1.0, type=click.FloatRange(min=0.001), help="Connection timeout in seconds")
 @click.option("--workers", default=100, type=click.IntRange(min=1), help="Maximum concurrent workers")
 @click.option(
     "--audit-file",
@@ -813,7 +813,7 @@ def report(
     default="headers,info_disclosure,ssl",
     help="Comma-separated list of checks: headers, info_disclosure, ssl",
 )
-@click.option("--timeout", default=5.0, type=float, help="Request timeout in seconds")
+@click.option("--timeout", default=5.0, type=click.FloatRange(min=0.001), help="Request timeout in seconds")
 @click.option(
     "--output-format",
     "output_fmt",
@@ -874,7 +874,7 @@ def web(target: str, checks: str, timeout: float, fmt: str, output_fmt: str | No
     type=click.Path(exists=True, readable=True),
     help="Path to wordlist file (one path per line). Uses built-in default if omitted.",
 )
-@click.option("--timeout", default=5.0, type=float, help="Request timeout in seconds")
+@click.option("--timeout", default=5.0, type=click.FloatRange(min=0.001), help="Request timeout in seconds")
 @click.option(
     "--workers",
     default=1,
@@ -962,7 +962,7 @@ def fuzz(
     type=int,
     help="Maximum recursion depth for recursive enumeration (default: 2).",
 )
-@click.option("--timeout", default=2.0, type=float, help="DNS resolution timeout in seconds")
+@click.option("--timeout", default=2.0, type=click.FloatRange(min=0.001), help="DNS resolution timeout in seconds")
 @click.option(
     "--workers",
     default=50,
@@ -1051,7 +1051,7 @@ def subdomains(
     "--resolver",
     help="Custom DNS resolver IP address (requires dnspython)",
 )
-@click.option("--timeout", default=2.0, type=float, help="DNS resolution timeout in seconds")
+@click.option("--timeout", default=2.0, type=click.FloatRange(min=0.001), help="DNS resolution timeout in seconds")
 @click.option(
     "--workers",
     default=50,
@@ -1130,7 +1130,7 @@ def subtake(
     help="WHOIS server to query (default: whois.iana.org)",
 )
 @click.option("--port", default=43, type=click.IntRange(0, 65535), help="WHOIS server port (default: 43)")
-@click.option("--timeout", default=5.0, type=float, help="Connection timeout in seconds")
+@click.option("--timeout", default=5.0, type=click.FloatRange(min=0.001), help="Connection timeout in seconds")
 @click.option(
     "--recursive/--no-recursive",
     default=False,
@@ -1205,7 +1205,7 @@ def whois(
 
 @cli.command()
 @click.option("--target", required=True, help="Target URL (e.g. https://example.com)")
-@click.option("--timeout", default=5.0, type=float, help="Request timeout in seconds")
+@click.option("--timeout", default=5.0, type=click.FloatRange(min=0.001), help="Request timeout in seconds")
 @click.option(
     "--output-format",
     "output_fmt",
@@ -1262,7 +1262,7 @@ def headers(target: str, timeout: float, fmt: str, output_fmt: str | None, out_p
     "--server",
     help="Custom DNS resolver IP address (requires dnspython)",
 )
-@click.option("--timeout", default=2.0, type=float, help="Resolution timeout in seconds")
+@click.option("--timeout", default=2.0, type=click.FloatRange(min=0.001), help="Resolution timeout in seconds")
 @click.option(
     "--workers",
     default=1,
@@ -1344,7 +1344,7 @@ def dns(
     "--server",
     help="Custom DNS resolver IP address (requires dnspython)",
 )
-@click.option("--timeout", default=2.0, type=float, help="Resolution timeout in seconds")
+@click.option("--timeout", default=2.0, type=click.FloatRange(min=0.001), help="Resolution timeout in seconds")
 @click.option(
     "--output-format",
     "output_fmt",
@@ -1439,7 +1439,7 @@ def resolve(
     type=int,
     help="Maximum recursion depth for recursive AXFR (default: 2).",
 )
-@click.option("--timeout", default=2.0, type=float, help="DNS timeout in seconds")
+@click.option("--timeout", default=2.0, type=click.FloatRange(min=0.001), help="DNS timeout in seconds")
 @click.option(
     "--workers",
     default=50,
@@ -1520,7 +1520,7 @@ def dnsbrute(
 @cli.command()
 @click.option("--target", required=True, help="Target host or URL (e.g. example.com or https://example.com)")
 @click.option("--port", default=443, type=click.IntRange(0, 65535), help="TLS port (default: 443)")
-@click.option("--timeout", default=5.0, type=float, help="Connection timeout in seconds")
+@click.option("--timeout", default=5.0, type=click.FloatRange(min=0.001), help="Connection timeout in seconds")
 @click.option(
     "--output-format",
     "output_fmt",
@@ -1577,7 +1577,7 @@ def ssl(target: str, port: int, timeout: float, fmt: str, output_fmt: str | None
     "cipher_option",
     help="Comma-separated list of cipher suites to test. Defaults to a built-in common list.",
 )
-@click.option("--timeout", default=5.0, type=float, help="Connection timeout in seconds")
+@click.option("--timeout", default=5.0, type=click.FloatRange(min=0.001), help="Connection timeout in seconds")
 @click.option("--workers", default=10, type=click.IntRange(min=1), help="Maximum concurrent probe workers")
 @click.option(
     "--output-format",
@@ -1662,7 +1662,7 @@ def tls(
     type=click.Choice(["fast", "normal", "full"]),
     help="Scan profile: fast (top ~18 ports), normal (common ports), full (1-1024 + common). Overrides --ports, --timeout, --workers unless explicitly set.",
 )
-@click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
+@click.option("--timeout", default=3.0, type=click.FloatRange(min=0.001), help="Connection timeout in seconds")
 @click.option("--workers", default=50, type=click.IntRange(min=1), help="Maximum concurrent workers")
 @click.option(
     "--output-format",
@@ -1792,7 +1792,7 @@ def service(ctx: click.Context, target: str, ports: str | None, profile: str | N
     default="sha256",
     help="Hash algorithm for salted/peppered banner matching (default: sha256).",
 )
-@click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
+@click.option("--timeout", default=3.0, type=click.FloatRange(min=0.001), help="Connection timeout in seconds")
 @click.option("--workers", default=50, type=click.IntRange(min=1), help="Maximum concurrent workers")
 @click.option(
     "--output-format",
@@ -1907,7 +1907,7 @@ def vuln(
     help="Enable/disable HTTP path fuzzing (default: enabled)",
 )
 @click.option("--port", default=443, type=click.IntRange(0, 65535), help="TLS port for SSL certificate inspection (default: 443)")
-@click.option("--timeout", default=5.0, type=float, help="Request timeout in seconds")
+@click.option("--timeout", default=5.0, type=click.FloatRange(min=0.001), help="Request timeout in seconds")
 @click.option("--workers", default=10, type=click.IntRange(min=1), help="Maximum concurrent workers for fuzzing")
 @click.option(
     "--output-format",
@@ -2012,7 +2012,7 @@ def urlcheck(
     type=click.Path(exists=True, readable=True),
     help="Path to passwords wordlist (one per line). Uses built-in default if omitted.",
 )
-@click.option("--timeout", default=5.0, type=float, help="Connection timeout in seconds")
+@click.option("--timeout", default=5.0, type=click.FloatRange(min=0.001), help="Connection timeout in seconds")
 @click.option("--workers", default=10, type=click.IntRange(min=1), help="Maximum concurrent workers")
 @click.option(
     "--output-format",
@@ -2095,7 +2095,7 @@ def brute(
     type=click.Path(exists=True, readable=True),
     help="JSON file with 'service' command output (port -> banner mapping) to cross-reference OS signatures.",
 )
-@click.option("--timeout", default=5.0, type=float, help="Connection timeout in seconds")
+@click.option("--timeout", default=5.0, type=click.FloatRange(min=0.001), help="Connection timeout in seconds")
 @click.option("--workers", default=10, type=click.IntRange(min=1), help="Maximum concurrent probe workers")
 @click.option(
     "--output-format",
@@ -2191,7 +2191,7 @@ def osdetect(
     type=int,
     help="Number of probes per hop for RTT averaging (default: 3)",
 )
-@click.option("--timeout", default=3.0, type=float, help="Per-probe timeout in seconds")
+@click.option("--timeout", default=3.0, type=click.FloatRange(min=0.001), help="Per-probe timeout in seconds")
 @click.option(
     "--recursive/--no-recursive",
     default=False,
@@ -2281,7 +2281,7 @@ def trace(
 @click.option(
     "--timeout",
     default=2.0,
-    type=float,
+    type=click.FloatRange(min=0.001),
     help="Per-probe timeout in seconds (default: 2.0)",
 )
 @click.option(
@@ -2408,7 +2408,7 @@ def wifi(interface: str | None, fmt: str, output_fmt: str | None, out_path: str 
     required=True,
     help="Target IP address, hostname, or URL (e.g., 8.8.8.8, example.com, https://example.com)",
 )
-@click.option("--timeout", default=5.0, type=float, help="API request timeout in seconds")
+@click.option("--timeout", default=5.0, type=click.FloatRange(min=0.001), help="API request timeout in seconds")
 @click.option(
     "--no-cache",
     is_flag=True,
@@ -2556,7 +2556,7 @@ def geo(
     type=int,
     help="Number of probes per hop for RTT averaging (default: 3)",
 )
-@click.option("--timeout", default=5.0, type=float, help="Network timeout in seconds")
+@click.option("--timeout", default=5.0, type=click.FloatRange(min=0.001), help="Network timeout in seconds")
 @click.option(
     "--workers",
     default=50,
@@ -2665,7 +2665,7 @@ def recon(
     required=True,
     help="Target domain or URL (e.g. example.com or https://example.com)",
 )
-@click.option("--timeout", default=10.0, type=float, help="API request timeout in seconds")
+@click.option("--timeout", default=10.0, type=click.FloatRange(min=0.001), help="API request timeout in seconds")
 @click.option(
     "--no-cache",
     is_flag=True,
@@ -2762,7 +2762,7 @@ def cert(
     "normal (common ports), full (1-1024 + common). Overrides --ports, "
     "--service-timeout, --workers unless explicitly set.",
 )
-@click.option("--timeout", default=10.0, type=float, help="API request timeout in seconds")
+@click.option("--timeout", default=10.0, type=click.FloatRange(min=0.001), help="API request timeout in seconds")
 @click.option(
     "--service-timeout",
     "service_timeout",
@@ -3225,7 +3225,7 @@ def radix(
     "--server",
     help="Custom DNS resolver IP address (requires dnspython)",
 )
-@click.option("--timeout", default=5.0, type=float, help="Query timeout in seconds")
+@click.option("--timeout", default=5.0, type=click.FloatRange(min=0.001), help="Query timeout in seconds")
 @click.option(
     "--output-format",
     "output_fmt",
@@ -3289,7 +3289,7 @@ def dnssec(
 @click.option(
     "--timeout",
     default=5.0,
-    type=float,
+    type=click.FloatRange(min=0.001),
     help="API request timeout in seconds (default: 5.0)",
 )
 @click.option(
@@ -3654,7 +3654,7 @@ def completion(
 @cli.command()
 @click.option("--target", required=True, help="Target host, host:port, or memcached:// URL (e.g. memcached://localhost:11211)")
 @click.option("--port", default=None, type=click.IntRange(0, 65535), help="Memcached port (overrides parsed port; default 11211)")
-@click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
+@click.option("--timeout", default=3.0, type=click.FloatRange(min=0.001), help="Connection timeout in seconds")
 @click.option(
     "--probes",
     default="version,stats",
@@ -3722,7 +3722,7 @@ def memcached(
 @cli.command()
 @click.option("--target", required=True, help="Target host, host:port, or mysql:// URL (e.g. mysql://localhost:3306)")
 @click.option("--port", default=None, type=click.IntRange(0, 65535), help="MySQL port (overrides parsed port; default 3306)")
-@click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
+@click.option("--timeout", default=3.0, type=click.FloatRange(min=0.001), help="Connection timeout in seconds")
 @click.option(
     "--probes",
     default="handshake",
@@ -3787,7 +3787,7 @@ def mysql(
 @cli.command()
 @click.option("--target", required=True, help="Target host, host:port, or mongodb:// URL (e.g. mongodb://localhost:27017)")
 @click.option("--port", default=None, type=click.IntRange(0, 65535), help="MongoDB port (overrides parsed port; default 27017)")
-@click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
+@click.option("--timeout", default=3.0, type=click.FloatRange(min=0.001), help="Connection timeout in seconds")
 @click.option(
     "--probes",
     default="buildInfo",
@@ -3852,7 +3852,7 @@ def mongodb(
 @cli.command()
 @click.option("--target", required=True, help="Target host, host:port, or postgresql:// URL (e.g. postgresql://localhost:5432)")
 @click.option("--port", default=None, type=click.IntRange(0, 65535), help="PostgreSQL port (overrides parsed port; default 5432)")
-@click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
+@click.option("--timeout", default=3.0, type=click.FloatRange(min=0.001), help="Connection timeout in seconds")
 @click.option(
     "--probes",
     default="startup",
@@ -4043,7 +4043,7 @@ def nmap(
 @click.option(
     "--timeout",
     default=DEFAULT_TIMEOUT,
-    type=float,
+    type=click.FloatRange(min=0.001),
     help="DNS resolution and TCP connect timeout in seconds.",
 )
 @click.option(
@@ -4119,7 +4119,7 @@ def stale(
     type=click.IntRange(0, 65535),
     help="Target SSH port (default: 22, or extracted from target)",
 )
-@click.option("--timeout", default=10.0, type=float, help="Connection timeout in seconds")
+@click.option("--timeout", default=10.0, type=click.FloatRange(min=0.001), help="Connection timeout in seconds")
 @click.option(
     "--output-format",
     "output_fmt",
@@ -4185,7 +4185,7 @@ def ssh(target: str, port: int | None, timeout: float, fmt: str, output_fmt: str
 @click.option(
     "--timeout",
     default=5.0,
-    type=float,
+    type=click.FloatRange(min=0.001),
     help="HTTP request timeout in seconds (default: 5.0)",
 )
 @click.option(
@@ -4283,7 +4283,7 @@ def s3(
     default=True,
     help="Skip the open-relay probe.",
 )
-@click.option("--timeout", default=2.0, type=float, help="Per-read timeout in seconds")
+@click.option("--timeout", default=2.0, type=click.FloatRange(min=0.001), help="Per-read timeout in seconds")
 @click.option(
     "--output-format",
     "output_fmt",
@@ -4364,7 +4364,7 @@ def smtp(
     default=True,
     help="Skip the anonymous-login probe.",
 )
-@click.option("--timeout", default=3.0, type=float, help="Per-read timeout in seconds")
+@click.option("--timeout", default=3.0, type=click.FloatRange(min=0.001), help="Per-read timeout in seconds")
 @click.option(
     "--output-format",
     "output_fmt",
@@ -4440,7 +4440,7 @@ def ftp(
     default=True,
     help="Skip the monlist amplification check.",
 )
-@click.option("--timeout", default=3.0, type=float, help="Per-request timeout in seconds")
+@click.option("--timeout", default=3.0, type=click.FloatRange(min=0.001), help="Per-request timeout in seconds")
 @click.option(
     "--output-format",
     "output_fmt",
@@ -4514,7 +4514,7 @@ def ntp(
     default=None,
     help="Comma-separated community strings to probe (default: public,private,default,'').",
 )
-@click.option("--timeout", default=3.0, type=float, help="Per-request timeout in seconds")
+@click.option("--timeout", default=3.0, type=click.FloatRange(min=0.001), help="Per-request timeout in seconds")
 @click.option(
     "--output-format",
     "output_fmt",
@@ -4598,7 +4598,7 @@ def snmp(
     type=int,
     help="Service suffix byte (hex or decimal) for the queried name (default 0).",
 )
-@click.option("--timeout", default=3.0, type=float, help="Per-request timeout in seconds")
+@click.option("--timeout", default=3.0, type=click.FloatRange(min=0.001), help="Per-request timeout in seconds")
 @click.option(
     "--output-format",
     "output_fmt",
@@ -4665,7 +4665,7 @@ def netbios(
 @cli.command()
 @click.option("--target", required=True, help="Target host, host:port, or smb:// URL (e.g. smb://localhost:445)")
 @click.option("--port", default=None, type=click.IntRange(0, 65535), help="SMB port (overrides parsed port; default 445)")
-@click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
+@click.option("--timeout", default=3.0, type=click.FloatRange(min=0.001), help="Connection timeout in seconds")
 @click.option(
     "--smb2/--no-smb2",
     "smb2",
@@ -4731,7 +4731,7 @@ def smb(
 @cli.command()
 @click.option("--target", required=True, help="Target host, host:port, or redis:// URL (e.g. redis://localhost:6379)")
 @click.option("--port", default=None, type=click.IntRange(0, 65535), help="Redis port (overrides parsed port; default 6379)")
-@click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
+@click.option("--timeout", default=3.0, type=click.FloatRange(min=0.001), help="Connection timeout in seconds")
 @click.option(
     "--probes",
     default=",".join(DEFAULT_PROBES),
@@ -4805,7 +4805,7 @@ def redis(
     show_default=True,
     help="LDAP protocol version used for the anonymous bind probe.",
 )
-@click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
+@click.option("--timeout", default=3.0, type=click.FloatRange(min=0.001), help="Connection timeout in seconds")
 @click.option(
     "--output-format",
     "output_fmt",
@@ -4865,7 +4865,7 @@ def ldap(
 @cli.command()
 @click.option("--target", required=True, help="Target host, host:port, or mssql:// URL (e.g. mssql://localhost:1433)")
 @click.option("--port", default=None, type=click.IntRange(0, 65535), help="MSSQL port (overrides parsed port; default 1433)")
-@click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
+@click.option("--timeout", default=3.0, type=click.FloatRange(min=0.001), help="Connection timeout in seconds")
 @click.option(
     "--probes",
     default="prelogin",
@@ -4930,7 +4930,7 @@ def mssql(
 @cli.command()
 @click.option("--target", required=True, help="Target host, host:port, or oracle:// URL (e.g. oracle://localhost:1521)")
 @click.option("--port", default=None, type=click.IntRange(0, 65535), help="Oracle port (overrides parsed port; default 1521)")
-@click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
+@click.option("--timeout", default=3.0, type=click.FloatRange(min=0.001), help="Connection timeout in seconds")
 @click.option(
     "--probes",
     default="version",

@@ -88,11 +88,14 @@ hostile targets no longer leaks a single traceback.
     `ValueError` in the `except` clauses.
 
 ## Remaining
-- The **`--timeout` option is not range-checked**: `--timeout -1` leaks a
-  raw `ValueError: Timeout value out of range` in **9** commands (`ldap`,
-  `memcached`, `netbios`, `ntp`, `redis`, `smb`, `snmp`, `trace`,
-  `whois`) and `--timeout 0` leaks a `BlockingIOError` in `whois`.
-  Evidence and the suggested fix are in `HANDOFF_NEXT.md`.
+- The **`--timeout` option is not range-checked** is now **done**: all 43
+  `--timeout` CLI options were changed from `type=float` to
+  `click.FloatRange(min=0.001)` (`ethscan/cli.py`), so `--timeout -1` and
+  `--timeout 0` are refused by click before the command runs (exit 2, single
+  `Error:` line), fixing the traceback in `ldap`, `memcached`, `netbios`,
+  `ntp`, `redis`, `smb`, `snmp`, `trace`, `whois` and the `BlockingIOError`
+  in `whois`. Four regression tests were added to `tests/test_cli.py`.
+  Evidence and the fix notes are in `HANDOFF_NEXT.md`.
 - The 48 pre-existing ruff errors are unrelated and left alone.
 - The `--ports` option (the plural form) is validated in every command that
   has it - checked in this session, no change needed.
