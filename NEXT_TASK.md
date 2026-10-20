@@ -1,24 +1,27 @@
 # NEXT TASK
 
-## Status: COMPLETE (wifi /proc/net/wireless hostile-content hardening done)
+## Status: COMPLETE (netbios: a short first-level name no longer crashes the command)
 
-1. **`_parse_proc_net_wireless` in `ethscan/wifi.py`** now reads its file via
-   `ethscan.fileio.read_text` (lenient UTF-8 decode) instead of a bare
-   `open(filepath, "r")` + `readlines()`. A file with a byte that is not valid
-   UTF-8 (or a null byte) no longer leaks a `UnicodeDecodeError`.
-2. **Library regression tests added** in `tests/test_wifi.py`:
-   `test_parse_proc_net_wireless_not_utf8` and
-   `test_parse_proc_net_wireless_null_byte` write hostile bytes to the file and
-   assert the valid interface row is still parsed with no traceback.
+1. **`_decode_name_chars` in `ethscan/netbios.py`** now rejects a name that
+   is shorter than 32 chars with a `ValueError`. It used to accept any even
+   length, decode it and read the suffix byte out of range, so an `IndexError`
+   escaped the `except ValueError` guards of `_parse_dns_name`,
+   `_parse_nbns_response` and `run_netbios`.
+2. **Library and command-line regression tests added** in
+   `tests/test_netbios.py`: 5 tests, all of which fail with the `IndexError`
+   on the unfixed module.
 
 ## Verification
 
 - `python -m ruff check ethscan/ tests/` → All checks passed.
-- `python -m pytest tests/test_wifi.py -q` → **44 passed** (was 42; added 2).
-- `python -m pytest -q` → **4561 passed, 48 skipped, 2 warnings** (was 4559).
+- `python -m pytest tests/test_netbios.py -q` → **78 passed** (was 73).
+- `python -m pytest -q` → **4566 passed, 48 skipped, 2 warnings** (was 4561).
 - `git diff --check` → clean.
 
 ## Next agent
 
-No open tasks from the handoff. If you need to pick a new bounded task, inspect
-recent changes and choose something small, verifiable, and durable.
+One bounded task is described in `HANDOFF_NEXT.md`: sweep the remaining
+server-answer parsers for the same class of bug (a fixed index into a decoded
+buffer, or an exception type that is not caught by the module's guard).
+The candidate list and the method that found the netbios bug are in
+`HANDOFF_NEXT.md`.

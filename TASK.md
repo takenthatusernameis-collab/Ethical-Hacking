@@ -1,25 +1,46 @@
 # TASK
 
-Status: COMPLETE (wifi /proc/net/wireless hostile-content hardening done)
+Status: COMPLETE (netbios: a short first-level name no longer crashes the command)
 
 ## What was done
-- `ethscan/wifi.py:22-38`: `_parse_proc_net_wireless` now reads its file via
-  `ethscan.fileio.read_text` (lenient UTF-8 decode, `errors="replace"`) instead
-  of a bare `open(filepath, "r")` + `readlines()`. A file with a byte that is
-  not valid UTF-8 (or a null byte) no longer leaks a `UnicodeDecodeError`; the
-  line is used as far as it can be read and the malformed interface row is
-  skipped by the existing `except (ValueError, IndexError)` clause.
-- The `except OSError` clause is preserved, so a missing/unreadable file still
-  returns `[]` as before.
-- Added library tests `test_parse_proc_net_wireless_not_utf8` and
-  `test_parse_proc_net_wireless_null_byte` in `tests/test_wifi.py`.
+
+- **`ethscan/netbios.py:177-193`**: `_decode_name_chars` now rejects a name
+  that is shorter than 32 chars (16 decoded bytes) with a `ValueError`,
+  like every other malformed name. Before the fix it only checked that the
+  length was even, so a name of 2 to 30 even chars was decoded into fewer
+  than 16 bytes and the suffix byte was then read out of range
+  (`suffix = raw[15]`).
+- The `IndexError` that this produced escaped **every** guard around the
+  NBNS parser: `_parse_dns_name` catches `ValueError`, `_parse_nbns_response`
+  documents `ValueError`, and `run_netbios` catches `ValueError` only. A
+  host that answers the NBNS query with such a name crashed the `netbios`
+  command with a traceback.
+- The short name is now reported as the text it is, the same way every
+  other name that is not first-level encoded is reported.
+- **`tests/test_netbios.py`**: 5 regression tests
+  (`test_decode_name_chars_too_short_raises`,
+  `test_parse_dns_name_short_name_is_reported_as_text`,
+  `test_parse_nbns_response_short_question_name_does_not_raise`,
+  `test_run_netbios_hostile_short_name_does_not_leak_a_traceback`,
+  `test_netbios_command_hostile_short_name_does_not_leak_a_traceback`).
 
 ## Verification
-- `python -m ruff check ethscan/ tests/` → All checks passed.
-- `python -m pytest tests/test_wifi.py -q` → 44 passed.
-- `python -m pytest -q` → 4561 passed, 48 skipped, 2 warnings (was 4559;
-  added 2 tests).
+
+- Reproduction before the fix: an NBNS response whose question name is the
+  2-byte label `AB` raised `IndexError: bytearray index out of range` in
+  `run_netbios`, in `_parse_nbns_response`, in `_parse_dns_name` and on the
+  command line (`ethscan netbios --target 127.0.0.1`). After the fix the
+  same packet is parsed (the name is reported as the text `AB`) and the
+  command exits 0.
+- The 5 new tests were run against the unfixed module (`git stash push --
+  ethscan/netbios.py`): all 5 failed with the `IndexError`. With the fix
+  they pass.
+- `python -m ruff check ethscan/ tests/` → **All checks passed**.
+- `python -m pytest tests/test_netbios.py -q` → **78 passed** (was 73).
+- `python -m pytest -q` → **4566 passed, 48 skipped, 2 warnings** (was 4561).
 - `git diff --check` → clean.
 
 ## Handoff
-No open issues. Baseline is clean.
+
+See `HANDOFF_NEXT.md` and `NEXT_TASK.md`. The baseline is clean: the fix and
+its tests are committed, nothing else is modified.
