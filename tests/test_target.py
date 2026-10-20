@@ -21,7 +21,7 @@ from urllib.parse import urlparse
 
 import pytest
 
-from ethscan.target import TargetSpecError, check_target_host, url_port
+from ethscan.target import TargetSpecError, check_port, check_target_host, url_port
 
 TARGET_MODULES = (
     "redis",
@@ -189,6 +189,96 @@ def test_web_and_ssh_still_parse_a_valid_port() -> None:
     assert web._parse_url("example.com") == ("example.com", 443, True)
     assert ssh._extract_port("ssh://example.com:2222") == 2222
     assert ssh._extract_port("example.com") == 22
+
+
+# --- A target whose port is out of range -----------------------------------
+#
+# The port of a bare ``host:port`` target is parsed by hand, while the port
+# of a scheme-qualified target goes through ``url_port``, which already
+# refuses a port outside 0-65535. Without the same check the bare form let
+# the port reach ``socket.connect()``, which raised an ``OverflowError`` (or
+# silently wrapped the port) far away from the parser.
+
+OUT_OF_RANGE_PORT_MESSAGE = "Port out of range 0-65535"
+
+# A superscript digit: ``str.isdigit`` accepts it, ``int`` refuses it.
+SUPERSCRIPT_TWO = "\xb2"
+
+BARE_OUT_OF_RANGE_PORT_TARGETS = (
+    "host:65536",
+    "host:99999",
+    "host:99999999999999999999",
+    "[::1]:99999",
+)
+
+
+def test_check_port_returns_a_valid_port() -> None:
+    """A port in range is returned unchanged, as a number or as text."""
+    assert check_port(443) == 443
+    assert check_port("443") == 443
+    assert check_port(0) == 0
+    assert check_port(65535) == 65535
+
+
+def test_check_port_raises_target_spec_error_for_an_out_of_range_port() -> None:
+    """A port outside the valid range is reported as an unusable target."""
+    for port in (-1, 65536, 99999):
+        with pytest.raises(TargetSpecError) as excinfo:
+            check_port(port)
+        assert str(excinfo.value) == OUT_OF_RANGE_PORT_MESSAGE
+
+
+def test_check_port_raises_target_spec_error_for_text_that_is_not_a_number() -> None:
+    """Text that ``int`` refuses is reported as an unusable target."""
+    with pytest.raises(TargetSpecError) as excinfo:
+        check_port(SUPERSCRIPT_TWO)
+    assert str(excinfo.value) == f"Invalid port {SUPERSCRIPT_TWO!r}"
+
+
+def test_check_port_error_is_still_a_value_error() -> None:
+    """Existing ``except ValueError`` handlers keep working."""
+    with pytest.raises(ValueError):
+        check_port(99999)
+
+
+@pytest.mark.parametrize("module_name", TARGET_MODULES)
+def test_a_bare_target_with_an_out_of_range_port_is_rejected(module_name: str) -> None:
+    """Every protocol module rejects a bare ``host:port`` with a bad port."""
+    module = importlib.import_module(f"ethscan.{module_name}")
+    for target in BARE_OUT_OF_RANGE_PORT_TARGETS:
+        with pytest.raises(TargetSpecError) as excinfo:
+            module._normalize_target(target)
+        assert str(excinfo.value) == OUT_OF_RANGE_PORT_MESSAGE
+
+
+@pytest.mark.parametrize("module_name", TARGET_MODULES)
+def test_a_bare_target_with_an_unparsable_port_is_rejected(module_name: str) -> None:
+    """A port that ``int`` refuses is rejected instead of raising a ValueError."""
+    module = importlib.import_module(f"ethscan.{module_name}")
+    with pytest.raises(TargetSpecError) as excinfo:
+        module._normalize_target(f"host:{SUPERSCRIPT_TWO}")
+    assert str(excinfo.value) == f"Invalid port {SUPERSCRIPT_TWO!r}"
+
+
+@pytest.mark.parametrize("module_name", PROBE_FAILURE_MODULES)
+def test_probe_failure_modules_report_an_out_of_range_port(
+    module_name: str,
+) -> None:
+    """A module that reports a failed probe keeps its contract."""
+    module = importlib.import_module(f"ethscan.{module_name}")
+    run = getattr(module, f"run_{module_name}")
+    results = run("host:99999")
+    assert results["accessible"] is False
+    assert results["error"] == OUT_OF_RANGE_PORT_MESSAGE
+
+
+@pytest.mark.parametrize("module_name", TARGET_MODULES)
+def test_a_valid_bare_port_is_still_parsed(module_name: str) -> None:
+    """The valid port forms keep being parsed exactly as before."""
+    module = importlib.import_module(f"ethscan.{module_name}")
+    assert module._normalize_target("host:1234") == ("host", 1234)
+    assert module._normalize_target("host:65535") == ("host", 65535)
+    assert module._normalize_target("[::1]:443") == ("::1", 443)
 
 
 # --- A target whose host contains a space or a control character ------------

@@ -74,21 +74,34 @@ def url_port(parsed: SplitResult) -> int | None:
         raise TargetSpecError(str(exc)) from exc
 
 
-def check_port(port: int) -> int:
-    """Raise ``TargetSpecError`` when a port is outside 0-65535.
+def check_port(port: int | str) -> int:
+    """Return the port when it is a valid port number.
+
+    The port of a bare ``host:port`` target is parsed by hand, so it can be
+    text that ``str.isdigit`` accepts but ``int`` refuses (the superscript
+    digits, for example). The text is converted here, so an unusable port is
+    reported as a :class:`TargetSpecError` instead of a raw ``ValueError``.
 
     Args:
-        port: The candidate port number.
+        port: The candidate port, either as a number or as the text of a
+            number as it appears in a ``host:port`` target.
 
     Returns:
         The port number when it is in range.
 
     Raises:
-        TargetSpecError: If the port is outside 0-65535.
+        TargetSpecError: If the port is not a number or is outside 0-65535.
     """
-    if port < 0 or port > 65535:
+    if isinstance(port, str):
+        try:
+            value = int(port)
+        except ValueError as exc:
+            raise TargetSpecError(f"Invalid port {port!r}") from exc
+    else:
+        value = port
+    if value < 0 or value > 65535:
         raise TargetSpecError("Port out of range 0-65535")
-    return port
+    return value
 
 
 def _host_of(target: str) -> str:

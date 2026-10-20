@@ -19,7 +19,7 @@ import json
 import socket
 from typing import Any
 
-from ethscan.target import TargetSpecError, url_port
+from ethscan.target import TargetSpecError, check_port, url_port
 
 DEFAULT_PORT = 21
 DEFAULT_TIMEOUT = 3.0
@@ -48,12 +48,12 @@ def _normalize_target(target: str) -> tuple[str, int]:
                 port_part = host[bracket_end + 2:]
                 if port_part.isdigit():
                     host = host[1:bracket_end]
-                    port = port or int(port_part)
+                    port = port or check_port(port_part)
         elif host and ":" in host and "]" not in host:
             base, _, rest = host.rpartition(":")
             if rest.isdigit():
                 host = base
-                port = port or int(rest)
+                port = port or check_port(rest)
         elif host and host.startswith("[") and host.endswith("]"):
             host = host[1:-1]
 

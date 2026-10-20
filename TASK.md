@@ -1,55 +1,61 @@
 # TASK.md
 
-Date: 2026-10-19T23:45:00Z
-Status: the **`s3` bracketed-IPv6 crash** (`http.client.InvalidURL`) is
-fixed. `python -m ethscan s3 --target '[::1]:443'` now exits 0 with
-per-bucket `error` results and no traceback. A second crash of the same
-class (a hostile `--region`) was found and fixed in the same change. The
-`--target` leak list is now empty; the next task (a port out of range in
-the bare `host:port` form) is prepared in `HANDOFF_NEXT.md` /
-`NEXT_TASK.md`.
+Date: 2026-10-20T00:40:00Z
+Status: the **out-of-range port in the bare `host:port` form** is fixed
+for **all 14 commands** that parse such a target, not only for the seven
+the previous session found. The same expression had a second crash
+(`str.isdigit()` accepts text that `int()` refuses), which is fixed too.
+A third, related surface was found and measured but deliberately left
+alone: the explicit `--port` option (next task, `HANDOFF_NEXT.md`).
 
 ## What changed
-- **`ethscan/s3.py`**
-  - `_bucket_name_problem()` (new): reports why a candidate cannot be an
-    S3 bucket name (length, uppercase, forbidden characters, leading /
-    trailing punctuation, adjacent periods, IPv4-like).
-  - `check_bucket_public()`: a name that cannot be an S3 bucket name is
-    reported as a failed probe (`error: "Invalid bucket name: ..."`)
-    **without** a DNS lookup or an HTTP request; `http.client.
-    HTTPException` (e.g. `InvalidURL`) is now caught and reported in
-    `error`; the `Request` construction moved inside the `try`.
-  - `run_s3()`: the worker wrapper turns any unexpected exception into a
-    failed probe result, so one bad candidate can no longer abort the
-    whole report; a note is added when no derived candidate is a valid
-    bucket name.
-- **Tests added**: `tests/test_s3.py` (8 library tests) and
-  `tests/test_cli.py` (1 CLI test).
+- **`ethscan/target.py`**
+  - `check_port(port)` now accepts the port as a **number or as the text**
+    of a number (`int | str`), converts the text itself and raises
+    `TargetSpecError` for text that `int()` refuses. The range check
+    (0-65535) and the message `Port out of range 0-65535` are unchanged.
+- **`ethscan/{redis,ldap,memcached,netbios,ntp,smb,snmp}.py`**
+  (completed from the previous session, which had left them without
+  tests): the hand-parsed port of the bare `host:port` form now goes
+  through `check_port()`.
+- **`ethscan/{ftp,smtp,mysql,mongodb,postgresql,mssql,oracle}.py`** (new)
+  - the same seven modules parse the port of a bare `host:port` target by
+    hand as well; they now call `check_port()` too. Before the change they
+    did **not** crash, they silently connected to the **wrong port**:
+    `socket.getaddrinfo()` wraps a port above 65535, so
+    `example.com:99999` was probed on port **34463**.
+- All 14 modules pass the port text to `check_port()` instead of calling
+  `int()` at the call site.
 
 ## Verification
-- Manual: `python -m ethscan s3 --target '[::1]:443'` -> exit 0, JSON
-  with 77 per-bucket `error` results, notes
-  "None of the 77 derived bucket names is a valid S3 bucket name.",
-  no traceback; markdown and CSV outputs render the same data.
-- Manual: `python -m ethscan s3 --target example.com --region 'a b'` ->
-  exit 0 (was exit 1 + `InvalidURL` traceback), every probe reports
-  "URL can't contain control characters.".
-- Manual: `python -m ethscan s3 --target example.com --timeout 2` ->
-  exit 0, DNS still resolved, probe failures still reported in `error`.
-- Full suite: **4215 passed, 1 skipped** (4207 + 8 new). Ruff: the same
-  48 pre-existing errors, no new ones.
-- Sweep: all 42 `--target` commands x 4 hostile inputs (`''`,
-  `'host name'`, `'no-such-host.invalid'`, `'[::1]:443'`) -> **0 leaked
-  tracebacks**. A wider sweep (15 further hostile inputs) is recorded in
-  `HANDOFF_NEXT.md` as the source of the next task.
+- `python -m ethscan <cmd> --target 'example.com:99999'` for the 9 commands
+  with a usage-error contract (`redis`, `ldap`, `memcached`, `netbios`,
+  `ntp`, `smb`, `snmp`, `ftp`, `smtp`) -> **exit 2**, one-line
+  `Error: Invalid value for '--target': Port out of range 0-65535`.
+- The same target for the 5 commands with a probe-failure contract
+  (`mysql`, `mongodb`, `postgresql`, `mssql`, `oracle`) -> **exit 0** with
+  `"error": "Port out of range 0-65535"` in the output, exactly like the
+  scheme-qualified form of the same target.
+- `python -m ethscan redis --target 'example.com:²'` (a superscript digit:
+  `str.isdigit()` accepts it, `int()` refuses it) -> **exit 2**,
+  `Error: Invalid value for '--target': Invalid port '²'` (before the
+  change: a raw `ValueError` traceback).
+- The valid forms are unchanged: `host`, `host:1234`, `host:65535`,
+  `[::1]:443` and the scheme forms parse to the same values in all 14
+  modules.
+- Full suite: **4272 passed, 1 skipped** (4215 before + 57 new tests).
+  Ruff: the same **48** pre-existing errors, no new ones.
+- Sweep: 20 target-consuming commands x 12 hostile targets = **240
+  invocations, 0 leaked tracebacks**.
 
 ## Remaining
-- A port out of range in the **bare** `host:port` form still crashes 7
-  commands with `OverflowError` (`redis`, `ldap`, `memcached`, `netbios`,
-  `ntp`, `smb`, `snmp`), while the same target with a scheme is already
-  reported as a usage error. Details, evidence and the suggested fix are
-  in `HANDOFF_NEXT.md`.
-- Two further classes of hostile `--target` were found by the wider sweep
-  (a host of only dots, and a percent-encoded NUL / userinfo in a URL).
-  They are recorded in `HANDOFF_NEXT.md` as backlog.
+- The explicit **`--port` option** is still not range-checked: 9 commands
+  leak an `OverflowError` traceback (`ldap`, `memcached`, `redis`, `smb`,
+  `netbios`, `ntp`, `snmp`, `trace`, `whois`) and 12 commands silently
+  probe the wrapped port. Evidence and the suggested fix are in
+  `HANDOFF_NEXT.md`.
+- The backlog of the wider sweep is unchanged and still reproduces: a host
+  of only dots (`UnicodeError`, 13 commands), a percent-encoded NUL
+  (`InvalidURL`, 4 commands) and a URL with userinfo (`InvalidURL`, 4
+  commands). See `HANDOFF_NEXT.md`.
 - The 48 pre-existing ruff errors are unrelated and left alone.

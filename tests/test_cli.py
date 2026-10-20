@@ -22282,6 +22282,137 @@ def test_a_valid_port_is_still_reported_in_the_output() -> None:
         assert payload["host"] == "127.0.0.1", f"{command}: {result.output}"
 
 
+# --- A --target whose port is out of range ---------------------------------
+#
+# The port of a bare ``host:port`` target is parsed by hand, while the port
+# of a scheme-qualified target goes through ``url_port``, which already
+# refuses a port outside 0-65535. Without the same check the bare form let
+# the port reach ``socket.connect()``, which raised an ``OverflowError``
+# (or silently wrapped the port) far away from the parser.
+
+BARE_PORT_COMMANDS = (
+    "redis",
+    "memcached",
+    "ntp",
+    "snmp",
+    "ftp",
+    "ldap",
+    "netbios",
+    "smb",
+    "smtp",
+)
+
+BARE_PORT_PROBE_FAILURE_COMMANDS = (
+    "mysql",
+    "mongodb",
+    "oracle",
+    "postgresql",
+    "mssql",
+)
+
+OUT_OF_RANGE_PORT_TARGETS = (
+    "host:65536",
+    "host:99999",
+    "host:99999999999999999999",
+    "[::1]:99999",
+)
+
+OUT_OF_RANGE_PORT_MESSAGE = "Port out of range 0-65535"
+
+# A superscript digit: ``str.isdigit`` accepts it, ``int`` refuses it.
+SUPERSCRIPT_TWO = "\xb2"
+
+
+def test_a_bare_target_with_an_out_of_range_port_is_a_usage_error() -> None:
+    """A bare ``host:port`` target with a bad port must be rejected cleanly."""
+    runner = CliRunner()
+    for command in BARE_PORT_COMMANDS:
+        for target in OUT_OF_RANGE_PORT_TARGETS:
+            result = runner.invoke(cli, [command, "--target", target])
+            _assert_target_usage_error(result, f"{command} --target {target!r}")
+            assert OUT_OF_RANGE_PORT_MESSAGE in result.output, result.output
+
+
+def test_a_bare_target_with_an_unparsable_port_is_a_usage_error() -> None:
+    """A port that ``int`` refuses is rejected instead of crashing."""
+    runner = CliRunner()
+    for command in BARE_PORT_COMMANDS:
+        result = runner.invoke(cli, [command, "--target", f"host:{SUPERSCRIPT_TWO}"])
+        _assert_target_usage_error(result, command)
+        assert f"Invalid port {SUPERSCRIPT_TWO!r}" in result.output, result.output
+
+
+def test_a_bare_target_with_an_out_of_range_port_does_not_start_a_probe(
+    monkeypatch,
+) -> None:
+    """A rejected target must abort before any network access happens."""
+    import importlib
+
+    calls = []
+
+    def make_tripwire(module_name: str, attribute: str):
+        def tripwire(*args, **kwargs):
+            calls.append((module_name, attribute))
+            raise AssertionError("a probe was started for an invalid target")
+
+        return tripwire
+
+    transports = (
+        ("redis", "_send_recv"),
+        ("memcached", "_send_recv"),
+        ("ntp", "_send_recv"),
+        ("snmp", "_send_recv"),
+        ("ldap", "_send_recv"),
+        ("netbios", "_send_recv"),
+        ("smb", "_send_recv"),
+        ("ftp", "_connect"),
+        ("smtp", "_connect"),
+    )
+    for module_name, attribute in transports:
+        module = importlib.import_module(f"ethscan.{module_name}")
+        monkeypatch.setattr(module, attribute, make_tripwire(module_name, attribute))
+
+    runner = CliRunner()
+    for command in BARE_PORT_COMMANDS:
+        result = runner.invoke(cli, [command, "--target", "host:99999"])
+        _assert_target_usage_error(result, command)
+    assert calls == [], "no probe may start for an invalid --target value"
+
+
+def test_probe_failure_commands_report_an_out_of_range_port() -> None:
+    """The five commands that report a failed probe keep their contract."""
+    runner = CliRunner()
+    for command in BARE_PORT_PROBE_FAILURE_COMMANDS:
+        result = runner.invoke(cli, [command, "--target", "host:99999"])
+        assert result.exit_code == 0, f"{command}: {result.output}"
+        payload = json.loads(result.output)
+        assert payload["accessible"] is False, f"{command}: {result.output}"
+        assert payload["error"] == OUT_OF_RANGE_PORT_MESSAGE, f"{command}: {result.output}"
+
+
+def test_the_bare_and_the_scheme_form_agree_on_an_out_of_range_port() -> None:
+    """The same target must be refused the same way in both forms."""
+    runner = CliRunner()
+    for command in BARE_PORT_COMMANDS:
+        bare = runner.invoke(cli, [command, "--target", "host:99999"])
+        scheme = runner.invoke(cli, [command, "--target", "redis://host:99999"])
+        _assert_target_usage_error(bare, command)
+        _assert_target_usage_error(scheme, command)
+        assert OUT_OF_RANGE_PORT_MESSAGE in bare.output, bare.output
+        assert OUT_OF_RANGE_PORT_MESSAGE in scheme.output, scheme.output
+
+
+def test_a_valid_bare_port_is_still_accepted() -> None:
+    """A target with a real port keeps working."""
+    runner = CliRunner()
+    for command in BARE_PORT_COMMANDS:
+        result = runner.invoke(
+            cli, [command, "--target", "127.0.0.1:65535", "--timeout", "0.2"]
+        )
+        assert result.exit_code == 0, f"{command}: {result.output}"
+        assert "Invalid value for '--target'" not in result.output, result.output
+
+
 # --- A target whose host contains a space or a control character -----------
 #
 # ``http.client`` refuses such a host with an ``http.client.InvalidURL``,

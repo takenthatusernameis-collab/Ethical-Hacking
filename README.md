@@ -218,6 +218,20 @@ $ python -m ethscan s3 --target "[::1]:443"
 }
 ```
 
+A port outside 0-65535 is refused the same way in both forms of a target,
+the bare `host:port` and the scheme-qualified `redis://host:port`:
+
+```console
+$ python -m ethscan redis --target "example.com:99999"
+Usage: python -m ethscan redis [OPTIONS]
+Try 'python -m ethscan redis --help' for help.
+
+Error: Invalid value for '--target': Port out of range 0-65535
+```
+
+The `mysql`, `mongodb`, `oracle`, `postgresql` and `mssql` commands report
+the same problem inside their own output and still exit 0.
+
 ## Disclaimer
 
 This project is for **authorized security testing only**. Use only against

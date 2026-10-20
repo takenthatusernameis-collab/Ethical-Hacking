@@ -1,159 +1,176 @@
 # HANDOFF_NEXT.md
 
 ## Summary
-The **`s3` bracketed-IPv6 crash is fixed**. `python -m ethscan s3
---target '[::1]:443'` used to die with a raw traceback
-(`http.client.InvalidURL: nonnumeric port: '1.s3.amazonaws.com'`, exit
-1). It now exits 0 and reports every candidate as a failed probe inside
-the normal JSON/Markdown/CSV output.
+The **out-of-range port in the bare `host:port` form is fixed for all 14
+commands** that parse such a target.
 
-The same change also fixed a **second crash of the same class** that the
-handoff had not recorded: a hostile `--region` (`--region 'a b'`)
-produced the identical `http.client.InvalidURL` traceback.
+The previous session had already introduced `check_port()` in
+`ethscan/target.py` and applied it to seven modules
+(`redis`, `ldap`, `memcached`, `netbios`, `ntp`, `smb`, `snmp`), but it
+ran out of time: the change was **untested and undocumented**, and the
+seven modules with the same hand-written port parser were missed. Those
+seven did not crash - they silently probed the **wrong port**.
 
-No `s3` usage error was introduced: for `s3` a malformed or unusable
-target is a probe failure, not an invalid option, so the failure is
-reported in the result (`error` field) and the command exits 0.
+A second crash in the very same expression was found and fixed as well.
+
+The `--port` **option** (as opposed to the port inside `--target`) is the
+next task; it has the same class of bug and is fully measured below.
 
 ## What changed
-### `ethscan/s3.py`
-1. **`_bucket_name_problem(bucket_name) -> str | None`** (new helper).
-   An S3 bucket name is a DNS-compliant label: 3-63 characters of
-   lowercase letters, digits, dots and hyphens, starting and ending with
-   a letter or a digit, without adjacent periods and not formatted as an
-   IPv4 address. The helper returns a short description of the problem,
-   or `None` when the name is valid.
-2. **`check_bucket_public()`**:
-   - a name that cannot be an S3 bucket name is reported as
-     `error: "Invalid bucket name: <reason>"` and returns **before** the
-     DNS lookup and the HTTP request (no network traffic at all);
-   - `http.client.HTTPException` (e.g. `InvalidURL`, `UnknownProtocol`)
-     is caught next to `HTTPError` / `URLError` / `OSError` and reported
-     in `error`. `InvalidURL` derives from `HTTPException` and **not**
-     from `OSError`, which is why it used to escape the `except` clause
-     and reach the user as a traceback;
-   - the `urllib.request.Request(...)` construction moved inside the
-     `try` block.
-3. **`run_s3()`**:
-   - the worker wrapper catches any exception of a probe and turns it
-     into a failed probe result (`error: "<Type>: <message>"`), so a
-     single unusable candidate can no longer abort the report of all the
-     other candidates;
-   - a note is added when **no** derived candidate is a valid bucket
-     name: `"None of the 77 derived bucket names is a valid S3 bucket
-     name."`.
+### `ethscan/target.py`
+1. **`check_port(port: int | str) -> int`** now takes the port as a number
+   **or as the text of a number** (the text as it appears in a
+   `host:port` target). It converts the text itself and raises
+   `TargetSpecError` for text that `int()` refuses. The range check and
+   its message (`Port out of range 0-65535`) are unchanged.
+2. The reason for the text form: the port of a bare target is parsed by
+   hand with `str.isdigit()`, and `str.isdigit()` accepts characters that
+   `int()` refuses - the superscript digits. `example.com:²` used to die
+   with a raw `ValueError: invalid literal for int() with base 10: '²'`.
 
-### Decisions that were made (the handoff asked for them explicitly)
-1. **Which bucket names are usable.** Option (b) of the handoff was
-   chosen: the candidates are **not** silently filtered out, every
-   candidate keeps its place in the report and carries an explicit
-   `error`. Dropping them would have (a) hidden the entries of an
-   explicit `--wordlist`, (b) changed the meaning of
-   `candidates_tested`, and (c) produced the misleading note "No bucket
-   candidates could be derived from the target." for a target that did
-   produce candidates. A summary note tells the user what happened.
-2. **Where a failed probe is reported.** Inside the result dict, in the
-   `error` field, exactly like `HTTPError` / `URLError` / `socket.
-   timeout` / `OSError` already were. **Not** a click usage error: for
-   `s3` a malformed or unresolvable target is a probe failure.
+### `ethscan/{ftp,smtp,mysql,mongodb,postgresql,mssql,oracle}.py` (new)
+The same hand-written `host:port` parser as in the seven modules the
+previous session fixed. These modules now call `check_port()` as well.
+
+**Why they did not crash before:** they connect with
+`socket.create_connection()`, which resolves the host with
+`socket.getaddrinfo()`, and `getaddrinfo()` *wraps* a port above 65535:
+
+```python
+>>> socket.getaddrinfo('127.0.0.1', 99999, 0, socket.SOCK_STREAM)
+[(<AddressFamily.AF_INET: 2>, <SocketKind.SOCK_STREAM: 1>, 6, '', ('127.0.0.1', 34463))]
+```
+
+So `example.com:99999` was probed on port **34463** and the result was
+reported as a normal probe result. A silent wrong port is worse than the
+crash of the other seven modules, which raised `OverflowError` (an
+`ArithmeticError`, **not** an `OSError`, so the `except OSError` handlers
+of the library did not catch it).
+
+### `ethscan/{redis,ldap,memcached,netbios,ntp,smb,snmp}.py`
+Completed from the previous session: the call sites now pass the port
+*text* to `check_port()` instead of calling `int()` themselves.
+
+### Decisions
+1. **Where the failure is reported** follows the convention that is
+   already established per command and was not changed:
+   - the 9 commands whose contract is "the option is invalid" (`redis`,
+     `ldap`, `memcached`, `netbios`, `ntp`, `smb`, `snmp`, `ftp`, `smtp`)
+     report a click usage error (exit 2):
+     `Error: Invalid value for '--target': Port out of range 0-65535`;
+   - the 5 commands whose contract is "the probe failed" (`mysql`,
+     `mongodb`, `oracle`, `postgresql`, `mssql`) report the error inside
+     their own output and exit 0, exactly like the scheme-qualified form
+     of the same target already did.
+2. **The message is identical to the one of `url_port()`**
+   (`Port out of range 0-65535`), so the bare form and the
+   scheme-qualified form of the same target now fail identically.
+3. `check_port()` keeps the `TargetSpecError` type, which is a
+   `ValueError` subclass, so the `except ValueError` handlers of the
+   library keep working.
 
 ## Verification
-- `python -m ethscan s3 --target '[::1]:443'` -> exit 0, no stderr, JSON
-  with 77 results, every `error` = "Invalid bucket name: contains
-  characters that are not allowed in a bucket name", `dns_resolved` is
-  `null`, no request is sent.
-- `python -m ethscan s3 --target '[::1]:443' --format markdown` and
-  `--format csv` -> exit 0, same data, the note is rendered in the
-  "Notes" section.
-- `python -m ethscan s3 --target example.com --region 'a b'` -> exit 0
-  (before the fix: exit 1 + `InvalidURL` traceback), every probe reports
-  "URL can't contain control characters.".
-- `python -m ethscan s3 --target example.com --timeout 2` -> exit 0, DNS
-  still resolved, probe failures still reported in `error`: the normal
-  path is unchanged.
-- Full suite: **4215 passed, 1 skipped** (4207 before + 8 new tests).
-- Ruff: **48 errors, the same pre-existing ones**, no new ones (the
-  blind `except Exception` in the worker carries `# noqa: BLE001` so the
-  baseline does not grow).
-- Sweep of every `--target` command with `''`, `'host name'`,
-  `'no-such-host.invalid'` and `'[::1]:443'`: **0 leaked tracebacks**
-  (168 invocations).
+- `python -m ethscan <cmd> --target 'example.com:99999'` for the 9
+  usage-error commands -> exit 2, one-line message, no traceback.
+- The same target for the 5 probe-failure commands -> exit 0,
+  `"error": "Port out of range 0-65535"`.
+- `python -m ethscan redis --target 'example.com:²'` -> exit 2,
+  `Error: Invalid value for '--target': Invalid port '²'`.
+- The valid forms are unchanged in all 14 modules: `host:1234` ->
+  `('host', 1234)`, `host:65535` -> `('host', 65535)`,
+  `[::1]:443` -> `('::1', 443)`.
+- Full suite: **4272 passed, 1 skipped** (4215 before + 57 new tests:
+  51 in `tests/test_target.py`, 6 in `tests/test_cli.py`).
+- Ruff: **48 errors, the same pre-existing ones**, no new ones. None of
+  them is on a line that was changed.
+- Sweep: 20 target-consuming commands x 12 hostile targets = 240
+  invocations, **0 leaked tracebacks**.
 
-## Next task (bounded, high-value): a port out of range in the bare `host:port` form
+## Next task (bounded, high-value): the explicit `--port` option is not range-checked
 
 ### Evidence
-`--target example.com:99999` still dies with a raw traceback in seven
-commands:
+23 commands take a port as an option. Every one of them uses `type=int`
+without a range, so the value reaches the socket layer:
 
 ```
-$ python -m ethscan redis --target 'example.com:99999'
+$ python -m ethscan redis --target 127.0.0.1 --port 99999
   File ".../ethscan/redis.py", line 193, in _send_recv
     sock.connect((host, port))
 OverflowError: connect(): port must be 0-65535.
 EXIT=1
 ```
 
-Affects: `redis`, `ldap`, `memcached`, `netbios`, `ntp`, `smb`, `snmp`
-(7 commands, same traceback in each).
+**10 commands leak a traceback** (`OverflowError`):
 
-The **same** target with a scheme is already handled correctly:
+| command | option | message |
+|---|---|---|
+| `redis`, `ldap`, `memcached`, `smb` | `--port` | `connect(): port must be 0-65535.` |
+| `netbios`, `ntp`, `snmp` | `--port` | `sendto(): port must be 0-65535.` |
+| `ping` | `--tcp-port` | `connect_ex(): port must be 0-65535.` |
+| `trace`, `whois` | `--port` | `connect(): port must be 0-65535.` |
 
-```
-$ python -m ethscan redis --target 'http://example.com:99999'
-Error: Invalid value for '--target': Port out of range 0-65535
-EXIT=2
+**12 commands probe the wrong port silently** (the `getaddrinfo()` wrap
+described above): `brute`, `ftp`, `mongodb`, `mssql`, `mysql`, `oracle`,
+`postgresql`, `smtp`, `ssh`, `ssl`, `tls`, `urlcheck`. `recon` passes
+`--trace-port` and `--whois-port` on to `trace` and `whois`.
+
+Reproduce:
+
+```python
+from click.testing import CliRunner
+from ethscan import cli
+
+runner = CliRunner()
+cmds = ("brute cert cve dns dnsbrute dnssec ftp fuzz geo headers ldap mac "
+        "memcached mongodb mssql mysql netbios ntp oracle osdetect ping "
+        "postgresql recon redis report resolve s3 scan service smb smtp snmp "
+        "ssh ssl subdomains subtake tls trace urlcheck vuln web whois").split()
+
+for c in cmds:
+    res = runner.invoke(cli.cli, [c, "--help"])
+    if "--port" not in res.output and "--tcp-port" not in res.output:
+        continue
+    opt = "--tcp-port" if "--tcp-port" in res.output else "--port"
+    res = runner.invoke(cli.cli, [c, "--target", "127.0.0.1", opt, "99999"])
+    exc = res.exception
+    if exc is not None and not isinstance(exc, SystemExit):
+        print(c, opt, res.exit_code, type(exc).__name__, exc)
 ```
 
 ### Root cause
-The seven modules share one `_normalize_target` shape (e.g.
-`ethscan/redis.py:33`):
-
-- target **with** a scheme -> `url_port(parsed)` (`ethscan/target.py:52`)
-  -> `urlparse` raises `ValueError("Port out of range 0-65535")` ->
-  `url_port` re-raises it as `TargetSpecError` -> the CLI turns it into
-  a usage error (exit 2). **Already correct.**
-- target **without** a scheme -> the port is parsed by hand, e.g.
-  `ethscan/redis.py:61-65`:
-
-  ```python
-  elif host and ":" in host and "]" not in host:
-      base, _, rest = host.rpartition(":")
-      if rest.isdigit():
-          host = base
-          port = port or int(rest)      # <-- no range check
-  ```
-
-  `int("99999")` is accepted, and the value reaches `socket.connect()` /
-  `socket.sendto()`, which raise `OverflowError` (an `OSError`
-  subclass, but raised at connect time, far from the parser).
-
-The same shape is repeated in `ethscan/ldap.py:152-159`,
-`ethscan/memcached.py:57-64`, `ethscan/netbios.py:135-142`,
-`ethscan/ntp.py:48-55`, `ethscan/smb.py:188-195`,
-`ethscan/snmp.py:136-143`.
+The options are declared as `@click.option("--port", default=443,
+type=int, ...)`. The library never sees the option value as a problem:
+the port is used as it is.
 
 ### Suggested fix shape
-Add one shared helper next to `url_port` in `ethscan/target.py`, e.g.
+Use `click.IntRange(0, 65535)` for the port options, so click rejects the
+value before the command runs:
 
 ```python
-def check_port(port: int) -> int:
-    """Raise ``TargetSpecError`` when a port is outside 0-65535."""
+@click.option("--port", default=443, type=click.IntRange(0, 65535),
+              help="TLS port (default: 443)")
 ```
 
-and call it in the hand-written `host:port` branch of the seven
-`_normalize_target` functions, so the bare form reports the same usage
-error as the scheme form (exit 2, "Error: Invalid value for '--target':
-Port out of range 0-65535") instead of an `OverflowError` traceback.
+The options to change (`ethscan/cli.py`): `whois` 1132, `ssl` 1522,
+`tls` 1569, `urlcheck` 1909, `brute` 1998, `trace` 2179, `ping`
+`--tcp-port` 2294, `recon` `--whois-port` 2529 and `--trace-port` 2544,
+`memcached` 3656, `mysql` 3724, `mongodb` 3789, `postgresql` 3854,
+`ssh` 4117, `smtp` 4263, `ftp` 4355, `ntp` 4431, `snmp` 4507,
+`netbios` 4585, `smb` 4667, `redis` 4733, `ldap` 4799, `mssql` 4867,
+`oracle` 4932. (The line numbers are from the current working tree.)
 
-Verify with `python -m ethscan <cmd> --target 'example.com:99999'` ->
-exit 2, no traceback, for all seven commands, and that
-`--target 'example.com:65535'` and `--target 'host:port'` keep working.
-Add a library test per module and one CLI test that loops over the seven
-commands.
+Note: the options with `default=None` (the protocol commands) must keep
+working - `click.IntRange` leaves a `None` default alone, but verify it.
+
+Verify with `python -m ethscan <cmd> --target 127.0.0.1 --port 99999` ->
+exit 2 and a one-line error for every command that has the option, and
+that `--port 443` and the defaults keep working. Add one CLI test that
+loops over the commands with a port option.
 
 ### Backlog found by the same sweep (not the next task)
-Reproduce with the script in `NEXT_TASK.md` (15 hostile inputs x 42
-commands). Two further classes of leaked traceback remain:
+Reproduce with the script in `NEXT_TASK.md` (42 commands x 3 hostile
+targets). Three further classes of leaked traceback remain, unchanged
+since the session that recorded them:
 
 | input | commands | error |
 |---|---|---|
@@ -161,20 +178,20 @@ commands). Two further classes of leaked traceback remain:
 | `--target '%00'` | `fuzz`, `headers`, `urlcheck`, `web` (4) | `InvalidURL: URL can't contain control characters. '\x00'` (the percent-encoded NUL is decoded after `check_target_path` has inspected the raw path) |
 | `--target 'http://user:pass@example.com'` | `fuzz`, `headers`, `urlcheck`, `web` (4) | `InvalidURL: nonnumeric port: 'pass@example.com'` (the userinfo is not stripped before the host is used) |
 
-Both are the same shape as the tasks above: the target is accepted by
+All three are the same shape as the tasks above: the target is accepted by
 the parser and refused later by the network layer. The established
 convention applies - report it as a usage error (exit 2) when the target
 is unusable, otherwise as a probe failure inside the output.
 
 ## Unchanged / deliberate non-changes
-- `_build_bucket_candidates` still derives the same candidates in the
-  same order; only the probe decides that a name is unusable. The
-  documented "original case kept" behaviour of the wordlist entries is
-  unchanged.
-- `s3._normalize_target` still lower-cases the target and keeps the
-  IPv6 form (`_normalize_target("https://[::1]/path") == "::1"`).
-- `s3` keeps its `_target_usage_errors` decorator, but an unusable
-  bucket name is still **not** a usage error.
-- The 48 pre-existing ruff errors are unrelated and left alone.
+- The valid target forms are untouched: `host`, `host:1234`, `host:65535`,
+  `[::1]:443`, `redis://host:6379`, `https://host:8443`.
+- The scheme-qualified form of an out-of-range port was already refused
+  by `url_port()` and still is, with the same message.
+- `s3` is unaffected: it never reads the port of its target.
 - The 14 `_normalize_target` copies remain duplicated (separate refactor;
-  they differ on `host:` / bracketed-IPv6 edge cases).
+  they differ on `host:` / bracketed-IPv6 edge cases). This session only
+  added the same one-line check to the port branch of each copy.
+- The 48 pre-existing ruff errors are unrelated and left alone.
+- The explicit `--port` option was **not** changed in this session: it is
+  a different surface (an option, not the target) and the next task.

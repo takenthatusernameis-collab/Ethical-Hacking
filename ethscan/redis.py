@@ -53,7 +53,7 @@ def _normalize_target(target: str) -> tuple[str, int]:
                 port_part = host[bracket_end + 2:]
                 if port_part.isdigit():
                     host = host[1:bracket_end]
-                    port = port or check_port(int(port_part))
+                    port = port or check_port(port_part)
                 else:
                     host = host[1:-1] if host.endswith("]") else host
             elif host.endswith("]"):
@@ -62,7 +62,7 @@ def _normalize_target(target: str) -> tuple[str, int]:
             base, _, rest = host.rpartition(":")
             if rest.isdigit():
                 host = base
-                port = port or check_port(int(rest))
+                port = port or check_port(rest)
         elif host and host.startswith("[") and host.endswith("]"):
             host = host[1:-1]
 
