@@ -2,6 +2,8 @@
 
 import threading
 
+import pytest
+
 from ethscan.dns import (
     DEFAULT_DNS_TYPES,
     DEFAULT_TIMEOUT,
@@ -559,6 +561,51 @@ def test_dns_availability_flag_true(monkeypatch) -> None:
         monkeypatch.delitem(sys.modules, "dns.resolver", raising=False)
         monkeypatch.delitem(sys.modules, "dns.exception", raising=False)
         reload(dns_mod)
+
+
+ESCAPE_TYPES = [
+    pytest.param(IndexError, id="indexerror"),
+    pytest.param(AttributeError, id="attributeerror"),
+    pytest.param(KeyError, id="keyerror"),
+]
+
+
+def _make_raise_resolve(exc):
+    def fake_resolve(domain, rdtype, self):
+        raise exc("boom")
+
+    return fake_resolve
+
+
+@pytest.mark.parametrize("exc", ESCAPE_TYPES)
+def test_resolve_with_dnspython_swallows_unlisted_exceptions(monkeypatch, exc):
+    """resolve_with_dnspython returns [] instead of raising IndexError/AttributeError/KeyError (line 107)."""
+    _install_fake_dns(monkeypatch, _make_raise_resolve(exc))
+    import ethscan.dns as dns_mod
+
+    assert dns_mod.resolve_with_dnspython("example.com", "MX", 0.1) == []
+
+
+@pytest.mark.parametrize("exc", ESCAPE_TYPES)
+def test_run_dns_mx_swallows_unlisted_exceptions(monkeypatch, exc):
+    """run_dns dnspython path (no server) returns [] for MX on unlisted exceptions (line 156)."""
+    _install_fake_dns(monkeypatch, _make_raise_resolve(exc))
+    import ethscan.dns as dns_mod
+
+    results = dns_mod.run_dns("example.com", record_types=["MX"], timeout=0.1)
+    assert results["records"]["MX"] == []
+
+
+@pytest.mark.parametrize("exc", ESCAPE_TYPES)
+def test_run_dns_custom_server_swallows_unlisted_exceptions(monkeypatch, exc):
+    """run_dns custom-server dnspython path returns [] for MX on unlisted exceptions (line 154)."""
+    _install_fake_dns(monkeypatch, _make_raise_resolve(exc))
+    import ethscan.dns as dns_mod
+
+    results = dns_mod.run_dns(
+        "example.com", record_types=["MX"], server="1.1.1.1", timeout=0.1
+    )
+    assert results["records"]["MX"] == []
 
 
 def test_dns_availability_flag_false(monkeypatch) -> None:

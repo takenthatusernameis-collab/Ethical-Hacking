@@ -4,6 +4,8 @@ import socket
 import socketserver
 import threading
 
+import pytest
+
 from ethscan.subtake import (
     DEFAULT_SUBDOMAINS,
     TAKEOVER_SIGNATURES,
@@ -1002,6 +1004,75 @@ def test_resolve_aaaa_records_dnspython_exception_falls_back(monkeypatch) -> Non
             "getaddrinfo",
             lambda *a, **k: (_ for _ in ()).throw(OSError("fail")),
         )
+        assert subtake_mod.resolve_aaaa_records("example.com", timeout=1.0, resolver="8.8.8.8") == []
+    finally:
+        _restore_subtake(monkeypatch)
+
+
+ESCAPE_TYPES = [
+    pytest.param(IndexError, id="indexerror"),
+    pytest.param(AttributeError, id="attributeerror"),
+    pytest.param(KeyError, id="keyerror"),
+]
+
+
+def _make_raising_resolver(exc):
+    class _Resolver:
+        def __init__(self):
+            self.timeout = None
+            self.lifetime = None
+            self.nameservers = []
+
+        def resolve(self, hostname, rdtype):
+            raise exc("boom")
+
+    return _Resolver
+
+
+def _socket_always_fails(monkeypatch, mod):
+    monkeypatch.setattr(
+        mod.socket,
+        "getaddrinfo",
+        lambda *a, **k: (_ for _ in ()).throw(OSError("fail")),
+    )
+
+
+@pytest.mark.parametrize("exc", ESCAPE_TYPES)
+def test_resolve_cname_swallows_unlisted_exceptions(monkeypatch, exc):
+    """resolve_cname returns None instead of raising unlisted exceptions (line 302)."""
+    subtake_mod = _reload_subtake(monkeypatch)
+    try:
+        monkeypatch.setattr(
+            subtake_mod.dns.resolver, "Resolver", _make_raising_resolver(exc)
+        )
+        assert subtake_mod.resolve_cname("x.example.com", timeout=1.0, resolver="8.8.8.8") is None
+    finally:
+        _restore_subtake(monkeypatch)
+
+
+@pytest.mark.parametrize("exc", ESCAPE_TYPES)
+def test_resolve_a_records_swallows_unlisted_exceptions(monkeypatch, exc):
+    """resolve_a_records returns [] instead of raising unlisted exceptions (line 329)."""
+    subtake_mod = _reload_subtake(monkeypatch)
+    try:
+        monkeypatch.setattr(
+            subtake_mod.dns.resolver, "Resolver", _make_raising_resolver(exc)
+        )
+        _socket_always_fails(monkeypatch, subtake_mod)
+        assert subtake_mod.resolve_a_records("example.com", timeout=1.0, resolver="8.8.8.8") == []
+    finally:
+        _restore_subtake(monkeypatch)
+
+
+@pytest.mark.parametrize("exc", ESCAPE_TYPES)
+def test_resolve_aaaa_records_swallows_unlisted_exceptions(monkeypatch, exc):
+    """resolve_aaaa_records returns [] instead of raising unlisted exceptions (line 353)."""
+    subtake_mod = _reload_subtake(monkeypatch)
+    try:
+        monkeypatch.setattr(
+            subtake_mod.dns.resolver, "Resolver", _make_raising_resolver(exc)
+        )
+        _socket_always_fails(monkeypatch, subtake_mod)
         assert subtake_mod.resolve_aaaa_records("example.com", timeout=1.0, resolver="8.8.8.8") == []
     finally:
         _restore_subtake(monkeypatch)

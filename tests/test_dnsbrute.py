@@ -1843,3 +1843,66 @@ def test_format_dnsbrute_report_csv_recursive_entry_no_records() -> None:
     assert rows[0][11] == "false"
     assert rows[0][12] == "transfer refused (REFUSED)"
     assert rows[0][13] == ""
+
+
+ESCAPE_TYPES = [
+    pytest.param(IndexError, id="indexerror"),
+    pytest.param(AttributeError, id="attributeerror"),
+    pytest.param(KeyError, id="keyerror"),
+]
+
+
+def _make_raising_resolve(exc):
+    def fake_resolve(self, hostname, rdtype):
+        raise exc("boom")
+
+    return fake_resolve
+
+
+def _make_raising_xfr(exc):
+    def fake_xfr(nameserver, zone, timeout=None, lifetime=None):
+        raise exc("boom")
+
+    return fake_xfr
+
+
+@pytest.mark.parametrize("exc", ESCAPE_TYPES)
+def test_resolve_label_swallows_unlisted_exceptions(monkeypatch, exc):
+    """_resolve_label returns empty a/aaaa instead of raising unlisted exceptions (lines 381, 390)."""
+    dnsbrute_mod = _reload_dnsbrute(monkeypatch)
+    try:
+        dnsbrute_mod.dns.resolver.Resolver.resolve = _make_raising_resolve(exc)
+        result = dnsbrute_mod._resolve_label("www", "example.com", 1.0, resolver="1.2.3.4")
+        assert result["subdomain"] == "www"
+        assert result["hostname"] == "www.example.com"
+        assert result["a"] == []
+        assert result["aaaa"] == []
+    finally:
+        _restore_dnsbrute(monkeypatch)
+
+
+@pytest.mark.parametrize("exc", ESCAPE_TYPES)
+def test_axfr_dnspython_swallows_unlisted_exceptions(monkeypatch, exc):
+    """_axfr_dnspython returns a failure result instead of raising unlisted exceptions (line 312)."""
+    dnsbrute_mod = _reload_dnsbrute(monkeypatch)
+    try:
+        dnsbrute_mod.dns.query.xfr = _make_raising_xfr(exc)
+        result = dnsbrute_mod._axfr_dnspython("ns.example.com", "example.com", timeout=1.0)
+        assert result["success"] is False
+        assert result["records"] == []
+        assert "boom" in result["error"]
+    finally:
+        _restore_dnsbrute(monkeypatch)
+
+
+@pytest.mark.parametrize("exc", ESCAPE_TYPES)
+def test_attempt_axfr_swallows_unlisted_exceptions(monkeypatch, exc):
+    """attempt_axfr returns a failure result instead of raising unlisted exceptions (line 312)."""
+    dnsbrute_mod = _reload_dnsbrute(monkeypatch)
+    try:
+        dnsbrute_mod.dns.query.xfr = _make_raising_xfr(exc)
+        result = dnsbrute_mod.attempt_axfr("ns.example.com", "example.com", timeout=1.0)
+        assert result["success"] is False
+        assert result["records"] == []
+    finally:
+        _restore_dnsbrute(monkeypatch)

@@ -887,3 +887,66 @@ def test_paramiko_import_success(monkeypatch):
     # Clean up
     monkeypatch.delitem(sys.modules, 'paramiko', raising=False)
     reload(ethscan.ssh)
+
+
+def test_get_host_key_info_paramiko_ssh_exception(monkeypatch) -> None:
+    """paramiko.SSHException is swallowed by the guard (ssh.py:332-333)."""
+    import ethscan.ssh as ssh_mod
+
+    class SSHException(Exception):
+        pass
+
+    fake_paramiko = types.ModuleType("paramiko")
+    fake_paramiko.SSHException = SSHException
+    fake_transport = MagicMock()
+    fake_transport.start_client.side_effect = SSHException("handshake failed")
+    fake_paramiko.Transport = lambda sock: fake_transport
+
+    fake_sock = MagicMock()
+    monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *a, **k: fake_sock)
+    monkeypatch.setattr("ethscan.ssh.paramiko", fake_paramiko, raising=False)
+    monkeypatch.setattr("ethscan.ssh.PARAMIKO_AVAILABLE", True)
+
+    assert ssh_mod._get_host_key_info_paramiko("example.com", 22, 1.0) is None
+
+
+def test_get_host_key_info_paramiko_authentication_exception(monkeypatch) -> None:
+    """paramiko.AuthenticationException (an SSHException subclass) is swallowed (ssh.py:332-333)."""
+    import ethscan.ssh as ssh_mod
+
+    class SSHException(Exception):
+        pass
+
+    class AuthenticationException(SSHException):
+        pass
+
+    fake_paramiko = types.ModuleType("paramiko")
+    fake_paramiko.SSHException = SSHException
+    fake_paramiko.AuthenticationException = AuthenticationException
+    fake_transport = MagicMock()
+    fake_transport.start_client.side_effect = AuthenticationException("rejected")
+    fake_paramiko.Transport = lambda sock: fake_transport
+
+    fake_sock = MagicMock()
+    monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *a, **k: fake_sock)
+    monkeypatch.setattr("ethscan.ssh.paramiko", fake_paramiko, raising=False)
+    monkeypatch.setattr("ethscan.ssh.PARAMIKO_AVAILABLE", True)
+
+    assert ssh_mod._get_host_key_info_paramiko("example.com", 22, 1.0) is None
+
+
+def test_get_host_key_info_paramiko_eof_error(monkeypatch) -> None:
+    """EOFError from paramiko is swallowed by the guard (ssh.py:332-333)."""
+    import ethscan.ssh as ssh_mod
+
+    fake_paramiko = types.ModuleType("paramiko")
+    fake_transport = MagicMock()
+    fake_transport.start_client.side_effect = EOFError("closed")
+    fake_paramiko.Transport = lambda sock: fake_transport
+
+    fake_sock = MagicMock()
+    monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *a, **k: fake_sock)
+    monkeypatch.setattr("ethscan.ssh.paramiko", fake_paramiko, raising=False)
+    monkeypatch.setattr("ethscan.ssh.PARAMIKO_AVAILABLE", True)
+
+    assert ssh_mod._get_host_key_info_paramiko("example.com", 22, 1.0) is None

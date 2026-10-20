@@ -1,87 +1,54 @@
 # TASK
 
-Status: COMPLETE (ftp + http: a hostile server answer no longer crashes the command)
+Status: COMPLETE (dnspython + paramiko: an exception type the client library raises no longer crashes the command)
 
 ## What was done
 
-The previous handoff closed the text-protocol and HTTP *parser* sweep and
-declared that every parser in `ethscan/` was covered. That claim was wrong
-for a second reason than the one it had already fixed: the sweeps read the
-code that **parses** an answer, but not the code that **receives** it. A
-client library raises exception types that the module's guard does not list,
-and those types escape as a traceback. Four modules had that gap, and every
-one of them is reachable with the default options.
+This session swept the two client libraries the previous handoff left unchecked: **dnspython** and **paramiko**. Both are not installed in this environment, so every dnspython module's library path was dead code (`DNS_AVAILABLE = False`) and the paramiko path in `ssh.py` was dead code (`PARAMIKO_AVAILABLE = False`) until a fake library module was injected on `sys.path`.
 
-### FTP (`ethscan/ftp.py`)
+A fake `dns` package whose `Resolver.resolve` raises one exception type was used to call every dnspython call site with `IndexError`, `AttributeError` and `KeyError`. Every call site whose guard was only `(dns.exception.DNSException, OSError, ValueError)` crashed — the exception escaped as a traceback through the public `run_*` command. The same happened for `dns.query.udp` (dnssec) and `dns.query.xfr` (dnsbrute AXFR). The fix, per the established template, is to turn the crash into the module's documented failure signal and add exactly the missing type to the guard.
 
-`run_ftp()` guards the session with `except ftplib.Error` (and, for the
-connect, `OSError`/`ValueError`). `ftplib` raises three more types for a
-server that misbehaves, and all three escaped:
+### Guards changed (ethscan/)
+`except (...)` gained `, IndexError, AttributeError, KeyError` at these sites:
 
-| Hostile answer | Exception ftplib raises | Where |
-| --- | --- | --- |
-| closes the connection before the greeting | `EOFError` | `ftp.py:141` (connect) |
-| closes the connection instead of answering `USER` | `EOFError` | `ftp.py:160` (login) |
-| resets the connection instead of answering `USER` | `ConnectionResetError` (an `OSError`) | `ftp.py:164` (login) |
-| answers `USER` with a byte that is not UTF-8 | `UnicodeDecodeError` (a `ValueError`) | `ftp.py:164` (login) |
+| Module | Guard before | Guard after | Sites |
+|---|---|---|---|
+| `dns.py` | `DNSException, OSError, ValueError` | `..., IndexError, AttributeError, KeyError` | `resolve_with_dnspython` (107), `run_dns` custom-server (154) |
+| `resolve.py` | `DNSException, OSError, ValueError` | `..., IndexError, AttributeError, KeyError` | `resolve_cname_records` (94), `resolve_ptr_records` (118), `resolve_with_dnspython` (138) |
+| `subtake.py` | `DNSException, OSError, ValueError` | `..., IndexError, AttributeError, KeyError` | `resolve_a_records` (329), `resolve_aaaa_records` (353) |
+| `subtake.py` | `..., IndexError` | `..., IndexError, AttributeError, KeyError` | `resolve_cname` (302) |
+| `subdomains.py` | `..., TypeError, IndexError` | `..., TypeError, IndexError, AttributeError, KeyError` | `resolve_subdomain` (106) |
+| `dnsbrute.py` | `DNSException, OSError, ValueError` | `..., IndexError, AttributeError, KeyError` | `_resolve_label` A (381), `_resolve_label` AAAA (390) |
+| `dnsbrute.py` | `..., ValueError) as exc` | `..., ValueError, IndexError, AttributeError, KeyError) as exc` | `_axfr_dnspython` (312) |
+| `dnssec.py` | `..., ValueError) as exc` | `..., ValueError, IndexError, AttributeError, KeyError) as exc` | `_query_dnskey_dnspython` (404), `_query_ds_dnspython` (436) |
 
-`ethscan ftp --target <host>` against such a server printed `Aborted!` and
-exited 1 (click turns the unhandled exception into an `Abort`). The banner
-read had the same gap and is now guarded as well.
+The indexing answer-set sites (`subtake.resolve_cname`, `subdomains.resolve_subdomain`) already listed `IndexError` from the previous session; they were missing `AttributeError`/`KeyError` and now list them.
 
-The module now reports its documented failure signals instead of raising:
-`connection failed: server closed the connection` for the connect phase, and
-`login failed: ...` with `anonymous_login` left at `None` (the outcome is
-unknown, not "refused") for the login phase.
+### paramiko (`ethscan/ssh.py`)
+The paramiko host-key path is already wrapped in `except Exception`, so `paramiko.SSHException`, `paramiko.AuthenticationException` and `EOFError` are swallowed there. The stdlib path of `run_ssh` uses only `socket`/`struct`, so it cannot raise a paramiko type. Confirmed with a fake `paramiko` module raising each of the three types: `_get_host_key_info_paramiko` returns `None` in every case, and `run_ssh`'s stdlib path is unaffected.
 
-### HTTP (`ethscan/web.py`, `ethscan/cve.py`, `ethscan/subtake.py`)
+### Tests added (next to each module's own tests)
+- `tests/test_dns.py`: 3 parametrized (`IndexError`/`AttributeError`/`KeyError`) for `resolve_with_dnspython` and both `run_dns` dnspython paths.
+- `tests/test_resolve.py`: 3 parametrized for `resolve_cname_records`, `resolve_ptr_records`, `resolve_with_dnspython`.
+- `tests/test_subtake.py`: 3 parametrized for `resolve_cname`, `resolve_a_records`, `resolve_aaaa_records`.
+- `tests/test_subdomains.py`: 3 parametrized for `resolve_subdomain`.
+- `tests/test_dnsbrute.py`: 3 parametrized for `_resolve_label`, `_axfr_dnspython`, `attempt_axfr`.
+- `tests/test_dnssec.py`: 3 parametrized for `_query_dnskey_dnspython`, `_query_ds_dnspython`, `run_dnssec`.
+- `tests/test_ssh.py`: 3 tests for `SSHException`, `AuthenticationException`, `EOFError` on `_get_host_key_info_paramiko`.
 
-`http.client.BadStatusLine` (a server that answers with a malformed status
-line) derives from `http.client.HTTPException` and not from `OSError` or
-`ValueError`, so it escaped every guard that did not name it. The repository
-already knew this trap: `ethscan/fuzz.py:94` and `ethscan/s3.py:308` catch
-`http.client.HTTPException` with a comment about it. Three modules did not:
-
-- `ethscan/web.py:fetch_headers` -> the `web` and `headers` commands.
-- `ethscan/cve.py:_fetch_cve_data` -> the `cve` command.
-- `ethscan/subtake.py:check_http_fingerprint` -> the `subtake` command.
-
-All three now return the failure signal the module already uses for an
-unreachable server (`{}`, `None`, `None`).
-
-### A flaky test in the sweep suite
-
-`tests/test_option_sweep.py` failed once during this session with
-`subdomains --resolver '/nonexistent/path' timed out after 5s`. The command
-itself is clean (it resolves every candidate subdomain with `getaddrinfo`, so
-it waits for the full DNS timeout when the resolver does not answer). The
-command stays in the sweep, but it now gets a longer per-invocation timeout
-(`DNS_COMMANDS`), so the guarantee is kept and the flake is gone.
-
-## Verification
-
-- Reproduction before the fix, over real sockets: a server that closes
-  without a greeting, one that closes during the login, one that resets the
-  connection and one that answers `USER` with `0xff` made `run_ftp()` raise
-  `EOFError`, `EOFError`, `ConnectionResetError` and `UnicodeDecodeError`.
-  `ethscan ftp --target 127.0.0.1 --port <port>` printed `Aborted!` and
-  exited 1.
-- A server that answers `NOT-HTTP garbage\r\n\r\n` made
-  `web.fetch_headers`, `cve._fetch_cve_data` and
-  `subtake.check_http_fingerprint` raise `http.client.BadStatusLine`.
-- 8 of the 10 new regression tests fail on the unfixed modules
-  (`git stash push -- ethscan/ftp.py ethscan/web.py ethscan/cve.py
-  ethscan/subtake.py`): 4 with `EOFError`/`ConnectionResetError`/
-  `UnicodeDecodeError` and 4 with `http.client.BadStatusLine`. The other 2
-  are controls that pin the normal answer (a successful and a refused login).
+### Verification
+- Before the fix, every one of the above call sites raised the injected type through the public command (reproduced with the fake `dns`/`paramiko` module).
+- After the fix, each returns the module's documented failure signal and does not raise.
 - `python -m ruff check ethscan/ tests/` -> **All checks passed**.
-- `python -m pytest tests/test_ftp.py tests/test_web.py tests/test_cve.py
-  tests/test_subtake.py -q` -> **201 passed**.
-- `python -m pytest -q` -> **4584 passed, 48 skipped, 2 warnings**
-  (was 4574).
+- `python -m pytest tests/` -> **4635 passed, 48 skipped** (was 4584).
 - `git diff --check` -> clean.
+- Only the 13 intended files are modified; nothing else changed.
 
-## Handoff
+## What remains unresolved
+Nothing from this task.
 
-See `HANDOFF_NEXT.md` and `NEXT_TASK.md`. The baseline is clean: the fixes,
-the tests and the de-flake are committed, nothing else is modified.
+## Approaches that failed and why
+None for this task. The method from the previous session (fake library module raising one exception type) worked for every candidate type.
+
+## One precise next task
+See `NEXT_TASK.md` and `HANDOFF_NEXT.md`. The baseline is clean: the fixes, the tests and the verification are in the working tree but **not committed** (commit only if explicitly asked).

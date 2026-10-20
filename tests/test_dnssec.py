@@ -7,6 +7,8 @@ import socket
 import struct
 from unittest.mock import ANY, MagicMock, patch
 
+import pytest
+
 from ethscan.dnssec import (
     ALGORITHM_NAMES,
     DEFAULT_TIMEOUT,
@@ -1343,3 +1345,71 @@ def test_dnssec_import_error(monkeypatch):
         assert dnssec_mod.DNS_AVAILABLE is False
     finally:
         sys.modules.pop("ethscan.dnssec", None)
+
+
+ESCAPE_TYPES = [
+    pytest.param(IndexError, id="indexerror"),
+    pytest.param(AttributeError, id="attributeerror"),
+    pytest.param(KeyError, id="keyerror"),
+]
+
+
+@pytest.mark.parametrize("exc", ESCAPE_TYPES)
+def test_query_dnskey_dnspython_swallows_unlisted_exceptions(monkeypatch, exc):
+    """_query_dnskey_dnspython returns a failure dict instead of raising unlisted exceptions (line 404)."""
+    mock_dns = MagicMock()
+
+    class FakeDNSException(Exception):
+        pass
+
+    mock_dns.exception.DNSException = FakeDNSException
+    mock_dns.query.udp.side_effect = exc("boom")
+
+    import ethscan.dnssec as dnssec_mod
+
+    monkeypatch.setattr(dnssec_mod, "dns", mock_dns, raising=False)
+    r = dnssec_mod._query_dnskey_dnspython("example.com", None, 1.0)
+    assert r["success"] is False
+    assert r["keys"] == []
+    assert "boom" in r["error"]
+
+
+@pytest.mark.parametrize("exc", ESCAPE_TYPES)
+def test_query_ds_dnspython_swallows_unlisted_exceptions(monkeypatch, exc):
+    """_query_ds_dnspython returns a failure dict instead of raising unlisted exceptions (line 436)."""
+    mock_dns = MagicMock()
+
+    class FakeDNSException(Exception):
+        pass
+
+    mock_dns.exception.DNSException = FakeDNSException
+    mock_dns.query.udp.side_effect = exc("boom")
+
+    import ethscan.dnssec as dnssec_mod
+
+    monkeypatch.setattr(dnssec_mod, "dns", mock_dns, raising=False)
+    r = dnssec_mod._query_ds_dnspython("example.com", None, 1.0)
+    assert r["success"] is False
+    assert r["records"] == []
+    assert "boom" in r["error"]
+
+
+@pytest.mark.parametrize("exc", ESCAPE_TYPES)
+def test_run_dnssec_does_not_crash_on_unlisted_exceptions(monkeypatch, exc):
+    """run_dnssec reports a failed DNSKEY/DS query instead of crashing on unlisted exceptions."""
+    mock_dns = MagicMock()
+
+    class FakeDNSException(Exception):
+        pass
+
+    mock_dns.exception.DNSException = FakeDNSException
+    mock_dns.query.udp.side_effect = exc("boom")
+
+    import ethscan.dnssec as dnssec_mod
+
+    monkeypatch.setattr(dnssec_mod, "dns", mock_dns, raising=False)
+    monkeypatch.setattr(dnssec_mod, "DNS_AVAILABLE", True)
+
+    results = dnssec_mod.run_dnssec("example.com", timeout=1.0)
+    assert results["validated"] is False
+    assert any("DNSKEY query failed" in n for n in results["notes"])

@@ -1,6 +1,8 @@
 """Tests for the ethscan subdomains module."""
 
 
+import pytest
+
 from ethscan.subdomains import (
     DEFAULT_RECURSIVE_DEPTH,
     DEFAULT_SUBDOMAINS,
@@ -681,6 +683,53 @@ def test_resolve_subdomain_with_resolver_empty_answer_set(monkeypatch) -> None:
     fake_dns = types.ModuleType("dns")
     fake_dns.resolver = types.ModuleType("dns.resolver")
     fake_dns.resolver.Resolver = FakeResolver
+    fake_dns.exception = types.ModuleType("dns.exception")
+
+    class _DNSException(Exception):
+        pass
+
+    fake_dns.exception.DNSException = _DNSException
+
+    monkeypatch.setattr(sub, "dns", fake_dns)
+    monkeypatch.setattr(sub, "DNS_AVAILABLE", True)
+
+    subdomain, ip = resolve_subdomain(
+        "www", "example.com", timeout=1.0, resolver="8.8.8.8"
+    )
+    assert subdomain == "www"
+    assert ip is None
+
+
+ESCAPE_TYPES = [
+    pytest.param(IndexError, id="indexerror"),
+    pytest.param(AttributeError, id="attributeerror"),
+    pytest.param(KeyError, id="keyerror"),
+]
+
+
+def _make_raising_resolver(exc):
+    class FakeResolver:
+        def __init__(self):
+            self.timeout = None
+            self.lifetime = None
+            self.nameservers = []
+
+        def resolve(self, hostname, rdtype):
+            raise exc("boom")
+
+    return FakeResolver
+
+
+@pytest.mark.parametrize("exc", ESCAPE_TYPES)
+def test_resolve_subdomain_swallows_unlisted_exceptions(monkeypatch, exc):
+    """resolve_subdomain returns (subdomain, None) instead of raising unlisted exceptions (line 106)."""
+    import types
+
+    import ethscan.subdomains as sub
+
+    fake_dns = types.ModuleType("dns")
+    fake_dns.resolver = types.ModuleType("dns.resolver")
+    fake_dns.resolver.Resolver = _make_raising_resolver(exc)
     fake_dns.exception = types.ModuleType("dns.exception")
 
     class _DNSException(Exception):

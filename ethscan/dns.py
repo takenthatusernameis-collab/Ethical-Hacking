@@ -104,7 +104,7 @@ def resolve_with_dnspython(
 
         answers = resolver.resolve(domain, record_type)
         return sorted({str(rdata) for rdata in answers})
-    except (dns.exception.DNSException, OSError, ValueError):
+    except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError):
         return []
 
 
@@ -151,7 +151,7 @@ def run_dns(
                     resolver.nameservers = [server]
                     answers = resolver.resolve(domain, rtype)
                     return rtype, sorted({str(rdata) for rdata in answers})
-                except (dns.exception.DNSException, OSError, ValueError):
+                except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError):
                     return rtype, []
             return rtype, []
         return rtype, resolve_with_dnspython(domain, rtype, timeout)

@@ -3,6 +3,8 @@
 import csv
 import io
 
+import pytest
+
 from ethscan.resolve import (
     DEFAULT_RECORD_TYPES,
     DEFAULT_TIMEOUT,
@@ -846,3 +848,74 @@ def test_resolve_dnspython_available(monkeypatch):
     # reload module
     import importlib
     importlib.reload(resolve)
+
+
+ESCAPE_TYPES = [
+    pytest.param(IndexError, id="indexerror"),
+    pytest.param(AttributeError, id="attributeerror"),
+    pytest.param(KeyError, id="keyerror"),
+]
+
+
+def _make_raise_resolve(exc):
+    def fake_resolve(domain, rdtype, self):
+        raise exc("boom")
+
+    return fake_resolve
+
+
+def _install_fake_dns(monkeypatch, resolver_resolve):
+    import types
+
+    import ethscan.resolve as resolve_mod
+
+    fake_dns = types.ModuleType("dns")
+    fake_dns.resolver = types.ModuleType("dns.resolver")
+    fake_dns.exception = types.ModuleType("dns.exception")
+    fake_dns.reversename = types.ModuleType("dns.reversename")
+    fake_dns.reversename.from_address = lambda ip: ip
+
+    class DNSException(Exception):
+        pass
+
+    fake_dns.exception.DNSException = DNSException
+
+    class FakeResolver:
+        def __init__(self):
+            self.timeout = None
+            self.lifetime = None
+            self.nameservers = ["1.2.3.4"]
+
+        def resolve(self, domain, rdtype):
+            return resolver_resolve(domain, rdtype, self)
+
+    fake_dns.resolver.Resolver = FakeResolver
+    monkeypatch.setattr(resolve_mod, "dns", fake_dns, raising=False)
+    monkeypatch.setattr(resolve_mod, "DNS_AVAILABLE", True)
+
+
+@pytest.mark.parametrize("exc", ESCAPE_TYPES)
+def test_resolve_cname_records_swallows_unlisted_exceptions(monkeypatch, exc):
+    """resolve_cname_records returns [] instead of raising unlisted exceptions (line 94)."""
+    _install_fake_dns(monkeypatch, _make_raise_resolve(exc))
+    import ethscan.resolve as resolve_mod
+
+    assert resolve_mod.resolve_cname_records("example.com", 0.1) == []
+
+
+@pytest.mark.parametrize("exc", ESCAPE_TYPES)
+def test_resolve_ptr_records_swallows_unlisted_exceptions(monkeypatch, exc):
+    """resolve_ptr_records returns [] instead of raising unlisted exceptions (line 118)."""
+    _install_fake_dns(monkeypatch, _make_raise_resolve(exc))
+    import ethscan.resolve as resolve_mod
+
+    assert resolve_mod.resolve_ptr_records("1.2.3.4", 0.1) == []
+
+
+@pytest.mark.parametrize("exc", ESCAPE_TYPES)
+def test_resolve_with_dnspython_swallows_unlisted_exceptions(monkeypatch, exc):
+    """resolve_with_dnspython returns [] instead of raising unlisted exceptions (line 138)."""
+    _install_fake_dns(monkeypatch, _make_raise_resolve(exc))
+    import ethscan.resolve as resolve_mod
+
+    assert resolve_mod.resolve_with_dnspython("example.com", "MX", 0.1) == []

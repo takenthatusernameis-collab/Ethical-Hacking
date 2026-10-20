@@ -103,7 +103,7 @@ def resolve_subdomain(
             if not answers:
                 return subdomain, None
             return subdomain, str(answers[0])
-        except (dns.exception.DNSException, OSError, ValueError, TypeError, IndexError):
+        except (dns.exception.DNSException, OSError, ValueError, TypeError, IndexError, AttributeError, KeyError):
             return subdomain, None
     try:
         socket.setdefaulttimeout(timeout)
