@@ -199,6 +199,25 @@ Error: Invalid value for '--target': Invalid target
 The `recon` and `geo` commands run the traceroute as one of their modules,
 so they report the same problem in their own output and still exit 0.
 
+The `s3` command reports an unusable target inside its own output, because
+its contract is "the probe failed". A candidate that cannot be an S3 bucket
+name is reported as a failed probe instead of being requested, and a probe
+that fails never aborts the report of the other candidates:
+
+```console
+$ python -m ethscan s3 --target "[::1]:443"
+{
+  "bucket": "::1",
+  "region": "us-east-1",
+  "url": "https://::1.s3.amazonaws.com/",
+  "dns_resolved": null,
+  "status_code": null,
+  "exists": false,
+  "public": false,
+  "error": "Invalid bucket name: contains characters that are not allowed in a bucket name"
+}
+```
+
 ## Disclaimer
 
 This project is for **authorized security testing only**. Use only against

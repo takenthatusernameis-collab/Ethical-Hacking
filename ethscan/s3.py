@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import contextlib
 import csv
+import http.client
 import io
+import re
 import socket
 import urllib.error
 import urllib.request
@@ -90,6 +92,43 @@ DEFAULT_BUCKET_NAMES = [
     "app",
     "apps",
 ]
+
+# An S3 bucket name is a DNS-compliant label: 3-63 characters of lowercase
+# letters, digits, dots and hyphens, starting and ending with a letter or a
+# digit. A name outside those rules cannot exist in S3, so probing it is
+# pointless: it only yields a malformed endpoint URL or a DNS failure. An
+# IPv6 target such as ``[::1]:443`` derives the candidate ``::1``, whose
+# endpoint URL (``https://::1.s3.amazonaws.com/``) is not parsable at all.
+_BUCKET_NAME_CHARS_RE = re.compile(r"^[a-z0-9.-]+$")
+
+_IPV4_LIKE_RE = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
+
+
+def _bucket_name_problem(bucket_name: str) -> str | None:
+    """Describe why a candidate cannot be an S3 bucket name.
+
+    Args:
+        bucket_name: The candidate bucket name.
+
+    Returns:
+        A short description of the problem, or ``None`` when the name is a
+        valid S3 bucket name.
+    """
+    if len(bucket_name) < 3:
+        return "is shorter than 3 characters"
+    if len(bucket_name) > 63:
+        return "is longer than 63 characters"
+    if bucket_name != bucket_name.lower():
+        return "contains uppercase characters"
+    if not _BUCKET_NAME_CHARS_RE.match(bucket_name):
+        return "contains characters that are not allowed in a bucket name"
+    if not bucket_name[0].isalnum() or not bucket_name[-1].isalnum():
+        return "must start and end with a letter or a digit"
+    if ".." in bucket_name:
+        return "contains adjacent periods"
+    if _IPV4_LIKE_RE.match(bucket_name):
+        return "is formatted as an IPv4 address"
+    return None
 
 
 def _normalize_target(target: str) -> str:
@@ -205,6 +244,12 @@ def check_bucket_public(
 ) -> dict[str, object]:
     """Check if an S3 bucket exists and is publicly readable via HTTP.
 
+    A candidate that cannot be an S3 bucket name is reported as a failed
+    probe without contacting the endpoint: the request would only fail
+    with a malformed URL. A malformed endpoint URL that is nevertheless
+    requested is reported the same way, so that no probe failure escapes
+    the function.
+
     Args:
         bucket_name: The S3 bucket name.
         region: AWS region (e.g. ``us-east-1``).
@@ -215,21 +260,28 @@ def check_bucket_public(
         ``status_code``, ``exists``, ``public``, and ``error`` fields.
     """
     url = _build_s3_url(bucket_name, region)
-    dns_ip = _resolve_s3_endpoint(bucket_name, region, timeout)
 
     result: dict[str, object] = {
         "bucket": bucket_name,
         "region": region,
         "url": url,
-        "dns_resolved": dns_ip,
+        "dns_resolved": None,
         "status_code": None,
         "exists": False,
         "public": False,
         "error": None,
     }
 
-    req = urllib.request.Request(url, headers={"User-Agent": "ethscan/0.1"})
+    problem = _bucket_name_problem(bucket_name)
+    if problem is not None:
+        result["error"] = f"Invalid bucket name: {problem}"
+        return result
+
+    dns_ip = _resolve_s3_endpoint(bucket_name, region, timeout)
+    result["dns_resolved"] = dns_ip
+
     try:
+        req = urllib.request.Request(url, headers={"User-Agent": "ethscan/0.1"})
         with urllib.request.urlopen(req, timeout=timeout) as response:
             status = response.getcode()
             result["status_code"] = status
@@ -254,6 +306,13 @@ def check_bucket_public(
             result["error"] = "Invalid bucket name or request"
     except (urllib.error.URLError, socket.timeout, OSError) as exc:
         result["error"] = str(exc) or exc.__class__.__name__
+    except http.client.HTTPException as exc:
+        # ``http.client.InvalidURL`` (raised for a host that ``http.client``
+        # refuses, such as the endpoint of a name carrying a colon) derives
+        # from ``HTTPException`` and not from ``OSError``, so it escapes the
+        # clause above and would otherwise take down the whole command when
+        # it is raised inside a worker thread.
+        result["error"] = str(exc) or exc.__class__.__name__
 
     return result
 
@@ -266,6 +325,10 @@ def run_s3(
     max_workers: int = DEFAULT_MAX_WORKERS,
 ) -> dict[str, object]:
     """Enumerate S3 buckets for a target and detect public access.
+
+    A probe that fails is reported inside the result of that probe (the
+    ``error`` field), never by aborting the command: one unusable candidate
+    must not discard the findings of all the others.
 
     Args:
         target: Bare domain or URL (e.g. ``example.com``).
@@ -309,12 +372,30 @@ def run_s3(
 
     regions = list(S3_REGIONS) if region == "all" else [region]
 
+    if all(_bucket_name_problem(c) is not None for c in candidates):
+        notes.append(
+            f"None of the {len(candidates)} derived bucket names is a valid "
+            "S3 bucket name."
+        )
+
     results: list[dict[str, object]] = []
 
     def _probe(bucket_name: str, region_to_check: str) -> dict[str, object]:
-        return check_bucket_public(
-            bucket_name, region=region_to_check, timeout=timeout
-        )
+        try:
+            return check_bucket_public(
+                bucket_name, region=region_to_check, timeout=timeout
+            )
+        except Exception as exc:  # noqa: BLE001 - a failed probe must not abort the report
+            return {
+                "bucket": bucket_name,
+                "region": region_to_check,
+                "url": _build_s3_url(bucket_name, region_to_check),
+                "dns_resolved": None,
+                "status_code": None,
+                "exists": False,
+                "public": False,
+                "error": f"{exc.__class__.__name__}: {exc}",
+            }
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_key = {}

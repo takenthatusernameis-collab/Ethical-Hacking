@@ -16763,6 +16763,28 @@ def test_s3_url_target(monkeypatch) -> None:
     assert captured["target"] == "https://example.com/path"
 
 
+def test_s3_ipv6_target_reports_invalid_bucket_names() -> None:
+    """A bracketed IPv6 target is reported, not raised as a traceback.
+
+    The candidates derived from an IPv6 target (``::1``) cannot be S3
+    bucket names, so every probe fails. The failure belongs inside the
+    report, like every other probe failure.
+    """
+    runner = CliRunner()
+    result = runner.invoke(cli, ["s3", "--target", "[::1]:443"])
+    assert result.exit_code == 0, result.output
+    assert result.exception is None, result.exception
+    payload = json.loads(result.output)
+    assert payload["domain"] == "::1"
+    assert payload["candidates_tested"] > 0
+    assert payload["results"]
+    assert payload["public_buckets"] == []
+    assert payload["existing_buckets"] == []
+    for entry in payload["results"]:
+        assert entry["error"], entry
+        assert entry["exists"] is False, entry
+
+
 def test_s3_default_format_is_json(monkeypatch) -> None:
     def mock_run_s3(
         target, wordlist=None, region=None, timeout=5.0, max_workers=20

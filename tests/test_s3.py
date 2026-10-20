@@ -1,6 +1,7 @@
 """Tests for the ethscan s3 module."""
 from __future__ import annotations
 
+import http.client
 import json
 import socket
 import urllib.error
@@ -9,6 +10,7 @@ from ethscan.s3 import (
     DEFAULT_BUCKET_NAMES,
     DEFAULT_REGION,
     S3_REGIONS,
+    _bucket_name_problem,
     _build_bucket_candidates,
     _build_s3_url,
     _normalize_target,
@@ -171,6 +173,32 @@ def test_resolve_s3_endpoint_failure(monkeypatch) -> None:
 
 
 # ---------------------------------------------------------------------------
+# _bucket_name_problem
+# ---------------------------------------------------------------------------
+
+
+def test_bucket_name_problem_accepts_valid_names() -> None:
+    assert _bucket_name_problem("mybucket") is None
+    assert _bucket_name_problem("example-com") is None
+    assert _bucket_name_problem("example.com") is None
+    assert _bucket_name_problem("a1-b2") is None
+    assert _bucket_name_problem("ab1") is None
+
+
+def test_bucket_name_problem_rejects_invalid_names() -> None:
+    assert _bucket_name_problem("ab") is not None
+    assert _bucket_name_problem("a" * 64) is not None
+    assert _bucket_name_problem("MyBucket") is not None
+    assert _bucket_name_problem("::1") is not None
+    assert _bucket_name_problem("fd00::1") is not None
+    assert _bucket_name_problem("my_bucket") is not None
+    assert _bucket_name_problem("-bucket") is not None
+    assert _bucket_name_problem("bucket-") is not None
+    assert _bucket_name_problem("my..bucket") is not None
+    assert _bucket_name_problem("192.168.5.4") is not None
+
+
+# ---------------------------------------------------------------------------
 # check_bucket_public
 # ---------------------------------------------------------------------------
 
@@ -265,6 +293,45 @@ def test_check_bucket_public_url_and_region_fields(monkeypatch) -> None:
     result = check_bucket_public("mybucket", "eu-west-1", 1.0)
     assert result["url"] == "https://mybucket.s3.eu-west-1.amazonaws.com/"
     assert result["region"] == "eu-west-1"
+
+
+def test_check_bucket_public_invalid_bucket_name_is_not_requested(monkeypatch) -> None:
+    """A name that cannot be an S3 bucket name is reported, not requested."""
+
+    def _no_request(*args, **kwargs):
+        raise AssertionError("no request may be sent for an invalid name")
+
+    def _no_dns(*args, **kwargs):
+        raise AssertionError("no DNS lookup may be sent for an invalid name")
+
+    monkeypatch.setattr("ethscan.s3.urllib.request.urlopen", _no_request)
+    monkeypatch.setattr("ethscan.s3._resolve_s3_endpoint", _no_dns)
+
+    result = check_bucket_public("::1", "us-east-1", 1.0)
+    assert result["error"] == (
+        "Invalid bucket name: contains characters that are not allowed "
+        "in a bucket name"
+    )
+    assert result["dns_resolved"] is None
+    assert result["status_code"] is None
+    assert result["exists"] is False
+    assert result["public"] is False
+    assert result["url"] == "https://::1.s3.amazonaws.com/"
+
+
+def test_check_bucket_public_invalid_url_is_reported(monkeypatch) -> None:
+    """``http.client.InvalidURL`` is a probe failure, not a crash."""
+    monkeypatch.setattr("ethscan.s3._resolve_s3_endpoint", _mock_dns(None))
+
+    def _raise(req, timeout=None):
+        raise http.client.InvalidURL("nonnumeric port: '1.s3.amazonaws.com'")
+
+    monkeypatch.setattr("ethscan.s3.urllib.request.urlopen", _raise)
+    result = check_bucket_public("mybucket", "us-east-1", 1.0)
+    assert result["error"] == "nonnumeric port: '1.s3.amazonaws.com'"
+    assert result["status_code"] is None
+    assert result["exists"] is False
+    assert result["public"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -416,6 +483,65 @@ def test_run_s3_region_normalization(monkeypatch) -> None:
 
     run_s3("example.com", region="US-WEST-2", timeout=1.0, max_workers=3)
     assert "us-west-2" in captured
+
+
+def test_run_s3_ipv6_target_reports_invalid_bucket_names(monkeypatch) -> None:
+    """A bracketed IPv6 target must not crash the command."""
+
+    def _no_request(*args, **kwargs):
+        raise AssertionError("no request may be sent for an invalid name")
+
+    monkeypatch.setattr("ethscan.s3.urllib.request.urlopen", _no_request)
+
+    results = run_s3("[::1]:443", timeout=1.0, max_workers=5)
+    assert results["domain"] == "::1"
+    assert results["candidates_tested"] > 0
+    assert results["results"]
+    assert results["public_buckets"] == []
+    assert results["private_buckets"] == []
+    assert results["existing_buckets"] == []
+    for entry in results["results"]:
+        assert entry["error"].startswith("Invalid bucket name")
+        assert entry["exists"] is False
+        assert entry["public"] is False
+    assert any(
+        "None of the" in note and "valid S3 bucket name" in note
+        for note in results["notes"]
+    )
+
+
+def test_run_s3_probe_exception_is_reported(monkeypatch) -> None:
+    """A failing probe must not abort the report of the other probes."""
+
+    def mock_check(bucket_name, region=DEFAULT_REGION, timeout=5.0):
+        raise RuntimeError("probe exploded")
+
+    monkeypatch.setattr("ethscan.s3.check_bucket_public", mock_check)
+
+    results = run_s3("example.com", timeout=1.0, max_workers=5)
+    assert results["results"]
+    for entry in results["results"]:
+        assert entry["error"] == "RuntimeError: probe exploded"
+        assert entry["exists"] is False
+        assert entry["public"] is False
+    assert results["public_buckets"] == []
+
+
+def test_run_s3_invalid_url_is_reported(monkeypatch) -> None:
+    """A malformed endpoint URL is reported per probe, not raised."""
+    monkeypatch.setattr("ethscan.s3._resolve_s3_endpoint", _mock_dns(None))
+
+    def _raise(req, timeout=None):
+        raise http.client.InvalidURL("URL can't contain control characters.")
+
+    monkeypatch.setattr("ethscan.s3.urllib.request.urlopen", _raise)
+
+    results = run_s3("example.com", region="a b", timeout=1.0, max_workers=5)
+    assert results["results"]
+    for entry in results["results"]:
+        assert entry["error"] == "URL can't contain control characters."
+        assert entry["exists"] is False
+        assert entry["public"] is False
 
 
 # ---------------------------------------------------------------------------
