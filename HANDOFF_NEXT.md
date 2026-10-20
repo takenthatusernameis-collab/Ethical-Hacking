@@ -2,113 +2,162 @@
 
 ## What changed this session
 
-- **`ethscan/netbios.py:177-193`**: `_decode_name_chars` now rejects a name
-  that is shorter than 32 chars (16 decoded bytes) with a `ValueError`. It
-  used to check only that the length was even, decode the chars it had and
-  then read the suffix byte out of range (`suffix = raw[15]`), which raised
-  an `IndexError`. That `IndexError` escaped every guard around the NBNS
-  parser (`_parse_dns_name` catches `ValueError`, `_parse_nbns_response`
-  documents `ValueError`, `run_netbios` catches `ValueError` only), so a
-  host that answers the NBNS query with a name of 2 to 30 even chars
-  crashed the `netbios` command with a traceback. The short name is now
-  reported as the text it is, the same way every other name that is not
-  first-level encoded is reported.
-- **`tests/test_netbios.py`**: 5 regression tests (see `TASK.md` for the
-  names). All 5 fail with the `IndexError` on the unfixed module.
+- **`ethscan/smtp.py`**:
+  - new helper `_reply_code()` (`ethscan/smtp.py:79-92`) that only reads
+    a reply code when the text is ASCII digits, used by
+    `_parse_smtp_response()` (`ethscan/smtp.py:102`). Before the fix the
+    code was read with `int(first[:3]) if first[:3].isdigit() else 0`,
+    and `str.isdigit()` accepts the Unicode superscript digits that
+    `int()` refuses.
+  - the EHLO capability parser (`ethscan/smtp.py:253-262`) no longer
+    reads a fixed index into an empty list: it splits the rest of the
+    line and skips a line that holds no word.
+  - the probe block of `run_smtp()` (`ethscan/smtp.py:316-319`) now has
+    an `except Exception` that reports the failure through the `error`
+    field. It had a `finally` but no `except`, so every exception raised
+    by a server answer reached the command line as a raw traceback.
+- **`tests/test_smtp.py`**: 6 regression tests. The fake SMTP server
+  learned two optional config keys (`ehlo_response`, `mail_response`)
+  so a hostile answer can be served over a real socket.
 
-The fix and the tests are committed (`fix(netbios): a short first-level name
+The fix and the tests are committed (`fix(smtp): a hostile server answer
 no longer crashes the command`). The baseline is clean.
 
 ## What was actually verified
 
-- Reproduction before the fix: an NBNS response whose question name is the
-  2-byte label `AB` raised `IndexError: bytearray index out of range` in
-  `run_netbios`, `_parse_nbns_response`, `_parse_dns_name` and on the
-  command line. After the fix the same packet is parsed and the command
-  exits 0.
-- The 5 new tests were run against the unfixed module
-  (`git stash push -- ethscan/netbios.py`): all 5 failed. With the fix they
-  pass.
+- Reproduction before the fix: `ethscan smtp --target <host>` exited 1
+  with `IndexError: list index out of range` (a server that answers
+  EHLO with `250-   \r\n250 OK\r\n`) and with `ValueError: invalid
+  literal for int() with base 10: '²²²'` (a server that answers
+  `MAIL FROM` with `²²² 5.7.1 blocked`). Both are reachable with the
+  default options, so no flag is needed to trigger them. After the fix
+  the same answers are parsed and the command exits 0.
+- 5 of the 6 new tests fail on the unfixed module (`git stash push --
+  ethscan/smtp.py`). The 6th is a control that pins that an ordinary
+  reply code is still read as a number.
+- The two parser fixes are each necessary: with only the new
+  `except Exception` net and the old parsers, 4 of the new tests still
+  fail.
 - `python -m ruff check ethscan/ tests/` → **All checks passed**.
-- `python -m pytest tests/test_netbios.py -q` → **78 passed** (was 73).
-- `python -m pytest -q` → **4566 passed, 48 skipped, 2 warnings** (was 4561).
+- `python -m pytest tests/test_smtp.py -q` → **59 passed** (was 53).
+- `python -m pytest -q` → **4572 passed, 48 skipped, 2 warnings**
+  (was 4566).
 - `git diff --check` → clean.
+
+## The sweep that was asked for, and its result
+
+The previous handoff asked for a sweep of the server-answer parsers for
+the netbios class of bug (a fixed index into a decoded buffer, or an
+exception type the module's guard does not catch). The candidate list
+was **incomplete**: the two bugs that exist are in `ethscan/smtp.py`,
+which was not on it.
+
+### The candidate list of the previous handoff is now verified clean
+
+Every parser on that list was swept with a *structurally valid* answer
+per protocol, then mutated:
+
+| Sweep | Coverage | Result |
+| --- | --- | --- |
+| Truncation + mutation, end-to-end | 13 modules (`mysql`, `mssql`, `ntp`, `redis`, `postgresql`, `oracle`, `mongodb`, `ldap`, `smb2`, `smb`, `memcached`, `snmp`, `netbios`): the answer truncated at **every** length, every single byte overwritten with `0x00`/`0xFF`/`0x7F`/`0x01`, every 2-byte and 4-byte window set to `0xFFFF`/`0xFFFFFFFF` | 0 escaping failures |
+| Random mutation, parser level | 17 parsers, 20 000 random mutations each | 0 non-`ValueError` failures |
+| Random mutation, parser level | `dnssec._parse_dnskey_response`, `dnssec._parse_ds_response`, `dnsbrute.parse_dns_response`, 40 000 mutations each | 0 failures |
+| Static | every `int()` call site (61), every `struct.unpack` slice length, every fixed `X[N]` index, every `split()[N]` index | no other unguarded site |
+
+`mysql`, `mssql`, `ntp`, `redis`, `postgresql`, `oracle`, `mongodb`,
+`ldap`, `smb`, `memcached`, `snmp` and `netbios` are therefore clean for
+this class of bug, with the evidence above. The three parsers that
+raised a `ValueError` (`ldap._parse_attribute`,
+`ldap._parse_search_entry`, `snmp._parse_snmp_message`) raise the type
+their callers catch.
+
+### Approaches that failed and why
+
+- **Random / byte-level fuzzing does NOT find this class of bug.** This
+  was checked, not assumed: the random fuzzer was pointed at the
+  *known* netbios bug (the `_decode_name_chars` fix reverted in memory)
+  and it did **not** find it. The bug needs a *structurally valid* short
+  name (a 2-byte label followed by `0x00`); a random mutation of a
+  valid packet almost never produces one, and the mutation of the length
+  byte alone produces an odd-length name that is rejected for a
+  different reason. Do not repeat a random fuzzer expecting it to find
+  the next one.
+- **A generic "feed hostile bytes to every parser" probe does not find
+  it either** (the previous handoff already recorded this). It only
+  reports parsers that raise, and every one of them except netbios
+  raised the `ValueError` their caller catches.
+- **The method that works** is the one the previous handoff described:
+  craft an answer that is *structurally valid* for the protocol but
+  holds a hostile field, then call the module's `run_<module>` with it
+  (every module that takes one has an injectable
+  `connector(host, port, request, timeout)`) and assert that the command
+  answers with an `error` field instead of raising. The two bugs found
+  this session were found by *reading* the parsers, not by fuzzing them:
+  the shape to look for is an operation on server text whose failure
+  mode is not a `ValueError` (`int()` on a non-decimal digit string, an
+  index into a list that can be empty, `struct.unpack` on a short
+  buffer, an `IndexError` on a slice).
 
 ## What remains unresolved
 
-- **The commit before this one (`91ce9aa`, empty message) is untested and
-  behaviourally almost neutral.** It made `cert`, `cve`, `geo`, `jwt` and
-  `mac` decode their HTTP responses with `errors="replace"` and to catch
-  the JSON error. Measured with a probe that fed hostile bodies to
-  `_fetch_cert_data`, `_fetch_cve_data`, `_fetch_geo_data` and
-  `_fetch_mac_data`: before the commit all of them already returned `None`
-  (or the parsed value) without a traceback, because the old code was
-  wrapped in `except Exception` / `except (OSError, ValueError)`. The only
-  behavioural difference is `mac`: a body with a byte that is not UTF-8 now
-  yields the replaced text as the vendor instead of a failed fetch. The
-  change is harmless, but nothing pins it: there is no test for it, and the
-  handoff notes of the previous session do not mention it. It is not worth
-  a rework; a single regression test for the `mac` vendor text would be
-  enough if someone wants to close it.
-- The file-input surface is exhausted: the file-option, file-content,
-  config-value and cache-content sweeps cover it, and the previous session
-  verified that no strict `open(...)` read is left in `ethscan/`.
-
-## Approaches that failed and why
-
-- **The generic "feed hostile bytes to every parser" probe does not find
-  this class of bug on its own.** It reports the parsers that raise
-  (`ldap._parse_attribute`, `ldap._parse_search_entry`,
-  `netbios._decode_name_chars`, `netbios._parse_nbtstat_rdata`,
-  `netbios._parse_nbns_response`, `snmp._parse_snmp_message`), but every
-  one of them except `netbios` raises `ValueError`, which the caller
-  catches. The netbios leak needed a *structurally valid* packet with a
-  short name, which a generic body (too short to be a packet) never is.
-  Do not repeat the generic probe expecting it to find the next one.
-- **A generic hostile body through the `connector` of the 12 modules that
-  take one (`oracle`, `snmp`, `mssql`, `ntp`, `postgresql`, `smb`,
-  `mongodb`, `mysql`, `netbios`, `memcached`, `redis`, `ldap`) produced no
-  leak other than the netbios one.** Those modules are bounds-checked for
-  short buffers; the gap is in the fields they read at a *fixed* offset.
+- **The commit before the netbios fix (`91ce9aa`, empty message) is
+  still untested and behaviourally almost neutral.** It made `cert`,
+  `cve`, `geo`, `jwt` and `mac` decode their HTTP responses with
+  `errors="replace"` and to catch the JSON error. The only behavioural
+  difference is `mac`: a body with a byte that is not UTF-8 now yields
+  the replaced text as the vendor instead of a failed fetch. There is no
+  test for it. It is not worth a rework; a single regression test for
+  the `mac` vendor text would be enough if someone wants to close it.
+- **The file-input surface is exhausted**: the file-option, file-content,
+  config-value and cache-content sweeps cover it, and the previous
+  session verified that no strict `open(...)` read is left in
+  `ethscan/`.
+- **`run_smtp()` is the only `run_<module>()` of a protocol module that
+  had no `except` net around its probe block** at the time of this
+  session; it has one now. The other protocol modules without such a
+  net (`run_redis`, `run_memcached`, `run_ntp`, `run_ldap`,
+  `run_smb2`/`run_smb`, `run_snmp`, `run_dnssec`, `run_ssh`) are clean
+  today, but a future bug in their parsers would crash the command
+  instead of being reported. Adding the net to them is a behaviour
+  change and was deliberately left out of this session's small fix.
 
 ## One precise next task
 
-**Sweep the server-answer parsers for the same class of bug: a fixed index
-into a decoded buffer, or an exception type that is not caught by the
-module's guard.** A remote host controls the bytes, so every one of these
-is a remotely triggerable traceback.
+**Sweep the text-protocol and HTTP answer parsers for the same class of
+bug.** The binary protocol parsers are now verified clean, and the two
+bugs that were found live in a *text* protocol, so that is where the
+remaining surface is. A server's answer here is text or JSON, and the
+operations that fail on it are string operations, not buffer offsets.
 
-Method that found the netbios bug (keep it):
+Candidates, with the current line numbers:
 
-1. Find the pure parser of a module (a function that takes `bytes` and
-   returns a structure, with no I/O inside).
-2. Craft an answer that is **structurally valid** for the protocol but
-   holds a hostile field: a name that is too short, a length field that
-   points outside the buffer, a count that is larger than the data.
-3. Call the module's `run_<module>` with it (every one of these modules
-   takes an injectable `connector(host, port, request, timeout)` that
-   returns `(bytes | None, str | None)`) and assert that the command
-   answers with an `error` field instead of raising.
-
-Candidates that are still unverified, with the current line numbers:
-
-| Module | Parser | Note |
+| Module | Surface | Note |
 | --- | --- | --- |
-| `ssh.py` | `_parse_kexinit` (239) | reads length-prefixed lists out of the payload |
-| `mysql.py` | `_parse_handshake` (95) | length-encoded integers and payload slices |
-| `postgresql.py` | `_parse_startup_response` (175), `_parse_error_fields` (148) | length-prefixed messages |
-| `ntp.py` | `_parse_monlist_response` (171) | entry count vs. buffer length |
-| `redis.py` | `_parse_resp` (118), `_parse_resp_bulk_string` (93) | `int()` on a length field, slices |
-| `memcached.py` | `_parse_stats_response` (121) | line splitting |
-| `oracle.py` | `_parse_accept_response` (197), `_parse_refuse_response` (249) | TNS header fields |
-| `mssql.py` | `_parse_prelogin_response` (366) | entry offset/length from the server |
-| `smb.py` | `_parse_smb2_response` (547), `_parse_smb2_negotiate_contexts` (486) | context offset/count from the server |
-| `mongodb.py` | `_parse_buildinfo_response` (149) | BSON fields |
-| `dnssec.py` | `_parse_dns_name` (117) | compression pointers |
-| `ldap.py` | `_read_tlv` / `_parse_ldap_message` (375) | TLV lengths |
+| `whois.py` | `parse_whois` (61), `extract_referral_server` (127) | regex over the raw answer; check `re` group handling and the `sorted({...})` of the nameserver set |
+| `web.py` | `fetch_headers` (69), `check_security_headers` (98), `check_information_disclosure` (123) | the header dict comes from the server; check every value that is used as a number or sliced |
+| `headers.py` | `run_headers` (10) | same header dict, reported to the user |
+| `cert.py` | `_fetch_cert_data` (97) | the JSON answer of an API; check the keys that are used as a number (`float(entry["timestamp"])`) and the nested `cert.get("subject", ())` iteration (`item[0]`/`item[1]`) |
+| `cve.py` | `_fetch_cve_data` (101) | the same shape as `cert.py`: `vulns[0]`, `descriptions[0].get("value")`, `entries[0].get("cvssData")` |
+| `geo.py` | `_fetch_geo_data` (115) | the same shape as `cert.py` |
+| `jwt.py` | `_decode_json_segment` (47), `parse_jwt` (59) | the segments come from a token the server handed out |
+| `mac.py` | `_fetch_mac_data` (99) | the same shape as `cert.py`; the vendor text is now the replaced text (see above) |
+| `s3.py` | `check_bucket_public` (241) | the status code drives the result; check the `urllib`/`http.client` error types |
+| `urlcheck.py` | `run_urlcheck` (29) | the redirect chain and the body of the answer |
+| `subtake.py`, `stale.py`, `subdomains.py`, `resolve.py`, `dns.py` | the `dnspython` answer sets | `answers[0]` raises `IndexError` on an empty answer set, which is not a `ValueError` and is not caught by the `except (dns.exception.DNSException, OSError, ValueError)` clauses |
 
-Constraints: keep the smallest reversible change (a length check that turns
-the crash into the module's documented error signal), add the regression test
-next to the module's own tests, and do not weaken the existing `except
-ValueError` guards. The `netbios` fix is the template: a name that is too
-short is now reported as the text it is, not as a crash.
+Method that found this session's two bugs (keep it): read the parser and
+ask *what operation on the server's text can fail with an exception the
+module does not catch*. The three that paid off here were
+`int()` on a string that `str.isdigit()` accepts but `int()` refuses
+(the repository already knows this trap: `ethscan/target.py:112-139`,
+`check_port`, documents it for ports), an index into a list that can be
+empty, and an exception type that the guard lists explicitly and
+narrowly.
+
+Constraints: keep the smallest reversible change (turn the crash into the
+module's documented error signal, or report the malformed value the way
+the module already reports malformed values), add the regression test
+next to the module's own tests, and do not weaken an existing guard.
+The `smtp` fix is the template: a status line that is not a valid reply
+code is now reported as code `0`, like any other non-numeric line, and a
+capability line without a keyword is skipped, not indexed.
