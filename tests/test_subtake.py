@@ -1,5 +1,8 @@
 """Tests for the ethscan subtake module."""
 
+import socket
+import socketserver
+import threading
 
 from ethscan.subtake import (
     DEFAULT_SUBDOMAINS,
@@ -13,6 +16,44 @@ from ethscan.subtake import (
     resolve_cname,
     run_subtake,
 )
+
+
+class _GarbledHandler(socketserver.BaseRequestHandler):
+    """Answers every request with a malformed HTTP status line."""
+
+    def handle(self) -> None:
+        try:
+            self.request.recv(4096)
+            self.request.sendall(b"NOT-HTTP garbage\r\n\r\n")
+        except OSError:
+            pass
+
+
+class _GarbledServer(socketserver.TCPServer):
+    allow_reuse_address = True
+
+
+def _start_garbled_http_server():
+    """Start a server that answers with a malformed status line.
+
+    Returns the server and its port; the caller closes the server.
+    """
+    server = _GarbledServer(("127.0.0.1", 0), _GarbledHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, server.server_address[1]
+
+
+def test_check_http_fingerprint_malformed_status_line() -> None:
+    # A server that answers with a malformed status line makes http.client
+    # raise a BadStatusLine, which is an HTTPException and not an OSError.
+    server, port = _start_garbled_http_server()
+    try:
+        body = check_http_fingerprint(f"127.0.0.1:{port}", timeout=5.0)
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert body is None
 
 
 def test_normalize_domain_bare() -> None:
@@ -661,7 +702,6 @@ def test_format_subtake_report_csv_pipe_escaping() -> None:
 
 def test_resolve_cname_socket_canonname(monkeypatch) -> None:
     """resolve_cname returns the socket canonname when dnspython is unavailable."""
-    import socket
 
     def mock_getaddrinfo(host, port, *args, **kwargs):
         return [
@@ -680,7 +720,6 @@ def test_resolve_cname_socket_canonname(monkeypatch) -> None:
 
 def test_resolve_cname_socket_no_canonname(monkeypatch) -> None:
     """resolve_cname returns None when socket yields no distinct canonname."""
-    import socket
 
     def mock_getaddrinfo(host, port, *args, **kwargs):
         return [

@@ -2,6 +2,8 @@
 
 import contextlib
 import json
+import socketserver
+import threading
 from unittest.mock import MagicMock, patch
 
 from ethscan.web import (
@@ -23,6 +25,32 @@ class _BadHeaderError(Exception):
 
 class _BadCertError(Exception):
     """Test-only cert access failure raised by fake SSock doubles."""
+
+
+class _GarbledHandler(socketserver.BaseRequestHandler):
+    """Answers every request with a malformed HTTP status line."""
+
+    def handle(self) -> None:
+        try:
+            self.request.recv(4096)
+            self.request.sendall(b"NOT-HTTP garbage\r\n\r\n")
+        except OSError:
+            pass
+
+
+class _GarbledServer(socketserver.TCPServer):
+    allow_reuse_address = True
+
+
+def _start_garbled_http_server():
+    """Start a server that answers with a malformed status line.
+
+    Returns the server and its port; the caller closes the server.
+    """
+    server = _GarbledServer(("127.0.0.1", 0), _GarbledHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, server.server_address[1]
 
 
 # ---------------------------------------------------------------------------
@@ -311,6 +339,30 @@ def test_fetch_headers_connection_error(mock_urlopen) -> None:
     mock_urlopen.side_effect = urllib.error.URLError("Connection refused")
     headers = fetch_headers("https://example.com", timeout=5.0)
     assert headers == {}
+
+
+def test_fetch_headers_malformed_status_line() -> None:
+    # A server that answers with a malformed status line makes http.client
+    # raise a BadStatusLine, which is an HTTPException and not an OSError.
+    server, port = _start_garbled_http_server()
+    try:
+        headers = fetch_headers(f"http://127.0.0.1:{port}/", timeout=5.0)
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert headers == {}
+
+
+def test_run_web_checks_malformed_status_line() -> None:
+    # The same hostile answer must not crash the whole check run.
+    server, port = _start_garbled_http_server()
+    try:
+        results = run_web_checks(f"http://127.0.0.1:{port}/", ["headers", "info_disclosure"], timeout=5.0)
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert results["headers"] == {}
+    assert results["security_headers"]["total"] > 0
 
 
 # ---------------------------------------------------------------------------

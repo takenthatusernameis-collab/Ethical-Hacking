@@ -6,6 +6,7 @@ service versions (provided via ``--services-file`` JSON output from the
 """
 from __future__ import annotations
 
+import http.client
 import json
 import math
 import socket
@@ -114,6 +115,12 @@ def _fetch_cve_data(
         if not isinstance(data, dict):
             return None
         return data
+    except http.client.HTTPException:
+        # ``http.client.BadStatusLine`` (an API that answers with a malformed
+        # status line) derives from ``HTTPException`` and not from ``OSError``
+        # or ``ValueError``, so it escapes the ``except`` below. An API that
+        # cannot answer is a failed lookup, not a crash.
+        return None
     except (OSError, ValueError):
         return None
 

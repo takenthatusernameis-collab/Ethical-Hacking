@@ -395,6 +395,7 @@ def check_http_fingerprint(hostname: str, timeout: float = 5.0) -> str | None:
     Returns:
         Response body snippet if successful, None otherwise.
     """
+    import http.client
     import urllib.error
     import urllib.request
 
@@ -405,7 +406,18 @@ def check_http_fingerprint(hostname: str, timeout: float = 5.0) -> str | None:
             with urllib.request.urlopen(req, timeout=timeout) as response:
                 body = response.read().decode("utf-8", errors="ignore")
                 return body[:5000]
-        except (urllib.error.URLError, urllib.error.HTTPError, socket.timeout, ValueError, OSError):
+        # ``http.client.BadStatusLine`` (a server that answers with a
+        # malformed status line) derives from ``HTTPException`` and not from
+        # ``OSError`` or ``ValueError``, so it escapes the ``except`` below.
+        # A server that cannot answer is a failed probe, not a crash.
+        except (
+            urllib.error.URLError,
+            urllib.error.HTTPError,
+            socket.timeout,
+            ValueError,
+            OSError,
+            http.client.HTTPException,
+        ):
             continue
     return None
 

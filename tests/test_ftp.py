@@ -7,6 +7,9 @@ import ftplib
 import io
 import json
 import socket
+import socketserver
+import struct
+import threading
 
 import pytest
 
@@ -69,6 +72,92 @@ class _FakeFTP:
         if isinstance(self.config, dict) and self.config.get("close_raises"):
             raise ftplib.Error("close failed")
         self.closed = True
+
+
+# ---------------------------------------------------------------------------
+# Fake FTP server (real socket) for the hostile-answer tests
+# ---------------------------------------------------------------------------
+
+
+class _FakeFTPHandler(socketserver.BaseRequestHandler):
+    """A tiny stateful fake FTP server driven by the server instance config.
+
+    The ``mode`` key of the config selects the hostile behaviour:
+
+    * ``normal`` -- answer USER with 331 and PASS with 230 (or 530).
+    * ``close_without_greeting`` -- close the connection without a greeting.
+    * ``close_during_login`` -- close the connection instead of answering USER.
+    * ``reset_during_login`` -- reset the connection instead of answering USER.
+    * ``non_utf8_during_login`` -- answer USER with a byte that is not UTF-8.
+    """
+
+    def handle(self) -> None:
+        s = self.request
+        s.settimeout(5.0)
+        cfg = self.server.ftp_config  # type: ignore[attr-defined]
+        mode = cfg.get("mode", "normal")
+
+        if mode == "close_without_greeting":
+            s.close()
+            return
+
+        banner = cfg.get("banner", "220 fake.ftp.example ready")
+        s.sendall(banner.encode("utf-8") + b"\r\n")
+
+        sockfile = s.makefile("rb")
+        while True:
+            try:
+                line = sockfile.readline()
+            except (OSError, socket.timeout):
+                break
+            if not line:
+                break
+            command = line.decode("utf-8", errors="replace").strip().upper()
+
+            if command.startswith("USER"):
+                if mode == "close_during_login":
+                    s.close()
+                    return
+                if mode == "reset_during_login":
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+                    s.close()
+                    return
+                if mode == "non_utf8_during_login":
+                    s.sendall(b"331 password required \xff\r\n")
+                    continue
+                s.sendall(b"331 password required\r\n")
+            elif command.startswith("PASS"):
+                if cfg.get("anonymous_allowed", True):
+                    s.sendall(b"230 logged in\r\n")
+                else:
+                    s.sendall(b"530 login incorrect\r\n")
+            elif command.startswith("QUIT"):
+                s.sendall(b"221 bye\r\n")
+                break
+            else:
+                s.sendall(b"500 unknown command\r\n")
+
+
+class _FakeFTPServer(socketserver.TCPServer):
+    allow_reuse_address = True
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.ftp_config: dict = {}
+
+
+@pytest.fixture()
+def fake_ftp():
+    """Start a fake FTP server; yield (host, port, server) and shut it down."""
+    server = _FakeFTPServer(("127.0.0.1", 0), _FakeFTPHandler)
+    server.ftp_config = {}
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield "127.0.0.1", server.server_address[1], server
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 # ---------------------------------------------------------------------------
@@ -277,6 +366,83 @@ def test_run_ftp_real_connection_refused() -> None:
     assert result["connected"] is False
     assert result["error"] is not None
     assert "connection failed" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# run_ftp – against a real socket, with a hostile server
+# ---------------------------------------------------------------------------
+
+
+def test_run_ftp_anonymous_login_over_socket(fake_ftp) -> None:
+    # Control: an ordinary server is still probed over a real socket.
+    host, port, server = fake_ftp
+    server.ftp_config = {"mode": "normal"}
+    result = run_ftp(host, port=port, timeout=5.0)
+    assert result["connected"] is True
+    assert result["banner"] == "220 fake.ftp.example ready"
+    assert result["anonymous_login"] is True
+    assert result["error"] is None
+
+
+def test_run_ftp_login_denied_over_socket(fake_ftp) -> None:
+    # Control: a server that refuses the login is reported as "not allowed".
+    host, port, server = fake_ftp
+    server.ftp_config = {"mode": "normal", "anonymous_allowed": False}
+    result = run_ftp(host, port=port, timeout=5.0)
+    assert result["connected"] is True
+    assert result["anonymous_login"] is False
+    assert result["error"] is None
+
+
+def test_run_ftp_server_closes_without_greeting(fake_ftp) -> None:
+    # A server that closes the connection without a greeting makes ftplib
+    # raise EOFError, which the module's guard did not catch.
+    host, port, server = fake_ftp
+    server.ftp_config = {"mode": "close_without_greeting"}
+    result = run_ftp(host, port=port, timeout=5.0)
+    assert result["connected"] is False
+    assert result["banner"] is None
+    assert result["error"] is not None
+    assert "connection failed" in result["error"]
+    assert "closed the connection" in result["error"]
+
+
+def test_run_ftp_server_closes_during_login(fake_ftp) -> None:
+    # A server that drops the connection instead of answering USER makes
+    # ftplib raise EOFError.
+    host, port, server = fake_ftp
+    server.ftp_config = {"mode": "close_during_login"}
+    result = run_ftp(host, port=port, timeout=5.0)
+    assert result["connected"] is True
+    assert result["anonymous_login"] is None
+    assert result["error"] is not None
+    assert "login failed" in result["error"]
+    assert "closed the connection" in result["error"]
+
+
+def test_run_ftp_server_resets_connection_during_login(fake_ftp) -> None:
+    # A server that resets the connection instead of answering USER makes
+    # ftplib raise ConnectionResetError, an OSError.
+    host, port, server = fake_ftp
+    server.ftp_config = {"mode": "reset_during_login"}
+    result = run_ftp(host, port=port, timeout=5.0)
+    assert result["connected"] is True
+    assert result["anonymous_login"] is None
+    assert result["error"] is not None
+    assert "login failed" in result["error"]
+
+
+def test_run_ftp_non_utf8_reply_during_login(fake_ftp) -> None:
+    # A server that answers USER with a byte that is not UTF-8 makes ftplib
+    # raise a UnicodeDecodeError, which is a ValueError.
+    host, port, server = fake_ftp
+    server.ftp_config = {"mode": "non_utf8_during_login"}
+    result = run_ftp(host, port=port, timeout=5.0)
+    assert result["connected"] is True
+    assert result["anonymous_login"] is None
+    assert result["error"] is not None
+    assert "login failed" in result["error"]
+    assert "decode" in result["error"]
 
 
 # ---------------------------------------------------------------------------

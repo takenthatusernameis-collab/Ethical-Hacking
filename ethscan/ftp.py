@@ -97,6 +97,11 @@ def run_ftp(
 
     Returns:
         Structured result dict consumed by the formatters below.
+
+        ``anonymous_login`` is ``True`` when the login succeeded, ``False``
+        when the server refused it, and ``None`` when the login could not be
+        completed (the server dropped the connection or answered with a
+        malformed reply); the reason is reported in ``error``.
     """
     host, parsed_port = _normalize_target(target)
     server_port = port if port is not None else parsed_port
@@ -122,11 +127,20 @@ def run_ftp(
                 welcome = client.getwelcome()
                 results["banner"] = welcome
                 results["welcome_message"] = welcome
-            except ftplib.Error as exc:
+            except EOFError:
+                results["error"] = "banner read failed: server closed the connection"
+                return results
+            except (ftplib.Error, OSError, ValueError) as exc:
                 results["error"] = f"banner read failed: {exc}"
                 return results
         # A host that is not a valid host name ("....") raises a UnicodeError,
-        # which is a ValueError, when the resolver encodes it.
+        # which is a ValueError, when the resolver encodes it. A server that
+        # closes the connection before sending its greeting makes ftplib
+        # raise EOFError, and a server that answers with bytes that are not
+        # text raises a UnicodeDecodeError, which is a ValueError.
+        except EOFError:
+            results["error"] = "connection failed: server closed the connection"
+            return results
         except (socket.timeout, OSError, ftplib.Error, ValueError) as exc:
             results["error"] = f"connection failed: {exc}"
             return results
@@ -140,6 +154,17 @@ def run_ftp(
             except ftplib.Error as exc:
                 results["anonymous_login"] = False
                 results["anonymous_message"] = str(exc)
+            # A server that drops the connection, resets it, or answers with
+            # bytes that are not text must not crash the command: the outcome
+            # of the login stays unknown and the failure is reported.
+            except EOFError:
+                results["anonymous_login"] = None
+                results["anonymous_message"] = "login failed: server closed the connection"
+                results["error"] = "login failed: server closed the connection"
+            except (OSError, ValueError) as exc:
+                results["anonymous_login"] = None
+                results["anonymous_message"] = f"login failed: {exc}"
+                results["error"] = f"login failed: {exc}"
     finally:
         if client is not None:
             with contextlib.suppress(ftplib.Error, OSError):

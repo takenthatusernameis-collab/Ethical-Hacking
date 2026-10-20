@@ -2,6 +2,7 @@
 
 import contextlib
 import csv
+import http.client
 import io
 import json
 import socket
@@ -91,6 +92,12 @@ def fetch_headers(target: str, timeout: float = 5.0) -> dict[str, str]:
             return {key.lower(): value for key, value in exc.headers.items()}
         except Exception:  # noqa: BLE001 - HTTPError.headers may raise arbitrarily
             return {}
+    except http.client.HTTPException:
+        # ``http.client.BadStatusLine`` (a server that answers with a
+        # malformed status line) derives from ``HTTPException`` and not from
+        # ``OSError`` or ``ValueError``, so it escapes the ``except`` below.
+        # A server that cannot answer is a failed probe, not a crash.
+        return {}
     except (urllib.error.URLError, OSError, ValueError):
         return {}
 

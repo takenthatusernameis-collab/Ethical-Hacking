@@ -1,8 +1,10 @@
 """Tests for the ethscan cve command."""
 
 import json
+import socketserver
 import subprocess
 import sys
+import threading
 import urllib.error
 
 from ethscan.cve import (
@@ -51,6 +53,44 @@ def test_lookup_cve_id_unknown() -> None:
 
 def test_lookup_cve_id_no_product() -> None:
     assert _lookup_cve_id("", "1.0") is None
+
+
+class _GarbledHandler(socketserver.BaseRequestHandler):
+    """Answers every request with a malformed HTTP status line."""
+
+    def handle(self) -> None:
+        try:
+            self.request.recv(4096)
+            self.request.sendall(b"NOT-HTTP garbage\r\n\r\n")
+        except OSError:
+            pass
+
+
+class _GarbledServer(socketserver.TCPServer):
+    allow_reuse_address = True
+
+
+def _start_garbled_http_server():
+    """Start a server that answers with a malformed status line.
+
+    Returns the server and its port; the caller closes the server.
+    """
+    server = _GarbledServer(("127.0.0.1", 0), _GarbledHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, server.server_address[1]
+
+
+def test_fetch_cve_data_malformed_status_line() -> None:
+    # An API that answers with a malformed status line makes http.client
+    # raise a BadStatusLine, which is an HTTPException and not an OSError.
+    server, port = _start_garbled_http_server()
+    try:
+        data = _fetch_cve_data("CVE-2016-6210", timeout=5.0, api_url=f"http://127.0.0.1:{port}/cve")
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert data is None
 
 
 def test_cache_load_missing(tmp_path, monkeypatch) -> None:
