@@ -545,7 +545,7 @@ def scan(ctx: click.Context, target: str, ports: str, profile: str | None, timeo
 @click.option(
     "--min-length",
     "min_length",
-    type=int,
+    type=click.IntRange(min=1),
     help="Flag passwords shorter than this length as too short.",
 )
 @click.option(
@@ -684,7 +684,7 @@ def audit(
 @click.option(
     "--min-length",
     "min_length",
-    type=int,
+    type=click.IntRange(min=1),
     default=None,
     help="Flag passwords shorter than this length as too short (passed to the embedded audit).",
 )
@@ -959,7 +959,7 @@ def fuzz(
 @click.option(
     "--max-depth",
     default=2,
-    type=int,
+    type=click.IntRange(min=1),
     help="Maximum recursion depth for recursive enumeration (default: 2).",
 )
 @click.option("--timeout", default=2.0, type=click.FloatRange(min=0.001), help="DNS resolution timeout in seconds")
@@ -1140,7 +1140,7 @@ def subtake(
 @click.option(
     "--max-depth",
     default=2,
-    type=int,
+    type=click.IntRange(min=1),
     help="Maximum recursive hops when --recursive is enabled (default: 2).",
 )
 @click.option(
@@ -1436,7 +1436,7 @@ def resolve(
 @click.option(
     "--max-depth",
     default=2,
-    type=int,
+    type=click.IntRange(min=1),
     help="Maximum recursion depth for recursive AXFR (default: 2).",
 )
 @click.option("--timeout", default=2.0, type=click.FloatRange(min=0.001), help="DNS timeout in seconds")
@@ -1775,7 +1775,7 @@ def service(ctx: click.Context, target: str, ports: str | None, profile: str | N
 @click.option(
     "--max-depth",
     default=2,
-    type=int,
+    type=click.IntRange(min=1),
     help="Maximum recursion depth for recursive scanning (default: 2).",
 )
 @click.option(
@@ -2181,14 +2181,14 @@ def osdetect(
     "--max-hops",
     "max_hops",
     default=30,
-    type=int,
+    type=click.IntRange(min=1, max=128),
     help="Maximum TTL / hops to probe (default: 30, max: 128)",
 )
 @click.option(
     "--probes-per-hop",
     "probes_per_hop",
     default=3,
-    type=int,
+    type=click.IntRange(min=1),
     help="Number of probes per hop for RTT averaging (default: 3)",
 )
 @click.option("--timeout", default=3.0, type=click.FloatRange(min=0.001), help="Per-probe timeout in seconds")
@@ -2200,7 +2200,7 @@ def osdetect(
 @click.option(
     "--max-depth",
     default=2,
-    type=int,
+    type=click.IntRange(min=1),
     help="Maximum recursion depth for recursive tracing (default: 2)",
 )
 @click.option(
@@ -2275,7 +2275,7 @@ def trace(
 @click.option(
     "--count",
     default=4,
-    type=int,
+    type=click.IntRange(min=1),
     help="Number of echo requests to send (default: 4)",
 )
 @click.option(
@@ -2287,7 +2287,7 @@ def trace(
 @click.option(
     "--ttl",
     default=64,
-    type=int,
+    type=click.IntRange(min=1, max=255),
     help="Time-to-live value for probes (default: 64)",
 )
 @click.option(
@@ -2431,7 +2431,7 @@ def wifi(interface: str | None, fmt: str, output_fmt: str | None, out_path: str 
 @click.option(
     "--max-depth",
     default=30,
-    type=int,
+    type=click.IntRange(min=1, max=128),
     help="Maximum number of traceroute hops when --recursive is enabled (default: 30, max: 128).",
 )
 @click.option(
@@ -2546,14 +2546,14 @@ def geo(
     "--trace-max-hops",
     "trace_max_hops",
     default=30,
-    type=int,
+    type=click.IntRange(min=1, max=128),
     help="Maximum TTL / hops for traceroute (default: 30, max: 128)",
 )
 @click.option(
     "--trace-probes-per-hop",
     "trace_probes_per_hop",
     default=3,
-    type=int,
+    type=click.IntRange(min=1),
     help="Number of probes per hop for RTT averaging (default: 3)",
 )
 @click.option("--timeout", default=5.0, type=click.FloatRange(min=0.001), help="Network timeout in seconds")
@@ -2997,7 +2997,7 @@ def cidr(cidr: str, contains: str | None, diff: str | None, fmt: str, output_fmt
     "--iterations",
     "iterations",
     default=None,
-    type=int,
+    type=click.IntRange(min=1),
     help="Optional PBKDF2 iteration count (requires --salt). When supplied, "
     "uses PBKDF2-HMAC(algorithm, password, salt, iterations) instead of a "
     "single-pass hash. Must be a positive integer.",
@@ -3031,9 +3031,6 @@ def cidr(cidr: str, contains: str | None, diff: str | None, fmt: str, output_fmt
 )
 def hash_cmd(passwords, password_file, algorithm, salt, pepper, iterations, check_digest, fmt, output_fmt, out_path) -> None:
     """Generate cryptographic hashes for passwords (MD5, SHA-1, SHA-256, SHA-512, NTLM, MD4)."""
-    if iterations is not None and iterations <= 0:
-        click.echo("Error: --iterations must be a positive integer.")
-        raise click.exceptions.Exit(1)
     if iterations is not None and not salt:
         click.echo("Error: --iterations requires --salt to be supplied.")
         raise click.exceptions.Exit(1)
@@ -3118,7 +3115,7 @@ def hash_cmd(passwords, password_file, algorithm, salt, pepper, iterations, chec
 @click.option(
     "--max-depth",
     default=64,
-    type=int,
+    type=click.IntRange(min=1),
     help="Maximum recursion depth for the radix tree (default: 64).",
 )
 @click.option(
@@ -4594,8 +4591,8 @@ def snmp(
 )
 @click.option(
     "--suffix",
-    default=None,
-    type=int,
+    default=0,
+    type=click.IntRange(min=0, max=255),
     help="Service suffix byte (hex or decimal) for the queried name (default 0).",
 )
 @click.option("--timeout", default=3.0, type=click.FloatRange(min=0.001), help="Per-request timeout in seconds")

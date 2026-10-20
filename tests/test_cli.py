@@ -14121,8 +14121,19 @@ def test_hash_iterations_non_positive() -> None:
             "json",
         ],
     )
-    assert result.exit_code != 0
-    assert "positive integer" in result.output
+    assert result.exit_code == 2, f"expected exit code 2, got {result.exit_code}\n{result.output}"
+    assert "Error: Invalid value for '--iterations':" in result.output, (
+        f"missing usage error message\n{result.output}"
+    )
+    assert "is not in the range x>=1." in result.output, (
+        f"missing range message\n{result.output}"
+    )
+    assert "Traceback (most recent call last)" not in result.output, (
+        f"leaked a traceback\n{result.output}"
+    )
+    assert isinstance(result.exception, SystemExit), (
+        f"leaked {result.exception!r} instead of a usage error"
+    )
 
 
 def test_hash_iterations_with_pepper() -> None:
@@ -23242,3 +23253,138 @@ def test_a_valid_timeout_option_is_still_used() -> None:
         assert "Traceback (most recent call last)" not in result.output, (
             f"redis --timeout {timeout}: leaked a traceback\n{result.output}"
         )
+
+
+INT_OPTION_RANGES = {
+    ("audit", "--min-length"): (1, None),
+    ("report", "--min-length"): (1, None),
+    ("subdomains", "--max-depth"): (1, None),
+    ("whois", "--max-depth"): (1, None),
+    ("dnsbrute", "--max-depth"): (1, None),
+    ("vuln", "--max-depth"): (1, None),
+    ("trace", "--max-hops"): (1, 128),
+    ("trace", "--probes-per-hop"): (1, None),
+    ("trace", "--max-depth"): (1, None),
+    ("ping", "--count"): (1, None),
+    ("ping", "--ttl"): (1, 255),
+    ("geo", "--max-depth"): (1, 128),
+    ("recon", "--trace-max-hops"): (1, 128),
+    ("recon", "--trace-probes-per-hop"): (1, None),
+    ("hash", "--iterations"): (1, None),
+    ("radix", "--max-depth"): (1, None),
+    ("netbios", "--suffix"): (0, 255),
+}
+
+INT_OPTION_UPPER_BAD = {
+    ("trace", "--max-hops"): "99999",
+    ("ping", "--ttl"): "99999",
+    ("geo", "--max-depth"): "99999",
+    ("recon", "--trace-max-hops"): "99999",
+    ("netbios", "--suffix"): "256",
+}
+
+
+def _bad_int_value(minimum, maximum):
+    if minimum is not None:
+        return str(minimum - 1)
+    return str(maximum + 1)
+
+
+def _assert_int_usage_error(result, command: str) -> None:
+    """Assert that ``result`` is a clean click usage error for an int option."""
+    assert result.exit_code == 2, (
+        f"{command}: expected exit code 2, got {result.exit_code}\n{result.output}"
+    )
+    assert "Error: Invalid value for" in result.output, (
+        f"{command}: missing usage error message\n{result.output}"
+    )
+    assert "Traceback (most recent call last)" not in result.output, (
+        f"{command}: leaked a traceback\n{result.output}"
+    )
+    assert isinstance(result.exception, SystemExit), (
+        f"{command}: leaked {result.exception!r} instead of a usage error"
+    )
+
+
+def test_every_int_option_of_the_cli_is_range_checked() -> None:
+    """No command may declare one of these int options without a range check."""
+    import click
+
+    checked = 0
+    for name, command in cli.commands.items():
+        for param in command.params:
+            matched = None
+            for opt in param.opts:
+                key = (name, opt)
+                if key in INT_OPTION_RANGES:
+                    matched = key
+                    break
+            if matched is None:
+                continue
+            assert isinstance(param.type, click.IntRange), (
+                f"{name} {matched[1]} is not range-checked"
+            )
+            minimum, maximum = INT_OPTION_RANGES[matched]
+            assert param.type.min == minimum, (
+                f"{name} {matched[1]} min is {param.type.min}, expected {minimum}"
+            )
+            if maximum is not None:
+                assert param.type.max == maximum, (
+                    f"{name} {matched[1]} max is {param.type.max}, expected {maximum}"
+                )
+            assert param.type.clamp is False, (
+                f"{name} {matched[1]} clamps the value instead of refusing it"
+            )
+            checked += 1
+    assert checked == len(INT_OPTION_RANGES), (
+        f"{checked} int options in the CLI, {len(INT_OPTION_RANGES)} in the test"
+    )
+
+
+def test_an_out_of_range_int_option_is_a_usage_error() -> None:
+    """An int option outside its allowed range must be rejected before the
+    command runs."""
+    runner = CliRunner()
+    for (command, option), (minimum, maximum) in INT_OPTION_RANGES.items():
+        value = _bad_int_value(minimum, maximum)
+        result = runner.invoke(cli, [command, option, value])
+        _assert_int_usage_error(result, f"{command} {option} {value}")
+        assert f"Error: Invalid value for '{option}':" in result.output, (
+            f"{command} {option} {value}: wrong option named\n{result.output}"
+        )
+
+
+def test_an_out_of_range_int_option_upper_bound_is_a_usage_error() -> None:
+    """An int option above its documented maximum must be rejected as well."""
+    runner = CliRunner()
+    for (command, option), value in INT_OPTION_UPPER_BAD.items():
+        result = runner.invoke(cli, [command, option, value])
+        _assert_int_usage_error(result, f"{command} {option} {value}")
+        assert f"Error: Invalid value for '{option}':" in result.output, (
+            f"{command} {option} {value}: wrong option named\n{result.output}"
+        )
+
+
+def test_an_out_of_range_int_option_is_a_single_line_error() -> None:
+    """The failure must be a one-line error, not a multi-line traceback."""
+    runner = CliRunner()
+    for (command, option), (minimum, maximum) in INT_OPTION_RANGES.items():
+        value = _bad_int_value(minimum, maximum)
+        result = runner.invoke(cli, [command, option, value])
+        error_lines = [
+            line for line in result.output.splitlines() if line.startswith("Error:")
+        ]
+        assert len(error_lines) == 1, f"{command} {option}: {result.output}"
+
+
+def test_a_valid_int_option_is_still_accepted() -> None:
+    """A value inside the allowed range still reaches the command unchanged."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["hash", "--password", "password", "--salt", "s", "--iterations", "1000"],
+    )
+    assert result.exit_code == 0, f"hash --iterations 1000: {result.output}"
+    assert "Traceback (most recent call last)" not in result.output, (
+        f"hash --iterations 1000: leaked a traceback\n{result.output}"
+    )
