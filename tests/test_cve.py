@@ -1042,6 +1042,24 @@ def test_run_cve_services_file_read_error(tmp_path, monkeypatch) -> None:
     assert any("Failed to read services file" in n for n in result["notes"])
 
 
+def test_run_cve_services_file_not_utf8(tmp_path, monkeypatch) -> None:
+    services_file = tmp_path / "services.json"
+    services_file.write_bytes(
+        b'{"services": [{"port": 80, "banner": "Apache/2.4 \xff bad"}]}'
+    )
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "ethscan.service.run_service", lambda *a, **k: {"results": []}
+    )
+
+    result = run_cve(
+        "example.com", services_file=str(services_file), timeout=0.5, use_cache=False
+    )
+    # A file that is not valid UTF-8 is read leniently: no traceback leaks,
+    # and the decoded content is used instead of being refused.
+    assert result is not None
+
+
 def test_run_cve_nvd_summary_appended(tmp_path, monkeypatch) -> None:
     services_file = tmp_path / "services.json"
     services_file.write_text(

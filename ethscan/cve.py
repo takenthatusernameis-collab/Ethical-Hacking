@@ -270,8 +270,7 @@ def run_cve(
         services = None
         if services_file:
             try:
-                with open(services_file, "r", encoding="utf-8") as handle:
-                    services = json.load(handle)
+                services = load_json(services_file)
             except (json.JSONDecodeError, OSError) as exc:
                 notes.append(f"Failed to read services file: {exc}")
                 services = None
