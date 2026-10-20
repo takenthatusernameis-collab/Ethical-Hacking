@@ -1129,7 +1129,7 @@ def subtake(
     default="whois.iana.org",
     help="WHOIS server to query (default: whois.iana.org)",
 )
-@click.option("--port", default=43, type=int, help="WHOIS server port (default: 43)")
+@click.option("--port", default=43, type=click.IntRange(0, 65535), help="WHOIS server port (default: 43)")
 @click.option("--timeout", default=5.0, type=float, help="Connection timeout in seconds")
 @click.option(
     "--recursive/--no-recursive",
@@ -1519,7 +1519,7 @@ def dnsbrute(
 
 @cli.command()
 @click.option("--target", required=True, help="Target host or URL (e.g. example.com or https://example.com)")
-@click.option("--port", default=443, type=int, help="TLS port (default: 443)")
+@click.option("--port", default=443, type=click.IntRange(0, 65535), help="TLS port (default: 443)")
 @click.option("--timeout", default=5.0, type=float, help="Connection timeout in seconds")
 @click.option(
     "--output-format",
@@ -1566,7 +1566,7 @@ def ssl(target: str, port: int, timeout: float, fmt: str, output_fmt: str | None
 
 @cli.command()
 @click.option("--target", required=True, help="Target host or URL (e.g. example.com or https://example.com)")
-@click.option("--port", default=443, type=int, help="TLS port (default: 443)")
+@click.option("--port", default=443, type=click.IntRange(0, 65535), help="TLS port (default: 443)")
 @click.option(
     "--versions",
     default="TLSv1,TLSv1_1,TLSv1_2,TLSv1_3",
@@ -1906,7 +1906,7 @@ def vuln(
     default=True,
     help="Enable/disable HTTP path fuzzing (default: enabled)",
 )
-@click.option("--port", default=443, type=int, help="TLS port for SSL certificate inspection (default: 443)")
+@click.option("--port", default=443, type=click.IntRange(0, 65535), help="TLS port for SSL certificate inspection (default: 443)")
 @click.option("--timeout", default=5.0, type=float, help="Request timeout in seconds")
 @click.option("--workers", default=10, type=click.IntRange(min=1), help="Maximum concurrent workers for fuzzing")
 @click.option(
@@ -1997,7 +1997,7 @@ def urlcheck(
 @click.option(
     "--port",
     default=None,
-    type=int,
+    type=click.IntRange(0, 65535),
     help="Target port (default: 21 for ftp, 22 for ssh)",
 )
 @click.option(
@@ -2176,7 +2176,7 @@ def osdetect(
     required=True,
     help="Target host or URL (e.g. example.com or https://example.com)",
 )
-@click.option("--port", default=80, type=int, help="Target TCP port for SYN probes (default: 80)")
+@click.option("--port", default=80, type=click.IntRange(0, 65535), help="Target TCP port for SYN probes (default: 80)")
 @click.option(
     "--max-hops",
     "max_hops",
@@ -2293,7 +2293,7 @@ def trace(
 @click.option(
     "--tcp-port",
     default=80,
-    type=int,
+    type=click.IntRange(0, 65535),
     help="Target TCP port for connect-based fallback when ICMP is unavailable (default: 80)",
 )
 @click.option(
@@ -2526,7 +2526,7 @@ def geo(
     default="whois.iana.org",
     help="WHOIS server to query (default: whois.iana.org).",
 )
-@click.option("--whois-port", default=43, type=int, help="WHOIS server port (default: 43)")
+@click.option("--whois-port", default=43, type=click.IntRange(0, 65535), help="WHOIS server port (default: 43)")
 @click.option(
     "--no-geo-cache",
     is_flag=True,
@@ -2541,7 +2541,7 @@ def geo(
     "--geo-api-url",
     help="Custom geolocation API base URL (must support ip-api.com query format).",
 )
-@click.option("--trace-port", default=80, type=int, help="Target TCP port for traceroute (default: 80)")
+@click.option("--trace-port", default=80, type=click.IntRange(0, 65535), help="Target TCP port for traceroute (default: 80)")
 @click.option(
     "--trace-max-hops",
     "trace_max_hops",
@@ -3653,7 +3653,7 @@ def completion(
 
 @cli.command()
 @click.option("--target", required=True, help="Target host, host:port, or memcached:// URL (e.g. memcached://localhost:11211)")
-@click.option("--port", default=None, type=int, help="Memcached port (overrides parsed port; default 11211)")
+@click.option("--port", default=None, type=click.IntRange(0, 65535), help="Memcached port (overrides parsed port; default 11211)")
 @click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
 @click.option(
     "--probes",
@@ -3721,7 +3721,7 @@ def memcached(
 
 @cli.command()
 @click.option("--target", required=True, help="Target host, host:port, or mysql:// URL (e.g. mysql://localhost:3306)")
-@click.option("--port", default=None, type=int, help="MySQL port (overrides parsed port; default 3306)")
+@click.option("--port", default=None, type=click.IntRange(0, 65535), help="MySQL port (overrides parsed port; default 3306)")
 @click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
 @click.option(
     "--probes",
@@ -3786,7 +3786,7 @@ def mysql(
 
 @cli.command()
 @click.option("--target", required=True, help="Target host, host:port, or mongodb:// URL (e.g. mongodb://localhost:27017)")
-@click.option("--port", default=None, type=int, help="MongoDB port (overrides parsed port; default 27017)")
+@click.option("--port", default=None, type=click.IntRange(0, 65535), help="MongoDB port (overrides parsed port; default 27017)")
 @click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
 @click.option(
     "--probes",
@@ -3851,7 +3851,7 @@ def mongodb(
 
 @cli.command()
 @click.option("--target", required=True, help="Target host, host:port, or postgresql:// URL (e.g. postgresql://localhost:5432)")
-@click.option("--port", default=None, type=int, help="PostgreSQL port (overrides parsed port; default 5432)")
+@click.option("--port", default=None, type=click.IntRange(0, 65535), help="PostgreSQL port (overrides parsed port; default 5432)")
 @click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
 @click.option(
     "--probes",
@@ -4116,7 +4116,7 @@ def stale(
 @click.option(
     "--port",
     default=None,
-    type=int,
+    type=click.IntRange(0, 65535),
     help="Target SSH port (default: 22, or extracted from target)",
 )
 @click.option("--timeout", default=10.0, type=float, help="Connection timeout in seconds")
@@ -4261,7 +4261,7 @@ def s3(
 )
 @click.option(
     "--port",
-    type=int,
+    type=click.IntRange(0, 65535),
     default=None,
     help="SMTP port (overrides any port parsed from --target; default 25).",
 )
@@ -4353,7 +4353,7 @@ def smtp(
 )
 @click.option(
     "--port",
-    type=int,
+    type=click.IntRange(0, 65535),
     default=None,
     help="FTP port (overrides any port parsed from --target; default 21).",
 )
@@ -4429,7 +4429,7 @@ def ftp(
 )
 @click.option(
     "--port",
-    type=int,
+    type=click.IntRange(0, 65535),
     default=None,
     help="NTP port (overrides any port parsed from --target; default 123).",
 )
@@ -4505,7 +4505,7 @@ def ntp(
 )
 @click.option(
     "--port",
-    type=int,
+    type=click.IntRange(0, 65535),
     default=None,
     help="SNMP port (overrides any port parsed from --target; default 161).",
 )
@@ -4583,7 +4583,7 @@ def snmp(
 )
 @click.option(
     "--port",
-    type=int,
+    type=click.IntRange(0, 65535),
     default=None,
     help="NetBIOS Name Service port (overrides any port parsed from --target; default 137).",
 )
@@ -4664,7 +4664,7 @@ def netbios(
 
 @cli.command()
 @click.option("--target", required=True, help="Target host, host:port, or smb:// URL (e.g. smb://localhost:445)")
-@click.option("--port", default=None, type=int, help="SMB port (overrides parsed port; default 445)")
+@click.option("--port", default=None, type=click.IntRange(0, 65535), help="SMB port (overrides parsed port; default 445)")
 @click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
 @click.option(
     "--smb2/--no-smb2",
@@ -4730,7 +4730,7 @@ def smb(
 
 @cli.command()
 @click.option("--target", required=True, help="Target host, host:port, or redis:// URL (e.g. redis://localhost:6379)")
-@click.option("--port", default=None, type=int, help="Redis port (overrides parsed port; default 6379)")
+@click.option("--port", default=None, type=click.IntRange(0, 65535), help="Redis port (overrides parsed port; default 6379)")
 @click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
 @click.option(
     "--probes",
@@ -4796,7 +4796,7 @@ def redis(
 
 @cli.command()
 @click.option("--target", required=True, help="Target host, host:port, or ldap:// URL (e.g. ldap://localhost:389)")
-@click.option("--port", default=None, type=int, help="LDAP port (overrides parsed port; default 389)")
+@click.option("--port", default=None, type=click.IntRange(0, 65535), help="LDAP port (overrides parsed port; default 389)")
 @click.option(
     "--ldap-version",
     "ldap_version",
@@ -4864,7 +4864,7 @@ def ldap(
 
 @cli.command()
 @click.option("--target", required=True, help="Target host, host:port, or mssql:// URL (e.g. mssql://localhost:1433)")
-@click.option("--port", default=None, type=int, help="MSSQL port (overrides parsed port; default 1433)")
+@click.option("--port", default=None, type=click.IntRange(0, 65535), help="MSSQL port (overrides parsed port; default 1433)")
 @click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
 @click.option(
     "--probes",
@@ -4929,7 +4929,7 @@ def mssql(
 
 @cli.command()
 @click.option("--target", required=True, help="Target host, host:port, or oracle:// URL (e.g. oracle://localhost:1521)")
-@click.option("--port", default=None, type=int, help="Oracle port (overrides parsed port; default 1521)")
+@click.option("--port", default=None, type=click.IntRange(0, 65535), help="Oracle port (overrides parsed port; default 1521)")
 @click.option("--timeout", default=3.0, type=float, help="Connection timeout in seconds")
 @click.option(
     "--probes",
