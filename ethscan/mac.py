@@ -86,7 +86,7 @@ def _fetch_mac_data(
         with urllib.request.urlopen(req, timeout=timeout) as response:
             raw = response.read().decode("utf-8")
         return {"mac": mac, "vendor": raw, "timestamp": time.time()}
-    except Exception:
+    except Exception:  # noqa: BLE001 - urlopen can raise any failure; swallow to None
         return None
 
 

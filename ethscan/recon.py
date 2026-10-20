@@ -95,7 +95,7 @@ def run_recon(
                 max_workers=max_workers,
                 resolver=resolver,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - module failures are heterogeneous
             results["notes"].append(f"subdomains module failed: {exc}")
 
     # DNS record enumeration
@@ -108,7 +108,7 @@ def run_recon(
                 server=dns_server,
                 timeout=timeout,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - module failures are heterogeneous
             results["notes"].append(f"dns module failed: {exc}")
 
     # WHOIS lookup
@@ -121,7 +121,7 @@ def run_recon(
                 port=whois_port,
                 timeout=timeout,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - module failures are heterogeneous
             results["notes"].append(f"whois module failed: {exc}")
 
     # Geolocation lookup
@@ -135,7 +135,7 @@ def run_recon(
                 offline_fallback=geo_offline_fallback,
                 api_url=geo_api_url,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - module failures are heterogeneous
             results["notes"].append(f"geo module failed: {exc}")
 
     # TCP traceroute
@@ -150,7 +150,7 @@ def run_recon(
                 probes_per_hop=trace_probes_per_hop,
             )
             results["modules_run"].append("trace")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - module failures are heterogeneous
             results["notes"].append(f"trace module failed: {exc}")
 
     return results

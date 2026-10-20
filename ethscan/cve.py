@@ -263,7 +263,7 @@ def run_cve(
                 try:
                     from ethscan.service import run_service as _rs
                     run_service = _rs
-                except Exception:
+                except ImportError:
                     import ethscan.service as _svc
                     run_service = _svc.run_service
 
@@ -283,7 +283,7 @@ def run_cve(
                 if service_result.get("notes"):
                     for sn in service_result["notes"]:
                         notes.append(f"service: {sn}")
-            except Exception as exc:
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
                 notes.append(f"Service detection failed: {exc}")
                 services = {"target": target, "services": []}
 
@@ -347,7 +347,7 @@ def run_cve(
                                 "offline_fallback": bool(cve_data.get("offline_fallback")),
                             }
                         )
-            except Exception:
+            except (OSError, ValueError, json.JSONDecodeError):
                 pass
 
         if severity:

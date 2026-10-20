@@ -169,7 +169,7 @@ def _send_recv(
     if connector is not None:
         try:
             return connector(host, port, request, timeout)
-        except Exception as exc:  # pragma: no cover
+        except Exception as exc:  # noqa: BLE001 - connector is a test seam; doubles raise any type
             return None, f"connector error: {exc}"
 
     try:
@@ -423,13 +423,15 @@ def run_oracle(
                         error = refuse_data.get("error")
                         version_data = refuse_data
                         # We don't set version from refuse
+                    elif pkt_type is None:
+                        error = "Failed to parse packet type"
                     else:
                         error = f"Unexpected packet type 0x{pkt_type:02x}"
                 else:
                     error = "Response too short to determine packet type"
             else:
                 error = error or "No response from server"
-        except Exception as exc:  # pragma: no cover
+        except Exception as exc:  # noqa: BLE001 - connector doubles may raise any type in tests
             error = str(exc)
 
     findings = _assess_version(version_data)

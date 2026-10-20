@@ -102,7 +102,7 @@ def _fetch_geo_data(ip: str, timeout: float = DEFAULT_TIMEOUT) -> dict | None:
             data["timestamp"] = time.time()
             return data
         return None
-    except Exception:
+    except Exception:  # noqa: BLE001 - urlopen/JSON can raise any failure; swallow to None
         return None
 
 
@@ -231,7 +231,7 @@ def run_geo(
                 if trace_result.get("notes"):
                     for trace_note in trace_result["notes"]:
                         notes.append(f"traceroute: {trace_note}")
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - traceroute module failures are heterogeneous
                 notes.append(f"recursive hop geolocation failed: {exc}")
 
         result = {

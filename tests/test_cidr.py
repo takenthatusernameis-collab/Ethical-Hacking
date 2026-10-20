@@ -646,7 +646,7 @@ def test_cidr_subtract_exclude_exception_path() -> None:
     m = [ipaddress.ip_network("192.168.1.0/28", strict=False)]
     s = [ipaddress.ip_network("192.168.1.5/32", strict=False)]
     # Patch address_exclude to raise
-    with patch.object(ipaddress.IPv4Network, 'address_exclude', side_effect=Exception("boom")):
+    with patch.object(ipaddress.IPv4Network, 'address_exclude', side_effect=ValueError("boom")):
         res = _subtract_networks(m, s)
         # When exception occurs, diffs becomes empty - so nothing added from this r_net?
         # But r_net overlapped s_net; exception means we get diffs=[] so we don't extend - remaining keeps that r_net? Wait look: after exception, diffs=[] (line 127), then if diffs: extend. So no extension; remaining becomes new_remaining which had items added only if no overlap OR if diffs non-empty. But in this case, r_net overlaps s_net and exclude failed -> diffs empty, so we don't append diffs; new_remaining remains empty of diffs. Also we didn't add r_net itself - look: if no overlap, add r_net. If overlaps, try exclude; if exclude gives results, extend them. If exclude fails or gives no results, we add nothing - meaning the overlapped portion is consumed? That depends - but this hits the exception path (126-127) and also the case where diffs is empty (line 122-123). Let us trace.

@@ -87,7 +87,7 @@ def _fetch_cert_data(
         if not isinstance(data, list):
             return None
         return {"domain": domain, "entries": data, "count": len(data)}
-    except Exception:
+    except Exception:  # noqa: BLE001 - urlopen/JSON can raise any failure; swallow to None
         return None
 
 

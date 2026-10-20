@@ -54,7 +54,7 @@ def _fmt_rtt(rtt_ms: float | None) -> str:
 def _probe_once(dst_ip: str, port: int, ttl: int, timeout: float) -> dict[str, Any]:
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - socket() can raise any OSError subclass
         return {"hop_ip": None, "rtt_ms": None, "reached": False, "error": str(e)}
 
     try:
@@ -94,7 +94,7 @@ def _trace_single(
 
     try:
         dst_ip = socket.gethostbyname(host)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - gethostbyname can raise any OSError subclass
         return {
             "target": host,
             "host": host,

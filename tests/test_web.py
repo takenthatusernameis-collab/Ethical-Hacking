@@ -16,6 +16,15 @@ from ethscan.web import (
     run_web_checks,
 )
 
+
+class _BadHeaderError(Exception):
+    """Test-only header access failure raised by fake HTTPError doubles."""
+
+
+class _BadCertError(Exception):
+    """Test-only cert access failure raised by fake SSock doubles."""
+
+
 # ---------------------------------------------------------------------------
 # _parse_url
 # ---------------------------------------------------------------------------
@@ -676,7 +685,7 @@ def test_fetch_headers_http_error_with_bad_headers() -> None:
 
         @property
         def headers(self):  # type: ignore[override]
-            raise Exception('bad')
+            raise _BadHeaderError('bad')
 
     with patch('urllib.request.urlopen', side_effect=BadErr()):
         result = fetch_headers('http://x')
@@ -852,7 +861,7 @@ def test_check_ssl_cert_bin_raises_fallback() -> None:
     class FakeSSock:
         def getpeercert(self, binary_form=False):
             if binary_form:
-                raise Exception('boom')
+                raise _BadCertError('boom')
             return {
                 'subject': ((('commonName', 'ok.com'),),),
                 'issuer': ((('commonName', 'ca'),),),

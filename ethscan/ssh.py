@@ -327,7 +327,9 @@ def _get_host_key_info_paramiko(host: str, port: int, timeout: float) -> dict[st
             "key_type": key_type,
             "key_bits": host_key.get_bits() if hasattr(host_key, "get_bits") else None,
         }
-    except Exception:
+    except OSError:
+        return None
+    except Exception:  # noqa: BLE001 - paramiko raises its own SSHException type
         return None
 
 

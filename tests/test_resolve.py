@@ -13,6 +13,10 @@ from ethscan.resolve import (
 )
 
 
+class _ResolveError(Exception):
+    """Test-only resolver failure raised by fake resolver doubles."""
+
+
 def test_default_record_types() -> None:
     assert DEFAULT_RECORD_TYPES == ["A", "AAAA", "CNAME"]
     assert DEFAULT_TIMEOUT == 2.0
@@ -468,7 +472,7 @@ def test_resolve_cname_records_dnspython_exception() -> None:
             self.lifetime = None
 
         def resolve(self, domain, rtype):
-            raise Exception("fail")
+            raise _ResolveError("fail")
 
     class FakeDns:
         exception = type("exception", (), {"DNSException": Exception})
@@ -670,7 +674,7 @@ def test_resolve_ptr_records_dnspython_exception() -> None:
             self.nameservers = None
 
         def resolve(self, rev_name, rtype):
-            raise Exception("fail")
+            raise _ResolveError("fail")
 
     class FakeReversename:
         @staticmethod
@@ -765,7 +769,7 @@ def test_resolve_with_dnspython_exception() -> None:
             self.nameservers = None
 
         def resolve(self, domain, rtype):
-            raise Exception("fail")
+            raise _ResolveError("fail")
 
     class FakeDns:
         exception = type("exception", (), {"DNSException": Exception})
@@ -829,7 +833,7 @@ def test_resolve_dnspython_available(monkeypatch):
     # simulate dnspython available
     class DummyResolver:
         def query(self, *a, **k):
-            raise Exception("test")
+            raise _ResolveError("test")
 
     dummy_dns = type('M', (), {})()
     dummy_dns.resolver = type('R', (), {'Resolver': DummyResolver, 'query': lambda *a, **k: []})()

@@ -116,7 +116,7 @@ def _attempt_ftp(
         ftp.connect(host, port, timeout=timeout)
         ftp.login(username, password)
         result["success"] = True
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - FTP connect/login raise OSError/ftplib.Error/UnicodeError(IDNA)
         result["error"] = str(exc)
     finally:
         with contextlib.suppress(Exception):  # pragma: no cover - defensive
@@ -171,7 +171,7 @@ def _attempt_ssh(
             allow_agent=False,
         )
         result["success"] = True
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - paramiko raises its own SSHException; test doubles raise any type
         result["error"] = str(exc)
     finally:
         with contextlib.suppress(Exception):  # pragma: no cover - defensive

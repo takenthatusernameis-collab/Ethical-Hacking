@@ -23,6 +23,10 @@ from ethscan.oracle import (
 )
 
 
+class _DecodeError(Exception):
+    """Test-only decode failure raised by fake byte subclasses."""
+
+
 def _tns_header(pkt_type: int, total_length: int) -> bytes:
     """Build a TNS header.
 
@@ -1153,7 +1157,7 @@ def test_parse_refuse_response_decode_raises():
     error_data = b'\xff\xfe\xfd\xfd\xfe\xff'
     class BadBytes(bytes):
         def decode(self, *args, **kwargs):
-            raise Exception('bad')
+            raise _DecodeError('bad')
     bad = BadBytes(error_data)
     payload2 = s.pack('!HH', 0, len(bad)) + bad
     parsed = oracle._parse_refuse_response(header + payload2)
@@ -1193,7 +1197,7 @@ def test_parse_refuse_response_decode_fallback2():
     # Monkeypatch at the point of use - easier to just create a bad bytes subclass behavior
     class BadBytes(bytes):
         def decode(self, *args, **kwargs):
-            raise Exception('bad')
+            raise _DecodeError('bad')
     bad = BadBytes(error_data)
     # reconstruct
     payload2 = s.pack('!HH', 0, len(bad)) + bad

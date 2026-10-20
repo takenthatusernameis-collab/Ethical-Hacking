@@ -89,7 +89,7 @@ def fetch_headers(target: str, timeout: float = 5.0) -> dict[str, str]:
         # HTTPError still carries headers.
         try:
             return {key.lower(): value for key, value in exc.headers.items()}
-        except Exception:
+        except Exception:  # noqa: BLE001 - HTTPError.headers may raise arbitrarily
             return {}
     except (urllib.error.URLError, OSError, ValueError):
         return {}
@@ -185,14 +185,14 @@ def check_ssl_configuration(host: str, port: int = 443, timeout: float = 5.0) ->
                             finally:
                                 with contextlib.suppress(Exception):
                                     os.unlink(cert_path)
-                        except Exception:
+                        except Exception:  # noqa: BLE001 - DER/PEM decode helpers may raise arbitrarily
                             cert = ssock.getpeercert()
                     else:
                         cert = ssock.getpeercert()
-                except Exception:
+                except Exception:  # noqa: BLE001 - getpeercert may raise arbitrarily
                     try:
                         cert = ssock.getpeercert()
-                    except Exception:
+                    except Exception:  # noqa: BLE001 - getpeercert may raise arbitrarily
                         cert = None
                 result["chain_length"] = len(ssock.get_verified_chain()) if ssock.get_verified_chain() else 0
                 if cert:
@@ -217,7 +217,7 @@ def check_ssl_configuration(host: str, port: int = 443, timeout: float = 5.0) ->
                             result["valid"] = result["days_remaining"] > 0
                         except (ValueError, TypeError):
                             result["valid"] = False
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - TLS/connection failures are heterogeneous
         result["error"] = str(exc)
     return result
 

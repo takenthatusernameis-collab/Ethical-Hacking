@@ -20,6 +20,10 @@ from ethscan.brute import (
 )
 
 
+class _LoginFailed(Exception):
+    """Test-only login failure raised by fake FTP/SSH doubles."""
+
+
 def test_defaults() -> None:
     assert DEFAULT_PROTOCOL == "ftp"
     assert DEFAULT_FTP_PORT == 21
@@ -56,7 +60,7 @@ def test_attempt_ftp_success(monkeypatch) -> None:
             if username == "admin" and password == "secret":
                 self.logged_in = True
                 return "230 Login successful"
-            raise Exception("530 Login incorrect")
+            raise _LoginFailed("530 Login incorrect")
 
         def close(self):
             self.logged_in = False
@@ -76,7 +80,7 @@ def test_attempt_ftp_failure(monkeypatch) -> None:
             pass
 
         def login(self, username, password):
-            raise Exception("530 Login incorrect")
+            raise _LoginFailed("530 Login incorrect")
 
         def close(self):
             pass
@@ -124,7 +128,7 @@ def test_attempt_ssh_with_paramiko(monkeypatch) -> None:
 
         def connect(self, host, port=None, username=None, password=None, **kwargs):
             if password != "secret":
-                raise Exception("Authentication failed")
+                raise _LoginFailed("Authentication failed")
 
         def close(self):
             self.closed = True
@@ -147,7 +151,7 @@ def test_attempt_ssh_with_paramiko_failure(monkeypatch) -> None:
             pass
 
         def connect(self, host, port=None, username=None, password=None, **kwargs):
-            raise Exception("Authentication failed")
+            raise _LoginFailed("Authentication failed")
 
         def close(self):
             pass
@@ -501,7 +505,7 @@ def test_paramiko_import_error(monkeypatch) -> None:
     sys.modules.pop("ethscan.brute", None)
 
     try:
-        import ethscan.brute as brute
+        import ethscan.brute as brute  # noqa: PLR0402 - reload() needs the module object
         reload(brute)
         assert brute.PARAMIKO_AVAILABLE is False
     finally:
@@ -525,7 +529,7 @@ def test_paramiko_import_success(monkeypatch):
     sys.modules.pop("ethscan.brute", None)
 
     try:
-        import ethscan.brute as brute
+        import ethscan.brute as brute  # noqa: PLR0402 - reload() needs the module object
         reload(brute)
         assert brute.PARAMIKO_AVAILABLE is True
         assert brute.paramiko is fake_paramiko
