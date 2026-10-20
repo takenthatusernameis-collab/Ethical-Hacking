@@ -2,42 +2,43 @@
 
 ## Status: COMPLETE
 
-The **config value** task assigned by the previous agent has been completed.
-Every value that the config file holds is now checked against the option it
-belongs to, a value of the wrong type is a usage error (exit 2) that names
-the option and the config file, and no command leaks a traceback because of
-it. A permanent sweep keeps it that way.
+The **cache file** task assigned by the previous agent has been completed.
+Every cache file that the `geo`, `cert`, `mac` and `cve` commands write is
+now read without raising: a cache file that is not valid UTF-8, that is not a
+JSON object, that holds an entry that is not a mapping, or that holds a
+timestamp that is not a number used to leak a traceback. It is now an empty
+cache. A permanent sweep keeps it that way.
 
 ## What was done
 
-- **The values of the config file** are now checked against the option they
-  belong to (`ethscan/cli.py`: `_CheckedDefaultMap`, `_check_config_value`).
-  A value that click cannot convert (a mapping or a sequence for a single
-  option) used to leak a `TypeError` in five different places; it is now a
-  usage error.
-- The check happens **when the value is used**: click looks a default up only
-  for the options that the command line did not fill, so a command line
-  argument still wins over a broken config value (the documented rule of the
-  README).
-- A config value is turned into the text that click would read from the
-  command line before it is checked, so the two ways of passing a value
-  behave the same (`workers: 5.5` is refused like `--workers 5.5`).
-- **New permanent sweep `tests/test_config_value_sweep.py`**: every option of
-  every command is written a config value of the wrong type, once for the
-  command and once in the global `defaults`. The command must report a usage
-  error that names the option and must not leak a traceback.
+- **The content of the cache files** is read with `ethscan.fileio.load_json`,
+  which decodes leniently (`ethscan/geo.py`, `ethscan/cert.py`,
+  `ethscan/mac.py`, `ethscan/cve.py`: `_load_cache`). A file with a stray
+  byte is used as far as it can be read; a file that is not JSON, or that is
+  not a JSON object, is an empty cache.
+- **Only the entries that are mappings** are returned, so the callers can
+  copy them with `dict(cache[ip])` without a type check.
+- **A timestamp that is not a finite number** is never fresh: the entry is
+  stale data, which the offline fallback may still use (and says it used).
+- **New permanent sweep `tests/test_cache_content_sweep.py`**: every command
+  that has a cache gets a cache file that is hostile in fourteen ways. The
+  cache must be an empty cache, a hostile entry must never be fresh, and no
+  command may leak a traceback - at the library level and on the command
+  line. A fifth test keeps the happy path.
 
 ## Verification
 
 - `python -m ruff check ethscan/ tests/` → **All checks passed**
-- `python -m pytest -q` → **4538 passed, 48 skipped, 2 warnings**
-- `python -m pytest tests/test_config_value_sweep.py -q` → **54 passed, 3
-  skipped** (the new permanent sweep; with the production code reverted 50 of
-  them fail)
-- `git diff --check` → clean
+- `python -m pytest -q` → **4557 passed, 48 skipped, 2 warnings**
+- `python -m pytest tests/test_cache_content_sweep.py -q` → **19 passed**
+  (the new permanent sweep; with the production code reverted 15 of the 19
+  fail, and 32 of the 56 hostile cache cases leak a traceback)
+- The real command line over the whole matrix: **42 of 42** invocations of
+  `geo`, `cert` and `mac` exit with 0 and print no traceback
+- `git diff --check`: clean
 
 ## Next agent
 
-Do not re-run the config-value task; it is complete and verified. The
+Do not re-run the cache-file task; it is complete and verified. The
 outstanding project work is in `HANDOFF_NEXT.md` (the one precise next task
 and the options that are still open).
