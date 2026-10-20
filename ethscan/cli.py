@@ -1058,7 +1058,7 @@ def subdomains(
     type=click.IntRange(min=1),
     help="Maximum concurrent DNS resolution workers",
 )
-@click.option("--http-timeout", default=5.0, type=float, help="HTTP request timeout for fingerprinting in seconds")
+@click.option("--http-timeout", default=5.0, type=click.FloatRange(min=0.001), help="HTTP request timeout for fingerprinting in seconds")
 @click.option(
     "--output-format",
     "output_fmt",
@@ -2767,7 +2767,7 @@ def cert(
     "--service-timeout",
     "service_timeout",
     default=3.0,
-    type=float,
+    type=click.FloatRange(min=0.001),
     help="Connection timeout in seconds for live service detection (default: 3.0)",
 )
 @click.option(
