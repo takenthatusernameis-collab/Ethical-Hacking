@@ -71,6 +71,17 @@ def test_resolve_subdomain_with_resolver_unavailable(monkeypatch) -> None:
     assert ip is None
 
 
+def test_resolve_subdomain_with_a_label_that_holds_a_null_byte() -> None:
+    """A label that cannot be resolved is a failed lookup, not a crash.
+
+    ``socket.gethostbyname`` refuses a name that holds a null byte with a
+    ``TypeError``, which is not an ``OSError``.
+    """
+    subdomain, ip = resolve_subdomain("a\x00b", "example.com", timeout=1.0)
+    assert subdomain == "a\x00b"
+    assert ip is None
+
+
 def test_run_subdomains_offline_target() -> None:
     results = run_subdomains(
         "nonexistent.invalid.domain.tld",

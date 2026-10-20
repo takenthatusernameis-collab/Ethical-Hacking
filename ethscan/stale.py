@@ -6,6 +6,7 @@ import io
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from ethscan.fileio import read_lines
 from ethscan.target import parse_url
 
 DEFAULT_TIMEOUT = 2.0
@@ -37,12 +38,7 @@ def load_domains_from_file(path: str) -> list[str]:
     Returns:
         List of domain names (lines stripped, empty lines and comments skipped).
     """
-    with open(path, "r", encoding="utf-8") as handle:
-        return [
-            line.strip()
-            for line in handle
-            if line.strip() and not line.startswith("#")
-        ]
+    return read_lines(path)
 
 
 def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str]:

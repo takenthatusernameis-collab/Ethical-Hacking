@@ -6,6 +6,7 @@ import io
 import json
 from typing import Any
 
+from ethscan.fileio import read_lines
 from ethscan.passwords import audit_passwords
 from ethscan.scanner import (
     get_profile_defaults,
@@ -71,8 +72,7 @@ def _resolve_ports_and_defaults(
 def _load_passwords(audit_file: str | None) -> list[str]:
     if not audit_file:
         return []
-    with open(audit_file, "r", encoding="utf-8") as handle:
-        return [line.strip() for line in handle if line.strip()]
+    return read_lines(audit_file, skip_comments=False)
 
 
 VALID_SORT_KEYS = ("score", "verdict", "length")

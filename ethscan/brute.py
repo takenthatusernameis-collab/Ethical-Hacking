@@ -8,6 +8,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from ftplib import FTP
 
+from ethscan.fileio import read_lines
 from ethscan.target import parse_url
 
 try:
@@ -55,12 +56,7 @@ def load_wordlist(path: str) -> list[str]:
     Returns:
         List of entries (lines stripped, empty lines and comments skipped).
     """
-    with open(path, "r", encoding="utf-8") as handle:
-        return [
-            line.strip()
-            for line in handle
-            if line.strip() and not line.startswith("#")
-        ]
+    return read_lines(path)
 
 
 def _normalize_host(target: str) -> str:

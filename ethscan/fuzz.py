@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import http.client
 import io
 import json
 import urllib.error
@@ -9,6 +10,7 @@ import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from ethscan.fileio import read_lines
 from ethscan.target import check_target_host, parse_url, strip_userinfo, url_port
 
 DEFAULT_WORDLIST = [
@@ -42,8 +44,7 @@ def load_wordlist(path: str) -> list[str]:
     Returns:
         List of paths (lines stripped, empty lines skipped).
     """
-    with open(path, "r", encoding="utf-8") as handle:
-        return [line.strip() for line in handle if line.strip() and not line.startswith("#")]
+    return read_lines(path)
 
 
 def _normalize_base_url(target: str) -> str:
@@ -90,6 +91,12 @@ def fuzz_path(base_url: str, path: str, timeout: float = 5.0) -> dict[str, objec
             return {"path": path, "status_code": response.status, "error": None}
     except urllib.error.HTTPError as exc:
         return {"path": path, "status_code": exc.code, "error": None}
+    except http.client.HTTPException as exc:
+        # ``http.client.InvalidURL`` (raised for a path that holds a space or a
+        # control character) derives from ``HTTPException`` and not from
+        # ``ValueError``, so it escapes the ``except`` below. A path of a
+        # wordlist that cannot be requested is a failed probe, not a crash.
+        return {"path": path, "status_code": None, "error": str(exc)}
     except (urllib.error.URLError, OSError, ValueError) as exc:
         return {"path": path, "status_code": None, "error": str(exc)}
 

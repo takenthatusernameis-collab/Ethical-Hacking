@@ -11,6 +11,8 @@ import hashlib
 import hmac
 import io
 
+from ethscan.fileio import read_lines
+
 # Algorithms supported natively by hashlib on this platform.
 # Maps canonical key -> hashlib algorithm name.
 _HASHLIB_ALGORITHMS = {
@@ -275,8 +277,7 @@ def load_passwords_from_file(path: str) -> list[str]:
     Returns:
         List of passwords (lines stripped, empty lines skipped).
     """
-    with open(path, "r", encoding="utf-8") as handle:
-        return [line.strip() for line in handle if line.strip()]
+    return read_lines(path, skip_comments=False)
 
 
 # ---------------------------------------------------------------------------

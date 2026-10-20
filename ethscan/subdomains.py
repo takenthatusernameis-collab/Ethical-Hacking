@@ -6,6 +6,7 @@ import io
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from ethscan.fileio import read_lines
 from ethscan.target import parse_url
 
 try:
@@ -58,12 +59,7 @@ def load_subdomain_wordlist(path: str) -> list[str]:
     Returns:
         List of subdomain names (lines stripped, empty lines skipped).
     """
-    with open(path, "r", encoding="utf-8") as handle:
-        return [
-            line.strip()
-            for line in handle
-            if line.strip() and not line.startswith("#")
-        ]
+    return read_lines(path)
 
 
 def _normalize_domain(target: str) -> str:
@@ -105,13 +101,16 @@ def resolve_subdomain(
             dns_resolver.nameservers = [resolver]
             answers = dns_resolver.resolve(hostname, "A")
             return subdomain, str(answers[0])
-        except (dns.exception.DNSException, OSError, ValueError):
+        except (dns.exception.DNSException, OSError, ValueError, TypeError):
             return subdomain, None
     try:
         socket.setdefaulttimeout(timeout)
         ip = socket.gethostbyname(hostname)
         return subdomain, ip
-    except (socket.timeout, socket.gaierror, OSError, ValueError):
+    except (socket.timeout, socket.gaierror, OSError, ValueError, TypeError):
+        # A label that holds a null byte (a wordlist that is not text) makes
+        # ``gethostbyname`` raise a ``TypeError``: the label cannot be
+        # resolved, it is not a crash.
         return subdomain, None
 
 

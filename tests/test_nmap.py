@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from ethscan.nmap import (
+    NmapParseError,
     _escape,
     _extract_text,
     _finding_detail,
@@ -412,6 +413,41 @@ def test_finding_detail_protocol_kind():
     }
     detail = _finding_detail(finding)
     assert detail == "TLSv1.0"
+
+
+def test_parse_port_skips_a_port_id_that_is_not_a_number():
+    """A port whose id is not a number is skipped, it is not a crash."""
+    import xml.etree.ElementTree as ET
+    port_elem = ET.Element("port", {"portid": "not-a-number", "protocol": "tcp"})
+    assert _parse_port(port_elem) is None
+
+
+def test_parse_port_skips_a_port_id_out_of_range():
+    """A port whose id is out of range is skipped, it is not a crash."""
+    import xml.etree.ElementTree as ET
+    port_elem = ET.Element("port", {"portid": "70000", "protocol": "tcp"})
+    assert _parse_port(port_elem) is None
+
+
+def test_parse_nmap_xml_raises_on_content_that_is_not_xml():
+    """Content that is not XML is reported, it is not a crash."""
+    with pytest.raises(NmapParseError):
+        parse_nmap_xml("this is not xml at all")
+
+
+def test_run_nmap_skips_a_port_with_an_invalid_id(tmp_path):
+    """A port with an invalid id does not abort the report of the other ports."""
+    path = tmp_path / "scan.xml"
+    path.write_text(
+        '<nmaprun><host><address addr="192.168.1.1" addrtype="ipv4"/><ports>'
+        '<port protocol="tcp" portid="not-a-number"><state state="open"/></port>'
+        '<port protocol="tcp" portid="22"><state state="open"/>'
+        '<service name="ssh" product="OpenSSH" version="7.2"/></port>'
+        "</ports></host></nmaprun>"
+    )
+    result = run_nmap(str(path))
+    assert result["total_ports_scanned"] == 1
+    assert result["services"][0]["port"] == 22
 
 
 def test_finding_detail_cipher_kind():

@@ -67,6 +67,24 @@ def test_load_wordlist_skips_empty_and_comments(tmp_path) -> None:
     assert paths == []
 
 
+def test_fuzz_path_reports_a_path_with_a_space_as_a_failed_probe() -> None:
+    """A path that ``http.client`` refuses is a failed probe, not a crash.
+
+    ``http.client.InvalidURL`` derives from ``HTTPException`` and not from
+    ``ValueError``, so it used to escape the ``except`` of ``fuzz_path``.
+    """
+    result = fuzz_path("http://127.0.0.1", "/a b", timeout=1.0)
+    assert result["status_code"] is None
+    assert result["error"]
+    assert result["path"] == "/a b"
+
+
+def test_fuzz_path_reports_a_path_with_a_null_byte_as_a_failed_probe() -> None:
+    result = fuzz_path("http://127.0.0.1", "/a\x00b", timeout=1.0)
+    assert result["status_code"] is None
+    assert result["error"]
+
+
 def test_default_wordlist_not_empty() -> None:
     assert len(DEFAULT_WORDLIST) > 0
     assert "/admin" in DEFAULT_WORDLIST

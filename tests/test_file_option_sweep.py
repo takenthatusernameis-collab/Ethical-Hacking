@@ -41,19 +41,15 @@ def _file_params(cmd: Any) -> list:
     for p in cmd.params:
         t = type(p.type)
         tname = getattr(t, "__name__", str(t))
-        if "Path" in tname:
-            if p.opts:
-                params.append(p)
+        if "Path" in tname and p.opts:
+            params.append(p)
     return params
 
 
 def _build_args(name: str, param: Any, value: str) -> list[str]:
     args = [name, param.opts[0], value]
     # Add target if command needs it and param isn't target
-    try:
-        cmd = cli.cli.commands[name]
-    except Exception:
-        cmd = None
+    cmd = cli.cli.commands.get(name)
     if cmd:
         has_target = any(q.name == "target" for q in cmd.params)
         if has_target and param.name != "target":
@@ -65,9 +61,8 @@ def _build_args(name: str, param: Any, value: str) -> list[str]:
 def test_every_file_option_refuses_hostile_values(name: str) -> None:
     if name in SLOW_COMMANDS:
         pytest.skip(f"{name} is excluded from the sweep")
-    try:
-        cmd = cli.cli.commands[name]
-    except Exception:
+    cmd = cli.cli.commands.get(name)
+    if cmd is None:
         return
     params = _file_params(cmd)
     if not params:

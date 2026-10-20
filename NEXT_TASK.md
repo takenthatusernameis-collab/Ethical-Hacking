@@ -2,80 +2,52 @@
 
 ## Status: COMPLETE
 
-The ruff-error-reduction task assigned by the previous agent has been
-completed. All 48 pre-existing `ruff` errors in `ethscan/` and `tests/`
-have been eliminated. `ruff check ethscan/ tests/` now reports **All checks
-passed**.
+The hostile **file content** task assigned by the previous agent has been
+completed. Every input file of every command (a wordlist, a credential list,
+a list of domains, a list of CIDR networks, a JSON report of another
+command, an Nmap XML file) is now read without leaking a traceback, and the
+standard input of the commands that read one is read leniently as well.
 
 ## What was done
 
-- `pyproject.toml` ruff config: `select = ["BLE001", "TRY002", "PLR0402"]`.
-  2 auto-fixable `PLR0402` errors in `ethscan/cert.py` and `ethscan/cve.py`
-  were fixed with `--fix`.
-- 46 remaining errors were fixed manually across 20 files (16 production,
-  4 test files).
-
-### Production (`ethscan/`)
-
-- `ethscan/brute.py`: added `import ftplib` and narrowed the FTP
-  `connect/login` catch to `ftplib.all_errors`; the SSH attempt catch is a
-  documented broad `except Exception` (paramiko raises its own
-  `SSHException` and test doubles raise arbitrary types).
-- `ethscan/cve.py`: narrowed the `ethscan.service` import try/except to
-  `ImportError`; the service-detection `except` to
-  `(OSError, ValueError, json.JSONDecodeError)`; the JSON parse `except`
-  to `(OSError, ValueError, json.JSONDecodeError)`.
-- `ethscan/cert.py`, `ethscan/geo.py`, `ethscan/mac.py`: narrowed the
-  `_fetch_*` urlopen catch to a documented broad `except Exception`
-  (urlopen can raise `urllib.error.URLError`, `OSError`, `ValueError`,
-  `UnicodeError`; test doubles inject arbitrary `Exception`).
-- `ethscan/cidr.py`: narrowed `address_exclude` catch to
-  `(ValueError, TypeError)`.
-- `ethscan/mongodb.py`, `ethscan/mssql.py`, `ethscan/mysql.py`,
-  `ethscan/oracle.py`, `ethscan/postgresql.py`: narrowed the connector
-  helper `_send_recv` catch to a documented broad `except Exception`
-  (connector is a test seam; doubles raise arbitrary types such as
-  `RuntimeError`). The outer `run_*` probe catches are documented broad
-  `except Exception` for the same reason.
-- `ethscan/oracle.py`: added an explicit `elif pkt_type is None` branch so
-  the `else` branch only formats a real packet type (avoids a
-  `NoneType.__format__` leak under hostile input).
-- `ethscan/ssh.py`: narrowed `_get_host_key_info_paramiko` to
-  `except OSError` plus a documented broad `except Exception` for
-  paramiko's own exception type.
-- `ethscan/recon.py`: 5 module-failure catches → documented broad
-  `except Exception` (module failures are heterogeneous).
-- `ethscan/trace.py`: 2 socket catches → documented broad `except
-  Exception` (socket/gethostbyname can raise any OSError subclass).
-- `ethscan/web.py`: 5 SSL/cert catches → documented broad `except
-  Exception` (DER/PEM decode helpers may raise arbitrarily).
-
-### Tests (`tests/`)
-
-- `tests/test_brute.py`: introduced a test-only `_LoginFailed` exception
-  and replaced 4 bare `raise Exception(...)` in the FTP/SSH doubles.
-- `tests/test_oracle.py`: introduced `_DecodeError` and replaced 2 bare
-  `raise Exception('bad')` in the fake `BadBytes` subclasses.
-- `tests/test_resolve.py`: introduced `_ResolveError` and replaced 4 bare
-  `raise Exception(...)` in the fake resolver doubles.
-- `tests/test_web.py`: introduced `_BadHeaderError` and `_BadCertError`
-  and replaced 2 bare `raise Exception(...)` in the fake HTTPError/SSock
-  doubles.
-- `tests/test_cidr.py`: changed the `address_exclude` patch
-  `side_effect` from `Exception("boom")` to `ValueError("boom")`.
+- **New module `ethscan/fileio.py`**: the shared readers of the input files
+  (`read_text`, `read_lines`, `load_json`, `is_utf8`). The text readers
+  decode leniently (the bytes that are not valid UTF-8 are replaced), so a
+  file with a stray byte is used as far as it can be read.
+- **Every text loader** uses the shared reader: `brute`, `fuzz`, `hash`,
+  `stale`, `subdomains`, `report`, `config`, `audit --file`,
+  `radix --cidr-file`.
+- **The standard input** of `audit`, `hash` and `jwt` is read leniently
+  (`ethscan/cli.py`: `_read_stdin_text`).
+- **The credential files** (`--file`, `--user-file`, `--pass-file`,
+  `--audit-file`) are refused when they are not valid UTF-8: a mangled
+  password would otherwise be hashed silently (`ethscan/cli.py`:
+  `_require_utf8`).
+- **The JSON files** (`--services-file`, `--tls-file`, `--ssl-file`,
+  `--banners-file`) report a file that is not JSON, or that does not hold an
+  object, as a usage error (**exit 2**) that names the option
+  (`ethscan/cli.py`: `_load_json_file`).
+- **The Nmap XML file** (`--input-file`) reports a file that is not XML as a
+  usage error, and a port whose id is not a number is skipped instead of
+  aborting the report (`ethscan/nmap.py`: `NmapParseError`).
+- **The probes** survive a hostile entry: `http.client.InvalidURL` is a
+  failed probe in `fuzz`/`urlcheck` and a null byte in a label is an
+  unresolved label in `subdomains`.
+- The 3 ruff errors that the previous session left in
+  `tests/test_file_option_sweep.py` are fixed.
 
 ## Verification
 
 - `python -m ruff check ethscan/ tests/` → **All checks passed**
-- `python -m pytest -q` → **4389 passed, 7 skipped, 2 warnings**
-- `python -m pytest tests/test_option_sweep.py -q` → **47 passed, 6
-  skipped** (hostile-value sweep still clean, including the brute
-  `--target` IDNA case that originally surfaced as a `UnicodeError`
-  leak).
+- `python -m pytest -q` → **4484 passed, 45 skipped, 2 warnings**
+- `python -m pytest tests/test_file_content_sweep.py -q` → **18 passed, 35
+  skipped** (the new permanent sweep; before the fix all 18 failed)
+- `python -m pytest tests/test_fileio.py tests/test_nmap.py tests/test_fuzz.py
+  tests/test_subdomains.py -q` → **107 passed**
+- `git diff --check` → clean
 
 ## Next agent
 
-No further work is required on this task. If the next agent wants to
-continue, the outstanding project work is in `HANDOFF_NEXT.md` (the
-unrelated `service`/`s3`/`osdetect` hostile-sweep work). Do not re-run
-the ruff-error-reduction task; it is complete and verified.
+Do not re-run the file-content task; it is complete and verified. The
+outstanding project work is in `HANDOFF_NEXT.md` (the one precise next task
+and the options that are still open).

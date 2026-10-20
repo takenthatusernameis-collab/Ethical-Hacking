@@ -66,6 +66,7 @@ from ethscan.dnssec import (
     format_dnssec_report_markdown,
     run_dnssec,
 )
+from ethscan.fileio import is_utf8, load_json, read_lines
 from ethscan.ftp import (
     format_ftp_report_csv,
     format_ftp_report_json,
@@ -154,6 +155,7 @@ from ethscan.netbios import (
     run_netbios,
 )
 from ethscan.nmap import (
+    NmapParseError,
     format_nmap_report_csv,
     format_nmap_report_json,
     format_nmap_report_markdown,
@@ -452,6 +454,64 @@ def _invalid_target(exc: ValueError) -> click.BadParameter:
     return click.BadParameter(str(exc), param_hint="'--target'")
 
 
+def _read_stdin_text() -> str:
+    """Read the standard input leniently.
+
+    The bytes that are not valid UTF-8 are replaced instead of raising a
+    ``UnicodeDecodeError``, which would reach the user as a raw traceback.
+    """
+    return click.get_text_stream("stdin", errors="replace").read()
+
+
+def _require_utf8(path: str, param_hint: str) -> None:
+    """Refuse a credential file that is not valid UTF-8.
+
+    A credential file that holds bytes which are not valid UTF-8 cannot be
+    read without changing the credentials it holds, so the command that takes
+    one refuses the file instead of auditing or hashing a mangled password.
+
+    Args:
+        path: The path of the file.
+        param_hint: The option that names the file, e.g. ``"'--file'"``.
+
+    Raises:
+        click.BadParameter: If the file is not valid UTF-8.
+    """
+    if not is_utf8(path):
+        raise click.BadParameter(
+            "the file is not valid UTF-8", param_hint=param_hint
+        )
+
+
+def _load_json_file(path: str, param_hint: str) -> dict[str, Any]:
+    """Load a JSON file that has to hold an object.
+
+    The JSON files of the CLI hold the output of another command, so they are
+    read before the command runs. A file that is not valid JSON (or that holds
+    something else than an object) is an unusable value for the option, and it
+    is reported as a usage error.
+
+    Args:
+        path: The path of the file.
+        param_hint: The option that names the file, e.g. ``"'--services-file'"``.
+
+    Returns:
+        The content of the file.
+
+    Raises:
+        click.BadParameter: If the file does not hold a JSON object.
+    """
+    try:
+        data = load_json(path)
+    except (OSError, ValueError) as exc:
+        raise click.BadParameter(str(exc), param_hint=param_hint) from exc
+    if not isinstance(data, dict):
+        raise click.BadParameter(
+            "the file does not hold a JSON object", param_hint=param_hint
+        )
+    return data
+
+
 def _write_output(out_path: str, output: str, message: str | None = None) -> None:
     """Write a report to a file, reporting an unusable path as a usage error.
 
@@ -632,10 +692,10 @@ def audit(
 ) -> None:
     """Audit passwords for strength and common weaknesses."""
     if file:
-        with open(file, "r", encoding="utf-8") as handle:
-            passwords = [line.strip() for line in handle if line.strip()]
+        _require_utf8(file, "'--file'")
+        passwords = read_lines(file, skip_comments=False)
     else:
-        passwords = [line.strip() for line in click.get_text_stream("stdin") if line.strip()]
+        passwords = [line.strip() for line in _read_stdin_text().split("\n") if line.strip()]
 
     if not passwords:
         click.echo("No passwords provided.")
@@ -785,6 +845,8 @@ def report(
     out_path: str,
 ) -> None:
     """Generate a report combining port scan and password audit results."""
+    if audit_file:
+        _require_utf8(audit_file, "'--audit-file'")
     timeout_source = ctx.get_parameter_source("timeout")
     workers_source = ctx.get_parameter_source("workers")
     timeout_explicit = timeout_source in (ParameterSource.COMMANDLINE, ParameterSource.ENVIRONMENT, ParameterSource.DEFAULT_MAP)
@@ -1829,18 +1891,15 @@ def vuln(
     """Check TARGET for known service, protocol, and certificate vulnerabilities."""
     services = None
     if services_file:
-        with open(services_file, "r", encoding="utf-8") as handle:
-            services = json.load(handle)
+        services = _load_json_file(services_file, "'--services-file'")
 
     tls_data = None
     if tls_file:
-        with open(tls_file, "r", encoding="utf-8") as handle:
-            tls_data = json.load(handle)
+        tls_data = _load_json_file(tls_file, "'--tls-file'")
 
     certificate = None
     if ssl_file:
-        with open(ssl_file, "r", encoding="utf-8") as handle:
-            certificate = json.load(handle)
+        certificate = _load_json_file(ssl_file, "'--ssl-file'")
 
     port_list = None
     if ports:
@@ -2035,6 +2094,10 @@ def brute(
     out_path: str | None,
 ) -> None:
     """Brute-force FTP or SSH login credentials against TARGET."""
+    if user_file:
+        _require_utf8(user_file, "'--user-file'")
+    if pass_file:
+        _require_utf8(pass_file, "'--pass-file'")
     usernames = load_cred_wordlist(user_file) if user_file else None
     passwords = load_cred_wordlist(pass_file) if pass_file else None
 
@@ -2121,8 +2184,7 @@ def osdetect(
 
     banners = None
     if banners_file:
-        with open(banners_file, "r", encoding="utf-8") as handle:
-            services = json.load(handle)
+        services = _load_json_file(banners_file, "'--banners-file'")
         banners = {}
         for entry in services.get("results") or []:
             port = entry.get("port")
@@ -2813,12 +2875,7 @@ def cve(
 ) -> None:
     """Query the NVD/CVE API for known vulnerabilities affecting TARGET's services."""
     if services_file:
-        try:
-            with open(services_file, "r", encoding="utf-8") as handle:
-                json.load(handle)
-        except json.JSONDecodeError as exc:
-            click.echo(f"Failed to read services file: {exc}", err=True)
-            return
+        _load_json_file(services_file, "'--services-file'")
 
     port_list = None
     if not services_file:
@@ -3005,9 +3062,12 @@ def hash_cmd(passwords, password_file, algorithm, salt, pepper, iterations, chec
 
     password_list = list(passwords)
     if not password_list and password_file:
+        _require_utf8(password_file, "'--file'")
         password_list = load_passwords_from_file(password_file)
     if not password_list:
-        password_list = [line.strip() for line in click.get_text_stream("stdin") if line.strip()]
+        password_list = [
+            line.strip() for line in _read_stdin_text().split("\n") if line.strip()
+        ]
 
     if not password_list:
         click.echo("No passwords provided.")
@@ -3134,8 +3194,7 @@ def radix(
     option_cidrs: list[str] = []
 
     if cidr_file:
-        with open(cidr_file, "r", encoding="utf-8") as f:
-            file_cidrs = [line.strip() for line in f if line.strip() and not line.strip().startswith("#")]
+        file_cidrs = read_lines(cidr_file)
         cidrs.extend(file_cidrs)
 
     if cidrs_option:
@@ -3499,7 +3558,7 @@ def jwt(token: str | None, fmt: str, output_fmt: str | None, out_path: str | Non
     if token:
         token = token.strip()
     else:
-        stdin_text = click.get_text_stream("stdin").read()
+        stdin_text = _read_stdin_text()
         token = stdin_text.strip() if stdin_text else ""
 
     if not token:
@@ -3949,7 +4008,10 @@ def nmap(
     out_path: str | None,
 ) -> None:
     """Parse Nmap XML scan output and cross-reference services against vulnerability database."""
-    results = run_nmap(input_file)
+    try:
+        results = run_nmap(input_file)
+    except NmapParseError as exc:
+        raise click.BadParameter(str(exc), param_hint="'--input-file'") from exc
 
     # --output-format takes precedence over the deprecated --format alias
     chosen_format = output_fmt if output_fmt is not None else fmt

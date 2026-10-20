@@ -232,6 +232,43 @@ Error: Invalid value for '--target': Port out of range 0-65535
 The `mysql`, `mongodb`, `oracle`, `postgresql` and `mssql` commands report
 the same problem inside their own output and still exit 0.
 
+The options that take a file are checked for the path they name (a missing
+file or a directory is a usage error) and for the content they hold. A JSON
+file that is not JSON, a JSON file that holds something else than an object
+and an Nmap XML file that is not XML are usage errors as well:
+
+```console
+$ python -m ethscan vuln --target example.com --services-file broken.json
+Usage: python -m ethscan vuln [OPTIONS]
+Try 'python -m ethscan vuln --help' for help.
+
+Error: Invalid value for '--services-file': Expecting value: line 1 column 1 (char 0)
+```
+
+```console
+$ python -m ethscan nmap --input-file broken.xml
+Usage: python -m ethscan nmap [OPTIONS]
+Try 'python -m ethscan nmap --help' for help.
+
+Error: Invalid value for '--input-file': invalid Nmap XML: syntax error: line 1, column 0
+```
+
+A text file (a wordlist, a list of domains, a list of CIDR networks) is read
+as UTF-8. The bytes that are not valid UTF-8 are replaced, so a file with a
+stray byte is used as far as it can be read. The standard input of the
+commands that read one (`audit`, `hash`, `jwt`) is read the same way. A file
+that holds credentials (`--file`, `--user-file`, `--pass-file`,
+`--audit-file`) is refused instead, because its content cannot be read
+without changing the credentials it holds:
+
+```console
+$ python -m ethscan audit --file passwords.txt
+Usage: python -m ethscan audit [OPTIONS]
+Try 'python -m ethscan audit --help' for help.
+
+Error: Invalid value for '--file': the file is not valid UTF-8
+```
+
 ## Disclaimer
 
 This project is for **authorized security testing only**. Use only against

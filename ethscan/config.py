@@ -34,6 +34,8 @@ import io
 from pathlib import Path
 from typing import Any
 
+from ethscan.fileio import read_text
+
 try:
     import yaml
 except ImportError:  # pragma: no cover - pyyaml is a declared dependency
@@ -110,8 +112,7 @@ def load_config(explicit: str | None = None) -> dict[str, Any]:
         return dict(DEFAULT_CONFIG)
 
     try:
-        with open(path, "r", encoding="utf-8") as handle:
-            data = yaml.safe_load(handle)
+        data = yaml.safe_load(read_text(path))
     except yaml.YAMLError as exc:
         return {
             "defaults": {},

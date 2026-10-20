@@ -1,95 +1,96 @@
 # TASK.md
 
-Date: 2026-10-20T10:40:00Z
-Status: the **hostile option sweep** of the CLI is finished. A sweep over
-every string option and every file option of all 42 commands used to leak
-**110 tracebacks**; it now leaks **none**, and the six root causes behind
-them are fixed with regression tests.
+Date: 2026-10-20T13:40:00Z
+Status: the **content** of the input files of the CLI is hardened. A file
+whose content is hostile (bytes that are not valid UTF-8, a null byte, a
+line that holds a space, a JSON file that is not JSON, an XML file that is
+not XML) used to leak **7 different tracebacks** in **19 commands**; it now
+leaks **none**.
+
+The path of a file option was already covered (a missing file or a directory
+is a usage error, see `tests/test_file_option_sweep.py`). The content of the
+file was not.
 
 ## What changed
 
-### 1. A target whose URL `urllib.parse` refuses (`--target 'http://[::1'`)
-- **Root cause:** `urllib.parse.urlparse` raises a bare `ValueError`
-  (`Invalid IPv6 URL`) for a URL whose authority holds an unmatched bracket
-  (`http://[::1`, `http://example.com]`). The error is a `ValueError` and not
-  an `OSError`, so the narrow `except` clauses of the library did not catch
-  it and it reached the user as a raw traceback in **36 of the 42** target
-  commands.
-- **`ethscan/target.py`**: new `parse_url(url)` helper that parses a URL and
-  re-raises the `ValueError` of urllib as a `TargetSpecError` (the message is
-  kept). The library stays free of click.
-- **39 modules** (33 of them only for the URL parsing, plus `cert`, `geo`,
-  `mac`, `dnsbrute` and `whois` for the other fixes): every target
-  normalizer parses its URL with `parse_url` instead of `urlparse`.
-- **`ethscan/cli.py`**: the per-command decorator `_target_usage_errors` was
-  replaced by a group class `_TargetGroup` that translates a `TargetSpecError`
-  into the same click usage error for **every** command. The guarantee is now
-  structural: a command that is added later cannot leak the error either.
-- The target is now either refused (**exit 2**, one line
-  `Error: Invalid value for '--target': Invalid IPv6 URL`) or reported as a
-  failed probe (**exit 0**) by the modules whose contract is to do so.
+### 1. A file that holds bytes that are not valid UTF-8
+- **Root cause:** every text file was read with `open(path, "r",
+  encoding="utf-8")`, which raises a `UnicodeDecodeError` for a byte that is
+  not valid UTF-8. The error is a `ValueError` and not an `OSError`, so it
+  reached the user as a raw traceback in **14 commands** (`audit`, `brute`,
+  `config`, `cve`, `dnsbrute`, `fuzz`, `hash`, `nmap`, `osdetect`, `radix`,
+  `recon`, `report`, `s3`, `stale`, `subdomains`, `subtake`, `urlcheck`,
+  `vuln`).
+- **`ethscan/fileio.py`** (new): the shared readers of the input files.
+  `read_text()` and `read_lines()` decode leniently (the bytes that cannot be
+  decoded are replaced), `load_json()` reads a JSON file, `is_utf8()` reports
+  whether a file holds valid UTF-8.
+- **Every text loader** now uses the shared reader: `brute`, `fuzz`, `hash`,
+  `stale`, `subdomains`, `report`, `config` and the two readers of the CLI
+  (`audit --file`, `radix --cidr-file`).
+- The **standard input** of the commands that read one (`audit`, `hash`,
+  `jwt`) is read leniently as well (`ethscan/cli.py`: `_read_stdin_text`).
+- A file that holds **credentials** (`--file`, `--user-file`, `--pass-file`,
+  `--audit-file`) is refused instead, because its content cannot be read
+  without changing the credentials it holds: a mangled password would be
+  hashed silently (`ethscan/cli.py`: `_require_utf8`, a usage error).
 
-### 2. An API base URL that `urllib` refuses (`--api-url 'not a url'`)
-- **Root cause:** `urllib.request.Request` raises a bare `ValueError`
-  (`unknown url type`) for a URL whose scheme it does not know, and the
-  request was built **outside** the `try` block of the fetch helpers.
-- **`ethscan/{cert,geo,mac}.py`**: the request is built inside the `try`
-  block, so an unusable API base URL is reported like any other failed
-  fetch (inside the output, **exit 0**).
+### 2. A JSON file that is not JSON (or that is not an object)
+- **Root cause:** the JSON files (`--services-file`, `--tls-file`,
+  `--ssl-file`, `--banners-file`) were read with a bare `json.load()`, so a
+  file that is not JSON raised a `json.JSONDecodeError` (a traceback), and a
+  file that holds a list or a string raised an `AttributeError` when the
+  command called `.get()` on it.
+- **`ethscan/cli.py`**: the new `_load_json_file()` reports a file that is not
+  valid JSON (or that does not hold an object) as a usage error (**exit 2**)
+  that names the option. The `cve` command reported the same problem before
+  (on stderr, exit 0) and now uses the same report as the other commands.
 
-### 3. A file option that points at something unusable
-- **Root cause:** the three file options that were plain strings (`audit
-  --file`, `hash --file`, `report --audit-file`) opened the file without
-  checking it, so a missing file ended in a `FileNotFoundError` traceback.
-  The options that already existed (`click.Path(exists=True, readable=True)`)
-  accepted a **directory**, which `open()` refuses with an
-  `IsADirectoryError` traceback.
-- **`ethscan/cli.py`**: the three options became
-  `click.Path(exists=True, readable=True, dir_okay=False)` and the 17
-  existing file options got the missing `dir_okay=False`. A missing file or
-  a directory is now a usage error (**exit 2**).
+### 3. An Nmap XML file that is not XML
+- **Root cause:** `ET.fromstring()` raises a `ParseError` for a file that is
+  not XML, and `int(port_elem.get("portid", 0))` raised a `ValueError` for a
+  port whose id is not a number.
+- **`ethscan/nmap.py`**: `parse_nmap_xml()` raises the new `NmapParseError`,
+  which the CLI reports as a usage error (**exit 2**). A port whose id is not
+  a number (or is out of range) is skipped, so one bad port does not abort
+  the report of the other ports.
 
-### 4. A WHOIS server that cannot be reached (`--server 'not a host'`)
-- **Root cause:** the primary query of `ethscan/whois.py` connected to the
-  server without catching the `socket.gaierror` / `ConnectionRefusedError` of
-  a host that cannot be resolved (the recursive hop already caught them).
-- **`ethscan/whois.py`**: the lookup reports a failed query (an `error` key,
-  an empty `raw`) inside the output (**exit 0**); the markdown and the CSV
-  format show the error as well.
-
-### 5. An output path that cannot be written (`--out /tmp`)
-- **Root cause:** every command wrote its report with a bare `open()`, so a
-  directory, a path whose directory does not exist or a name the file system
-  refuses ended in an `OSError` traceback (in 53 commands).
-- **`ethscan/cli.py`**: new `_write_output()` helper reports an unusable
-  output path as a usage error (**exit 2**). The `config` command keeps its
-  own contract (**exit 1** with `Error writing output: ...`).
-
-### 6. A nameserver whose label is too long (`--ns <300 characters>`)
-- **Root cause:** the resolver encodes a host name as IDNA and raises a
-  `UnicodeError` for a label that is too long. A `UnicodeError` is a
-  `ValueError` and not an `OSError`, so it escaped the `except OSError` of
-  the raw AXFR query.
-- **`ethscan/dnsbrute.py`**: the query catches `ValueError` as well.
+### 4. A wordlist entry that cannot be requested or resolved
+- **Root cause:** `http.client.InvalidURL` (raised for a path that holds a
+  space or a control character) derives from `HTTPException` and not from
+  `ValueError`, so it escaped the `except` of `fuzz_path` (a traceback in
+  `fuzz` and `urlcheck`). `socket.gethostbyname()` refuses a name that holds
+  a null byte with a `TypeError`, which escaped the `except` of
+  `resolve_subdomain` (a traceback in `subdomains`).
+- **`ethscan/fuzz.py`**: `fuzz_path()` catches `http.client.HTTPException`
+  and reports the path as a failed probe, the same way `ethscan/s3.py`
+  already did.
+- **`ethscan/subdomains.py`**: `resolve_subdomain()` catches the `TypeError`
+  and reports the label as unresolved.
 
 ## Verification
-- Full suite: **4342 passed, 1 skipped** (4328 before + 14 new tests).
-- Ruff: the same **48** pre-existing errors, **no new ones**
-  (`ruff check ethscan/ tests/`).
+
+- Full suite: **4484 passed, 45 skipped** (before: 4439 passed, 10 skipped;
+  the new sweep adds 18 cases and skips the 35 commands that have no input
+  file option).
+- Ruff: `ruff check ethscan/ tests/` → **All checks passed** (the 3 errors
+  that the previous session left in `tests/test_file_option_sweep.py` are
+  fixed as well).
 - `git diff --check`: clean.
-- Sweep over every **string** option of every command
-  (973 invocations): **0 leaked tracebacks** (110 before).
-- Sweep over every **file** option of every command
-  (225 invocations): **0 leaked tracebacks** (132 before).
-- The 16 timeouts of the sweeps are the commands that probe a real host
-  (`brute`, `recon`, `snmp`, `ssh`, `trace`), with or without a change.
+- The new permanent sweep `tests/test_file_content_sweep.py` walks every
+  input file option of every command (18 commands, 4 hostile contents each)
+  and asserts that no traceback leaks. Before the fix **all 18 commands
+  failed**; now all of them pass.
+- The standard input of `audit`, `hash` and `jwt` is read leniently (the
+  traceback is gone).
 
 ## Remaining
-- The 48 pre-existing ruff errors are unrelated and left alone.
-- The `--ports` option (the plural form) is validated in every command that
-  has it - checked in an earlier session, no change needed.
-- A target that is not a usable host is still reported as a failed probe
-  (**exit 0**) by the modules whose contract is to do so (`ftp`, `ldap`,
-  `mac`, `memcached`, `mongodb`, `mssql`, `mysql`, `netbios`, `ntp`,
-  `oracle`, `postgresql`, `redis`, `service`, `smb`, `smtp`, `snmp`).
-  That contract is unchanged; only the crash is gone.
+
+- The `cve` command still reports a file it cannot read inside its own
+  output when it is used as a library (`ethscan/cve.py`: the `notes` entry
+  "Failed to read services file"). The CLI reports it as a usage error
+  before the module runs, so the note is only reachable for a direct API
+  user.
+- The options that hold a *value* read from the environment or from the
+  config file were not touched by this task; the config file already
+  reports a value of the wrong type as a usage error.

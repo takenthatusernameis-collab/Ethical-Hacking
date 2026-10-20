@@ -10,11 +10,16 @@ import io
 import json
 import xml.etree.ElementTree as ET
 
+from ethscan.fileio import read_text
 from ethscan.vuln import (
     SEVERITIES,
     match_service_vulns,
     parse_banner,
 )
+
+
+class NmapParseError(ValueError):
+    """Raised when the Nmap XML file cannot be parsed."""
 
 
 def _extract_text(element: ET.Element | None, default: str = "") -> str:
@@ -24,9 +29,20 @@ def _extract_text(element: ET.Element | None, default: str = "") -> str:
     return default
 
 
-def _parse_port(port_elem: ET.Element) -> dict[str, object]:
-    """Parse a single port element from Nmap XML."""
-    port_id = int(port_elem.get("portid", 0))
+def _parse_port(port_elem: ET.Element) -> dict[str, object] | None:
+    """Parse a single port element from Nmap XML.
+
+    Returns:
+        The parsed port, or None when the element does not hold a usable port
+        number (a port id that is not a number, or a number outside the range
+        of a TCP/UDP port).
+    """
+    try:
+        port_id = int(port_elem.get("portid", 0))
+    except (TypeError, ValueError):
+        return None
+    if not 0 <= port_id <= 65535:
+        return None
     protocol = port_elem.get("protocol", "tcp")
 
     state_elem = port_elem.find("state")
@@ -101,7 +117,9 @@ def _parse_host(host_elem: ET.Element) -> dict[str, object]:
     ports_elem = host_elem.find("ports")
     if ports_elem is not None:
         for port_elem in ports_elem.findall("port"):
-            ports.append(_parse_port(port_elem))
+            port = _parse_port(port_elem)
+            if port is not None:
+                ports.append(port)
 
     return {
         "address": addr,
@@ -120,8 +138,14 @@ def parse_nmap_xml(xml_content: str) -> list[dict[str, object]]:
 
     Returns:
         List of host dictionaries with parsed port/service information.
+
+    Raises:
+        NmapParseError: If the content is not valid XML.
     """
-    root = ET.fromstring(xml_content)
+    try:
+        root = ET.fromstring(xml_content)
+    except ET.ParseError as exc:
+        raise NmapParseError(f"invalid Nmap XML: {exc}") from exc
 
     hosts: list[dict[str, object]] = []
     for host_elem in root.findall("host"):
@@ -140,9 +164,11 @@ def run_nmap(
 
     Returns:
         Structured results with parsed services and matched vulnerabilities.
+
+    Raises:
+        NmapParseError: If the file does not hold valid Nmap XML.
     """
-    with open(input_file, "r", encoding="utf-8") as f:
-        xml_content = f.read()
+    xml_content = read_text(input_file)
 
     hosts = parse_nmap_xml(xml_content)
 

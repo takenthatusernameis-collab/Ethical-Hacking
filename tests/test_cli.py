@@ -23699,3 +23699,133 @@ def test_a_writable_output_path_still_writes_the_report(tmp_path) -> None:
     assert result.exit_code == 0, result.output
     assert "Report written" in result.output
     assert out_file.exists()
+
+
+# --- A file whose content cannot be read -------------------------------------
+#
+# The file options are checked for the *path* they name (a missing file, a
+# directory, an over-long name). The *content* of the file can be hostile too:
+# a JSON file that is not JSON, a JSON file that holds something else than an
+# object, an XML file that is not XML, a credential file that is not UTF-8.
+# Those used to reach the user as a raw traceback.
+
+# The commands that read a JSON file, with the option that names it.
+JSON_FILE_OPTIONS = (
+    ("vuln", "--services-file"),
+    ("vuln", "--tls-file"),
+    ("vuln", "--ssl-file"),
+    ("osdetect", "--banners-file"),
+    ("cve", "--services-file"),
+)
+
+
+def test_a_json_file_that_is_not_json_is_a_usage_error(tmp_path) -> None:
+    """A JSON file that cannot be parsed must be refused cleanly."""
+    runner = CliRunner()
+    path = tmp_path / "broken.json"
+    path.write_text("this is not json at all")
+    for command, option in JSON_FILE_OPTIONS:
+        result = runner.invoke(
+            cli, [command, "--target", "127.0.0.1", option, str(path)]
+        )
+        assert result.exit_code == 2, f"{command} {option}: {result.output}"
+        assert f"Error: Invalid value for '{option}':" in result.output, (
+            f"{command} {option}: {result.output}"
+        )
+        assert "Traceback (most recent call last)" not in result.output, (
+            f"{command} {option}: leaked a traceback\n{result.output}"
+        )
+
+
+def test_a_json_file_that_is_not_an_object_is_a_usage_error(tmp_path) -> None:
+    """A JSON file that does not hold an object must be refused cleanly."""
+    runner = CliRunner()
+    path = tmp_path / "list.json"
+    path.write_text("[1, 2, 3]")
+    for command, option in JSON_FILE_OPTIONS:
+        result = runner.invoke(
+            cli, [command, "--target", "127.0.0.1", option, str(path)]
+        )
+        assert result.exit_code == 2, f"{command} {option}: {result.output}"
+        assert "does not hold a JSON object" in result.output, (
+            f"{command} {option}: {result.output}"
+        )
+        assert "Traceback (most recent call last)" not in result.output, (
+            f"{command} {option}: leaked a traceback\n{result.output}"
+        )
+
+
+def test_a_json_file_with_bytes_that_are_not_utf8_is_a_usage_error(tmp_path) -> None:
+    """A JSON file with a stray byte must be refused cleanly."""
+    runner = CliRunner()
+    path = tmp_path / "binary.json"
+    path.write_bytes(b'{"port": \xff\xfe')
+    for command, option in JSON_FILE_OPTIONS:
+        result = runner.invoke(
+            cli, [command, "--target", "127.0.0.1", option, str(path)]
+        )
+        assert result.exit_code == 2, f"{command} {option}: {result.output}"
+        assert "Traceback (most recent call last)" not in result.output, (
+            f"{command} {option}: leaked a traceback\n{result.output}"
+        )
+
+
+def test_an_xml_file_that_is_not_xml_is_a_usage_error(tmp_path) -> None:
+    """An Nmap XML file that cannot be parsed must be refused cleanly."""
+    runner = CliRunner()
+    path = tmp_path / "scan.xml"
+    path.write_text("this is not xml at all")
+    result = runner.invoke(cli, ["nmap", "--input-file", str(path)])
+    assert result.exit_code == 2, result.output
+    assert "Error: Invalid value for '--input-file':" in result.output, result.output
+    assert "Traceback (most recent call last)" not in result.output, result.output
+
+
+def test_a_credential_file_that_is_not_utf8_is_a_usage_error(tmp_path) -> None:
+    """A credential file that is not UTF-8 must be refused cleanly.
+
+    The credentials of such a file cannot be read without changing them, so
+    the command refuses the file instead of auditing a mangled password.
+    """
+    runner = CliRunner()
+    path = tmp_path / "passwords.txt"
+    path.write_bytes(b"caf\xe9\n")
+    cases = (
+        ("audit", ["--file"]),
+        ("hash", ["--file"]),
+        ("brute", ["--target", "127.0.0.1", "--user-file"]),
+        ("brute", ["--target", "127.0.0.1", "--pass-file"]),
+        ("report", ["--target", "127.0.0.1", "--audit-file"]),
+    )
+    for command, args in cases:
+        result = runner.invoke(cli, [command, *args, str(path)])
+        assert result.exit_code == 2, f"{command} {args}: {result.output}"
+        assert "not valid UTF-8" in result.output, f"{command} {args}: {result.output}"
+        assert "Traceback (most recent call last)" not in result.output, (
+            f"{command} {args}: leaked a traceback\n{result.output}"
+        )
+
+
+def test_a_wordlist_that_is_not_utf8_is_still_read(tmp_path) -> None:
+    """A wordlist with a stray byte is read as far as it can be read."""
+    runner = CliRunner()
+    path = tmp_path / "wordlist.txt"
+    path.write_bytes(b"/admin\n/ca\xffe9\n")
+    result = runner.invoke(
+        cli,
+        ["fuzz", "--target", "http://127.0.0.1", "--wordlist", str(path), "--timeout", "1"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Traceback (most recent call last)" not in result.output, result.output
+    assert "paths_tested" in result.output
+
+
+def test_a_standard_input_that_is_not_utf8_is_read_leniently() -> None:
+    """A standard input with a stray byte is read, it is not a crash."""
+    runner = CliRunner()
+    for command in ("audit", "hash", "jwt"):
+        result = runner.invoke(cli, [command], input=b"\xff\xfe bad\n")
+        assert result.exit_code == 0, f"{command}: {result.output}"
+        assert "Traceback (most recent call last)" not in result.output, (
+            f"{command}: leaked a traceback\n{result.output}"
+        )
