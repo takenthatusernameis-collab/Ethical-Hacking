@@ -13,6 +13,8 @@ import socket
 import struct
 import time
 
+from ethscan.target import parse_url
+
 DEFAULT_COUNT = 4
 DEFAULT_TIMEOUT = 2.0
 DEFAULT_TTL = 64
@@ -35,9 +37,7 @@ def _normalize_host(target: str) -> str:
     normalized = target.strip()
     if "://" not in normalized:
         normalized = "https://" + normalized
-    from urllib.parse import urlparse
-
-    parsed = urlparse(normalized)
+    parsed = parse_url(normalized)
     return (parsed.hostname or parsed.netloc or "").lower()
 
 

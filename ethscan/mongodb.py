@@ -20,7 +20,7 @@ import json
 import socket
 from typing import Any
 
-from ethscan.target import TargetSpecError, check_port, url_port
+from ethscan.target import TargetSpecError, check_port, parse_url, url_port
 
 DEFAULT_PORT = 27017
 DEFAULT_TIMEOUT = 3.0
@@ -39,9 +39,7 @@ def _normalize_target(target: str) -> tuple[str, int]:
     port: int | None = None
 
     if "://" in normalized:
-        from urllib.parse import urlparse
-
-        parsed = urlparse(normalized)
+        parsed = parse_url(normalized)
         host = (parsed.hostname or "").strip()
         port = url_port(parsed)
     else:

@@ -9,7 +9,7 @@ import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from ethscan.target import check_target_host, strip_userinfo, url_port
+from ethscan.target import check_target_host, parse_url, strip_userinfo, url_port
 
 DEFAULT_WORDLIST = [
     "/admin",
@@ -60,7 +60,7 @@ def _normalize_base_url(target: str) -> str:
     if "://" not in normalized:
         normalized = "https://" + normalized
     check_target_host(normalized)
-    parsed = urllib.parse.urlparse(normalized)
+    parsed = parse_url(normalized)
     url_port(parsed)
     return f"{parsed.scheme}://{strip_userinfo(parsed.netloc)}"
 

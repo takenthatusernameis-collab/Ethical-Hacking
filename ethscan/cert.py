@@ -15,6 +15,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from ethscan.target import parse_url
+
 DEFAULT_API_URL = "https://crt.sh/"
 DEFAULT_TIMEOUT = 10.0
 CACHE_DIR = Path.home() / ".cache" / "ethscan"
@@ -27,9 +29,7 @@ def _normalize_target(target: str) -> str:
     normalized = target.strip()
     if "://" not in normalized:
         normalized = "https://" + normalized
-    from urllib.parse import urlparse
-
-    parsed = urlparse(normalized)
+    parsed = parse_url(normalized)
     host = (parsed.hostname or parsed.netloc or "").lower()
     return host
 
@@ -79,8 +79,8 @@ def _fetch_cert_data(
     """Fetch certificate transparency data from the public API."""
     base = (api_url or DEFAULT_API_URL).rstrip("/") + "/"
     url = f"{base}?q=%25.{domain}&output=json"
-    req = urllib.request.Request(url, headers={"User-Agent": "ethscan/0.1"})
     try:
+        req = urllib.request.Request(url, headers={"User-Agent": "ethscan/0.1"})
         with urllib.request.urlopen(req, timeout=timeout) as response:
             raw = response.read().decode("utf-8")
         data = json.loads(raw)

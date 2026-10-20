@@ -18,9 +18,8 @@ import socket
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from urllib.parse import urlparse
 
-from ethscan.target import check_target_host
+from ethscan.target import check_target_host, parse_url
 
 DEFAULT_TIMEOUT = 5.0
 DEFAULT_MAX_WORKERS = 20
@@ -148,7 +147,7 @@ def _normalize_target(target: str) -> str:
     if "://" not in normalized:
         normalized = "https://" + normalized
     check_target_host(normalized)
-    parsed = urlparse(normalized)
+    parsed = parse_url(normalized)
     return (parsed.hostname or parsed.netloc or "").lower()
 
 
@@ -177,7 +176,7 @@ def _resolve_s3_endpoint(
         Resolved IPv4 address string, or ``None`` if it could not resolve.
     """
     url = _build_s3_url(bucket_name, region)
-    hostname = urlparse(url).hostname
+    hostname = parse_url(url).hostname
     if not hostname:
         return None
     try:

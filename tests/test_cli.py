@@ -13605,8 +13605,9 @@ def test_hash_file_missing_file_fails(tmp_path) -> None:
     result = runner.invoke(
         cli, ["hash", "--file", str(missing), "--algorithm", "md5", "--format", "json"],
     )
-    assert result.exit_code != 0
-    assert isinstance(result.exception, FileNotFoundError)
+    assert result.exit_code == 2
+    assert "does not exist" in result.output
+    assert not isinstance(result.exception, FileNotFoundError)
 
 
 # ---------------------------------------------------------------------------
@@ -18609,7 +18610,7 @@ def test_hash_output_format_csv() -> None:
     assert result.exit_code == 0
 
 
-def test_hash_output_format_csv_with_passwords(monkeypatch) -> None:
+def test_hash_output_format_csv_with_passwords(tmp_path, monkeypatch) -> None:
     mock_results = {
         "algorithm": "md5",
         "results": [
@@ -18619,7 +18620,9 @@ def test_hash_output_format_csv_with_passwords(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.cli.run_hash", lambda *a, **k: mock_results)
     monkeypatch.setattr("ethscan.cli.load_passwords_from_file", lambda p: ["password"])
     runner = CliRunner()
-    result = runner.invoke(cli, ["hash", "--algorithm", "md5", "--output-format", "csv", "--file", "passwords.txt"])
+    wordlist = tmp_path / "passwords.txt"
+    wordlist.write_text("password\n", encoding="utf-8")
+    result = runner.invoke(cli, ["hash", "--algorithm", "md5", "--output-format", "csv", "--file", str(wordlist)])
     assert result.exit_code == 0
     assert "password,digest,algorithm,salt,pepper,iterations,computed,match,error" in result.output
     assert "password,5f4dcc3b5aa765d61d8327deb882cf99,md5" in result.output
@@ -18636,14 +18639,16 @@ def test_hash_output_format_csv_out(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("ethscan.cli.load_passwords_from_file", lambda p: ["password"])
     runner = CliRunner()
     out_file = tmp_path / "hash.csv"
-    result = runner.invoke(cli, ["hash", "--algorithm", "md5", "--output-format", "csv", "--out", str(out_file), "--file", "passwords.txt"])
+    wordlist = tmp_path / "passwords.txt"
+    wordlist.write_text("password\n", encoding="utf-8")
+    result = runner.invoke(cli, ["hash", "--algorithm", "md5", "--output-format", "csv", "--out", str(out_file), "--file", str(wordlist)])
     assert result.exit_code == 0
     assert "Report written" in result.output
     content = out_file.read_text()
     assert "password,digest,algorithm,salt,pepper,iterations,computed,match,error" in content
 
 
-def test_hash_format_csv_alias(monkeypatch) -> None:
+def test_hash_format_csv_alias(tmp_path, monkeypatch) -> None:
     mock_results = {
         "algorithm": "md5",
         "results": [
@@ -18653,12 +18658,14 @@ def test_hash_format_csv_alias(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.cli.run_hash", lambda *a, **k: mock_results)
     monkeypatch.setattr("ethscan.cli.load_passwords_from_file", lambda p: ["password"])
     runner = CliRunner()
-    result = runner.invoke(cli, ["hash", "--algorithm", "md5", "--format", "csv", "--file", "passwords.txt"])
+    wordlist = tmp_path / "passwords.txt"
+    wordlist.write_text("password\n", encoding="utf-8")
+    result = runner.invoke(cli, ["hash", "--algorithm", "md5", "--format", "csv", "--file", str(wordlist)])
     assert result.exit_code == 0
     assert "password,digest,algorithm,salt,pepper,iterations,computed,match,error" in result.output
 
 
-def test_hash_check_output_format_csv(monkeypatch) -> None:
+def test_hash_check_output_format_csv(tmp_path, monkeypatch) -> None:
     mock_result = {
         "password": "password",
         "digest": "5f4dcc3b5aa765d61d8327deb882cf99",
@@ -18673,7 +18680,9 @@ def test_hash_check_output_format_csv(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.cli.run_check", lambda *a, **k: mock_result)
     monkeypatch.setattr("ethscan.cli.load_passwords_from_file", lambda p: ["password"])
     runner = CliRunner()
-    result = runner.invoke(cli, ["hash", "--check", "5f4dcc3b5aa765d61d8327deb882cf99", "--algorithm", "md5", "--output-format", "csv", "--file", "passwords.txt"])
+    wordlist = tmp_path / "passwords.txt"
+    wordlist.write_text("password\n", encoding="utf-8")
+    result = runner.invoke(cli, ["hash", "--check", "5f4dcc3b5aa765d61d8327deb882cf99", "--algorithm", "md5", "--output-format", "csv", "--file", str(wordlist)])
     assert result.exit_code == 0
     assert "password,digest,algorithm,salt,pepper,iterations,computed,match,error" in result.output
     assert "password,5f4dcc3b5aa765d61d8327deb882cf99,md5,false,false,,5f4dcc3b5aa765d61d8327deb882cf99,true," in result.output
@@ -23388,3 +23397,305 @@ def test_a_valid_int_option_is_still_accepted() -> None:
     assert "Traceback (most recent call last)" not in result.output, (
         f"hash --iterations 1000: leaked a traceback\n{result.output}"
     )
+
+
+# --- A target whose URL urllib refuses --------------------------------------
+#
+# ``urllib.parse.urlparse`` raises a bare ``ValueError`` ("Invalid IPv6
+# URL") for a URL whose authority holds an unmatched bracket. The error
+# escaped the ``except ValueError`` handlers of the modules and reached the
+# user as a raw traceback in 36 of the 42 target commands. The modules now
+# parse the target with ``ethscan.target.parse_url``, which reports the
+# problem as a ``TargetSpecError``, and the CLI group turns that into a
+# usage error.
+
+TARGET_COMMANDS = (
+    "brute",
+    "cert",
+    "cve",
+    "dns",
+    "dnsbrute",
+    "dnssec",
+    "ftp",
+    "fuzz",
+    "geo",
+    "headers",
+    "ldap",
+    "mac",
+    "memcached",
+    "mongodb",
+    "mssql",
+    "mysql",
+    "netbios",
+    "ntp",
+    "oracle",
+    "osdetect",
+    "ping",
+    "postgresql",
+    "recon",
+    "redis",
+    "report",
+    "resolve",
+    "s3",
+    "scan",
+    "service",
+    "smb",
+    "smtp",
+    "snmp",
+    "ssh",
+    "ssl",
+    "subdomains",
+    "subtake",
+    "tls",
+    "trace",
+    "urlcheck",
+    "vuln",
+    "web",
+    "whois",
+)
+
+UNPARSEABLE_URL_TARGETS = (
+    "http://[::1",
+    "[::1",
+    "http://example.com]",
+)
+
+
+def test_a_target_with_an_unparseable_url_is_not_a_traceback() -> None:
+    """No target command may leak the ValueError of urllib.parse."""
+    runner = CliRunner()
+    for command in TARGET_COMMANDS:
+        for target in UNPARSEABLE_URL_TARGETS:
+            result = runner.invoke(cli, [command, "--target", target])
+            assert "Traceback (most recent call last)" not in result.output, (
+                f"{command} --target {target!r}: leaked a traceback\n{result.output}"
+            )
+            assert not isinstance(result.exception, ValueError), (
+                f"{command} --target {target!r}: leaked {result.exception!r}"
+            )
+
+
+def test_an_unparseable_url_target_is_a_usage_error_or_a_failed_probe() -> None:
+    """The target is either refused (exit 2) or reported as a failed probe."""
+    runner = CliRunner()
+    for command in TARGET_COMMANDS:
+        for target in UNPARSEABLE_URL_TARGETS:
+            result = runner.invoke(cli, [command, "--target", target])
+            assert result.exit_code in (0, 2), (
+                f"{command} --target {target!r}: exit code {result.exit_code}\n"
+                f"{result.output}"
+            )
+            if result.exit_code == 2:
+                error_lines = [
+                    line for line in result.output.splitlines() if line.startswith("Error:")
+                ]
+                assert len(error_lines) == 1, (
+                    f"{command} --target {target!r}: {result.output}"
+                )
+                assert error_lines[0] == (
+                    "Error: Invalid value for '--target': Invalid IPv6 URL"
+                ), f"{command} --target {target!r}: {result.output}"
+
+
+def test_a_target_with_an_unparseable_url_does_not_start_a_probe(
+    monkeypatch,
+) -> None:
+    """A refused target must abort before any network access happens."""
+    import socket
+
+    def tripwire(*args, **kwargs):
+        raise AssertionError("a connection was started for an invalid target")
+
+    monkeypatch.setattr(socket, "create_connection", tripwire)
+    monkeypatch.setattr(socket, "getaddrinfo", tripwire)
+
+    runner = CliRunner()
+    for command in ("web", "headers", "urlcheck", "fuzz", "dns", "resolve"):
+        result = runner.invoke(cli, [command, "--target", "http://[::1"])
+        assert result.exit_code == 2, f"{command}: {result.output}"
+
+
+def test_a_valid_url_target_is_still_accepted() -> None:
+    """A well formed URL with a bracketed IPv6 host keeps working."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["web", "--target", "http://[::1]:8443"])
+    assert "Invalid IPv6 URL" not in result.output, result.output
+
+
+# --- An API base URL that urllib refuses ------------------------------------
+#
+# ``urllib.request.Request`` raises a bare ``ValueError`` for a URL whose
+# scheme it does not know. The request was built outside the ``try`` block
+# of the fetch helpers, so the error escaped them.
+
+
+API_URL_COMMANDS = (
+    ("cert", "--api-url"),
+    ("geo", "--api-url"),
+    ("mac", "--api-url"),
+)
+
+
+def test_an_unusable_api_url_is_not_a_traceback() -> None:
+    """An API base URL that urllib refuses is reported inside the output."""
+    runner = CliRunner()
+    for command, option in API_URL_COMMANDS:
+        for value in ("not a url", "http://[::1"):
+            result = runner.invoke(
+                cli, [command, "--target", "127.0.0.1", option, value]
+            )
+            assert result.exit_code == 0, f"{command}: {result.output}"
+            assert "Traceback (most recent call last)" not in result.output, (
+                f"{command} {option} {value!r}: leaked a traceback\n{result.output}"
+            )
+
+
+# --- A file option that points at something unusable ------------------------
+#
+# The file options that were plain strings opened the file without checking
+# it, so a missing file (or a directory) ended in a raw ``FileNotFoundError``
+# or ``IsADirectoryError`` traceback. The options that already existed
+# accepted a directory, which was refused by ``open()`` in the same way.
+
+FILE_OPTIONS = (
+    ("audit", "--file"),
+    ("hash", "--file"),
+    ("report", "--audit-file"),
+    ("brute", "--user-file"),
+    ("brute", "--pass-file"),
+    ("cve", "--services-file"),
+    ("dnsbrute", "--wordlist"),
+    ("fuzz", "--wordlist"),
+    ("nmap", "--input-file"),
+    ("osdetect", "--banners-file"),
+    ("radix", "--cidr-file"),
+    ("recon", "--subdomains-wordlist"),
+    ("s3", "--wordlist"),
+    ("stale", "--file"),
+    ("subdomains", "--wordlist"),
+    ("subtake", "--wordlist"),
+    ("urlcheck", "--wordlist"),
+    ("vuln", "--services-file"),
+    ("vuln", "--tls-file"),
+    ("vuln", "--ssl-file"),
+)
+
+
+def _file_option_command(entry) -> tuple:
+    return entry
+
+
+def test_a_file_option_with_a_missing_file_is_a_usage_error(tmp_path) -> None:
+    """A file that does not exist must be refused before the command runs."""
+    runner = CliRunner()
+    missing = str(tmp_path / "does-not-exist.txt")
+    for entry in FILE_OPTIONS:
+        command, option = _file_option_command(entry)
+        args = [command, option, missing]
+        if "target" in {
+            param.name for param in cli.commands[command].params
+        }:
+            args += ["--target", "127.0.0.1"]
+        result = runner.invoke(cli, args)
+        assert result.exit_code == 2, f"{command} {option}: {result.output}"
+        assert "does not exist" in result.output, f"{command} {option}: {result.output}"
+        assert "Traceback (most recent call last)" not in result.output, (
+            f"{command} {option}: leaked a traceback\n{result.output}"
+        )
+
+
+def test_a_file_option_with_a_directory_is_a_usage_error(tmp_path) -> None:
+    """A directory is not a file, so it must be refused as well."""
+    runner = CliRunner()
+    for entry in FILE_OPTIONS:
+        command, option = _file_option_command(entry)
+        args = [command, option, str(tmp_path)]
+        if "target" in {
+            param.name for param in cli.commands[command].params
+        }:
+            args += ["--target", "127.0.0.1"]
+        result = runner.invoke(cli, args)
+        assert result.exit_code == 2, f"{command} {option}: {result.output}"
+        assert "is a directory" in result.output, f"{command} {option}: {result.output}"
+        assert "Traceback (most recent call last)" not in result.output, (
+            f"{command} {option}: leaked a traceback\n{result.output}"
+        )
+
+
+# --- A WHOIS server that cannot be reached -----------------------------------
+
+
+def test_an_unreachable_whois_server_is_reported_in_the_output() -> None:
+    """A server that cannot be reached is a failed lookup, not a crash."""
+    runner = CliRunner()
+    for server in ("not a host", "host:99999"):
+        result = runner.invoke(
+            cli,
+            ["whois", "--target", "example.com", "--server", server, "--timeout", "1"],
+        )
+        assert result.exit_code == 0, f"{server}: {result.output}"
+        assert "Traceback (most recent call last)" not in result.output, (
+            f"{server}: leaked a traceback\n{result.output}"
+        )
+        assert "Connection failed" in result.output, f"{server}: {result.output}"
+
+
+# --- A nameserver whose label is too long ------------------------------------
+#
+# The resolver encodes a host name as IDNA and raises a ``UnicodeError`` for
+# a label that is too long. A ``UnicodeError`` is a ``ValueError`` and not an
+# ``OSError``, so it escaped the ``except OSError`` of the raw AXFR query.
+
+
+def test_an_over_long_nameserver_is_not_a_traceback() -> None:
+    """A nameserver that cannot be encoded is reported inside the output."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["dnsbrute", "--target", "example.com", "--ns", "x" * 300, "--timeout", "1"],
+    )
+    assert "Traceback (most recent call last)" not in result.output, result.output
+    assert not isinstance(result.exception, UnicodeError)
+
+
+# --- An output path that cannot be written ----------------------------------
+#
+# The output path of a command is a plain path, so it can point at a
+# directory, at a path whose directory does not exist or at a name that the
+# file system refuses. ``open`` reports those with an ``OSError`` (or with a
+# ``ValueError`` for a name that holds a null byte), which used to reach the
+# user as a raw traceback.
+
+
+def test_an_unusable_output_path_is_a_usage_error(tmp_path) -> None:
+    """An output path that cannot be written must be refused cleanly."""
+    runner = CliRunner()
+    unusable = (str(tmp_path), str(tmp_path / "missing" / "report.json"), "x" * 300)
+    for command in ("web", "hash", "whois", "dns"):
+        args = [command]
+        if command != "hash":
+            args += ["--target", "127.0.0.1"]
+        else:
+            args += ["--password", "password"]
+        for path in unusable:
+            result = runner.invoke(cli, args + ["--out", path])
+            assert result.exit_code == 2, f"{command} --out {path!r}: {result.output}"
+            assert "Error: Invalid value for '--out':" in result.output, (
+                f"{command} --out {path!r}: {result.output}"
+            )
+            assert "Traceback (most recent call last)" not in result.output, (
+                f"{command} --out {path!r}: leaked a traceback\n{result.output}"
+            )
+
+
+def test_a_writable_output_path_still_writes_the_report(tmp_path) -> None:
+    """A usable output path keeps working."""
+    runner = CliRunner()
+    out_file = tmp_path / "report.json"
+    result = runner.invoke(
+        cli,
+        ["web", "--target", "127.0.0.1", "--out", str(out_file), "--format", "json"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Report written" in result.output
+    assert out_file.exists()

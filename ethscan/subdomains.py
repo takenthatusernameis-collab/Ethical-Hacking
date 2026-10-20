@@ -5,7 +5,8 @@ import csv
 import io
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from urllib.parse import urlparse
+
+from ethscan.target import parse_url
 
 try:
     import dns.exception
@@ -77,7 +78,7 @@ def _normalize_domain(target: str) -> str:
     normalized = target.strip()
     if "://" not in normalized:
         normalized = "https://" + normalized
-    parsed = urlparse(normalized)
+    parsed = parse_url(normalized)
     return parsed.netloc.lower()
 
 

@@ -1,87 +1,93 @@
 # NEXT_TASK.md
 
-## Status (2026-10-20T08:20:00Z)
-- Prior agent task (the explicit **`--port` option**): **complete**. The
-  range check itself was already in the code (`click.IntRange(0, 65535)` on
-  all 24 port options), but it was **untested and undocumented**; this
-  session verified it end to end and added the regression tests (including
-  an invariant test that every port option of the CLI is range-checked and
-  a tripwire test that a rejected port starts no connection).
-- The three classes of the wider backlog (a percent-encoded control
-  character in the host, a userinfo part in the authority, a host that is
-  not a valid host name) are **fixed as well**.
-- Verified: **4319 passed / 1 skipped**; ruff rule set identical to the
+## Status (2026-10-20T10:40:00Z)
+- The **hostile option sweep** of the CLI is **complete**. A sweep over
+  every string option and every file option of all 42 commands used to leak
+  **110 tracebacks**; it now leaks **none**.
+- The six root causes behind them are fixed: a URL that `urllib.parse`
+  refuses (`--target 'http://[::1'`), an API base URL that `urllib` refuses
+  (`--api-url 'not a url'`), a file option that points at a missing file or
+  a directory, a WHOIS server that cannot be reached, an output path that
+  cannot be written and a nameserver whose label is too long.
+- Verified: **4342 passed / 1 skipped**; ruff rule set identical to the
   baseline (48 pre-existing errors, no new ones); `git diff --check` clean.
-- The `--target` leak list is empty for the inputs of the sweep below
-  (462 invocations, 0 leaked tracebacks).
 
-## The port fix in one paragraph
-All 24 port options of the CLI (`--port`, and `ping --tcp-port`,
-`recon --trace-port`, `recon --whois-port`) are declared as
-`click.IntRange(0, 65535)`, so click refuses a value outside 0-65535
-before the command runs, with **exit 2** and the single line
-`Error: Invalid value for '--port': 99999 is not in the range 0<=x<=65535.`
-The same check applies to a port that comes from the **config file**
-(`commands: {redis: {port: 99999}}`), because click validates the default
-map as well.
+## The URL fix in one paragraph
+`urllib.parse.urlparse` raises a bare `ValueError` (`Invalid IPv6 URL`) for
+a URL whose authority holds an unmatched bracket. The error is a
+`ValueError` and not an `OSError`, so the narrow `except` clauses of the
+library did not catch it and it reached the user as a raw traceback in 36 of
+the 42 target commands. `ethscan/target.py` now has a `parse_url(url)`
+helper that re-raises it as a `TargetSpecError`, every target normalizer
+uses that helper, and `ethscan/cli.py` translates the error into the click
+usage error for **every** command (a group class, not a per-command
+decorator, so a command added later cannot leak it either).
 
-## Sweep of every `--target` command (current evidence)
+## Sweep of every option (current evidence)
 
-All 42 CLI commands that take a `--target` were invoked with eleven
-hostile inputs. Reproduce with:
+Every string option of every command was invoked with hostile values, and
+every file option with a missing path, a directory and an over-long name.
+Reproduce with:
 
 ```python
+import signal
 from click.testing import CliRunner
 from ethscan import cli
 
-runner = CliRunner()
-cmds = ("brute cert cve dns dnsbrute dnssec ftp fuzz geo headers ldap mac "
-        "memcached mongodb mssql mysql netbios ntp oracle osdetect ping "
-        "postgresql recon redis report resolve s3 scan service smb smtp snmp "
-        "ssh ssl subdomains subtake tls trace urlcheck vuln web whois").split()
-targets = ("....", "%00", "http://user:pass@example.com", "host name",
-           "host\tname", "https://example.com/a b", "redis://host:notaport",
-           "host:99999", "http://example.com/ho\x00st", "https://host\tname", "")
+class _Timeout(BaseException):
+    pass
 
-for c in cmds:
-    for target in targets:
-        res = runner.invoke(cli.cli, [c, "--target", target])
-        exc = res.exception
-        leaked = exc is not None and not isinstance(exc, SystemExit)
-        if leaked:
-            print(c, repr(target), res.exit_code, type(exc).__name__, exc)
+signal.signal(signal.SIGALRM, lambda *_: (_ for _ in ()).throw(_Timeout()))
+runner = CliRunner()
+hostile = {"target": ["http://[::1", "[::1", "http://a]b", "%00", "host name"],
+           "api_url": ["not a url", "http://[::1"],
+           "server": ["not a host", ""]}
+
+for name, cmd in sorted(cli.cli.commands.items()):
+    has_target = any(p.name == "target" for p in cmd.params)
+    for p in cmd.params:
+        if type(p.type).__name__ == "StringParamType" and p.opts:
+            for value in hostile.get(p.name, ["", "x" * 300, "/nonexistent/path"]):
+                args = [name, p.opts[0], value]
+                if has_target and p.name != "target":
+                    args += ["--target", "127.0.0.1"]
+                signal.setitimer(signal.ITIMER_REAL, 20)
+                try:
+                    res = runner.invoke(cli.cli, args)
+                finally:
+                    signal.setitimer(signal.ITIMER_REAL, 0)
+                if res.exception is not None and not isinstance(res.exception, SystemExit):
+                    print(name, p.opts[0], repr(value), type(res.exception).__name__)
 ```
 
-Result: **no traceback leaked** (462 invocations).
+Result: **no traceback leaked** (973 invocations for the string options, 225
+for the file options).
 
 ## Remaining tasks (bounded, high-value)
 
-### 1. The `--timeout` option is not range-checked
+### 1. The 48 pre-existing ruff errors
+Most of them are `BLE001` (a broad `except Exception`) and `TRY002` (a
+`raise Exception` in a test). They are unrelated to the behaviour of the
+toolkit and were deferred by three earlier sessions, because fixing them
+means reviewing 48 places in the code. Two of them are auto-fixable
+(`PLR0402` in `tests/test_brute.py`).
 
-**DONE.** All 43 `--timeout` CLI options were changed from `type=float` to
-`click.FloatRange(min=0.001)` (`ethscan/cli.py`), so click refuses a negative
-or zero timeout before the command runs, with exit 2 and a single-line
-`Error: Invalid value for '--timeout': ... is not in the range x>=0.001.`.
-
-Previously `--timeout -1` leaked a `ValueError: Timeout value out of range`
-traceback in `ldap`, `memcached`, `netbios`, `ntp`, `redis`, `smb`, `snmp`,
-`trace` and `whois`, and `--timeout 0` leaked a `BlockingIOError` in `whois`.
-
-Verified: `python -m pytest -q` -> **4323 passed, 1 skipped** (4 new timeout
-tests added to `tests/test_cli.py`); ruff unchanged (48 pre-existing errors,
-no new ones); `git diff --check` clean; `--timeout -1`/`0` return exit 2 for
-all 43 commands and valid timeouts (`0.001`, `0.5`, `5.0`, `10.0`) still work.
-
-### 2. Backlog from the wider sweep
-The three classes that were in the backlog of the previous session are
-**fixed** (percent-encoded control character, userinfo, invalid host
-name). Nothing from that sweep leaks any more.
+### 2. A permanent sweep test
+The hostile sweep of this session lives outside the repository (it is a
+script, not a test), because it needs a per-invocation timeout and takes
+about twenty minutes. A **short** version of it (the string options of the
+commands that are fast, with a small value set) would fit into the suite
+and would keep the guarantee alive. The per-class regression tests that
+were added to `tests/test_cli.py` and `tests/test_target.py` cover the six
+root causes; they do not cover a **new** option that is added later.
 
 ## Verified working forms (do not break)
 - `host`, `host:443`, `host:65535`, `http://host`, `https://host:8443`,
   `[::1]:443`
 - `https://example.com/path`, `https://example.com/a%20b`,
   `https://example.com/?q=1`, `https://example.com/path?query=1#frag`
+- `http://[::1]:8443` (a **closed** bracket is a valid IPv6 URL and must
+  keep working; only an unmatched bracket is refused)
 - The empty-host -> `localhost` mapping of `web._parse_url` and the
   lower-casing of `s3._normalize_target` must stay as they are.
 - `trace` still accepts `example.com`, `example.com:80` and
@@ -97,3 +103,8 @@ name). Nothing from that sweep leaks any more.
 - A host that is not a valid host name (`....`) is reported as a failed
   probe (**exit 0**), exactly like a host that cannot be resolved
   (`no-such-host.invalid`).
+- A WHOIS server that cannot be reached is a **failed lookup** inside the
+  output (**exit 0**), the way a recursive hop that cannot be reached
+  already was.
+- The `config` command keeps its own contract for an output path that
+  cannot be written: **exit 1** with `Error writing output: ...`.

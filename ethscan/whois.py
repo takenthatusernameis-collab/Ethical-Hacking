@@ -5,7 +5,8 @@ import csv
 import io
 import re
 import socket
-from urllib.parse import urlparse
+
+from ethscan.target import parse_url
 
 DEFAULT_WHOIS_SERVER = "whois.iana.org"
 DEFAULT_TIMEOUT = 5.0
@@ -17,7 +18,7 @@ def _normalize_target(target: str) -> str:
     normalized = target.strip()
     if "://" not in normalized:
         normalized = "http://" + normalized
-    parsed = urlparse(normalized)
+    parsed = parse_url(normalized)
     host = (parsed.hostname or parsed.netloc or "").lower()
     return host
 
@@ -177,8 +178,24 @@ def run_whois(
     Returns:
         Structured results with target, server, raw response, parsed fields,
         and (when recursive) per-hop results in ``recursive_hops``.
+
+        A WHOIS server that cannot be reached is reported as a failed lookup
+        (``error`` is set, ``raw`` is empty) instead of a traceback.
     """
-    raw = query_whois(target, server=server, port=port, timeout=timeout)
+    try:
+        raw = query_whois(target, server=server, port=port, timeout=timeout)
+    except (socket.gaierror, socket.timeout, ConnectionRefusedError, OSError) as exc:
+        return {
+            "target": target,
+            "server": server,
+            "port": port,
+            "raw": "",
+            "parsed": parse_whois(""),
+            "recursive": recursive,
+            "max_depth": max_depth,
+            "recursive_hops": [],
+            "error": f"Connection failed: {exc}",
+        }
     parsed = parse_whois(raw)
 
     result: dict[str, object] = {
@@ -264,6 +281,8 @@ def format_whois_report_markdown(data: dict[str, object]) -> str:
     lines = ["# ethscan WHOIS Lookup Report", ""]
     lines.append(f"- **Target:** {data['target']}")
     lines.append(f"- **Server:** {data['server']}:{data['port']}")
+    if data.get("error"):
+        lines.append(f"- **Error:** {data['error']}")
     lines.append("")
 
     lines.append("## Parsed Fields")
@@ -340,6 +359,8 @@ def format_whois_report_csv(data: dict[str, object]) -> str:
     writer.writerow(["registrant_org", parsed.get("registrant_org") or ""])
     writer.writerow(["nameservers", ";".join(parsed.get("nameservers") or [])])
     writer.writerow(["status_codes", ";".join(parsed.get("status_codes") or [])])
+    if data.get("error"):
+        writer.writerow(["error", data["error"]])
 
     recursive_hops = data.get("recursive_hops") or []
     if recursive_hops:

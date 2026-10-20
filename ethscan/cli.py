@@ -1,10 +1,8 @@
 """Command-line interface for ethscan."""
 from __future__ import annotations
 
-import functools
 import json
 import os
-from collections.abc import Callable
 from typing import Any
 
 import click
@@ -355,7 +353,30 @@ from ethscan.wifi import (
 )
 
 
-@click.group()
+class _TargetGroup(click.Group):
+    """A group that reports an unusable ``--target`` as a click usage error.
+
+    The library raises :class:`~ethscan.target.TargetSpecError` when a target
+    string does not contain a usable host or cannot be parsed. Commands that
+    treat an unusable target as a failed probe report it inside their own
+    output and are unaffected; every other command would otherwise die with a
+    raw traceback, so the error becomes a click usage error (exit code 2) at
+    the CLI boundary.
+
+    The translation happens in the group, so every command is covered without
+    having to opt in, and a command that is added later cannot leak the
+    error. The library modules stay free of click: this is the only place
+    where the translation happens.
+    """
+
+    def invoke(self, ctx: click.Context) -> Any:
+        try:
+            return super().invoke(ctx)
+        except TargetSpecError as exc:
+            raise _invalid_target(exc) from exc
+
+
+@click.group(cls=_TargetGroup)
 @click.option(
     "--config",
     "config_path",
@@ -431,27 +452,30 @@ def _invalid_target(exc: ValueError) -> click.BadParameter:
     return click.BadParameter(str(exc), param_hint="'--target'")
 
 
-def _target_usage_errors(func: Callable[..., Any]) -> Callable[..., Any]:
-    """Turn an unparsable ``--target`` into a click usage error.
+def _write_output(out_path: str, output: str, message: str | None = None) -> None:
+    """Write a report to a file, reporting an unusable path as a usage error.
 
-    The library raises :class:`~ethscan.target.TargetSpecError` when a target
-    string does not contain a usable host. Commands that treat an unparsable
-    target as a failed probe report it inside their own output and are
-    unaffected; the others would otherwise die with a raw traceback, so the
-    error becomes a click usage error (exit code 2) at the CLI boundary.
+    The output path of a command is a plain path, so it can point at a
+    directory, at a path whose directory does not exist or at a name that the
+    file system refuses. ``open`` reports those with an ``OSError`` (or with a
+    ``ValueError`` for a name that holds a null byte), which would reach the
+    user as a raw traceback.
 
-    The library modules stay free of click: this is the only place where the
-    translation happens.
+    Args:
+        out_path: The path of the file to write.
+        output: The report to write.
+        message: The message that confirms the write (defaults to the usual
+            "Report written to ..." line).
+
+    Raises:
+        click.BadParameter: If the file cannot be written.
     """
-
-    @functools.wraps(func)
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
-        try:
-            return func(*args, **kwargs)
-        except TargetSpecError as exc:
-            raise _invalid_target(exc) from exc
-
-    return wrapper
+    try:
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(output)
+    except (OSError, ValueError) as exc:
+        raise click.BadParameter(str(exc), param_hint="'--out'") from exc
+    click.echo(message or f"Report written to {out_path}")
 
 
 @cli.command()
@@ -530,9 +554,7 @@ def scan(ctx: click.Context, target: str, ports: str, profile: str | None, timeo
         output = format_scan_report_csv(scan_data)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -540,6 +562,7 @@ def scan(ctx: click.Context, target: str, ports: str, profile: str | None, timeo
 @cli.command()
 @click.option(
     "--file",
+    type=click.Path(exists=True, readable=True, dir_okay=False),
     help="Path to a file containing one password per line. If omitted, reads stdin.",
 )
 @click.option(
@@ -655,9 +678,7 @@ def audit(
         output = format_audit_report_csv(passwords, results, min_length=min_length, salt=salt, pepper=pepper)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -679,6 +700,7 @@ def audit(
 @click.option(
     "--audit-file",
     "audit_file",
+    type=click.Path(exists=True, readable=True, dir_okay=False),
     help="Path to a file containing one password per line for password audit",
 )
 @click.option(
@@ -799,9 +821,7 @@ def report(
         output = format_report_csv(report_data)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -835,7 +855,6 @@ def report(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-@_target_usage_errors
 def web(target: str, checks: str, timeout: float, fmt: str, output_fmt: str | None, out_path: str) -> None:
     """Run web application security checks against TARGET."""
     check_list = [c.strip() for c in checks.split(",") if c.strip()]
@@ -859,9 +878,7 @@ def web(target: str, checks: str, timeout: float, fmt: str, output_fmt: str | No
         output = format_web_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -871,7 +888,7 @@ def web(target: str, checks: str, timeout: float, fmt: str, output_fmt: str | No
 @click.option(
     "--wordlist",
     "wordlist_path",
-    type=click.Path(exists=True, readable=True),
+    type=click.Path(exists=True, readable=True, dir_okay=False),
     help="Path to wordlist file (one path per line). Uses built-in default if omitted.",
 )
 @click.option("--timeout", default=5.0, type=click.FloatRange(min=0.001), help="Request timeout in seconds")
@@ -902,7 +919,6 @@ def web(target: str, checks: str, timeout: float, fmt: str, output_fmt: str | No
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-@_target_usage_errors
 def fuzz(
     target: str,
     wordlist_path: str,
@@ -928,9 +944,7 @@ def fuzz(
         output = format_fuzz_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -944,7 +958,7 @@ def fuzz(
 @click.option(
     "--wordlist",
     "wordlist_path",
-    type=click.Path(exists=True, readable=True),
+    type=click.Path(exists=True, readable=True, dir_okay=False),
     help="Path to wordlist file (one subdomain per line). Uses built-in default if omitted.",
 )
 @click.option(
@@ -1028,9 +1042,7 @@ def subdomains(
         output = format_subdomains_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -1044,7 +1056,7 @@ def subdomains(
 @click.option(
     "--wordlist",
     "wordlist_path",
-    type=click.Path(exists=True, readable=True),
+    type=click.Path(exists=True, readable=True, dir_okay=False),
     help="Path to wordlist file (one subdomain per line). Uses built-in default if omitted.",
 )
 @click.option(
@@ -1115,9 +1127,7 @@ def subtake(
         output = format_subtake_report_csv(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -1196,9 +1206,7 @@ def whois(
         output = format_whois_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -1227,7 +1235,6 @@ def whois(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-@_target_usage_errors
 def headers(target: str, timeout: float, fmt: str, output_fmt: str | None, out_path: str) -> None:
     """Run security headers check against TARGET."""
     results = run_headers(target, timeout=timeout)
@@ -1243,9 +1250,7 @@ def headers(target: str, timeout: float, fmt: str, output_fmt: str | None, out_p
         output = format_headers_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -1321,9 +1326,7 @@ def dns(
         output = format_dns_report_csv(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -1399,9 +1402,7 @@ def resolve(
         output = format_resolve_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -1421,7 +1422,7 @@ def resolve(
 @click.option(
     "--wordlist",
     "wordlist_path",
-    type=click.Path(exists=True, readable=True),
+    type=click.Path(exists=True, readable=True, dir_okay=False),
     help="Path to wordlist file (one subdomain per line). Uses built-in default if omitted.",
 )
 @click.option(
@@ -1510,9 +1511,7 @@ def dnsbrute(
         output = format_dnsbrute_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -1557,9 +1556,7 @@ def ssl(target: str, port: int, timeout: float, fmt: str, output_fmt: str | None
         output = format_ssl_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -1643,9 +1640,7 @@ def tls(
         output = format_tls_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -1718,9 +1713,7 @@ def service(ctx: click.Context, target: str, ports: str | None, profile: str | N
         output = format_service_report_csv(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -1739,20 +1732,20 @@ def service(ctx: click.Context, target: str, ports: str | None, profile: str | N
 @click.option(
     "--services-file",
     "services_file",
-    type=click.Path(exists=True, readable=True),
+    type=click.Path(exists=True, readable=True, dir_okay=False),
     help="JSON file with 'service' command output (skips live detection).",
 )
 @click.option(
     "--tls-file",
     "tls_file",
-    type=click.Path(exists=True, readable=True),
+    type=click.Path(exists=True, readable=True, dir_okay=False),
     help="JSON file with 'tls' command output to check protocol/cipher "
     "weaknesses.",
 )
 @click.option(
     "--ssl-file",
     "ssl_file",
-    type=click.Path(exists=True, readable=True),
+    type=click.Path(exists=True, readable=True, dir_okay=False),
     help="JSON file with 'ssl' command output to check certificate "
     "weaknesses.",
 )
@@ -1881,9 +1874,7 @@ def vuln(
         output = format_vuln_report_csv(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -1898,7 +1889,7 @@ def vuln(
 @click.option(
     "--wordlist",
     "wordlist_path",
-    type=click.Path(exists=True, readable=True),
+    type=click.Path(exists=True, readable=True, dir_okay=False),
     help="Path to wordlist file for fuzzing (one path per line). Uses built-in default if omitted.",
 )
 @click.option(
@@ -1930,7 +1921,6 @@ def vuln(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-@_target_usage_errors
 def urlcheck(
     target: str,
     checks: str,
@@ -1975,9 +1965,7 @@ def urlcheck(
         output = format_urlcheck_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -2003,13 +1991,13 @@ def urlcheck(
 @click.option(
     "--user-file",
     "user_file",
-    type=click.Path(exists=True, readable=True),
+    type=click.Path(exists=True, readable=True, dir_okay=False),
     help="Path to usernames wordlist (one per line). Uses built-in default if omitted.",
 )
 @click.option(
     "--pass-file",
     "pass_file",
-    type=click.Path(exists=True, readable=True),
+    type=click.Path(exists=True, readable=True, dir_okay=False),
     help="Path to passwords wordlist (one per line). Uses built-in default if omitted.",
 )
 @click.option("--timeout", default=5.0, type=click.FloatRange(min=0.001), help="Connection timeout in seconds")
@@ -2071,9 +2059,7 @@ def brute(
         output = format_brute_report_csv(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -2092,7 +2078,7 @@ def brute(
 @click.option(
     "--banners-file",
     "banners_file",
-    type=click.Path(exists=True, readable=True),
+    type=click.Path(exists=True, readable=True, dir_okay=False),
     help="JSON file with 'service' command output (port -> banner mapping) to cross-reference OS signatures.",
 )
 @click.option("--timeout", default=5.0, type=click.FloatRange(min=0.001), help="Connection timeout in seconds")
@@ -2163,9 +2149,7 @@ def osdetect(
         output = format_osdetect_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -2224,7 +2208,6 @@ def osdetect(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-@_target_usage_errors
 def trace(
     target: str,
     port: int,
@@ -2259,9 +2242,7 @@ def trace(
         output = format_trace_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -2347,9 +2328,7 @@ def ping(
         output = format_ping_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -2395,9 +2374,7 @@ def wifi(interface: str | None, fmt: str, output_fmt: str | None, out_path: str 
         output = format_wifi_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -2487,9 +2464,7 @@ def geo(
         output = format_geo_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -2508,7 +2483,7 @@ def geo(
 @click.option(
     "--subdomains-wordlist",
     "subdomains_wordlist_path",
-    type=click.Path(exists=True, readable=True),
+    type=click.Path(exists=True, readable=True, dir_okay=False),
     help="Path to wordlist file for subdomain enumeration.",
 )
 @click.option(
@@ -2652,9 +2627,7 @@ def recon(
         output = format_recon_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -2731,9 +2704,7 @@ def cert(
         output = format_cert_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -2747,7 +2718,7 @@ def cert(
 @click.option(
     "--services-file",
     "services_file",
-    type=click.Path(exists=True, readable=True),
+    type=click.Path(exists=True, readable=True, dir_okay=False),
     help="JSON file with 'service' command output (skips live detection).",
 )
 @click.option(
@@ -2894,9 +2865,7 @@ def cve(
         output = format_cve_report_csv(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -2953,9 +2922,7 @@ def cidr(cidr: str, contains: str | None, diff: str | None, fmt: str, output_fmt
         output = format_cidr_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -2970,6 +2937,7 @@ def cidr(cidr: str, contains: str | None, diff: str | None, fmt: str, output_fmt
 @click.option(
     "--file",
     "password_file",
+    type=click.Path(exists=True, readable=True, dir_okay=False),
     help="Path to a file containing one password per line. Takes precedence over stdin.",
 )
 @click.option(
@@ -3082,9 +3050,7 @@ def hash_cmd(passwords, password_file, algorithm, salt, pepper, iterations, chec
             output = format_hash_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -3098,7 +3064,7 @@ def hash_cmd(passwords, password_file, algorithm, salt, pepper, iterations, chec
 @click.option(
     "--cidr-file",
     "cidr_file",
-    type=click.Path(exists=True, readable=True),
+    type=click.Path(exists=True, readable=True, dir_okay=False),
     help="Path to a file containing CIDR networks (one per line).",
 )
 @click.option(
@@ -3205,9 +3171,7 @@ def radix(
         output = format_radix_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -3270,9 +3234,7 @@ def dnssec(
         output = format_dnssec_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -3354,9 +3316,7 @@ def mac(
         output = format_mac_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -3500,7 +3460,7 @@ def config(
         try:
             with open(out_path, "w", encoding="utf-8") as handle:
                 handle.write(output)
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             click.echo(f"Error writing output: {exc}", err=True)
             raise SystemExit(1)
         click.echo(f"Report written to {out_path}")
@@ -3559,9 +3519,7 @@ def jwt(token: str | None, fmt: str, output_fmt: str | None, out_path: str | Non
         output = format_jwt_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -3641,9 +3599,7 @@ def completion(
         output = format_completion_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo("Completion script written")
+        _write_output(out_path, output, "Completion script written")
     else:
         click.echo(output)
 
@@ -3678,7 +3634,6 @@ def completion(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-@_target_usage_errors
 def memcached(
     target: str,
     port: int | None,
@@ -3707,9 +3662,7 @@ def memcached(
         output = format_memcached_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -3774,9 +3727,7 @@ def mysql(
         output = format_mysql_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -3839,9 +3790,7 @@ def mongodb(
         output = format_mongodb_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -3904,9 +3853,7 @@ def postgresql(
         output = format_postgresql_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -3962,9 +3909,7 @@ def validate(
         output = format_validate_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -3974,7 +3919,7 @@ def validate(
     "--input-file",
     "input_file",
     required=True,
-    type=click.Path(exists=True, readable=True),
+    type=click.Path(exists=True, readable=True, dir_okay=False),
     help="Path to Nmap XML output file (-oX).",
 )
 @click.option(
@@ -4017,9 +3962,7 @@ def nmap(
         output = format_nmap_report_csv(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -4034,7 +3977,7 @@ def nmap(
 @click.option(
     "--file",
     "target_file",
-    type=click.Path(exists=True, readable=True),
+    type=click.Path(exists=True, readable=True, dir_okay=False),
     help="Path to a file containing domains (one per line).",
 )
 @click.option(
@@ -4097,9 +4040,7 @@ def stale(
         output = format_stale_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -4138,7 +4079,6 @@ def stale(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-@_target_usage_errors
 def ssh(target: str, port: int | None, timeout: float, fmt: str, output_fmt: str | None, out_path: str | None) -> None:
     """Assess SSH server security: enumerate algorithms, check for weak/deprecated ciphers, MACs, KEX, and host keys."""
     results = run_ssh(target, port=port, timeout=timeout)
@@ -4152,9 +4092,7 @@ def ssh(target: str, port: int | None, timeout: float, fmt: str, output_fmt: str
         output = format_ssh_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -4168,7 +4106,7 @@ def ssh(target: str, port: int | None, timeout: float, fmt: str, output_fmt: str
 @click.option(
     "--wordlist",
     "wordlist_path",
-    type=click.Path(exists=True, readable=True),
+    type=click.Path(exists=True, readable=True, dir_okay=False),
     help="Path to a wordlist file (one bucket name per line). Uses built-in "
     "default derivations if omitted.",
 )
@@ -4212,7 +4150,6 @@ def ssh(target: str, port: int | None, timeout: float, fmt: str, output_fmt: str
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-@_target_usage_errors
 def s3(
     target: str,
     wordlist_path: str | None,
@@ -4243,9 +4180,7 @@ def s3(
         output = format_s3_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -4302,7 +4237,6 @@ def s3(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-@_target_usage_errors
 def smtp(
     target: str,
     port: int | None,
@@ -4335,9 +4269,7 @@ def smtp(
         output = format_smtp_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -4383,7 +4315,6 @@ def smtp(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-@_target_usage_errors
 def ftp(
     target: str,
     port: int | None,
@@ -4411,9 +4342,7 @@ def ftp(
         output = format_ftp_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -4459,7 +4388,6 @@ def ftp(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-@_target_usage_errors
 def ntp(
     target: str,
     port: int | None,
@@ -4487,9 +4415,7 @@ def ntp(
         output = format_ntp_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -4533,7 +4459,6 @@ def ntp(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-@_target_usage_errors
 def snmp(
     target: str,
     port: int | None,
@@ -4565,9 +4490,7 @@ def snmp(
         output = format_snmp_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -4617,7 +4540,6 @@ def snmp(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-@_target_usage_errors
 def netbios(
     target: str,
     port: int | None,
@@ -4652,9 +4574,7 @@ def netbios(
         output = format_netbios_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -4690,7 +4610,6 @@ def netbios(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-@_target_usage_errors
 def smb(
     target: str,
     port: int | None,
@@ -4718,9 +4637,7 @@ def smb(
         output = format_smb_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -4755,7 +4672,6 @@ def smb(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-@_target_usage_errors
 def redis(
     target: str,
     port: int | None,
@@ -4784,9 +4700,7 @@ def redis(
         output = format_redis_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -4824,7 +4738,6 @@ def redis(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
-@_target_usage_errors
 def ldap(
     target: str,
     port: int | None,
@@ -4852,9 +4765,7 @@ def ldap(
         output = format_ldap_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -4917,9 +4828,7 @@ def mssql(
         output = format_mssql_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
@@ -4982,9 +4891,7 @@ def oracle(
         output = format_oracle_report_markdown(results)
 
     if out_path:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
-        click.echo(f"Report written to {out_path}")
+        _write_output(out_path, output)
     else:
         click.echo(output)
 

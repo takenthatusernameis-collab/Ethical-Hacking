@@ -6,10 +6,10 @@ import io
 import socket
 import struct
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from urllib.parse import urlparse
 
 from ethscan.dns import resolve_a_records, resolve_aaaa_records, resolve_with_dnspython
 from ethscan.subdomains import DEFAULT_SUBDOMAINS
+from ethscan.target import parse_url
 
 try:
     import dns.exception
@@ -52,7 +52,7 @@ def _normalize_domain(target: str) -> str:
     normalized = target.strip()
     if "://" not in normalized:
         normalized = "https://" + normalized
-    parsed = urlparse(normalized)
+    parsed = parse_url(normalized)
     return parsed.netloc.lower()
 
 
@@ -264,7 +264,7 @@ def query_axfr_raw(
                 if not chunk:
                     break
                 data += chunk
-    except (socket.timeout, socket.gaierror, OSError) as exc:
+    except (socket.timeout, socket.gaierror, OSError, ValueError) as exc:
         message = str(exc) or exc.__class__.__name__
         return _axfr_result(nameserver, False, [], message)
 

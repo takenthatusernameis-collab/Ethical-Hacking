@@ -6,6 +6,8 @@ import io
 import ipaddress
 import socket
 
+from ethscan.target import parse_url
+
 try:
     import dns.exception
     import dns.resolver
@@ -31,11 +33,9 @@ def _normalize_target(target: str) -> str:
     normalized = target.strip()
     if "://" not in normalized:
         normalized = "https://" + normalized
-    from urllib.parse import urlparse
-
-    parsed = urlparse(normalized)
+    parsed = parse_url(normalized)
     netloc = parsed.netloc.lower()
-    # urlparse preserves IPv6 brackets in netloc (e.g. "[::1]" or "[::1]:8080").
+    # parse_url preserves IPv6 brackets in netloc (e.g. "[::1]" or "[::1]:8080").
     # Strip them so IPv6 literals are consistently represented bare and are
     # correctly recognized as IP addresses by _is_ip_address(). Bare IPv6 inputs
     # without brackets (e.g. "2001:db8::1") are passed through unchanged.

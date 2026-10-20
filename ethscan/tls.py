@@ -10,6 +10,8 @@ import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Union
 
+from ethscan.target import parse_url
+
 DEFAULT_PORT = 443
 DEFAULT_TIMEOUT = 5.0
 DEFAULT_WORKERS = 10
@@ -77,9 +79,7 @@ def _normalize_host(target: str) -> str:
     normalized = target.strip()
     if "://" not in normalized:
         normalized = "https://" + normalized
-    from urllib.parse import urlparse
-
-    parsed = urlparse(normalized)
+    parsed = parse_url(normalized)
     return (parsed.hostname or parsed.netloc or "").lower()
 
 

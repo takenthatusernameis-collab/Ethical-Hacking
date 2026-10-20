@@ -32,6 +32,7 @@ from ethscan.target import (
     TargetSpecError,
     check_port,
     check_target_host,
+    parse_url,
     strip_userinfo,
     url_port,
 )
@@ -695,3 +696,45 @@ def test_trace_still_accepts_the_working_target_forms() -> None:
     assert trace._normalize_host("example.com") == "example.com"
     assert trace._normalize_host("example.com:80") == "example.com"
     assert trace._normalize_host("http://example.com/") == "example.com"
+
+
+# --- A URL that urllib refuses ---------------------------------------------
+#
+# ``urllib.parse.urlparse`` raises a bare ``ValueError`` ("Invalid IPv6
+# URL") for a URL whose authority holds an unmatched bracket. The error
+# escaped the ``except ValueError`` handlers of the modules and reached the
+# user as a raw traceback, so :func:`parse_url` re-raises it as a
+# :class:`TargetSpecError`.
+
+UNPARSEABLE_URLS = (
+    "http://[::1",
+    "https://[::1",
+    "http://example.com]",
+    "http://[::1/path",
+)
+
+
+def test_parse_url_reports_an_unparseable_url() -> None:
+    """A URL that urllib refuses is reported as a TargetSpecError."""
+    for url in UNPARSEABLE_URLS:
+        with pytest.raises(TargetSpecError) as excinfo:
+            parse_url(url)
+        assert str(excinfo.value) == "Invalid IPv6 URL"
+
+
+def test_parse_url_error_is_still_a_value_error() -> None:
+    """Existing ``except ValueError`` handlers keep working."""
+    with pytest.raises(ValueError):
+        parse_url("http://[::1")
+
+
+def test_parse_url_returns_the_same_result_as_urlparse() -> None:
+    """A URL that urllib accepts is parsed exactly as before."""
+    for url in (
+        "https://example.com/path?q=1#frag",
+        "http://example.com:8443",
+        "http://[::1]:443",
+        "https://example.com/a%20b",
+        "http://user:pass@example.com",
+    ):
+        assert parse_url(url) == urlparse(url)

@@ -12,6 +12,7 @@ import json
 from ethscan.dns import run_dns
 from ethscan.geo import run_geo
 from ethscan.subdomains import run_subdomains
+from ethscan.target import parse_url
 from ethscan.trace import run_trace
 from ethscan.whois import run_whois
 
@@ -23,8 +24,7 @@ def _normalize_domain(target: str) -> str:
     normalized = target.strip()
     if "://" not in normalized:
         normalized = "https://" + normalized
-    from urllib.parse import urlparse
-    parsed = urlparse(normalized)
+    parsed = parse_url(normalized)
     return parsed.netloc.lower()
 
 

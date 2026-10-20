@@ -14,6 +14,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from ethscan.target import parse_url
+
 DEFAULT_API_URL = "http://ip-api.com/json/"
 DEFAULT_TIMEOUT = 5.0
 CACHE_DIR = Path.home() / ".cache" / "ethscan"
@@ -45,9 +47,7 @@ def _normalize_target(target: str) -> str:
     normalized = target.strip()
     if "://" not in normalized:
         normalized = "http://" + normalized
-    from urllib.parse import urlparse
-
-    parsed = urlparse(normalized)
+    parsed = parse_url(normalized)
     host = (parsed.hostname or parsed.netloc or "").lower()
     return host
 
@@ -94,8 +94,8 @@ def _is_cache_valid(entry: dict, ttl: int = CACHE_TTL) -> bool:
 def _fetch_geo_data(ip: str, timeout: float = DEFAULT_TIMEOUT) -> dict | None:
     """Fetch geolocation data from the public API."""
     url = f"{DEFAULT_API_URL}{ip}?fields={','.join(FIELDS)}"
-    req = urllib.request.Request(url, headers={"User-Agent": "ethscan/0.1"})
     try:
+        req = urllib.request.Request(url, headers={"User-Agent": "ethscan/0.1"})
         with urllib.request.urlopen(req, timeout=timeout) as response:
             data = json.loads(response.read().decode("utf-8"))
         if data.get("status") == "success":

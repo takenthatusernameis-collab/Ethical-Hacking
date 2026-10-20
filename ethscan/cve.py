@@ -14,6 +14,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from ethscan.target import parse_url
+
 DEFAULT_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 DEFAULT_TIMEOUT = 10.0
 CACHE_DIR = Path.home() / ".cache" / "ethscan"
@@ -34,9 +36,7 @@ def _normalize_host(target: str) -> str:
     normalized = target.strip()
     if "://" not in normalized:
         normalized = "https://" + normalized
-    from urllib.parse import urlparse
-
-    parsed = urlparse(normalized)
+    parsed = parse_url(normalized)
     return (parsed.hostname or parsed.netloc or "").lower()
 
 

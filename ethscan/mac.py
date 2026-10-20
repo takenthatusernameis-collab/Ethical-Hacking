@@ -14,6 +14,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from ethscan.target import parse_url
+
 DEFAULT_API_URL = "https://api.macvendors.com/"
 DEFAULT_TIMEOUT = 5.0
 CACHE_DIR = Path.home() / ".cache" / "ethscan"
@@ -25,9 +27,7 @@ def _normalize_target(target: str) -> str:
     """Extract a bare MAC address from a target that may be a URL or MAC string."""
     normalized = target.strip().lower()
     if "://" in normalized:
-        from urllib.parse import urlparse
-
-        parsed = urlparse(normalized)
+        parsed = parse_url(normalized)
         normalized = (parsed.hostname or parsed.netloc or "").lower()
     # Strip any surrounding whitespace again after URL parsing
     normalized = normalized.strip()
@@ -81,8 +81,8 @@ def _fetch_mac_data(
     """Fetch MAC vendor data from the public OUI API."""
     base = (api_url or DEFAULT_API_URL).rstrip("/") + "/"
     url = f"{base}{mac}"
-    req = urllib.request.Request(url, headers={"User-Agent": "ethscan/0.1"})
     try:
+        req = urllib.request.Request(url, headers={"User-Agent": "ethscan/0.1"})
         with urllib.request.urlopen(req, timeout=timeout) as response:
             raw = response.read().decode("utf-8")
         return {"mac": mac, "vendor": raw, "timestamp": time.time()}

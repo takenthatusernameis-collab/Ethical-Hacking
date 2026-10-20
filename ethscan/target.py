@@ -29,13 +29,17 @@ request target with an ``http.client.InvalidURL`` for the same reason. The
 fragment (``#...``) is not sent to the server and is therefore not
 validated.
 
+:func:`parse_url` parses a URL and reports a URL that ``urllib.parse``
+refuses (an unmatched bracket in the authority) as a
+:class:`TargetSpecError` instead of a bare ``ValueError``.
+
 The module is intentionally free of any click import: the translation from a
 library error to a click usage error happens in :mod:`ethscan.cli`.
 """
 from __future__ import annotations
 
 import re
-from urllib.parse import SplitResult, unquote
+from urllib.parse import ParseResult, SplitResult, unquote, urlparse
 
 # The characters that ``http.client`` refuses in a URL: the C0 control
 # characters, the space and DEL.
@@ -53,6 +57,31 @@ class TargetSpecError(ValueError):
     an invalid target from unrelated value errors and turn it into a usage
     error.
     """
+
+
+def parse_url(url: str) -> ParseResult:
+    """Parse a URL, raising :class:`TargetSpecError` when urllib refuses it.
+
+    ``urllib.parse.urlparse`` raises a bare ``ValueError`` ("Invalid IPv6
+    URL") for a URL whose authority holds an unmatched bracket, e.g.
+    ``http://[::1`` or ``http://example.com]``. The error is re-raised as a
+    :class:`TargetSpecError` with the original message intact, so the CLI can
+    report it as a usage error while modules that treat an unusable target as
+    a failed probe keep working unchanged.
+
+    Args:
+        url: The URL to parse.
+
+    Returns:
+        The parsed URL, exactly as ``urllib.parse.urlparse`` returns it.
+
+    Raises:
+        TargetSpecError: If the URL cannot be parsed.
+    """
+    try:
+        return urlparse(url)
+    except ValueError as exc:
+        raise TargetSpecError(str(exc)) from exc
 
 
 def url_port(parsed: SplitResult) -> int | None:

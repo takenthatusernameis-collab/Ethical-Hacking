@@ -8,6 +8,8 @@ import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from ftplib import FTP
 
+from ethscan.target import parse_url
+
 try:
     import paramiko
     PARAMIKO_AVAILABLE = True
@@ -73,9 +75,7 @@ def _normalize_host(target: str) -> str:
     normalized = target.strip()
     if "://" not in normalized:
         normalized = "https://" + normalized
-    from urllib.parse import urlparse
-
-    parsed = urlparse(normalized)
+    parsed = parse_url(normalized)
     return (parsed.hostname or parsed.netloc or "").lower()
 
 

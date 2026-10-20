@@ -12,6 +12,7 @@ import urllib.request
 from ethscan.target import (
     check_target_host,
     check_target_path,
+    parse_url,
     strip_userinfo,
     url_port,
 )
@@ -53,7 +54,7 @@ def _parse_url(target: str) -> tuple[str, int, bool]:
         normalized = "https://" + normalized
     check_target_host(normalized)
     check_target_path(normalized)
-    parsed = urllib.request.urlparse(normalized)
+    parsed = parse_url(normalized)
     host = parsed.hostname or "localhost"
     scheme = parsed.scheme.lower()
     if scheme == "https":

@@ -6,6 +6,8 @@ import io
 import socket
 import struct
 
+from ethscan.target import parse_url
+
 try:
     import dns.dnssec
     import dns.exception
@@ -67,8 +69,7 @@ def _normalize_domain(target: str) -> str:
     normalized = target.strip()
     if "://" not in normalized:
         normalized = "https://" + normalized
-    from urllib.parse import urlparse
-    parsed = urlparse(normalized)
+    parsed = parse_url(normalized)
     return parsed.netloc.lower()
 
 

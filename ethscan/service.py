@@ -8,6 +8,8 @@ import re
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from ethscan.target import parse_url
+
 DEFAULT_PORTS = [
     21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445,
     993, 995, 1723, 3306, 3389, 5432, 5900, 8080, 8443, 8888,
@@ -176,8 +178,7 @@ def run_service(
     """
     host = target.strip()
     if "://" in host:
-        from urllib.parse import urlparse
-        parsed = urlparse(host)
+        parsed = parse_url(host)
         host = parsed.hostname or host
 
     port_list = ports if ports is not None else DEFAULT_PORTS

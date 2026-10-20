@@ -8,6 +8,8 @@ import json
 import socket
 import ssl
 
+from ethscan.target import parse_url
+
 DEFAULT_PORT = 443
 DEFAULT_TIMEOUT = 5.0
 
@@ -24,9 +26,7 @@ def _normalize_host(target: str) -> str:
     normalized = target.strip()
     if "://" not in normalized:
         normalized = "https://" + normalized
-    from urllib.parse import urlparse
-
-    parsed = urlparse(normalized)
+    parsed = parse_url(normalized)
     return (parsed.hostname or parsed.netloc or "").lower()
 
 
