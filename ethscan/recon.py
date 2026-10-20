@@ -149,7 +149,6 @@ def run_recon(
                 timeout=timeout,
                 probes_per_hop=trace_probes_per_hop,
             )
-            results["modules_run"].append("trace")
         except Exception as exc:  # noqa: BLE001 - module failures are heterogeneous
             results["notes"].append(f"trace module failed: {exc}")
 
