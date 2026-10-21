@@ -13,7 +13,6 @@ from ethscan.brute import (
     format_brute_report_csv,
     format_brute_report_json,
     format_brute_report_markdown,
-    run_brute,
 )
 from ethscan.brute import load_wordlist as load_cred_wordlist
 from ethscan.cert import (
@@ -5069,3 +5068,15 @@ def oracle(
 
 if __name__ == "__main__":
     cli()
+
+
+def run_brute(*args, **kwargs):
+    """Run a brute-force login attempt through the live ethscan.brute module.
+
+    Resolved at call time via importlib, so the CLI honors a reloaded
+    ethscan.brute (the test suite reloads it to simulate paramiko being
+    present or absent) instead of holding a stale import-time binding.
+    """
+    import importlib
+
+    return importlib.import_module("ethscan.brute").run_brute(*args, **kwargs)
