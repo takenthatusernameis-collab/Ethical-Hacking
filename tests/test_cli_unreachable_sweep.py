@@ -9,7 +9,9 @@ the way it does against a target that is really unreachable.
 The transport is patched, so the sweep needs no network and does not depend on
 what the machine that runs it can reach. Each command keeps its own failure
 signal: the ping command reports a failed probe, the osdetect command a
-NO-RESPONSE probe, and the four DNS commands the absence of records.
+NO-RESPONSE probe, the four DNS commands the absence of records, the scan and
+service commands the absence of an open port, and the protocol commands the
+error of their own probe.
 """
 from __future__ import annotations
 
@@ -278,3 +280,205 @@ def test_smtp_cli_reports_a_failed_connection(monkeypatch) -> None:
 
     assert report["connected"] is False
     assert "hostile transport" in (report["error"] or "")
+
+
+# ---------------------------------------------------------------------------
+# The protocol commands that take a connector seam. The command line never
+# injects a connector, so the transport that is patched here is the socket
+# the module really opens; each command reports its own failure signal and
+# exits 0.
+# ---------------------------------------------------------------------------
+
+
+def _hostile_transport(monkeypatch, seam: str) -> None:
+    """Make the transport at *seam* fail with an error type the module ignores.
+
+    A failure the module does not know is the interesting one: it has to be
+    reported through the module's own failure field, never raised.
+    """
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr(seam, boom)
+
+
+def test_redis_cli_reports_a_failed_probe(monkeypatch) -> None:
+    """The redis command reports a failed probe and exits 0."""
+    _hostile_transport(monkeypatch, "ethscan.redis.socket.socket")
+
+    report = _run_cli(["redis", "--target", "127.0.0.1", "--timeout", "1.0"])
+
+    assert report["accessible"] is False
+    assert "hostile transport" in (report["error"] or "")
+
+
+def test_memcached_cli_reports_a_failed_probe(monkeypatch) -> None:
+    """The memcached command reports a failed probe and exits 0."""
+    _hostile_transport(monkeypatch, "ethscan.memcached.socket.socket")
+
+    report = _run_cli(["memcached", "--target", "127.0.0.1", "--timeout", "1.0"])
+
+    assert report["accessible"] is False
+    assert "hostile transport" in (report["error"] or "")
+
+
+def test_ntp_cli_reports_a_failed_probe(monkeypatch) -> None:
+    """The ntp command reports a failed probe and exits 0."""
+    _hostile_transport(monkeypatch, "ethscan.ntp.socket.socket")
+
+    report = _run_cli(["ntp", "--target", "127.0.0.1", "--timeout", "1.0"])
+
+    assert report["time_response"] is None
+    assert report["is_reflector"] is False
+    assert "hostile transport" in (report["error"] or "")
+
+
+def test_ldap_cli_reports_a_failed_probe(monkeypatch) -> None:
+    """The ldap command reports a failed probe and exits 0."""
+    _hostile_transport(monkeypatch, "ethscan.ldap.socket.socket")
+
+    report = _run_cli(["ldap", "--target", "127.0.0.1", "--timeout", "1.0"])
+
+    assert report["accessible"] is False
+    assert "hostile transport" in (report["error"] or "")
+
+
+def test_smb_cli_reports_a_failed_probe(monkeypatch) -> None:
+    """The smb command reports a failed probe and exits 0."""
+    _hostile_transport(monkeypatch, "ethscan.smb.socket.socket")
+
+    report = _run_cli(["smb", "--target", "127.0.0.1", "--timeout", "1.0"])
+
+    assert report["accessible"] is False
+    assert "hostile transport" in (report["error"] or "")
+
+
+def test_snmp_cli_reports_a_failed_probe(monkeypatch) -> None:
+    """The snmp command reports a failed probe and exits 0."""
+    _hostile_transport(monkeypatch, "ethscan.snmp.socket.socket")
+
+    report = _run_cli(["snmp", "--target", "127.0.0.1", "--timeout", "1.0"])
+
+    assert report["communities"] == []
+    assert "hostile transport" in (report["error"] or "")
+
+
+def test_ssh_cli_reports_a_failed_probe(monkeypatch) -> None:
+    """The ssh command reports a failed probe and exits 0."""
+    _hostile_transport(monkeypatch, "ethscan.ssh.socket.create_connection")
+
+    report = _run_cli(["ssh", "--target", UNREACHABLE_HOST, "--timeout", "1.0"])
+
+    assert report["banner"] is None
+    assert "hostile transport" in (report["error"] or "")
+
+
+def test_ssl_cli_reports_a_failed_probe(monkeypatch) -> None:
+    """The ssl command reports a failed probe and exits 0."""
+    _hostile_transport(monkeypatch, "ethscan.ssl.socket.create_connection")
+
+    report = _run_cli(["ssl", "--target", UNREACHABLE_HOST, "--timeout", "1.0"])
+
+    assert report["cert"] is None
+    assert report["valid"] is False
+    assert "hostile transport" in (report["error"] or "")
+
+
+def test_tls_cli_reports_a_failed_probe(monkeypatch) -> None:
+    """The tls command reports a failed probe per version and per cipher."""
+    _hostile_transport(monkeypatch, "ethscan.tls.socket.create_connection")
+
+    report = _run_cli(["tls", "--target", UNREACHABLE_HOST, "--timeout", "1.0"])
+
+    assert report["versions"]
+    assert report["ciphers"]
+    for entry in report["versions"]:
+        assert entry["supported"] is False
+        assert "hostile transport" in (entry["error"] or "")
+    for entry in report["ciphers"]:
+        assert entry["supported"] is False
+        assert entry["error"]
+    assert report["supported_versions"] == []
+    assert report["supported_ciphers"] == []
+
+
+def test_whois_cli_reports_a_failed_lookup(monkeypatch) -> None:
+    """The whois command reports a failed lookup and exits 0."""
+
+    class _FailingSocket:
+        """A socket whose connection fails like a refused one does."""
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def settimeout(self, *args, **kwargs):
+            pass
+
+        def connect(self, *args, **kwargs):
+            raise RuntimeError("hostile transport")
+
+        def close(self, *args, **kwargs):
+            pass
+
+    monkeypatch.setattr("ethscan.whois.socket.socket", _FailingSocket)
+
+    report = _run_cli(
+        [
+            "whois",
+            "--target",
+            "example.com",
+            "--server",
+            "127.0.0.1",
+            "--timeout",
+            "1.0",
+        ]
+    )
+
+    assert report["raw"] == ""
+    assert "Connection failed" in (report["error"] or "")
+    assert "hostile transport" in (report["error"] or "")
+
+
+def test_service_cli_reports_a_closed_port(monkeypatch) -> None:
+    """The service command reports closed ports and exits 0."""
+    _hostile_transport(monkeypatch, "ethscan.service.socket.create_connection")
+
+    report = _run_cli(
+        [
+            "service",
+            "--target",
+            UNREACHABLE_HOST,
+            "--ports",
+            "80,443",
+            "--timeout",
+            "1.0",
+        ]
+    )
+
+    assert report["ports_scanned"] == 2
+    assert report["services_found"] == 0
+    assert report["results"] == []
+
+
+def test_dnssec_cli_reports_a_failed_probe(monkeypatch) -> None:
+    """The dnssec command reports a failed probe and exits 0.
+
+    Both the stdlib path and the dnspython path are stubbed, so the check
+    holds whether or not dnspython is installed.
+    """
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr(
+        "ethscan.dnssec._resolve_nameservers", lambda domain, timeout: ["127.0.0.1"]
+    )
+    monkeypatch.setattr("ethscan.dnssec._query_dnskey_raw", boom)
+    monkeypatch.setattr("ethscan.dnssec._query_dnskey_dnspython", boom)
+
+    report = _run_cli(["dnssec", "--target", "example.com", "--timeout", "1.0"])
+
+    assert report["validated"] is False
+    assert "hostile transport" in (report["dnskey"]["error"] or "")
+    assert "hostile transport" in (report["ds"]["error"] or "")
