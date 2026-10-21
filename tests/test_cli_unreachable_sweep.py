@@ -139,3 +139,142 @@ def test_subdomains_cli_reports_an_unresolvable_target(monkeypatch) -> None:
     assert report["resolved"] == []
     assert report["all_results"]
     assert all(entry["ip"] is None for entry in report["all_results"])
+
+
+# ---------------------------------------------------------------------------
+# The ten commands of the session before this one. Their transport is a
+# socket call (the database modules, the scanner and dnsbrute), a UDP socket
+# (netbios) or an injectable connector (ftp, smtp); each reports its own
+# failure signal at the command line and exits 0.
+# ---------------------------------------------------------------------------
+
+
+def test_scan_cli_reports_a_closed_port(monkeypatch) -> None:
+    """The scan command reports closed ports and exits 0."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.scanner.socket.create_connection", boom)
+
+    report = _run_cli(
+        ["scan", "--target", UNREACHABLE_HOST, "--ports", "80,443", "--timeout", "1.0"]
+    )
+
+    assert report["open_ports"] == []
+    assert report["ports_scanned"] == 2
+    assert all(not entry["open"] for entry in report["details"])
+
+
+def test_dnsbrute_cli_reports_a_refused_zone_transfer(monkeypatch) -> None:
+    """The dnsbrute command reports a refused transfer and exits 0.
+
+    The raw socket path is the one that is exercised here, whatever the host
+    has installed, so dnspython is disabled for the check.
+    """
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.dnsbrute.socket.create_connection", boom)
+    monkeypatch.setattr("ethscan.dnsbrute.DNS_AVAILABLE", False)
+    monkeypatch.setattr("ethscan.dns.socket.getaddrinfo", boom)
+
+    report = _run_cli(
+        ["dnsbrute", "--target", UNRESOLVABLE_HOST, "--ns", "127.0.0.1", "--timeout", "1.0"]
+    )
+
+    assert report["axfr_success"] is False
+    assert report["axfr"]
+    assert "hostile transport" in (report["axfr"][0]["error"] or "")
+    assert report["resolved"] == []
+
+
+def _database_cli_report(monkeypatch, command, target, module):
+    """Run a database command against a hostile transport and return the report."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr(f"ethscan.{module}.socket.create_connection", boom)
+
+    return _run_cli([command, "--target", target, "--timeout", "1.0"])
+
+
+def test_mysql_cli_reports_a_refused_connection(monkeypatch) -> None:
+    """The mysql command reports a refused connection and exits 0."""
+    report = _database_cli_report(monkeypatch, "mysql", "127.0.0.1:1", "mysql")
+    assert report["accessible"] is False
+    assert "hostile transport" in (report["error"] or "")
+
+
+def test_mongodb_cli_reports_a_refused_connection(monkeypatch) -> None:
+    """The mongodb command reports a refused connection and exits 0."""
+    report = _database_cli_report(monkeypatch, "mongodb", "127.0.0.1:1", "mongodb")
+    assert report["accessible"] is False
+    assert "hostile transport" in (report["error"] or "")
+
+
+def test_postgresql_cli_reports_a_refused_connection(monkeypatch) -> None:
+    """The postgresql command reports a refused connection and exits 0."""
+    report = _database_cli_report(
+        monkeypatch, "postgresql", "127.0.0.1:1", "postgresql"
+    )
+    assert report["accessible"] is False
+    assert "hostile transport" in (report["error"] or "")
+
+
+def test_mssql_cli_reports_a_refused_connection(monkeypatch) -> None:
+    """The mssql command reports a refused connection and exits 0."""
+    report = _database_cli_report(monkeypatch, "mssql", "127.0.0.1:1", "mssql")
+    assert report["accessible"] is False
+    assert "hostile transport" in (report["error"] or "")
+
+
+def test_oracle_cli_reports_a_refused_connection(monkeypatch) -> None:
+    """The oracle command reports a refused connection and exits 0."""
+    report = _database_cli_report(monkeypatch, "oracle", "127.0.0.1:1", "oracle")
+    assert report["accessible"] is False
+    assert "hostile transport" in (report["error"] or "")
+
+
+def test_netbios_cli_reports_a_failed_request(monkeypatch) -> None:
+    """The netbios command reports a failed request and exits 0."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.netbios.socket.socket", boom)
+
+    report = _run_cli(["netbios", "--target", UNREACHABLE_HOST, "--timeout", "1.0"])
+
+    assert "node status request failed" in (report["error"] or "")
+    assert "hostile transport" in (report["error"] or "")
+
+
+def test_ftp_cli_reports_a_failed_connection(monkeypatch) -> None:
+    """The ftp command reports a failed connection and exits 0."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.ftp._connect", boom)
+
+    report = _run_cli(["ftp", "--target", UNREACHABLE_HOST, "--timeout", "1.0"])
+
+    assert report["connected"] is False
+    assert "hostile transport" in (report["error"] or "")
+
+
+def test_smtp_cli_reports_a_failed_connection(monkeypatch) -> None:
+    """The smtp command reports a failed connection and exits 0."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.smtp._connect", boom)
+
+    report = _run_cli(["smtp", "--target", UNREACHABLE_HOST, "--timeout", "1.0"])
+
+    assert report["connected"] is False
+    assert "hostile transport" in (report["error"] or "")
