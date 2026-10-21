@@ -225,6 +225,18 @@ def test_run_mongodb_connector_error():
     assert result["accessible"] is False
     assert result["error"] == "Connection refused"
 
+def test_run_mongodb_transport_failure_is_reported(monkeypatch):
+    """A transport failure of an unnamed type is reported, not raised."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.mongodb.socket.create_connection", boom)
+
+    results = run_mongodb("localhost")
+    assert results["accessible"] is False
+    assert "hostile transport" in results["error"]
+
 
 def test_run_mongodb_no_response():
     result = run_mongodb("localhost", connector=lambda *a: (b"", None))

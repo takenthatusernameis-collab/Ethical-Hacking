@@ -1128,3 +1128,15 @@ def test_format_mssql_report_json_accessible():
     assert parsed["accessible"] is True
     assert parsed["prelogin"]["encryption"] == "REQUIRED"
     assert parsed["prelogin"]["thread_id"] == 42
+
+def test_run_mssql_transport_failure_is_reported(monkeypatch):
+    """A transport failure of an unnamed type is reported, not raised."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.mssql.socket.create_connection", boom)
+
+    results = run_mssql("localhost")
+    assert results["accessible"] is False
+    assert "hostile transport" in results["error"]

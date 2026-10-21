@@ -485,6 +485,53 @@ def test_send_recv_connector_receives_arguments() -> None:
     }
 
 
+def test_send_recv_connector_failure_is_reported() -> None:
+    """A connector that fails is reported, never raised."""
+
+    def connector(host, port, request, timeout):
+        raise RuntimeError("hostile transport")
+
+    data, err = _send_recv("h", DEFAULT_PORT, b"req", 1.0, connector=connector)
+    assert data is None
+    assert "hostile transport" in err
+
+
+def test_send_recv_socket_creation_failure_is_reported(monkeypatch) -> None:
+    """A socket that cannot even be created is reported, never raised."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.netbios.socket.socket", boom)
+
+    data, err = _send_recv("h", DEFAULT_PORT, b"req", 1.0)
+    assert data is None
+    assert "hostile transport" in err
+
+
+def test_send_recv_socket_failure_is_reported(monkeypatch) -> None:
+    """A transport failure of an unnamed type is reported, never raised."""
+
+    class _BoomSocket:
+        def settimeout(self, timeout):
+            pass
+
+        def sendto(self, data, address):
+            raise RuntimeError("hostile transport")
+
+        def recvfrom(self, size):
+            return b"", None
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("ethscan.netbios.socket.socket", lambda *a, **kw: _BoomSocket())
+
+    data, err = _send_recv("h", DEFAULT_PORT, b"req", 1.0)
+    assert data is None
+    assert "hostile transport" in err
+
+
 # ---------------------------------------------------------------------------
 # run_netbios
 # ---------------------------------------------------------------------------
@@ -532,6 +579,29 @@ def test_run_netbios_parse_failure() -> None:
 
     results = run_netbios("192.168.1.100", timeout=1.0, connector=connector)
     assert results["error"].startswith("response parse failed:")
+
+
+def test_run_netbios_connector_failure_is_reported() -> None:
+    """A failing transport is reported through the error field, not raised."""
+
+    def connector(host, port, request, timeout):
+        raise RuntimeError("hostile transport")
+
+    results = run_netbios("192.168.1.100", timeout=1.0, connector=connector)
+    assert results["error"].startswith("node status request failed:")
+    assert "hostile transport" in results["error"]
+    assert results["names"] == []
+
+
+def test_run_netbios_empty_answer_is_reported() -> None:
+    """A transport that answers with nothing is reported, not raised."""
+
+    def connector(host, port, request, timeout):
+        return None, None
+
+    results = run_netbios("192.168.1.100", timeout=1.0, connector=connector)
+    assert results["error"].startswith("response parse failed:")
+    assert results["names"] == []
 
 
 def test_run_netbios_rcode_error() -> None:

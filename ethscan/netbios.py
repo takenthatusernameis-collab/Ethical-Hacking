@@ -456,13 +456,23 @@ def _send_recv(
     timeout: float,
     connector=None,
 ) -> tuple[bytes | None, str | None]:
-    """Send a UDP NBNS request and receive the response (injectable for tests)."""
-    if connector is not None:
-        return connector(host, port, request, timeout)
+    """Send a UDP NBNS request and receive the response (injectable for tests).
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.settimeout(timeout)
+    A transport failure of an unnamed type is reported, never raised: the
+    reason travels back to the caller as the error of the request. The socket
+    is opened inside the guarded block, so a socket that cannot even be
+    created is reported like any other transport failure.
+    """
+    if connector is not None:
+        try:
+            return connector(host, port, request, timeout)
+        except Exception as exc:  # noqa: BLE001 - connector is a test seam; doubles raise any type
+            return None, f"connector error: {exc}"
+
+    sock = None
     try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(timeout)
         sock.sendto(request, (host, port))
         data, _ = sock.recvfrom(65536)
         return data, None
@@ -471,7 +481,8 @@ def _send_recv(
     except (OSError, RuntimeError) as exc:
         return None, str(exc)
     finally:
-        sock.close()
+        if sock is not None:
+            sock.close()
 
 
 # ---------------------------------------------------------------------------
@@ -551,7 +562,9 @@ def run_netbios(
 
     try:
         message = _parse_nbns_response(data)
-    except ValueError as exc:
+    # A transport that answers with nothing at all hands over ``None``, which
+    # the parser cannot read; that is a failed request, not a crash.
+    except (ValueError, TypeError) as exc:
         results["error"] = f"response parse failed: {exc}"
         return results
 

@@ -1229,3 +1229,15 @@ def test_parse_refuse_response_decode_exception_direct():
     oracle._parse_refuse_response(header + payload)
     # This won't hit it. Let us patch _parse_refuse_response's internal behavior by
     # creating a custom test that forces the except
+
+def test_run_oracle_transport_failure_is_reported(monkeypatch):
+    """A transport failure of an unnamed type is reported, not raised."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.oracle.socket.create_connection", boom)
+
+    results = run_oracle("localhost")
+    assert results["accessible"] is False
+    assert "hostile transport" in results["error"]

@@ -245,6 +245,20 @@ def test_run_smtp_connection_refused() -> None:
     assert "connection failed" in result["error"]
 
 
+def test_run_smtp_transport_failure_is_reported() -> None:
+    """A transport failure of an unnamed type is reported, not raised."""
+
+    def connector(address, timeout):
+        raise RuntimeError("hostile transport")
+
+    result = run_smtp("127.0.0.1", timeout=1.0, connector=connector)
+    assert result["connected"] is False
+    assert result["banner"] is None
+    assert result["error"] is not None
+    assert "connection failed" in result["error"]
+    assert "hostile transport" in result["error"]
+
+
 def test_run_smtp_open_relay_detected(fake_smtp) -> None:
     host, port, server = fake_smtp
     server.smtp_config["open_relay"] = True

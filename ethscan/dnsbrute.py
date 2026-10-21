@@ -309,7 +309,9 @@ def _axfr_dnspython(
         zone_obj = dns.zone.from_xfr(xfr_source)
     except dns.exception.FormError as exc:
         return _axfr_result(nameserver, False, [], f"transfer refused ({exc})")
-    except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError) as exc:
+    # A transport failure of an unnamed type must not escape the command, the
+    # same way the raw socket path reports it.
+    except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError, RuntimeError) as exc:
         return _axfr_result(nameserver, False, [], str(exc))
 
     records: list[str] = []
@@ -378,7 +380,8 @@ def _resolve_label(label: str, domain: str, timeout: float, resolver: str | None
             dns_resolver.nameservers = [resolver]
             answers = dns_resolver.resolve(hostname, "A")
             a_records = sorted({str(rdata) for rdata in answers})
-        except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError):
+        # A transport failure of an unnamed type must not escape the command.
+        except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError, RuntimeError):
             pass
         try:
             dns_resolver = dns.resolver.Resolver()
@@ -387,7 +390,8 @@ def _resolve_label(label: str, domain: str, timeout: float, resolver: str | None
             dns_resolver.nameservers = [resolver]
             answers = dns_resolver.resolve(hostname, "AAAA")
             aaaa_records = sorted({str(rdata) for rdata in answers})
-        except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError):
+        # A transport failure of an unnamed type must not escape the command.
+        except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError, RuntimeError):
             pass
     else:
         a_records = resolve_a_records(hostname, timeout=timeout)

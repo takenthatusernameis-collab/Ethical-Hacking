@@ -97,6 +97,30 @@ def test_scan_ports_localhost() -> None:
         assert isinstance(is_open, bool)
 
 
+def test_scan_port_transport_failure_is_reported(monkeypatch) -> None:
+    """A transport failure of an unnamed type is reported as a closed port."""
+    from ethscan import scanner as scanner_mod
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.scanner.socket.create_connection", boom)
+
+    assert scanner_mod.scan_port("127.0.0.1", 80) == (80, False)
+
+
+def test_scan_ports_transport_failure_is_reported(monkeypatch) -> None:
+    """A failing transport does not escape the concurrent scan either."""
+    from ethscan import scanner as scanner_mod
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.scanner.socket.create_connection", boom)
+
+    assert scanner_mod.scan_ports("127.0.0.1", [80, 443]) == [(80, False), (443, False)]
+
+
 def test_get_profile_ports_fast() -> None:
     ports = get_profile_ports("fast")
     assert isinstance(ports, list)

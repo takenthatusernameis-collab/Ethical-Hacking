@@ -719,3 +719,15 @@ def test_parse_startup_response_msg_type_empty_slice() -> None:
     # Try with a very odd case
     result = _parse_startup_response(data)
     assert isinstance(result, dict)
+
+def test_run_postgresql_transport_failure_is_reported(monkeypatch):
+    """A transport failure of an unnamed type is reported, not raised."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.postgresql.socket.create_connection", boom)
+
+    results = run_postgresql("localhost")
+    assert results["accessible"] is False
+    assert "hostile transport" in results["error"]

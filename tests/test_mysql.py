@@ -395,6 +395,18 @@ def test_run_mysql_connector_exception():
     assert results["accessible"] is False
     assert results["error"] == "connector error: test"
 
+def test_run_mysql_transport_failure_is_reported(monkeypatch):
+    """A transport failure of an unnamed type is reported, not raised."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.mysql.socket.create_connection", boom)
+
+    results = run_mysql("localhost")
+    assert results["accessible"] is False
+    assert "hostile transport" in results["error"]
+
 
 def test_run_mysql_default_port():
     def connector(host, port, request, timeout):

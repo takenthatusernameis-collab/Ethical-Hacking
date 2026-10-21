@@ -325,6 +325,42 @@ def test_run_ftp_banner_read_failed() -> None:
     assert "banner read failed" in result["error"]
 
 
+def test_run_ftp_transport_failure_is_reported() -> None:
+    """A transport failure of an unnamed type is reported, not raised."""
+
+    def factory():
+        raise RuntimeError("hostile transport")
+
+    result = run_ftp("ftp.example.com", timeout=2.0, connector=factory)
+    assert result["connected"] is False
+    assert result["error"] is not None
+    assert "connection failed" in result["error"]
+    assert "hostile transport" in result["error"]
+
+
+def test_run_ftp_banner_read_transport_failure_is_reported() -> None:
+    """A banner that cannot be read is reported, not raised."""
+
+    class _BoomBanner:
+        def connect(self, host, port, timeout=30):
+            return "220 ready"
+
+        def getwelcome(self):
+            raise RuntimeError("hostile transport")
+
+        def login(self, user="anonymous", passwd="", account=""):
+            raise ftplib.Error("530 Login incorrect")
+
+        def close(self):
+            pass
+
+    result = run_ftp("ftp.example.com", timeout=2.0, connector=_BoomBanner)
+    assert result["connected"] is True
+    assert result["banner"] is None
+    assert "banner read failed" in result["error"]
+    assert "hostile transport" in result["error"]
+
+
 def test_run_ftp_close_raises_swallowed() -> None:
     def factory():
         c = _FakeFTP()

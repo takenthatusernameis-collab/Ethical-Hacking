@@ -1,16 +1,33 @@
 # NEXT TASK
 
-## Status: COMPLETE (socket-command transport failures reported + cve error + permanent protocol sweep)
+## Status: COMPLETE (socket commands in the permanent sweep + the netbios/dnsbrute crash paths)
 
-The task assigned by the previous handoff is done and committed in HEAD `baf31c4` (plus this session's cve top-level error field):
+The optional extension of the previous `NEXT_TASK.md` is done: the commands
+that were surveyed (ftp, smtp, netbios, scanner, dnsbrute, mysql, mongodb,
+postgresql, mssql, oracle) are now covered by the permanent protocol sweep,
+and the survey found three crash paths that the earlier handoff had listed as
+safe.
 
-1. **Socket commands report transport failures.** `ssl.run_ssl`, `tls.run_tls`, `whois.run_whois` and `service.run_service` guard `RuntimeError` from `socket.create_connection`/`socket.socket` and report it through their own failure field instead of raising. `service` uses its existing empty-results convention.
+1. **The permanent sweep covers the ten commands.**
+   `tests/test_protocol_hostile_sweep.py` grew from 119 to 256 checks. The six
+   modules that take a `connector(host, port, request, timeout)` seam (netbios,
+   mysql, mongodb, postgresql, mssql, oracle) are checked with the same two
+   checks as the group above them (a hostile answer, a failing probe), the
+   database modules are additionally checked on the socket they really use, and
+   ftp, smtp, scanner and dnsbrute have their own checks.
 
-2. **cve reports a failed NVD lookup as its own error.** `run_cve` now returns a top-level `"error"` field (`"NVD lookup failed for <cve_id>: <reason>"`) in addition to the existing note, so a user can tell an unreachable NVD API from "no CVEs matched" even when built-in findings are present.
+2. **The crash paths the earlier handoff listed as safe are fixed.**
+   `netbios` raised on a failing connector, on a socket that could not be
+   created and on an answer of `None`; `dnsbrute` raised on a `RuntimeError`
+   of the dnspython zone transfer and of the dnspython resolver.
 
-3. **Permanent protocol sweep.** `tests/test_protocol_hostile_sweep.py` covers redis, memcached, ntp, ldap, smb2, smb, snmp, ssh, ssl, tls, whois and service; `tests/test_http_hostile_sweep.py` covers the ten HTTP-facing commands.
+3. **The regression test of each module sits next to its own tests** (19
+   tests in ten files).
 
-`python -m ruff check ethscan/ tests/` passes; `python -m pytest tests/` passes (4876 passed, 48 skipped). CLI verified: `ethscan ssl --target 127.0.0.1:9` reports `"error": "[Errno 111] Connection refused"` and exits 0.
+`python -m ruff check ethscan/ tests/` passes; `python -m pytest tests/`
+passes (5032 passed, 48 skipped; the baseline was 4876 passed, 48 skipped).
+The CLI reports its own error field and exits 0 for every command of the
+sweep.
 
 ## Constraints
 
@@ -20,4 +37,25 @@ The task assigned by the previous handoff is done and committed in HEAD `baf31c4
 
 ## One precise next task (optional extension)
 
-The assigned theme is complete with no pending item. If extending coverage, survey the remaining socket-based commands (`ftp`, `smtp`, `netbios`, `ping`, `trace`, `scan`, `brute`, `dnsbrute`, `mysql`, `mongodb`, `postgresql`, `mssql`, `oracle`) for transport failures of an unnamed type that escape instead of being reported, then add guards + sweep coverage using the ssl/tls/whois/service method (patch the transport seam to raise `RuntimeError`, call the public `run_*`, assert the module's own failure field, add to `tests/test_protocol_hostile_sweep.py`). Do not commit unless explicitly asked.
+Six commands still let a transport failure of an unnamed type escape:
+`ping`, `osdetect`, `resolve`, `dns`, `stale` and `subdomains`. The exact
+crash sites are listed in `TASK.md` ("One precise next task"): with the
+transport seam raising a `RuntimeError`, these calls raise instead of
+reporting it:
+
+- `ping.run_ping` -> `ethscan/ping.py:122`
+- `osdetect.run_osdetect` -> `ethscan/osdetect.py:123`
+- `resolve.run_resolve` -> `ethscan/resolve.py:60`
+- `dns.run_dns` -> `ethscan/dns.py:58`
+- `stale.run_stale` -> `ethscan/stale.py:48`
+- `subdomains.run_subdomains` -> `ethscan/subdomains.py:110`
+
+`trace.run_trace` is safe (both its socket creation and its name lookup are
+wrapped in `except Exception`).
+
+The method is the one used in the last session: patch the transport seam to
+raise, call the public `run_*`, assert the module's own failure field, add the
+command to `tests/test_protocol_hostile_sweep.py` (a new group: these six have
+no connector seam, so the sweep patches the socket function in the module
+itself), and put the regression test next to the module's own tests. Do not
+commit unless explicitly asked.
