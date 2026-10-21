@@ -1397,3 +1397,78 @@ def test_finding_detail_fallback_empty() -> None:
 
     assert _finding_detail({"kind": "nonexistent"}) == ""
     assert _finding_detail({}) == ""
+
+
+# ---------------------------------------------------------------------------
+# The documents the command reads from a file are foreign data: a document
+# that does not hold the expected shape is reported in the notes of the
+# report, never raised.
+# ---------------------------------------------------------------------------
+
+
+def test_run_vuln_reports_an_unusable_services_document() -> None:
+    """A services document without a 'results' list is reported, not raised."""
+    results = run_vuln("example.com", services={"results": "not a list"})
+
+    assert results["services_checked"] == 0
+    assert results["findings"] == []
+    assert "Service data holds no 'results' list" in results["notes"]
+
+
+def test_run_vuln_reports_service_entries_that_are_not_objects() -> None:
+    """A services entry that is not an object is skipped, not raised."""
+    results = run_vuln("example.com", services={"results": ["not an object"]})
+
+    assert results["services_checked"] == 0
+    assert results["findings"] == []
+    assert "Service data holds entries that are not objects" in results["notes"]
+
+
+def test_run_vuln_reports_a_banner_that_is_not_text() -> None:
+    """A banner that is not text is skipped, not raised."""
+    results = run_vuln(
+        "example.com", services={"results": [{"port": 22, "banner": 5}]}
+    )
+
+    assert results["services_checked"] == 0
+    assert results["findings"] == []
+    assert "No service banners detected" in results["notes"]
+
+
+def test_run_vuln_reports_an_unusable_tls_document() -> None:
+    """A TLS document without a list of names is reported, not raised."""
+    results = run_vuln("example.com", tls={"supported_versions": 5})
+
+    assert results["tls_checked"] is True
+    assert results["findings"] == []
+    assert "TLS data holds no 'supported_versions' list" in results["notes"]
+
+
+def test_run_vuln_reports_an_unusable_certificate_document() -> None:
+    """A certificate document without a certificate is reported, not raised."""
+    results = run_vuln("example.com", certificate={"cert": 5})
+
+    assert results["certificate_checked"] is True
+    assert results["findings"] == []
+    assert "Certificate data holds no 'cert' object" in results["notes"]
+
+
+def test_match_certificate_vulns_ignores_a_key_size_that_is_not_a_number() -> None:
+    """A key size that is not a number matches nothing, it is not a crash."""
+    assert match_certificate_vulns({"key_size": "small"}) == []
+
+
+def test_match_certificate_vulns_ignores_data_that_is_not_an_object() -> None:
+    """Certificate data that is not an object matches nothing."""
+    assert match_certificate_vulns("not an object") == []
+
+
+def test_match_tls_vulns_ignores_names_that_are_not_held_in_a_list() -> None:
+    """Names that are not held in a list match nothing."""
+    assert match_tls_vulns({"supported_versions": 5}) == []
+    assert match_tls_vulns({"supported_ciphers": 5}) == []
+
+
+def test_match_ssl_vulns_ignores_a_certificate_that_is_not_an_object() -> None:
+    """A certificate that is not an object matches nothing."""
+    assert match_ssl_vulns({"cert": 5}) == []

@@ -2,132 +2,127 @@
 
 ## What changed this session
 
-The task of the previous handoff (extend the permanent CLI-level sweep to
-`trace` and `brute`) had already been committed by the session before this
-one (commit `119cc6e`, together with the fix of `ethscan/brute.py:110`). The
-session after that one (commit `1c5d930`) added a `run_brute` wrapper to
-`ethscan/cli.py` **below** the `__main__` guard and broke the
-`python -m ethscan.cli` entry point. This session fixed that regression,
-closed the gaps the previous sweep left open, and removed two sources of
-flakiness from the permanent test suite.
+The task of the previous handoff (extend the permanent CLI-level sweep to the
+three aggregators `vuln`, `recon` and `report`) was partly done by an
+interrupted session and committed as `1ea280d`: four checks in
+`tests/test_cli_unreachable_sweep.py`, two of them under the same name. This
+session replaced that partial work with a sweep of its own, and it fixed the
+crash paths the new sweep exposed.
 
 Nothing was committed by this session: the work is in the worktree, the
 controller makes the checkpoint commit.
 
 ### Source (`ethscan/`)
 
-- `cli.py`: the `run_brute` wrapper was defined **after**
-  `if __name__ == "__main__": cli()`. The guard runs the CLI while the module
-  body is still executing, so `run_brute` was not bound yet and
-  `python -m ethscan.cli brute ...` died with
-  `NameError: name 'run_brute' is not defined` (exit 1, no report). The
-  wrapper is now defined above the guard, next to the imports.
-- `brute.py`: `_attempt_ssh` built the paramiko client **outside** the
-  guarded block (the same defect the FTP path had until commit `119cc6e`).
-  A failing `paramiko.SSHClient()` escaped the command as a bare
-  `RuntimeError`. The client is now built inside the `try:`.
-- `ping.py`: two guards were too narrow.
-  - `probe_icmp` caught only `socket.gaierror` around `connect_ex`; a
-    transport that fails with any other type escaped the command. It now
-    catches `(OSError, RuntimeError)`, like the other guards of the module.
-  - `_resolve_host` caught only `(socket.gaierror, socket.herror, ValueError)`.
-- `cert.py`, `geo.py`, `mac.py`: their `_resolve_host` helpers caught only
-  `(socket.gaierror, socket.herror, ValueError)`, so a resolver that fails
-  with any other error type escaped the command. They now catch the same set
-  as `ethscan/dns.py` and `ethscan/resolve.py`:
-  `(socket.timeout, socket.gaierror, socket.herror, OSError, ValueError,
-  RuntimeError)`.
+- `vuln.py`: the command reads the output of other commands from a file
+  (`--services-file`, `--tls-file`, `--ssl-file`). The CLI checked that the
+  file holds an object and nothing else, so a document whose *shape* was
+  wrong reached the library and crashed the command with a traceback (exit 1,
+  no report). The documents are now read as foreign data:
+  - `_service_document` (`ethscan/vuln.py:587`), `_tls_document`
+    (`ethscan/vuln.py:616`) and `_certificate_document`
+    (`ethscan/vuln.py:650`) return the readable part of a document and the
+    reason it could not be read.
+  - `run_vuln` (`ethscan/vuln.py:867`) reads the three documents once and
+    puts the reason in the notes of the report, so the user learns that the
+    file was not usable instead of reading a clean-looking report.
+  - `match_tls_vulns` (`ethscan/vuln.py:779`), `match_ssl_vulns`
+    (`ethscan/vuln.py:800`) and `match_certificate_vulns`
+    (`ethscan/vuln.py:743`) read their document through the same helpers, so
+    a library user that calls them directly is protected as well.
+    `match_certificate_vulns` also requires a key size that is a number
+    (`isinstance(key_size, int)`), because a key size that is text cannot be
+    compared with a number.
+  - the loop of `_scan_host` (`ethscan/vuln.py:912`) skips an entry that is
+    not an object and a banner that is not text.
+
+  The behaviour of a well formed document is unchanged: the same findings,
+  the same counts, the same notes.
 
 ### Tests (`tests/`)
 
-- `test_main.py` (4 new checks): the `__main__` guard must be the last
-  statement of `ethscan/cli.py`, `ethscan/main.py` and
-  `ethscan/__main__.py` (a static invariant that catches the whole class of
-  "defined below the guard" defects), and the `brute` command must run when
-  `ethscan/cli.py` is executed as `__main__` (the regression itself).
-- `test_cli_trace_brute_unreachable_sweep.py` (3 -> 6 checks): rewritten in
-  the conventions of `test_cli_http_unreachable_sweep.py` and extended:
-  - the FTP client that cannot be **constructed** (locks in the fix of
-    commit `119cc6e`, which had no permanent check);
-  - the SSH login that fails and the SSH client that cannot be constructed
-    (the SSH branch of the command had no check at all; paramiko is not
-    installed here, so a stand-in module is used).
-- `conftest.py` (new): the `no_external_network` fixture, shared by the two
-  option sweeps.
-- `test_option_sweep.py`, `test_file_option_sweep.py`: use the fixture. The
-  `cert` command fetches certificate transparency data from `crt.sh` and the
-  `whois` command talks to a whois server; both made the sweeps depend on
-  the latency of the internet and tripped their own five second alarm.
-- `test_cert.py`, `test_geo.py`, `test_mac.py`, `test_ping.py` (5 new
-  checks): a resolver that fails with an unknown error type is a failed
-  lookup, not a raise.
+- `test_cli_aggregator_unreachable_sweep.py` (new, 9 checks): the permanent
+  CLI-level sweep of the three aggregators. It patches the transport each
+  command really opens, runs the command through `CliRunner` and asserts that
+  it exits 0, leaks no traceback and prints the command's own failure
+  signal:
+  - `vuln`: the service detection that fails (`ethscan.service.socket.create_connection`),
+    a services file without a `results` list, a services file with an entry
+    that is not an object, a TLS file without a list of names, a certificate
+    file without a certificate and a certificate whose key size is text;
+  - `report`: the scan that fails (`ethscan.scanner.socket.create_connection`);
+  - `recon`: the failure of every module of the run
+    (`ethscan.subdomains.socket.gethostbyname`,
+    `ethscan.dns.socket.getaddrinfo`, `ethscan.whois.socket.socket`,
+    `ethscan.geo.socket.gethostbyname`, `ethscan.trace.socket.gethostbyname`)
+    and a module that cannot run at all (`ethscan.recon.run_dns`).
+- `test_vuln.py` (9 new checks): the same invariants one level down, in the
+  library.
+- `test_cli_unreachable_sweep.py`: the four checks of commit `1ea280d` were
+  removed; the file is back to its state before that commit.
 
 ## What was actually verified
 
-- **The regression was reproduced before the fix**:
-  `python -m ethscan.cli brute --target 127.0.0.1 --user-file u.txt
-  --pass-file p.txt` exited 1 with
-  `NameError: name 'run_brute' is not defined`. After the fix the same
-  command prints its JSON report and exits 0.
+- **The eight crashes were reproduced at the command line before the fix**
+  (each one a JSON file that holds an object of the wrong shape):
+
+  | command            | document                                       | before this session                                   | after this session |
+  |--------------------|------------------------------------------------|--------------------------------------------------------|--------------------|
+  | `vuln --services-file` | `{"results": "abc"}`                    | exit 1, `AttributeError: 'str' object has no attribute 'get'` | exit 0, note `Service data holds no 'results' list` |
+  | `vuln --services-file` | `{"results": 5}`                       | exit 1, `TypeError: 'int' object is not iterable`        | exit 0, same note |
+  | `vuln --services-file` | `{"results": ["abc"]}`                  | exit 1, `AttributeError: 'str' object has no attribute 'get'` | exit 0, note `Service data holds entries that are not objects` |
+  | `vuln --services-file` | `{"results": [{"port": 80, "banner": 5}]}` | exit 1, `TypeError: expected string or bytes-like object, got 'int'` | exit 0, `No service banners detected` |
+  | `vuln --tls-file`      | `{"supported_versions": 5}`             | exit 1, `TypeError: 'int' object is not iterable`        | exit 0, note `TLS data holds no 'supported_versions' list` |
+  | `vuln --tls-file`      | `{"supported_ciphers": 5}`              | exit 1, `TypeError: 'int' object is not iterable`        | exit 0, note `TLS data holds no 'supported_ciphers' list` |
+  | `vuln --ssl-file`      | `{"cert": 5}`                           | exit 1, `AttributeError: 'int' object has no attribute 'get'` | exit 0, note `Certificate data holds no 'cert' object` |
+  | `vuln --ssl-file`      | `{"cert": {"key_size": "small"}}`       | exit 1, `TypeError: '<' not supported between instances of 'str' and 'int'` | exit 0, no finding |
 
 - **The new checks are meaningful.** Every check was proved by reverting the
   guard of its own module and watching the check fail:
 
-  | check                                                | mutation                                                     |
-  |------------------------------------------------------|--------------------------------------------------------------|
-  | `test_main_guard_is_the_last_statement_of_the_module` | the `run_brute` wrapper moved back below the guard          |
-  | `test_cli_module_as_main_runs_the_brute_command`      | the `run_brute` wrapper moved back below the guard          |
-  | `test_trace_cli_reports_a_failed_name_lookup`          | `except Exception` -> `except ValueError` (trace)            |
-  | `test_trace_cli_reports_a_failed_socket`               | `except Exception` -> `except ValueError` (trace)            |
-  | `test_brute_cli_reports_a_failed_login`                | `except Exception` -> `except ValueError` (brute)            |
-  | `test_brute_cli_reports_an_unbuildable_client`         | `ftp = FTP()` moved out of the `try:` (brute)                |
-  | `test_brute_cli_reports_a_failed_ssh_login`            | `except Exception` -> `except ValueError` (brute)            |
-  | `test_brute_cli_reports_an_unbuildable_ssh_client`     | `client = paramiko.SSHClient()` moved out of the `try:`      |
-  | `test_ping_connect_failure_of_an_unknown_type_is_reported` | `except (OSError, RuntimeError)` -> `except socket.gaierror` |
-  | `test_cert/test_geo/test_mac/test_ping` resolver checks | the `_resolve_host` guard narrowed back                      |
+  | check                                                        | mutation                                                             |
+  |--------------------------------------------------------------|----------------------------------------------------------------------|
+  | `test_vuln_cli_reports_a_failed_service_detection`           | `ethscan/service.py`: the guard of `grab_banner` -> `except ValueError` |
+  | `test_report_cli_reports_a_failed_scan`                      | `ethscan/scanner.py`: the guard of `scan_port` -> `except ValueError`  |
+  | `test_recon_cli_reports_the_failure_of_every_module`         | `ethscan/dns.py`: the guard of `resolve_a_records` -> `except ValueError` |
+  | `test_recon_cli_reports_a_failed_module`                      | `ethscan/recon.py`: `except Exception` -> `except ValueError` around the dns module |
+  | `test_vuln_cli_reports_an_unusable_services_file` and `test_run_vuln_reports_an_unusable_services_document` | `ethscan/vuln.py`: the reading of the `results` list of a service document reverted |
+  | `test_vuln_cli_reports_service_entries_that_are_not_objects` and `test_run_vuln_reports_service_entries_that_are_not_objects` | `ethscan/vuln.py`: the reading of the entries of a service document reverted |
+  | `test_vuln_cli_reports_an_unusable_tls_file`, `test_run_vuln_reports_an_unusable_tls_document`, `test_match_tls_vulns_ignores_names_that_are_not_held_in_a_list` | `ethscan/vuln.py`: the reading of the names of a TLS document reverted |
+  | `test_vuln_cli_reports_an_unusable_certificate_file`, `test_vuln_cli_reports_a_certificate_file_without_a_certificate`, `test_run_vuln_reports_an_unusable_certificate_document`, `test_match_certificate_vulns_ignores_a_key_size_that_is_not_a_number`, `test_match_certificate_vulns_ignores_data_that_is_not_an_object`, `test_match_ssl_vulns_ignores_a_certificate_that_is_not_an_object` | `ethscan/vuln.py`: the reading of a certificate document and the reading of its key size reverted |
+  | `test_run_vuln_reports_a_banner_that_is_not_text`            | `ethscan/vuln.py`: the guard that reads the banner of a service entry removed |
 
   With the guards restored, all of them pass.
 
-- **The four resolver guards were measured at the command line.** With
-  `socket.gethostbyname` and `socket.getaddrinfo` raising a plain
-  `OSError("hostile resolver")`:
-
-  | command | before this session | after this session |
-  |---------|---------------------|--------------------|
-  | `cert`  | exit 1, traceback    | exit 0, report     |
-  | `geo`   | exit 1, traceback    | exit 0, report     |
-  | `mac`   | exit 1, traceback    | exit 0, report     |
-  | `ping`  | exit 1, traceback    | exit 0, report     |
-  | `dns`, `resolve`, `stale`, `subdomains`, `subtake`, `s3`, `trace`, `whois`, `web` | exit 0 | exit 0 |
-
-- **The new checks are hermetic.** `test_cli_trace_brute_unreachable_sweep.py`
-  and `test_main.py` were run with the network blocked (a plugin that raises
-  on every connection and on every name lookup that is not a numeric
-  address): **20 passed**. The plugin was used for the proof only and is not
-  part of the repository.
-
-- **The option sweeps are hermetic now.** They are run with the
-  `no_external_network` fixture: the HTTP transport and the resolution of a
-  name that is not a numeric address fail at once, while connections to a
-  numeric address stay untouched. Both sweeps were run three times in a row:
-  97 passed, 9 skipped, every time.
+- **The new sweep is hermetic.** It runs with the `no_external_network`
+  fixture of `tests/conftest.py`: the transport a check is about is patched,
+  every other transport fails at once instead of reaching the network. The
+  file runs in **0.13 s** (9 passed).
 
 - `python -m ruff check ethscan/ tests/` -> **All checks passed**.
-- `python -m pytest tests/` -> **5097 passed, 48 skipped, 3 warnings** (the
-  baseline at the start of the session was 5085 passed, 48 skipped, 2
-  warnings; the +12 are the new checks, the third warning is the new runpy
-  check in `test_main.py`, of the same kind as the two pre-existing ones).
-  The suite was run twice in a row with the same result.
+- `python -m pytest tests/` -> **5115 passed, 48 skipped, 3 warnings**
+  (baseline at the start of the session: 5148 collected at commit `1ea280d`,
+  of which one check was shadowed by a duplicate name and never ran; the +15
+  are the 9 new CLI checks and the 9 new module checks minus the 3 partial
+  checks that were removed).
 - `git diff --check` -> clean. Nothing is committed.
 
 ## What remains unresolved
 
-- **The CLI level still has no failure-field check for the three
-  aggregators** `vuln`, `recon` and `report` (40 of the 53 commands have a
-  permanent CLI-level check: 28 in `test_cli_unreachable_sweep.py`, 10 in
-  `test_cli_http_unreachable_sweep.py`, 2 in
-  `test_cli_trace_brute_unreachable_sweep.py`). The modules behind them are
-  covered one level down.
+- **Two commands still crash on a JSON document they cannot read.** Both
+  read the same kind of document as the `vuln` command, and both were left
+  alone because they are not part of the three aggregators of this task:
+  - `cve --services-file` with `{"results": [{"port": 22, "banner": 5}]}`
+    dies with `TypeError: expected string or bytes-like object, got 'int'`
+    (`ethscan/cve.py:345` hands the banner to `parse_banner` unchanged).
+  - `osdetect --banners-file` with `{"results": "abc"}` dies with
+    `AttributeError: 'str' object has no attribute 'get'`
+    (`ethscan/cli.py:2313` reads the entries of the file as objects).
+- **The CLI level still has no failure-field check for the commands that do
+  not open a transport of their own** (43 of the 53 commands have one: 28 in
+  `test_cli_unreachable_sweep.py`, 10 in `test_cli_http_unreachable_sweep.py`,
+  6 in `test_cli_trace_brute_unreachable_sweep.py`, 9 in
+  `test_cli_aggregator_unreachable_sweep.py`).
 - **`socket.setdefaulttimeout()` is a process-wide side effect.** The
   resolution helpers of `ethscan/dns.py`, `ethscan/resolve.py`,
   `ethscan/stale.py`, `ethscan/subtake.py` and `ethscan/s3.py` set the
@@ -138,63 +133,52 @@ controller makes the checkpoint commit.
   (pre-existing, not a regression): the script's own directory is
   `sys.path[0]`, so `from ethscan import __version__` fails with
   `ModuleNotFoundError`. `python -m ethscan.cli` is the working form of that
-  entry point and it works again after the fix of this session.
-- **The `vuln`, `recon` and `report` commands were not probed at the command
-  line in this session** (only their modules were covered one level down
-  before), so a crash path of the aggregators themselves would still be
-  invisible to the permanent sweeps.
+  entry point.
 
 ## Approaches that failed and why
 
-- **The first version of the hermetic fixture raised a plain `OSError` from
-  the name resolution.** The string-option sweep then failed for `cert`,
-  `geo`, `mac` and `ping`, because a plain `OSError` is not the failure a
-  resolver produces: the real failure of a name lookup is a
-  `socket.gaierror`. The fixture now raises `socket.gaierror`, which is what
-  the modules already handle, and the four resolver guards were fixed
-  separately with the guard they were missing.
-- **The first version of the fixture recursed into itself.** The guarded
-  resolver called `socket.getaddrinfo`, which was the patched function, and
-  every command died with `RecursionError`. The originals are now kept at
-  module level in `tests/conftest.py`.
-- **The first version of the ping guard caught only `OSError`.** The
-  project's hostile transport is a `RuntimeError` (see the other regression
-  tests), which is not an `OSError`, so the check failed. The guard catches
-  `(OSError, RuntimeError)` now, like the other guards of the module.
+- **A duplicate test name hides a failing check.** Commit `1ea280d` defined
+  `test_recon_cli_reports_module_failures` twice; the second definition
+  shadowed the first, so only one of the two ran and `ruff check` failed with
+  F811. The shadowed check would have failed as well: with the transports of
+  the recon modules patched, every module reports the failure inside its own
+  output and the notes of the recon report stay empty. A check has to assert
+  the failure signal of the module it is about, not the number of notes.
+- **Patching a transport that a module does not open proves nothing.** The
+  first version of the recon check patched `ethscan.geo.socket.create_connection`,
+  but the geo module opens `urllib.request.urlopen` and resolves the host
+  first; the check passed for the wrong reason. The seams of the sweep are
+  the ones the modules really open.
 - **`socket.gaierror` derives from `OSError`.** Narrowing a guard to
   `except socket.gaierror` therefore changes nothing for a `gaierror`; the
   mutation has to drop `OSError` (or raise a different type) to prove
   anything. This trap applies to every guard of this repository.
+- **Two guards that protect each other cannot be proved one at a time.** The
+  certificate of a document is read in `_certificate_document` and again in
+  `match_certificate_vulns`; reverting one of the two alone changes nothing.
+  The mutation of that table reverts both, which is what "revert the guard"
+  has to mean when a value is read twice.
 - **A check that fails while another process mutates the sources is not
   evidence.** The mutation runs and the test runs have to be sequential.
 
 ## One precise next task
 
-Extend the permanent CLI-level sweep to the last three commands that open a
-transport of their own without a failure-field check at the command line:
-the aggregators `vuln`, `recon` and `report`.
+Fix the two commands that read the same kind of JSON document from a file and
+still crash on a document they cannot read: `cve` and `osdetect`.
 
-The method is the one of `tests/test_cli_unreachable_sweep.py`,
-`tests/test_cli_http_unreachable_sweep.py` and
-`tests/test_cli_trace_brute_unreachable_sweep.py`: patch the transport the
-command really opens, run the command through `CliRunner`, and assert that
-it exits 0, leaks no traceback and prints the command's own failure signal.
+- `cve --services-file` with `{"results": [{"port": 22, "banner": 5}]}` dies
+  with `TypeError: expected string or bytes-like object, got 'int'`
+  (`ethscan/cve.py:345`).
+- `osdetect --banners-file` with `{"results": "abc"}` dies with
+  `AttributeError: 'str' object has no attribute 'get'`
+  (`ethscan/cli.py:2313`).
 
-What is already known about the three commands:
-
-- `vuln` (`--target`, optional `--services-file`, `--tls-file`,
-  `--ssl-file`): the services file lists the ports to probe, so a check
-  needs a file with one port.
-- `recon` (`--target`, optional `--modules`): the modules of the recon run
-  can be limited with `--modules`, so a check can pick the ones that open a
-  socket and leave the rest out.
-- `report` (`--target`, optional `--audit-file`): it scans the ports of the
-  target and audits the credentials.
-
-The transports to patch are the ones the modules really open
-(`ethscan.vuln`, `ethscan.recon`, `ethscan.report` use sockets of their
-own); patching the module attribute is enough, because the command line
-never injects a transport.
+The fix is the one of `ethscan/vuln.py` of this session: read the document as
+foreign data, skip what cannot be read and name it in the notes of the
+report. Give both commands a permanent check in
+`tests/test_cli_aggregator_unreachable_sweep.py`, the file of this session
+that already holds the checks of the commands that read a document from a
+file, and prove every check by reverting the guard of its own module.
 
 Constraints:
 

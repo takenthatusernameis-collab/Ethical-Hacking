@@ -584,6 +584,96 @@ def _finding(entry: dict[str, object], **extra: object) -> dict[str, object]:
     return finding
 
 
+def _service_document(services: object) -> tuple[dict | None, str | None]:
+    """Return the service document and the reason it cannot be read.
+
+    The document is the output of the ``service`` command: an object whose
+    ``results`` key holds a list of objects. A document that holds something
+    else (a hand-written file, or the output of another tool) is not a
+    crash: the entries that cannot be read are skipped, and the reason is
+    returned so that the report can name the file that was not usable.
+
+    Args:
+        services: The service document, or None when no document was given.
+
+    Returns:
+        Tuple of the readable document (None when no document was given) and
+        the reason the document could not be read (None when it could).
+    """
+    if services is None:
+        return None, None
+    if not isinstance(services, dict):
+        return {"results": []}, "Service data is not a JSON object"
+    results = services.get("results")
+    if not isinstance(results, list):
+        return {"results": []}, "Service data holds no 'results' list"
+    entries = [entry for entry in results if isinstance(entry, dict)]
+    if len(entries) != len(results):
+        return {"results": entries}, "Service data holds entries that are not objects"
+    return {"results": entries}, None
+
+
+def _tls_document(tls_data: object) -> tuple[dict | None, str | None]:
+    """Return the TLS document and the reason it cannot be read.
+
+    The document is the output of the ``tls`` command: an object whose
+    ``supported_versions`` and ``supported_ciphers`` keys hold lists of
+    names. A document that holds something else is not a crash: the names
+    that cannot be read are skipped, and the reason is returned so that the
+    report can name the file that was not usable.
+
+    Args:
+        tls_data: The TLS document, or None when no document was given.
+
+    Returns:
+        Tuple of the readable document (None when no document was given) and
+        the reason the document could not be read (None when it could).
+    """
+    if tls_data is None:
+        return None, None
+    if not isinstance(tls_data, dict):
+        return {"supported_versions": [], "supported_ciphers": []}, (
+            "TLS data is not a JSON object"
+        )
+    versions = tls_data.get("supported_versions")
+    ciphers = tls_data.get("supported_ciphers")
+    note = None
+    if not isinstance(versions, list):
+        versions = []
+        note = "TLS data holds no 'supported_versions' list"
+    if not isinstance(ciphers, list):
+        ciphers = []
+        note = note or "TLS data holds no 'supported_ciphers' list"
+    return {"supported_versions": versions, "supported_ciphers": ciphers}, note
+
+
+def _certificate_document(certificate: object) -> tuple[dict | None, str | None]:
+    """Return the certificate document and the reason it cannot be read.
+
+    The document is the output of the ``ssl`` command: an object whose
+    ``cert`` key holds the parsed certificate. A document that holds
+    something else is not a crash: the certificate is skipped, and the
+    reason is returned so that the report can name the file that was not
+    usable.
+
+    Args:
+        certificate: The certificate document, or None when no document was
+            given.
+
+    Returns:
+        Tuple of the readable document (None when no document was given) and
+        the reason the document could not be read (None when it could).
+    """
+    if certificate is None:
+        return None, None
+    if not isinstance(certificate, dict):
+        return {"cert": {}}, "Certificate data is not a JSON object"
+    cert = certificate.get("cert")
+    if not isinstance(cert, dict):
+        return {"cert": {}}, "Certificate data holds no 'cert' object"
+    return {"cert": cert}, None
+
+
 def match_service_vulns(
     product: str | None,
     version: str | None,
@@ -653,6 +743,10 @@ def match_cipher_vulns(
 def match_certificate_vulns(cert_data: dict | None) -> list[dict[str, object]]:
     """Check parsed certificate data against the certificate weakness database.
 
+    The certificate data comes from the ``ssl`` command, so it is read as
+    foreign data: a value that is not a certificate object is not a crash,
+    it simply matches nothing.
+
     Args:
         cert_data: Parsed certificate dictionary as returned by the ``ssl``
             command (with ``key_size`` and ``signature_algorithm`` fields).
@@ -661,7 +755,7 @@ def match_certificate_vulns(cert_data: dict | None) -> list[dict[str, object]]:
         List of matching vulnerability findings.
     """
     findings: list[dict[str, object]] = []
-    if not cert_data:
+    if not isinstance(cert_data, dict):
         return findings
 
     key_size = cert_data.get("key_size")
@@ -670,7 +764,7 @@ def match_certificate_vulns(cert_data: dict | None) -> list[dict[str, object]]:
     for entry in CERTIFICATE_VULNS:
         check = entry["check"]
         if check == "key_size_below":
-            if key_size is not None and key_size < entry["value"]:
+            if isinstance(key_size, int) and key_size < entry["value"]:
                 findings.append(_finding(entry, key_size=key_size))
         elif check == "signature_contains" and entry["value"] in signature:
             findings.append(
@@ -685,6 +779,10 @@ def match_certificate_vulns(cert_data: dict | None) -> list[dict[str, object]]:
 def match_tls_vulns(tls_data: dict) -> list[dict[str, object]]:
     """Check ``tls`` command output for protocol and cipher weaknesses.
 
+    The document comes from the ``tls`` command, so it is read as foreign
+    data: names that are not held in a list match nothing, they are not a
+    crash.
+
     Args:
         tls_data: Results dictionary from ``run_tls`` with
             ``supported_versions`` and ``supported_ciphers`` lists.
@@ -692,14 +790,19 @@ def match_tls_vulns(tls_data: dict) -> list[dict[str, object]]:
     Returns:
         List of matching vulnerability findings.
     """
+    document, _ = _tls_document(tls_data)
     findings: list[dict[str, object]] = []
-    findings.extend(match_protocol_vulns(tls_data.get("supported_versions") or []))
-    findings.extend(match_cipher_vulns(tls_data.get("supported_ciphers") or []))
+    findings.extend(match_protocol_vulns(document["supported_versions"]))
+    findings.extend(match_cipher_vulns(document["supported_ciphers"]))
     return findings
 
 
 def match_ssl_vulns(ssl_data: dict) -> list[dict[str, object]]:
     """Check ``ssl`` command output for certificate weaknesses.
+
+    The document comes from the ``ssl`` command, so it is read as foreign
+    data: a certificate that is not an object matches nothing, it is not a
+    crash.
 
     Args:
         ssl_data: Results dictionary from ``run_ssl`` with a ``cert`` key.
@@ -707,7 +810,8 @@ def match_ssl_vulns(ssl_data: dict) -> list[dict[str, object]]:
     Returns:
         List of matching vulnerability findings.
     """
-    return match_certificate_vulns(ssl_data.get("cert") or {})
+    document, _ = _certificate_document(ssl_data)
+    return match_certificate_vulns(document["cert"])
 
 
 def run_vuln(
@@ -757,8 +861,18 @@ def run_vuln(
     """
     host = _normalize_host(target)
 
+    # The documents come from other commands, so they are read as foreign
+    # data: a document that cannot be read is named in the notes instead of
+    # crashing the command.
+    services, services_note = _service_document(services)
+    tls, tls_note = _tls_document(tls)
+    certificate, certificate_note = _certificate_document(certificate)
+
     all_findings: list[dict[str, object]] = []
     all_notes: list[str] = []
+    for note in (services_note, tls_note, certificate_note):
+        if note:
+            all_notes.append(note)
     recursive_hosts_scanned: list[str] = []
     recursive_findings: list[dict[str, object]] = []
     scanned_hosts: set = set()
@@ -795,7 +909,14 @@ def run_vuln(
         services_checked = 0
         banners: list[str] = []
         for entry in svc_data.get("results") or []:
-            banner = entry.get("banner") or ""
+            if not isinstance(entry, dict):
+                continue
+            banner = entry.get("banner")
+            if banner is not None and not isinstance(banner, str):
+                # A banner is text: a value of another type is not a banner,
+                # it is data the document did not hold in the expected shape.
+                continue
+            banner = banner or ""
             if banner:
                 banners.append(banner)
             # Apply salt/pepper transformation to the banner before matching,

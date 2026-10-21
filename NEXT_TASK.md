@@ -1,60 +1,56 @@
 # NEXT TASK
 
-## Status: COMPLETE (the CLI-level sweep is complete for every command that opens a transport of its own, except the three aggregators)
+## Status: COMPLETE (the CLI-level sweep covers every command that opens a transport of its own)
 
 The task of the previous handoff is done. The permanent CLI-level sweep now
-covers 40 of the 53 commands, every command that opens a transport of its
-own, except the three aggregators `vuln`, `recon` and `report`.
+covers 43 of the 53 commands: every command that opens a transport of its
+own, the three aggregators `vuln`, `recon` and `report` included.
 
 ## What this session changed
 
-1. **A regression of the previous session is fixed.** The `run_brute`
-   wrapper of `ethscan/cli.py` was defined below the `__main__` guard, so
-   `python -m ethscan.cli brute ...` died with
-   `NameError: name 'run_brute' is not defined` (exit 1, no report). The
-   wrapper is now defined above the guard.
+1. **The `vuln` command no longer crashes on a JSON document it cannot
+   read.** The command reads the output of other commands from a file
+   (`--services-file`, `--tls-file`, `--ssl-file`). The CLI checked that the
+   file holds an object and nothing else, so a document whose *shape* was
+   wrong reached the library and died with a traceback (exit 1, no report):
+   eight distinct crashes, from `AttributeError: 'str' object has no
+   attribute 'get'` to `TypeError: '<' not supported between instances of
+   'str' and 'int'`. The library now reads those documents as foreign data:
+   what cannot be read is skipped and named in the notes of the report
+   (`Service data holds no 'results' list`, `TLS data holds no
+   'supported_versions' list`, `Certificate data holds no 'cert' object`).
 
-2. **The trace and brute sweep is complete and proved.** The file
-   `tests/test_cli_trace_brute_unreachable_sweep.py` was rewritten in the
-   conventions of the other sweeps and grew from three to six checks: the
-   FTP client that cannot be constructed, the SSH login that fails and the
-   SSH client that cannot be constructed are new. The two new ones exposed
-   a second instance of the defect of `ethscan/brute.py:110` in the SSH
-   branch (`paramiko.SSHClient()` was built outside the guard); it is
-   fixed.
+2. **A permanent CLI-level sweep for the three aggregators.**
+   `tests/test_cli_aggregator_unreachable_sweep.py` (new, 9 checks) patches
+   the transport each command really opens, runs the command through
+   `CliRunner` and asserts that it exits 0, leaks no traceback and prints the
+   command's own failure signal: the notes of the vuln report, the closed
+   ports of the report scan section, the failure of each recon module.
 
-3. **Two sources of flakiness are gone.** The `cert` command fetches
-   certificate transparency data from `crt.sh` and the `whois` command
-   talks to a whois server, so the two option sweeps depended on the
-   latency of the internet and tripped their own five second alarm. A
-   shared fixture (`tests/conftest.py`) keeps them off the internet.
-
-4. **Four commands no longer crash on a resolver failure.** A resolver
-   that fails with an error type the modules did not name in their guards
-   (a plain `OSError`) escaped the `cert`, `geo`, `mac` and `ping`
-   commands with a traceback (exit 1). All four now report the failure
-   (exit 0), and the `ping` command no longer lets a `connect_ex` failure
-   of an unknown type escape either.
-
-5. **The entry-point regression has a permanent check.** `tests/test_main.py`
-   now asserts that the `__main__` guard is the last statement of the
-   three entry-point modules, and that the `brute` command runs when
-   `ethscan/cli.py` is executed as `__main__`.
+3. **The partial work of the interrupted session was replaced.** Commit
+   `1ea280d` added four checks to `tests/test_cli_unreachable_sweep.py`, two
+   of them under the same name (`test_recon_cli_reports_module_failures`):
+   the second definition shadowed the first, `ruff check` failed with F811,
+   and the shadowed check would have failed as well (with the transports of
+   the recon modules patched, every module reports its own failure and the
+   notes stay empty, so its assertion `len(report["notes"]) > 0` was wrong).
+   The file is back to its state before that commit and the checks live in
+   the new sweep file.
 
 ## What was actually verified
 
-- The crash was reproduced before the fix and is gone after it.
+- Every one of the eight crashes was reproduced at the command line before
+  the fix and is gone after it (exit 0 with the note that names the file).
 - Every new check was proved by reverting the guard of its own module and
   watching the check fail; with the guards restored all of them pass.
-- The new checks are hermetic: 20 passed with the network blocked (a
-  plugin that raises on every connection and on every name lookup that is
-  not a numeric address; the plugin is not part of the repository).
-- The two option sweeps were run three times in a row: 97 passed, 9
-  skipped, every time.
+- The new sweep is hermetic: it runs with the `no_external_network` fixture
+  of `tests/conftest.py`, so a transport that a check forgot to patch fails
+  at once instead of reaching the network (9 passed in 0.13 s).
 - `python -m ruff check ethscan/ tests/` -> **All checks passed**.
-- `python -m pytest tests/` -> **5097 passed, 48 skipped, 3 warnings**
-  (baseline at the start of the session: 5085 passed, 48 skipped, 2
-  warnings). The suite was run twice in a row with the same result.
+- `python -m pytest tests/` -> **5115 passed, 48 skipped, 3 warnings**
+  (baseline at the start of the session: 5148 collected, of which 3 ran and
+  1 was shadowed; the +15 are the 9 new CLI checks and the 9 new module
+  checks minus the 3 partial checks that were removed).
 - `git diff --check` -> clean. Nothing is committed.
 
 The full evidence, the mutation table and the open points are in
@@ -70,27 +66,22 @@ The full evidence, the mutation table and the open points are in
 
 ## One precise next task
 
-Extend the permanent CLI-level sweep to the last three commands that open a
-transport of their own without a failure-field check at the command line:
-the aggregators `vuln`, `recon` and `report`.
+The two commands that read the same kind of JSON document from a file and
+still crash on a document they cannot read: `cve` and `osdetect`.
 
-The method is the one of `tests/test_cli_unreachable_sweep.py`,
-`tests/test_cli_http_unreachable_sweep.py` and
-`tests/test_cli_trace_brute_unreachable_sweep.py`: patch the transport the
-command really opens, run the command through `CliRunner`, and assert that
-it exits 0, leaks no traceback and prints the command's own failure signal.
+- `cve --services-file` with `{"results": [{"port": 22, "banner": 5}]}` dies
+  with `TypeError: expected string or bytes-like object, got 'int'`
+  (`ethscan/cve.py`, the banner is handed to `parse_banner` unchanged).
+- `osdetect --banners-file` with `{"results": "abc"}` dies with
+  `AttributeError: 'str' object has no attribute 'get'`
+  (`ethscan/cli.py`, the entries of the file are read as objects).
 
-What is already known about the three commands:
-
-- `vuln` (`--target`, optional `--services-file`, `--tls-file`,
-  `--ssl-file`): the services file lists the ports to probe, so a check
-  needs a file with one port.
-- `recon` (`--target`, optional `--modules`): the modules of the recon run
-  can be limited with `--modules`, so a check can pick the ones that open a
-  socket and leave the rest out.
-- `report` (`--target`, optional `--audit-file`): it scans the ports of the
-  target and audits the credentials.
+The fix is the one of `ethscan/vuln.py` of this session: read the document as
+foreign data, skip what cannot be read and name it in the notes of the
+report. Give both commands a permanent check in the same sweep (the sweep
+file of this session already holds the checks of the commands that read a
+document from a file).
 
 The other open points (the process-wide side effect of
-`socket.setdefaulttimeout()`, the `python ethscan/cli.py` script path) are
-in `HANDOFF_NEXT.md` under "What remains unresolved".
+`socket.setdefaulttimeout()`, the `python ethscan/cli.py` script path) are in
+`HANDOFF_NEXT.md` under "What remains unresolved".
