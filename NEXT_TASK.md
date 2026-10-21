@@ -1,95 +1,96 @@
 # NEXT TASK
 
-## Status: COMPLETE (CLI-level sweep extended to the HTTP-facing commands)
+## Status: COMPLETE (the CLI-level sweep is complete for every command that opens a transport of its own, except the three aggregators)
 
-The task of the previous handoff is done: the permanent CLI-level sweep now
-covers the ten HTTP-facing commands (`web`, `headers`, `fuzz`, `urlcheck`,
-`cert`, `geo`, `mac`, `s3`, `cve` and `subtake`), each of them printing its
-own failure signal and exiting 0.
+The task of the previous handoff is done. The permanent CLI-level sweep now
+covers 40 of the 53 commands, every command that opens a transport of its
+own, except the three aggregators `vuln`, `recon` and `report`.
 
-1. **The ten commands were verified through the CLI.** With the transport
-   seam patched to raise a `RuntimeError("hostile transport")`:
-   - `web` -> `error="header fetch failed: hostile transport"`,
-     `ssl.error="hostile transport"`, no header;
-   - `headers` -> `error="header fetch failed: hostile transport"`, no
-     header;
-   - `fuzz` -> `error="hostile transport"` on every probed path, no finding;
-   - `urlcheck` -> `web.error`, `ssl.error` and the error of every fuzzed
-     path;
-   - `cert` -> `cert_data.error="Failed to fetch certificate transparency
-     data"`;
-   - `geo` -> `geolocation.error="Failed to fetch geolocation data"`;
-   - `mac` -> `mac_data.error="Failed to fetch MAC vendor data"`;
-   - `s3` -> `error="hostile transport"` on every probed bucket, no public
-     bucket;
-   - `cve` -> `error="NVD lookup failed for CVE-2016-6210: Failed to fetch
-     CVE data"`;
-   - `subtake` -> the subdomain is reported without a CNAME and
-     `vulnerable=false`.
-   All exit 0.
+## What this session changed
 
-2. **The result is a permanent sweep.** `tests/test_cli_http_unreachable_sweep.py`
-   holds the ten checks. Each one patches the transport the module really
-   opens (the command line never injects a transport), runs the command
-   through `CliRunner` and asserts exit 0, no traceback and the command's own
-   failure signal. It is hermetic: the transport is patched, so it needs no
-   network and the result does not depend on what the machine can reach.
+1. **A regression of the previous session is fixed.** The `run_brute`
+   wrapper of `ethscan/cli.py` was defined below the `__main__` guard, so
+   `python -m ethscan.cli brute ...` died with
+   `NameError: name 'run_brute' is not defined` (exit 1, no report). The
+   wrapper is now defined above the guard.
 
-3. **The checks are meaningful.** All ten were proved by reverting the guard
-   of their own module (narrowing the broad `except Exception` to
-   `except ValueError`, dropping `RuntimeError` from the caught tuple, or
-   dropping the reason of the failure) and watching the matching check fail.
-   With the guards restored all ten pass.
+2. **The trace and brute sweep is complete and proved.** The file
+   `tests/test_cli_trace_brute_unreachable_sweep.py` was rewritten in the
+   conventions of the other sweeps and grew from three to six checks: the
+   FTP client that cannot be constructed, the SSH login that fails and the
+   SSH client that cannot be constructed are new. The two new ones exposed
+   a second instance of the defect of `ethscan/brute.py:110` in the SSH
+   branch (`paramiko.SSHClient()` was built outside the guard); it is
+   fixed.
 
-4. **The checks are hermetic.** The file was run with the network blocked (a
-   plugin that raises on every connection and on every name lookup that is
-   not a numeric address): 10 passed. The plugin was used for the proof
-   only and is not part of the repository.
+3. **Two sources of flakiness are gone.** The `cert` command fetches
+   certificate transparency data from `crt.sh` and the `whois` command
+   talks to a whois server, so the two option sweeps depended on the
+   latency of the internet and tripped their own five second alarm. A
+   shared fixture (`tests/conftest.py`) keeps them off the internet.
 
-`python -m ruff check ethscan/ tests/` -> All checks passed.
-`python -m pytest tests/` -> **5082 passed, 48 skipped, 2 warnings** (baseline
-5072 passed, 48 skipped; the +10 are the checks of the rewritten file).
-`git diff --check` clean. Nothing is committed.
+4. **Four commands no longer crash on a resolver failure.** A resolver
+   that fails with an error type the modules did not name in their guards
+   (a plain `OSError`) escaped the `cert`, `geo`, `mac` and `ping`
+   commands with a traceback (exit 1). All four now report the failure
+   (exit 0), and the `ping` command no longer lets a `connect_ex` failure
+   of an unknown type escape either.
 
-The file was already in the repository as a draft. It was rewritten, because
-the draft proved nothing (`test_fuzz` had no assertion and probed an empty
-wordlist), depended on the filesystem cache (`cert`, `geo`, `mac`, `cve` ran
-with the cache enabled) and on the real resolver (`s3`, `subtake`).
+5. **The entry-point regression has a permanent check.** `tests/test_main.py`
+   now asserts that the `__main__` guard is the last statement of the
+   three entry-point modules, and that the `brute` command runs when
+   `ethscan/cli.py` is executed as `__main__`.
+
+## What was actually verified
+
+- The crash was reproduced before the fix and is gone after it.
+- Every new check was proved by reverting the guard of its own module and
+  watching the check fail; with the guards restored all of them pass.
+- The new checks are hermetic: 20 passed with the network blocked (a
+  plugin that raises on every connection and on every name lookup that is
+  not a numeric address; the plugin is not part of the repository).
+- The two option sweeps were run three times in a row: 97 passed, 9
+  skipped, every time.
+- `python -m ruff check ethscan/ tests/` -> **All checks passed**.
+- `python -m pytest tests/` -> **5097 passed, 48 skipped, 3 warnings**
+  (baseline at the start of the session: 5085 passed, 48 skipped, 2
+  warnings). The suite was run twice in a row with the same result.
+- `git diff --check` -> clean. Nothing is committed.
+
+The full evidence, the mutation table and the open points are in
+`HANDOFF_NEXT.md`.
 
 ## Constraints
 
 - Smallest reversible change; do not weaken an existing guard; turn the
   crash into the module's documented error signal.
-- Keep the permanent sweeps in the repository.
+- Keep the permanent sweeps in the repository, and prove every new check by
+  reverting the guard of its own module.
 - Do not commit unless explicitly asked.
 
 ## One precise next task
 
-Extend the permanent CLI-level sweep to the two commands that still open a
+Extend the permanent CLI-level sweep to the last three commands that open a
 transport of their own without a failure-field check at the command line:
-`trace` and `brute` (the aggregators `vuln`, `recon` and `report` have
-their modules covered one level down).
+the aggregators `vuln`, `recon` and `report`.
 
-The method is the one of `tests/test_cli_unreachable_sweep.py` and
-`tests/test_cli_http_unreachable_sweep.py`: patch the transport the module
-really opens, run the command through `CliRunner`, and assert that it exits
-0, leaks no traceback and prints the module's own failure signal.
+The method is the one of `tests/test_cli_unreachable_sweep.py`,
+`tests/test_cli_http_unreachable_sweep.py` and
+`tests/test_cli_trace_brute_unreachable_sweep.py`: patch the transport the
+command really opens, run the command through `CliRunner`, and assert that
+it exits 0, leaks no traceback and prints the command's own failure signal.
 
-The expected signals are already measured:
+What is already known about the three commands:
 
-- `trace`: patching `ethscan.trace.socket.gethostbyname` gives exit 0,
-  `error="hostile transport"`, `reached=false`; patching
-  `ethscan.trace.socket.socket` gives exit 0, `error="hostile transport"` and
-  a hop whose `error_code` is the failure.
-- `brute`: patching `ethscan.brute.FTP` with a stand-in class whose
-  `connect` raises gives exit 0, `attempts=1`, `successful_count=0` and
-  `results[0]["error"]="hostile transport"`. The command line takes the
-  wordlists as `--user-file` and `--pass-file`.
+- `vuln` (`--target`, optional `--services-file`, `--tls-file`,
+  `--ssl-file`): the services file lists the ports to probe, so a check
+  needs a file with one port.
+- `recon` (`--target`, optional `--modules`): the modules of the recon run
+  can be limited with `--modules`, so a check can pick the ones that open a
+  socket and leave the rest out.
+- `report` (`--target`, optional `--audit-file`): it scans the ports of the
+  target and audits the credentials.
 
-The brute check may expose the defect of `ethscan/brute.py:110`, where the
-FTP client is built outside the guard of `_attempt_ftp`: a failure of the
-constructor escapes the command (exit 1 with a bare `RuntimeError`). The
-smallest fix is to build the client inside the `try:`.
-
-The list of the commands that still have no such check, and the other open
-points, are in `HANDOFF_NEXT.md` under "What remains unresolved".
+The other open points (the process-wide side effect of
+`socket.setdefaulttimeout()`, the `python ethscan/cli.py` script path) are
+in `HANDOFF_NEXT.md` under "What remains unresolved".

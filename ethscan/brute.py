@@ -152,8 +152,8 @@ def _attempt_ssh(
         )
         return result
 
-    client = paramiko.SSHClient()
     try:
+        client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         client.connect(
             host,

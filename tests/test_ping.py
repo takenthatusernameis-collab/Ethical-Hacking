@@ -1114,3 +1114,46 @@ def test_ping_transport_failure_is_reported_not_raised(monkeypatch) -> None:
     assert probe["response_type"] == ethscan.ping.RESP_NO_RESPONSE
     assert "hostile transport" in (probe.get("error") or "")
     assert results["failed"] == 1
+
+
+def test_ping_connect_failure_of_an_unknown_type_is_reported(monkeypatch) -> None:
+    """A connect that fails with an unknown error type is a failed probe, not a raise."""
+    import ethscan.ping
+
+    class _HostileSocket:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def setsockopt(self, *args, **kwargs) -> None:
+            pass
+
+        def settimeout(self, *args, **kwargs) -> None:
+            pass
+
+        def connect_ex(self, *args, **kwargs) -> int:
+            raise RuntimeError("hostile transport")
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr("ethscan.ping.socket.socket", _HostileSocket)
+
+    probe = ethscan.ping.probe_icmp("127.0.0.1", timeout=1.0, raw_socket=None)
+
+    assert probe["response_type"] == ethscan.ping.RESP_NO_RESPONSE
+    assert "hostile transport" in (probe.get("error") or "")
+
+
+def test_ping_resolver_failure_of_an_unknown_type_is_reported(monkeypatch) -> None:
+    """A resolver that fails with an unknown error type is a failed lookup, not a raise."""
+    import ethscan.ping
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile resolver")
+
+    monkeypatch.setattr("ethscan.ping.socket.gethostbyname", boom)
+
+    results = ethscan.ping.run_ping("127.0.0.1", count=1, timeout=1.0)
+
+    assert results["ip"] is None
+    assert any("Could not resolve host" in note for note in results["notes"])

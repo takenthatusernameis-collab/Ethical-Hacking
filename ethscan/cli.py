@@ -355,6 +355,22 @@ from ethscan.wifi import (
 )
 
 
+def run_brute(*args, **kwargs):
+    """Run a brute-force login attempt through the live ethscan.brute module.
+
+    Resolved at call time via importlib, so the CLI honors a reloaded
+    ethscan.brute (the test suite reloads it to simulate paramiko being
+    present or absent) instead of holding a stale import-time binding.
+
+    Defined before the ``__main__`` guard at the end of this module: the
+    guard runs the CLI while the module body is still executing, so every
+    name a command uses has to be bound by then.
+    """
+    import importlib
+
+    return importlib.import_module("ethscan.brute").run_brute(*args, **kwargs)
+
+
 class _TargetGroup(click.Group):
     """A group that reports an unusable ``--target`` as a click usage error.
 
@@ -5068,15 +5084,3 @@ def oracle(
 
 if __name__ == "__main__":
     cli()
-
-
-def run_brute(*args, **kwargs):
-    """Run a brute-force login attempt through the live ethscan.brute module.
-
-    Resolved at call time via importlib, so the CLI honors a reloaded
-    ethscan.brute (the test suite reloads it to simulate paramiko being
-    present or absent) instead of holding a stale import-time binding.
-    """
-    import importlib
-
-    return importlib.import_module("ethscan.brute").run_brute(*args, **kwargs)

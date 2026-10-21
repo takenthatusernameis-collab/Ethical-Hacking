@@ -130,8 +130,9 @@ def _resolve_host(host: str) -> str | None:
     try:
         return socket.gethostbyname(host)
     # A host that is not a valid host name ("....") raises a UnicodeError,
-    # which is a ValueError, when the resolver encodes it.
-    except (socket.gaierror, socket.herror, ValueError):
+    # which is a ValueError, when the resolver encodes it. A resolver that
+    # fails with any other error type is a failed lookup as well.
+    except (socket.timeout, socket.gaierror, socket.herror, OSError, ValueError, RuntimeError):
         return None
 
 
@@ -262,10 +263,11 @@ def probe_icmp(
         }
     try:
         err = send_sock.connect_ex((host, port))
-    except socket.gaierror as exc:
+    except (OSError, RuntimeError) as exc:
         # The name itself cannot be resolved (connect_ex only swallows errors
-        # from connect(), not from getaddrinfo()). Report it as a failed probe
-        # instead of letting the exception escape the command.
+        # from connect(), not from getaddrinfo()) and a transport that fails
+        # with any other error type must not escape the command either.
+        # Report it as a failed probe instead.
         rtt = (time.monotonic() - start) * 1000
         return {
             "ip": None,

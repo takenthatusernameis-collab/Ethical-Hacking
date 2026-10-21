@@ -41,8 +41,9 @@ def _resolve_host(host: str) -> str | None:
     try:
         return socket.gethostbyname(host)
     # A host that is not a valid host name ("....") raises a UnicodeError,
-    # which is a ValueError, when the resolver encodes it.
-    except (socket.gaierror, socket.herror, ValueError):
+    # which is a ValueError, when the resolver encodes it. A resolver that
+    # fails with any other error type is a failed lookup as well.
+    except (socket.timeout, socket.gaierror, socket.herror, OSError, ValueError, RuntimeError):
         return None
 
 

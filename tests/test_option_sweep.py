@@ -90,7 +90,7 @@ def _build_args(name: str, param: Any, value: str) -> list[str]:
 
 
 @pytest.mark.parametrize("name", sorted(cli.cli.commands))
-def test_every_string_option_refuses_hostile_values(name: str) -> None:
+def test_every_string_option_refuses_hostile_values(name: str, no_external_network) -> None:
     """Every string option of every command refuses hostile values cleanly.
 
     A hostile value is an empty string, an over-long name or a path that does

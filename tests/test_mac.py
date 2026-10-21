@@ -724,3 +724,19 @@ def test_format_mac_report_csv_error() -> None:
     reader = list(csv.reader(io.StringIO(output)))
     assert reader[1][3] == ""
     assert reader[1][6] == "Failed to fetch MAC vendor data"
+
+
+def test_resolver_failure_of_an_unknown_type_is_reported(monkeypatch) -> None:
+    """A resolver that fails with an unknown error type is a failed lookup, not a raise."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile resolver")
+
+    monkeypatch.setattr("socket.gethostbyname", boom)
+
+    assert _resolve_host("example.com") is None
+
+    result = run_mac("example.com", use_cache=False, offline_fallback=False)
+
+    assert result["mac"] is None
+    assert any("Could not resolve host" in note for note in result["notes"])

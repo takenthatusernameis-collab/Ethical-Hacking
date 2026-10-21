@@ -989,3 +989,19 @@ def test_run_geo_recursive_exception():
         result = run_geo("8.8.8.8", timeout=1.0, recursive=True)
 
     assert any("recursive hop geolocation failed" in note for note in result["notes"])
+
+
+def test_resolver_failure_of_an_unknown_type_is_reported(monkeypatch) -> None:
+    """A resolver that fails with an unknown error type is a failed lookup, not a raise."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile resolver")
+
+    monkeypatch.setattr("ethscan.geo.socket.gethostbyname", boom)
+
+    assert _resolve_host("example.com") is None
+
+    result = run_geo("example.com", use_cache=False, offline_fallback=False)
+
+    assert result["ip"] is None
+    assert any("Could not resolve host" in note for note in result["notes"])

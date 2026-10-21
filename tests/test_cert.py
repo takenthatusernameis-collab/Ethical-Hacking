@@ -713,3 +713,19 @@ def test_format_cert_report_csv_empty() -> None:
     reader = list(csv.reader(io.StringIO(output)))
     assert len(reader) == 2  # header + one empty row
     assert reader[1] == ["example.com", "example.com", "", ""]
+
+
+def test_resolver_failure_of_an_unknown_type_is_reported(monkeypatch) -> None:
+    """A resolver that fails with an unknown error type is a failed lookup, not a raise."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile resolver")
+
+    monkeypatch.setattr("ethscan.cert.socket.gethostbyname", boom)
+
+    assert _resolve_host("example.com") is None
+
+    result = run_cert("example.com", use_cache=False, offline_fallback=False)
+
+    assert result["ip"] is None
+    assert any("Could not resolve host" in note for note in result["notes"])

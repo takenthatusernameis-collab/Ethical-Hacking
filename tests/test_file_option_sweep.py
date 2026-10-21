@@ -58,7 +58,7 @@ def _build_args(name: str, param: Any, value: str) -> list[str]:
 
 
 @pytest.mark.parametrize("name", sorted(cli.cli.commands))
-def test_every_file_option_refuses_hostile_values(name: str) -> None:
+def test_every_file_option_refuses_hostile_values(name: str, no_external_network) -> None:
     if name in SLOW_COMMANDS:
         pytest.skip(f"{name} is excluded from the sweep")
     cmd = cli.cli.commands.get(name)
