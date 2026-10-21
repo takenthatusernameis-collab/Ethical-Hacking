@@ -331,6 +331,7 @@ def run_cve(
             service_list = []
         cve_entries: list[dict[str, object]] = []
         services_checked = 0
+        nvd_errors: list[str] = []
 
         items = service_list
         if isinstance(items, dict):
@@ -367,9 +368,9 @@ def run_cve(
                     )
 
                     if isinstance(cve_data, dict) and cve_data.get("error"):
-                        notes.append(
-                            f"NVD lookup failed for {cve_id}: {cve_data['error']}"
-                        )
+                        message = f"NVD lookup failed for {cve_id}: {cve_data['error']}"
+                        notes.append(message)
+                        nvd_errors.append(message)
 
                     summary = _extract_cve_summary(cve_data) if cve_data else {}
                     if summary:
@@ -440,6 +441,7 @@ def run_cve(
             "ports": ports,
             "profile": profile,
             "services_checked": services_checked,
+            "error": nvd_errors[0] if nvd_errors else None,
             "cve_entries": cve_entries,
             "cve_count": len(cve_entries),
             "severity_counts": severity_counts,

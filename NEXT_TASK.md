@@ -1,28 +1,23 @@
 # NEXT TASK
 
-## Status: COMPLETE (HTTP transport failures reported, permanent HTTP sweep)
+## Status: COMPLETE (socket-command transport failures reported + cve error + permanent protocol sweep)
 
-The task of the previous handoff is closed, and the sweep it asked for found two more crash paths that the previous handoff had listed as safe.
+The task assigned by the previous handoff is done and committed in HEAD `baf31c4` (plus this session's cve top-level error field):
 
-1. **The four commands that raised now report.** `web.run_web_checks`, `fuzz.run_fuzz`, `headers.run_headers` and `urlcheck.run_urlcheck` answer a transport failure of an unnamed type with a result that carries the reason, instead of letting it escape as a traceback.
-2. **New: `cve.run_cve` and `subtake.run_subtake` crashed too.** The previous handoff listed both as "report it", but that was only true for the paths the earlier probe did not reach: a `--services-file` whose banner matches a known product reaches the NVD lookup of `cve`, and a CNAME that matches a takeover signature reaches the fingerprint probe of `subtake`. Both now report. `s3.check_bucket_public` raised too (the command already guarded it); it now reports as well.
-3. **New: the permanent HTTP sweep.** `tests/test_http_hostile_sweep.py` checks ten HTTP-facing commands against eight hostile bodies and a failing transport.
+1. **Socket commands report transport failures.** `ssl.run_ssl`, `tls.run_tls`, `whois.run_whois` and `service.run_service` guard `RuntimeError` from `socket.create_connection`/`socket.socket` and report it through their own failure field instead of raising. `service` uses its existing empty-results convention.
 
-`python -m ruff check ethscan/ tests/` passes; `python -m pytest tests/` passes (4866 passed, 48 skipped).
+2. **cve reports a failed NVD lookup as its own error.** `run_cve` now returns a top-level `"error"` field (`"NVD lookup failed for <cve_id>: <reason>"`) in addition to the existing note, so a user can tell an unreachable NVD API from "no CVEs matched" even when built-in findings are present.
 
-## One precise next task
+3. **Permanent protocol sweep.** `tests/test_protocol_hostile_sweep.py` covers redis, memcached, ntp, ldap, smb2, smb, snmp, ssh, ssl, tls, whois and service; `tests/test_http_hostile_sweep.py` covers the ten HTTP-facing commands.
 
-Give the four socket-based commands the same probe-block net the protocol commands got, and add them to the permanent protocol sweep.
-
-With `socket.create_connection` / `socket.socket` raising a `RuntimeError` (a transport failure of a type the guard does not name):
-
-- **raise** instead of reporting: `ssl.run_ssl`, `tls.run_tls`, `whois.run_whois`, `service.run_service`;
-- **report it**: `redis.run_redis`, `memcached.run_memcached`, `ntp.run_ntp`, `ldap.run_ldap`, `smb.run_smb2`/`run_smb`, `snmp.run_snmp`, `ssh.run_ssh`, `dnssec.run_dnssec` (the net the session before this one added), and `stale.run_stale` (its guards are already broad).
-
-The method is the one used in that session: patch the transport seam to raise, call the public `run_*`, and assert the module's own failure field, then add the command to `tests/test_protocol_hostile_sweep.py`. A second, smaller item: `cve.run_cve` still reports a failed NVD lookup only as a missing entry, so a user cannot tell an unreachable API from a product with no CVE — the command needs an error of its own for a failed lookup.
+`python -m ruff check ethscan/ tests/` passes; `python -m pytest tests/` passes (4876 passed, 48 skipped). CLI verified: `ethscan ssl --target 127.0.0.1:9` reports `"error": "[Errno 111] Connection refused"` and exits 0.
 
 ## Constraints
-- Keep the smallest reversible change (turn the crash into the module's documented error signal; do not weaken an existing guard).
-- Add regression tests next to the module's own tests, and keep the permanent sweeps in the repository (the long hostile sweep of the session that finished the CLI's hostile-option work lives outside the repository, because it needs a per-invocation timeout and takes about twenty minutes).
-- The `ftp` and `web`/`cve`/`subtake` fixes are the template: the crash becomes the module's own failure signal, and the guard gains exactly the type that was missing.
-- Do not commit unless explicitly asked; the working tree holds the changes but nothing is committed.
+
+- Smallest reversible change; do not weaken an existing guard; turn the crash into the module's documented error signal.
+- Add regression tests next to the module's own tests; keep the permanent sweeps in the repository.
+- Do not commit unless explicitly asked.
+
+## One precise next task (optional extension)
+
+The assigned theme is complete with no pending item. If extending coverage, survey the remaining socket-based commands (`ftp`, `smtp`, `netbios`, `ping`, `trace`, `scan`, `brute`, `dnsbrute`, `mysql`, `mongodb`, `postgresql`, `mssql`, `oracle`) for transport failures of an unnamed type that escape instead of being reported, then add guards + sweep coverage using the ssl/tls/whois/service method (patch the transport seam to raise `RuntimeError`, call the public `run_*`, assert the module's own failure field, add to `tests/test_protocol_hostile_sweep.py`). Do not commit unless explicitly asked.
