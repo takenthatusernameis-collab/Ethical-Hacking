@@ -290,7 +290,7 @@ def run_cve(
                 notes.append(f"Failed to read services file: {exc}")
                 services = None
 
-        if services is None:
+        if services is None and not services_file:
             try:
                 try:
                     from ethscan.service import run_service as _rs
@@ -318,6 +318,8 @@ def run_cve(
             except (OSError, ValueError, json.JSONDecodeError) as exc:
                 notes.append(f"Service detection failed: {exc}")
                 services = {"target": target, "services": []}
+        elif services is None and services_file:
+            services = {"target": target, "services": []}
 
         service_list = None
         if isinstance(services, dict):
@@ -339,11 +341,38 @@ def run_cve(
 
         if items is None:
             items = []
+        if isinstance(services, dict) and services_file:
+            results = services.get("results")
+            if results is not None and not isinstance(results, list):
+                notes.append("Service data holds no 'results' list")
+                items = []
+            elif isinstance(results, list):
+                bad_entries = [e for e in results if not isinstance(e, dict)]
+                if bad_entries:
+                    notes.append("Service data holds entries that are not objects")
+                    items = [e for e in results if isinstance(e, dict)]
+                else:
+                    items = results
+            elif services.get("services") is not None and not isinstance(services.get("services"), list):
+                notes.append("Service data holds no 'results' list")
+                items = []
+            elif isinstance(services.get("services"), list):
+                bad_entries = [e for e in services.get("services") if not isinstance(e, dict)]
+                if bad_entries:
+                    notes.append("Service data holds entries that are not objects")
+                    items = [e for e in services.get("services") if isinstance(e, dict)]
+                else:
+                    items = services.get("services")
         for entry in items:
             if not isinstance(entry, dict):
                 continue
             banner = entry.get("banner") or ""
-            product, version = parse_banner(banner)
+            if not isinstance(banner, str):
+                banner = ""
+            try:
+                product, version = parse_banner(banner)
+            except (TypeError, ValueError):
+                product, version = None, None
             port = entry.get("port")
             services_checked += 1
 

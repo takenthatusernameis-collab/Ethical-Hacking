@@ -2310,10 +2310,34 @@ def osdetect(
     if banners_file:
         services = _load_json_file(banners_file, "'--banners-file'")
         banners = {}
-        for entry in services.get("results") or []:
+        results = services.get("results")
+        if results is None:
+            results = []
+        elif not isinstance(results, list):
+            error_report = {
+                "target": target,
+                "os_matches": [],
+                "confidence": 0.0,
+                "notes": ["Banners data holds no 'results' list"],
+            }
+            chosen_format = output_fmt if output_fmt is not None else fmt
+            if chosen_format == "json":
+                output = format_osdetect_report_json(error_report)
+            elif chosen_format == "csv":
+                output = format_osdetect_report_csv(error_report)
+            else:
+                output = format_osdetect_report_markdown(error_report)
+            if out_path:
+                _write_output(out_path, output)
+            else:
+                click.echo(output)
+            return
+        for entry in results:
+            if not isinstance(entry, dict):
+                continue
             port = entry.get("port")
             banner = entry.get("banner")
-            if port is not None and banner:
+            if port is not None and isinstance(banner, str) and banner:
                 banners[port] = banner
 
     results = run_osdetect(

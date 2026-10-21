@@ -243,3 +243,42 @@ def test_recon_cli_reports_a_failed_module(monkeypatch) -> None:
     assert report["modules_run"] == ["dns"]
     assert report["dns"] is None
     assert "dns module failed: hostile transport" in report["notes"]
+
+
+def test_cve_cli_reports_an_unusable_services_file(tmp_path: Path) -> None:
+    """The cve command reports a services file it cannot read and exits 0."""
+    services_file = _write_json(tmp_path, "services.json", {"results": "not a list"})
+
+    report = _run_cli(
+        ["cve", "--target", UNREACHABLE_HOST, "--services-file", services_file]
+    )
+
+    assert report["services_checked"] == 0
+    assert report["cve_entries"] == []
+    assert "Service data holds no 'results' list" in report["notes"]
+
+
+def test_cve_cli_reports_service_entries_that_are_not_objects(tmp_path: Path) -> None:
+    """The cve command reports service entries it cannot read and exits 0."""
+    services_file = _write_json(
+        tmp_path, "services.json", {"results": [{"port": 22, "banner": 5}]}
+    )
+
+    report = _run_cli(
+        ["cve", "--target", UNREACHABLE_HOST, "--services-file", services_file]
+    )
+
+    assert report["cve_entries"] == []
+    assert isinstance(report["notes"], list)
+
+
+def test_osdetect_cli_reports_an_unusable_banners_file(tmp_path: Path) -> None:
+    """The osdetect command reports a banners file it cannot read and exits 0."""
+    banners_file = _write_json(tmp_path, "banners.json", {"results": "abc"})
+
+    report = _run_cli(
+        ["osdetect", "--target", UNREACHABLE_HOST, "--banners-file", banners_file]
+    )
+
+    assert report["os_matches"] == []
+    assert "Banners data holds no 'results' list" in report["notes"]
