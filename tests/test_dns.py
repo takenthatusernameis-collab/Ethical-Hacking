@@ -621,3 +621,18 @@ def test_dns_availability_flag_false(monkeypatch) -> None:
     finally:
         monkeypatch.delitem(sys.modules, "dns", raising=False)
         reload(dns_mod)
+
+
+def test_dns_transport_failure_is_reported_not_raised(monkeypatch) -> None:
+    """A failing stdlib resolution is reported as empty records, not raised."""
+    import ethscan.dns
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.dns.socket.getaddrinfo", boom)
+
+    results = ethscan.dns.run_dns("example.com")
+
+    assert isinstance(results, dict)
+    assert results["records"]["A"] == []

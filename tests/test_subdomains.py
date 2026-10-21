@@ -745,3 +745,19 @@ def test_resolve_subdomain_swallows_unlisted_exceptions(monkeypatch, exc):
     )
     assert subdomain == "www"
     assert ip is None
+
+
+def test_subdomains_transport_failure_is_reported_not_raised(monkeypatch) -> None:
+    """A failing name lookup is reported as unresolved, not raised."""
+    import ethscan.subdomains
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.subdomains.socket.gethostbyname", boom)
+
+    results = ethscan.subdomains.run_subdomains("example.com", subdomains=["www"])
+
+    assert isinstance(results, dict)
+    assert results["resolved"] == []
+    assert all(entry["ip"] is None for entry in results["all_results"])

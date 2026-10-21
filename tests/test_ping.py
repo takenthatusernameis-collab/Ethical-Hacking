@@ -1096,3 +1096,21 @@ def test_format_ping_report_csv_empty() -> None:
     reader = list(csv.reader(io.StringIO(output)))
     assert len(reader) == 1
     assert reader[0][0] == "target"
+
+
+def test_ping_transport_failure_is_reported_not_raised(monkeypatch) -> None:
+    """A socket that cannot be created is reported as a failed probe, not raised."""
+    import ethscan.ping
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.ping.socket.socket", boom)
+
+    results = ethscan.ping.run_ping("127.0.0.1", count=1)
+
+    assert isinstance(results, dict)
+    probe = results["probes"][0]
+    assert probe["response_type"] == ethscan.ping.RESP_NO_RESPONSE
+    assert "hostile transport" in (probe.get("error") or "")
+    assert results["failed"] == 1

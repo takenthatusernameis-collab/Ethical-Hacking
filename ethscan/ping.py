@@ -173,7 +173,7 @@ def probe_icmp(
     if raw_socket is not None:
         try:
             send_sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
-        except (OSError, PermissionError):
+        except (OSError, PermissionError, RuntimeError):
             # Fall back to TCP mode if raw socket creation fails
             raw_socket = None
         else:
@@ -244,9 +244,22 @@ def probe_icmp(
                 }
 
     # Fallback mode: TCP connect-based ping
-    send_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    send_sock.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, ttl)
-    send_sock.settimeout(timeout)
+    try:
+        send_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        send_sock.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, ttl)
+        send_sock.settimeout(timeout)
+    except (OSError, RuntimeError) as exc:
+        # A socket that cannot be created is a transport failure: report it as
+        # a failed probe instead of letting the exception escape the command.
+        rtt = (time.monotonic() - start) * 1000
+        return {
+            "ip": None,
+            "rtt_ms": round(rtt, 2),
+            "ttl": ttl,
+            "sequence": sequence,
+            "response_type": RESP_NO_RESPONSE,
+            "error": str(exc),
+        }
     try:
         err = send_sock.connect_ex((host, port))
     except socket.gaierror as exc:

@@ -919,3 +919,18 @@ def test_resolve_with_dnspython_swallows_unlisted_exceptions(monkeypatch, exc):
     import ethscan.resolve as resolve_mod
 
     assert resolve_mod.resolve_with_dnspython("example.com", "MX", 0.1) == []
+
+
+def test_resolve_transport_failure_is_reported_not_raised(monkeypatch) -> None:
+    """A failing stdlib resolution is reported as empty records, not raised."""
+    import ethscan.resolve
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.resolve.socket.getaddrinfo", boom)
+
+    results = ethscan.resolve.run_resolve("example.com", record_types=["A"])
+
+    assert isinstance(results, dict)
+    assert results["records"]["A"] == []

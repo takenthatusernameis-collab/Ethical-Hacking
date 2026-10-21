@@ -1,61 +1,44 @@
 # NEXT TASK
 
-## Status: COMPLETE (socket commands in the permanent sweep + the netbios/dnsbrute crash paths)
+## Status: COMPLETE (six remaining commands in the transport-failure sweep)
 
-The optional extension of the previous `NEXT_TASK.md` is done: the commands
-that were surveyed (ftp, smtp, netbios, scanner, dnsbrute, mysql, mongodb,
-postgresql, mssql, oracle) are now covered by the permanent protocol sweep,
-and the survey found three crash paths that the earlier handoff had listed as
-safe.
+The optional extension from `HANDOFF_NEXT.md` / `TASK.md` is done: the six
+commands that still let a transport failure of an unnamed type escape
+(`ping`, `osdetect`, `resolve`, `dns`, `stale`, `subdomains`) are now covered
+by the permanent protocol sweep and by regression tests next to each module's
+own tests.
 
-1. **The permanent sweep covers the ten commands.**
-   `tests/test_protocol_hostile_sweep.py` grew from 119 to 256 checks. The six
-   modules that take a `connector(host, port, request, timeout)` seam (netbios,
-   mysql, mongodb, postgresql, mssql, oracle) are checked with the same two
-   checks as the group above them (a hostile answer, a failing probe), the
-   database modules are additionally checked on the socket they really use, and
-   ftp, smtp, scanner and dnsbrute have their own checks.
+1. **`ethscan/ping.py` fixed.** `_try_create_raw_socket` also catches
+   `RuntimeError`, and the TCP-fallback socket creation is guarded so a socket
+   that cannot be created is reported as a failed probe (`NO-RESPONSE`,
+   `error = str(exc)`) instead of crashing `run_ping`. The other five commands
+   already caught `RuntimeError` on their socket seams.
 
-2. **The crash paths the earlier handoff listed as safe are fixed.**
-   `netbios` raised on a failing connector, on a socket that could not be
-   created and on an answer of `None`; `dnsbrute` raised on a `RuntimeError`
-   of the dnspython zone transfer and of the dnspython resolver.
+2. **Sweep checks added.** `tests/test_protocol_hostile_sweep.py` gained one
+   check per command (+6). Each patches the module's own socket seam to raise
+   `RuntimeError` and asserts the module's own failure field.
 
-3. **The regression test of each module sits next to its own tests** (19
-   tests in ten files).
+3. **Regression tests added next to each module's own tests** (+1 test each in
+   `test_ping.py`, `test_osdetect.py`, `test_resolve.py`, `test_dns.py`,
+   `test_stale.py`, `test_subdomains.py`).
 
-`python -m ruff check ethscan/ tests/` passes; `python -m pytest tests/`
-passes (5032 passed, 48 skipped; the baseline was 4876 passed, 48 skipped).
-The CLI reports its own error field and exits 0 for every command of the
-sweep.
+`python -m ruff check ethscan/ tests/` -> All checks passed.
+`python -m pytest tests/` -> **5044 passed, 48 skipped, 2 warnings** (baseline
+5032 passed, 48 skipped; the +12 are the new checks). `git diff --check` clean.
+Nothing is committed.
 
 ## Constraints
 
-- Smallest reversible change; do not weaken an existing guard; turn the crash into the module's documented error signal.
-- Add regression tests next to the module's own tests; keep the permanent sweeps in the repository.
+- Smallest reversible change; do not weaken an existing guard; turn the crash
+  into the module's documented error signal.
+- Add regression tests next to the module's own tests; keep the permanent
+  sweeps in the repository.
 - Do not commit unless explicitly asked.
 
-## One precise next task (optional extension)
+## One precise next task
 
-Six commands still let a transport failure of an unnamed type escape:
-`ping`, `osdetect`, `resolve`, `dns`, `stale` and `subdomains`. The exact
-crash sites are listed in `TASK.md` ("One precise next task"): with the
-transport seam raising a `RuntimeError`, these calls raise instead of
-reporting it:
-
-- `ping.run_ping` -> `ethscan/ping.py:122`
-- `osdetect.run_osdetect` -> `ethscan/osdetect.py:123`
-- `resolve.run_resolve` -> `ethscan/resolve.py:60`
-- `dns.run_dns` -> `ethscan/dns.py:58`
-- `stale.run_stale` -> `ethscan/stale.py:48`
-- `subdomains.run_subdomains` -> `ethscan/subdomains.py:110`
-
-`trace.run_trace` is safe (both its socket creation and its name lookup are
-wrapped in `except Exception`).
-
-The method is the one used in the last session: patch the transport seam to
-raise, call the public `run_*`, assert the module's own failure field, add the
-command to `tests/test_protocol_hostile_sweep.py` (a new group: these six have
-no connector seam, so the sweep patches the socket function in the module
-itself), and put the regression test next to the module's own tests. Do not
-commit unless explicitly asked.
+Run the CLI against an unreachable target for each of the six commands
+(`ping`, `osdetect`, `resolve`, `dns`, `stale`, `subdomains`) and confirm each
+prints its own error field and exits 0, mirroring the verification done for the
+ten commands in the previous session
+(`ethscan <cmd> --target 127.0.0.1` -> error field printed, exit 0).

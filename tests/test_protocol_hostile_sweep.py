@@ -18,6 +18,13 @@ The HTTP-facing commands whose own test file already carries hostile-answer
 tests (web, cve and subtake) are not repeated here. The FTP and SMTP commands
 are covered here for the failing transport and for a hostile answer; their own
 test files keep the real-socket cases.
+
+The ping, osdetect, resolve, dns, stale and subdomains commands have no
+connector seam: their transport is a stdlib socket call
+(``socket.socket``, ``socket.create_connection``, ``socket.getaddrinfo`` or
+``socket.gethostbyname``). A transport failure of an unnamed type there is
+patched to raise and must be reported through the module's own failure field,
+never raised.
 """
 from __future__ import annotations
 
@@ -28,6 +35,7 @@ from typing import Any
 import pytest
 
 from ethscan import (
+    dns,
     dnsbrute,
     dnssec,
     ftp,
@@ -39,8 +47,11 @@ from ethscan import (
     netbios,
     ntp,
     oracle,
+    osdetect,
+    ping,
     postgresql,
     redis,
+    resolve,
     scanner,
     service,
     smb,
@@ -48,6 +59,8 @@ from ethscan import (
     snmp,
     ssh,
     ssl,
+    stale,
+    subdomains,
     tls,
     whois,
 )
@@ -519,3 +532,95 @@ def test_service_probe_failure_is_reported_not_raised(monkeypatch) -> None:
     assert isinstance(result, dict)
     assert result["services_found"] == 0
     assert result["results"] == []
+
+
+def test_ping_transport_failure_is_reported_not_raised(monkeypatch) -> None:
+    """A failing TCP fallback socket is reported as a failed probe, not raised."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.ping.socket.socket", boom)
+
+    results = ping.run_ping("127.0.0.1", count=1)
+
+    assert isinstance(results, dict)
+    probe = results["probes"][0]
+    assert probe["response_type"] == ping.RESP_NO_RESPONSE
+    assert "hostile transport" in (probe.get("error") or "")
+    assert results["failed"] == 1
+
+
+def test_osdetect_transport_failure_is_reported_not_raised(monkeypatch) -> None:
+    """A failing TCP connect is reported as a NO-RESPONSE probe, not raised."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.osdetect.socket.create_connection", boom)
+
+    results = osdetect.run_osdetect("127.0.0.1", ports=[80])
+
+    assert isinstance(results, dict)
+    probe = results["probes"][0]
+    assert probe["response"] == "NO-RESPONSE"
+    assert "hostile transport" in (probe.get("error") or "")
+
+
+def test_resolve_transport_failure_is_reported_not_raised(monkeypatch) -> None:
+    """A failing stdlib resolution is reported as empty records, not raised."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.resolve.socket.getaddrinfo", boom)
+
+    results = resolve.run_resolve("example.com", record_types=["A"])
+
+    assert isinstance(results, dict)
+    assert results["records"]["A"] == []
+
+
+def test_dns_transport_failure_is_reported_not_raised(monkeypatch) -> None:
+    """A failing stdlib resolution is reported as empty records, not raised."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.dns.socket.getaddrinfo", boom)
+
+    results = dns.run_dns("example.com")
+
+    assert isinstance(results, dict)
+    assert results["records"]["A"] == []
+
+
+def test_stale_transport_failure_is_reported_not_raised(monkeypatch) -> None:
+    """A failing stdlib resolution is reported as a stale domain, not raised."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.stale.socket.getaddrinfo", boom)
+
+    results = stale.run_stale(["example.com"])
+
+    assert isinstance(results, dict)
+    entry = results["results"][0]
+    assert entry["A"] == []
+    assert entry["stale"] is True
+
+
+def test_subdomains_transport_failure_is_reported_not_raised(monkeypatch) -> None:
+    """A failing name lookup is reported as unresolved, not raised."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.subdomains.socket.gethostbyname", boom)
+
+    results = subdomains.run_subdomains("example.com", subdomains=["www"])
+
+    assert isinstance(results, dict)
+    assert results["resolved"] == []
+    assert all(entry["ip"] is None for entry in results["all_results"])

@@ -353,3 +353,20 @@ class TestCSVFormatter:
         assert "1.1.1|1" in lines[1]
         assert "cname|example.com" in lines[1]
         assert "reason|1; reason|2" in lines[1]
+
+
+def test_stale_transport_failure_is_reported_not_raised(monkeypatch) -> None:
+    """A failing stdlib resolution is reported as a stale domain, not raised."""
+    import ethscan.stale
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.stale.socket.getaddrinfo", boom)
+
+    results = ethscan.stale.run_stale(["example.com"])
+
+    assert isinstance(results, dict)
+    entry = results["results"][0]
+    assert entry["A"] == []
+    assert entry["stale"] is True

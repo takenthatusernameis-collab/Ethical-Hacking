@@ -824,3 +824,20 @@ def test_run_osdetect_no_inferred_adds_notes() -> None:
     }), patch("ethscan.osdetect._match_os_from_banner", return_value=[]), patch("ethscan.osdetect._match_os_from_behavior", return_value=[]):
             res = osdetect.run_osdetect("example.com", ports=[80], timeout=1.0, max_workers=1)
             assert any("No OS signature matched" in n for n in res["notes"])
+
+
+def test_osdetect_transport_failure_is_reported_not_raised(monkeypatch) -> None:
+    """A failing TCP connect is reported as a NO-RESPONSE probe, not raised."""
+    import ethscan.osdetect
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.osdetect.socket.create_connection", boom)
+
+    results = ethscan.osdetect.run_osdetect("127.0.0.1", ports=[80])
+
+    assert isinstance(results, dict)
+    probe = results["probes"][0]
+    assert probe["response"] == "NO-RESPONSE"
+    assert "hostile transport" in (probe.get("error") or "")
