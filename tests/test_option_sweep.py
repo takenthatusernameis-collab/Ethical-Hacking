@@ -62,8 +62,10 @@ PER_INVOCATION_TIMEOUT = 5
 # full DNS timeout when the resolver does not answer. They stay in the sweep
 # (their options are swept like every other command) but they get a longer
 # per-invocation timeout: with the short one the sweep failed on a slow
-# resolver, although the command itself exits cleanly.
-DNS_COMMANDS = frozenset({"subdomains"})
+# resolver, although the command itself exits cleanly. The subtake command
+# resolves three record types for each of its 26 candidate labels, so it needs
+# the same margin as the subdomains command.
+DNS_COMMANDS = frozenset({"subdomains", "subtake"})
 
 # Per-invocation timeout for the commands of DNS_COMMANDS, in seconds.
 DNS_COMMAND_TIMEOUT = 20
