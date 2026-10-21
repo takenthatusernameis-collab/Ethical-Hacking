@@ -482,3 +482,84 @@ def test_dnssec_cli_reports_a_failed_probe(monkeypatch) -> None:
     assert report["validated"] is False
     assert "hostile transport" in (report["dnskey"]["error"] or "")
     assert "hostile transport" in (report["ds"]["error"] or "")
+
+
+def test_vuln_cli_reports_a_failed_service_detection(monkeypatch, tmp_path) -> None:
+    """The vuln command reports a failed service detection and exits 0.
+
+    vuln uses run_service for live detection; a hostile transport there must
+    not crash the command and must leave the report with its own failure
+    signal (no services scanned / no findings) rather than raising.
+    """
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.service.socket.create_connection", boom)
+
+    report = _run_cli(["vuln", "--target", UNREACHABLE_HOST, "--timeout", "1.0"])
+
+    assert report["services_checked"] == 0
+    assert report["findings"] == []
+    assert report["finding_count"] == 0
+    assert "No service banners detected" in report["notes"]
+
+
+def test_recon_cli_reports_module_failures(monkeypatch) -> None:
+    """The recon command reports module failures and exits 0.
+
+    A hostile transport in a recon module is caught by run_recon and recorded
+    as notes; the command must still print its consolidated report and exit 0.
+    """
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.subdomains.socket.gethostbyname", boom)
+    monkeypatch.setattr("ethscan.dns.socket.getaddrinfo", boom)
+    monkeypatch.setattr("ethscan.whois.socket.socket", boom)
+    monkeypatch.setattr("ethscan.geo.socket.create_connection", boom)
+    monkeypatch.setattr("ethscan.trace.socket.socket", boom)
+
+    report = _run_cli(["recon", "--target", "example.com"])
+
+    assert report["target"] == "example.com"
+    assert isinstance(report["notes"], list)
+    assert len(report["notes"]) > 0
+
+
+def test_report_cli_reports_a_failed_scan(monkeypatch) -> None:
+    """The report command reports a failed scan and exits 0."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.scanner.socket.create_connection", boom)
+
+    report = _run_cli(["report", "--target", UNREACHABLE_HOST, "--ports", "80,443"])
+
+    assert report["scan"]["ports_scanned"] == 2
+    assert report["scan"]["open_ports"] == []
+    assert all(not entry["open"] for entry in report["scan"]["details"])
+
+
+def test_recon_cli_reports_module_failures(monkeypatch) -> None:
+    """The recon command reports module failures and exits 0."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    for name in [
+        "run_subdomains",
+        "run_dns",
+        "run_whois",
+        "run_geo",
+        "run_trace",
+    ]:
+        monkeypatch.setattr(f"ethscan.recon.{name}", boom)
+
+    report = _run_cli(["recon", "--target", "example.com"])
+
+    assert report["target"] == "example.com"
+    assert isinstance(report["notes"], list)
+    assert len(report["notes"]) > 0
