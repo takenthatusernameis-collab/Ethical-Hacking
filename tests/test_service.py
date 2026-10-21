@@ -109,6 +109,20 @@ def test_run_service_custom_ports(monkeypatch) -> None:
     assert called_ports == [8080, 8443]
 
 
+def test_run_service_transport_failure_reported(monkeypatch) -> None:
+    """run_service reports a transport failure of an unnamed type instead of raising."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.service.socket.create_connection", boom)
+
+    result = run_service("127.0.0.1", timeout=0.5)
+
+    assert result["services_found"] == 0
+    assert result["results"] == []
+
+
 def test_format_service_report_json() -> None:
     data = {
         "target": "example.com",

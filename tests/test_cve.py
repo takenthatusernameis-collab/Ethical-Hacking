@@ -1075,6 +1075,25 @@ def test_run_cve_reports_a_transport_failure(tmp_path, monkeypatch) -> None:
     assert results["cve_count"] == 2
 
 
+def test_run_cve_records_failed_nvd_lookup(tmp_path, monkeypatch) -> None:
+    """A failed NVD lookup is recorded as its own error, not as 'no match'."""
+    monkeypatch.setattr(
+        "ethscan.cve.urllib.request.urlopen",
+        lambda req, timeout=None: (_ for _ in ()).throw(
+            RuntimeError("hostile transport")
+        ),
+    )
+    services = tmp_path / "services.json"
+    services.write_text(json.dumps({"services": [{"port": 22, "banner": "OpenSSH_7.2"}]}))
+    results = run_cve(
+        "127.0.0.1", services_file=str(services), timeout=1.0, use_cache=False
+    )
+
+    assert results["services_checked"] == 1
+    assert results["cve_count"] == 2
+    assert any("NVD lookup failed" in note for note in results["notes"])
+
+
 def test_fetch_cve_data_success(monkeypatch) -> None:
     class FakeResponse:
         def read(self) -> bytes:

@@ -365,6 +365,12 @@ def run_cve(
                     cve_data = _get_cached_or_fetch(
                         cve_id, timeout, use_cache, offline_fallback, api_url
                     )
+
+                    if isinstance(cve_data, dict) and cve_data.get("error"):
+                        notes.append(
+                            f"NVD lookup failed for {cve_id}: {cve_data['error']}"
+                        )
+
                     summary = _extract_cve_summary(cve_data) if cve_data else {}
                     if summary:
                         cve_entries.append(

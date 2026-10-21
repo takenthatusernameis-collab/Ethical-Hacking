@@ -24,7 +24,20 @@ from typing import Any
 
 import pytest
 
-from ethscan import dnssec, ldap, memcached, ntp, redis, smb, snmp, ssh
+from ethscan import (
+    dnssec,
+    ldap,
+    memcached,
+    ntp,
+    redis,
+    service,
+    smb,
+    snmp,
+    ssh,
+    ssl,
+    tls,
+    whois,
+)
 
 #: The answers a hostile server can send: the framing of each protocol with
 #: the content left out, made hostile or not text at all. A length that does
@@ -172,3 +185,77 @@ def test_dnssec_probe_failure_is_reported_not_raised(monkeypatch) -> None:
 
     assert "probe failed" in (result["dnskey"].get("error") or "")
     assert "probe failed" in (result["ds"].get("error") or "")
+
+
+def test_ssl_probe_failure_is_reported_not_raised(monkeypatch) -> None:
+    """A failing SSL transport is reported through the error field, not raised."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.ssl.socket.create_connection", boom)
+
+    result = ssl.run_ssl("example.com")
+
+    assert isinstance(result, dict)
+    assert result["error"] is not None
+    assert "hostile transport" in result["error"]
+
+
+def test_tls_probe_failure_is_reported_not_raised(monkeypatch) -> None:
+    """A failing TLS transport is reported per probe, not raised."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.tls.socket.create_connection", boom)
+
+    result = tls.run_tls("example.com")
+
+    assert isinstance(result, dict)
+    for entry in result["versions"]:
+        assert entry["supported"] is False
+        assert entry["error"] is not None
+    for entry in result["ciphers"]:
+        assert entry["supported"] is False
+        assert entry["error"] is not None
+
+
+def test_whois_probe_failure_is_reported_not_raised(monkeypatch) -> None:
+    """A failing WHOIS transport is reported through the error field, not raised."""
+
+    class BoomSocket:
+        def __init__(self, *a, **k):
+            pass
+
+        def settimeout(self, *a, **k):
+            pass
+
+        def connect(self, *a, **k):
+            raise RuntimeError("hostile transport")
+
+        def close(self, *a, **k):
+            pass
+
+    monkeypatch.setattr("ethscan.whois.socket.socket", BoomSocket)
+
+    result = whois.run_whois("example.com")
+
+    assert isinstance(result, dict)
+    assert result["error"] is not None
+    assert "hostile transport" in result["error"]
+
+
+def test_service_probe_failure_is_reported_not_raised(monkeypatch) -> None:
+    """A failing service-detection transport is reported, not raised."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.service.socket.create_connection", boom)
+
+    result = service.run_service("127.0.0.1")
+
+    assert isinstance(result, dict)
+    assert result["services_found"] == 0
+    assert result["results"] == []

@@ -215,6 +215,20 @@ def test_run_ssl_offline(monkeypatch) -> None:
     assert result["error"] == "connection refused"
 
 
+def test_run_ssl_transport_failure_reported(monkeypatch) -> None:
+    """run_ssl reports a transport failure of an unnamed type instead of raising."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.ssl.socket.create_connection", boom)
+
+    result = run_ssl("example.com")
+
+    assert result["error"] is not None
+    assert "hostile transport" in result["error"]
+
+
 # ---------------------------------------------------------------------------
 # CSV formatter
 # ---------------------------------------------------------------------------

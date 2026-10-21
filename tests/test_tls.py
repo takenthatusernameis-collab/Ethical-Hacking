@@ -332,6 +332,24 @@ def test_run_tls_offline_connection_refused() -> None:
         assert entry["error"] is not None
 
 
+def test_run_tls_transport_failure_reported(monkeypatch) -> None:
+    """run_tls reports a transport failure of an unnamed type per probe instead of raising."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.tls.socket.create_connection", boom)
+
+    result = run_tls("example.com", max_workers=2)
+
+    for entry in result["versions"]:
+        assert entry["supported"] is False
+        assert entry["error"] is not None
+    for entry in result["ciphers"]:
+        assert entry["supported"] is False
+        assert entry["error"] is not None
+
+
 def test_format_tls_report_json() -> None:
     data = {
         "target": "example.com",

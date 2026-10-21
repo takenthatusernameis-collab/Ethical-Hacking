@@ -187,6 +187,30 @@ def test_run_whois_offline(monkeypatch) -> None:
     assert results["parsed"]["creation_date"] == "2020-01-01"
 
 
+def test_run_whois_transport_failure_reported(monkeypatch) -> None:
+    """run_whois reports a transport failure of an unnamed type instead of raising."""
+
+    class BoomSocket:
+        def __init__(self, *a, **k):
+            pass
+
+        def settimeout(self, *a, **k):
+            pass
+
+        def connect(self, *a, **k):
+            raise RuntimeError("hostile transport")
+
+        def close(self, *a, **k):
+            pass
+
+    monkeypatch.setattr("ethscan.whois.socket.socket", BoomSocket)
+
+    result = run_whois("example.com")
+
+    assert result["error"] is not None
+    assert "hostile transport" in result["error"]
+
+
 def test_query_whois_invalid_target() -> None:
     with pytest.raises((socket.gaierror, socket.timeout, ConnectionRefusedError, OSError)):
         query_whois("invalid.tld", server="127.0.0.1", port=43, timeout=0.1)
