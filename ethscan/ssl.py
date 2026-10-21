@@ -227,7 +227,7 @@ def inspect_certificate(
                     result["valid"] = result["days_remaining"] > 0
                 except (ValueError, TypeError):
                     result["valid"] = False
-    except (ssl.SSLError, OSError, ValueError) as exc:
+    except (ssl.SSLError, OSError, ValueError, RuntimeError) as exc:
         result["error"] = str(exc)
     return result
 

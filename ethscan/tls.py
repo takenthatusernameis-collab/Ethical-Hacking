@@ -236,7 +236,7 @@ def probe_version(
         entry["error"] = str(exc)
     except ssl.SSLError as exc:
         entry["error"] = _truncate(str(exc))
-    except OSError as exc:
+    except (OSError, RuntimeError) as exc:
         entry["error"] = _truncate(str(exc))
     return entry
 
@@ -272,7 +272,7 @@ def probe_cipher(
         entry["negotiated_version"] = protocol
     except ssl.SSLError as exc:
         entry["error"] = _truncate(str(exc))
-    except OSError as exc:
+    except (OSError, RuntimeError) as exc:
         entry["error"] = _truncate(str(exc))
     return entry
 

@@ -184,7 +184,7 @@ def run_whois(
     """
     try:
         raw = query_whois(target, server=server, port=port, timeout=timeout)
-    except (socket.gaierror, socket.timeout, ConnectionRefusedError, OSError) as exc:
+    except (socket.gaierror, socket.timeout, ConnectionRefusedError, OSError, RuntimeError) as exc:
         return {
             "target": target,
             "server": server,
@@ -228,7 +228,7 @@ def run_whois(
             hop_raw = query_whois(
                 target, server=referral, port=current_port, timeout=timeout
             )
-        except (socket.gaierror, socket.timeout, ConnectionRefusedError, OSError):
+        except (socket.gaierror, socket.timeout, ConnectionRefusedError, OSError, RuntimeError):
             hops.append(
                 {
                     "depth": depth,
