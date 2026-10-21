@@ -107,8 +107,8 @@ def _attempt_ftp(
         "success": False,
         "error": None,
     }
-    ftp = FTP()
     try:
+        ftp = FTP()
         ftp.connect(host, port, timeout=timeout)
         ftp.login(username, password)
         result["success"] = True
