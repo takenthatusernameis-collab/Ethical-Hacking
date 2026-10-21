@@ -1,68 +1,95 @@
 # NEXT TASK
 
-## Status: COMPLETE (CLI-level sweep extended to the last twelve commands)
+## Status: COMPLETE (CLI-level sweep extended to the HTTP-facing commands)
 
 The task of the previous handoff is done: the permanent CLI-level sweep now
-covers the twelve commands that still had no failure-field check at the
-command line (`redis`, `memcached`, `ntp`, `ldap`, `smb`, `snmp`, `ssh`,
-`dnssec`, `ssl`, `tls`, `whois` and `service`), each of them printing its own
-error field and exiting 0.
+covers the ten HTTP-facing commands (`web`, `headers`, `fuzz`, `urlcheck`,
+`cert`, `geo`, `mac`, `s3`, `cve` and `subtake`), each of them printing its
+own failure signal and exiting 0.
 
-1. **The twelve commands were verified through the CLI.** With the transport
+1. **The ten commands were verified through the CLI.** With the transport
    seam patched to raise a `RuntimeError("hostile transport")`:
-   - `redis`/`memcached`/`ldap`/`smb` -> `accessible=false`,
-     `error="<module> probe failed: hostile transport"`;
-   - `ntp` -> `time_response=null`, `error="ntp probe failed: ..."`;
-   - `snmp` -> `communities=[]`, `error="snmp probe failed: ..."`;
-   - `ssh` -> `banner=null`, `error="ssh probe failed: ..."`;
-   - `ssl` -> `cert=null`, `valid=false`, `error="hostile transport"`;
-   - `tls` -> every version and cipher `supported=false` with its error;
-   - `whois` -> `raw=""`, `error="Connection failed: ..."`;
-   - `service` -> `services_found=0`, `results=[]`;
-   - `dnssec` -> `validated=false`, `dnskey.error="dnssec probe failed: ..."`.
+   - `web` -> `error="header fetch failed: hostile transport"`,
+     `ssl.error="hostile transport"`, no header;
+   - `headers` -> `error="header fetch failed: hostile transport"`, no
+     header;
+   - `fuzz` -> `error="hostile transport"` on every probed path, no finding;
+   - `urlcheck` -> `web.error`, `ssl.error` and the error of every fuzzed
+     path;
+   - `cert` -> `cert_data.error="Failed to fetch certificate transparency
+     data"`;
+   - `geo` -> `geolocation.error="Failed to fetch geolocation data"`;
+   - `mac` -> `mac_data.error="Failed to fetch MAC vendor data"`;
+   - `s3` -> `error="hostile transport"` on every probed bucket, no public
+     bucket;
+   - `cve` -> `error="NVD lookup failed for CVE-2016-6210: Failed to fetch
+     CVE data"`;
+   - `subtake` -> the subdomain is reported without a CNAME and
+     `vulnerable=false`.
    All exit 0.
 
-2. **The result is a permanent sweep.** `tests/test_cli_unreachable_sweep.py`
-   grew from 16 to 28 checks. The new checks patch the socket seam the
-   module really opens (the command line never injects a connector), run the
-   command through `CliRunner` and assert exit 0, no traceback and the
-   command's own failure signal. It is hermetic: no network is needed and
-   the result does not depend on what the machine can reach.
+2. **The result is a permanent sweep.** `tests/test_cli_http_unreachable_sweep.py`
+   holds the ten checks. Each one patches the transport the module really
+   opens (the command line never injects a transport), runs the command
+   through `CliRunner` and asserts exit 0, no traceback and the command's own
+   failure signal. It is hermetic: the transport is patched, so it needs no
+   network and the result does not depend on what the machine can reach.
 
-3. **The checks are meaningful.** All twelve were proved by reverting the
-   guard of their own module (narrowing the broad `except Exception` to
-   `except ValueError`, or dropping `RuntimeError` from the caught tuple)
-   and watching the matching check fail. With the guards restored all 28
-   pass.
+3. **The checks are meaningful.** All ten were proved by reverting the guard
+   of their own module (narrowing the broad `except Exception` to
+   `except ValueError`, dropping `RuntimeError` from the caught tuple, or
+   dropping the reason of the failure) and watching the matching check fail.
+   With the guards restored all ten pass.
+
+4. **The checks are hermetic.** The file was run with the network blocked (a
+   plugin that raises on every connection and on every name lookup that is
+   not a numeric address): 10 passed. The plugin was used for the proof
+   only and is not part of the repository.
 
 `python -m ruff check ethscan/ tests/` -> All checks passed.
-`python -m pytest tests/` -> **5072 passed, 48 skipped, 2 warnings** (baseline
-5060 passed, 48 skipped; the +12 are the new CLI checks). `git diff --check`
-clean. Nothing is committed.
+`python -m pytest tests/` -> **5082 passed, 48 skipped, 2 warnings** (baseline
+5072 passed, 48 skipped; the +10 are the checks of the rewritten file).
+`git diff --check` clean. Nothing is committed.
+
+The file was already in the repository as a draft. It was rewritten, because
+the draft proved nothing (`test_fuzz` had no assertion and probed an empty
+wordlist), depended on the filesystem cache (`cert`, `geo`, `mac`, `cve` ran
+with the cache enabled) and on the real resolver (`s3`, `subtake`).
 
 ## Constraints
 
-- Smallest reversible change; do not weaken an existing guard; turn the crash
-  into the module's documented error signal.
+- Smallest reversible change; do not weaken an existing guard; turn the
+  crash into the module's documented error signal.
 - Keep the permanent sweeps in the repository.
 - Do not commit unless explicitly asked.
 
 ## One precise next task
 
-Extend the permanent CLI-level sweep to the HTTP-facing commands, the last
-group of network commands without a failure-field check at the command line:
-`web`, `headers`, `fuzz`, `urlcheck`, `cert`, `geo`, `mac`, `s3`, `cve` and
-`subtake`.
+Extend the permanent CLI-level sweep to the two commands that still open a
+transport of their own without a failure-field check at the command line:
+`trace` and `brute` (the aggregators `vuln`, `recon` and `report` have
+their modules covered one level down).
 
-The method is the one of `tests/test_cli_unreachable_sweep.py`: patch the
-transport the module really uses (here `urllib.request.urlopen`, patched
-globally exactly as `tests/test_http_hostile_sweep.py` does; `urlcheck` also
-runs the TLS probe of `ethscan.ssl`, so it needs
-`ethscan.ssl.socket.create_connection` as well), run the command through
-`CliRunner`, and assert that it exits 0, leaks no traceback and prints the
-module's own failure signal. `cve` and `subtake` report a failed lookup as
-a missing entry instead of an error field, so assert the signal the module
-documents, not a fixed wording.
+The method is the one of `tests/test_cli_unreachable_sweep.py` and
+`tests/test_cli_http_unreachable_sweep.py`: patch the transport the module
+really opens, run the command through `CliRunner`, and assert that it exits
+0, leaks no traceback and prints the module's own failure signal.
 
-The list of the commands that still have no such check is in
-`HANDOFF_NEXT.md` under "What remains unresolved".
+The expected signals are already measured:
+
+- `trace`: patching `ethscan.trace.socket.gethostbyname` gives exit 0,
+  `error="hostile transport"`, `reached=false`; patching
+  `ethscan.trace.socket.socket` gives exit 0, `error="hostile transport"` and
+  a hop whose `error_code` is the failure.
+- `brute`: patching `ethscan.brute.FTP` with a stand-in class whose
+  `connect` raises gives exit 0, `attempts=1`, `successful_count=0` and
+  `results[0]["error"]="hostile transport"`. The command line takes the
+  wordlists as `--user-file` and `--pass-file`.
+
+The brute check may expose the defect of `ethscan/brute.py:110`, where the
+FTP client is built outside the guard of `_attempt_ftp`: a failure of the
+constructor escapes the command (exit 1 with a bare `RuntimeError`). The
+smallest fix is to build the client inside the `try:`.
+
+The list of the commands that still have no such check, and the other open
+points, are in `HANDOFF_NEXT.md` under "What remains unresolved".
