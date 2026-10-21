@@ -130,18 +130,19 @@ def run_ftp(
             except EOFError:
                 results["error"] = "banner read failed: server closed the connection"
                 return results
-            except (ftplib.Error, OSError, ValueError) as exc:
+            except (ftplib.Error, OSError, ValueError, RuntimeError) as exc:
                 results["error"] = f"banner read failed: {exc}"
                 return results
         # A host that is not a valid host name ("....") raises a UnicodeError,
         # which is a ValueError, when the resolver encodes it. A server that
         # closes the connection before sending its greeting makes ftplib
         # raise EOFError, and a server that answers with bytes that are not
-        # text raises a UnicodeDecodeError, which is a ValueError.
+        # text raises a UnicodeDecodeError, which is a ValueError. A transport
+        # failure of an unnamed type must not escape the command.
         except EOFError:
             results["error"] = "connection failed: server closed the connection"
             return results
-        except (socket.timeout, OSError, ftplib.Error, ValueError) as exc:
+        except (socket.timeout, OSError, ftplib.Error, ValueError, RuntimeError) as exc:
             results["error"] = f"connection failed: {exc}"
             return results
 

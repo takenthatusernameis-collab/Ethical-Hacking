@@ -468,7 +468,7 @@ def _send_recv(
         return data, None
     except socket.timeout:
         return None, "timeout"
-    except OSError as exc:
+    except (OSError, RuntimeError) as exc:
         return None, str(exc)
     finally:
         sock.close()

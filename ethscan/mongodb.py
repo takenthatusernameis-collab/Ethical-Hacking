@@ -89,7 +89,7 @@ def _send_recv(
         return None, "Timeout"
     except ConnectionRefusedError:
         return None, "Connection refused"
-    except OSError as exc:
+    except (OSError, RuntimeError) as exc:
         return None, str(exc)
 
 
