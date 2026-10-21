@@ -48,7 +48,7 @@ def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str
         results = socket.getaddrinfo(domain, None, socket.AF_INET)
         ips = [r[4][0] for r in results]
         return sorted(set(ips))
-    except (socket.timeout, socket.gaierror, OSError, ValueError):
+    except (socket.timeout, socket.gaierror, OSError, ValueError, RuntimeError):
         return []
 
 
@@ -59,7 +59,7 @@ def resolve_aaaa_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[
         results = socket.getaddrinfo(domain, None, socket.AF_INET6)
         ips = [r[4][0] for r in results]
         return sorted(set(ips))
-    except (socket.timeout, socket.gaierror, OSError, ValueError):
+    except (socket.timeout, socket.gaierror, OSError, ValueError, RuntimeError):
         return []
 
 
@@ -72,7 +72,7 @@ def resolve_cname(domain: str, timeout: float = DEFAULT_TIMEOUT) -> str | None:
             canonname = results[0][3]
             if canonname and canonname != domain:
                 return canonname.rstrip(".")
-    except (socket.timeout, socket.gaierror, OSError, ValueError):
+    except (socket.timeout, socket.gaierror, OSError, ValueError, RuntimeError):
         pass
     return None
 
@@ -85,7 +85,7 @@ def check_tcp_connect(ip: str, port: int = 80, timeout: float = DEFAULT_TIMEOUT)
         sock.connect((ip, port))
         sock.close()
         return True
-    except (socket.timeout, socket.gaierror, ConnectionRefusedError, OSError):
+    except (socket.timeout, socket.gaierror, ConnectionRefusedError, OSError, RuntimeError):
         return False
 
 

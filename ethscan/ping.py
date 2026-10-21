@@ -121,7 +121,7 @@ def _try_create_raw_socket() -> socket.socket | None:
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
         return sock
-    except (OSError, PermissionError):
+    except (OSError, PermissionError, RuntimeError):
         return None
 
 

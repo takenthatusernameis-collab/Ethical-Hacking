@@ -58,7 +58,7 @@ def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str
         results = socket.getaddrinfo(domain, None, socket.AF_INET)
         ips = [r[4][0] for r in results]
         return sorted(set(ips))
-    except (socket.timeout, socket.gaierror, OSError, ValueError):
+    except (socket.timeout, socket.gaierror, OSError, ValueError, RuntimeError):
         return []
 
 
@@ -77,7 +77,7 @@ def resolve_aaaa_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[
         results = socket.getaddrinfo(domain, None, socket.AF_INET6)
         ips = [r[4][0] for r in results]
         return sorted(set(ips))
-    except (socket.timeout, socket.gaierror, OSError, ValueError):
+    except (socket.timeout, socket.gaierror, OSError, ValueError, RuntimeError):
         return []
 
 
@@ -104,7 +104,7 @@ def resolve_with_dnspython(
 
         answers = resolver.resolve(domain, record_type)
         return sorted({str(rdata) for rdata in answers})
-    except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError):
+    except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError, RuntimeError):
         return []
 
 
@@ -151,7 +151,7 @@ def run_dns(
                     resolver.nameservers = [server]
                     answers = resolver.resolve(domain, rtype)
                     return rtype, sorted({str(rdata) for rdata in answers})
-                except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError):
+                except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError, RuntimeError):
                     return rtype, []
             return rtype, []
         return rtype, resolve_with_dnspython(domain, rtype, timeout)
