@@ -126,6 +126,8 @@ def _fetch_cve_data(
         return None
     except (OSError, ValueError):
         return None
+    except Exception:  # noqa: BLE001 - urlopen can raise any failure; swallow to None
+        return None
 
 
 def _get_cached_or_fetch(

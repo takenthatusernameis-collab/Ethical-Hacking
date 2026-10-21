@@ -81,6 +81,20 @@ def test_run_headers_bare_domain(monkeypatch):
     assert results["secure"] is True
 
 
+def test_run_headers_reports_a_transport_failure(monkeypatch):
+    """A transport failure of a type the guard does not name is reported."""
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("urllib.request.urlopen", boom)
+
+    results = run_headers("https://example.com", timeout=1.0)
+
+    assert "hostile transport" in (results.get("error") or "")
+    assert results["headers"] == {}
+    assert results["security_headers"]["missing_count"] == len(SECURITY_HEADERS)
+
+
 def test_format_headers_report_json():
     """Test JSON formatter for headers report."""
     data = {

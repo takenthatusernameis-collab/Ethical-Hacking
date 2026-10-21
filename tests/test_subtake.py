@@ -769,6 +769,37 @@ def test_check_http_fingerprint_all_schemes_fail(monkeypatch) -> None:
     assert check_http_fingerprint("example.com", timeout=1.0) is None
 
 
+def test_check_http_fingerprint_transport_failure(monkeypatch) -> None:
+    """A transport failure of a type the guard does not name is a failed probe."""
+
+    def mock_urlopen(req, timeout=5.0):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("urllib.request.urlopen", mock_urlopen)
+    assert check_http_fingerprint("example.com", timeout=1.0) is None
+
+
+def test_run_subtake_reports_a_failed_probe(monkeypatch) -> None:
+    """A label whose probe fails is reported; the command is not aborted."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr(
+        "ethscan.subtake.resolve_cname", lambda *a, **kw: "victim.azurewebsites.net"
+    )
+    monkeypatch.setattr("ethscan.subtake.resolve_a_records", lambda *a, **kw: ["127.0.0.1"])
+    monkeypatch.setattr("ethscan.subtake.resolve_aaaa_records", lambda *a, **kw: [])
+    monkeypatch.setattr("ethscan.subtake.check_takeover_signature", boom)
+
+    results = run_subtake("example.com", subdomains=["www"], timeout=1.0)
+
+    assert results["vulnerable_count"] == 0
+    entry = results["all_results"][0]
+    assert entry["subdomain"] == "www"
+    assert "hostile transport" in entry["error"]
+
+
 def test_run_subtake_unknown_cname_takeover_branch(monkeypatch) -> None:
     """A CNAME matching no known service takes the 'Unknown' takeover branch."""
 

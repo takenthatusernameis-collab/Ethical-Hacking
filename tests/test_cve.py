@@ -1043,6 +1043,38 @@ def test_fetch_cve_data_network_error(monkeypatch) -> None:
     assert _fetch_cve_data("CVE-X") is None
 
 
+def test_fetch_cve_data_transport_failure(monkeypatch) -> None:
+    # A transport failure of a type the guard does not name is a failed
+    # lookup, not a crash.
+    monkeypatch.setattr(
+        "ethscan.cve.urllib.request.urlopen",
+        lambda req, timeout=None: (_ for _ in ()).throw(
+            RuntimeError("hostile transport")
+        ),
+    )
+    assert _fetch_cve_data("CVE-X") is None
+
+
+def test_run_cve_reports_a_transport_failure(tmp_path, monkeypatch) -> None:
+    # The lookup of a banner that matches a known product reaches the API;
+    # a transport that fails must not take the command down.
+    monkeypatch.setattr(
+        "ethscan.cve.urllib.request.urlopen",
+        lambda req, timeout=None: (_ for _ in ()).throw(
+            RuntimeError("hostile transport")
+        ),
+    )
+    services = tmp_path / "services.json"
+    services.write_text(json.dumps({"services": [{"port": 22, "banner": "OpenSSH_7.2"}]}))
+
+    results = run_cve(
+        "127.0.0.1", services_file=str(services), timeout=1.0, use_cache=False
+    )
+
+    assert results["services_checked"] == 1
+    assert results["cve_count"] == 2
+
+
 def test_fetch_cve_data_success(monkeypatch) -> None:
     class FakeResponse:
         def read(self) -> bytes:

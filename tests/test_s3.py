@@ -284,6 +284,21 @@ def test_check_bucket_public_timeout(monkeypatch) -> None:
     assert result["error"] is not None
 
 
+def test_check_bucket_public_transport_failure(monkeypatch) -> None:
+    # A transport failure of a type the guard does not name is a failed
+    # probe, not a crash.
+    monkeypatch.setattr("ethscan.s3._resolve_s3_endpoint", _mock_dns("1.2.3.4"))
+
+    def _raise(req, timeout=None):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.s3.urllib.request.urlopen", _raise)
+    result = check_bucket_public("mybucket", "us-east-1", 1.0)
+    assert result["exists"] is False
+    assert result["public"] is False
+    assert "hostile transport" in result["error"]
+
+
 def test_check_bucket_public_url_and_region_fields(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.s3._resolve_s3_endpoint", _mock_dns(None))
     monkeypatch.setattr(

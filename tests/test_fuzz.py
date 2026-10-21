@@ -85,6 +85,21 @@ def test_fuzz_path_reports_a_path_with_a_null_byte_as_a_failed_probe() -> None:
     assert result["error"]
 
 
+def test_fuzz_path_reports_a_transport_failure(monkeypatch) -> None:
+    """A transport failure of a type the guard does not name is reported."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("urllib.request.urlopen", boom)
+
+    result = fuzz_path("http://127.0.0.1", "/admin", timeout=1.0)
+
+    assert result["status_code"] is None
+    assert "hostile transport" in result["error"]
+    assert result["path"] == "/admin"
+
+
 def test_default_wordlist_not_empty() -> None:
     assert len(DEFAULT_WORDLIST) > 0
     assert "/admin" in DEFAULT_WORDLIST

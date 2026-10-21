@@ -312,6 +312,10 @@ def check_bucket_public(
         # clause above and would otherwise take down the whole command when
         # it is raised inside a worker thread.
         result["error"] = str(exc) or exc.__class__.__name__
+    except Exception as exc:  # noqa: BLE001 - urlopen can raise any failure
+        # A transport failure of a type the guard does not name must not take
+        # the command down: the probe failed, it did not crash.
+        result["error"] = str(exc) or exc.__class__.__name__
 
     return result
 

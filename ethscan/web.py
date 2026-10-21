@@ -1,4 +1,5 @@
 """Web application security checks for ethscan."""
+from __future__ import annotations
 
 import contextlib
 import csv
@@ -9,6 +10,7 @@ import socket
 import ssl
 import urllib.error
 import urllib.request
+from typing import Any
 
 from ethscan.target import (
     check_target_host,
@@ -36,6 +38,21 @@ INFO_DISCLOSURE_HEADERS: dict[str, str] = {
     "X-ASPNET-Version": "Reveals ASP.NET version.",
     "X-ASPNET-Mvc-Version": "Reveals ASP.NET MVC version.",
 }
+
+
+class FetchedHeaders(dict):
+    """The headers of a target, and the reason the fetch failed.
+
+    The headers stay a plain mapping of lowercase names to values, so every
+    caller that treats them as a dict keeps working. ``error`` holds the
+    reason the fetch failed and is ``None`` when the fetch worked.
+    """
+
+    error: str | None
+
+    def __init__(self, *args: Any, error: str | None = None, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.error = error
 
 
 def _parse_url(target: str) -> tuple[str, int, bool]:
@@ -67,7 +84,7 @@ def _parse_url(target: str) -> tuple[str, int, bool]:
     return host, port, is_secure
 
 
-def fetch_headers(target: str, timeout: float = 5.0) -> dict[str, str]:
+def fetch_headers(target: str, timeout: float = 5.0) -> FetchedHeaders:
     """Fetch HTTP response headers from ``target``.
 
     The userinfo of the target is dropped before the request is made:
@@ -80,26 +97,32 @@ def fetch_headers(target: str, timeout: float = 5.0) -> dict[str, str]:
         timeout: Connection timeout in seconds.
 
     Returns:
-        Dictionary of lowercase header names to values.
+        Dictionary of lowercase header names to values. A target that cannot
+        be reached has no headers; the reason is in ``error``.
     """
     try:
         request = urllib.request.Request(strip_userinfo(target), method="HEAD")
         with urllib.request.urlopen(request, timeout=timeout) as response:
-            return {key.lower(): value for key, value in response.headers.items()}
+            return FetchedHeaders({key.lower(): value for key, value in response.headers.items()})
     except urllib.error.HTTPError as exc:
         # HTTPError still carries headers.
         try:
-            return {key.lower(): value for key, value in exc.headers.items()}
+            return FetchedHeaders({key.lower(): value for key, value in exc.headers.items()})
         except Exception:  # noqa: BLE001 - HTTPError.headers may raise arbitrarily
-            return {}
-    except http.client.HTTPException:
+            return FetchedHeaders()
+    except http.client.HTTPException as exc:
         # ``http.client.BadStatusLine`` (a server that answers with a
         # malformed status line) derives from ``HTTPException`` and not from
         # ``OSError`` or ``ValueError``, so it escapes the ``except`` below.
         # A server that cannot answer is a failed probe, not a crash.
-        return {}
-    except (urllib.error.URLError, OSError, ValueError):
-        return {}
+        return FetchedHeaders(error=f"header fetch failed: {exc}")
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        return FetchedHeaders(error=f"header fetch failed: {exc}")
+    except Exception as exc:  # noqa: BLE001 - urlopen can raise any failure
+        # A transport failure of a type the guard does not name (a custom
+        # opener that raises its own error, for instance) must not take the
+        # command down either: it is a failed probe, not a crash.
+        return FetchedHeaders(error=f"header fetch failed: {exc}")
 
 
 def check_security_headers(headers: dict[str, str]) -> dict[str, object]:
@@ -241,14 +264,26 @@ def run_web_checks(target: str, checks: list[str], timeout: float = 5.0) -> dict
         Structured results keyed by check name.
     """
     host, port, is_secure = _parse_url(target)
-    results: dict[str, object] = {"target": target, "host": host, "port": port, "secure": is_secure}
+    results: dict[str, object] = {
+        "target": target,
+        "host": host,
+        "port": port,
+        "secure": is_secure,
+        "error": None,
+    }
     headers: dict[str, str] = {}
 
     needs_headers = any(c in checks for c in ["headers", "info_disclosure", "security_headers"])
     if needs_headers:
         url = target if "://" in target.strip() else ("https://" + target.strip() if is_secure else "http://" + target.strip())
-        headers = fetch_headers(url, timeout=timeout)
-        results["headers"] = dict(headers)
+        fetched = fetch_headers(url, timeout=timeout)
+        headers = dict(fetched)
+        results["headers"] = headers
+        # A caller that replaces ``fetch_headers`` may hand back a plain dict,
+        # which carries no reason of its own.
+        fetch_error = getattr(fetched, "error", None)
+        if fetch_error:
+            results["error"] = fetch_error
 
     if "headers" in checks or "security_headers" in checks:
         results["security_headers"] = check_security_headers(headers)
@@ -277,6 +312,8 @@ def format_web_report_markdown(data: dict[str, object]) -> str:
     lines.append(f"- **Host:** {data['host']}")
     lines.append(f"- **Port:** {data['port']}")
     lines.append(f"- **HTTPS:** {'Yes' if data['secure'] else 'No'}")
+    if data.get("error"):
+        lines.append(f"- **Error:** {data['error']}")
     lines.append("")
 
     if "security_headers" in data:
@@ -339,6 +376,7 @@ def format_web_report_csv(data: dict[str, object]) -> str:
     writer.writerow(["host", data.get("host", "")])
     writer.writerow(["port", data.get("port", "")])
     writer.writerow(["https", "true" if data.get("secure") else "false"])
+    writer.writerow(["error", data.get("error") or ""])
 
     if "security_headers" in data:
         sh = data["security_headers"]

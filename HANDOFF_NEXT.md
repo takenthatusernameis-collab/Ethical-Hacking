@@ -2,59 +2,45 @@
 
 ## What changed this session
 
-Three parts: the two open items of the previous handoff, plus two crash classes found while checking the rest of the input surface.
+The task of the previous handoff: extend the permanent sweep to the HTTP-facing commands, and decide per module whether an unexpected transport failure is reported instead of raised. The four commands that raised now report, the permanent HTTP sweep found two more crash paths, and those are fixed too.
 
-### 1. Probe-block net (the `smtp` template)
+### 1. The HTTP commands report the failure
 
-The probe block of the protocol commands that lacked a net now reports a failure through the module's own field instead of letting it escape:
+- `web.py`: `fetch_headers` never raises. It returns a `FetchedHeaders` — a plain mapping of lowercase header names to values that carries the reason of a failure in its `error` attribute — so the reason travels with the headers to every caller. `run_web_checks` puts that reason in its own `error` field, and the JSON, Markdown and CSV reports show it. Before this, a target that could not be reached was indistinguishable from a target with no security headers: both showed "0/7 present".
+- `headers.py`: `run_headers` reports the same reason in its own `error` field; the Markdown and CSV reports show it.
+- `fuzz.py`: `fuzz_path` reports a failure of an unnamed type in the `error` field of that path, the way it already reported the failures it knew.
+- `cve.py`: `_fetch_cve_data` answers a failure of an unnamed type with the module's own signal for a failed lookup (`None`), like `cert`, `geo` and `mac` already did.
+- `subtake.py`: `check_http_fingerprint` answers a failure of an unnamed type with `None`, the way it already answered the failures it knew; `run_subtake` reports a label whose probe failed in that label's result, the way `s3.run_s3` already reported a failed bucket probe.
+- `s3.py`: `check_bucket_public` reports a failure of an unnamed type in its own `error` field (`run_s3` already guarded the probe, so the command did not crash).
+- `urlcheck.py`: the report shows the `error` of the web section.
 
-- `redis.py` (`run_redis`), `memcached.py` (`run_memcached`), `ntp.py` (`run_ntp`), `ldap.py` (`run_ldap`), `smb.py` (`run_smb2` and `run_smb`), `snmp.py` (`run_snmp`): `results["error"] = f"<module> probe failed: {exc}"`.
-- `ssh.py` (`run_ssh`): a new `except Exception` after the existing `(OSError, ValueError)` handler: `result["error"] = f"ssh probe failed: {exc}"`.
-- `dnssec.py` (`run_dnssec`): the module has no top-level error field, so the failure lands in `dnskey_result["error"]` and `ds_result["error"]`; the report reads `DNSKEY query failed: dnssec probe failed: ...`.
+### 2. The permanent sweep
 
-### 2. The `mac` vendor text
-
-`tests/test_mac.py` covers the behaviour change made by `91ce9aa`: a body with a byte that is not UTF-8 yields the replaced text as the vendor instead of a failed fetch.
-
-### 3. A document that nests too deeply for its parser
-
-The JSON parser and the YAML parser raise a `RecursionError` for a document that nests too deeply, and no guard named that type, so four commands crashed with a raw traceback. Fixed at the source:
-
-- `fileio.py` (`load_json`): such a file is an unusable value (`ValueError`). This fixes every caller at once — the CLI's `_load_json_file` (`--services-file`, `--tls-file`, `--ssl-file`, `--banners-file`), `cve.run_cve`'s services file, and the `cert`/`cve`/`geo`/`mac` cache readers.
-- `config.py` (`load_config`): such a config file is a `_parse_error`, like a file with broken YAML.
-- `cve.py` (`_fetch_cve_data`): such a body is a failed lookup (`None`).
-- `jwt.py` (`_decode_json_segment`): such a segment is an unreadable segment (`None`).
-
-### 4. A number with more digits than Python converts
-
-`int()` refuses more than 4300 digits, so a banner in a `--services-file` crashed `ethscan vuln`. `vuln.py` (`_version_tuple`) now reads such a version as no version, so it matches no range.
-
-### Tests
-
-- `tests/test_protocol_hostile_sweep.py` (new, 115 checks): a hostile answer is answered with a result and never a traceback, and a failure inside the probe block is reported through the module's own field — for the seven modules with a connector seam (redis, memcached, ntp, ldap, smb2, smb, snmp) plus the SSH and DNSSEC variants.
-- `tests/test_fileio.py`, `tests/test_config.py`, `tests/test_jwt.py`, `tests/test_cve.py`, `tests/test_vuln.py`, `tests/test_cli.py`: the regression tests for the two new crash classes (module level and command level).
-- `tests/test_file_content_sweep.py`: a deeply nested JSON is now one of the hostile file contents, so the permanent sweep covers every command that reads a file.
+- `tests/test_http_hostile_sweep.py` (new, 98 checks): ten HTTP-facing commands (web, headers, fuzz, urlcheck, cert, geo, mac, s3, cve, subtake) against eight hostile bodies and a failing transport. A hostile body is answered with a result and never with a traceback; a failing transport is reported through the command's own failure field.
+- `tests/test_web.py`, `test_headers.py`, `test_fuzz.py`, `test_urlcheck.py`, `test_cve.py`, `test_subtake.py`, `test_s3.py`: the regression test of each module next to its own tests (10 tests).
 
 ## What was actually verified
 
-- The five crash paths were reproduced **before** the fix as CLI tracebacks: `ethscan vuln --services-file <deep .json>`, `ethscan cve --services-file <deep .json>`, `ethscan config --config <deep .yaml>`, `ethscan jwt --token <deep segment>`, `ethscan vuln --services-file <banner with 5000 digits>`. After the fix each reports a usage error, a parse error or an empty result, with no traceback.
-- The new sweep test is meaningful: with the pre-net `redis.py` restored, `test_probe_failure_is_reported_not_raised[redis]` fails with the `RuntimeError` escaping; with the net it passes.
+- The crash paths were reproduced **before** the fix: with `urllib.request.urlopen` raising a `RuntimeError`, `web.run_web_checks`, `fuzz.run_fuzz`, `headers.run_headers` and `urlcheck.run_urlcheck` raised. Two more raised as well, on the paths the previous handoff had listed as safe: `cve.run_cve` (with a `--services-file` whose banner matches a known product) and `subtake.run_subtake` (with a CNAME that matches a takeover signature). After the fix every one of them answers with a result.
+- The new sweep test is meaningful: with the pre-fix sources restored, 10 of its checks fail with the `RuntimeError` escaping (`web`, `headers`, `fuzz`, `urlcheck`, `cve`, `subtake`); with the fix they pass.
+- The CLI was run against an unreachable target: `ethscan web --target http://127.0.0.1:9/` prints `"error": "header fetch failed: <urlopen error [Errno 111] Connection refused>"` in the JSON report, the Markdown report and the CSV report; `ethscan headers` and `ethscan urlcheck` report the same; `ethscan fuzz` reports the error per path.
+- Ten real-socket hostile answers (a garbled status line, a lying `Content-Length`, a truncated body, a broken chunked body, a body that nests too deeply, binary bytes, an empty answer) against the seven commands that talk to a socket produced no crash.
 - `python -m ruff check ethscan/ tests/` -> **All checks passed**.
-- `python -m pytest tests/` -> **4758 passed, 48 skipped, 2 warnings** (the two warnings are the pre-existing `test_main.py` runpy ones; the baseline was 4635 passed, 48 skipped).
-- `git diff --check` -> clean. 21 files changed and `tests/test_protocol_hostile_sweep.py` added.
+- `python -m pytest tests/` -> **4866 passed, 48 skipped, 2 warnings** (the two warnings are the pre-existing `test_main.py` runpy ones; the baseline was 4758 passed, 48 skipped).
+- `git diff --check` -> clean. 14 files changed and `tests/test_http_hostile_sweep.py` added.
 - Nothing is committed (commit only if explicitly asked).
 
 ## What remains unresolved
 
-- The HTTP-facing commands still let an unexpected transport failure escape: with `urllib.request.urlopen` raising a type that is not an `OSError` (a `RuntimeError`, for instance), `web.run_web_checks`, `fuzz.run_fuzz`, `headers.run_headers` and `urlcheck.run_urlcheck` raise instead of reporting it. The protocol commands no longer do, because of the net added this session. The bodies themselves are clean: ten hostile bodies against eight HTTP commands produced no crash.
-- `tests/test_file_option_sweep.py` hit its 5-second per-invocation timeout once for `recon --out /tmp` and `s3 --out ...` while the whole suite was running. Both pass in isolation and in a re-run of the full suite; they are DNS-dependent commands and the timeout is pre-existing.
+- **Four socket-based commands still let a transport failure of an unnamed type escape**: `ssl.run_ssl`, `tls.run_tls`, `whois.run_whois` and `service.run_service` raise a `RuntimeError` from `socket.create_connection` / `socket.socket` instead of reporting it. Their guards name the types they know (`(ssl.SSLError, OSError, ValueError)`, `(socket.gaierror, socket.timeout, ConnectionRefusedError, OSError)`, ...), but they have no net, and the permanent protocol sweep does not cover them. `stale.run_stale` is safe (its guards are already broad).
+- **`cve.run_cve` still reports a failed NVD lookup only as a missing entry.** A lookup that failed and a lookup that found nothing both end up as "no CVE matched", and the built-in findings hide it. The command needs an error of its own for a failed lookup.
+- `tests/test_file_option_sweep.py` hit its 5-second per-invocation timeout once for `recon --out /tmp` and `s3 --out ...` while the whole suite was running. In this session `tests/test_file_content_sweep.py::test_every_input_file_survives_hostile_content[s3]` hit the same 5-second timeout once in a full run and passed in 2.8 s in isolation and 3.2 s on the pristine sources: the `s3` command resolves its endpoint over DNS, and the timeout is pre-existing.
 
 ## Approaches that failed and why
 
-- **Fuzzing the protocol parsers found nothing.** A random corpus (1500 payloads per module plus structured hostile answers) against redis, memcached, ntp, ldap, smb2, smb and snmp produced no crash: the parsers are careful. The bug found this session was the digit limit of `int()`, which a random corpus never reaches. It came from reading the conversion sites, not from fuzzing.
-- **The `socket.connect` path never raises `UnicodeError` for a malformed host.** `socket.getaddrinfo` raises it for a host that cannot be IDNA-encoded, but `socket.connect` reports a `gaierror` (an `OSError`), so the `UnicodeError` guard that `smtp`/`mac`/`ssh` carry cannot be reached that way.
-- **The package regexes show no catastrophic backtracking.** 72 compiled patterns against nine adversarial inputs (long runs, repeated digits, long dotted numbers) produced no pattern slower than 50 ms.
+- **The handoff's list of "safe" HTTP commands was wrong for two of them.** `cve` and `subtake` were listed as reporting a failed transport, but the probe that established it never reached the API lookup of `cve` (no service banner matched) and never reached the fingerprint probe of `subtake` (no CNAME matched). A command is only safe on the paths that were exercised.
+- **A dict subclass was needed to carry the reason of a failure out of `web.fetch_headers`.** The helper is the seam that `run_web_checks`, `run_headers` and the tests replace, so it cannot change its return type without breaking them, and a plain `{}` carries no reason. `FetchedHeaders` is still a plain mapping (`headers == {}` holds, `dict(headers)` works), so every caller that treats the headers as a dict keeps working.
 
 ## One precise next task
 
-Extend the permanent sweep to the HTTP-facing commands, and decide the same question the protocol modules got this session: should an unexpected transport failure be reported instead of raised? The evidence is in "What remains unresolved" above: `web.run_web_checks`, `fuzz.run_fuzz`, `headers.run_headers` and `urlcheck.run_urlcheck` raise a `RuntimeError` from `urlopen`, while `cert`, `cve`, `geo`, `mac`, `ssl`, `tls`, `whois`, `stale` and `service` report it. The method is the one used this session: patch `urllib.request.urlopen` to raise, call the public `run_*`, and assert the module's own failure signal. Add the checks to the permanent sweep test, keep the smallest reversible change, add the regression test next to the module's own tests, and do not commit unless explicitly asked.
+Give the four socket-based commands the same probe-block net the protocol commands got, and add them to the permanent protocol sweep. The evidence is in "What remains unresolved": with `socket.create_connection` / `socket.socket` raising a `RuntimeError`, `ssl.run_ssl`, `tls.run_tls`, `whois.run_whois` and `service.run_service` raise instead of reporting it, while `redis`, `memcached`, `ntp`, `ldap`, `smb`, `snmp`, `ssh` and `dnssec` report it through their own field (the net added in the session before this one). The method is the one used in that session: patch the transport seam to raise, call the public `run_*`, and assert the module's own failure field; then add the command to `tests/test_protocol_hostile_sweep.py`. Keep the smallest reversible change (the crash becomes the module's documented error signal; do not weaken an existing guard), add the regression test next to the module's own tests, and do not commit unless explicitly asked.

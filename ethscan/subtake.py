@@ -419,6 +419,11 @@ def check_http_fingerprint(hostname: str, timeout: float = 5.0) -> str | None:
             http.client.HTTPException,
         ):
             continue
+        except Exception:  # noqa: BLE001, S112 - urlopen can raise any failure
+            # A transport failure of a type the guard does not name must not
+            # take the command down: the fingerprint is a failed probe, not a
+            # crash.
+            continue
     return None
 
 
@@ -490,7 +495,20 @@ def run_subtake(
             for label in labels
         }
         for future in as_completed(future_to_label):
-            result = future.result()
+            try:
+                result = future.result()
+            except Exception as exc:  # noqa: BLE001 - a failed probe must not abort the report
+                label = future_to_label[future]
+                result = {
+                    "subdomain": label,
+                    "hostname": f"{label}.{domain}",
+                    "cname": None,
+                    "a_records": [],
+                    "aaaa_records": [],
+                    "vulnerable": False,
+                    "takeover": None,
+                    "error": f"{exc.__class__.__name__}: {exc}",
+                }
             hostname = result["hostname"]
             if hostname not in seen_hostnames:
                 seen_hostnames.add(hostname)

@@ -84,6 +84,29 @@ def test_run_urlcheck_ssl_not_requested() -> None:
     assert results["summary"]["ssl_checked"] is False
 
 
+def test_run_urlcheck_reports_a_transport_failure(monkeypatch) -> None:
+    """A transport failure of a type the guard does not name is reported."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("urllib.request.urlopen", boom)
+
+    results = run_urlcheck(
+        "http://127.0.0.1:9/",
+        ["headers"],
+        wordlist=["/admin"],
+        fuzz_paths=True,
+        port=9,
+        timeout=1.0,
+        workers=2,
+    )
+
+    assert "hostile transport" in (results["web"].get("error") or "")
+    assert all(entry["error"] for entry in results["fuzz"]["all_results"])
+    assert results["fuzz"]["findings"] == []
+
+
 def test_format_urlcheck_report_json() -> None:
     data = {
         "target": "https://example.com",

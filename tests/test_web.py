@@ -353,6 +353,29 @@ def test_fetch_headers_malformed_status_line() -> None:
     assert headers == {}
 
 
+@patch("ethscan.web.urllib.request.urlopen")
+def test_fetch_headers_reports_a_transport_failure(mock_urlopen) -> None:
+    # A transport failure of a type the guard does not name is reported
+    # instead of taken as a crash.
+    mock_urlopen.side_effect = RuntimeError("hostile transport")
+
+    headers = fetch_headers("https://example.com")
+
+    assert headers == {}
+    assert "hostile transport" in (headers.error or "")
+
+
+@patch("ethscan.web.urllib.request.urlopen")
+def test_run_web_checks_reports_a_transport_failure(mock_urlopen) -> None:
+    mock_urlopen.side_effect = RuntimeError("hostile transport")
+
+    results = run_web_checks("https://example.com", ["headers", "info_disclosure"], timeout=1.0)
+
+    assert "hostile transport" in (results.get("error") or "")
+    assert results["headers"] == {}
+    assert results["security_headers"]["missing_count"] > 0
+
+
 def test_run_web_checks_malformed_status_line() -> None:
     # The same hostile answer must not crash the whole check run.
     server, port = _start_garbled_http_server()

@@ -135,6 +135,8 @@ def format_urlcheck_report_markdown(data: dict[str, object]) -> str:
         lines.append(f"- **Host:** {web.get('host')}")
         lines.append(f"- **Port:** {web.get('port')}")
         lines.append(f"- **HTTPS:** {'Yes' if web.get('secure') else 'No'}")
+        if web.get("error"):
+            lines.append(f"- **Error:** {web['error']}")
         lines.append("")
 
         if "security_headers" in web:
@@ -262,6 +264,8 @@ def format_urlcheck_report_csv(data: dict[str, object]) -> str:
 
     web = data.get("web") or {}
     security_headers = web.get("security_headers") or {}
+    if web.get("error"):
+        writer.writerow(["web", "error", web["error"]])
     for header in security_headers.get("present", []):
         writer.writerow(["web", "header_present", header])
     for header in security_headers.get("missing", []):

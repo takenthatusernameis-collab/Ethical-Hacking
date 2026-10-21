@@ -99,6 +99,10 @@ def fuzz_path(base_url: str, path: str, timeout: float = 5.0) -> dict[str, objec
         return {"path": path, "status_code": None, "error": str(exc)}
     except (urllib.error.URLError, OSError, ValueError) as exc:
         return {"path": path, "status_code": None, "error": str(exc)}
+    except Exception as exc:  # noqa: BLE001 - urlopen can raise any failure
+        # A transport failure of a type the guard does not name must not take
+        # the command down: the path is a failed probe, not a crash.
+        return {"path": path, "status_code": None, "error": str(exc) or exc.__class__.__name__}
 
 
 def run_fuzz(

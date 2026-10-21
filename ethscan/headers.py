@@ -19,15 +19,23 @@ def run_headers(target: str, timeout: float = 5.0) -> dict[str, object]:
     """
     host, port, is_secure = _parse_url(target)
     url = target if "://" in target.strip() else ("https://" + target.strip() if is_secure else "http://" + target.strip())
-    headers = fetch_headers(url, timeout=timeout)
+    fetched = fetch_headers(url, timeout=timeout)
+    headers = dict(fetched)
 
     results: dict[str, object] = {
         "target": target,
         "host": host,
         "port": port,
         "secure": is_secure,
-        "headers": dict(headers),
+        "headers": headers,
+        "error": None,
     }
+
+    # A caller that replaces ``fetch_headers`` may hand back a plain dict,
+    # which carries no reason of its own.
+    fetch_error = getattr(fetched, "error", None)
+    if fetch_error:
+        results["error"] = fetch_error
 
     results["security_headers"] = check_security_headers(headers)
 
@@ -46,6 +54,8 @@ def format_headers_report_markdown(data: dict[str, object]) -> str:
     lines.append(f"- **Host:** {data['host']}")
     lines.append(f"- **Port:** {data['port']}")
     lines.append(f"- **HTTPS:** {'Yes' if data['secure'] else 'No'}")
+    if data.get("error"):
+        lines.append(f"- **Error:** {data['error']}")
     lines.append("")
 
     sh = data["security_headers"]
@@ -74,6 +84,7 @@ def format_headers_report_csv(data: dict[str, object]) -> str:
     writer.writerow(["host", data.get("host", "")])
     writer.writerow(["port", data.get("port", "")])
     writer.writerow(["https", "true" if data.get("secure") else "false"])
+    writer.writerow(["error", data.get("error") or ""])
     writer.writerow(["present_count", sh.get("present_count", 0)])
     writer.writerow(["missing_count", sh.get("missing_count", 0)])
     writer.writerow(["total", sh.get("total", 0)])
