@@ -296,54 +296,60 @@ def run_redis(
         "error": None,
     }
 
-    # Run PING first
-    if "ping" in probe_list:
-        ping_req = _build_resp_array("PING")
-        ping_data, ping_err = _send_recv(host, server_port, ping_req, timeout, connector=connector)
-        if ping_err:
-            results["error"] = f"ping request failed: {ping_err}"
-            return results
-        ping_resp, _ = _parse_resp(ping_data)
-        if isinstance(ping_resp, bytes):
-            results["ping"] = ping_resp.decode("utf-8", errors="replace")
-        elif isinstance(ping_resp, str):
-            results["ping"] = ping_resp
-        else:
-            results["ping"] = str(ping_resp) if ping_resp is not None else None
-        if results["ping"] and "PONG" not in str(results["ping"]).upper():
-            # Still consider accessible if we got a response; but PONG is normal
-            pass
-        results["accessible"] = True
+    try:
+        # Run PING first
+        if "ping" in probe_list:
+            ping_req = _build_resp_array("PING")
+            ping_data, ping_err = _send_recv(host, server_port, ping_req, timeout, connector=connector)
+            if ping_err:
+                results["error"] = f"ping request failed: {ping_err}"
+                return results
+            ping_resp, _ = _parse_resp(ping_data)
+            if isinstance(ping_resp, bytes):
+                results["ping"] = ping_resp.decode("utf-8", errors="replace")
+            elif isinstance(ping_resp, str):
+                results["ping"] = ping_resp
+            else:
+                results["ping"] = str(ping_resp) if ping_resp is not None else None
+            if results["ping"] and "PONG" not in str(results["ping"]).upper():
+                # Still consider accessible if we got a response; but PONG is normal
+                pass
+            results["accessible"] = True
 
-    # Run INFO server
-    if "info" in probe_list:
-        info_req = _build_resp_array("INFO", "server")
-        info_data, info_err = _send_recv(host, server_port, info_req, timeout, connector=connector)
-        if info_err:
-            results["error"] = f"info request failed: {info_err}"
-            return results
-        parsed_info = _parse_info(info_data)
-        if not parsed_info:
-            # try full INFO
-            info_req2 = _build_resp_array("INFO")
-            info_data2, info_err2 = _send_recv(host, server_port, info_req2, timeout, connector=connector)
-            if not info_err2:
-                parsed_info = _parse_info(info_data2)
-        results["info"] = parsed_info
-        results["accessible"] = True
+        # Run INFO server
+        if "info" in probe_list:
+            info_req = _build_resp_array("INFO", "server")
+            info_data, info_err = _send_recv(host, server_port, info_req, timeout, connector=connector)
+            if info_err:
+                results["error"] = f"info request failed: {info_err}"
+                return results
+            parsed_info = _parse_info(info_data)
+            if not parsed_info:
+                # try full INFO
+                info_req2 = _build_resp_array("INFO")
+                info_data2, info_err2 = _send_recv(host, server_port, info_req2, timeout, connector=connector)
+                if not info_err2:
+                    parsed_info = _parse_info(info_data2)
+            results["info"] = parsed_info
+            results["accessible"] = True
 
-    # Run CONFIG GET *
-    if "config" in probe_list:
-        config_req = _build_resp_array("CONFIG", "GET", "*")
-        config_data, config_err = _send_recv(host, server_port, config_req, timeout, connector=connector)
-        if config_err:
-            results["error"] = f"config request failed: {config_err}"
-            return results
-        parsed_config = _parse_config(config_data)
-        results["config"] = parsed_config
-        findings = _assess_dangerous(parsed_config)
-        results["dangerous_findings"] = findings
-        results["accessible"] = True
+        # Run CONFIG GET *
+        if "config" in probe_list:
+            config_req = _build_resp_array("CONFIG", "GET", "*")
+            config_data, config_err = _send_recv(host, server_port, config_req, timeout, connector=connector)
+            if config_err:
+                results["error"] = f"config request failed: {config_err}"
+                return results
+            parsed_config = _parse_config(config_data)
+            results["config"] = parsed_config
+            findings = _assess_dangerous(parsed_config)
+            results["dangerous_findings"] = findings
+            results["accessible"] = True
+
+    # A hostile server must never crash the command: whatever it sends is
+    # reported through the module's own failure field.
+    except Exception as exc:  # noqa: BLE001 - a remote answer must not raise
+        results["error"] = f"redis probe failed: {exc}"
 
     return results
 

@@ -459,23 +459,37 @@ def run_dnssec(
     chain: list[dict[str, object]] = []
     notes: list[str] = []
 
-    if DNS_AVAILABLE:
-        dnskey_result = _query_dnskey_dnspython(domain, server, timeout)
-        parent = _get_parent_zone(domain)
-        if parent != ".":
-            ds_result = _query_ds_dnspython(parent.rstrip("."), server, timeout)
-    else:
-        nameservers = _resolve_nameservers(domain, timeout)
-        if nameservers:
-            dnskey_result = _query_dnskey_raw(nameservers[0], domain, timeout)
+    try:
+        if DNS_AVAILABLE:
+            dnskey_result = _query_dnskey_dnspython(domain, server, timeout)
             parent = _get_parent_zone(domain)
             if parent != ".":
-                parent_ns = _resolve_nameservers(parent.rstrip("."), timeout)
-                if parent_ns:
-                    ds_result = _query_ds_raw(parent_ns[0], parent.rstrip("."), timeout)
+                ds_result = _query_ds_dnspython(parent.rstrip("."), server, timeout)
         else:
-            dnskey_result["error"] = "no nameservers found"
-            ds_result["error"] = "no nameservers found"
+            nameservers = _resolve_nameservers(domain, timeout)
+            if nameservers:
+                dnskey_result = _query_dnskey_raw(nameservers[0], domain, timeout)
+                parent = _get_parent_zone(domain)
+                if parent != ".":
+                    parent_ns = _resolve_nameservers(parent.rstrip("."), timeout)
+                    if parent_ns:
+                        ds_result = _query_ds_raw(parent_ns[0], parent.rstrip("."), timeout)
+            else:
+                dnskey_result["error"] = "no nameservers found"
+                ds_result["error"] = "no nameservers found"
+    # A hostile server must never crash the command: whatever it sends is
+    # reported through the module's own failure field.
+    except Exception as exc:  # noqa: BLE001 - a remote answer must not raise
+        dnskey_result = {
+            "success": False,
+            "keys": [],
+            "error": f"dnssec probe failed: {exc}",
+        }
+        ds_result = {
+            "success": False,
+            "records": [],
+            "error": f"dnssec probe failed: {exc}",
+        }
 
     chain.append({
         "zone": domain,

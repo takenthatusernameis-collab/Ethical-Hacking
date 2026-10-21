@@ -521,9 +521,20 @@ def parse_banner(banner: str) -> tuple[str | None, str | None]:
 
 
 def _version_tuple(version: str) -> tuple[int, ...]:
-    """Convert a version string into a comparable tuple of integers."""
+    """Convert a version string into a comparable tuple of integers.
+
+    A number with more digits than Python converts (4300 of them) is not a
+    version: it is a banner that was crafted to be read as one. Such a
+    version is read as no version at all, so it matches no range.
+    """
     parts = re.findall(r"[0-9]+", str(version))
-    return tuple(int(part) for part in parts) if parts else ()
+    values: list[int] = []
+    for part in parts:
+        try:
+            values.append(int(part))
+        except ValueError:
+            return ()
+    return tuple(values)
 
 
 def version_in_range(version: str, spec: dict[str, object]) -> bool:

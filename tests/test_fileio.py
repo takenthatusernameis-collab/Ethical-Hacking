@@ -61,6 +61,19 @@ def test_load_json_raises_on_a_file_that_is_not_json(tmp_path) -> None:
         load_json(str(path))
 
 
+def test_load_json_raises_on_a_file_that_nests_too_deeply(tmp_path) -> None:
+    """A file whose JSON nests deeper than the parser can read is unusable.
+
+    The JSON parser raises a ``RecursionError`` for such a file, which is
+    neither a ``json.JSONDecodeError`` nor an ``OSError``: it is reported as
+    an unusable value, like a file that holds broken JSON.
+    """
+    path = tmp_path / "file.json"
+    path.write_text("[" * 20000 + "]" * 20000)
+    with pytest.raises(ValueError):
+        load_json(str(path))
+
+
 def test_is_utf8_accepts_a_text_file(tmp_path) -> None:
     path = tmp_path / "file.txt"
     path.write_text("café\n")

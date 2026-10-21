@@ -247,34 +247,39 @@ def run_memcached(
         "error": None,
     }
 
-    # Probe 1: version
-    if "version" in probe_list:
-        req = _build_memcached_request("version")
-        data, err = _send_recv(host, server_port, req, timeout, connector=connector)
-        if err:
-            results["error"] = f"version request failed: {err}"
-            return results
-        if not data:
-            results["error"] = "version request failed: no response"
-            return results
-        parsed_version = _parse_version_response(data)
-        results["version"] = parsed_version
-        results["accessible"] = True
+    try:
+        # Probe 1: version
+        if "version" in probe_list:
+            req = _build_memcached_request("version")
+            data, err = _send_recv(host, server_port, req, timeout, connector=connector)
+            if err:
+                results["error"] = f"version request failed: {err}"
+                return results
+            if not data:
+                results["error"] = "version request failed: no response"
+                return results
+            parsed_version = _parse_version_response(data)
+            results["version"] = parsed_version
+            results["accessible"] = True
 
-    # Probe 2: stats
-    if "stats" in probe_list:
-        req = _build_memcached_request("stats")
-        data, err = _send_recv(host, server_port, req, timeout, connector=connector)
-        if err:
-            results["error"] = f"stats request failed: {err}"
-            return results
-        if not data:
-            results["error"] = "stats request failed: no response"
-            return results
-        parsed_stats = _parse_stats_response(data)
-        results["stats"] = parsed_stats
-        results["findings"] = _assess_stats(parsed_stats)
-        results["accessible"] = True
+        # Probe 2: stats
+        if "stats" in probe_list:
+            req = _build_memcached_request("stats")
+            data, err = _send_recv(host, server_port, req, timeout, connector=connector)
+            if err:
+                results["error"] = f"stats request failed: {err}"
+                return results
+            if not data:
+                results["error"] = "stats request failed: no response"
+                return results
+            parsed_stats = _parse_stats_response(data)
+            results["stats"] = parsed_stats
+            results["findings"] = _assess_stats(parsed_stats)
+            results["accessible"] = True
+    # A hostile server must never crash the command: whatever it sends is
+    # reported through the module's own failure field.
+    except Exception as exc:  # noqa: BLE001 - a remote answer must not raise
+        results["error"] = f"memcached probe failed: {exc}"
 
     return results
 

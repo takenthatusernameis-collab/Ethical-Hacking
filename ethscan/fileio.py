@@ -54,6 +54,11 @@ def read_lines(path: str, *, skip_comments: bool = True) -> list[str]:
 def load_json(path: str) -> Any:
     """Load a JSON file.
 
+    A file whose content nests deeper than the parser can read is a file that
+    cannot be used: the JSON parser raises a ``RecursionError`` for it, which
+    is reported as an unusable value (a ``ValueError``) like a file that holds
+    broken JSON.
+
     Args:
         path: Path to the file.
 
@@ -62,11 +67,16 @@ def load_json(path: str) -> Any:
 
     Raises:
         ValueError: The file does not hold valid JSON (``json.JSONDecodeError``
-            is a ``ValueError``).
+            is a ``ValueError``), or it nests too deeply to be parsed.
         OSError: The file cannot be read.
     """
     with open(path, "r", encoding="utf-8", errors="replace") as handle:
-        return json.load(handle)
+        try:
+            return json.load(handle)
+        except RecursionError as exc:
+            raise ValueError(
+                "the file nests too deeply to be parsed as JSON"
+            ) from exc
 
 
 def is_utf8(path: str) -> bool:

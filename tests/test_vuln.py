@@ -105,6 +105,19 @@ def test_version_in_range_garbage() -> None:
     assert not version_in_range("", {"version_max": "9.9"})
 
 
+def test_version_in_range_a_number_that_is_too_long_to_be_one() -> None:
+    """A banner with more digits than Python converts is no version at all.
+
+    ``int()`` refuses a string with more than 4300 digits, and a banner is
+    text that a server can send: such a version is read as no version, so it
+    matches no range instead of crashing the command.
+    """
+    huge = "9" * 5000
+    assert not version_in_range(huge, {"version_max": "9.9"})
+    assert not version_in_range(huge, {"version_min": "1.0"})
+    assert match_service_vulns("OpenSSH", huge) == []
+
+
 def test_match_service_vulns_openssh_old() -> None:
     findings = match_service_vulns("OpenSSH", "7.2p2", port=22)
     ids = {finding["id"] for finding in findings}

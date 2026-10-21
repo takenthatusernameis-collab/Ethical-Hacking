@@ -453,6 +453,10 @@ def run_ssh(
     # which is a ValueError, when the resolver encodes it.
     except (OSError, ValueError) as exc:
         result["error"] = f"Connection error: {exc}"
+    # A hostile server must never crash the command: whatever it sends is
+    # reported through the module's own failure field.
+    except Exception as exc:  # noqa: BLE001 - a remote answer must not raise
+        result["error"] = f"ssh probe failed: {exc}"
     finally:
         if sock:
             with contextlib.suppress(Exception):

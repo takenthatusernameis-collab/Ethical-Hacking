@@ -84,6 +84,22 @@ def test_load_config_invalid_yaml(tmp_path) -> None:
     assert "Failed to parse" in config["_parse_error"]
 
 
+def test_load_config_yaml_that_nests_too_deeply(tmp_path) -> None:
+    """A file whose YAML nests deeper than the parser can read is unusable.
+
+    The YAML parser raises a ``RecursionError`` for such a file, which is not
+    a ``yaml.YAMLError``: the file is reported as a file that cannot be
+    parsed, like a file with broken YAML.
+    """
+    path = tmp_path / "ethscan.yaml"
+    path.write_text("{a: " * 5000 + "1" + "}" * 5000)
+    config = load_config(str(path))
+    assert config["defaults"] == {}
+    assert config["commands"] == {}
+    assert "_parse_error" in config
+    assert "Failed to parse" in config["_parse_error"]
+
+
 def test_load_config_non_dict_root(tmp_path) -> None:
     path = tmp_path / "ethscan.yaml"
     path.write_text("- a\n- b\n")

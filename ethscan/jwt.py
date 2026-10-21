@@ -51,7 +51,10 @@ def _decode_json_segment(segment: str) -> dict | None:
         return None
     try:
         data = json.loads(raw.decode("utf-8", errors="replace"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
+    # A segment whose JSON nests deeper than the parser can read raises a
+    # ``RecursionError``, which is neither a ``UnicodeDecodeError`` nor a
+    # ``JSONDecodeError``: it is a segment that cannot be read.
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
         return None
     return data if isinstance(data, dict) else None
 

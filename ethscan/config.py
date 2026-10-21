@@ -113,7 +113,10 @@ def load_config(explicit: str | None = None) -> dict[str, Any]:
 
     try:
         data = yaml.safe_load(read_text(path))
-    except yaml.YAMLError as exc:
+    # A file whose YAML nests deeper than the parser can read raises a
+    # ``RecursionError``, which is not a ``yaml.YAMLError``: it is a file
+    # that cannot be parsed, and it is reported like a file with broken YAML.
+    except (yaml.YAMLError, RecursionError) as exc:
         return {
             "defaults": {},
             "commands": {},

@@ -290,34 +290,39 @@ def run_ntp(
         "error": None,
     }
 
-    time_req = _build_time_request()
-    time_data, time_err = _send_recv(host, server_port, time_req, timeout, connector=connector)
-    if time_err:
-        results["error"] = f"time request failed: {time_err}"
-        return results
+    try:
+        time_req = _build_time_request()
+        time_data, time_err = _send_recv(host, server_port, time_req, timeout, connector=connector)
+        if time_err:
+            results["error"] = f"time request failed: {time_err}"
+            return results
 
-    time_resp = _parse_time_response(time_data)
-    results["time_response"] = time_resp
+        time_resp = _parse_time_response(time_data)
+        results["time_response"] = time_resp
 
-    if "error" in time_resp:
-        results["error"] = time_resp["error"]
-        return results
+        if "error" in time_resp:
+            results["error"] = time_resp["error"]
+            return results
 
-    if check_monlist:
-        monlist_req = _build_monlist_request()
-        mon_data, mon_err = _send_recv(host, server_port, monlist_req, timeout, connector=connector)
-        if mon_err:
-            results["monlist_response"] = {"error": f"monlist request failed: {mon_err}"}
-        else:
-            mon_resp = _parse_monlist_response(mon_data)
-            results["monlist_response"] = mon_resp
+        if check_monlist:
+            monlist_req = _build_monlist_request()
+            mon_data, mon_err = _send_recv(host, server_port, monlist_req, timeout, connector=connector)
+            if mon_err:
+                results["monlist_response"] = {"error": f"monlist request failed: {mon_err}"}
+            else:
+                mon_resp = _parse_monlist_response(mon_data)
+                results["monlist_response"] = mon_resp
 
-            if mon_resp.get("peer_count", 0) > 0:
-                results["is_reflector"] = True
-                req_len = len(monlist_req)
-                resp_len = len(mon_data)
-                if req_len > 0:
-                    results["amplification_factor"] = round(resp_len / req_len, 2)
+                if mon_resp.get("peer_count", 0) > 0:
+                    results["is_reflector"] = True
+                    req_len = len(monlist_req)
+                    resp_len = len(mon_data)
+                    if req_len > 0:
+                        results["amplification_factor"] = round(resp_len / req_len, 2)
+    # A hostile server must never crash the command: whatever it sends is
+    # reported through the module's own failure field.
+    except Exception as exc:  # noqa: BLE001 - a remote answer must not raise
+        results["error"] = f"ntp probe failed: {exc}"
 
     return results
 

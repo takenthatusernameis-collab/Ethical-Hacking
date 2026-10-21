@@ -5982,6 +5982,46 @@ def test_vuln_services_file_option(tmp_path) -> None:
     assert "ProFTPD" in result.output
 
 
+def test_vuln_services_file_with_a_banner_that_is_not_a_number(tmp_path) -> None:
+    """A banner whose version is too long to be a number is not a crash.
+
+    ``int()`` refuses a string with more than 4300 digits, and a services
+    file holds text that came from a server: the command reports what it
+    makes of it instead of leaking a traceback.
+    """
+    services_file = tmp_path / "service_report.json"
+    services_file.write_text(
+        json.dumps(
+            {
+                "target": "example.com",
+                "host": "example.com",
+                "results": [
+                    {
+                        "port": 22,
+                        "banner": "SSH-2.0-OpenSSH_" + "9" * 5000,
+                        "service": "SSH",
+                    },
+                ],
+            }
+        )
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "vuln",
+            "--target",
+            "example.com",
+            "--services-file",
+            str(services_file),
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Traceback" not in result.output
+
+
 def test_vuln_tls_file_option(tmp_path) -> None:
     tls_file = tmp_path / "tls_report.json"
     tls_file.write_text(
@@ -12436,6 +12476,23 @@ def test_config_with_explicit_file(tmp_path) -> None:
     assert parsed["config_file"] == str(cfg)
     assert parsed["defaults"]["timeout"] == 5.0
     assert parsed["commands"]["scan"]["ports"] == "common"
+
+
+def test_config_with_a_file_that_nests_too_deeply(tmp_path) -> None:
+    """A config file whose YAML nests too deeply is a parse error, not a crash.
+
+    The YAML parser raises a ``RecursionError`` for such a file, which is not
+    a ``yaml.YAMLError``: the command reports the file as a file it cannot
+    parse.
+    """
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("{a: " * 5000 + "1" + "}" * 5000)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["config", "--config", str(cfg)])
+    assert result.exit_code == 0, result.output
+    parsed = json.loads(result.output)
+    assert "parse_error" in parsed
+    assert "Failed to parse" in parsed["parse_error"]
 
 
 def test_config_inherits_parent_config(tmp_path) -> None:

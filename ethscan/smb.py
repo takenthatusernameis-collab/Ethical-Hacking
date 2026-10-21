@@ -695,32 +695,38 @@ def run_smb2(
         "error": None,
     }
 
-    request = _build_smb2_negotiate_request(dialects=tuple(dialects))
-    data, err = _send_recv(host, server_port, request, timeout, connector=connector)
+    try:
+        request = _build_smb2_negotiate_request(dialects=tuple(dialects))
+        data, err = _send_recv(host, server_port, request, timeout, connector=connector)
 
-    if err:
-        results["error"] = f"SMB2 negotiate request failed: {err}"
-        return results
-    if not data:
-        results["error"] = "SMB2 negotiate request failed: no response"
-        return results
+        if err:
+            results["error"] = f"SMB2 negotiate request failed: {err}"
+            return results
+        if not data:
+            results["error"] = "SMB2 negotiate request failed: no response"
+            return results
 
-    parsed = _parse_smb2_response(data, dialects=tuple(dialects))
-    results.update({k: parsed[k] for k in parsed})
-    if parsed.get("error"):
-        results["error"] = parsed["error"]
-        return results
+        parsed = _parse_smb2_response(data, dialects=tuple(dialects))
+        results.update({k: parsed[k] for k in parsed})
+        if parsed.get("error"):
+            results["error"] = parsed["error"]
+            return results
 
-    results["accessible"] = True
-    results["banner"] = _build_smb2_banner(parsed)
+        results["accessible"] = True
+        results["banner"] = _build_smb2_banner(parsed)
 
-    revision = parsed.get("dialect_revision")
-    if revision == SMB2_DIALECT_002:
-        results["notes"].append("dialect SMB 2.0.2 is the original SMB2 specification")
-    if parsed.get("signing_required"):
-        results["notes"].append("message signing is required by the server")
-    elif parsed.get("signing_enabled"):
-        results["notes"].append("message signing is supported but not enforced")
+        revision = parsed.get("dialect_revision")
+        if revision == SMB2_DIALECT_002:
+            results["notes"].append("dialect SMB 2.0.2 is the original SMB2 specification")
+        if parsed.get("signing_required"):
+            results["notes"].append("message signing is required by the server")
+        elif parsed.get("signing_enabled"):
+            results["notes"].append("message signing is supported but not enforced")
+    # A hostile server must never crash the command: whatever it sends is
+    # reported through the module's own failure field.
+    except Exception as exc:  # noqa: BLE001 - a remote answer must not raise
+        results["error"] = f"smb2 probe failed: {exc}"
+
     return results
 
 
@@ -767,31 +773,36 @@ def run_smb(
         "error": None,
     }
 
-    request = _build_smb1_negotiate_request(dial)
-    data, err = _send_recv(host, server_port, request, timeout, connector=connector)
+    try:
+        request = _build_smb1_negotiate_request(dial)
+        data, err = _send_recv(host, server_port, request, timeout, connector=connector)
 
-    if err:
-        results["error"] = f"negotiate request failed: {err}"
-    elif not data:
-        results["error"] = "negotiate request failed: no response"
-    else:
-        parsed = _parse_smb_response(data, dial)
-        results.update({k: parsed[k] for k in parsed})
-        if parsed.get("error"):
-            results["error"] = parsed["error"]
+        if err:
+            results["error"] = f"negotiate request failed: {err}"
+        elif not data:
+            results["error"] = "negotiate request failed: no response"
         else:
-            results["accessible"] = True
-            results["banner"] = _build_banner(parsed)
+            parsed = _parse_smb_response(data, dial)
+            results.update({k: parsed[k] for k in parsed})
+            if parsed.get("error"):
+                results["error"] = parsed["error"]
+            else:
+                results["accessible"] = True
+                results["banner"] = _build_banner(parsed)
 
-    if smb2:
-        smb2_dial = tuple(smb2_dialects) if smb2_dialects else DEFAULT_SMB2_DIALECTS
-        results["smb2"] = run_smb2(
-            target,
-            port=server_port,
-            timeout=timeout,
-            dialects=smb2_dial,
-            connector=connector,
-        )
+        if smb2:
+            smb2_dial = tuple(smb2_dialects) if smb2_dialects else DEFAULT_SMB2_DIALECTS
+            results["smb2"] = run_smb2(
+                target,
+                port=server_port,
+                timeout=timeout,
+                dialects=smb2_dial,
+                connector=connector,
+            )
+    # A hostile server must never crash the command: whatever it sends is
+    # reported through the module's own failure field.
+    except Exception as exc:  # noqa: BLE001 - a remote answer must not raise
+        results["error"] = f"smb probe failed: {exc}"
 
     return results
 

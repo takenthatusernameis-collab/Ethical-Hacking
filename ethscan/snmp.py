@@ -515,22 +515,27 @@ def run_snmp(
         "error": None,
     }
 
-    first_error: str | None = None
-    for community in community_list:
-        entry = _probe_community(host, server_port, community, timeout, connector)
-        results["communities"].append(entry)
-        if entry["valid"]:
-            results["valid_communities"].append(community)
-            if results["snmp_version"] is None:
-                results["snmp_version"] = entry.get("version")
-                for key in ("sysDescr", "sysObjectID", "sysUpTime", "sysName"):
-                    if results[key] is None:
-                        results[key] = entry.get(key)
-        elif entry.get("error") and first_error is None:
-            first_error = entry["error"]
+    try:
+        first_error: str | None = None
+        for community in community_list:
+            entry = _probe_community(host, server_port, community, timeout, connector)
+            results["communities"].append(entry)
+            if entry["valid"]:
+                results["valid_communities"].append(community)
+                if results["snmp_version"] is None:
+                    results["snmp_version"] = entry.get("version")
+                    for key in ("sysDescr", "sysObjectID", "sysUpTime", "sysName"):
+                        if results[key] is None:
+                            results[key] = entry.get(key)
+            elif entry.get("error") and first_error is None:
+                first_error = entry["error"]
 
-    if first_error is not None and not results["valid_communities"]:
-        results["error"] = first_error
+        if first_error is not None and not results["valid_communities"]:
+            results["error"] = first_error
+    # A hostile server must never crash the command: whatever it sends is
+    # reported through the module's own failure field.
+    except Exception as exc:  # noqa: BLE001 - a remote answer must not raise
+        results["error"] = f"snmp probe failed: {exc}"
 
     return results
 

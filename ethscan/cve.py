@@ -110,7 +110,10 @@ def _fetch_cve_data(
         with urllib.request.urlopen(req, timeout=timeout) as response:
             try:
                 data = json.loads(response.read().decode("utf-8", errors="replace"))
-            except (ValueError, TypeError):
+            # A body whose JSON nests deeper than the parser can read raises a
+            # ``RecursionError``, which is neither a ``ValueError`` nor a
+            # ``TypeError``: it is a body that cannot be read.
+            except (ValueError, TypeError, RecursionError):
                 return None
         if not isinstance(data, dict):
             return None

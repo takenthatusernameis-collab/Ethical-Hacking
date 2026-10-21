@@ -552,63 +552,68 @@ def run_ldap(
         "error": None,
     }
 
-    # Probe 1: anonymous bind.
-    bind_request = _build_bind_request(version)
-    data, err = _send_recv(host, server_port, bind_request, timeout,
-                           connector=connector, use_tls=use_tls)
-    if err:
-        results["error"] = f"bind request failed: {err}"
-        return results
-    if not data:
-        results["error"] = "bind request failed: no response"
-        return results
+    try:
+        # Probe 1: anonymous bind.
+        bind_request = _build_bind_request(version)
+        data, err = _send_recv(host, server_port, bind_request, timeout,
+                               connector=connector, use_tls=use_tls)
+        if err:
+            results["error"] = f"bind request failed: {err}"
+            return results
+        if not data:
+            results["error"] = "bind request failed: no response"
+            return results
 
-    parsed = _parse_ldap_response(data)
-    results["raw_preview"] = parsed.get("raw_preview", "")
-    results["message_id"] = parsed.get("message_id")
-    if parsed.get("error"):
-        results["error"] = parsed["error"]
-    results["bind_result_code"] = parsed.get("result_code")
-    results["bind_result"] = parsed.get("result_code_name")
-    results["matched_dn"] = parsed.get("matched_dn")
-    results["diagnostic_message"] = parsed.get("diagnostic_message")
-    results["referral"] = parsed.get("referral")
-    results["accessible"] = True
-    if parsed.get("result_code") == 0:
-        results["anonymous_bind"] = True
-    elif parsed.get("result_code") == 49:
-        results["notes"].append(
-            "anonymous bind rejected (invalidCredentials); the server may still allow anonymous searches",
-        )
-    elif parsed.get("result_code") == 2 and version >= 3:
-        results["notes"].append(
-            "protocol error; the server may require LDAPv2 (retry with --ldap-version 2)",
-        )
+        parsed = _parse_ldap_response(data)
+        results["raw_preview"] = parsed.get("raw_preview", "")
+        results["message_id"] = parsed.get("message_id")
+        if parsed.get("error"):
+            results["error"] = parsed["error"]
+        results["bind_result_code"] = parsed.get("result_code")
+        results["bind_result"] = parsed.get("result_code_name")
+        results["matched_dn"] = parsed.get("matched_dn")
+        results["diagnostic_message"] = parsed.get("diagnostic_message")
+        results["referral"] = parsed.get("referral")
+        results["accessible"] = True
+        if parsed.get("result_code") == 0:
+            results["anonymous_bind"] = True
+        elif parsed.get("result_code") == 49:
+            results["notes"].append(
+                "anonymous bind rejected (invalidCredentials); the server may still allow anonymous searches",
+            )
+        elif parsed.get("result_code") == 2 and version >= 3:
+            results["notes"].append(
+                "protocol error; the server may require LDAPv2 (retry with --ldap-version 2)",
+            )
 
-    # Probe 2: RootDSE search (server identity / capabilities).
-    search_request = _build_root_dse_search()
-    search_data, search_err = _send_recv(host, server_port, search_request, timeout,
-                                         connector=connector, use_tls=use_tls)
-    if search_err:
-        results["root_dse_error"] = f"root DSE search failed: {search_err}"
-    elif not search_data:
-        results["root_dse_error"] = "root DSE search failed: no response"
-    else:
-        parsed_search = _parse_ldap_response(search_data)
-        if parsed_search.get("error"):
-            results["root_dse_error"] = parsed_search["error"]
+        # Probe 2: RootDSE search (server identity / capabilities).
+        search_request = _build_root_dse_search()
+        search_data, search_err = _send_recv(host, server_port, search_request, timeout,
+                                             connector=connector, use_tls=use_tls)
+        if search_err:
+            results["root_dse_error"] = f"root DSE search failed: {search_err}"
+        elif not search_data:
+            results["root_dse_error"] = "root DSE search failed: no response"
         else:
-            merged: dict[str, list[str]] = {}
-            for entry in parsed_search.get("entries") or []:
-                for attr, values in (entry.get("attributes") or {}).items():
-                    merged.setdefault(attr, []).extend(values)
-            results["root_dse"] = merged
-            done_code = parsed_search.get("result_code")
-            if done_code is not None and done_code != 0 and not merged:
-                results["root_dse_error"] = (
-                    f"root DSE search returned "
-                    f"{parsed_search.get('result_code_name') or done_code}"
-                )
+            parsed_search = _parse_ldap_response(search_data)
+            if parsed_search.get("error"):
+                results["root_dse_error"] = parsed_search["error"]
+            else:
+                merged: dict[str, list[str]] = {}
+                for entry in parsed_search.get("entries") or []:
+                    for attr, values in (entry.get("attributes") or {}).items():
+                        merged.setdefault(attr, []).extend(values)
+                results["root_dse"] = merged
+                done_code = parsed_search.get("result_code")
+                if done_code is not None and done_code != 0 and not merged:
+                    results["root_dse_error"] = (
+                        f"root DSE search returned "
+                        f"{parsed_search.get('result_code_name') or done_code}"
+                    )
+    # A hostile server must never crash the command: whatever it sends is
+    # reported through the module's own failure field.
+    except Exception as exc:  # noqa: BLE001 - a remote answer must not raise
+        results["error"] = f"ldap probe failed: {exc}"
 
     results["banner"] = _build_banner(results)
     return results

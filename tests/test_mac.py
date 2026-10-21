@@ -159,6 +159,24 @@ def test_fetch_mac_data_success() -> None:
     assert "timestamp" in result
 
 
+def test_fetch_mac_data_non_utf8_body_is_read_as_replaced_text() -> None:
+    """A body that is not UTF-8 is read as the replaced text, not as a failure.
+
+    The vendor API answers with plain text. A body that holds a byte that is
+    not UTF-8 must not turn the lookup into a failed fetch: the text is read
+    with that byte replaced, so the vendor is still reported.
+    """
+    mock_urlopen = MagicMock()
+    mock_urlopen.__enter__.return_value.read.return_value = b"Cisco \xff Systems"
+
+    with patch("urllib.request.urlopen", return_value=mock_urlopen):
+        result = _fetch_mac_data("00:1a:2b:3c:4d:5e", timeout=1.0)
+
+    assert result is not None
+    assert result["vendor"] == "Cisco \ufffd Systems"
+    assert "timestamp" in result
+
+
 def test_fetch_mac_data_network_error() -> None:
     with patch("urllib.request.urlopen", side_effect=Exception("Network error")):
         result = _fetch_mac_data("00:1a:2b:3c:4d:5e", timeout=1.0)

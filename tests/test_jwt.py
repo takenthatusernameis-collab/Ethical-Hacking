@@ -117,6 +117,19 @@ def test_parse_jwt_non_object_segment() -> None:
     assert parsed["header"] is None
 
 
+def test_parse_jwt_segment_that_nests_too_deeply() -> None:
+    """A segment whose JSON nests too deeply is unreadable, not a crash.
+
+    The JSON parser raises a ``RecursionError`` for such a segment, which is
+    neither a ``UnicodeDecodeError`` nor a ``json.JSONDecodeError``: the
+    segment is reported as a segment that cannot be read.
+    """
+    token = _b64url(b"{}") + "." + _b64url(b"[" * 20000 + b"]" * 20000) + "." + _b64url(b"")
+    parsed = parse_jwt(token)
+    assert parsed["valid_structure"] is True
+    assert parsed["payload"] is None
+
+
 def test_run_jwt_hs256_full_claims() -> None:
     token = _make_token(
         {"alg": "HS256", "typ": "JWT"},

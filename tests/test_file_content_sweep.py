@@ -60,12 +60,14 @@ INPUT_FILE_DESTS = frozenset(
 )
 
 # Hostile content: bytes that are not valid UTF-8, a null byte, a line that
-# holds a space, and a file that is not the JSON (or the XML) it claims to be.
+# holds a space, a file that is not the JSON (or the XML) it claims to be, and
+# a JSON file that nests deeper than the parser can read.
 HOSTILE_CONTENTS = (
     b"\xff\xfe not utf-8\n",
     b"a\x00b\n",
     b"a b\n",
     b"{ not json\n",
+    b"[" * 20000 + b"]" * 20000,
 )
 
 # Commands that need a --target to run get this target supplied.

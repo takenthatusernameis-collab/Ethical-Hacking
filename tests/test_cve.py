@@ -93,6 +93,50 @@ def test_fetch_cve_data_malformed_status_line() -> None:
     assert data is None
 
 
+class _DeepJsonHandler(socketserver.BaseRequestHandler):
+    """Answers every request with a JSON body that nests too deeply."""
+
+    def handle(self) -> None:
+        try:
+            self.request.recv(4096)
+            body = b"[" * 20000 + b"]" * 20000
+            self.request.sendall(
+                b"HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n"
+                + f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
+                + body
+            )
+        except OSError:
+            pass
+
+
+class _DeepJsonServer(socketserver.TCPServer):
+    allow_reuse_address = True
+
+
+def _start_deep_json_http_server():
+    """Start a server that answers with a body that nests too deeply.
+
+    Returns the server and its port; the caller closes the server.
+    """
+    server = _DeepJsonServer(("127.0.0.1", 0), _DeepJsonHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, server.server_address[1]
+
+
+def test_fetch_cve_data_body_that_nests_too_deeply() -> None:
+    # A body whose JSON nests deeper than the parser can read makes the
+    # parser raise a RecursionError, which is neither a ValueError nor a
+    # TypeError: the lookup fails, it does not crash.
+    server, port = _start_deep_json_http_server()
+    try:
+        data = _fetch_cve_data("CVE-2016-6210", timeout=5.0, api_url=f"http://127.0.0.1:{port}/cve")
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert data is None
+
+
 def test_cache_load_missing(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("ethscan.cve.CACHE_FILE", tmp_path / "missing.json")
     assert _load_cache() == {}
