@@ -84,7 +84,7 @@ def resolve_cname(domain: str, timeout: float = DEFAULT_TIMEOUT) -> str | None:
                     return canonname.rstrip(".")
         finally:
             socket.setdefaulttimeout(previous)
-    except (socket.timeout, socket.gaierror, OSError, ValueError, RuntimeError):
+    except Exception:  # noqa: BLE001, S110 - resolver can raise any type
         pass
     return None
 
@@ -97,7 +97,7 @@ def check_tcp_connect(ip: str, port: int = 80, timeout: float = DEFAULT_TIMEOUT)
         sock.connect((ip, port))
         sock.close()
         return True
-    except (socket.timeout, socket.gaierror, ConnectionRefusedError, OSError, RuntimeError):
+    except Exception:  # noqa: BLE001 - transport can raise any type
         return False
 
 

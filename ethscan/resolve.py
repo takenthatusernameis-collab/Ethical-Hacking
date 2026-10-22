@@ -99,7 +99,7 @@ def resolve_cname_records(
 
         answers = resolver.resolve(domain, "CNAME")
         return sorted({str(rdata) for rdata in answers})
-    except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError, RuntimeError):
+    except Exception:  # noqa: BLE001 - resolver can raise any type
         return []
 
 
@@ -127,7 +127,7 @@ def resolve_ptr_records(ip: str, timeout: float = DEFAULT_TIMEOUT, server: str |
         rev_name = dns.reversename.from_address(ip)
         answers = resolver.resolve(rev_name, "PTR")
         return sorted({str(rdata) for rdata in answers})
-    except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError, RuntimeError):
+    except Exception:  # noqa: BLE001 - resolver can raise any type
         return []
 
 
@@ -147,7 +147,7 @@ def resolve_with_dnspython(
 
         answers = resolver.resolve(domain, record_type)
         return sorted({str(rdata) for rdata in answers})
-    except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError, RuntimeError):
+    except Exception:  # noqa: BLE001 - resolver can raise any type
         return []
 
 

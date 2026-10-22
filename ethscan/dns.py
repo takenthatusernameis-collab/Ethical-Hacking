@@ -112,7 +112,7 @@ def resolve_with_dnspython(
 
         answers = resolver.resolve(domain, record_type)
         return sorted({str(rdata) for rdata in answers})
-    except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError, RuntimeError):
+    except Exception:  # noqa: BLE001 - resolver can raise any type
         return []
 
 
@@ -159,7 +159,7 @@ def run_dns(
                     resolver.nameservers = [server]
                     answers = resolver.resolve(domain, rtype)
                     return rtype, sorted({str(rdata) for rdata in answers})
-                except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError, RuntimeError):
+                except Exception:  # noqa: BLE001 - resolver can raise any type
                     return rtype, []
             return rtype, []
         return rtype, resolve_with_dnspython(domain, rtype, timeout)

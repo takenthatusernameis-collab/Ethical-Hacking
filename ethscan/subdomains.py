@@ -103,7 +103,7 @@ def resolve_subdomain(
             if not answers:
                 return subdomain, None
             return subdomain, str(answers[0])
-        except (dns.exception.DNSException, OSError, ValueError, TypeError, IndexError, AttributeError, KeyError, RuntimeError):
+        except Exception:  # noqa: BLE001 - resolver can raise any type
             return subdomain, None
     try:
         previous = socket.getdefaulttimeout()
