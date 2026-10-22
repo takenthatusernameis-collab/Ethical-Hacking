@@ -1,6 +1,8 @@
 """Tests for the ethscan wifi module."""
 
 import json
+import subprocess
+import sys
 from unittest.mock import MagicMock, patch
 
 from ethscan.wifi import (
@@ -356,6 +358,84 @@ def test_run_iw_scan_privacy_wep_no_wpa() -> None:
         result = _run_iw_scan("wlan0")
         assert len(result) == 1
         assert result[0]["encryption"] == "wep"
+
+
+# ---------------------------------------------------------------------------
+# Output that is not valid UTF-8
+#
+# An SSID is an arbitrary 32-byte string, so the output of the Wi-Fi tools can
+# hold a byte that is not valid UTF-8. The tools are really run, so their
+# output is really decoded: the module has to replace the byte instead of
+# letting a UnicodeDecodeError escape.
+# ---------------------------------------------------------------------------
+
+
+#: The output of the iw tool for one access point whose SSID holds a byte
+#: that is not valid UTF-8.
+IW_OUTPUT_WITH_INVALID_UTF8 = (
+    b"BSS 00:11:22:33:44:55(on wlan0)\n"
+    b"        freq: 2412\n"
+    b"        signal: -65.00 dBm\n"
+    b"        SSID: caf\xff\n"
+)
+
+#: The output of the iwlist tool for one access point whose SSID holds a byte
+#: that is not valid UTF-8.
+IWLIST_OUTPUT_WITH_INVALID_UTF8 = (
+    b"Cell 01 - Address: 00:11:22:33:44:55\n"
+    b"        ESSID:\"caf\xff\"\n"
+)
+
+
+def _run_tool_with_invalid_utf8(
+    monkeypatch, tmp_path, name: str, payload: bytes
+) -> None:
+    """Make the Wi-Fi tool of *name* print *payload*.
+
+    The tool is really run, so its output is really decoded. The encoding is
+    forced to UTF-8 so that the check does not depend on the locale of the
+    machine that runs it; the way the bytes that are not valid UTF-8 are
+    handled is the module's own choice and is not forced here.
+    """
+    script = tmp_path / f"{name}.py"
+    script.write_bytes(
+        b"import sys\nsys.stdout.buffer.write(" + repr(payload).encode("ascii") + b")\n"
+    )
+    real_run = subprocess.run
+
+    def fake_run(cmd, *args, **kwargs):
+        if isinstance(cmd, (list, tuple)) and cmd and cmd[0] in ("iw", "iwlist"):
+            cmd = [sys.executable, str(script)]
+            kwargs["encoding"] = "utf-8"
+        return real_run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr("ethscan.wifi.subprocess.run", fake_run)
+
+
+def test_run_iw_scan_reads_output_that_is_not_utf8(monkeypatch, tmp_path) -> None:
+    """The iw output that is not valid UTF-8 is read leniently."""
+    _run_tool_with_invalid_utf8(
+        monkeypatch, tmp_path, "iw", IW_OUTPUT_WITH_INVALID_UTF8
+    )
+
+    result = _run_iw_scan("wlan0")
+
+    assert len(result) == 1
+    assert result[0]["bssid"] == "00:11:22:33:44:55"
+    assert result[0]["ssid"].startswith("caf")
+
+
+def test_run_iwlist_scan_reads_output_that_is_not_utf8(monkeypatch, tmp_path) -> None:
+    """The iwlist output that is not valid UTF-8 is read leniently."""
+    _run_tool_with_invalid_utf8(
+        monkeypatch, tmp_path, "iwlist", IWLIST_OUTPUT_WITH_INVALID_UTF8
+    )
+
+    result = _run_iwlist_scan("wlan0")
+
+    assert len(result) == 1
+    assert result[0]["bssid"] == "00:11:22:33:44:55"
+    assert result[0]["ssid"].startswith("caf")
 
 
 # ---------------------------------------------------------------------------

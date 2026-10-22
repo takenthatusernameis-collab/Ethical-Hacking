@@ -77,13 +77,28 @@ def _run_iwlist_scan(interface: str) -> list[dict]:
             ["iwlist", interface, "scan"],
             capture_output=True,
             text=True,
+            # An SSID is an arbitrary 32-byte string, so the output of the
+            # tool can hold bytes that are not valid UTF-8. They are replaced
+            # instead of raising a UnicodeDecodeError, which would reach the
+            # user as a raw traceback.
+            errors="replace",
             timeout=10,
             check=False,
         )
         if result.returncode != 0:
             return aps
         output = result.stdout
-    except (subprocess.SubprocessError, FileNotFoundError, OSError):
+    # A failure of the tool is a scan that found nothing, never a crash of the
+    # command: the tool that is missing, the tool that fails, the output that
+    # cannot be decoded and the failure of a type this module does not know
+    # are all reported the same way.
+    except (
+        subprocess.SubprocessError,
+        FileNotFoundError,
+        OSError,
+        UnicodeDecodeError,
+        RuntimeError,
+    ):
         return aps
 
     # Parse iwlist output
@@ -152,13 +167,28 @@ def _run_iw_scan(interface: str) -> list[dict]:
             ["iw", "dev", interface, "scan"],
             capture_output=True,
             text=True,
+            # An SSID is an arbitrary 32-byte string, so the output of the
+            # tool can hold bytes that are not valid UTF-8. They are replaced
+            # instead of raising a UnicodeDecodeError, which would reach the
+            # user as a raw traceback.
+            errors="replace",
             timeout=10,
             check=False,
         )
         if result.returncode != 0:
             return aps
         output = result.stdout
-    except (subprocess.SubprocessError, FileNotFoundError, OSError):
+    # A failure of the tool is a scan that found nothing, never a crash of the
+    # command: the tool that is missing, the tool that fails, the output that
+    # cannot be decoded and the failure of a type this module does not know
+    # are all reported the same way.
+    except (
+        subprocess.SubprocessError,
+        FileNotFoundError,
+        OSError,
+        UnicodeDecodeError,
+        RuntimeError,
+    ):
         return aps
 
     # Parse iw output (similar structure to iwlist but different format)
