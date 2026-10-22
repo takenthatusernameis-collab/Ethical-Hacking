@@ -97,7 +97,6 @@ def _run_iwlist_scan(interface: str) -> list[dict]:
         FileNotFoundError,
         OSError,
         UnicodeDecodeError,
-        RuntimeError,
     ):
         return aps
 
@@ -187,7 +186,6 @@ def _run_iw_scan(interface: str) -> list[dict]:
         FileNotFoundError,
         OSError,
         UnicodeDecodeError,
-        RuntimeError,
     ):
         return aps
 
