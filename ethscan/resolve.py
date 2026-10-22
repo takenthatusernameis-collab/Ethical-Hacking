@@ -64,7 +64,7 @@ def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str
             return sorted(set(ips))
         finally:
             socket.setdefaulttimeout(previous)
-    except (socket.timeout, socket.gaierror, OSError, ValueError, RuntimeError):
+    except Exception:  # noqa: BLE001 - resolver can raise any type
         return []
 
 
@@ -79,7 +79,7 @@ def resolve_aaaa_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[
             return sorted(set(ips))
         finally:
             socket.setdefaulttimeout(previous)
-    except (socket.timeout, socket.gaierror, OSError, ValueError, RuntimeError):
+    except Exception:  # noqa: BLE001 - resolver can raise any type
         return []
 
 

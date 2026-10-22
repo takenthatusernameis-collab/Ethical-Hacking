@@ -128,7 +128,7 @@ def _connect_tcp(host: str, port: int, timeout: float) -> tuple[bool, str | None
         return False, "connection timed out", None
     # A host that is not a valid host name ("....") raises a UnicodeError,
     # which is a ValueError, when the resolver encodes it.
-    except (OSError, ValueError, RuntimeError) as exc:
+    except Exception as exc:  # noqa: BLE001 - transport can raise any type
         return False, _truncate(str(exc)), None
     finally:
         with contextlib.suppress(Exception):

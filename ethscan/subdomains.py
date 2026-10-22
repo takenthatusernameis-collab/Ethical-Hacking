@@ -113,7 +113,7 @@ def resolve_subdomain(
             return subdomain, ip
         finally:
             socket.setdefaulttimeout(previous)
-    except (socket.timeout, socket.gaierror, OSError, ValueError, TypeError, RuntimeError):
+    except Exception:  # noqa: BLE001 - resolver can raise any type
         # A label that holds a null byte (a wordlist that is not text) makes
         # ``gethostbyname`` raise a ``TypeError``: the label cannot be
         # resolved, it is not a crash.
