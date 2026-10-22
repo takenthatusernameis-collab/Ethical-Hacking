@@ -304,7 +304,14 @@ def run_wifi(interface: str | None = None) -> dict:
     # Scan each interface
     all_aps = []
     for iface in target_interfaces:
-        aps = _scan_interface(iface)
+        try:
+            aps = _scan_interface(iface)
+        # A scan tool that fails in a way the module does not know is a tool
+        # that cannot scan: the failure is named in the notes of the report,
+        # never raised.
+        except Exception as exc:  # noqa: BLE001 - a scan tool can fail in any way
+            result["notes"].append(f"Scan of interface '{iface}' failed: {exc}")
+            continue
         if aps:
             for ap in aps:
                 ap["interface"] = iface

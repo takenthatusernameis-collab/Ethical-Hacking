@@ -497,6 +497,15 @@ def test_run_wifi_linux_with_interfaces_no_scan_results() -> None:
                 assert "no scan results" in result["notes"][0].lower()
 
 
+def test_run_wifi_reports_a_scan_tool_that_fails() -> None:
+    """A scan tool that fails in any way is reported, not raised."""
+    ifaces = [{"interface": "wlan0", "status": 0, "link_quality": 45.0, "signal_level": -45.0, "noise_level": -256.0}]
+    with patch("ethscan.wifi._parse_proc_net_wireless", return_value=ifaces), patch("ethscan.wifi._scan_interface", side_effect=RuntimeError("hostile transport")), patch("platform.system", return_value="Linux"):
+                result = run_wifi()
+                assert result["access_points"] == []
+                assert "hostile transport" in result["notes"][0]
+
+
 def test_run_wifi_linux_with_scan_results() -> None:
     ifaces = [{"interface": "wlan0", "status": 0, "link_quality": 45.0, "signal_level": -45.0, "noise_level": -256.0}]
     aps = [
