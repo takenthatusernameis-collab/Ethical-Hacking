@@ -87,6 +87,27 @@ def test_osdetect_cli_reports_an_unreachable_target(monkeypatch) -> None:
     assert report["inferred_os"] == []
 
 
+def test_osdetect_cli_reports_a_hostile_transport(monkeypatch) -> None:
+    """The osdetect command reports a transport error of an unknown type.
+
+    A transport that fails with a type the module does not name (a
+    ``RuntimeError``, not the ``socket.timeout`` the probe knows) must still be
+    reported through the probe's own failure field and never raised.
+    """
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.osdetect.socket.create_connection", boom)
+
+    report = _run_cli(["osdetect", "--target", UNREACHABLE_HOST])
+
+    probe = report["probes"][0]
+    assert probe["response"] == "NO-RESPONSE"
+    assert "hostile transport" in probe["error"]
+    assert report["inferred_os"] == []
+
+
 def test_resolve_cli_reports_an_unresolvable_target(monkeypatch) -> None:
     """The resolve command reports empty records and exits 0."""
 
@@ -100,11 +121,41 @@ def test_resolve_cli_reports_an_unresolvable_target(monkeypatch) -> None:
     assert report["records"]["A"] == []
 
 
+def test_resolve_cli_reports_a_hostile_transport(monkeypatch) -> None:
+    """The resolve command reports a transport error of an unknown type.
+
+    A resolver that fails with a type the module does not name must still be
+    reported as an empty record set and never raised.
+    """
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.resolve.socket.getaddrinfo", boom)
+
+    report = _run_cli(["resolve", "--target", UNRESOLVABLE_HOST, "--types", "A"])
+
+    assert report["records"]["A"] == []
+
+
 def test_dns_cli_reports_an_unresolvable_target(monkeypatch) -> None:
     """The dns command reports empty records and exits 0."""
 
     def boom(*args, **kwargs):
         raise socket.gaierror("name does not resolve")
+
+    monkeypatch.setattr("ethscan.dns.socket.getaddrinfo", boom)
+
+    report = _run_cli(["dns", "--target", UNRESOLVABLE_HOST, "--types", "A"])
+
+    assert report["records"]["A"] == []
+
+
+def test_dns_cli_reports_a_hostile_transport(monkeypatch) -> None:
+    """The dns command reports a transport error of an unknown type and exits 0."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
 
     monkeypatch.setattr("ethscan.dns.socket.getaddrinfo", boom)
 
@@ -128,11 +179,41 @@ def test_stale_cli_reports_an_unresolvable_target(monkeypatch) -> None:
     assert entry["stale"] is True
 
 
+def test_stale_cli_reports_a_hostile_transport(monkeypatch) -> None:
+    """The stale command reports a transport error of an unknown type and exits 0."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.stale.socket.getaddrinfo", boom)
+
+    report = _run_cli(["stale", "--target", UNRESOLVABLE_HOST])
+
+    entry = report["results"][0]
+    assert entry["A"] == []
+    assert entry["stale"] is True
+
+
 def test_subdomains_cli_reports_an_unresolvable_target(monkeypatch) -> None:
     """The subdomains command reports unresolved names and exits 0."""
 
     def boom(*args, **kwargs):
         raise socket.gaierror("name does not resolve")
+
+    monkeypatch.setattr("ethscan.subdomains.socket.gethostbyname", boom)
+
+    report = _run_cli(["subdomains", "--target", UNRESOLVABLE_HOST])
+
+    assert report["resolved"] == []
+    assert report["all_results"]
+    assert all(entry["ip"] is None for entry in report["all_results"])
+
+
+def test_subdomains_cli_reports_a_hostile_transport(monkeypatch) -> None:
+    """The subdomains command reports a transport error of an unknown type and exits 0."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
 
     monkeypatch.setattr("ethscan.subdomains.socket.gethostbyname", boom)
 
