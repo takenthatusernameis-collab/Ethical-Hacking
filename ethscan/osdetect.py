@@ -119,6 +119,7 @@ def _connect_tcp(host: str, port: int, timeout: float) -> tuple[bool, str | None
     can only be observed through raw sockets; for stdlib connections we infer
     RST from immediate ConnectionRefusedError.
     """
+    sock = None
     try:
         sock = socket.create_connection((host, port), timeout=timeout)
         return True, None, None
@@ -132,7 +133,8 @@ def _connect_tcp(host: str, port: int, timeout: float) -> tuple[bool, str | None
         return False, _truncate(str(exc)), None
     finally:
         with contextlib.suppress(Exception):
-            sock.close()
+            if sock is not None:
+                sock.close()
 
 
 def probe_syn(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict[str, object]:
@@ -179,6 +181,7 @@ def probe_rst(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict[st
         "error": None,
         "flags_observed": None,
     }
+    sock = None
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(timeout)
@@ -203,7 +206,8 @@ def probe_rst(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict[st
         entry["error"] = _truncate(str(exc))
     finally:
         with contextlib.suppress(Exception):
-            sock.close()
+            if sock is not None:
+                sock.close()
     return entry
 
 
@@ -217,6 +221,7 @@ def probe_fin(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict[st
         "error": None,
         "flags_observed": None,
     }
+    sock = None
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(timeout)
@@ -241,7 +246,8 @@ def probe_fin(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict[st
         entry["error"] = _truncate(str(exc))
     finally:
         with contextlib.suppress(Exception):
-            sock.close()
+            if sock is not None:
+                sock.close()
     return entry
 
 
@@ -255,6 +261,7 @@ def probe_ack(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict[st
         "error": None,
         "flags_observed": None,
     }
+    sock = None
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(timeout)
@@ -278,7 +285,8 @@ def probe_ack(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict[st
         entry["error"] = _truncate(str(exc))
     finally:
         with contextlib.suppress(Exception):
-            sock.close()
+            if sock is not None:
+                sock.close()
     return entry
 
 
