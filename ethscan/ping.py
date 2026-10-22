@@ -184,7 +184,7 @@ def probe_icmp(
             request = _build_icmp_echo_request(identifier, sequence, payload)
             try:
                 send_sock.sendto(request, (host, 0))
-            except OSError as exc:
+            except Exception as exc:  # noqa: BLE001
                 send_sock.close()
                 rtt = (time.monotonic() - start) * 1000
                 return {
@@ -232,7 +232,7 @@ def probe_icmp(
                     "response_type": RESP_TIMEOUT,
                     "error": "timeout",
                 }
-            except OSError as exc:
+            except Exception as exc:  # noqa: BLE001
                 rtt = (time.monotonic() - start) * 1000
                 send_sock.close()
                 return {

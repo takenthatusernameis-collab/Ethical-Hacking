@@ -201,7 +201,7 @@ def probe_rst(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict[st
     except socket.timeout:
         entry["response"] = "NO-RESPONSE"
         entry["error"] = "connection timed out"
-    except OSError as exc:
+    except Exception as exc:  # noqa: BLE001 - transport can raise any type
         entry["response"] = "NO-RESPONSE"
         entry["error"] = _truncate(str(exc))
     finally:
@@ -241,7 +241,7 @@ def probe_fin(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict[st
     except socket.timeout:
         entry["response"] = "NO-RESPONSE"
         entry["error"] = "connection timed out"
-    except OSError as exc:
+    except Exception as exc:  # noqa: BLE001 - transport can raise any type
         entry["response"] = "NO-RESPONSE"
         entry["error"] = _truncate(str(exc))
     finally:
@@ -280,7 +280,7 @@ def probe_ack(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict[st
     except socket.timeout:
         entry["response"] = "NO-RESPONSE"
         entry["error"] = "connection timed out"
-    except OSError as exc:
+    except Exception as exc:  # noqa: BLE001 - transport can raise any type
         entry["response"] = "NO-RESPONSE"
         entry["error"] = _truncate(str(exc))
     finally:
