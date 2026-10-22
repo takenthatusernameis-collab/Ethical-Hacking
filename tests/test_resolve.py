@@ -2,6 +2,7 @@
 
 import csv
 import io
+import socket
 
 import pytest
 
@@ -391,6 +392,29 @@ def test_resolve_aaaa_records_success() -> None:
     result = resolve.resolve_aaaa_records("localhost")
     # Could be ::1 or empty depending on setup; at least exercise path
     assert isinstance(result, list)
+
+
+def test_resolve_a_records_restores_default_socket_timeout(monkeypatch) -> None:
+    """resolve_a_records restores the default socket timeout it temporarily set.
+
+    The helper switches the process-wide default timeout for its own lookup and
+    must restore it afterwards, so a later test does not inherit a 2s (or
+    other) default timeout from this call.
+    """
+
+    def blocked(*args, **kwargs):
+        raise socket.gaierror("blocked")
+
+    from ethscan import resolve
+
+    monkeypatch.setattr("ethscan.resolve.socket.getaddrinfo", blocked)
+    previous = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(123.0)
+    try:
+        assert resolve.resolve_a_records("example.invalid", timeout=0.1) == []
+        assert socket.getdefaulttimeout() == 123.0
+    finally:
+        socket.setdefaulttimeout(previous)
 
 
 def test_resolve_cname_records_no_dnspython() -> None:

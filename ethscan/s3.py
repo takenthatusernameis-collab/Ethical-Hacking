@@ -179,6 +179,7 @@ def _resolve_s3_endpoint(
     hostname = parse_url(url).hostname
     if not hostname:
         return None
+    previous = socket.getdefaulttimeout()
     try:
         socket.setdefaulttimeout(timeout)
         return socket.gethostbyname(hostname)
@@ -186,7 +187,7 @@ def _resolve_s3_endpoint(
         return None
     finally:
         with contextlib.suppress(OSError):
-            socket.setdefaulttimeout(None)
+            socket.setdefaulttimeout(previous)
 
 
 def _build_bucket_candidates(

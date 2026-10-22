@@ -56,10 +56,14 @@ def _is_ip_address(value: str) -> bool:
 def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str]:
     """Resolve A records (IPv4 addresses) for a domain using stdlib."""
     try:
-        socket.setdefaulttimeout(timeout)
-        results = socket.getaddrinfo(domain, None, socket.AF_INET)
-        ips = [r[4][0] for r in results]
-        return sorted(set(ips))
+        previous = socket.getdefaulttimeout()
+        try:
+            socket.setdefaulttimeout(timeout)
+            results = socket.getaddrinfo(domain, None, socket.AF_INET)
+            ips = [r[4][0] for r in results]
+            return sorted(set(ips))
+        finally:
+            socket.setdefaulttimeout(previous)
     except (socket.timeout, socket.gaierror, OSError, ValueError, RuntimeError):
         return []
 
@@ -67,10 +71,14 @@ def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str
 def resolve_aaaa_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str]:
     """Resolve AAAA records (IPv6 addresses) for a domain using stdlib."""
     try:
-        socket.setdefaulttimeout(timeout)
-        results = socket.getaddrinfo(domain, None, socket.AF_INET6)
-        ips = [r[4][0] for r in results]
-        return sorted(set(ips))
+        previous = socket.getdefaulttimeout()
+        try:
+            socket.setdefaulttimeout(timeout)
+            results = socket.getaddrinfo(domain, None, socket.AF_INET6)
+            ips = [r[4][0] for r in results]
+            return sorted(set(ips))
+        finally:
+            socket.setdefaulttimeout(previous)
     except (socket.timeout, socket.gaierror, OSError, ValueError, RuntimeError):
         return []
 
@@ -99,9 +107,13 @@ def resolve_ptr_records(ip: str, timeout: float = DEFAULT_TIMEOUT, server: str |
     """Resolve PTR records (reverse DNS) for an IP address."""
     if not DNS_AVAILABLE:
         try:
-            socket.setdefaulttimeout(timeout)
-            hostname, _, _ = socket.gethostbyaddr(ip)
-            return [hostname]
+            previous = socket.getdefaulttimeout()
+            try:
+                socket.setdefaulttimeout(timeout)
+                hostname, _, _ = socket.gethostbyaddr(ip)
+                return [hostname]
+            finally:
+                socket.setdefaulttimeout(previous)
         except (socket.timeout, socket.herror, OSError, ValueError, RuntimeError):
             return []
 

@@ -5,7 +5,7 @@ import io
 import json
 import socket
 import struct
-from unittest.mock import ANY, MagicMock, patch
+from unittest.mock import ANY, MagicMock, call, patch
 
 import pytest
 
@@ -804,6 +804,7 @@ def test_query_tcp_oserror():
 
 
 def test_resolve_nameservers_success():
+    previous = socket.getdefaulttimeout()
     with patch("ethscan.dnssec.socket.getaddrinfo") as m, \
          patch("ethscan.dnssec.socket.setdefaulttimeout") as mset:
         m.return_value = [
@@ -813,7 +814,7 @@ def test_resolve_nameservers_success():
         ]
         r = _resolve_nameservers("example.com", 1.0)
         assert sorted(r) == ["8.8.8.8", "9.9.9.9"]
-        mset.assert_called_once_with(1.0)
+        assert mset.call_args_list == [call(1.0), call(previous)]
 
 
 def test_resolve_nameservers_gaierror():
@@ -824,6 +825,27 @@ def test_resolve_nameservers_gaierror():
 def test_resolve_nameservers_timeout():
     with patch("ethscan.dnssec.socket.getaddrinfo", side_effect=socket.timeout()):
         assert _resolve_nameservers("bad.invalid", 1.0) == []
+
+
+def test_resolve_nameservers_restores_default_socket_timeout() -> None:
+    """_resolve_nameservers restores the default socket timeout it temporarily set.
+
+    The helper switches the process-wide default timeout for its own lookup and
+    must restore it afterwards, so a later test does not inherit a 2s (or
+    other) default timeout from this call.
+    """
+
+    def blocked(*args, **kwargs):
+        raise socket.gaierror("blocked")
+
+    with patch("ethscan.dnssec.socket.getaddrinfo", blocked):
+        previous = socket.getdefaulttimeout()
+        socket.setdefaulttimeout(123.0)
+        try:
+            assert _resolve_nameservers("example.invalid", 1.0) == []
+            assert socket.getdefaulttimeout() == 123.0
+        finally:
+            socket.setdefaulttimeout(previous)
 
 
 def test_query_dnskey_raw_udp_success():

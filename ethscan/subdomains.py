@@ -106,9 +106,13 @@ def resolve_subdomain(
         except (dns.exception.DNSException, OSError, ValueError, TypeError, IndexError, AttributeError, KeyError, RuntimeError):
             return subdomain, None
     try:
-        socket.setdefaulttimeout(timeout)
-        ip = socket.gethostbyname(hostname)
-        return subdomain, ip
+        previous = socket.getdefaulttimeout()
+        try:
+            socket.setdefaulttimeout(timeout)
+            ip = socket.gethostbyname(hostname)
+            return subdomain, ip
+        finally:
+            socket.setdefaulttimeout(previous)
     except (socket.timeout, socket.gaierror, OSError, ValueError, TypeError, RuntimeError):
         # A label that holds a null byte (a wordlist that is not text) makes
         # ``gethostbyname`` raise a ``TypeError``: the label cannot be

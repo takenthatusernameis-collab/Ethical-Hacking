@@ -1,87 +1,46 @@
 # NEXT TASK
 
-## Status: COMPLETE (the CLI-level sweep covers every command that opens a transport of its own)
+## Status: COMPLETE
 
-The task of the previous handoff is done. The permanent CLI-level sweep now
-covers 43 of the 53 commands: every command that opens a transport of its
-own, the three aggregators `vuln`, `recon` and `report` included.
+### Previously assigned task: `cve` and `osdetect` bad-document crashes
+**Done — already committed in the baseline (`8b4da94`, HEAD).**
+- `cve --services-file` with `{"results": [{"port": 22, "banner": 5}]}` -> exit 0, notes name the problem,
+  no traceback (`ethscan/cve.py:344-365`).
+- `osdetect --banners-file` with `{"results": "abc"}` -> exit 0, note
+  `Banners data holds no 'results' list` (`ethscan/cli.py:2310-2341`).
+- Covered by 3 checks in `tests/test_cli_aggregator_unreachable_sweep.py`; verified at the command line
+  and by the test suite (12 passed in that file).
 
-## What this session changed
+### This session: `socket.setdefaulttimeout()` process-wide side effect
+**Done in the worktree, not committed.** Every resolution helper that called `socket.setdefaulttimeout()`
+now saves the previous default timeout and restores it in a `finally`, so the default timeout no longer
+leaks to later tests: `ethscan/dns.py`, `ethscan/resolve.py`, `ethscan/stale.py`, `ethscan/subtake.py`,
+`ethscan/s3.py`, `ethscan/subdomains.py`, `ethscan/dnssec.py` (7 modules, 13 call sites).
 
-1. **The `vuln` command no longer crashes on a JSON document it cannot
-   read.** The command reads the output of other commands from a file
-   (`--services-file`, `--tls-file`, `--ssl-file`). The CLI checked that the
-   file holds an object and nothing else, so a document whose *shape* was
-   wrong reached the library and died with a traceback (exit 1, no report):
-   eight distinct crashes, from `AttributeError: 'str' object has no
-   attribute 'get'` to `TypeError: '<' not supported between instances of
-   'str' and 'int'`. The library now reads those documents as foreign data:
-   what cannot be read is skipped and named in the notes of the report
-   (`Service data holds no 'results' list`, `TLS data holds no
-   'supported_versions' list`, `Certificate data holds no 'cert' object`).
-
-2. **A permanent CLI-level sweep for the three aggregators.**
-   `tests/test_cli_aggregator_unreachable_sweep.py` (new, 9 checks) patches
-   the transport each command really opens, runs the command through
-   `CliRunner` and asserts that it exits 0, leaks no traceback and prints the
-   command's own failure signal: the notes of the vuln report, the closed
-   ports of the report scan section, the failure of each recon module.
-
-3. **The partial work of the interrupted session was replaced.** Commit
-   `1ea280d` added four checks to `tests/test_cli_unreachable_sweep.py`, two
-   of them under the same name (`test_recon_cli_reports_module_failures`):
-   the second definition shadowed the first, `ruff check` failed with F811,
-   and the shadowed check would have failed as well (with the transports of
-   the recon modules patched, every module reports its own failure and the
-   notes stay empty, so its assertion `len(report["notes"]) > 0` was wrong).
-   The file is back to its state before that commit and the checks live in
-   the new sweep file.
-
-## What was actually verified
-
-- Every one of the eight crashes was reproduced at the command line before
-  the fix and is gone after it (exit 0 with the note that names the file).
-- Every new check was proved by reverting the guard of its own module and
-  watching the check fail; with the guards restored all of them pass.
-- The new sweep is hermetic: it runs with the `no_external_network` fixture
-  of `tests/conftest.py`, so a transport that a check forgot to patch fails
-  at once instead of reaching the network (9 passed in 0.13 s).
+### What was actually verified
 - `python -m ruff check ethscan/ tests/` -> **All checks passed**.
-- `python -m pytest tests/` -> **5115 passed, 48 skipped, 3 warnings**
-  (baseline at the start of the session: 5148 collected, of which 3 ran and
-  1 was shadowed; the +15 are the 9 new CLI checks and the 9 new module
-  checks minus the 3 partial checks that were removed).
-- `git diff --check` -> clean. Nothing is committed.
+- `python -m pytest tests/` -> **5125 passed, 48 skipped, 3 warnings** (pre-existing `test_main.py` runpy
+  warnings).
+- Each of the 7 new restoration tests was proved by mutation (revert guard -> check fails -> restore ->
+  check passes); all guards restored, no mutation artifacts in the diff.
+- Updated 2 existing tests that coupled to the old behavior: `tests/test_dnssec.py:806`,
+  `tests/test_s3.py:961`.
 
-The full evidence, the mutation table and the open points are in
-`HANDOFF_NEXT.md`.
+## What remains unresolved
+- About 10 of the 53 commands still have no CLI-level failure-field check (see the counts in
+  `HANDOFF_NEXT.md`).
+- `python ethscan/cli.py` cannot work in this layout (pre-existing); use `python -m ethscan.cli`.
 
 ## Constraints
-
-- Smallest reversible change; do not weaken an existing guard; turn the
-  crash into the module's documented error signal.
-- Keep the permanent sweeps in the repository, and prove every new check by
-  reverting the guard of its own module.
+- Smallest reversible change; do not weaken an existing guard; turn the crash into the module's
+  documented error signal.
+- Keep the permanent sweeps in the repository, and prove every new check by reverting the guard of its
+  own module.
 - Do not commit unless explicitly asked.
 
 ## One precise next task
-
-The two commands that read the same kind of JSON document from a file and
-still crash on a document they cannot read: `cve` and `osdetect`.
-
-- `cve --services-file` with `{"results": [{"port": 22, "banner": 5}]}` dies
-  with `TypeError: expected string or bytes-like object, got 'int'`
-  (`ethscan/cve.py`, the banner is handed to `parse_banner` unchanged).
-- `osdetect --banners-file` with `{"results": "abc"}` dies with
-  `AttributeError: 'str' object has no attribute 'get'`
-  (`ethscan/cli.py`, the entries of the file are read as objects).
-
-The fix is the one of `ethscan/vuln.py` of this session: read the document as
-foreign data, skip what cannot be read and name it in the notes of the
-report. Give both commands a permanent check in the same sweep (the sweep
-file of this session already holds the checks of the commands that read a
-document from a file).
-
-The other open points (the process-wide side effect of
-`socket.setdefaulttimeout()`, the `python ethscan/cli.py` script path) are in
-`HANDOFF_NEXT.md` under "What remains unresolved".
+Extend the permanent CLI failure-field coverage to the commands still lacking it (about 10 of 53, not
+covered by `test_cli_unreachable_sweep.py`, `test_cli_http_unreachable_sweep.py`,
+`test_cli_trace_brute_unreachable_sweep.py`, `tests/test_cli_aggregator_unreachable_sweep.py`). For each
+command: run via `CliRunner` under `no_external_network`, assert exit 0, no traceback, and the
+command's own failure signal; add to the appropriate sweep file; prove by reverting the relevant guard.

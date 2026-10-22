@@ -303,12 +303,16 @@ def resolve_cname(hostname: str, timeout: float = 2.0, resolver: str | None = No
             return None
 
     try:
-        socket.setdefaulttimeout(timeout)
-        results = socket.getaddrinfo(hostname, None, socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, socket.AI_CANONNAME)
-        for r in results:
-            canonname = r[3]
-            if canonname and canonname != hostname:
-                return canonname.rstrip(".")
+        previous = socket.getdefaulttimeout()
+        try:
+            socket.setdefaulttimeout(timeout)
+            results = socket.getaddrinfo(hostname, None, socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, socket.AI_CANONNAME)
+            for r in results:
+                canonname = r[3]
+                if canonname and canonname != hostname:
+                    return canonname.rstrip(".")
+        finally:
+            socket.setdefaulttimeout(previous)
     except (socket.timeout, socket.gaierror, OSError, ValueError):
         pass
     return None
@@ -330,9 +334,13 @@ def resolve_a_records(hostname: str, timeout: float = 2.0, resolver: str | None 
             pass
 
     try:
-        socket.setdefaulttimeout(timeout)
-        results = socket.getaddrinfo(hostname, None, socket.AF_INET)
-        ips = sorted({r[4][0] for r in results})
+        previous = socket.getdefaulttimeout()
+        try:
+            socket.setdefaulttimeout(timeout)
+            results = socket.getaddrinfo(hostname, None, socket.AF_INET)
+            ips = sorted({r[4][0] for r in results})
+        finally:
+            socket.setdefaulttimeout(previous)
     except (socket.timeout, socket.gaierror, OSError, ValueError):
         pass
     return ips
@@ -354,9 +362,13 @@ def resolve_aaaa_records(hostname: str, timeout: float = 2.0, resolver: str | No
             pass
 
     try:
-        socket.setdefaulttimeout(timeout)
-        results = socket.getaddrinfo(hostname, None, socket.AF_INET6)
-        ips = sorted({r[4][0] for r in results})
+        previous = socket.getdefaulttimeout()
+        try:
+            socket.setdefaulttimeout(timeout)
+            results = socket.getaddrinfo(hostname, None, socket.AF_INET6)
+            ips = sorted({r[4][0] for r in results})
+        finally:
+            socket.setdefaulttimeout(previous)
     except (socket.timeout, socket.gaierror, OSError, ValueError):
         pass
     return ips

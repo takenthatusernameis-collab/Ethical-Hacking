@@ -131,6 +131,27 @@ class TestResolveCNAME:
         assert result is None
 
 
+def test_resolve_a_records_restores_default_socket_timeout(monkeypatch) -> None:
+    """resolve_a_records restores the default socket timeout it temporarily set.
+
+    The helper switches the process-wide default timeout for its own lookup and
+    must restore it afterwards, so a later test does not inherit a 2s (or
+    other) default timeout from this call.
+    """
+
+    def blocked(*args, **kwargs):
+        raise socket.gaierror("blocked")
+
+    monkeypatch.setattr("ethscan.stale.socket.getaddrinfo", blocked)
+    previous = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(123.0)
+    try:
+        assert resolve_a_records("example.invalid", timeout=0.1) == []
+        assert socket.getdefaulttimeout() == 123.0
+    finally:
+        socket.setdefaulttimeout(previous)
+
+
 class TestCheckTCPConnect:
     @patch("socket.socket")
     def test_success(self, mock_socket):

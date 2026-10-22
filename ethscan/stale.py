@@ -44,10 +44,14 @@ def load_domains_from_file(path: str) -> list[str]:
 def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str]:
     """Resolve A records (IPv4 addresses) for a domain using stdlib."""
     try:
-        socket.setdefaulttimeout(timeout)
-        results = socket.getaddrinfo(domain, None, socket.AF_INET)
-        ips = [r[4][0] for r in results]
-        return sorted(set(ips))
+        previous = socket.getdefaulttimeout()
+        try:
+            socket.setdefaulttimeout(timeout)
+            results = socket.getaddrinfo(domain, None, socket.AF_INET)
+            ips = [r[4][0] for r in results]
+            return sorted(set(ips))
+        finally:
+            socket.setdefaulttimeout(previous)
     except (socket.timeout, socket.gaierror, OSError, ValueError, RuntimeError):
         return []
 
@@ -55,10 +59,14 @@ def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str
 def resolve_aaaa_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str]:
     """Resolve AAAA records (IPv6 addresses) for a domain using stdlib."""
     try:
-        socket.setdefaulttimeout(timeout)
-        results = socket.getaddrinfo(domain, None, socket.AF_INET6)
-        ips = [r[4][0] for r in results]
-        return sorted(set(ips))
+        previous = socket.getdefaulttimeout()
+        try:
+            socket.setdefaulttimeout(timeout)
+            results = socket.getaddrinfo(domain, None, socket.AF_INET6)
+            ips = [r[4][0] for r in results]
+            return sorted(set(ips))
+        finally:
+            socket.setdefaulttimeout(previous)
     except (socket.timeout, socket.gaierror, OSError, ValueError, RuntimeError):
         return []
 
@@ -66,12 +74,16 @@ def resolve_aaaa_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[
 def resolve_cname(domain: str, timeout: float = DEFAULT_TIMEOUT) -> str | None:
     """Resolve CNAME record for a domain using stdlib getaddrinfo (follows CNAME)."""
     try:
-        socket.setdefaulttimeout(timeout)
-        results = socket.getaddrinfo(domain, None, socket.AF_UNSPEC, 0, 0, socket.AI_CANONNAME)
-        if results:
-            canonname = results[0][3]
-            if canonname and canonname != domain:
-                return canonname.rstrip(".")
+        previous = socket.getdefaulttimeout()
+        try:
+            socket.setdefaulttimeout(timeout)
+            results = socket.getaddrinfo(domain, None, socket.AF_UNSPEC, 0, 0, socket.AI_CANONNAME)
+            if results:
+                canonname = results[0][3]
+                if canonname and canonname != domain:
+                    return canonname.rstrip(".")
+        finally:
+            socket.setdefaulttimeout(previous)
     except (socket.timeout, socket.gaierror, OSError, ValueError, RuntimeError):
         pass
     return None

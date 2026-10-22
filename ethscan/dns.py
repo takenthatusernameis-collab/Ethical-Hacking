@@ -54,10 +54,14 @@ def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str
         List of IPv4 addresses.
     """
     try:
-        socket.setdefaulttimeout(timeout)
-        results = socket.getaddrinfo(domain, None, socket.AF_INET)
-        ips = [r[4][0] for r in results]
-        return sorted(set(ips))
+        previous = socket.getdefaulttimeout()
+        try:
+            socket.setdefaulttimeout(timeout)
+            results = socket.getaddrinfo(domain, None, socket.AF_INET)
+            ips = [r[4][0] for r in results]
+            return sorted(set(ips))
+        finally:
+            socket.setdefaulttimeout(previous)
     except (socket.timeout, socket.gaierror, OSError, ValueError, RuntimeError):
         return []
 
@@ -73,10 +77,14 @@ def resolve_aaaa_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[
         List of IPv6 addresses.
     """
     try:
-        socket.setdefaulttimeout(timeout)
-        results = socket.getaddrinfo(domain, None, socket.AF_INET6)
-        ips = [r[4][0] for r in results]
-        return sorted(set(ips))
+        previous = socket.getdefaulttimeout()
+        try:
+            socket.setdefaulttimeout(timeout)
+            results = socket.getaddrinfo(domain, None, socket.AF_INET6)
+            ips = [r[4][0] for r in results]
+            return sorted(set(ips))
+        finally:
+            socket.setdefaulttimeout(previous)
     except (socket.timeout, socket.gaierror, OSError, ValueError, RuntimeError):
         return []
 

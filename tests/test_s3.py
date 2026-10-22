@@ -9,6 +9,7 @@ import urllib.error
 from ethscan.s3 import (
     DEFAULT_BUCKET_NAMES,
     DEFAULT_REGION,
+    DEFAULT_TIMEOUT,
     S3_REGIONS,
     _bucket_name_problem,
     _build_bucket_candidates,
@@ -967,8 +968,41 @@ def test_resolve_s3_endpoint_setdefaulttimeout_none_oserror(monkeypatch) -> None
             if value is None:
                 raise OSError("setdefaulttimeout(None) failed")
 
+        def getdefaulttimeout(self) -> float | None:
+            return None
+
         def gethostbyname(self, host: str) -> str:
             return "1.2.3.4"
 
     monkeypatch.setattr("ethscan.s3.socket", _FakeSocket())
     assert _resolve_s3_endpoint("bucket", "us-east-1") == "1.2.3.4"
+
+
+def test_resolve_s3_endpoint_restores_default_socket_timeout(monkeypatch) -> None:
+    """_resolve_s3_endpoint restores the default socket timeout it temporarily set.
+
+    The helper switches the process-wide default timeout for its own lookup and
+    must restore it afterwards, so a later test does not inherit a 2s (or
+    other) default timeout from this call.
+    """
+
+    class _RecordingSocket:
+        gaierror = OSError
+        herror = OSError
+
+        def __init__(self) -> None:
+            self.timeout_values: list[float | None] = []
+
+        def setdefaulttimeout(self, value: float) -> None:
+            self.timeout_values.append(value)
+
+        def getdefaulttimeout(self) -> float | None:
+            return 42.0
+
+        def gethostbyname(self, host: str) -> str:
+            return "1.2.3.4"
+
+    fake = _RecordingSocket()
+    monkeypatch.setattr("ethscan.s3.socket", fake)
+    assert _resolve_s3_endpoint("bucket", "us-east-1") == "1.2.3.4"
+    assert fake.timeout_values == [DEFAULT_TIMEOUT, 42.0]

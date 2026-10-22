@@ -1,6 +1,8 @@
 """Tests for the ethscan subdomains module."""
 
 
+import socket
+
 import pytest
 
 from ethscan.subdomains import (
@@ -82,6 +84,29 @@ def test_resolve_subdomain_with_a_label_that_holds_a_null_byte() -> None:
     subdomain, ip = resolve_subdomain("a\x00b", "example.com", timeout=1.0)
     assert subdomain == "a\x00b"
     assert ip is None
+
+
+def test_resolve_subdomain_restores_default_socket_timeout(monkeypatch) -> None:
+    """resolve_subdomain restores the default socket timeout it temporarily set.
+
+    The helper switches the process-wide default timeout for its own lookup and
+    must restore it afterwards, so a later test does not inherit a 2s (or
+    other) default timeout from this call.
+    """
+
+    def blocked(*args, **kwargs):
+        raise socket.gaierror("blocked")
+
+    monkeypatch.setattr("ethscan.subdomains.socket.gethostbyname", blocked)
+    previous = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(123.0)
+    try:
+        subdomain, ip = resolve_subdomain("www", "example.invalid", timeout=0.1)
+        assert subdomain == "www"
+        assert ip is None
+        assert socket.getdefaulttimeout() == 123.0
+    finally:
+        socket.setdefaulttimeout(previous)
 
 
 def test_run_subdomains_offline_target() -> None:
