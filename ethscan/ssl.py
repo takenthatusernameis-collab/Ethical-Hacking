@@ -210,7 +210,17 @@ def inspect_certificate(
             # Verification failed; retry without verification to still inspect the cert.
             result["error"] = str(exc)
             context = _build_context(verify=False)
-            _, cert, _ = _wrap_socket(context, host, port, timeout)
+            try:
+                _, cert, _ = _wrap_socket(context, host, port, timeout)
+            except ssl.SSLError as exc:
+                result["error"] = str(exc)
+                return result
+            except (OSError, ValueError, RuntimeError) as exc:
+                result["error"] = str(exc)
+                return result
+            except Exception as exc:  # noqa: BLE001 - transport can raise any type
+                result["error"] = str(exc)
+                return result
 
         if cert:
             result["cert"] = _parse_cert(cert)
@@ -228,6 +238,8 @@ def inspect_certificate(
                 except (ValueError, TypeError):
                     result["valid"] = False
     except (ssl.SSLError, OSError, ValueError, RuntimeError) as exc:
+        result["error"] = str(exc)
+    except Exception as exc:  # noqa: BLE001 - transport can raise any type
         result["error"] = str(exc)
     return result
 

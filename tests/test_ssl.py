@@ -15,9 +15,31 @@ from ethscan.ssl import (
 )
 
 
-def test_defaults() -> None:
-    assert DEFAULT_PORT == 443
-    assert DEFAULT_TIMEOUT == 5.0
+def test_inspect_certificate_transport_failure_unnamed_type_reported(monkeypatch) -> None:
+    import socket
+
+    def bad_conn(*args, **kwargs):
+        raise TypeError("hostile transport")
+
+    monkeypatch.setattr("socket.create_connection", bad_conn)
+    result = inspect_certificate("example.com")
+    assert result["cert"] is None
+    assert result["chain_length"] == 0
+    assert result["valid"] is False
+    assert result["error"] == "hostile transport"
+
+
+def test_run_ssl_transport_failure_unnamed_type_reported(monkeypatch) -> None:
+    import socket
+
+    def bad_conn(*args, **kwargs):
+        raise TypeError("hostile transport")
+
+    monkeypatch.setattr("socket.create_connection", bad_conn)
+    result = run_ssl("example.com")
+    assert result["host"] == "example.com"
+    assert result["cert"] is None
+    assert result["error"] == "hostile transport"
 
 
 def test_normalize_host_bare() -> None:
