@@ -34,7 +34,7 @@ def _alarm(signum: int, frame: Any) -> None:
 
 # Commands that probe a real host and take a network round trip. They are
 # excluded from the sweep for the same reason as in the file-option sweep.
-SLOW_COMMANDS = frozenset({"dnssec", "netbios", "snmp"})
+SLOW_COMMANDS = frozenset({"dnssec", "netbios", "snmp", "s3"})
 
 # The options that name a file the command *reads*. The options that name an
 # output path (``--out``, ``--output``, ``--init``) are not part of the sweep:
