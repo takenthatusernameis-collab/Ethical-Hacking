@@ -950,3 +950,36 @@ def test_get_host_key_info_paramiko_eof_error(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.ssh.PARAMIKO_AVAILABLE", True)
 
     assert ssh_mod._get_host_key_info_paramiko("example.com", 22, 1.0) is None
+
+
+from ethscan import ssh
+
+
+def test_run_ssh_transport_failure_unnamed_type_on_connect_reported(monkeypatch) -> None:
+    """Transport failures of unnamed types on connect must not crash run_ssh."""
+
+    def boom(*args, **kwargs):
+        raise TypeError("hostile")
+
+    monkeypatch.setattr("socket.create_connection", boom)
+    result = ssh.run_ssh("127.0.0.1")
+    assert result["error"] is not None
+    assert "hostile" in result["error"]
+
+
+def test_run_ssh_transport_failure_unnamed_type_in_recv_reported(monkeypatch) -> None:
+    """Transport failures of unnamed types from recv must not crash run_ssh."""
+
+    class DummySock:
+        def settimeout(self, timeout):
+            pass
+
+        def recv(self, bufsize):
+            raise TypeError("hostile")
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("socket.create_connection", lambda *a, **k: DummySock())
+    result = ssh.run_ssh("127.0.0.1")
+    assert result["error"] is not None

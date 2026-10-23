@@ -605,3 +605,27 @@ def test_format_ftp_report_csv_comma_escaping() -> None:
     assert reader[1][3] == "220 server, ready, for you"
     assert reader[1][5] == "530, no, way"
     assert reader[1][6] == "err, one, two"
+
+
+from ethscan import ftp
+
+
+def test_run_ftp_transport_failure_unnamed_type_on_connect_reported(monkeypatch) -> None:
+    """Transport failures of unnamed types on connect must not crash run_ftp."""
+
+    class BadFTP:
+        def connect(self, *args, **kwargs):
+            raise TypeError("hostile")
+
+        def getwelcome(self):
+            return ""
+
+        def login(self, *args, **kwargs):
+            pass
+
+        def close(self):
+            pass
+
+    result = ftp.run_ftp("127.0.0.1", connector=BadFTP)
+    assert result["error"] is not None
+    assert "hostile" in result["error"]

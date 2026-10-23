@@ -145,6 +145,9 @@ def run_ftp(
         except (socket.timeout, OSError, ftplib.Error, ValueError, RuntimeError) as exc:
             results["error"] = f"connection failed: {exc}"
             return results
+        except Exception as exc:  # noqa: BLE001 - transport can raise any type
+            results["error"] = f"connection failed: {exc}"
+            return results
 
         # Optional anonymous-login probe.
         if check_anonymous:
@@ -163,6 +166,10 @@ def run_ftp(
                 results["anonymous_message"] = "login failed: server closed the connection"
                 results["error"] = "login failed: server closed the connection"
             except (OSError, ValueError) as exc:
+                results["anonymous_login"] = None
+                results["anonymous_message"] = f"login failed: {exc}"
+                results["error"] = f"login failed: {exc}"
+            except Exception as exc:  # noqa: BLE001 - transport can raise any type
                 results["anonymous_login"] = None
                 results["anonymous_message"] = f"login failed: {exc}"
                 results["error"] = f"login failed: {exc}"
