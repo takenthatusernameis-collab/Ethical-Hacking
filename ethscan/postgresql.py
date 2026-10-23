@@ -141,7 +141,7 @@ def _send_recv(
         return None, "Timeout"
     except ConnectionRefusedError:
         return None, "Connection refused"
-    except (OSError, RuntimeError) as exc:
+    except Exception as exc:  # noqa: BLE001 - transport can raise any type
         return None, str(exc)
 
 

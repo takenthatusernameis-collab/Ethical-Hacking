@@ -478,7 +478,7 @@ def _send_recv(
         return data, None
     except socket.timeout:
         return None, "timeout"
-    except (OSError, RuntimeError) as exc:
+    except Exception as exc:  # noqa: BLE001 - transport can raise any type
         return None, str(exc)
     finally:
         if sock is not None:

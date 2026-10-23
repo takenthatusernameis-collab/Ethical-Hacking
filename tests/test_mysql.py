@@ -408,6 +408,19 @@ def test_run_mysql_transport_failure_is_reported(monkeypatch):
     assert "hostile transport" in results["error"]
 
 
+def test_run_mysql_transport_failure_of_unnamed_type_is_reported(monkeypatch):
+    """A transport failure of an unnamed type (ValueError) is reported, not raised."""
+
+    def boom(*args, **kwargs):
+        raise ValueError("hostile transport")
+
+    monkeypatch.setattr("ethscan.mysql.socket.create_connection", boom)
+
+    results = run_mysql("localhost")
+    assert results["accessible"] is False
+    assert "hostile transport" in results["error"]
+
+
 def test_run_mysql_default_port():
     def connector(host, port, request, timeout):
         assert port == 3306  # default port

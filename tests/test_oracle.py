@@ -1241,3 +1241,16 @@ def test_run_oracle_transport_failure_is_reported(monkeypatch):
     results = run_oracle("localhost")
     assert results["accessible"] is False
     assert "hostile transport" in results["error"]
+
+
+def test_run_oracle_transport_failure_of_unnamed_type_is_reported(monkeypatch):
+    """A transport failure of an unnamed type (ValueError) is reported, not raised."""
+
+    def boom(*args, **kwargs):
+        raise ValueError("hostile transport")
+
+    monkeypatch.setattr("ethscan.oracle.socket.create_connection", boom)
+
+    results = run_oracle("localhost")
+    assert results["accessible"] is False
+    assert "hostile transport" in results["error"]

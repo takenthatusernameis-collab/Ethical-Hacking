@@ -509,6 +509,19 @@ def test_send_recv_socket_creation_failure_is_reported(monkeypatch) -> None:
     assert "hostile transport" in err
 
 
+def test_send_recv_socket_creation_failure_of_unnamed_type_is_reported(monkeypatch) -> None:
+    """A socket that cannot be created (ValueError) is reported, never raised."""
+
+    def boom(*args, **kwargs):
+        raise ValueError("hostile transport")
+
+    monkeypatch.setattr("ethscan.netbios.socket.socket", boom)
+
+    data, err = _send_recv("h", DEFAULT_PORT, b"req", 1.0)
+    assert data is None
+    assert "hostile transport" in err
+
+
 def test_send_recv_socket_failure_is_reported(monkeypatch) -> None:
     """A transport failure of an unnamed type is reported, never raised."""
 
