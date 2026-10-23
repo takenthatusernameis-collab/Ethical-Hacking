@@ -1157,3 +1157,21 @@ def test_ping_resolver_failure_of_an_unknown_type_is_reported(monkeypatch) -> No
 
     assert results["ip"] is None
     assert any("Could not resolve host" in note for note in results["notes"])
+
+
+def test_ping_socket_creation_failure_of_unnamed_type_is_reported(monkeypatch) -> None:
+    """A socket creation failure of an unnamed type is a failed probe, not a raise."""
+    import ethscan.ping
+
+    def boom(*args, **kwargs):
+        raise ValueError("hostile transport")
+
+    monkeypatch.setattr("ethscan.ping.socket.socket", boom)
+
+    results = ethscan.ping.run_ping("127.0.0.1", count=1, timeout=1.0)
+
+    assert isinstance(results, dict)
+    probe = results["probes"][0]
+    assert probe["response_type"] == ethscan.ping.RESP_NO_RESPONSE
+    assert "hostile transport" in (probe.get("error") or "")
+    assert results["failed"] == 1

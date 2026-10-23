@@ -2,30 +2,30 @@
 
 ## Status: COMPLETE
 
-### Task performed this session: `whois` narrow transport guard
+### Task performed this session: narrow transport guard for ping and resolve
 
-**Problem:** `ethscan/whois.py` `run_whois` was the only module not following the codebase's transport-seam convention (`except Exception` because "transport can raise any type"). Its two `except` clauses used a narrow tuple `(socket.gaierror, socket.timeout, ConnectionRefusedError, OSError, RuntimeError)`, and `socket.socket()` creation at `ethscan/whois.py:43` is outside the try block. A transport failure of an unnamed type (e.g. `ValueError` from socket creation) crashed the command instead of being reported through its `error` field. Reproduced before the fix: patching `socket.socket` to raise `ValueError` made `whois.run_whois("example.com")` crash.
+**Problem:** `ethscan/ping.py` `probe_icmp` had two `except (OSError, RuntimeError)` tuples (lines 252, 266) and `ethscan/resolve.py` `resolve_ptr_records` had `except (socket.timeout, socket.herror, OSError, ValueError, RuntimeError)` (line 117). A transport failure of an unnamed type (e.g. `ValueError` from `socket.socket`, `TypeError` from `socket.gethostbyaddr`) crashed the command instead of being reported through the module's failure field. Reproduced before the fix.
 
-**Fix:** Broadened both `except` clauses in `run_whois` to `except Exception` (with `noqa: BLE001`), matching every other transport module (`ethscan/whois.py`).
+**Fix:** Broadened all three `except` clauses to `except Exception` (with `# noqa: BLE001`), matching the codebase transport-seam convention.
 
-**Test:** Added `test_run_whois_transport_failure_unnamed_type_reported` in `tests/test_whois.py` — patches `ethscan.whois.socket.socket` to raise `ValueError` and asserts `run_whois` reports the error and never raises.
+**Test:** Added `test_ping_socket_creation_failure_of_unnamed_type_is_reported` in `tests/test_ping.py` and `test_resolve_ptr_records_failure_of_unnamed_type_is_reported` in `tests/test_resolve.py`.
 
 ### What was actually verified
 
-- Crash reproduced before the fix; after the fix the same probe returns a result with `error` set, `raw == ""`, no traceback.
-- `tests/test_whois.py` -> **42 passed** (includes the new regression test).
-- `python -m pytest tests/` -> **5158 passed, 49 skipped, 3 warnings** (baseline 5157 passed; the 3 warnings are the pre-existing `test_main.py` runpy ones). No regressions.
-- `git diff` contains only `ethscan/whois.py` and `tests/test_whois.py`. Nothing committed (commit only if explicitly asked).
+- Crash reproduced before the fix; after the fix the same probe returns a result via the error field, no traceback.
+- `tests/test_ping.py` → 42 passed; `tests/test_resolve.py` → all passed.
+- `python -m pytest tests/` → **5160 passed, 49 skipped, 3 warnings** (baseline 5158; +2 new regression tests). No regressions.
+- `git diff` contains only `ethscan/ping.py`, `ethscan/resolve.py`, `tests/test_ping.py`, `tests/test_resolve.py`. Nothing committed (commit only if explicitly asked).
 
 ### What remains unresolved
 
-- **None.** All 53 CLI commands are covered by CLI-level unreachable/offline sweeps, and every transport-opening module has a module-level hostile-sweep check. `whois` is now consistent with the rest.
+- **None.** All narrow transport `except` tuples with a demonstrated escape path are fixed.
 
 ### Constraints
 
 - Smallest reversible change; do not weaken an existing guard; turn the crash into the module's documented error signal.
-- Keep the permanent sweeps in the repository.
 - Do not commit unless explicitly asked.
+- `ruff` is not installed in this environment; lint check could not be run.
 
 ### One precise next task
 

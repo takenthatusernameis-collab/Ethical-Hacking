@@ -958,3 +958,15 @@ def test_resolve_transport_failure_is_reported_not_raised(monkeypatch) -> None:
 
     assert isinstance(results, dict)
     assert results["records"]["A"] == []
+
+
+def test_resolve_ptr_records_failure_of_unnamed_type_is_reported(monkeypatch) -> None:
+    """A gethostbyaddr failure of an unnamed type returns empty records, not raised."""
+    import ethscan.resolve
+
+    def boom(*args, **kwargs):
+        raise TypeError("hostile resolver")
+
+    monkeypatch.setattr("ethscan.resolve.socket.gethostbyaddr", boom)
+
+    assert ethscan.resolve.resolve_ptr_records("1.2.3.4", 0.1) == []

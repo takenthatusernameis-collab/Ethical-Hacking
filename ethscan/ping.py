@@ -249,7 +249,7 @@ def probe_icmp(
         send_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         send_sock.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, ttl)
         send_sock.settimeout(timeout)
-    except (OSError, RuntimeError) as exc:
+    except Exception as exc:  # noqa: BLE001 - transport can raise any type
         # A socket that cannot be created is a transport failure: report it as
         # a failed probe instead of letting the exception escape the command.
         rtt = (time.monotonic() - start) * 1000
@@ -263,7 +263,7 @@ def probe_icmp(
         }
     try:
         err = send_sock.connect_ex((host, port))
-    except (OSError, RuntimeError) as exc:
+    except Exception as exc:  # noqa: BLE001 - transport can raise any type
         # The name itself cannot be resolved (connect_ex only swallows errors
         # from connect(), not from getaddrinfo()) and a transport that fails
         # with any other error type must not escape the command either.

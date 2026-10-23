@@ -114,7 +114,7 @@ def resolve_ptr_records(ip: str, timeout: float = DEFAULT_TIMEOUT, server: str |
                 return [hostname]
             finally:
                 socket.setdefaulttimeout(previous)
-        except (socket.timeout, socket.herror, OSError, ValueError, RuntimeError):
+        except Exception:  # noqa: BLE001 - resolver can raise any type
             return []
 
     try:
