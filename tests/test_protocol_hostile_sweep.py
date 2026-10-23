@@ -310,6 +310,18 @@ def test_smtp_probe_failure_is_reported_not_raised() -> None:
     assert "hostile transport" in (results.get("error") or "")
 
 
+def test_smtp_probe_failure_unnamed_type_is_reported_not_raised() -> None:
+    """A failing SMTP transport with an unnamed exception is reported through the error field, not raised."""
+
+    def connector(address, timeout):
+        raise TypeError("hostile transport")
+
+    results = smtp.run_smtp("127.0.0.1", connector=connector)
+
+    assert isinstance(results, dict)
+    assert "hostile transport" in (results.get("error") or "")
+
+
 def test_scanner_probe_failure_is_reported_not_raised(monkeypatch) -> None:
     """A failing transport is reported as a closed port, not raised.
 
