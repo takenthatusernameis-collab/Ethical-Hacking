@@ -2,51 +2,45 @@
 
 ## What changed this session
 
-**Broadened narrow `except (OSError, RuntimeError)` tuples on database/NBNS transport seams to `except Exception` (# noqa: BLE001), matching the ping.py/resolve.py convention from earlier sessions.** All six are `_send_recv` functions that open the real socket inside the guarded block, so a transport failure of an unnamed type (e.g. `ValueError` from `socket.create_connection`/`socket.socket`) previously crashed the command instead of being reported through the error field.
+**Broadened narrow `except (socket.timeout, OSError)` transport seams in `ethscan/smtp.py` to catch unnamed exceptions, matching the transport-seam convention.**
 
-- `ethscan/mongodb.py:92` (`_send_recv`)
-- `ethscan/mysql.py:91` (`_send_recv`)
-- `ethscan/mssql.py:362` (`_send_recv`)
-- `ethscan/postgresql.py:144` (`_send_recv`)
-- `ethscan/oracle.py:193` (`_send_recv`)
-- `ethscan/netbios.py:481` (`_send_recv`)
+- `ethscan/smtp.py:127` (`_read_response`) - added `except Exception`
+- `ethscan/smtp.py:236-251` (`run_smtp` banner read) - added `except Exception`
+- `ethscan/smtp.py:273-313` (`run_smtp` EHLO) - added `except Exception`
+- `ethscan/smtp.py:296-315` (`run_smtp` VRFY) - added `except Exception`
+- `ethscan/smtp.py:312-334` (`run_smtp` relay probe) - added `except Exception`
 
-**Tests added** (next to each module's own tests, mirroring the existing `RuntimeError` transport-failure tests but with `ValueError`):
-- `tests/test_mongodb.py`: `test_run_mongodb_transport_failure_of_unnamed_type_is_reported`
-- `tests/test_mysql.py`: `test_run_mysql_transport_failure_of_unnamed_type_is_reported`
-- `tests/test_mssql.py`: `test_run_mssql_transport_failure_of_unnamed_type_is_reported`
-- `tests/test_postgresql.py`: `test_run_postgresql_transport_failure_of_unnamed_type_is_reported`
-- `tests/test_oracle.py`: `test_run_oracle_transport_failure_of_unnamed_type_is_reported`
-- `tests/test_netbios.py`: `test_send_recv_socket_creation_failure_of_unnamed_type_is_reported`
+**Tests added** (next to SMTP tests):
+- `tests/test_smtp.py`: `test_run_smtp_transport_failure_on_connect_unnamed_type_is_reported`
+- `tests/test_smtp.py`: `test_run_smtp_transport_failure_on_banner_unnamed_type_is_reported`
+- `tests/test_smtp.py`: `test_run_smtp_transport_failure_on_ehlo_unnamed_type_is_reported`
+- `tests/test_smtp.py`: `test_run_smtp_transport_failure_on_vrfy_unnamed_type_is_reported`
+- `tests/test_smtp.py`: `test_run_smtp_transport_failure_on_relay_unnamed_type_is_reported`
 
-Diff: 6 source files (1 line each), 6 test files (+~8 lines each). Nothing committed (commit only if explicitly asked).
+Diff: 1 source file (multiple lines), 1 test file (+~150 lines). Nothing committed (commit only if explicitly asked).
 
 ## What was actually verified
 
-- Crash reproduced **before** the fix for all six: patching `socket.create_connection`/`socket.socket` to raise `ValueError` made `run_*()`/`_send_recv()` raise `ValueError` (traceback) instead of returning an error.
-- After the fix: all six report through the module's normal failure field (`accessible: False` + `error`, or netbios `error`), no traceback.
-- `tests/test_mongodb.py` + `test_mysql.py` + `test_mssql.py` + `test_postgresql.py` + `test_oracle.py` + `test_netbios.py` → **453 passed** (includes 6 new regression tests).
-- `python -m pytest tests/` → **5167 passed, 49 skipped, 3 warnings** (the 3 warnings are the pre-existing `test_main.py` runpy ones). No regressions.
+- Reproduced crashes before fix: `_read_response` raising `ValueError` from `recv` crashed when uncaught; paths now report via `results["error"]`/user entry errors/`open_relay` appropriately.
+- `tests/test_smtp.py` → **65 passed** (includes 5 new regression tests).
+- `python -m pytest tests/` → **5172 passed, 49 skipped, 3 warnings** (the 3 warnings are the pre-existing `test_main.py` runpy ones). No regressions.
 - `git diff --check` → clean.
 - `python -m ruff check ethscan/ tests/` → **not run** (ruff is not installed in this environment).
 
 ## What remains unresolved
 
-**None on this task.** All six narrow `(OSError, RuntimeError)` transport seams with a demonstrated escape path are fixed.
+**None on this task.** All narrow `(socket.timeout, OSError)` transport seams in SMTP with demonstrated escape paths are fixed.
 
-Other narrow transport tuples remain in the codebase but have **no demonstrated crash** yet (per the rule: do not broaden without evidence). Candidates to scan next, following the same reproduce-before-fixing method:
-- `ethscan/smtp.py` (lines 127, 232, 269, 292, 308): `except (socket.timeout, OSError)`
-- `ethscan/service.py` (lines 131, 141): `except (socket.timeout, OSError)`; (line 146): `except (socket.timeout, ConnectionRefusedError, OSError, ValueError, RuntimeError)`
-- `ethscan/ssh.py` (lines 124, 234, 454): `except (socket.timeout, OSError, UnicodeDecodeError)` / `(socket.timeout, OSError, struct.error)` / `(OSError, ValueError)`
-- `ethscan/ftp.py` (lines 133, 145, 165)
-- `ethscan/geo.py`, `ethscan/mac.py`, `ethscan/cert.py`, `ethscan/dnsbrute.py`: tuples missing `TypeError` on name-lookup seams
+Other narrow transport tuples remain but have **no demonstrated crash** yet (per the rule: do not broaden without evidence). Candidates to scan next, following the same reproduce-before-fixing method:
+- `ethscan/service.py` (lines ~131, 141): `except (socket.timeout, OSError)`; (line ~146): `except (socket.timeout, ConnectionRefusedError, OSError, ValueError, RuntimeError)`
+- `ethscan/ssh.py` (lines ~124, 234, 454): various narrow tuples
+- `ethscan/ftp.py` (lines ~133, 145, 165)
+- `ethscan/geo.py`, `ethscan/mac.py`, `ethscan/cert.py`, `ethscan/dnsbrute.py`: tuples missing broader handling on name-lookup seams
 
 ## Approaches that failed and why
 
-- **None.** The fix follows the established convention (`except Exception` with `# noqa: BLE001`) used in ping.py/resolve.py and the existing `test_*_transport_failure_is_reported` tests. Crashes were reproduced before fixing, so no speculative broadening was done.
+- **None.** Followed established convention (`except Exception` with `# noqa: BLE001`) and reproduced crashes before fixing.
 
 ## One precise next task
 
-**Scan the remaining narrow transport `except` tuples listed above, reproduce any crash with an unnamed exception type (patch the seam to raise `ValueError`/`TypeError`, call the public `run_*`, confirm it raises), then broaden to `except Exception` (# noqa: BLE001), add a `ValueError` regression test next to the module's own tests, and re-run `python -m pytest tests/`. Do not broaden any tuple without first demonstrating a crash.** Start with `ethscan/smtp.py` (the `except (socket.timeout, OSError)` seams), since `smtplib` can raise `ValueError`/`TypeError` on malformed host/port input that escapes the narrow tuple.
-
-(End of file)
+**Scan remaining narrow transport `except` tuples (start with `ethscan/service.py`), reproduce any crash with an unnamed exception type (patch seam to raise `ValueError`/`TypeError`, call public `run_*`, confirm it raises), then broaden to `except Exception` (# noqa: BLE001), add a `ValueError` regression test next to the module's own tests, and re-run `python -m pytest tests/`. Do not broaden any tuple without first demonstrating a crash.**

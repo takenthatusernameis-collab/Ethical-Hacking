@@ -128,6 +128,10 @@ def _read_response(sock: socket.socket, timeout: float, max_lines: int = 100) ->
             if not lines:
                 raise
             break
+        except Exception as exc:  # noqa: BLE001 - transport can raise any type
+            if not lines:
+                raise
+            break
         if not chunk:
             break
         buf += chunk
@@ -232,6 +236,9 @@ def run_smtp(
         except (socket.timeout, OSError) as exc:
             results["error"] = f"banner read failed: {exc}"
             return results
+        except Exception as exc:  # noqa: BLE001 - transport can raise any type
+            results["error"] = f"banner read failed: {exc}"
+            return results
     # A host that is not a valid host name ("....") raises a UnicodeError,
     # which is a ValueError, when the resolver encodes it.
     except (socket.timeout, OSError, ValueError, RuntimeError) as exc:
@@ -269,6 +276,9 @@ def run_smtp(
             except (socket.timeout, OSError) as exc:
                 results["error"] = f"ehlo failed: {exc}"
                 results["ehlo_success"] = False
+            except Exception as exc:  # noqa: BLE001 - transport can raise any type
+                results["error"] = f"ehlo failed: {exc}"
+                results["ehlo_success"] = False
 
         # Optional VRFY user enumeration.
         if users:
@@ -291,6 +301,8 @@ def run_smtp(
                     entry["description"] = desc
                 except (socket.timeout, OSError) as exc:
                     entry["error"] = str(exc)
+                except Exception as exc:  # noqa: BLE001 - transport can raise any type
+                    entry["error"] = str(exc)
                 results["users"].append(entry)
 
         # Optional open-relay probe.
@@ -306,6 +318,10 @@ def run_smtp(
                         open_relay = True
                 results["open_relay"] = open_relay
             except (socket.timeout, OSError) as exc:
+                results["open_relay"] = None
+                if not results["error"]:
+                    results["error"] = f"relay check failed: {exc}"
+            except Exception as exc:  # noqa: BLE001 - transport can raise any type
                 results["open_relay"] = None
                 if not results["error"]:
                     results["error"] = f"relay check failed: {exc}"

@@ -1200,3 +1200,126 @@ def test_smtp_command_hostile_server_does_not_leak_a_traceback() -> None:
         f"the smtp command leaked a traceback: {type(exc).__name__}: {exc}"
     )
     assert result.exit_code == 0
+
+
+def test_run_smtp_transport_failure_on_connect_unnamed_type_is_reported(monkeypatch) -> None:
+    """A transport failure during connection of an unnamed type is reported, not raised."""
+
+    def boom(*args, **kwargs):
+        raise ValueError("hostile transport")
+
+    results = run_smtp("example.com", connector=boom)
+    assert results["connected"] is False
+    assert "hostile transport" in results["error"]
+
+
+def test_run_smtp_transport_failure_on_banner_unnamed_type_is_reported(monkeypatch) -> None:
+    """A transport failure while reading banner of an unnamed type is reported, not raised."""
+
+    class FakeSock:
+        def __init__(self):
+            pass
+
+        def settimeout(self, *a, **k):
+            pass
+
+        def recv(self, n):
+            raise ValueError("hostile transport")
+
+        def send(self, data):
+            return len(data)
+
+        def close(self):
+            pass
+
+    results = run_smtp("example.com", connector=lambda *a, **kw: FakeSock(), check_starttls=False, check_relay=False)
+    assert results["connected"] is True
+    assert "hostile transport" in results["error"]
+
+
+def test_run_smtp_transport_failure_on_ehlo_unnamed_type_is_reported(monkeypatch) -> None:
+    """A transport failure during EHLO of an unnamed type is reported, not raised."""
+
+    class FakeSock:
+        def __init__(self):
+            self.calls = 0
+
+        def settimeout(self, *a, **k):
+            pass
+
+        def recv(self, n):
+            self.calls += 1
+            if self.calls == 1:
+                return b"220 example.com ESMTP\r\n"
+            raise ValueError("hostile transport")
+
+        def send(self, data):
+            return len(data)
+
+        def close(self):
+            pass
+
+    results = run_smtp("example.com", connector=lambda *a, **kw: FakeSock(), check_starttls=True, check_relay=False)
+    assert results["error"] is not None
+    assert "hostile transport" in results["error"]
+
+
+def test_run_smtp_transport_failure_on_vrfy_unnamed_type_is_reported(monkeypatch) -> None:
+    """A transport failure during VRFY of an unnamed type is reported per user."""
+
+    class FakeSock:
+        def __init__(self):
+            self.calls = 0
+
+        def settimeout(self, *a, **k):
+            pass
+
+        def recv(self, n):
+            self.calls += 1
+            if self.calls == 1:
+                return b"220 example.com ESMTP\r\n"
+            elif self.calls == 2:
+                return b"250-Hello\r\n250 OK\r\n"
+            raise ValueError("hostile transport")
+
+        def send(self, data):
+            return len(data)
+
+        def close(self):
+            pass
+
+    results = run_smtp("example.com", connector=lambda *a, **kw: FakeSock(), users=["alice"], check_starttls=True, check_relay=False)
+    assert results["users"]
+    assert "hostile transport" in results["users"][0]["error"]
+
+
+def test_run_smtp_transport_failure_on_relay_unnamed_type_is_reported(monkeypatch) -> None:
+    """A transport failure during relay probe of an unnamed type is reported."""
+
+    class FakeSock:
+        def __init__(self):
+            self.calls = 0
+
+        def settimeout(self, *a, **k):
+            pass
+
+        def recv(self, n):
+            self.calls += 1
+            if self.calls == 1:
+                return b"220 example.com ESMTP\r\n"
+            elif self.calls == 2:
+                return b"250-Hello\r\n250 OK\r\n"
+            elif self.calls == 3:
+                return b"250 OK\r\n"
+            raise ValueError("hostile transport")
+
+        def send(self, data):
+            return len(data)
+
+        def close(self):
+            pass
+
+    results = run_smtp("example.com", connector=lambda *a, **kw: FakeSock(), check_starttls=True, check_relay=True)
+    assert results["open_relay"] is None
+    assert results["error"] is not None
+    assert "hostile transport" in results["error"]
