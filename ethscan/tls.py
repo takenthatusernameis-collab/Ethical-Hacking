@@ -232,11 +232,7 @@ def probe_version(
         entry["supported"] = True
         entry["negotiated_cipher"] = cipher_name
         entry["negotiated_protocol"] = protocol
-    except ValueError as exc:
-        entry["error"] = str(exc)
-    except ssl.SSLError as exc:
-        entry["error"] = _truncate(str(exc))
-    except (OSError, RuntimeError) as exc:
+    except Exception as exc:  # noqa: BLE001 - transport can raise any type
         entry["error"] = _truncate(str(exc))
     return entry
 
@@ -270,9 +266,7 @@ def probe_cipher(
         _, protocol = _probe(host, port, context, timeout)
         entry["supported"] = True
         entry["negotiated_version"] = protocol
-    except ssl.SSLError as exc:
-        entry["error"] = _truncate(str(exc))
-    except (OSError, RuntimeError) as exc:
+    except Exception as exc:  # noqa: BLE001 - transport can raise any type
         entry["error"] = _truncate(str(exc))
     return entry
 

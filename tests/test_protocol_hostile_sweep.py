@@ -475,11 +475,17 @@ def test_ssl_probe_failure_is_reported_not_raised(monkeypatch) -> None:
     assert "hostile transport" in result["error"]
 
 
-def test_tls_probe_failure_is_reported_not_raised(monkeypatch) -> None:
-    """A failing TLS transport is reported per probe, not raised."""
+@pytest.mark.parametrize("exc_type", [RuntimeError, TypeError], ids=["runtime_error", "type_error"])
+def test_tls_probe_failure_is_reported_not_raised(monkeypatch, exc_type) -> None:
+    """A failing TLS transport is reported per probe, not raised.
+
+    Covers both a known transport type (RuntimeError, which the narrow tuple
+    already caught) and an unnamed type (TypeError) that used to escape
+    ``probe_version`` and ``probe_cipher`` and crash ``run_tls``.
+    """
 
     def boom(*args, **kwargs):
-        raise RuntimeError("hostile transport")
+        raise exc_type("hostile transport")
 
     monkeypatch.setattr("ethscan.tls.socket.create_connection", boom)
 
