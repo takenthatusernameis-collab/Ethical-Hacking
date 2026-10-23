@@ -123,6 +123,36 @@ def test_run_service_transport_failure_reported(monkeypatch) -> None:
     assert result["results"] == []
 
 
+def test_run_service_transport_failure_unnamed_type_in_recv_reported(monkeypatch) -> None:
+    """An unnamed exception type raised by recv is reported, not propagated."""
+
+    class FakeSock:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def settimeout(self, value):
+            pass
+
+        def recv(self, size):
+            raise ValueError("hostile recv")
+
+        def sendall(self, data):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("ethscan.service.socket.create_connection", lambda *a, **k: FakeSock())
+
+    result = run_service("127.0.0.1", ports=[80], timeout=0.5)
+
+    assert result["services_found"] == 0
+    assert result["results"] == []
+
+
 def test_format_service_report_json() -> None:
     data = {
         "target": "example.com",
