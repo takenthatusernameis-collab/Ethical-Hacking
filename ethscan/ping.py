@@ -174,7 +174,7 @@ def probe_icmp(
     if raw_socket is not None:
         try:
             send_sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
-        except (OSError, PermissionError, RuntimeError):
+        except Exception:  # noqa: BLE001 - transport can raise any type
             # Fall back to TCP mode if raw socket creation fails
             raw_socket = None
         else:

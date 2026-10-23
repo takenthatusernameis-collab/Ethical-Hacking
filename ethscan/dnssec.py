@@ -169,7 +169,7 @@ def _query_udp(
             sock.sendto(query, (nameserver, port))
             data, _ = sock.recvfrom(4096)
             return data
-    except (socket.timeout, socket.gaierror, OSError, RuntimeError):
+    except Exception:  # noqa: BLE001 - transport can raise any type
         return None
 
 
@@ -196,7 +196,7 @@ def _query_tcp(
                     break
                 data += chunk
             return data[:resp_len]
-    except (socket.timeout, socket.gaierror, OSError, RuntimeError):
+    except Exception:  # noqa: BLE001 - transport can raise any type
         return None
 
 

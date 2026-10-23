@@ -25,7 +25,7 @@ def scan_port(host: str, port: int, timeout: float = 1.0) -> tuple[int, bool]:
     # A host that is not a valid host name ("....") raises a UnicodeError,
     # which is a ValueError, when the resolver encodes it. A transport
     # failure of an unnamed type must not escape the scanner.
-    except (socket.timeout, ConnectionRefusedError, OSError, ValueError, RuntimeError):
+    except Exception:  # noqa: BLE001 - transport can raise any type
         return port, False
 
 
