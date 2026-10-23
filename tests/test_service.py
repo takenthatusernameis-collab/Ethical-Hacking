@@ -153,6 +153,20 @@ def test_run_service_transport_failure_unnamed_type_in_recv_reported(monkeypatch
     assert result["results"] == []
 
 
+def test_run_service_transport_failure_unnamed_type_on_connect_reported(monkeypatch) -> None:
+    """An unnamed exception type raised by create_connection is caught, not propagated."""
+
+    def boom(*args, **kwargs):
+        raise TypeError("hostile connect")
+
+    monkeypatch.setattr("ethscan.service.socket.create_connection", boom)
+
+    result = run_service("127.0.0.1", timeout=0.5)
+
+    assert result["services_found"] == 0
+    assert result["results"] == []
+
+
 def test_format_service_report_json() -> None:
     data = {
         "target": "example.com",

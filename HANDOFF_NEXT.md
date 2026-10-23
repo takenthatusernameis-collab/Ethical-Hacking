@@ -2,45 +2,54 @@
 
 ## What changed this session
 
-**Broadened narrow `except (socket.timeout, OSError)` transport seams in `ethscan/smtp.py` to catch unnamed exceptions, matching the transport-seam convention.**
+**Broadened the narrow transport `except` tuple in `ethscan/service.py` to catch unnamed exceptions, matching the transport-seam convention (`except Exception` + `# noqa: BLE001`).**
 
-- `ethscan/smtp.py:127` (`_read_response`) - added `except Exception`
-- `ethscan/smtp.py:236-251` (`run_smtp` banner read) - added `except Exception`
-- `ethscan/smtp.py:273-313` (`run_smtp` EHLO) - added `except Exception`
-- `ethscan/smtp.py:296-315` (`run_smtp` VRFY) - added `except Exception`
-- `ethscan/smtp.py:312-334` (`run_smtp` relay probe) - added `except Exception`
+- `ethscan/service.py:146` (`grab_banner` around `socket.create_connection`):
+  `except (socket.timeout, ConnectionRefusedError, OSError, ValueError, RuntimeError):`
+  → `except Exception:  # noqa: BLE001 - transport can raise any type`
 
-**Tests added** (next to SMTP tests):
-- `tests/test_smtp.py`: `test_run_smtp_transport_failure_on_connect_unnamed_type_is_reported`
-- `tests/test_smtp.py`: `test_run_smtp_transport_failure_on_banner_unnamed_type_is_reported`
-- `tests/test_smtp.py`: `test_run_smtp_transport_failure_on_ehlo_unnamed_type_is_reported`
-- `tests/test_smtp.py`: `test_run_smtp_transport_failure_on_vrfy_unnamed_type_is_reported`
-- `tests/test_smtp.py`: `test_run_smtp_transport_failure_on_relay_unnamed_type_is_reported`
+**Test added** (next to service tests):
+- `tests/test_service.py`: `test_run_service_transport_failure_unnamed_type_on_connect_reported`
+  (patches `ethscan.service.socket.create_connection` to raise `TypeError`, asserts `run_service`
+  returns `services_found == 0` and `results == []` instead of crashing).
 
-Diff: 1 source file (multiple lines), 1 test file (+~150 lines). Nothing committed (commit only if explicitly asked).
+Diff: 2 files, +15/-1 lines. Nothing committed (commit only if explicitly asked).
 
 ## What was actually verified
 
-- Reproduced crashes before fix: `_read_response` raising `ValueError` from `recv` crashed when uncaught; paths now report via `results["error"]`/user entry errors/`open_relay` appropriately.
-- `tests/test_smtp.py` → **65 passed** (includes 5 new regression tests).
-- `python -m pytest tests/` → **5172 passed, 49 skipped, 3 warnings** (the 3 warnings are the pre-existing `test_main.py` runpy ones). No regressions.
+- **Crash reproduced before fix:** patching `socket.create_connection` to raise `TypeError` made
+  `run_service("127.0.0.1")` raise `TypeError: hostile transport` (escaped via `future.result()`).
+- **After fix:** same patch returns `{"services_found": 0, "results": []}` with no traceback.
+- `tests/test_service.py` → **26 passed** (was 25, +1 new regression test).
+- `python -m pytest tests/` → **5174 passed, 49 skipped, 0 failed** (3 pre-existing `test_main.py`
+  runpy warnings). No regressions.
 - `git diff --check` → clean.
-- `python -m ruff check ethscan/ tests/` → **not run** (ruff is not installed in this environment).
+- `ruff` is not installed in this environment (not run).
 
 ## What remains unresolved
 
-**None on this task.** All narrow `(socket.timeout, OSError)` transport seams in SMTP with demonstrated escape paths are fixed.
+None on this task. `ethscan/service.py` narrow transport tuple with a demonstrated escape path is fixed.
 
-Other narrow transport tuples remain but have **no demonstrated crash** yet (per the rule: do not broaden without evidence). Candidates to scan next, following the same reproduce-before-fixing method:
-- `ethscan/service.py` (lines ~131, 141): `except (socket.timeout, OSError)`; (line ~146): `except (socket.timeout, ConnectionRefusedError, OSError, ValueError, RuntimeError)`
+Other narrow transport tuples remain with **no demonstrated crash yet** (do not broaden without
+evidence), per the same reproduce-before-fixing method:
 - `ethscan/ssh.py` (lines ~124, 234, 454): various narrow tuples
 - `ethscan/ftp.py` (lines ~133, 145, 165)
-- `ethscan/geo.py`, `ethscan/mac.py`, `ethscan/cert.py`, `ethscan/dnsbrute.py`: tuples missing broader handling on name-lookup seams
+- `ethscan/geo.py`, `ethscan/mac.py`, `ethscan/cert.py`, `ethscan/dnsbrute.py`: tuples missing broader
+  handling on name-lookup seams
+
+(Alternative longer-term track from TASK.md: give ping/osdetect/resolve/dns/stale/subdomains the
+same hostile-transport net and regression tests — those crash sites are listed in TASK.md lines 105-111.)
 
 ## Approaches that failed and why
 
-- **None.** Followed established convention (`except Exception` with `# noqa: BLE001`) and reproduced crashes before fixing.
+None. Followed established convention (reproduce crash first, then `except Exception` +
+`# noqa: BLE001`).
 
 ## One precise next task
 
-**Scan remaining narrow transport `except` tuples (start with `ethscan/service.py`), reproduce any crash with an unnamed exception type (patch seam to raise `ValueError`/`TypeError`, call public `run_*`, confirm it raises), then broaden to `except Exception` (# noqa: BLE001), add a `ValueError` regression test next to the module's own tests, and re-run `python -m pytest tests/`. Do not broaden any tuple without first demonstrating a crash.**
+Scan remaining narrow transport `except` tuples, starting with `ethscan/ssh.py`: for each tuple,
+reproduce a crash with an unnamed exception type (patch the seam to raise `ValueError`/`TypeError`,
+call the public `run_*`, confirm it raises), then broaden to `except Exception`
+(`# noqa: BLE001 - transport can raise any type`), add a `ValueError`/`TypeError` regression test
+next to the module's own tests, and re-run `python -m pytest tests/`. Do not broaden any tuple
+without first demonstrating a crash. Do not commit unless explicitly asked.
