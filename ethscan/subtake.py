@@ -313,7 +313,7 @@ def resolve_cname(hostname: str, timeout: float = 2.0, resolver: str | None = No
                     return canonname.rstrip(".")
         finally:
             socket.setdefaulttimeout(previous)
-    except (socket.timeout, socket.gaierror, OSError, ValueError):
+    except Exception:  # noqa: BLE001 - resolver can raise any type
         pass
     return None
 
@@ -341,7 +341,7 @@ def resolve_a_records(hostname: str, timeout: float = 2.0, resolver: str | None 
             ips = sorted({r[4][0] for r in results})
         finally:
             socket.setdefaulttimeout(previous)
-    except (socket.timeout, socket.gaierror, OSError, ValueError):
+    except Exception:  # noqa: BLE001 - resolver can raise any type
         pass
     return ips
 
@@ -369,7 +369,7 @@ def resolve_aaaa_records(hostname: str, timeout: float = 2.0, resolver: str | No
             ips = sorted({r[4][0] for r in results})
         finally:
             socket.setdefaulttimeout(previous)
-    except (socket.timeout, socket.gaierror, OSError, ValueError):
+    except Exception:  # noqa: BLE001 - resolver can raise any type
         pass
     return ips
 

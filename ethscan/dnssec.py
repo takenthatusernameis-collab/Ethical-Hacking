@@ -213,7 +213,7 @@ def _resolve_nameservers(domain: str, timeout: float) -> list[str]:
             socket.setdefaulttimeout(previous)
     # A domain that is not a valid host name ("....") raises a UnicodeError,
     # which is a ValueError, when the resolver encodes it.
-    except (socket.timeout, socket.gaierror, OSError, ValueError):
+    except Exception:  # noqa: BLE001 - resolver can raise any type
         return []
 
 

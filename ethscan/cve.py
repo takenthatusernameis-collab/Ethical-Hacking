@@ -47,7 +47,7 @@ def _resolve_host(host: str) -> str | None:
     """Resolve a hostname to an IPv4 address, returning None on failure."""
     try:
         return socket.gethostbyname(host)
-    except (socket.gaierror, socket.herror):
+    except Exception:  # noqa: BLE001 - resolver can raise any type
         return None
 
 
