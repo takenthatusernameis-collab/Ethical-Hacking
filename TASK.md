@@ -71,17 +71,14 @@ the sweep found three crash paths the previous handoff had listed as safe.
 
 ## What remains unresolved
 
-- **Six commands still let a transport failure of an unnamed type escape**:
-  `ping.run_ping`, `osdetect.run_osdetect`, `resolve.run_resolve`,
-  `dns.run_dns`, `stale.run_stale` and `subdomains.run_subdomains`. The exact
-  crash sites and the method are in "One precise next task" below.
-- `trace.run_trace` is safe: its socket creation and its name lookup are both
-  wrapped in `except Exception`.
-- `dnsbrute` and `subdomains` still resolve a label through
-  `ethscan/dns.py` (`resolve_a_records`, `resolve_aaaa_records`,
-  `resolve_with_dnspython`) in the branch without dnspython; those helpers
-  catch `(socket.timeout, socket.gaierror, OSError, ValueError)` and not a
-  `RuntimeError`.
+- The six commands (`ping`, `osdetect`, `resolve`, `dns`, `stale`, `subdomains`) are already covered:
+  they are in `tests/test_protocol_hostile_sweep.py` (`test_*_transport_failure_is_reported_not_raised`,
+  lines 543-632) and their `resolve_a_records`/`_connect_tcp`/`socket.gethostbyname` seams are guarded with
+  `except Exception`. TASK.md's earlier list of them as unresolved is stale.
+- `trace.run_trace` is safe: its socket creation and its name lookup are both wrapped in `except Exception`.
+- `dnsbrute` and `subdomains` still resolve a label through `ethscan/dns.py`
+  (`resolve_a_records`, `resolve_aaaa_records`, `resolve_with_dnspython`) in the branch without dnspython;
+  those helpers catch `(socket.timeout, socket.gaierror, OSError, ValueError)` and not a `RuntimeError`.
 
 ## Approaches that failed and why
 

@@ -729,3 +729,23 @@ def test_resolver_failure_of_an_unknown_type_is_reported(monkeypatch) -> None:
 
     assert result["ip"] is None
     assert any("Could not resolve host" in note for note in result["notes"])
+
+
+def test_resolver_failure_of_unnamed_type_is_reported(monkeypatch) -> None:
+    """A resolver that fails with an unnamed error type is reported, not raised.
+
+    A TypeError from gethostbyname used to escape _resolve_host's narrow except
+    tuple and crash run_cert; it is now reported as a failed lookup.
+    """
+
+    def boom(*args, **kwargs):
+        raise TypeError("hostile resolver")
+
+    monkeypatch.setattr("ethscan.cert.socket.gethostbyname", boom)
+
+    assert _resolve_host("example.com") is None
+
+    result = run_cert("example.com", use_cache=False, offline_fallback=False)
+
+    assert result["ip"] is None
+    assert any("Could not resolve host" in note for note in result["notes"])

@@ -28,28 +28,35 @@ Diff: 2 files, +15/-1 lines. Nothing committed (commit only if explicitly asked)
 
 ## What remains unresolved
 
-None on this task. `ethscan/service.py` narrow transport tuple with a demonstrated escape path is fixed.
+None on the service.py task. The flagged narrow-transport candidates have now been investigated:
 
-Other narrow transport tuples remain with **no demonstrated crash yet** (do not broaden without
-evidence), per the same reproduce-before-fixing method:
-- `ethscan/ssh.py` (lines ~124, 234, 454): various narrow tuples
-- `ethscan/ftp.py` (lines ~133, 145, 165)
-- `ethscan/geo.py`, `ethscan/mac.py`, `ethscan/cert.py`, `ethscan/dnsbrute.py`: tuples missing broader
-  handling on name-lookup seams
+- `ethscan/geo.py:64` and `ethscan/cert.py:46` — **fixed** (this session). Both `_resolve_host` name-lookup
+  seams had narrow tuples that let an unnamed `TypeError` from `socket.gethostbyname` escape `run_geo`/`run_cert`.
+  Reproduced the crash before the fix, broadened to `except Exception` (# noqa: BLE001), added
+  `test_resolver_failure_of_unnamed_type_is_reported` in `tests/test_geo.py` and `tests/test_cert.py`.
+  Full suite: 5176 passed, 49 skipped.
+- `ethscan/ssh.py` (lines 124, 234, 454) — **safe**: each narrow tuple is nested inside `run_ssh`'s outer
+  `try` whose final `except Exception` (line 458) catches everything; no crash demonstrable at `run_ssh`. Left alone.
+- `ethscan/mac.py` (line 48) — **safe**: patching `socket.gethostbyname` to raise `TypeError` did not crash `run_mac`.
+  Left alone.
+- `ethscan/ftp.py`, `ethscan/dnsbrute.py`, `ethscan/smtp.py`, `ethscan/ssl.py` — already covered by
+  `tests/test_protocol_hostile_sweep.py` for their transport seam; no unnamed-type crash demonstrated yet, so not
+  broadened.
 
-(Alternative longer-term track from TASK.md: give ping/osdetect/resolve/dns/stale/subdomains the
-same hostile-transport net and regression tests — those crash sites are listed in TASK.md lines 105-111.)
+The six TASK.md commands (`ping`, `osdetect`, `resolve`, `dns`, `stale`, `subdomains`) are already in
+`tests/test_protocol_hostile_sweep.py` and guarded in source; TASK.md's "remains unresolved" list for them is stale.
 
 ## Approaches that failed and why
 
 None. Followed established convention (reproduce crash first, then `except Exception` +
-`# noqa: BLE001`).
+`# noqa: BLE001 - transport can raise any type`).
 
 ## One precise next task
 
-Scan remaining narrow transport `except` tuples, starting with `ethscan/ssh.py`: for each tuple,
-reproduce a crash with an unnamed exception type (patch the seam to raise `ValueError`/`TypeError`,
-call the public `run_*`, confirm it raises), then broaden to `except Exception`
-(`# noqa: BLE001 - transport can raise any type`), add a `ValueError`/`TypeError` regression test
-next to the module's own tests, and re-run `python -m pytest tests/`. Do not broaden any tuple
-without first demonstrating a crash. Do not commit unless explicitly asked.
+Re-examine the remaining sweep-covered transport modules for an unnamed-type escape: starting with
+`ethscan/smtp.py` (lines 127, 236, 244, 276, 302, 320), then `ethscan/ssl.py` (lines 52, 147, 228, 230),
+patch each transport seam to raise `TypeError`, call the public `run_*`, and confirm whether it crashes.
+Only if a crash is reproduced, broaden the narrow tuple to `except Exception`
+(# noqa: BLE001 - transport can raise any type), add a `TypeError` regression test next to the module's
+own tests, and re-run `python -m pytest tests/`. Do not broaden any tuple without first demonstrating a
+crash. Do not commit unless explicitly asked.
