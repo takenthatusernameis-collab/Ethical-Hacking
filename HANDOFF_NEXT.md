@@ -47,10 +47,14 @@
 
 ## What remains unresolved
 
-- **The CLI level still has no failure-field check for the commands that do not open a transport of
-  their own:** 43 of the 53 commands have one (28 in `test_cli_unreachable_sweep.py`, 10 in
-  `test_cli_http_unreachable_sweep.py`, 6 in `test_cli_trace_brute_unreachable_sweep.py`, 9 in
-  `test_cli_aggregator_unreachable_sweep.py`); about 10 commands lack one.
+- **None.** The CLI failure-field coverage task is complete: all 53 CLI commands now have a
+  permanent CLI-level failure-field check. The 10 commands that do not open a transport of their
+  own (audit, cidr, completion, config, hash, jwt, nmap, radix, validate, wifi) are covered by
+  `tests/test_cli_offline_sweep.py` and `tests/test_cli_offline_input_sweep.py`; the other 43 are
+  covered by `test_cli_unreachable_sweep.py`, `test_cli_http_unreachable_sweep.py`,
+  `test_cli_trace_brute_unreachable_sweep.py` and `test_cli_aggregator_unreachable_sweep.py`. A
+  cross-reference of every `@cli.command()` against the sweep files confirms 53/53 covered, and all
+  sweep checks pass.
 - **`python ethscan/cli.py` does not work and cannot work in this layout** (pre-existing, not a
   regression): the script's own directory is `sys.path[0]`, so `from ethscan import __version__`
   fails with `ModuleNotFoundError`. `python -m ethscan.cli` is the working entry point.
@@ -64,9 +68,9 @@
 
 ## One precise next task
 
-Extend the permanent CLI failure-field coverage to the commands still lacking it (about 10 of 53,
-not covered by the four existing sweep files). For each command: run it through `CliRunner` against
-an unreachable/unresolvable target under `no_external_network`, assert exit 0, no traceback, and
-the command's own failure signal; add the check to the appropriate sweep file; prove it by
-reverting the relevant guard and watching the check fail. Smallest reversible change; do not commit
-unless explicitly asked.
+## One precise next task
+
+- **No outstanding task from this handoff.** The CLI failure-field coverage work is done and verified
+  (`python -m pytest tests/` -> 5158 passed, 48 skipped; `python -m ruff check ethscan/ tests/` ->
+  all checks passed). The next session should inspect `git status`/`git diff` and only take on new
+  work if a new assignment exists; do not re-add checks that already exist.

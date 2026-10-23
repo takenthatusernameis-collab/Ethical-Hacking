@@ -27,20 +27,24 @@ leaks to later tests: `ethscan/dns.py`, `ethscan/resolve.py`, `ethscan/stale.py`
   `tests/test_s3.py:961`.
 
 ## What remains unresolved
-- About 10 of the 53 commands still have no CLI-level failure-field check (see the counts in
-  `HANDOFF_NEXT.md`).
+
+- **None.** The CLI failure-field coverage task is complete: all 53 CLI commands now have a
+  permanent CLI-level failure-field check. The 10 commands that do not open a transport of their
+  own are covered by `tests/test_cli_offline_sweep.py` and `tests/test_cli_offline_input_sweep.py`;
+  the other 43 are covered by the four transport sweep files. A cross-reference of every
+  `@cli.command()` against the sweep files confirms 53/53 covered.
 - `python ethscan/cli.py` cannot work in this layout (pre-existing); use `python -m ethscan.cli`.
 
 ## Constraints
+
 - Smallest reversible change; do not weaken an existing guard; turn the crash into the module's
   documented error signal.
-- Keep the permanent sweeps in the repository, and prove every new check by reverting the guard of its
-  own module.
+- Keep the permanent sweeps in the repository, and prove every new check by reverting the guard of
+  its own module.
 - Do not commit unless explicitly asked.
 
 ## One precise next task
-Extend the permanent CLI failure-field coverage to the commands still lacking it (about 10 of 53, not
-covered by `test_cli_unreachable_sweep.py`, `test_cli_http_unreachable_sweep.py`,
-`test_cli_trace_brute_unreachable_sweep.py`, `tests/test_cli_aggregator_unreachable_sweep.py`). For each
-command: run via `CliRunner` under `no_external_network`, assert exit 0, no traceback, and the
-command's own failure signal; add to the appropriate sweep file; prove by reverting the relevant guard.
+
+- **No outstanding task from this handoff.** The CLI failure-field coverage work is done and
+  verified (`python -m pytest tests/` -> 5158 passed, 48 skipped; `python -m ruff check ethscan/
+  tests/` -> all checks passed). Do not re-add checks that already exist.
