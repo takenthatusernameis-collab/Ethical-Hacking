@@ -211,6 +211,27 @@ def test_run_whois_transport_failure_reported(monkeypatch) -> None:
     assert "hostile transport" in result["error"]
 
 
+def test_run_whois_transport_failure_unnamed_type_reported(monkeypatch) -> None:
+    """run_whois reports a transport failure of an unnamed type instead of raising.
+
+    The socket creation itself is the seam here: when it fails with a type the
+    module's narrow guard did not name, the command must still report the
+    failure through its own error field and never crash.
+    """
+
+    def boom(*args, **kwargs):
+        raise ValueError("socket creation failed")
+
+    monkeypatch.setattr("ethscan.whois.socket.socket", boom)
+
+    result = run_whois("example.com")
+
+    assert result["error"] is not None
+    assert "socket creation failed" in result["error"]
+    assert result["raw"] == ""
+    assert result["parsed"]["registrar"] is None
+
+
 def test_query_whois_invalid_target() -> None:
     with pytest.raises((socket.gaierror, socket.timeout, ConnectionRefusedError, OSError)):
         query_whois("invalid.tld", server="127.0.0.1", port=43, timeout=0.1)

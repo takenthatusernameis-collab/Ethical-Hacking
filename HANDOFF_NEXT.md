@@ -2,42 +2,25 @@
 
 ## What changed this session
 
-- **No source or test changes.** Verified state only. Working tree clean
-  (`git diff --stat` empty, `git status` clean). HEAD unchanged.
+- **Source (`ethscan/whois.py`):** `run_whois` was the sole module deviating from the codebase's transport-seam convention (`except Exception` because "transport can raise any type"). Both of its `except` clauses used a narrow tuple `(socket.gaierror, socket.timeout, ConnectionRefusedError, OSError, RuntimeError)`, and `socket.socket()` creation sits outside the try block. Broadened both clauses to `except Exception` (with `noqa: BLE001`), matching every other transport module, so a transport failure of an unnamed type is reported through the `error` field instead of crashing the command.
+- **Tests (`tests/test_whois.py`):** added `test_run_whois_transport_failure_unnamed_type_reported` — patches `ethscan.whois.socket.socket` to raise a `ValueError` (a type the narrow guard did not name) and asserts `run_whois` reports the error and never raises.
 
 ## What was actually verified
 
-- `python -m pytest tests/` -> **5157 passed, 49 skipped, 3 warnings**
-  (pre-existing `test_main.py` runpy warnings; no regressions).
-- The six commands flagged in the handoff are already guarded:
-  - `ping` (TCP fallback socket creation/connect exceptions, ICMP send/recv) returns
-    `RESP_NO_RESPONSE` with error strings; hostile sweep passes
-    (`tests/test_protocol_hostile_sweep.py:537-552`).
-  - `osdetect` (`_connect_tcp` catches `Exception`) reports `NO-RESPONSE`;
-    hostile sweep passes (554-568).
-  - `resolve`/`dns` (`resolve_a_records`/`resolve_aaaa_records` catch `Exception`)
-    return `[]`; hostile sweeps pass (570-596).
-  - `stale` catches resolver/connect exceptions and marks domain stale; passes
-    (598-612).
-  - `subdomains` catches `gethostbyname` exceptions and reports unresolved; passes
-    (614-626).
-- Module-level regression tests also pass: `test_ping.py` (51 passed),
-  `test_osdetect.py` (81 passed), `test_resolve.py`, `test_dns.py`,
-  `test_stale.py`, `test_subdomains.py` all have corresponding checks.
-- `ethscan/cli.py` declares 53 `@cli.command()` decorators with permanent
-  sweep coverage cross-referenced by `tests/test_cli_sweep_coverage.py` (all pass).
+- Reproduced the crash **before** the fix: patching `socket.socket` to raise `ValueError("socket creation failed")` made `whois.run_whois("example.com")` crash with `ValueError`.
+- After the fix: same probe returns a result with `error` set (`Connection failed: socket creation failed`), `raw == ""`, no traceback.
+- `tests/test_whois.py` -> **42 passed** (includes the new regression test).
+- `python -m pytest tests/` -> **5158 passed, 49 skipped, 3 warnings** (baseline was 5157 passed; the +1 is the new check; the 3 warnings are the pre-existing `test_main.py` runpy ones). No regressions.
+- Working tree contains only the two intended file modifications (`ethscan/whois.py`, `tests/test_whois.py`).
 
 ## What remains unresolved
 
-- **None.** All six commands named in the previous handoff are fixed and
-  verified. No outstanding tasks from handoffs remain.
+- **None.** The crash-guard domain is complete across all 53 CLI commands (module-level hostile sweeps + CLI-level unreachable sweeps + offline sweeps). `whois` is now consistent with the rest.
 
 ## Approaches that failed and why
 
-- Trusting handoff claims without verification was unnecessary; direct inspection
-  confirms the guards exist as described. No approach was repeated blindly.
+- **None.** No approach was repeated blindly. The `whois` narrow guard was a genuine deviation from the project's explicit convention, confirmed by a reproducible crash.
 
 ## One precise next task
 
-- **No outstanding task.** If no new assignment exists, inspect
-  `git status`/`git diff` only. Do not re-add checks that already exist.
+- **No outstanding task.** If no new assignment exists, inspect `git status`/`git diff` only. Do not re-add guards that already exist.
