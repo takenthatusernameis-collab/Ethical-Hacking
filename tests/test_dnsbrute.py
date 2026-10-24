@@ -378,6 +378,30 @@ def test_attempt_axfr_dnspython_not_installed(monkeypatch) -> None:
     assert result["error"] == "dnspython not installed"
 
 
+def test_axfr_dnspython_empty_message_falls_back_to_class_name(monkeypatch) -> None:
+    """A zone-transfer failure whose message is empty is reported, not dropped.
+
+    dnspython raises ``ValueError()`` with no message when a zone-transfer
+    response is malformed; ``_axfr_dnspython`` must fall back to the
+    exception class name the way the raw socket path does, so the failure
+    is reported instead of an empty string.
+    """
+    from ethscan import dnsbrute
+
+    def boom(*args, **kwargs):
+        raise ValueError()
+
+    monkeypatch.setattr("ethscan.dnsbrute.DNS_AVAILABLE", True)
+    monkeypatch.setattr("ethscan.dnsbrute.dns.query.xfr", boom)
+
+    result = dnsbrute._axfr_dnspython("ns1.example.com", "example.com", timeout=1.0)
+
+    assert result["success"] is False
+    assert result["records_count"] == 0
+    assert result["records"] == []
+    assert result["error"] == "ValueError"
+
+
 # ---------------------------------------------------------------------------
 # Nameserver discovery
 # ---------------------------------------------------------------------------

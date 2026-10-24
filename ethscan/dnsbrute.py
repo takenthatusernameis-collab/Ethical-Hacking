@@ -315,9 +315,13 @@ def _axfr_dnspython(
     except dns.exception.FormError as exc:
         return _axfr_result(nameserver, False, [], f"transfer refused ({exc})")
     # A transport failure of an unnamed type must not escape the command, the
-    # same way the raw socket path reports it.
+    # same way the raw socket path reports it.  Fall back to the exception
+    # class name when the message is empty, so a malformed zone-transfer
+    # response (which dnspython raises as ValueError() with no message) is
+    # reported instead of an empty string.
     except Exception as exc:  # noqa: BLE001 - transport can raise any type
-        return _axfr_result(nameserver, False, [], str(exc))
+        message = str(exc) or exc.__class__.__name__
+        return _axfr_result(nameserver, False, [], message)
 
     records: list[str] = []
     for name in sorted(zone_obj.nodes.keys(), key=str):
