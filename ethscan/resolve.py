@@ -193,20 +193,35 @@ def run_resolve(
             continue
 
         if rtype_upper == "A":
-            results["A"] = resolve_a_records(normalized, timeout)
+            try:
+                results["A"] = resolve_a_records(normalized, timeout)
+            except Exception:  # noqa: BLE001 - resolver can raise any type
+                results["A"] = []
         elif rtype_upper == "AAAA":
-            results["AAAA"] = resolve_aaaa_records(normalized, timeout)
+            try:
+                results["AAAA"] = resolve_aaaa_records(normalized, timeout)
+            except Exception:  # noqa: BLE001 - resolver can raise any type
+                results["AAAA"] = []
         elif rtype_upper == "CNAME":
-            results["CNAME"] = resolve_cname_records(normalized, timeout, server)
+            try:
+                results["CNAME"] = resolve_cname_records(normalized, timeout, server)
+            except Exception:  # noqa: BLE001 - resolver can raise any type
+                results["CNAME"] = []
         elif rtype_upper == "PTR":
-            results["PTR"] = resolve_ptr_records(normalized, timeout, server)
+            try:
+                results["PTR"] = resolve_ptr_records(normalized, timeout, server)
+            except Exception:  # noqa: BLE001 - resolver can raise any type
+                results["PTR"] = []
         elif rtype_upper in all_supported:
             continue  # should not happen due to above
         else:
             if DNS_AVAILABLE:
-                values = resolve_with_dnspython(normalized, rtype_upper, timeout, server)
-                if values:
-                    results[rtype_upper] = values
+                try:
+                    values = resolve_with_dnspython(normalized, rtype_upper, timeout, server)
+                    if values:
+                        results[rtype_upper] = values
+                except Exception:  # noqa: BLE001 - resolver can raise any type
+                    pass
             else:
                 continue  # ignore unknown types when dnspython unavailable
 

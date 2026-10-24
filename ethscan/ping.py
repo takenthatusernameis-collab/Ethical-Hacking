@@ -340,7 +340,10 @@ def run_ping(
 
     own_raw_socket = False
     if raw_socket is None:
-        raw_socket = _try_create_raw_socket()
+        try:
+            raw_socket = _try_create_raw_socket()
+        except Exception:  # noqa: BLE001 - transport can raise any type
+            raw_socket = None
         own_raw_socket = raw_socket is not None
 
     identifier = 0xFFFF & int(time.time() * 1000)
@@ -357,16 +360,26 @@ def run_ping(
         )
 
     for seq in range(1, count + 1):
-        result = probe_icmp(
-            host,
-            timeout=timeout,
-            ttl=ttl,
-            raw_socket=raw_socket,
-            identifier=identifier,
-            sequence=seq,
-            resolved_ip=ip,
-            port=port,
-        )
+        try:
+            result = probe_icmp(
+                host,
+                timeout=timeout,
+                ttl=ttl,
+                raw_socket=raw_socket,
+                identifier=identifier,
+                sequence=seq,
+                resolved_ip=ip,
+                port=port,
+            )
+        except Exception as exc:  # noqa: BLE001 - transport can raise any type
+            result = {
+                "ip": ip,
+                "rtt_ms": None,
+                "ttl": ttl,
+                "sequence": seq,
+                "response_type": RESP_NO_RESPONSE,
+                "error": str(exc),
+            }
         probes.append(result)
 
     if own_raw_socket and raw_socket is not None:

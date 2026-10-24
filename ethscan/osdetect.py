@@ -400,13 +400,39 @@ def run_osdetect(
     port_list = ports if ports is not None else [22, 80, 443]
 
     probes: list[dict[str, object]] = []
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_port = {
-            executor.submit(probe_syn, host, port, timeout): port
+    try:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_port = {
+                executor.submit(probe_syn, host, port, timeout): port
+                for port in port_list
+            }
+            for future in as_completed(future_to_port):
+                try:
+                    probes.append(future.result())
+                except Exception as exc:  # noqa: BLE001 - transport can raise any type
+                    port = future_to_port.get(future)
+                    probes.append(
+                        {
+                            "port": port,
+                            "probe_type": "SYN",
+                            "connected": False,
+                            "response": "NO-RESPONSE",
+                            "error": str(exc),
+                            "flags_observed": None,
+                        }
+                    )
+    except Exception as exc:  # noqa: BLE001 - transport can raise any type
+        probes = [
+            {
+                "port": port,
+                "probe_type": "SYN",
+                "connected": False,
+                "response": "NO-RESPONSE",
+                "error": str(exc),
+                "flags_observed": None,
+            }
             for port in port_list
-        }
-        for future in as_completed(future_to_port):
-            probes.append(future.result())
+        ]
     probes.sort(key=lambda r: r["port"])
 
     # Cross-reference banners when provided

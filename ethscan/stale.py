@@ -117,14 +117,28 @@ def resolve_domain_all(domain: str, timeout: float) -> dict[str, object]:
         "stale_reasons": [],
     }
 
-    a_records = resolve_a_records(domain, timeout)
-    result["A"] = a_records
+    try:
+        a_records = resolve_a_records(domain, timeout)
+        result["A"] = a_records
+    except Exception:  # noqa: BLE001 - resolver can raise any type
+        a_records = []
+        result["A"] = []
+        result["stale"] = True
+        result["stale_reasons"].append("DNS resolution failed")
 
-    aaaa_records = resolve_aaaa_records(domain, timeout)
-    result["AAAA"] = aaaa_records
+    try:
+        aaaa_records = resolve_aaaa_records(domain, timeout)
+        result["AAAA"] = aaaa_records
+    except Exception:  # noqa: BLE001 - resolver can raise any type
+        aaaa_records = []
+        result["AAAA"] = []
 
-    cname = resolve_cname(domain, timeout)
-    result["CNAME"] = cname
+    try:
+        cname = resolve_cname(domain, timeout)
+        result["CNAME"] = cname
+    except Exception:  # noqa: BLE001 - resolver can raise any type
+        cname = None
+        result["CNAME"] = None
 
     if not a_records and not aaaa_records and not cname:
         result["stale"] = True
@@ -170,7 +184,20 @@ def run_stale(
             for domain in unique_targets
         }
         for future in as_completed(future_to_domain):
-            results.append(future.result())
+            try:
+                results.append(future.result())
+            except Exception as exc:  # noqa: BLE001 - resolver can raise any type
+                domain = future_to_domain.get(future, "")
+                results.append(
+                    {
+                        "domain": domain,
+                        "A": [],
+                        "AAAA": [],
+                        "CNAME": None,
+                        "stale": True,
+                        "stale_reasons": [str(exc)],
+                    }
+                )
 
     stale_results = [r for r in results if r["stale"]]
     fresh_results = [r for r in results if not r["stale"]]

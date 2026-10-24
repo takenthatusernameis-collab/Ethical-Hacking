@@ -160,18 +160,33 @@ def run_subdomains(
     ) -> list[dict[str, object]]:
         """Enumerate subdomains at a specific depth."""
         depth_results: list[dict[str, object]] = []
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_label = {
-                executor.submit(
-                    resolve_subdomain, label, base_domain, timeout, resolver
-                ): label
-                for label in current_labels
-            }
-            for future in as_completed(future_to_label):
-                subdomain, ip = future.result()
-                hostname = f"{subdomain}.{base_domain}"
+        try:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_to_label = {
+                    executor.submit(
+                        resolve_subdomain, label, base_domain, timeout, resolver
+                    ): label
+                    for label in current_labels
+                }
+                for future in as_completed(future_to_label):
+                    try:
+                        subdomain, ip = future.result()
+                        hostname = f"{subdomain}.{base_domain}"
+                        depth_results.append(
+                            {"subdomain": subdomain, "hostname": hostname, "ip": ip, "depth": depth}
+                        )
+                    except Exception:  # noqa: BLE001 - resolver can raise any type
+                        label = future_to_label.get(future)
+                        if label is not None:
+                            hostname = f"{label}.{base_domain}"
+                            depth_results.append(
+                                {"subdomain": label, "hostname": hostname, "ip": None, "depth": depth}
+                            )
+        except Exception:  # noqa: BLE001 - resolver can raise any type
+            for label in current_labels:
+                hostname = f"{label}.{base_domain}"
                 depth_results.append(
-                    {"subdomain": subdomain, "hostname": hostname, "ip": ip, "depth": depth}
+                    {"subdomain": label, "hostname": hostname, "ip": None, "depth": depth}
                 )
         return depth_results
 

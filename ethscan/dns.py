@@ -151,38 +151,51 @@ def run_dns(
 
     def resolve_type(rtype: str) -> tuple:
         """Resolve a single record type, returning (rtype, results_list)."""
-        if rtype == "A":
-            return rtype, resolve_a_records(domain, timeout)
-        elif rtype == "AAAA":
-            return rtype, resolve_aaaa_records(domain, timeout)
-        if server:
-            if DNS_AVAILABLE:
-                try:
-                    resolver = dns.resolver.Resolver()
-                    resolver.timeout = timeout
-                    resolver.lifetime = timeout
-                    resolver.nameservers = [server]
-                    answers = resolver.resolve(domain, rtype)
-                    return rtype, sorted({str(rdata) for rdata in answers})
-                except Exception:  # noqa: BLE001 - resolver can raise any type
-                    return rtype, []
+        try:
+            if rtype == "A":
+                return rtype, resolve_a_records(domain, timeout)
+            elif rtype == "AAAA":
+                return rtype, resolve_aaaa_records(domain, timeout)
+            if server:
+                if DNS_AVAILABLE:
+                    try:
+                        resolver = dns.resolver.Resolver()
+                        resolver.timeout = timeout
+                        resolver.lifetime = timeout
+                        resolver.nameservers = [server]
+                        answers = resolver.resolve(domain, rtype)
+                        return rtype, sorted({str(rdata) for rdata in answers})
+                    except Exception:  # noqa: BLE001 - resolver can raise any type
+                        return rtype, []
+                return rtype, []
+            return rtype, resolve_with_dnspython(domain, rtype, timeout)
+        except Exception:  # noqa: BLE001 - resolver can raise any type
             return rtype, []
-        return rtype, resolve_with_dnspython(domain, rtype, timeout)
 
     results: dict[str, list[str]] = {}
 
     if workers <= 1:
         for rtype in valid_types:
-            rtype_key, values = resolve_type(rtype)
-            results[rtype_key] = values
-    else:
-        with ThreadPoolExecutor(max_workers=workers) as executor:
-            # Submit all jobs and keep futures in the same order as valid_types
-            futures = [executor.submit(resolve_type, rtype) for rtype in valid_types]
-            # Collect results in the order of valid_types to preserve insertion order
-            for i, rtype in enumerate(valid_types):
-                rtype_key, values = futures[i].result()
+            try:
+                rtype_key, values = resolve_type(rtype)
                 results[rtype_key] = values
+            except Exception:  # noqa: BLE001 - resolver can raise any type
+                results[rtype.upper()] = []
+    else:
+        try:
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                # Submit all jobs and keep futures in the same order as valid_types
+                futures = [executor.submit(resolve_type, rtype) for rtype in valid_types]
+                # Collect results in the order of valid_types to preserve insertion order
+                for i, rtype in enumerate(valid_types):
+                    try:
+                        rtype_key, values = futures[i].result()
+                        results[rtype_key] = values
+                    except Exception:  # noqa: BLE001 - resolver can raise any type
+                        results[rtype.upper()] = []
+        except Exception:  # noqa: BLE001 - resolver can raise any type
+            for rtype in valid_types:
+                results[rtype.upper()] = []
 
     return {
         "target": target,

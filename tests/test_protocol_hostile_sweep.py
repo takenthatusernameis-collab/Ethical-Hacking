@@ -569,13 +569,29 @@ def test_ping_transport_failure_is_reported_not_raised(monkeypatch) -> None:
     assert results["failed"] == 1
 
 
-def test_osdetect_transport_failure_is_reported_not_raised(monkeypatch) -> None:
-    """A failing TCP connect is reported as a NO-RESPONSE probe, not raised."""
+def test_ping_try_create_raw_socket_failure_is_reported_not_raised(monkeypatch) -> None:
+    """A failure from _try_create_raw_socket is reported, not raised."""
+
+    def boom():
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.ping._try_create_raw_socket", boom)
+
+    results = ping.run_ping("127.0.0.1", count=1)
+
+    assert isinstance(results, dict)
+    probe = results["probes"][0]
+    assert probe["response_type"] in (ping.RESP_NO_RESPONSE, ping.RESP_RST, ping.RESP_CONNECTED)
+    assert results["failed"] >= 0
+
+
+def test_osdetect_connect_tcp_failure_is_reported_not_raised(monkeypatch) -> None:
+    """A failing _connect_tcp is reported as a NO-RESPONSE probe, not raised."""
 
     def boom(*args, **kwargs):
         raise RuntimeError("hostile transport")
 
-    monkeypatch.setattr("ethscan.osdetect.socket.create_connection", boom)
+    monkeypatch.setattr("ethscan.osdetect._connect_tcp", boom)
 
     results = osdetect.run_osdetect("127.0.0.1", ports=[80])
 
@@ -599,6 +615,20 @@ def test_resolve_transport_failure_is_reported_not_raised(monkeypatch) -> None:
     assert results["records"]["A"] == []
 
 
+def test_resolve_a_records_failure_is_reported_not_raised(monkeypatch) -> None:
+    """A failing resolve_a_records is reported as empty records, not raised."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.resolve.resolve_a_records", boom)
+
+    results = resolve.run_resolve("example.com", record_types=["A"])
+
+    assert isinstance(results, dict)
+    assert results["records"]["A"] == []
+
+
 def test_dns_transport_failure_is_reported_not_raised(monkeypatch) -> None:
     """A failing stdlib resolution is reported as empty records, not raised."""
 
@@ -606,6 +636,20 @@ def test_dns_transport_failure_is_reported_not_raised(monkeypatch) -> None:
         raise RuntimeError("hostile transport")
 
     monkeypatch.setattr("ethscan.dns.socket.getaddrinfo", boom)
+
+    results = dns.run_dns("example.com")
+
+    assert isinstance(results, dict)
+    assert results["records"]["A"] == []
+
+
+def test_dns_a_records_failure_is_reported_not_raised(monkeypatch) -> None:
+    """A failing resolve_a_records is reported as empty records, not raised."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.dns.resolve_a_records", boom)
 
     results = dns.run_dns("example.com")
 
@@ -629,8 +673,39 @@ def test_stale_transport_failure_is_reported_not_raised(monkeypatch) -> None:
     assert entry["stale"] is True
 
 
+def test_stale_a_records_failure_is_reported_not_raised(monkeypatch) -> None:
+    """A failing resolve_a_records is reported as stale, not raised."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.stale.resolve_a_records", boom)
+
+    results = stale.run_stale(["example.com"])
+
+    assert isinstance(results, dict)
+    entry = results["results"][0]
+    assert entry["A"] == []
+    assert entry["stale"] is True
+
+
 def test_subdomains_transport_failure_is_reported_not_raised(monkeypatch) -> None:
     """A failing name lookup is reported as unresolved, not raised."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.subdomains.socket.gethostbyname", boom)
+
+    results = subdomains.run_subdomains("example.com", subdomains=["www"])
+
+    assert isinstance(results, dict)
+    assert results["resolved"] == []
+    assert all(entry["ip"] is None for entry in results["all_results"])
+
+
+def test_subdomains_gethostbyname_failure_is_reported_not_raised(monkeypatch) -> None:
+    """A failing socket.gethostbyname is reported as unresolved, not raised."""
 
     def boom(*args, **kwargs):
         raise RuntimeError("hostile transport")
