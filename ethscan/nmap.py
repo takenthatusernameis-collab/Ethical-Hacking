@@ -41,7 +41,7 @@ def _parse_port(port_elem: ET.Element) -> dict[str, object] | None:
         port_id = int(port_elem.get("portid", 0))
     except (TypeError, ValueError):
         return None
-    if not 0 <= port_id <= 65535:
+    if not 1 <= port_id <= 65535:
         return None
     protocol = port_elem.get("protocol", "tcp")
 
