@@ -15,13 +15,14 @@ from ethscan.target import parse_url
 
 try:
     try:
+        import dns.enum
         import dns.message
-    except ImportError:
+    except Exception:
         pass
     import dns.exception
     import dns.resolver
     DNS_AVAILABLE = True
-except ImportError:
+except Exception:
     DNS_AVAILABLE = False
 
 DEFAULT_SUBDOMAINS = [

@@ -10,17 +10,19 @@ from ethscan.target import parse_url
 
 try:
     try:
+        import dns.enum
         import dns.message
-    except ImportError:
+    except Exception:
         pass
     import dns.dnssec
     import dns.exception
     import dns.flags
+    import dns.enum
     import dns.message
     import dns.query
     import dns.resolver
     DNS_AVAILABLE = True
-except ImportError:
+except Exception:
     DNS_AVAILABLE = False
 
 
@@ -307,7 +309,7 @@ def _parse_dnskey_response(data: bytes, domain: str) -> dict[str, object]:
                 "protocol": protocol,
                 "algorithm": algorithm,
                 "algorithm_name": ALGORITHM_NAMES.get(algorithm, f"Unknown({algorithm})"),
-                "key_tag": dns.dnssec.key_id(dns.rdata.Rdata(1, DNSKEY_QTYPE, key_data)) if DNS_AVAILABLE else None,
+                "key_tag": dns.dnssec.key_id(dns.rdtypes.ANY.DNSKEY.DNSKEY(1, DNSKEY_QTYPE, key_flags, protocol, algorithm, key_data)) if DNS_AVAILABLE else None,
                 "key_data": key_data.hex() if key_data else "",
             })
 

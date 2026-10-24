@@ -600,7 +600,7 @@ def test_parse_dnskey_response_full():
     assert key["protocol"] == 3
     assert key["algorithm"] == 8
     assert key["algorithm_name"] == "RSASHA256"
-    assert key["key_tag"] is None  # dnspython not installed
+    assert key["key_tag"] == 41382
     assert key["key_data"] == "deadbeef"
 
 

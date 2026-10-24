@@ -13,7 +13,7 @@ try:
     import dns.resolver
     import dns.reversename
     DNS_AVAILABLE = True
-except ImportError:
+except Exception:
     DNS_AVAILABLE = False
 
 
