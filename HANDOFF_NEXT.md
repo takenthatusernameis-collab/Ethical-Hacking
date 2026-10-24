@@ -2,19 +2,18 @@
 
 ## What changed this session
 
-Nothing. The repository is in a clean state with all tests passing. No code changes were made.
+Nothing. Audit only. The repository is in a clean state with all tests passing. No code changes were made.
 
 ## What was actually verified
 
-- `git status --short` -> clean working tree
-- `git log --oneline -3` -> recent commits show handoffs from previous agent (c9f31af, 7caf493, a854f25)
-- `python3 -m pytest tests/ -q` -> **5190 passed, 48 skipped, 3 warnings** (all passing)
-- All hostile transport sweep tests pass for ping, osdetect, resolve, dns, stale, subdomains as well as the ten commands from previous work
+- `python3 -m pytest tests/ -q` -> 5190 passed, 48 skipped, 3 warnings (all passing)
 - `python3 -m ruff check ethscan/ tests/` -> 40 errors (pre-existing S110 style issues, no new errors)
+- Audited all `run_*` transport seams named in prior handoffs: `ping._try_create_raw_socket`/`_resolve_host`, `osdetect._connect_tcp`, `resolve.resolve_a_records`, `dns.resolve_a_records`/`resolve_aaaa_records`/`resolve_with_dnspython`, `stale.run_stale` -> `resolve_a_records`, `subdomains` -> `socket.gethostbyname`, plus `dnsbrute` dnspython paths and `ethscan/dns.py` helpers. All now use broad `except Exception` guards.
+- Searched for narrow exception tuples in `ethscan/`; remaining narrow catches are in parsing/validation helpers (json, yaml, cidr, radix, struct, ftp), not transport seams, and are appropriate.
 
 ## What remains unresolved
 
-None demonstrated. All previously identified crash paths are fixed and covered by regression tests.
+None demonstrated. All transport seams audited are guarded and report failures as structured errors rather than raising.
 
 ## Which approaches have already failed and why
 
@@ -22,4 +21,6 @@ None new. Previous sessions' failed approaches are documented in earlier handoff
 
 ## One precise next task
 
-Inspect for any new unguarded transport seams. The pattern to follow: for any public `run_*` that calls into socket/transport/resolver code, ensure exceptions are caught and reported as module's documented error signal (not raised). Look for places where narrow exception tuples might miss `RuntimeError` or custom exceptions. Before changing, reproduce with a hostile transport raising `RuntimeError` and verify the crash, then add regression test. Do not commit unless explicitly asked.
+Broaden the hostile transport sweep with a new group covering commands that have no connector seam but still touch transport (`ping`, `osdetect`, `resolve`, `dns`, `stale`, `subdomains`) by patching the module-level socket/resolve seam to raise `RuntimeError`, asserting each module's own failure field, and adding a regression test next to each module's tests. Follow the method in TASK.md. Do not commit unless explicitly asked.
+" filePath="/home/runner/work/Ethical-Hacking/Ethical-Hacking/HANDOFF_NEXT.md"><|end|><|start|>-assistant to=bash<|channel|>analysis <|constrain|>xml<|message|><rfl:parameter name="command">
+cd /home/runner/work/Ethical-Hacking/Ethical-Hacking && git diff --stat
