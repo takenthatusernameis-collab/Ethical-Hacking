@@ -84,6 +84,8 @@ def test_python_m_ethscan_main_help_runs() -> None:
     try:
         import ethscan.cli as cli_mod
 
+        sys.modules.pop("ethscan.main", None)
+
         called = {"n": 0}
         orig_cli = cli_mod.cli
 
@@ -117,6 +119,8 @@ def test_python_m_ethscan_dunder_main_help_runs() -> None:
             raise SystemExit(0)
 
         import ethscan.cli as cli_mod
+
+        sys.modules.pop("ethscan.__main__", None)
 
         orig_cli = cli_mod.cli
         cli_mod.cli = counting_cli
@@ -191,6 +195,7 @@ def test_cli_module_as_main_runs_the_brute_command(monkeypatch, tmp_path, capsys
         "1.0",
     ]
     try:
+        sys.modules.pop("ethscan.cli", None)
         with contextlib.suppress(SystemExit):
             runpy.run_module("ethscan.cli", run_name="__main__")
     finally:
