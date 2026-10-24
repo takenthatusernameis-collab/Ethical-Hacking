@@ -13,7 +13,7 @@ Made `validate_config` warn about unknown config options per command (previously
 ### What was actually verified
 
 - `python -m ruff check ethscan/ tests/` → All checks passed (0 errors).
-- `python -m pytest tests/ -q` → 5202 passed, 48 skipped, 3 warnings (pre-existing `test_main.py` runpy warnings).
+- `python -m pytest tests/ -q` → 5204 passed, 48 skipped, 3 warnings (pre-existing `test_main.py` runpy warnings).
 - End-to-end: `python -m ethscan --config <bogus-option config> config` emits
   `Warning: Unknown option 'potrs' for command 'scan' (no such option)`;
   a valid `format: json` config emits no warning.
@@ -25,7 +25,10 @@ None from this task.
 ### Approaches that failed and why
 
 - The first version of the option check treated `format` as unknown for every command, breaking `test_cli.py::test_config_explicit_overrides_config` (which configures `cidr: { format: json }`). Fixed by recognizing `format` as an alias for the `fmt` dest.
+- The end-to-end CLI tests `test_config_option_unknown_bogus_warning` and `test_config_option_format_key_no_warning` already existed but were broken: their YAML placed `cidr:` at the top level (parsed as an unknown *command*, not an unknown *option*), and they accessed `result.stderr` on a default `CliRunner` (mix_stderr=True), which raises `ValueError: stderr not separately captured`. Fixed by wrapping the config in `commands:` and using `CliRunner(mix_stderr=False)`.
 
 ### One precise next task
 
-Add an end-to-end CLI-level test in `tests/test_cli.py` that invokes `ethscan --config <file> <command>` with (a) a bogus option and asserts a warning is printed on stderr, and (b) a valid `format` key and asserts no warning. This complements the unit tests in `tests/test_config.py`. Constraints: smallest change, no behavior change, do not commit unless asked.
+None. The next task from the handoff is complete.
+
+(End of file - total 31 lines)
