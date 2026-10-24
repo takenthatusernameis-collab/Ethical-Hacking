@@ -148,13 +148,16 @@ def grab_banner(host: str, port: int, timeout: float) -> tuple[int, str | None, 
         pass
 
     detected_service = None
-    if banner and service_name and service_name in SERVICE_SIGNATURES:
-        for pattern, name in SERVICE_SIGNATURES[service_name]:
-            match = pattern.search(banner)
-            if match:
-                detected_service = name or (match.group(1) if match.groups() else service_name.upper())
-                break
-        if not detected_service:
+    if banner and service_name:
+        if service_name in SERVICE_SIGNATURES:
+            for pattern, name in SERVICE_SIGNATURES[service_name]:
+                match = pattern.search(banner)
+                if match:
+                    detected_service = name or (match.group(1) if match.groups() else service_name.upper())
+                    break
+            if not detected_service:
+                detected_service = service_name.upper()
+        else:
             detected_service = service_name.upper()
 
     return port, banner, detected_service
