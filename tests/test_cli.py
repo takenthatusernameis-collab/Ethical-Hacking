@@ -12529,6 +12529,27 @@ def test_config_init_creates_parent_dirs(tmp_path) -> None:
     assert "Sample config written" in result.output
 
 
+def test_config_init_sample_runs_end_to_end(tmp_path) -> None:
+    """A config written by `config --init` loads and runs a command cleanly.
+
+    The documented onboarding flow is `ethscan config --init PATH` followed by
+    `ethscan --config PATH <command>`. The initialized sample must not produce
+    unknown-option warnings and the command must run successfully.
+    """
+    out = tmp_path / "ethscan.yaml"
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(cli, ["config", "--init", str(out)])
+    assert result.exit_code == 0
+    assert out.exists()
+    result = runner.invoke(
+        cli,
+        ["--config", str(out), "cidr", "--cidr", "192.168.1.0/24"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Unknown option" not in result.stderr
+    assert "network_address" in result.output
+
+
 def test_config_option_unknown_bogus_warning(tmp_path) -> None:
     """Unknown option in config for a command emits a warning on stderr."""
     config_file = tmp_path / "ethscan.yaml"
