@@ -13,12 +13,12 @@ try:
     try:
         import dns.enum
         import dns.message
-    except Exception:
+    except Exception:  # noqa: BLE001, S110
         pass
     import dns.exception
     import dns.resolver
     DNS_AVAILABLE = True
-except Exception:
+except Exception:  # noqa: BLE001
     DNS_AVAILABLE = False
 
 

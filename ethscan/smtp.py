@@ -128,11 +128,7 @@ def _read_response(sock: socket.socket, timeout: float, max_lines: int = 100) ->
             if not lines:
                 raise
             break
-        except Exception as exc:  # noqa: BLE001 - transport can raise any type
-            if not lines:
-                raise
-            break
-        except Exception as exc:  # noqa: BLE001 - transport can raise any type
+        except Exception:
             if not lines:
                 raise
             break

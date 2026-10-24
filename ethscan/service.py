@@ -128,7 +128,7 @@ def grab_banner(host: str, port: int, timeout: float) -> tuple[int, str | None, 
                 data = sock.recv(BANNER_MAX_LENGTH)
                 if data:
                     banner = data.decode("utf-8", errors="ignore").strip()
-            except Exception:  # noqa: BLE001 - transport can raise any type
+            except Exception:  # noqa: BLE001, S110 - transport can raise any type
                 pass
 
             if not banner and service_name in {"http", "https"}:
@@ -138,13 +138,13 @@ def grab_banner(host: str, port: int, timeout: float) -> tuple[int, str | None, 
                     data = sock.recv(BANNER_MAX_LENGTH)
                     if data:
                         banner = data.decode("utf-8", errors="ignore").strip()
-                except Exception:  # noqa: BLE001 - transport can raise any type
+                except Exception:  # noqa: BLE001, S110 - transport can raise any type
                     pass
 
     # A host that is not a valid host name ("....") raises a UnicodeError,
     # which is a ValueError, when the resolver encodes it.
     # Transport seams can raise any type, so catch all of them here.
-    except Exception:  # noqa: BLE001 - transport can raise any type
+    except Exception:  # noqa: BLE001, S110 - transport can raise any type
         pass
 
     detected_service = None

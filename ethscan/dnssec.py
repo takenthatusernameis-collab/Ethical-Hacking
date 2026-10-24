@@ -12,17 +12,16 @@ try:
     try:
         import dns.enum
         import dns.message
-    except Exception:
+    except Exception:  # noqa: BLE001, S110
         pass
     import dns.dnssec
     import dns.exception
     import dns.flags
-    import dns.enum
     import dns.message
     import dns.query
     import dns.resolver
     DNS_AVAILABLE = True
-except Exception:
+except Exception:  # noqa: BLE001
     DNS_AVAILABLE = False
 
 

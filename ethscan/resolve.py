@@ -13,7 +13,7 @@ try:
     import dns.resolver
     import dns.reversename
     DNS_AVAILABLE = True
-except Exception:
+except Exception:  # noqa: BLE001
     DNS_AVAILABLE = False
 
 
@@ -220,7 +220,7 @@ def run_resolve(
                     values = resolve_with_dnspython(normalized, rtype_upper, timeout, server)
                     if values:
                         results[rtype_upper] = values
-                except Exception:  # noqa: BLE001 - resolver can raise any type
+                except Exception:  # noqa: BLE001, S110 - resolver can raise any type
                     pass
             else:
                 continue  # ignore unknown types when dnspython unavailable

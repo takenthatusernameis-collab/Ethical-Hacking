@@ -123,7 +123,7 @@ def _ssh_banner_exchange(sock: socket.socket, timeout: float) -> str | None:
             return banner
     except (socket.timeout, OSError, UnicodeDecodeError):
         pass
-    except Exception:  # noqa: BLE001 - transport can raise any type
+    except Exception:  # noqa: BLE001, S110 - transport can raise any type
         pass
     return None
 
@@ -212,10 +212,7 @@ def _send_kexinit(sock: socket.socket) -> None:
     payload += struct.pack(">I", 0)  # reserved
 
     packet_len = struct.pack(">I", len(payload))
-    try:
-        sock.sendall(packet_len + payload)
-    except Exception:  # noqa: BLE001 - transport can raise any type
-        raise
+    sock.sendall(packet_len + payload)
 
 
 def _read_packet(sock: socket.socket) -> bytes | None:
@@ -238,7 +235,7 @@ def _read_packet(sock: socket.socket) -> bytes | None:
             return payload[1:]
     except (socket.timeout, OSError, struct.error):
         pass
-    except Exception:  # noqa: BLE001 - transport can raise any type
+    except Exception:  # noqa: BLE001, S110 - transport can raise any type
         pass
     return None
 

@@ -2,8 +2,6 @@
 
 
 from ethscan.ssl import (
-    DEFAULT_PORT,
-    DEFAULT_TIMEOUT,
     _normalize_host,
     _parse_cert,
     _rdn_to_str,
@@ -16,8 +14,6 @@ from ethscan.ssl import (
 
 
 def test_inspect_certificate_transport_failure_unnamed_type_reported(monkeypatch) -> None:
-    import socket
-
     def bad_conn(*args, **kwargs):
         raise TypeError("hostile transport")
 
@@ -30,8 +26,6 @@ def test_inspect_certificate_transport_failure_unnamed_type_reported(monkeypatch
 
 
 def test_run_ssl_transport_failure_unnamed_type_reported(monkeypatch) -> None:
-    import socket
-
     def bad_conn(*args, **kwargs):
         raise TypeError("hostile transport")
 

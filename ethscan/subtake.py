@@ -17,12 +17,12 @@ try:
     try:
         import dns.enum
         import dns.message
-    except Exception:
+    except Exception:  # noqa: BLE001, S110
         pass
     import dns.exception
     import dns.resolver
     DNS_AVAILABLE = True
-except Exception:
+except Exception:  # noqa: BLE001
     DNS_AVAILABLE = False
 
 DEFAULT_SUBDOMAINS = [
@@ -321,7 +321,7 @@ def resolve_cname(hostname: str, timeout: float = 2.0, resolver: str | None = No
                     return canonname.rstrip(".")
         finally:
             socket.setdefaulttimeout(previous)
-    except Exception:  # noqa: BLE001 - resolver can raise any type
+    except Exception:  # noqa: BLE001, S110 - resolver can raise any type
         pass
     return None
 
@@ -341,7 +341,7 @@ def resolve_a_records(hostname: str, timeout: float = 2.0, resolver: str | None 
         # A transport failure of an unnamed type must not escape the command:
         # the resolver can raise any type, and a hostile answer is a failed
         # lookup, not a crash.
-        except Exception:  # noqa: BLE001 - resolver can raise any type
+        except Exception:  # noqa: BLE001, S110 - resolver can raise any type
             pass
 
     try:
@@ -352,7 +352,7 @@ def resolve_a_records(hostname: str, timeout: float = 2.0, resolver: str | None 
             ips = sorted({r[4][0] for r in results})
         finally:
             socket.setdefaulttimeout(previous)
-    except Exception:  # noqa: BLE001 - resolver can raise any type
+    except Exception:  # noqa: BLE001, S110 - resolver can raise any type
         pass
     return ips
 
@@ -372,7 +372,7 @@ def resolve_aaaa_records(hostname: str, timeout: float = 2.0, resolver: str | No
         # A transport failure of an unnamed type must not escape the command:
         # the resolver can raise any type, and a hostile answer is a failed
         # lookup, not a crash.
-        except Exception:  # noqa: BLE001 - resolver can raise any type
+        except Exception:  # noqa: BLE001, S110 - resolver can raise any type
             pass
 
     try:
@@ -383,7 +383,7 @@ def resolve_aaaa_records(hostname: str, timeout: float = 2.0, resolver: str | No
             ips = sorted({r[4][0] for r in results})
         finally:
             socket.setdefaulttimeout(previous)
-    except Exception:  # noqa: BLE001 - resolver can raise any type
+    except Exception:  # noqa: BLE001, S110 - resolver can raise any type
         pass
     return ips
 

@@ -1,23 +1,24 @@
 # NEXT_TASK
 
-## Status: READY
+## Status: COMPLETE
 
-### Suggested task: tighten ruff cleanliness in dns/dnsbrute
+The task of the previous handoff (tighten ruff cleanliness in dns/dnsbrute) was
+already satisfied, and this session extended it to the remaining files.
 
-41 pre-existing ruff errors remain in `ethscan/dns.py` and `ethscan/dnsbrute.py` (DNS import guards and try/except/pass). These are not runtime issues. A small, reversible pass can clean them up without changing behavior.
+### What was done
 
-### What to verify
-
-- Run `python -m ruff check ethscan/dns.py ethscan/dnsbrute.py` to see current errors
-- Fix with minimal changes (narrow excepts/logging or targeted `# noqa` where appropriate)
-- Ensure behavior unchanged
+- `python -m ruff check ethscan/ tests/` → **All checks passed** (was 33 errors).
+- Minimal, reversible edits to `ethscan/dnssec.py`, `ethscan/resolve.py`,
+  `ethscan/service.py`, `ethscan/smtp.py`, `ethscan/ssh.py`, `ethscan/subdomains.py`,
+  `ethscan/subtake.py`, and `tests/test_ssl.py` (add `# noqa: BLE001, S110` to
+  import guards and transport-failure `except Exception: pass` blocks; collapse a
+  duplicate handler in `smtp.py`; drop unused imports in `test_ssl.py`).
+- Behavior unchanged: `python -m pytest tests/ -q` → 5196 passed, 48 skipped, 3 warnings.
 
 ### Verification commands
 
-- `python -m ruff check ethscan/dns.py ethscan/dnsbrute.py`
 - `python -m ruff check ethscan/ tests/`
-- `python -m pytest tests/test_dns.py tests/test_dnsbrute.py -q`
-- `python -m pytest tests/test_protocol_hostile_sweep.py -q`
+- `python -m pytest tests/ -q`
 
 ### Constraints
 
@@ -28,4 +29,6 @@
 
 ### Evidence of completion
 
-Ruff errors reduced/cleared in those files, all related tests pass.
+Ruff errors reduced from 33 to 0; full test suite passes.
+
+(End of file - total 26 lines)
