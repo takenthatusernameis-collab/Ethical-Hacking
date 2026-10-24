@@ -589,7 +589,11 @@ def _dnskey_response_with_key(key_data: bytes = b"\xde\xad\xbe\xef") -> bytes:
     return header + question + answer
 
 
-def test_parse_dnskey_response_full():
+def test_parse_dnskey_response_full() -> None:
+    try:
+        import dns  # noqa: F401
+    except ImportError:
+        pytest.skip("dnspython not installed")
     data = _dnskey_response_with_key()
     res = _parse_dnskey_response(data, "example.com")
     assert res["success"] is True

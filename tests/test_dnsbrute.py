@@ -388,6 +388,11 @@ def test_axfr_dnspython_empty_message_falls_back_to_class_name(monkeypatch) -> N
     """
     from ethscan import dnsbrute
 
+    try:
+        import dns  # noqa: F401
+    except ImportError:
+        pytest.skip("dnspython not installed")
+
     def boom(*args, **kwargs):
         raise ValueError()
 
