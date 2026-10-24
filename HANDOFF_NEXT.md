@@ -2,24 +2,19 @@
 
 ## What changed this session
 
-Extended `validate_config` so it warns about unknown options inside a command's config block (previously it only warned about unknown commands).
-
-### Source (`ethscan/`)
-
-- `config.py`:
-  - `validate_config(config, known_commands=None, known_options=None)`: new `known_options` parameter mapping command name -> set of accepted option dest names. Each configured option not accepted by its command is warned about.
-  - New `_option_is_known(key, options)` helper: the documented config key `format` counts as known when `fmt` is accepted (it is remapped to the `fmt` Click dest by `_normalize_format_key`). Global `defaults` are not option-checked (avoids noise for values valid for one command but not another).
-- `cli.py:410`: the startup `validate_config` call now passes `known_options` built from `cli.commands` (each command's click parameter dest names), covering every real CLI command.
+Added end-to-end CLI tests verifying config option validation warnings.
 
 ### Tests (`tests/`)
 
-- `test_config.py`: 6 new tests covering unknown-option warning, known-option clean, defaults not option-checked, real CLI commands, and the `format`/`fmt` alias both directions.
+- `tests/test_cli.py`:
+  - `test_config_option_unknown_bogus_warning`: with config `commands.cidr.bogus: 1`, running `ethscan --config <file> cidr --help` via `CliRunner(mix_stderr=False)` emits `Unknown option 'bogus' for command 'cidr'` on stderr.
+  - `test_config_option_format_key_no_warning`: with config `commands.cidr.format: json`, running `ethscan --config <file> cidr --help` produces no `Unknown option` warning on stderr.
 
 ## What was actually verified
 
 - `python -m ruff check ethscan/ tests/` → All checks passed (0 errors).
-- `python -m pytest tests/ -q` → 5202 passed, 48 skipped, 3 warnings (pre-existing `test_main.py` runpy warnings).
-- End-to-end: a config with `scan: { potrs: common }` prints `Warning: Unknown option 'potrs' for command 'scan' (no such option)`; a valid `format: json` config prints no warning.
+- `python -m pytest tests/test_config.py tests/test_cli.py -q` → All passed.
+- `python -m pytest tests/ -q` → 5204 passed, 48 skipped, 3 warnings (pre-existing `test_main.py` runpy warnings).
 
 ## What remains unresolved
 
@@ -27,10 +22,10 @@ None from this task.
 
 ## Which approaches have already failed and why
 
-- First version of the option check flagged the documented `format` key as unknown for every command, breaking `test_cli.py::test_config_explicit_overrides_config` (configures `cidr: { format: json }`). Fixed by treating `format` as an alias for the `fmt` dest.
+None.
 
 ## One precise next task
 
-Add an end-to-end CLI-level test in `tests/test_cli.py` that invokes `ethscan --config <file> <command>` with (a) a bogus option and asserts a warning is printed on stderr, and (b) a valid `format` key and asserts no warning. Complements the unit tests in `tests/test_config.py`.
+Search for a small, concrete improvement: look for TODO/FIXME in source (non-test) files, or find code patterns that are clearly duplicated/redundant and can be simplified safely with existing tests as guardrails. Pick exactly one bounded task, implement with smallest reversible change, verify with relevant tests/ruff, and update TASK.md/HANDOFF_NEXT.md before ending.
 
-Constraints: smallest reversible change, no behavior changes, ruff-clean, full suite passes, do not commit unless explicitly asked.
+Constraints: smallest reversible change, no behavior changes unless strictly necessary and covered by tests, ruff-clean, full suite passes, do not commit unless explicitly asked.
