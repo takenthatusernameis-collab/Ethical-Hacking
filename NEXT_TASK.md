@@ -1,34 +1,34 @@
 # NEXT_TASK
 
-## Status: COMPLETE
+## Status: PENDING
 
-The task of the previous handoff (tighten ruff cleanliness in dns/dnsbrute) was
-already satisfied, and this session extended it to the remaining files.
+Add an end-to-end CLI-level test in `tests/test_cli.py` for config option validation.
 
-### What was done
+### What to do
 
-- `python -m ruff check ethscan/ tests/` → **All checks passed** (was 33 errors).
-- Minimal, reversible edits to `ethscan/dnssec.py`, `ethscan/resolve.py`,
-  `ethscan/service.py`, `ethscan/smtp.py`, `ethscan/ssh.py`, `ethscan/subdomains.py`,
-  `ethscan/subtake.py`, and `tests/test_ssl.py` (add `# noqa: BLE001, S110` to
-  import guards and transport-failure `except Exception: pass` blocks; collapse a
-  duplicate handler in `smtp.py`; drop unused imports in `test_ssl.py`).
-- Behavior unchanged: `python -m pytest tests/ -q` → 5196 passed, 48 skipped, 3 warnings.
+Invoke `ethscan --config <file> <command>` through the Click runner and assert:
+- (a) a config containing a bogus option for a command (e.g. `cidr: { bogus: 1 }`) prints a warning like `Unknown option 'bogus' for command 'cidr'` on stderr.
+- (b) a config containing the documented `format` key (e.g. `cidr: { format: json }`) prints no such warning.
+
+This complements the unit tests already in `tests/test_config.py` and locks in the end-to-end behavior.
 
 ### Verification commands
 
 - `python -m ruff check ethscan/ tests/`
+- `python -m pytest tests/test_config.py tests/test_cli.py -q`
 - `python -m pytest tests/ -q`
 
 ### Constraints
 
 - Smallest reversible change
 - No behavior changes
-- Do not weaken safety controls
+- Ruff-clean
+- Full test suite passes
 - Do not commit unless explicitly asked
 
-### Evidence of completion
+### Evidence / references
 
-Ruff errors reduced from 33 to 0; full test suite passes.
-
-(End of file - total 26 lines)
+- `ethscan/config.py:234` `validate_config` now accepts `known_options` and warns on unknown options.
+- `ethscan/config.py:_option_is_known` treats documented `format` as the `fmt` dest.
+- `ethscan/cli.py:410` passes `known_options` built from `cli.commands`.
+- `tests/test_config.py` already covers `validate_config` at unit level.

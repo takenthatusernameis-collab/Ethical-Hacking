@@ -3,6 +3,7 @@
 
 import yaml
 
+from ethscan import cli
 from ethscan.config import (
     CONFIG_CANDIDATES,
     DEFAULT_CONFIG,
@@ -213,6 +214,80 @@ def test_validate_config_known_command_clean() -> None:
         known_commands=["scan"],
     )
     assert warnings == []
+
+
+def test_validate_config_unknown_option() -> None:
+    """A config option that the command does not accept is warned about."""
+    warnings = validate_config(
+        {"defaults": {}, "commands": {"scan": {"potrs": "common"}}},
+        known_commands=["scan"],
+        known_options={"scan": {"ports", "profile", "timeout", "workers"}},
+    )
+    assert any("potrs" in w and "scan" in w for w in warnings)
+
+
+def test_validate_config_known_option_clean() -> None:
+    """A valid config option for a command produces no warning."""
+    warnings = validate_config(
+        {"defaults": {}, "commands": {"scan": {"ports": "common"}}},
+        known_commands=["scan"],
+        known_options={"scan": {"ports"}},
+    )
+    assert warnings == []
+
+
+def test_validate_config_format_key_counts_as_fmt() -> None:
+    """The documented ``format`` key remaps to the ``fmt`` dest and is known."""
+    warnings = validate_config(
+        {"defaults": {}, "commands": {"cidr": {"format": "json"}}},
+        known_commands=["cidr"],
+        known_options={"cidr": {"fmt", "output_fmt", "cidr"}},
+    )
+    assert warnings == []
+
+
+def test_validate_config_format_key_without_fmt_is_unknown() -> None:
+    """If a command does not accept ``fmt``, ``format`` is flagged as unknown."""
+    warnings = validate_config(
+        {"defaults": {}, "commands": {"cidr": {"format": "json"}}},
+        known_commands=["cidr"],
+        known_options={"cidr": {"output_fmt"}},
+    )
+    assert any("format" in w and "cidr" in w for w in warnings)
+
+
+def test_validate_config_defaults_are_not_option_checked() -> None:
+    """Global defaults are not validated against per-command options, so a
+    value valid for one command but not another is not flagged as noise."""
+    warnings = validate_config(
+        {"defaults": {"timeout": 5.0}, "commands": {}},
+        known_commands=[],
+        known_options={},
+    )
+    assert warnings == []
+
+
+def test_validate_config_with_real_cli_commands() -> None:
+    """The real CLI commands are used to validate configured options."""
+    known_options = {
+        name: {param.name for param in command.params}
+        for name, command in cli.cli.commands.items()
+    }
+    assert "scan" in known_options
+    # A valid option for scan produces no warning.
+    warnings = validate_config(
+        {"defaults": {}, "commands": {"scan": {"ports": "common"}}},
+        known_commands=sorted(known_options),
+        known_options=known_options,
+    )
+    assert not any("scan" in w for w in warnings)
+    # An unknown option for scan produces a warning.
+    warnings = validate_config(
+        {"defaults": {}, "commands": {"scan": {"bogus-option": "x"}}},
+        known_commands=sorted(known_options),
+        known_options=known_options,
+    )
+    assert any("bogus-option" in w and "scan" in w for w in warnings)
 
 
 def test_dump_default_config_is_yaml() -> None:

@@ -2,52 +2,30 @@
 
 ## Status: COMPLETE
 
-The task of the previous handoff (tighten ruff cleanliness in dns/dnsbrute) was
-already satisfied, and this session extended it to the remaining files.
+Made `validate_config` warn about unknown config options per command (previously it only warned about unknown commands; an unknown option such as `scan: { potrs: common }` was silently ignored).
 
 ### What was done
 
-- `python -m ruff check ethscan/ tests/` → **All checks passed** (was 33 errors).
-- Minimal, reversible edits to `ethscan/dnssec.py`, `ethscan/resolve.py`,
-  `ethscan/service.py`, `ethscan/smtp.py`, `ethscan/ssh.py`, `ethscan/subdomains.py`,
-  `ethscan/subtake.py`, and `tests/test_ssl.py`:
-  - Added `# noqa: BLE001, S110` to import guards and transport-failure
-    `except Exception: pass` blocks (matching the pattern already used in
-    `ethscan/dns.py` and `ethscan/dnsbrute.py`).
-  - Collapsed a duplicate `except Exception as exc:` handler in
-    `ethscan/smtp.py:_read_response` and removed the unused `exc` binding and
-    the now-unnecessary `# noqa` on that line.
-  - Removed the bare `except Exception: raise` in `ethscan/ssh.py:_send_kexinit`
-    (the `raise` was redundant).
-  - Dropped unused `DEFAULT_PORT`, `DEFAULT_TIMEOUT` imports and two unused
-    `import socket` lines in `tests/test_ssl.py`.
-- Behavior unchanged: `python -m pytest tests/ -q` → 5196 passed, 48 skipped, 3 warnings.
+- `ethscan/config.py`: `validate_config` gained an optional `known_options: dict[str, set[str]]` parameter mapping a command name to the set of option dest names it accepts. Each configured option not accepted by its command is now reported as a warning. The documented config key `format` (remapped to the `fmt` Click dest by `_normalize_format_key`) counts as known when `fmt` is accepted, via a new `_option_is_known` helper.
+- `ethscan/cli.py:410`: the startup call now passes `known_options` built from `cli.commands` (each click command's parameter dest names), so every real CLI command is covered.
+- `tests/test_config.py`: added `test_validate_config_unknown_option`, `test_validate_config_known_option_clean`, `test_validate_config_defaults_are_not_option_checked`, `test_validate_config_with_real_cli_commands`, `test_validate_config_format_key_counts_as_fmt`, and `test_validate_config_format_key_without_fmt_is_unknown`.
 
 ### What was actually verified
 
 - `python -m ruff check ethscan/ tests/` → All checks passed (0 errors).
-- `python -m pytest tests/test_dns.py tests/test_dnsbrute.py
-  tests/test_protocol_hostile_sweep.py -q` → 418 passed.
-- `python -m pytest tests/ -q` → 5196 passed, 48 skipped, 3 warnings (the warnings
-  are the pre-existing `test_main.py` runpy ones).
-- `git diff --check` → clean.
-- Nothing is committed (commit only if explicitly asked).
+- `python -m pytest tests/ -q` → 5202 passed, 48 skipped, 3 warnings (pre-existing `test_main.py` runpy warnings).
+- End-to-end: `python -m ethscan --config <bogus-option config> config` emits
+  `Warning: Unknown option 'potrs' for command 'scan' (no such option)`;
+  a valid `format: json` config emits no warning.
 
 ### What remains unresolved
 
-None from the ruff task. The broader codebase is ruff-clean.
+None from this task.
 
 ### Approaches that failed and why
 
-- The `except Exception: pass` blocks in `smtp.py` had a duplicate handler
-  (`B025`) and an unused `exc` binding (`F841`) that the previous session's
-  `# noqa: BLE001` did not suppress. The fix was to collapse the duplicate into
-  a single handler and drop the unused binding, not to add more `# noqa`
-  directives.
+- The first version of the option check treated `format` as unknown for every command, breaking `test_cli.py::test_config_explicit_overrides_config` (which configures `cidr: { format: json }`). Fixed by recognizing `format` as an alias for the `fmt` dest.
 
 ### One precise next task
 
-No next task — the ruff handoff is complete. If a new task is assigned, inspect
-this file first.
-
-(End of file - total 60 lines)
+Add an end-to-end CLI-level test in `tests/test_cli.py` that invokes `ethscan --config <file> <command>` with (a) a bogus option and asserts a warning is printed on stderr, and (b) a valid `format` key and asserts no warning. This complements the unit tests in `tests/test_config.py`. Constraints: smallest change, no behavior change, do not commit unless asked.

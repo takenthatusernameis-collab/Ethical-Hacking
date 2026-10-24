@@ -408,7 +408,13 @@ def cli(ctx, config_path: str | None) -> None:
     config = load_config(config_path)
     ctx.obj = {"config": config, "config_path": config_path}
     known_commands = sorted(cli.commands.keys())
-    for warning in validate_config(config, known_commands=known_commands):
+    known_options = {
+        name: {param.name for param in command.params}
+        for name, command in cli.commands.items()
+    }
+    for warning in validate_config(
+        config, known_commands=known_commands, known_options=known_options
+    ):
         click.echo(f"Warning: {warning}", err=True)
     default_map: dict[str, dict[str, Any]] = {}
     config_file = config_path_string(config)

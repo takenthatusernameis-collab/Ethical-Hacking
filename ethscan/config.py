@@ -231,11 +231,20 @@ def config_path_string(config: dict[str, Any]) -> str | None:
     return None
 
 
-def validate_config(config: dict[str, Any], known_commands: list[str] | None = None) -> list[str]:
+def validate_config(
+    config: dict[str, Any],
+    known_commands: list[str] | None = None,
+    known_options: dict[str, set[str]] | None = None,
+) -> list[str]:
     """Validate a config dict and return a list of human-readable warnings.
 
     An empty list means the config is structurally valid. Warnings are
     non-fatal and do not prevent the toolkit from running.
+
+    When ``known_options`` is given, it maps a command name to the set of
+    option dest names that command accepts, and each configured option that
+    is not accepted by its command is reported as a warning. A typo in a
+    config option name would otherwise be silently ignored.
     """
     warnings: list[str] = []
     parse_error = config.get("_parse_error")
@@ -264,8 +273,28 @@ def validate_config(config: dict[str, Any], known_commands: list[str] | None = N
                     warnings.append(
                         f"command '{cmd}' must be a mapping of option names to values"
                     )
+                    continue
+                if known_options is not None:
+                    options = known_options.get(cmd)
+                    if options is not None:
+                        for key in opts:
+                            if not _option_is_known(key, options):
+                                warnings.append(
+                                    f"Unknown option '{key}' for command '{cmd}' "
+                                    f"(no such option)"
+                                )
 
     return warnings
+
+
+def _option_is_known(key: str, options: set[str]) -> bool:
+    """Return whether a config option key is accepted by a command.
+
+    The documented config key ``format`` is remapped to the working ``fmt``
+    Click dest (see ``_normalize_format_key``), so it counts as known when
+    ``fmt`` is accepted.
+    """
+    return key in options or (key == "format" and "fmt" in options)
 
 
 def dump_default_config() -> str:
