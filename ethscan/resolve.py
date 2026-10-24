@@ -204,7 +204,9 @@ def run_resolve(
             continue  # should not happen due to above
         else:
             if DNS_AVAILABLE:
-                results[rtype_upper] = resolve_with_dnspython(normalized, rtype_upper, timeout, server)
+                values = resolve_with_dnspython(normalized, rtype_upper, timeout, server)
+                if values:
+                    results[rtype_upper] = values
             else:
                 continue  # ignore unknown types when dnspython unavailable
 
