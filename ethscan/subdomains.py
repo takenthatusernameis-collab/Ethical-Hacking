@@ -11,7 +11,7 @@ from ethscan.target import parse_url
 
 try:
     try:
-        import dns._features
+        import dns.message
     except ImportError:
         pass
     import dns.exception

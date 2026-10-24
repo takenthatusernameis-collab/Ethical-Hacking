@@ -902,6 +902,7 @@ def _restore_subtake(monkeypatch):
     import ethscan.subtake as subtake_mod
     monkeypatch.delitem(sys.modules, "dns", raising=False)
     monkeypatch.delitem(sys.modules, "dns.resolver", raising=False)
+    monkeypatch.delitem(sys.modules, "dns.message", raising=False)
     monkeypatch.delitem(sys.modules, "dns.exception", raising=False)
     reload(subtake_mod)
 

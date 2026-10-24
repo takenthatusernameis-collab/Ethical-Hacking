@@ -1571,6 +1571,7 @@ def _restore_dnsbrute(monkeypatch):
 
     monkeypatch.delitem(sys.modules, "dns", raising=False)
     monkeypatch.delitem(sys.modules, "dns.resolver", raising=False)
+    monkeypatch.delitem(sys.modules, "dns.message", raising=False)
     monkeypatch.delitem(sys.modules, "dns.exception", raising=False)
     monkeypatch.delitem(sys.modules, "dns.query", raising=False)
     monkeypatch.delitem(sys.modules, "dns.zone", raising=False)

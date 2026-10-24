@@ -581,6 +581,7 @@ def test_dns_availability_flag_true(monkeypatch) -> None:
     finally:
         monkeypatch.delitem(sys.modules, "dns", raising=False)
         monkeypatch.delitem(sys.modules, "dns.resolver", raising=False)
+        monkeypatch.delitem(sys.modules, "dns.message", raising=False)
         monkeypatch.delitem(sys.modules, "dns.exception", raising=False)
         reload(dns_mod)
 
