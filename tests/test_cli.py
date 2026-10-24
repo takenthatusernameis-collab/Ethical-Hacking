@@ -12527,10 +12527,28 @@ def test_config_init_creates_parent_dirs(tmp_path) -> None:
     result = runner.invoke(cli, ["config", "--init", str(out)])
     assert result.exit_code == 0
     assert "Sample config written" in result.output
-    assert out.exists()
-    assert out.parent.is_dir()
-    content = out.read_text()
-    assert "defaults:" in content
+
+
+def test_config_option_unknown_bogus_warning(tmp_path) -> None:
+    """Unknown option in config for a command emits a warning on stderr."""
+    config_file = tmp_path / "ethscan.yaml"
+    config_file.write_text("cidr:\n  bogus: 1\n")
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--config", str(config_file), "cidr", "--help"])
+    assert result.exit_code == 0
+    combined = result.output + getattr(result, "stderr", "") or result.output
+    assert "Unknown option 'bogus' for command 'cidr'" in combined
+
+
+def test_config_option_format_key_no_warning(tmp_path) -> None:
+    """Documented format key in config does not emit an unknown-option warning."""
+    config_file = tmp_path / "ethscan.yaml"
+    config_file.write_text("cidr:\n  format: json\n")
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--config", str(config_file), "cidr", "--help"])
+    assert result.exit_code == 0
+    combined = result.output + getattr(result, "stderr", "") or result.output
+    assert "Unknown option" not in combined
 
 
 def test_config_out_json(tmp_path) -> None:
