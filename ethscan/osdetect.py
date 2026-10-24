@@ -365,7 +365,6 @@ def _match_os_from_behavior(behavior: dict[str, object]) -> list[str]:
     """Infer OS family from TCP/IP stack behavior observations."""
     matches: list[str] = []
     response = str(behavior.get("response") or "")
-    str(behavior.get("flags_observed") or "")
 
     # Windows typically sends RST in response to a FIN on a closed port
     if response == "RST" and "FIN" in behavior.get("probe_type", ""):
