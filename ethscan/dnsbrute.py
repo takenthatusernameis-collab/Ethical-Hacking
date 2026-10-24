@@ -311,7 +311,7 @@ def _axfr_dnspython(
         return _axfr_result(nameserver, False, [], f"transfer refused ({exc})")
     # A transport failure of an unnamed type must not escape the command, the
     # same way the raw socket path reports it.
-    except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError, RuntimeError) as exc:
+    except Exception as exc:  # noqa: BLE001 - transport can raise any type
         return _axfr_result(nameserver, False, [], str(exc))
 
     records: list[str] = []
@@ -381,7 +381,7 @@ def _resolve_label(label: str, domain: str, timeout: float, resolver: str | None
             answers = dns_resolver.resolve(hostname, "A")
             a_records = sorted({str(rdata) for rdata in answers})
         # A transport failure of an unnamed type must not escape the command.
-        except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError, RuntimeError):
+        except Exception:  # noqa: BLE001 - resolver can raise any type
             pass
         try:
             dns_resolver = dns.resolver.Resolver()
@@ -391,7 +391,7 @@ def _resolve_label(label: str, domain: str, timeout: float, resolver: str | None
             answers = dns_resolver.resolve(hostname, "AAAA")
             aaaa_records = sorted({str(rdata) for rdata in answers})
         # A transport failure of an unnamed type must not escape the command.
-        except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError, RuntimeError):
+        except Exception:  # noqa: BLE001 - resolver can raise any type
             pass
     else:
         a_records = resolve_a_records(hostname, timeout=timeout)
