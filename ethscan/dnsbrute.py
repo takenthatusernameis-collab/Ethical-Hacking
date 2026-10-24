@@ -264,7 +264,7 @@ def query_axfr_raw(
                 if not chunk:
                     break
                 data += chunk
-    except (socket.timeout, socket.gaierror, OSError, ValueError, RuntimeError) as exc:
+    except Exception as exc:  # noqa: BLE001 - transport can raise any type
         message = str(exc) or exc.__class__.__name__
         return _axfr_result(nameserver, False, [], message)
 

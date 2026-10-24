@@ -740,3 +740,19 @@ def test_resolver_failure_of_an_unknown_type_is_reported(monkeypatch) -> None:
 
     assert result["mac"] is None
     assert any("Could not resolve host" in note for note in result["notes"])
+
+
+def test_resolver_failure_of_an_unnamed_type_is_reported(monkeypatch) -> None:
+    """A resolver that fails with an unnamed exception type is a failed lookup, not a raise."""
+
+    def boom(*args, **kwargs):
+        raise TypeError("hostile")
+
+    monkeypatch.setattr("socket.gethostbyname", boom)
+
+    assert _resolve_host("example.com") is None
+
+    result = run_mac("example.com", use_cache=False, offline_fallback=False)
+
+    assert result["mac"] is None
+    assert any("Could not resolve host" in note for note in result["notes"])

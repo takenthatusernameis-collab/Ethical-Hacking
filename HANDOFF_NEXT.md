@@ -2,40 +2,74 @@
 
 ## What changed this session
 
-- **ethscan/ssh.py**: Broadened transport seams to catch unnamed exceptions.
-  - `_ssh_banner_exchange()`: added `except Exception` fallback (transport can raise any type).
-  - `_send_kexinit()`: wrapped `sock.sendall()` in `try/except Exception` and re-raise so outer `run_ssh` handles safely.
-  - `_read_packet()`: added `except Exception` fallback returning `None`.
-- **ethscan/ftp.py**: Broadened connection and login seams.
-  - `run_ftp()`: added `except Exception` after connection tuple to catch unnamed transport failures (sets `connection failed: ...`, returns).
-  - `run_ftp()`: added `except Exception` in anonymous login probe to report failure without crashing.
-- **tests/test_ssh.py**: Added `test_run_ssh_transport_failure_unnamed_type_on_connect_reported` and `test_run_ssh_transport_failure_unnamed_type_in_recv_reported`.
-- **tests/test_ftp.py**: Added `test_run_ftp_transport_failure_unnamed_type_on_connect_reported`.
+- **ethscan/dnsbrute.py**: Broadened the raw AXFR transport seam.
+  - `query_axfr_raw`: `except (socket.timeout, socket.gaierror, OSError, ValueError, RuntimeError)`
+    -> `except Exception as exc:  # noqa: BLE001 - transport can raise any type`.
+- **ethscan/mac.py**: Broadened the host-resolution seam.
+  - `_resolve_host`: `except (socket.timeout, socket.gaierror, socket.herror, OSError, ValueError, RuntimeError)`
+    -> `except Exception:  # noqa: BLE001 - resolver can raise any type`.
+- **tests/test_dnsbrute.py**: Added `test_query_axfr_raw_transport_failure_unnamed_type_on_connect_reported`.
+- **tests/test_mac.py**: Added `test_resolver_failure_of_an_unnamed_type_is_reported`.
 
 ## What was actually verified
 
 - **Reproduced before fixes:**
-  - `ssh.run_ssh('127.0.0.1')` with `socket.create_connection` raising `TypeError('hostile')` crashed with `ERR` in ad-hoc test (no broad catch at connect point). After fix returns `error` containing hostile message.
-  - `ssh._ssh_banner_exchange` with `recv` raising `TypeError` propagated/crashed before fix; after fix returns `None`. `run_ssh` with `recv` raising `TypeError` at banner read now returns error via outer handler.
-  - `ftp.run_ftp(..., connector=BadFTP)` where `connect()` raises `TypeError` crashed with `ERR` before fix; after fix returns `connection failed: hostile`.
-- **Tests:** `python -m pytest tests/test_ssh.py -v` → 67 passed. `python -m pytest tests/test_ftp.py -v` → 36 passed. `python -m pytest tests/` → **5181 passed, 49 skipped, 3 warnings** (pre-existing runpy warnings). No regressions.
-- **Diff hygiene:** changes are small and reversible; no secrets/credentials added.
+  - `dnsbrute.query_axfr_raw('127.0.0.1', 'example.com')` with `socket.create_connection`
+    raising `TypeError('hostile')` crashed with `TypeError` (narrow tuple at line 267).
+    After fix returns a result with `error` containing "hostile".
+  - `mac._resolve_host('example.com')` with `socket.gethostbyname` raising `TypeError('hostile')`
+    crashed with `TypeError` (narrow tuple at line 48). After fix returns `None`,
+    and `run_mac` reports "Could not resolve host 'example.com' to a MAC address".
+- **Tests:** `python3 -m pytest tests/test_dnsbrute.py -q` -> 162 passed, 1 skipped.
+  `python3 -m pytest tests/test_mac.py -q` -> all pass. `python3 -m pytest tests/` ->
+  **5183 passed, 49 skipped, 3 warnings** (pre-existing runpy warnings). No regressions.
+- **Diff hygiene:** 4 files, 34 insertions, 2 deletions. `git diff --check` -> clean.
+  Nothing committed (commit only if explicitly asked).
+- `ruff` is not installed in this environment; `pytest` was not installed either and was
+  installed locally for this session (`pip install pytest`).
 
 ## What remains unresolved
 
-- All transport modules with demonstrated unnamed-exception escape paths from this sweep are now hardened (service.py fixed previously, smtp/ssl investigated and had outer handlers per prior handoff, ssh/ftp fixed now).
-- Other modules may have narrow tuples without demonstrated crashes. No new crashes demonstrated in this session.
+- `ethscan/dnsbrute.py:_resolve_label` (lines 384, 394) still uses a narrow tuple that
+  excludes `TypeError`. It is only reachable when `resolver` is set AND dnspython is
+  installed. `dnspython` is **not** installed in this environment, so the branch is
+  unreachable and no crash could be demonstrated. Per the handoff rule ("do not broaden
+  tuples without first demonstrating a crash"), it was left untouched. If dnspython
+  becomes available, re-check that seam with a `TypeError` and broaden if it escapes.
+- `ethscan/geo.py` and `ethscan/cert.py` were inspected: their `_resolve_host` already
+  uses `except Exception`, and their other narrow tuples (`_load_cache`,
+  `_is_cache_valid`, `_fetch_*`) are cache/JSON seams, not transport seams, so they are
+  out of scope for this sweep.
+- Other modules may have narrow tuples without demonstrated crashes. No new crashes
+  were demonstrated in this session beyond the two fixed above.
 
 ## Which approaches have already failed and why
 
-- Trusting that outer `except Exception` in public APIs would always catch all helper failures was incorrect for ssh/ftp: some helpers (`_ssh_banner_exchange`, connection/login paths) had narrow catches or no catches allowing unnamed exceptions to propagate/crash before reaching outer handlers in certain code paths. Reproducing with mocked seams (patching `create_connection`/`recv`/connector) exposed the gaps.
+- Trusting that the outer `except Exception` in the public APIs would always catch all
+  helper failures was incorrect for `dnsbrute.query_axfr_raw` and `mac._resolve_host`:
+  both had narrow tuples on transport seams that let an unnamed exception type
+  (`TypeError`) escape and crash the public function. Reproducing with a mocked seam
+  (patching `socket.create_connection` / `socket.gethostbyname` to raise `TypeError`)
+  exposed the gaps.
 
 ## One precise next task
 
-**Scan remaining narrow transport `except` tuples without demonstrated crashes** (start with `ethscan/dnsbrute.py` seams like `_resolve_label` which use broad named tuples but may have other paths; also check `ethscan/geo.py`, `ethscan/mac.py`, `ethscan/cert.py` if any transport seam lacks coverage). For each candidate:
-1. Reproduce with a hostile seam: patch the transport/callable to raise `TypeError('hostile')`, call the public `run_*` function, confirm it crashes (or escapes).
-2. If it crashes, broaden the narrowest seam to `except Exception` with `# noqa: BLE001` and ensure the public API reports an error (no traceback).
-3. Add a focused regression test in the module's tests.
-4. Run `python -m pytest tests/` and verify no regressions.
+Continue the sweep of remaining narrow transport `except` tuples, but only after
+reproducing a crash with a hostile seam (patch the transport/callable to raise
+`TypeError('hostile')`, call the public `run_*`, confirm it raises). Candidates to
+inspect next, in priority order:
 
-Do **not** broaden tuples without first demonstrating a crash. Do not commit unless explicitly asked. `ruff` may not be installed in the environment.
+1. `ethscan/dnsbrute.py:_resolve_label` — only if dnspython becomes available (see
+   "What remains unresolved").
+2. `ethscan/geo.py:_fetch_geo_data` — already `except Exception`; re-verify the
+   recursive-traceroute seam at line 259 is broad enough (it is).
+3. `ethscan/cert.py:_fetch_cert_data` — already `except Exception`.
+4. Other protocol modules not yet swept: re-run the hostile-seam reproduction
+   script across every `ethscan/*.py` public `run_*` function and broaden only where a
+   crash is demonstrated.
+
+Do **not** broaden any tuple without first demonstrating a crash. Do not commit unless
+explicitly asked. `ruff` may not be installed in the environment; `pytest` was not
+installed either and had to be installed locally with `pip install pytest`.
+
+(End of file - total 64 lines)

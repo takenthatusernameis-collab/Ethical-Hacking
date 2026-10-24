@@ -308,6 +308,22 @@ def test_query_axfr_raw_transport_failure_is_reported(monkeypatch) -> None:
     assert "hostile transport" in result["error"]
 
 
+def test_query_axfr_raw_transport_failure_unnamed_type_on_connect_reported(monkeypatch) -> None:
+    """A transport failure of an unnamed exception type on connect is reported, not raised."""
+    from ethscan import dnsbrute as dnsbrute_mod
+
+    def boom(*args, **kwargs):
+        raise TypeError("hostile")
+
+    monkeypatch.setattr("ethscan.dnsbrute.socket.create_connection", boom)
+
+    result = dnsbrute_mod.query_axfr_raw("127.0.0.1", "example.com", timeout=1.0)
+
+    assert result["success"] is False
+    assert result["records_count"] == 0
+    assert "hostile" in result["error"]
+
+
 # ---------------------------------------------------------------------------
 # attempt_axfr dispatch
 # ---------------------------------------------------------------------------
