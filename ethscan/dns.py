@@ -12,12 +12,12 @@ try:
     try:
         import dns.enum
         import dns.message
-    except Exception:
+    except Exception:  # noqa: BLE001, S110
         pass
     import dns.exception
     import dns.resolver
     DNS_AVAILABLE = True
-except Exception:
+except Exception:  # noqa: BLE001
     DNS_AVAILABLE = False
 
 
@@ -67,7 +67,7 @@ def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str
             return sorted(set(ips))
         finally:
             socket.setdefaulttimeout(previous)
-    except Exception:  # noqa: BLE001 - resolver can raise any type
+    except Exception:  # noqa: BLE001  # noqa: BLE001 - resolver can raise any type
         return []
 
 
@@ -90,7 +90,7 @@ def resolve_aaaa_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[
             return sorted(set(ips))
         finally:
             socket.setdefaulttimeout(previous)
-    except Exception:  # noqa: BLE001 - resolver can raise any type
+    except Exception:  # noqa: BLE001  # noqa: BLE001 - resolver can raise any type
         return []
 
 
@@ -117,7 +117,7 @@ def resolve_with_dnspython(
 
         answers = resolver.resolve(domain, record_type)
         return sorted({str(rdata) for rdata in answers})
-    except Exception:  # noqa: BLE001 - resolver can raise any type
+    except Exception:  # noqa: BLE001  # noqa: BLE001 - resolver can raise any type
         return []
 
 
@@ -165,11 +165,11 @@ def run_dns(
                         resolver.nameservers = [server]
                         answers = resolver.resolve(domain, rtype)
                         return rtype, sorted({str(rdata) for rdata in answers})
-                    except Exception:  # noqa: BLE001 - resolver can raise any type
+                    except Exception:  # noqa: BLE001  # noqa: BLE001 - resolver can raise any type
                         return rtype, []
                 return rtype, []
             return rtype, resolve_with_dnspython(domain, rtype, timeout)
-        except Exception:  # noqa: BLE001 - resolver can raise any type
+        except Exception:  # noqa: BLE001  # noqa: BLE001 - resolver can raise any type
             return rtype, []
 
     results: dict[str, list[str]] = {}
@@ -179,7 +179,7 @@ def run_dns(
             try:
                 rtype_key, values = resolve_type(rtype)
                 results[rtype_key] = values
-            except Exception:  # noqa: BLE001 - resolver can raise any type
+            except Exception:  # noqa: BLE001  # noqa: BLE001 - resolver can raise any type
                 results[rtype.upper()] = []
     else:
         try:
@@ -191,9 +191,9 @@ def run_dns(
                     try:
                         rtype_key, values = futures[i].result()
                         results[rtype_key] = values
-                    except Exception:  # noqa: BLE001 - resolver can raise any type
+                    except Exception:  # noqa: BLE001  # noqa: BLE001 - resolver can raise any type
                         results[rtype.upper()] = []
-        except Exception:  # noqa: BLE001 - resolver can raise any type
+        except Exception:  # noqa: BLE001  # noqa: BLE001 - resolver can raise any type
             for rtype in valid_types:
                 results[rtype.upper()] = []
 

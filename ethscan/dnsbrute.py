@@ -15,12 +15,12 @@ try:
     try:
         import dns.enum
         import dns.message
-    except Exception:
+    except Exception:  # noqa: BLE001, S110
         pass
     import dns.exception
     import dns.resolver
     DNS_AVAILABLE = True
-except Exception:
+except Exception:  # noqa: BLE001
     DNS_AVAILABLE = False
 
 
@@ -390,7 +390,7 @@ def _resolve_label(label: str, domain: str, timeout: float, resolver: str | None
             answers = dns_resolver.resolve(hostname, "A")
             a_records = sorted({str(rdata) for rdata in answers})
         # A transport failure of an unnamed type must not escape the command.
-        except Exception:  # noqa: BLE001 - resolver can raise any type
+        except Exception:  # noqa: BLE001, S110 - resolver can raise any type
             pass
         try:
             dns_resolver = dns.resolver.Resolver()
@@ -400,7 +400,7 @@ def _resolve_label(label: str, domain: str, timeout: float, resolver: str | None
             answers = dns_resolver.resolve(hostname, "AAAA")
             aaaa_records = sorted({str(rdata) for rdata in answers})
         # A transport failure of an unnamed type must not escape the command.
-        except Exception:  # noqa: BLE001 - resolver can raise any type
+        except Exception:  # noqa: BLE001, S110 - resolver can raise any type
             pass
     else:
         a_records = resolve_a_records(hostname, timeout=timeout)
