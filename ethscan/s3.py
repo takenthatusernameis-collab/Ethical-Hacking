@@ -183,7 +183,7 @@ def _resolve_s3_endpoint(
     try:
         socket.setdefaulttimeout(timeout)
         return socket.gethostbyname(hostname)
-    except (socket.gaierror, socket.herror, OSError, ValueError):
+    except Exception:  # noqa: BLE001 - resolver can raise any type
         return None
     finally:
         with contextlib.suppress(OSError):
