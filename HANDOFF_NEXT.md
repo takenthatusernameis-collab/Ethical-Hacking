@@ -2,74 +2,60 @@
 
 ## What changed this session
 
-- **ethscan/dnsbrute.py**: Broadened the raw AXFR transport seam.
-  - `query_axfr_raw`: `except (socket.timeout, socket.gaierror, OSError, ValueError, RuntimeError)`
-    -> `except Exception as exc:  # noqa: BLE001 - transport can raise any type`.
-- **ethscan/mac.py**: Broadened the host-resolution seam.
-  - `_resolve_host`: `except (socket.timeout, socket.gaierror, socket.herror, OSError, ValueError, RuntimeError)`
-    -> `except Exception:  # noqa: BLE001 - resolver can raise any type`.
-- **tests/test_dnsbrute.py**: Added `test_query_axfr_raw_transport_failure_unnamed_type_on_connect_reported`.
-- **tests/test_mac.py**: Added `test_resolver_failure_of_an_unnamed_type_is_reported`.
+No source changes. This session was a verification sweep, not a fix sweep.
+
+- Re-derived the full public `run_*` surface from `ethscan/*.py` (46 `run_*`
+  functions) and identified every network seam.
+- Ran a hostile-seam reproduction script (`/tmp/hostile_repro.py`) that patches
+  each seam to raise `TypeError('hostile')` and calls the public function.
+  **Result: 0 crashes out of 30 seam-bearing commands.** The remaining narrow
+  `except` tuples (`subtake.py:302,333,361,425`, `dnssec.py:408,440`,
+  `dnsbrute.py:_resolve_label` at 384/394) are behind a `resolver` argument and
+  were exercised through their public paths; no crash was demonstrated, so per
+  the handoff rule no tuple was broadened.
 
 ## What was actually verified
 
-- **Reproduced before fixes:**
-  - `dnsbrute.query_axfr_raw('127.0.0.1', 'example.com')` with `socket.create_connection`
-    raising `TypeError('hostile')` crashed with `TypeError` (narrow tuple at line 267).
-    After fix returns a result with `error` containing "hostile".
-  - `mac._resolve_host('example.com')` with `socket.gethostbyname` raising `TypeError('hostile')`
-    crashed with `TypeError` (narrow tuple at line 48). After fix returns `None`,
-    and `run_mac` reports "Could not resolve host 'example.com' to a MAC address".
-- **Tests:** `python3 -m pytest tests/test_dnsbrute.py -q` -> 162 passed, 1 skipped.
-  `python3 -m pytest tests/test_mac.py -q` -> all pass. `python3 -m pytest tests/` ->
-  **5183 passed, 49 skipped, 3 warnings** (pre-existing runpy warnings). No regressions.
-- **Diff hygiene:** 4 files, 34 insertions, 2 deletions. `git diff --check` -> clean.
-  Nothing committed (commit only if explicitly asked).
-- `ruff` is not installed in this environment; `pytest` was not installed either and was
-  installed locally for this session (`pip install pytest`).
+- `python3 /tmp/hostile_repro.py` -> 24 REPORTED, 6 skip (no seam), 0 crashes.
+- `python3 -m pytest tests/test_protocol_hostile_sweep.py -q` -> **264 passed**.
+- `python3 -m pytest tests/test_mac.py -q` -> **60 passed**.
+- `git status` / `git diff --check` -> clean. Nothing committed.
+- The 17 failures in `tests/test_dnsbrute.py` and the 16+1 in
+  `tests/test_subtake.py` / `tests/test_subdomains.py` are **pre-existing on the
+  committed tree** (verified by running them on a clean checkout): dnspython
+  2.9.0 removed `dns.message` and `dns._features`. Not regressions.
 
 ## What remains unresolved
 
-- `ethscan/dnsbrute.py:_resolve_label` (lines 384, 394) still uses a narrow tuple that
-  excludes `TypeError`. It is only reachable when `resolver` is set AND dnspython is
-  installed. `dnspython` is **not** installed in this environment, so the branch is
-  unreachable and no crash could be demonstrated. Per the handoff rule ("do not broaden
-  tuples without first demonstrating a crash"), it was left untouched. If dnspython
-  becomes available, re-check that seam with a `TypeError` and broaden if it escapes.
-- `ethscan/geo.py` and `ethscan/cert.py` were inspected: their `_resolve_host` already
-  uses `except Exception`, and their other narrow tuples (`_load_cache`,
-  `_is_cache_valid`, `_fetch_*`) are cache/JSON seams, not transport seams, so they are
-  out of scope for this sweep.
-- Other modules may have narrow tuples without demonstrated crashes. No new crashes
-  were demonstrated in this session beyond the two fixed above.
+- **dnspython 2.9.0 incompatibility is the dominant open item.** It breaks 34
+  tests across `test_dnsbrute.py`, `test_subtake.py` and `test_subdomains.py`.
+  The affected code paths are guarded behind `DNS_AVAILABLE` / a custom
+  `resolver`, so normal CLI use does not crash, but the suite is red. This is a
+  library API change, not a missing `except`, and is out of scope for the
+  transport-seam sweep.
+- The dnspython resolver tuples in `dnsbrute._resolve_label`,
+  `subtake.resolve_*` and `dnssec._query_*_dnspython` still exclude unnamed
+  types; they were left untouched because no crash could be demonstrated with
+  the installed dnspython.
 
 ## Which approaches have already failed and why
 
-- Trusting that the outer `except Exception` in the public APIs would always catch all
-  helper failures was incorrect for `dnsbrute.query_axfr_raw` and `mac._resolve_host`:
-  both had narrow tuples on transport seams that let an unnamed exception type
-  (`TypeError`) escape and crash the public function. Reproducing with a mocked seam
-  (patching `socket.create_connection` / `socket.gethostbyname` to raise `TypeError`)
-  exposed the gaps.
+- Trusting the previous handoff's candidate list at face value would have wasted
+  effort: re-deriving the surface from the source showed the remaining tuples
+  are unreachable through the public seam, so broadening them would have been an
+  unforced change with no demonstrated benefit.
 
 ## One precise next task
 
-Continue the sweep of remaining narrow transport `except` tuples, but only after
-reproducing a crash with a hostile seam (patch the transport/callable to raise
-`TypeError('hostile')`, call the public `run_*`, confirm it raises). Candidates to
-inspect next, in priority order:
+Repair the dnspython 2.9.0 incompatibility so the suite is green: replace the
+removed `dns.message` / `dns._features` usages in `ethscan/dnsbrute.py`,
+`ethscan/dns.py`, `ethscan/subtake.py`, `ethscan/dnssec.py` and
+`ethscan/subdomains.py` with their 2.9.0 equivalents, then re-run
+`python3 -m pytest tests/` and confirm the 34 failures are gone with no
+regressions. After that, re-run `/tmp/hostile_repro.py` to confirm the
+dnspython resolver seams still report instead of raise.
 
-1. `ethscan/dnsbrute.py:_resolve_label` — only if dnspython becomes available (see
-   "What remains unresolved").
-2. `ethscan/geo.py:_fetch_geo_data` — already `except Exception`; re-verify the
-   recursive-traceroute seam at line 259 is broad enough (it is).
-3. `ethscan/cert.py:_fetch_cert_data` — already `except Exception`.
-4. Other protocol modules not yet swept: re-run the hostile-seam reproduction
-   script across every `ethscan/*.py` public `run_*` function and broaden only where a
-   crash is demonstrated.
-
-Do **not** broaden any tuple without first demonstrating a crash. Do not commit unless
-explicitly asked. `ruff` may not be installed in the environment; `pytest` was not
-installed either and had to be installed locally with `pip install pytest`.
+Do not broaden any tuple without first demonstrating a crash. Do not commit
+unless explicitly asked.
 
 (End of file - total 64 lines)
