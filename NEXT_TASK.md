@@ -1,53 +1,30 @@
 # NEXT_TASK
 
-## Status: COMPLETE
+## Status: READY
 
-### Task performed this session: reproduce-and-fix the remaining narrow resolver tuples
+### Suggested task: audit for remaining unguarded transport seams
 
-The previous handoff left the narrow resolver tuples in `subtake.py` and
-`dnssec.py` untouched, claiming they were unreachable through the public
-seam. This session re-ran that claim instead of trusting it: a reproduction
-script (`/tmp/hostile_resolver.py`) was written that patches the resolver and
-the dnspython transport to raise a custom `Hostile(Exception)` and calls each
-helper and its public `run_*` with a `resolver=`/`server=` argument.
+All known crash paths are fixed. The codebase follows the pattern of catching broad exceptions and reporting them as structured errors. A good bounded task is to do a quick audit for any public `run_*` functions that might have unguarded transport calls.
 
-**Result: 5 of 12 seams crashed with the pre-fix source.** All 12 report with
-the fix.
+### What to verify
 
-### What was actually verified
+- For each command module, check if `run_*` can propagate exceptions from transport/resolve calls
+- Pay special attention to paths using `socket.*`, `connect`, raw sockets, subprocess, etc.
+- If any crash is found, reproduce with hostile transport raising `RuntimeError`, fix with smallest change, add regression test
 
-- `/tmp/hostile_resolver.py` -> pre-fix: 5 CRASH / 7 REPORTED; post-fix:
-  12 REPORTED, 0 crashes.
-- The 6 new regression tests fail against the pre-fix source (5 raise, 1
-  passes only because `run_dnssec` already has an outer net) and pass with the
-  fix: verified by stashing only the source changes.
-- `python3 -m pytest tests/` -> **5190 passed, 48 skipped, 3 warnings**
-  (baseline 5184; 6 new tests).
-- `python3 -m pytest tests/test_protocol_hostile_sweep.py -q` -> **264 passed**.
-- `python3 -m ruff check ethscan/ tests/` -> 40 errors, same codes as baseline
-  (S110 +2 in subtake.py, matching the pre-existing style; no new codes, no
-  unused-import regressions).
-- `git diff --check` -> clean.
-- The handoff's premise (dnspython 2.9.0 removed `dns.message`/`dns._features`,
-  breaking 34 tests) was **verified false**: both attributes import in 2.9.0
-  and the suite was already green. No dnspython repair was performed.
+### Verification commands
 
-### What remains unresolved
-
-Nothing demonstrated. The five crashing guards are fixed and locked in.
+- `python3 -m pytest tests/test_protocol_hostile_sweep.py -q`
+- `python3 -m pytest tests/ -q`
+- `python3 -m ruff check ethscan/ tests/`
 
 ### Constraints
 
-- Smallest reversible change; crashes become reported, never tracebacks.
-- Do not commit unless explicitly asked.
-- Reproduce before fixing any further tuple.
+- Smallest reversible change; exceptions become reported errors, never tracebacks
+- Add regression test next to module's tests if fixing
+- Do not commit unless explicitly asked
+- Reproduce before fixing
 
-### One precise next task
+### Evidence of completion
 
-None. The demonstrated crashes are fixed and covered by tests that fail
-without the fix. The six commands from TASK.md (`ping`, `osdetect`, `resolve`,
-`dns`, `stale`, `subdomains`) are already in
-`tests/test_protocol_hostile_sweep.py` (lines 555-643), so that task is stale
-too.
-
-(End of file - total 47 lines)
+All tests pass, no unguarded seams found or fixed with tests.
