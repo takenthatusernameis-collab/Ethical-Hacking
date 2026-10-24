@@ -14,6 +14,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from ethscan.target import parse_url
 
 try:
+    try:
+        import dns._features
+    except ImportError:
+        pass
     import dns.exception
     import dns.resolver
     DNS_AVAILABLE = True
