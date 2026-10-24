@@ -12548,6 +12548,15 @@ def test_config_option_format_key_no_warning(tmp_path) -> None:
     assert result.exit_code == 0
     assert "Unknown option" not in result.stderr
 
+def test_config_option_wrong_type_errors(tmp_path) -> None:
+    """A config value of the wrong type is reported as a usage error."""
+    config_file = tmp_path / "ethscan.yaml"
+    config_file.write_text("commands:\n  scan:\n    workers: 5.5\n")
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(cli, ["--config", str(config_file), "scan", "--target", "127.0.0.1"])
+    assert result.exit_code == 2
+    assert "Invalid value for '--workers'" in result.stderr or "Invalid value for '--workers'" in result.output
+
 
 def test_config_out_json(tmp_path) -> None:
     """Test config command with --out (json)."""
