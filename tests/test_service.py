@@ -439,6 +439,41 @@ def test_grab_banner_http_fallback(monkeypatch) -> None:
     assert service == "HTTP"  # first http signature matches 200 OK
 
 
+def test_grab_banner_http_fallback_uses_real_crlf(monkeypatch) -> None:
+    """Regression: the HTTP HEAD request must carry real CRLF, not literal backslashes."""
+    class FakeSock:
+        def __init__(self):
+            self._initial = True
+            self._sent = b""
+
+        def settimeout(self, timeout):
+            pass
+
+        def recv(self, n):
+            if self._initial:
+                self._initial = False
+                return b""  # initial banner empty
+            return b"HTTP/1.1 200 OK\r\nServer: nginx\r\n\r\n"
+
+        def sendall(self, data):
+            self._sent += data
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    fake = FakeSock()
+    monkeypatch.setattr("ethscan.service.socket.create_connection", lambda addr, timeout=None: fake)
+    grab_banner("127.0.0.1", 80, 2.0)
+    # The request bytes must contain real CRLF (0x0d 0x0a), not the two-character
+    # literal sequence backslash-r-backslash-n that a doubled-escape string would emit.
+    assert b"\r\n" in fake._sent
+    assert b"\\r\\n" not in fake._sent
+    assert fake._sent.startswith(b"HEAD / HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n")
+
+
 def test_grab_banner_http_fallback_oserror_caught(monkeypatch) -> None:
     """Cover lines 140-141: OSError during HTTP fallback recv is swallowed."""
     import socket as _socket

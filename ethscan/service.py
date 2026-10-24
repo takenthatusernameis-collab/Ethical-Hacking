@@ -133,7 +133,7 @@ def grab_banner(host: str, port: int, timeout: float) -> tuple[int, str | None, 
 
             if not banner and service_name in {"http", "https"}:
                 try:
-                    request = f"HEAD / HTTP/1.0\\r\\nHost: {host}\\r\\n\\r\\n"
+                    request = f"HEAD / HTTP/1.0\r\nHost: {host}\r\n\r\n"
                     sock.sendall(request.encode())
                     data = sock.recv(BANNER_MAX_LENGTH)
                     if data:

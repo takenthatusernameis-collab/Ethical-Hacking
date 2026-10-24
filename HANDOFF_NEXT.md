@@ -2,23 +2,29 @@
 
 ## What changed this session
 
-Added end-to-end CLI tests verifying config option validation warnings.
+Fixed a real bug in the HTTP banner-grab fallback: the request string used doubled backslash escapes, so the socket received literal `\r\n` text instead of CRLF bytes.
+
+### Source (`ethscan/`)
+
+- `ethscan/service.py:136`: `request = f"HEAD / HTTP/1.0\r\nHost: {host}\r\n\r\n"` (was `\\r\\n`).
 
 ### Tests (`tests/`)
 
-- `tests/test_cli.py`:
-  - `test_config_option_unknown_bogus_warning`: with config `commands.cidr.bogus: 1`, running `ethscan --config <file> cidr --help` via `CliRunner(mix_stderr=False)` emits `Unknown option 'bogus' for command 'cidr'` on stderr.
-  - `test_config_option_format_key_no_warning`: with config `commands.cidr.format: json`, running `ethscan --config <file> cidr --help` produces no `Unknown option` warning on stderr.
+- `tests/test_service.py`: added `test_grab_banner_http_fallback_uses_real_crlf`, asserting `b"\r\n" in sent` and `b"\\r\\n" not in sent`, plus the exact request prefix.
 
 ## What was actually verified
 
-- `python -m ruff check ethscan/ tests/` → All checks passed (0 errors).
-- `python -m pytest tests/test_config.py tests/test_cli.py -q` → All passed.
-- `python -m pytest tests/ -q` → 5204 passed, 48 skipped, 3 warnings (pre-existing `test_main.py` runpy warnings).
+- `python -m ruff check ethscan/service.py tests/test_service.py` → All checks passed (0 errors).
+- `python -m pytest tests/test_service.py -q` → 27 passed.
+- `python -m pytest tests/ -q` → 5202 passed, 49 skipped, 2 failed, 3 warnings.
+- The 2 failures are pre-existing on the clean baseline (verified with `git stash`):
+  - `test_dnsbrute.py::test_axfr_dnspython_empty_message_falls_back_to_class_name` (ImportError: `ethscan.dnsbrute.dns` not a package)
+  - `test_dnssec.py::test_parse_dnskey_response_full` (assert None == 41382)
+- Byte-level proof: old string → `b'HEAD / HTTP/1.0\\r\\nHost: x\\r\\n\\r\\n'`; new string → `b'HEAD / HTTP/1.0\r\nHost: x\r\n\r\n'`.
 
 ## What remains unresolved
 
-None from this task.
+The two pre-existing test failures above are out of scope for this task.
 
 ## Which approaches have already failed and why
 
@@ -26,6 +32,8 @@ None.
 
 ## One precise next task
 
-Search for a small, concrete improvement: look for TODO/FIXME in source (non-test) files, or find code patterns that are clearly duplicated/redundant and can be simplified safely with existing tests as guardrails. Pick exactly one bounded task, implement with smallest reversible change, verify with relevant tests/ruff, and update TASK.md/HANDOFF_NEXT.md before ending.
+Investigate the two pre-existing failures if desired:
+- `test_dnsbrute.py::test_axfr_dnspython_empty_message_falls_back_to_class_name` — ImportError suggests a relative-import or packaging issue in `ethscan.dnsbrute`.
+- `test_dnssec.py::test_parse_dnskey_response_full` — a DNSKEY key_tag computation returning None; likely a parsing/algorithm issue in `ethscan.dnssec`.
 
-Constraints: smallest reversible change, no behavior changes unless strictly necessary and covered by tests, ruff-clean, full suite passes, do not commit unless explicitly asked.
+Constraints if pursued: smallest reversible change, no behavior changes unless strictly necessary and covered by tests, ruff-clean, full suite passes, do not commit unless explicitly asked.
