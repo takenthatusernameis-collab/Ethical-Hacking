@@ -1131,3 +1131,55 @@ def test_resolve_aaaa_records_swallows_unlisted_exceptions(monkeypatch, exc):
         assert subtake_mod.resolve_aaaa_records("example.com", timeout=1.0, resolver="8.8.8.8") == []
     finally:
         _restore_subtake(monkeypatch)
+
+
+class Hostile(Exception):
+    """An exception type the resolver tuple does not name.
+
+    ``IndexError``/``AttributeError``/``KeyError`` are all members of the
+    tuple the guards used to list, so a test that raises one of them passes
+    trivially and never demonstrates the seam. A hostile resolver can raise
+    any type at all, so the regression is demonstrated with a type that was
+    never in the tuple.
+    """
+
+
+@pytest.mark.parametrize("exc", [Hostile])
+def test_resolve_cname_swallows_hostile_exception(monkeypatch, exc):
+    """resolve_cname returns None when the resolver raises an unlisted type."""
+    subtake_mod = _reload_subtake(monkeypatch)
+    try:
+        monkeypatch.setattr(
+            subtake_mod.dns.resolver, "Resolver", _make_raising_resolver(exc)
+        )
+        assert subtake_mod.resolve_cname("x.example.com", timeout=1.0, resolver="8.8.8.8") is None
+    finally:
+        _restore_subtake(monkeypatch)
+
+
+@pytest.mark.parametrize("exc", [Hostile])
+def test_resolve_a_records_swallows_hostile_exception(monkeypatch, exc):
+    """resolve_a_records returns [] when the resolver raises an unlisted type."""
+    subtake_mod = _reload_subtake(monkeypatch)
+    try:
+        monkeypatch.setattr(
+            subtake_mod.dns.resolver, "Resolver", _make_raising_resolver(exc)
+        )
+        _socket_always_fails(monkeypatch, subtake_mod)
+        assert subtake_mod.resolve_a_records("example.com", timeout=1.0, resolver="8.8.8.8") == []
+    finally:
+        _restore_subtake(monkeypatch)
+
+
+@pytest.mark.parametrize("exc", [Hostile])
+def test_resolve_aaaa_records_swallows_hostile_exception(monkeypatch, exc):
+    """resolve_aaaa_records returns [] when the resolver raises an unlisted type."""
+    subtake_mod = _reload_subtake(monkeypatch)
+    try:
+        monkeypatch.setattr(
+            subtake_mod.dns.resolver, "Resolver", _make_raising_resolver(exc)
+        )
+        _socket_always_fails(monkeypatch, subtake_mod)
+        assert subtake_mod.resolve_aaaa_records("example.com", timeout=1.0, resolver="8.8.8.8") == []
+    finally:
+        _restore_subtake(monkeypatch)

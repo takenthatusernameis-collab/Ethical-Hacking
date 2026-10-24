@@ -304,7 +304,10 @@ def resolve_cname(hostname: str, timeout: float = 2.0, resolver: str | None = No
             if not answers:
                 return None
             return str(answers[0]).rstrip(".")
-        except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError):
+        # A transport failure of an unnamed type must not escape the command:
+        # the resolver can raise any type, and a hostile answer is a failed
+        # lookup, not a crash.
+        except Exception:  # noqa: BLE001 - resolver can raise any type
             return None
 
     try:
@@ -335,7 +338,10 @@ def resolve_a_records(hostname: str, timeout: float = 2.0, resolver: str | None 
             answers = dns_resolver.resolve(hostname, "A")
             ips = sorted({str(rdata) for rdata in answers})
             return ips
-        except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError):
+        # A transport failure of an unnamed type must not escape the command:
+        # the resolver can raise any type, and a hostile answer is a failed
+        # lookup, not a crash.
+        except Exception:  # noqa: BLE001 - resolver can raise any type
             pass
 
     try:
@@ -363,7 +369,10 @@ def resolve_aaaa_records(hostname: str, timeout: float = 2.0, resolver: str | No
             answers = dns_resolver.resolve(hostname, "AAAA")
             ips = sorted({str(rdata) for rdata in answers})
             return ips
-        except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError):
+        # A transport failure of an unnamed type must not escape the command:
+        # the resolver can raise any type, and a hostile answer is a failed
+        # lookup, not a crash.
+        except Exception:  # noqa: BLE001 - resolver can raise any type
             pass
 
     try:

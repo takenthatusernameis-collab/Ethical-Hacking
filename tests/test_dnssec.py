@@ -1435,3 +1435,72 @@ def test_run_dnssec_does_not_crash_on_unlisted_exceptions(monkeypatch, exc):
     results = dnssec_mod.run_dnssec("example.com", timeout=1.0)
     assert results["validated"] is False
     assert any("DNSKEY query failed" in n for n in results["notes"])
+
+
+class Hostile(Exception):
+    """An exception type the resolver tuple does not name.
+
+    ``IndexError``/``AttributeError``/``KeyError`` are all members of the
+    tuple the guards used to list, so a test that raises one of them passes
+    trivially and never demonstrates the seam. A hostile resolver/server can
+    raise any type at all, so the regression is demonstrated with a type that
+    was never in the tuple.
+    """
+
+
+def test_query_dnskey_dnspython_swallows_hostile_exception(monkeypatch):
+    """_query_dnskey_dnspython returns a failure dict when the transport raises an unlisted type."""
+    mock_dns = MagicMock()
+
+    class FakeDNSException(Exception):
+        pass
+
+    mock_dns.exception.DNSException = FakeDNSException
+    mock_dns.query.udp.side_effect = Hostile("hostile")
+
+    import ethscan.dnssec as dnssec_mod
+
+    monkeypatch.setattr(dnssec_mod, "dns", mock_dns, raising=False)
+    r = dnssec_mod._query_dnskey_dnspython("example.com", None, 1.0)
+    assert r["success"] is False
+    assert r["keys"] == []
+    assert "hostile" in r["error"]
+
+
+def test_query_ds_dnspython_swallows_hostile_exception(monkeypatch):
+    """_query_ds_dnspython returns a failure dict when the transport raises an unlisted type."""
+    mock_dns = MagicMock()
+
+    class FakeDNSException(Exception):
+        pass
+
+    mock_dns.exception.DNSException = FakeDNSException
+    mock_dns.query.udp.side_effect = Hostile("hostile")
+
+    import ethscan.dnssec as dnssec_mod
+
+    monkeypatch.setattr(dnssec_mod, "dns", mock_dns, raising=False)
+    r = dnssec_mod._query_ds_dnspython("example.com", None, 1.0)
+    assert r["success"] is False
+    assert r["records"] == []
+    assert "hostile" in r["error"]
+
+
+def test_run_dnssec_does_not_crash_on_hostile_exception(monkeypatch):
+    """run_dnssec reports a failed DNSKEY/DS query instead of crashing on an unlisted exception."""
+    mock_dns = MagicMock()
+
+    class FakeDNSException(Exception):
+        pass
+
+    mock_dns.exception.DNSException = FakeDNSException
+    mock_dns.query.udp.side_effect = Hostile("hostile")
+
+    import ethscan.dnssec as dnssec_mod
+
+    monkeypatch.setattr(dnssec_mod, "dns", mock_dns, raising=False)
+    monkeypatch.setattr(dnssec_mod, "DNS_AVAILABLE", True)
+
+    results = dnssec_mod.run_dnssec("example.com", timeout=1.0)
+    assert results["validated"] is False
+    assert any("DNSKEY query failed" in n for n in results["notes"])

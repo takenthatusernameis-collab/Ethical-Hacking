@@ -411,7 +411,10 @@ def _query_dnskey_dnspython(
                         "key_data": str(rdata).split()[-1] if str(rdata) else "",
                     })
         return {"success": True, "keys": keys, "error": None}
-    except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError) as exc:
+    # A transport failure of an unnamed type must not escape the command: a
+    # hostile resolver/server can raise any type, and it is a failed probe, not
+    # a crash.
+    except Exception as exc:  # noqa: BLE001 - transport can raise any type
         return {"success": False, "keys": [], "error": str(exc)}
 
 
@@ -443,7 +446,10 @@ def _query_ds_dnspython(
                         "digest": rdata.digest.hex() if rdata.digest else "",
                     })
         return {"success": True, "records": records, "error": None}
-    except (dns.exception.DNSException, OSError, ValueError, IndexError, AttributeError, KeyError) as exc:
+    # A transport failure of an unnamed type must not escape the command: a
+    # hostile resolver/server can raise any type, and it is a failed probe, not
+    # a crash.
+    except Exception as exc:  # noqa: BLE001 - transport can raise any type
         return {"success": False, "records": [], "error": str(exc)}
 
 
