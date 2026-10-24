@@ -156,11 +156,10 @@ def _parse_resp(data: bytes) -> tuple[Any | None, int]:
                 if pos >= len(data):
                     return None, 0
                 item, c = _parse_resp(data[pos:])
-                if c == 0 and item is None and data[pos:pos+1] == b"$" and data[pos:pos+3] == b"$-1":
-                    # null bulk string case - need to consume properly
-                    pass  # try again
                 if c == 0:
-                    # try to handle null bulk string
+                    # Defensive handling for a truncated null bulk string
+                    # ("$-1" with no trailing CRLF); a well-formed "$-1\r\n"
+                    # is already consumed by _parse_resp_bulk_string (c == 5).
                     if data[pos:pos+3] == b"$-1":
                         items.append(None)
                         pos += 5

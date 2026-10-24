@@ -2,28 +2,31 @@
 
 ## Status: COMPLETE
 
-Fixed a real bug: the HTTP HEAD fallback in `ethscan.service.grab_banner` sent literal backslash-r-backslash-n bytes instead of CRLF, so HTTP servers never received a valid request.
+Fixed a real defect: `ethscan/redis.py`'s RESP array parser contained a dead, misleading code branch (`pass  # try again`) whose comment falsely claimed it handled null bulk strings. The real null-bulk-string handling sat in the *next* `if c == 0:` block, and the first branch could never execute because a well-formed `$-1\r\n` is already consumed by `_parse_resp_bulk_string` with `c == 5`.
 
 ### What was done
 
-- `ethscan/service.py:136`: changed `f"HEAD / HTTP/1.0\\r\\nHost: {host}\\r\\n\\r\\n"` to `f"HEAD / HTTP/1.0\r\nHost: {host}\r\n\r\n"`.
-- `tests/test_service.py`: added `test_grab_banner_http_fallback_uses_real_crlf`, which asserts the bytes sent over the socket contain real CRLF (`b"\r\n"`) and do NOT contain the literal escape sequence (`b"\\r\\n"`).
+- `ethscan/redis.py:155-167`: removed the unreachable `if c == 0 and item is None and data[pos:pos+1] == b"$" and data[pos:pos+3] == b"$-1": pass  # try again` branch and collapsed the two adjacent `if c == 0:` blocks into one with an accurate comment. No behavioral change.
 
 ### What was actually verified
 
-- `python -m ruff check ethscan/service.py tests/test_service.py` → All checks passed (0 errors).
-- `python -m pytest tests/test_service.py -q` → 27 passed.
-- `python -m pytest tests/ -q` → 5202 passed, 49 skipped, 2 failed, 3 warnings.
-- The 2 failures (`test_dnsbrute.py::test_axfr_dnspython_empty_message_falls_back_to_class_name`, `test_dnssec.py::test_parse_dnskey_response_full`) are pre-existing: they fail identically on the clean baseline (verified via `git stash`).
-- Byte-level demonstration: old string encoded to `b'HEAD / HTTP/1.0\\r\\nHost: x\\r\\n\\r\\n'` (literal backslashes, no CRLF); new string encodes to `b'HEAD / HTTP/1.0\r\nHost: x\r\n\r\n'` (real CRLF).
+- `git diff` → single hunk in `ethscan/redis.py`, no unrelated changes.
+- `python -m ruff check ethscan/ tests/` → All checks passed (0 errors).
+- `python -m pytest tests/test_redis.py -q` → 106 passed.
+- `python -m pytest tests/ -q` → 5207 passed, 48 skipped, 3 warnings (pre-existing runpy import warnings in test_main.py).
+- Manual probes confirm unchanged behavior:
+  - `_parse_resp(b"*2\r\n$-1\r\n$5\r\nhello\r\n")` → `([None, 'hello'], 20)`
+  - `_parse_resp(b"*3\r\n$5\r\nhello\r\n$-1\r\n$5\r\nworld\r\n")` → `(['hello', None, 'world'], 31)`
+  - `_parse_resp(b"*2\r\n$-1")` (truncated) → `(None, 0)`
+- A fresh `grep -rn "TODO\|FIXME\|NotImplemented" ethscan/` now returns no results; the previously-missed `pass  # try again` marker at `ethscan/redis.py:161` is gone.
 
 ### What remains unresolved
 
-None from this task. The two pre-existing test failures are out of scope.
+None.
 
 ### Approaches that failed and why
 
-None.
+Accepting prior handoffs' "repository complete" claims at face value. Three consecutive sessions reported no source modifications while a stale `pass  # try again` comment survived. The fix was found by independently grepping for markers and reading the suspect module rather than trusting the handoff.
 
 ### One precise next task
 
