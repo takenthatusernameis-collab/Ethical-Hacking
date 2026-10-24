@@ -8,7 +8,7 @@ No changes made. The repository was already in a clean, complete, passing state 
 
 - `git status` shows clean working tree (no staged/unstaged changes).
 - `python -m ruff check ethscan/ tests/` → All checks passed (0 errors).
-- `python -m pytest tests/ -q` → 5207 passed, 48 skipped, 3 warnings (the 3 warnings are pre-existing `runpy` RuntimeWarnings in test_main.py).
+- `python -m pytest tests/ -q` → 5207 passed, 48 skipped, 3 warnings (pre-existing `runpy` RuntimeWarnings in test_main.py).
 
 ## What remains unresolved
 
