@@ -1,8 +1,7 @@
 ## What changed this session
 
-Fixed deterministic blockers:
-- `ethscan/service.py`: narrowed blind `except Exception` to `(TypeError, ValueError)` for ruff S110/BLE001.
-- `ethscan/nmap.py`: removed duplicate CSV row writer in `format_nmap_report_csv` that emitted an extra row per finding.
+- `ethscan/urlcheck.py`: hardened `format_urlcheck_report_csv` with defensive type checks and safe handling of `web_checks_run` (list/str/other) to avoid assuming dict shapes.
+- `ethscan/cli.py`: tightened `known_options` to store `str` param names only, avoiding passing `None` to `validate_config`.
 
 ## What was actually verified
 

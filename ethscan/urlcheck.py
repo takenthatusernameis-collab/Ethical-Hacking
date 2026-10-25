@@ -252,38 +252,52 @@ def format_urlcheck_report_csv(data: dict[str, object]) -> str:
     writer = csv.writer(output)
     writer.writerow(["section", "key", "value"])
 
-    summary = data.get("summary") or {}
+    summary = data.get("summary")
+    if not isinstance(summary, dict):
+        summary = {}
     writer.writerow(["summary", "target", data.get("target", "")])
     writer.writerow(["summary", "normalized_target", data.get("normalized_target", "")])
     writer.writerow(["summary", "total_findings", summary.get("total_findings", 0)])
-    writer.writerow(
-        ["summary", "web_checks_run", ",".join(summary.get("web_checks_run", []))]
-    )
+    web_checks_run = summary.get("web_checks_run") or []
+    if isinstance(web_checks_run, (list, tuple)):
+        writer.writerow(["summary", "web_checks_run", ",".join(str(x) for x in web_checks_run)])
+    else:
+        writer.writerow(["summary", "web_checks_run", web_checks_run])
     writer.writerow(["summary", "fuzz_enabled", "true" if summary.get("fuzz_enabled") else "false"])
     writer.writerow(["summary", "ssl_checked", "true" if summary.get("ssl_checked") else "false"])
 
-    web = data.get("web") or {}
-    security_headers = web.get("security_headers") or {}
+    web = data.get("web")
+    if not isinstance(web, dict):
+        web = {}
+    security_headers = web.get("security_headers")
+    if not isinstance(security_headers, dict):
+        security_headers = {}
     if web.get("error"):
         writer.writerow(["web", "error", web["error"]])
-    for header in security_headers.get("present", []):
-        writer.writerow(["web", "header_present", header])
-    for header in security_headers.get("missing", []):
-        writer.writerow(["web", "header_missing", header])
+    for header in security_headers.get("present") or []:
+        if isinstance(header, str):
+            writer.writerow(["web", "header_present", header])
+    for header in security_headers.get("missing") or []:
+        if isinstance(header, str):
+            writer.writerow(["web", "header_missing", header])
     for finding in web.get("information_disclosure") or []:
-        writer.writerow(["web", "information_disclosure", finding.get("header", "")])
+        if isinstance(finding, dict):
+            writer.writerow(["web", "information_disclosure", finding.get("header", "")])
 
     fuzz = data.get("fuzz")
-    if fuzz:
+    if isinstance(fuzz, dict):
         for finding in fuzz.get("findings") or []:
-            writer.writerow(
-                ["fuzz", "finding", f"{finding.get('path', '')} ({finding.get('status_code')})"]
-            )
+            if isinstance(finding, dict):
+                writer.writerow(
+                    ["fuzz", "finding", f"{finding.get('path', '')} ({finding.get('status_code')})"]
+                )
 
     ssl_data = data.get("ssl")
-    if ssl_data:
+    if isinstance(ssl_data, dict):
         writer.writerow(["ssl", "valid", "true" if ssl_data.get("valid") else "false"])
-        cert = ssl_data.get("cert") or {}
+        cert = ssl_data.get("cert")
+        if not isinstance(cert, dict):
+            cert = {}
         for key in ("subject", "issuer", "signature_algorithm"):
             if cert.get(key):
                 writer.writerow(["ssl", key, cert.get(key)])

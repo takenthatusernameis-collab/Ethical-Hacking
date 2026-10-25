@@ -408,8 +408,8 @@ def cli(ctx, config_path: str | None) -> None:
     config = load_config(config_path)
     ctx.obj = {"config": config, "config_path": config_path}
     known_commands = sorted(cli.commands.keys())
-    known_options = {
-        name: {param.name for param in command.params}
+    known_options: dict[str, set[str]] = {
+        name: {str(param.name) for param in command.params if param.name is not None}
         for name, command in cli.commands.items()
     }
     for warning in validate_config(
