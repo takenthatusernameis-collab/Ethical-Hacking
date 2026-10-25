@@ -208,7 +208,7 @@ def run_service(
             if isinstance(x, dict):
                 val = x.get("port")
                 return int(val or 0)
-        except Exception:
+        except (TypeError, ValueError):
             pass
         return 0
 

@@ -415,16 +415,4 @@ def format_nmap_report_csv(data: dict[str, object]) -> str:
                 title,
             ]
         )
-        service = str(finding.get("service_name") or "")
-        product = str(finding.get("product") or "")
-        version = str(finding.get("version") or "")
-        cve_id = str(finding.get("id") or "")
-        severity = str(finding.get("severity") or "").upper()
-        score = finding.get("score", "")
-        if score is None:
-            score = ""
-        title = str(finding.get("title") or "")
-        writer.writerow(
-            [host, addr, port, state, service, product, version, cve_id, severity, score, title]
-        )
     return output.getvalue().rstrip("\r\n")
