@@ -59,7 +59,7 @@ BANNER_SIGNATURES = [
     ),
 ]
 
-SERVICE_VULNS = [
+SERVICE_VULNS: list[dict[str, object]] = [
     {
         "kind": "service",
         "id": "CVE-2016-6210",

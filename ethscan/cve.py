@@ -170,18 +170,21 @@ def _get_cached_or_fetch(
 
 def _extract_cve_summary(cve_data: dict[str, object]) -> dict[str, object]:
     """Extract a normalized CVE summary from raw NVD API response."""
-    vulns = (cve_data.get("vulnerabilities") or [])
+    vulns_raw = cve_data.get("vulnerabilities")
+    vulns = vulns_raw if isinstance(vulns_raw, list) else []
     if not vulns:
         return {}
     first = vulns[0]
     if not isinstance(first, dict):
         return {}
-    cve = first.get("cve") or {}
-    if not isinstance(cve, dict):
+    cve_raw = first.get("cve")
+    cve = cve_raw if isinstance(cve_raw, dict) else {}
+    if not cve:
         return {}
 
     cve_id = cve.get("id") or ""
-    descriptions = cve.get("descriptions") or []
+    descriptions_raw = cve.get("descriptions")
+    descriptions = descriptions_raw if isinstance(descriptions_raw, list) else []
     description = ""
     for entry in descriptions:
         if isinstance(entry, dict) and entry.get("lang") == "en":
@@ -190,22 +193,27 @@ def _extract_cve_summary(cve_data: dict[str, object]) -> dict[str, object]:
     if not description and descriptions and isinstance(descriptions[0], dict):
         description = descriptions[0].get("value") or ""
 
-    metrics = cve.get("metrics") or {}
-    cvss = {}
+    metrics_raw = cve.get("metrics")
+    metrics = metrics_raw if isinstance(metrics_raw, dict) else {}
+    cvss: dict[str, object] = {}
     for key in ("cvssMetricV31", "cvssMetricV30", "cvssMetricV2"):
-        entries = metrics.get(key) or []
+        entries_raw = metrics.get(key)
+        entries = entries_raw if isinstance(entries_raw, list) else []
         if entries and isinstance(entries[0], dict):
-            cvss = entries[0].get("cvssData") or {}
+            cvss_raw = entries[0].get("cvssData")
+            cvss = cvss_raw if isinstance(cvss_raw, dict) else {}
             break
 
-    severity = (cvss.get("baseSeverity") or "").upper() or None
+    severity_raw = cvss.get("baseSeverity")
+    severity = str(severity_raw).upper() if severity_raw else None
     score = cvss.get("baseScore")
     published = cve.get("published") or ""
     last_modified = cve.get("lastModified") or ""
 
+    references_raw = cve.get("references")
     references = [
         r.get("url")
-        for r in (cve.get("references") or [])
+        for r in (references_raw if isinstance(references_raw, list) else [])
         if isinstance(r, dict) and r.get("url")
     ]
 
@@ -312,8 +320,9 @@ def run_cve(
                     "notes": service_result.get("notes", []),
                     "results": service_result.get("results", service_result.get("services", [])),
                 }
-                if service_result.get("notes"):
-                    for sn in service_result["notes"]:
+                notes_raw = service_result.get("notes")
+                if isinstance(notes_raw, list):
+                    for sn in notes_raw:
                         notes.append(f"service: {sn}")
             except (OSError, ValueError, json.JSONDecodeError) as exc:
                 notes.append(f"Service detection failed: {exc}")
@@ -321,26 +330,24 @@ def run_cve(
         elif services is None and services_file:
             services = {"target": target, "services": []}
 
-        service_list = None
+        service_list: list[object] = []
         if isinstance(services, dict):
-            if services.get("services"):
-                service_list = services.get("services")
-            elif services.get("results"):
-                service_list = services.get("results")
+            services_list = services.get("services")
+            if isinstance(services_list, list):
+                service_list = services_list
             else:
-                service_list = []
-        else:
-            service_list = []
+                results_list = services.get("results")
+                if isinstance(results_list, list):
+                    service_list = results_list
         cve_entries: list[dict[str, object]] = []
         services_checked = 0
         nvd_errors: list[str] = []
 
-        items = service_list
+        items: list[object] = service_list
         if isinstance(items, dict):
-            items = items.get("services") or items.get("results") or []
+            inner_services = items.get("services")
+            items = inner_services if isinstance(inner_services, list) else []
 
-        if items is None:
-            items = []
         if isinstance(services, dict) and services_file:
             results = services.get("results")
             if results is not None and not isinstance(results, list):
@@ -353,16 +360,18 @@ def run_cve(
                     items = [e for e in results if isinstance(e, dict)]
                 else:
                     items = results
-            elif services.get("services") is not None and not isinstance(services.get("services"), list):
-                notes.append("Service data holds no 'results' list")
-                items = []
-            elif isinstance(services.get("services"), list):
-                bad_entries = [e for e in services.get("services") if not isinstance(e, dict)]
-                if bad_entries:
-                    notes.append("Service data holds entries that are not objects")
-                    items = [e for e in services.get("services") if isinstance(e, dict)]
-                else:
-                    items = services.get("services")
+            else:
+                services_list = services.get("services")
+                if services_list is not None and not isinstance(services_list, list):
+                    notes.append("Service data holds no 'results' list")
+                    items = []
+                elif isinstance(services_list, list):
+                    bad_entries = [e for e in services_list if not isinstance(e, dict)]
+                    if bad_entries:
+                        notes.append("Service data holds entries that are not objects")
+                        items = [e for e in services_list if isinstance(e, dict)]
+                    else:
+                        items = services_list
         for entry in items:
             if not isinstance(entry, dict):
                 continue
@@ -390,7 +399,10 @@ def run_cve(
                 )
 
             try:
-                cve_id = _lookup_cve_id(product, version)
+                cve_id = _lookup_cve_id(
+                    product if product is not None else "",
+                    version if version is not None else "",
+                )
                 if cve_id:
                     cve_data = _get_cached_or_fetch(
                         cve_id, timeout, use_cache, offline_fallback, api_url
@@ -421,8 +433,10 @@ def run_cve(
         if severity:
             filtered: list[dict[str, object]] = []
             for entry in cve_entries:
-                finding = entry.get("finding") or {}
-                cve = entry.get("cve") or {}
+                finding_raw = entry.get("finding")
+                finding = finding_raw if isinstance(finding_raw, dict) else {}
+                cve_raw = entry.get("cve")
+                cve = cve_raw if isinstance(cve_raw, dict) else {}
                 sev = finding.get("severity") or cve.get("severity")
                 if sev and str(sev).lower() == severity:
                     filtered.append(entry)
@@ -433,9 +447,12 @@ def run_cve(
             if min_rank is not None:
                 filtered_min: list[dict[str, object]] = []
                 for entry in cve_entries:
-                    finding = entry.get("finding") or {}
-                    cve = entry.get("cve") or {}
-                    level = finding.get("severity") or cve.get("severity")
+                    finding_raw = entry.get("finding")
+                    finding = finding_raw if isinstance(finding_raw, dict) else {}
+                    cve_raw = entry.get("cve")
+                    cve = cve_raw if isinstance(cve_raw, dict) else {}
+                    level_raw = finding.get("severity") or cve.get("severity")
+                    level = str(level_raw) if level_raw else None
                     rank = _severity_rank(level)
                     if rank is not None and rank >= min_rank:
                         filtered_min.append(entry)
@@ -443,12 +460,14 @@ def run_cve(
 
         severity_counts: dict[str, int] = {name: 0 for name in SEVERITIES}
         for entry in cve_entries:
-            finding = entry.get("finding") or {}
-            cve = entry.get("cve") or {}
-            level = finding.get("severity") or cve.get("severity")
-            if level:
-                severity_counts[str(level).lower()] = severity_counts.get(
-                    str(level).lower(), 0
+            finding_raw = entry.get("finding")
+            finding = finding_raw if isinstance(finding_raw, dict) else {}
+            cve_raw = entry.get("cve")
+            cve = cve_raw if isinstance(cve_raw, dict) else {}
+            level_raw = finding.get("severity") or cve.get("severity")
+            if level_raw:
+                severity_counts[str(level_raw).lower()] = severity_counts.get(
+                    str(level_raw).lower(), 0
                 ) + 1
 
         if services_checked == 0:
@@ -507,15 +526,19 @@ def format_cve_report_csv(data: dict[str, object]) -> str:
 
     writer.writerow(["source", "port", "product", "version", "cve_id", "severity", "score", "title", "description", "references", "cached", "offline_fallback"])
 
-    entries = data.get("cve_entries") or []
+    entries = data.get("cve_entries")
+    entries = entries if isinstance(entries, list) else []
     for entry in entries:
+        if not isinstance(entry, dict):
+            continue
         source = str(entry.get("source", ""))
         port = entry.get("port", "")
         product = str(entry.get("product") or "")
         version = str(entry.get("version") or "")
 
         if source == "builtin":
-            finding = entry.get("finding") or {}
+            finding_raw = entry.get("finding")
+            finding = finding_raw if isinstance(finding_raw, dict) else {}
             cve_id = finding.get("id", "")
             severity = str(finding.get("severity", "")).upper()
             score = ""
@@ -525,13 +548,16 @@ def format_cve_report_csv(data: dict[str, object]) -> str:
             cached = ""
             offline_fallback = ""
         else:
-            cve = entry.get("cve") or {}
+            cve_raw = entry.get("cve")
+            cve = cve_raw if isinstance(cve_raw, dict) else {}
             cve_id = entry.get("cve_id") or cve.get("id", "")
             severity = str(cve.get("severity", "")).upper()
             score = cve.get("score", "")
             title = ""
             description = str(cve.get("description", ""))
-            refs = "; ".join(cve.get("references") or [])
+            refs_raw = cve.get("references")
+            refs_list = refs_raw if isinstance(refs_raw, list) else []
+            refs = "; ".join(str(r) for r in refs_list)
             cached = "true" if entry.get("cached") else "false"
             offline_fallback = "true" if entry.get("offline_fallback") else "false"
 
@@ -582,23 +608,30 @@ def format_cve_report_markdown(data: dict[str, object]) -> str:
     if data.get("min_severity_filter"):
         lines.append(f"- **Min Severity:** {data['min_severity_filter']}")
     if data.get("ports"):
-        ports_str = ", ".join(str(p) for p in data["ports"])
+        ports_raw = data["ports"]
+        ports_list = ports_raw if isinstance(ports_raw, list) else []
+        ports_str = ", ".join(str(p) for p in ports_list)
         lines.append(f"- **Ports Scanned:** {ports_str}")
     lines.append("")
 
-    severity_counts = data.get("severity_counts") or {}
+    severity_counts_raw = data.get("severity_counts")
+    severity_counts = severity_counts_raw if isinstance(severity_counts_raw, dict) else {}
     lines.append("## Severity Summary")
     for name in SEVERITIES:
         lines.append(f"- **{name.capitalize()}:** {severity_counts.get(name, 0)}")
     lines.append("")
 
-    entries = data.get("cve_entries") or []
+    entries_raw = data.get("cve_entries")
+    entries = entries_raw if isinstance(entries_raw, list) else []
     lines.append("## CVE Findings")
     if entries:
         for entry in entries:
+            if not isinstance(entry, dict):
+                continue
             source = str(entry.get("source", ""))
             if source == "builtin":
-                finding = entry.get("finding") or {}
+                finding_raw = entry.get("finding")
+                finding = finding_raw if isinstance(finding_raw, dict) else {}
                 lines.append(
                     f"### {finding.get('id', 'Unknown')} "
                     f"({str(finding.get('severity', '')).upper()})"
@@ -612,7 +645,8 @@ def format_cve_report_markdown(data: dict[str, object]) -> str:
                     f"- **Description:** {_escape(str(finding.get('description', '')))}"
                 )
             else:
-                cve = entry.get("cve") or {}
+                cve_raw = entry.get("cve")
+                cve = cve_raw if isinstance(cve_raw, dict) else {}
                 cve_id = entry.get("cve_id") or cve.get("id") or "Unknown"
                 lines.append(
                     f"### {cve_id} ({str(cve.get('severity', '')).upper()})"
@@ -635,7 +669,8 @@ def format_cve_report_markdown(data: dict[str, object]) -> str:
                     lines.append(
                         f"- **Description:** {_escape(str(cve.get('description')))}"
                     )
-                refs = cve.get("references") or []
+                refs_raw = cve.get("references")
+                refs = refs_raw if isinstance(refs_raw, list) else []
                 if refs:
                     lines.append("- **References:**")
                     for ref in refs:
@@ -649,7 +684,8 @@ def format_cve_report_markdown(data: dict[str, object]) -> str:
         lines.append("*No CVEs matched.*")
         lines.append("")
 
-    notes = data.get("notes") or []
+    notes_raw = data.get("notes")
+    notes = notes_raw if isinstance(notes_raw, list) else []
     if notes:
         lines.append("## Notes")
         for note in notes:
