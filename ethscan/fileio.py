@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import codecs
 import json
+from pathlib import Path
 from typing import Any
 
 
-def read_text(path: str) -> str:
+def read_text(path: str | Path) -> str:
     """Read a text file leniently.
 
     The bytes that are not valid UTF-8 are replaced instead of raising a
@@ -30,7 +31,7 @@ def read_text(path: str) -> str:
         return handle.read()
 
 
-def read_lines(path: str, *, skip_comments: bool = True) -> list[str]:
+def read_lines(path: str | Path, *, skip_comments: bool = True) -> list[str]:
     """Read a text file into a list of stripped, non-empty lines.
 
     Args:
