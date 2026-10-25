@@ -16,3 +16,6 @@ include = ["ethscan*"]
 testpaths = ["tests"]
 [tool.setuptools.package-data]
 ethscan = ["py.typed"]
+
+[project.scripts]
+ethscan = "ethscan.cli:cli"
