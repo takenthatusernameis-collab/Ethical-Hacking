@@ -12529,6 +12529,25 @@ def test_config_init_creates_parent_dirs(tmp_path) -> None:
     assert "Sample config written" in result.output
 
 
+def test_config_init_and_out_are_mutually_exclusive(tmp_path) -> None:
+    """`config --init PATH --out OUT` is a usage error, not a silent drop.
+
+    ``--init`` writes a sample config file and exits; it has no report to
+    redirect to ``--out``. Previously the ``--out`` path was silently ignored,
+    which looked like a write that never happened.
+    """
+    sample = tmp_path / "sample.yaml"
+    report = tmp_path / "report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["config", "--init", str(sample), "--out", str(report)]
+    )
+    assert result.exit_code == 2
+    assert "cannot be used together" in result.output
+    assert not report.exists()
+    assert not sample.exists()
+
+
 def test_config_init_sample_runs_end_to_end(tmp_path) -> None:
     """A config written by `config --init` loads and runs a command cleanly.
 

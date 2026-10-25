@@ -3579,6 +3579,16 @@ def config(
     """Inspect or initialize the ethscan configuration file."""
     from ethscan.config import dump_default_config
 
+    # --init writes a sample config and exits; it has no report to send to
+    # --out, so the two options are mutually exclusive. Without this check the
+    # --out path is silently ignored, which looks like a write that never
+    # happened.
+    if init_path and out_path:
+        raise click.UsageError(
+            "--init and --out cannot be used together: --init writes a sample "
+            "config file and has no report to redirect."
+        )
+
     if init_path:
         sample = dump_default_config()
         try:
