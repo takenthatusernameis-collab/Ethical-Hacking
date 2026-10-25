@@ -7,6 +7,10 @@ name = "ethscan"
 version = "0.1.0"
 description = "An ethical hacking toolkit"
 requires-python = ">=3.9"
+dependencies = [
+    "click>=8.1",
+    "pyyaml>=6.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -52,7 +52,7 @@ def read_lines(path: str | Path, *, skip_comments: bool = True) -> list[str]:
     return lines
 
 
-def load_json(path: str) -> Any:
+def load_json(path: str | Path) -> Any:
     """Load a JSON file.
 
     A file whose content nests deeper than the parser can read is a file that
@@ -80,7 +80,7 @@ def load_json(path: str) -> Any:
             ) from exc
 
 
-def is_utf8(path: str) -> bool:
+def is_utf8(path: str | Path) -> bool:
     """Return True when the file holds only bytes that are valid UTF-8.
 
     A credential file that is not valid UTF-8 cannot be read without changing
