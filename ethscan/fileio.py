@@ -1,4 +1,4 @@
-"""Shared helpers for reading the input files that the CLI accepts.
+"""Shared helpers for reading and writing files.
 
 Every option that takes a file can point at a file whose *content* is
 hostile: a wordlist with a line that is not valid UTF-8, a JSON file that is
@@ -103,3 +103,28 @@ def is_utf8(path: str | Path) -> bool:
     except (UnicodeDecodeError, OSError):
         return False
     return True
+
+
+def write_text(path: str | Path, content: str, *, encoding: str = "utf-8") -> None:
+    """Write text to a file.
+
+    Args:
+        path: Path to the file.
+        content: Text content to write.
+        encoding: File encoding (defaults to utf-8).
+    """
+    with open(path, "w", encoding=encoding) as handle:
+        handle.write(content)
+
+
+def write_json(path: str | Path, data: Any, *, indent: int = 2) -> None:
+    """Write data as JSON to a file.
+
+    Args:
+        path: Path to the file.
+        data: Data to serialize as JSON.
+        indent: JSON indentation (defaults to 2).
+    """
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(data, handle, indent=indent)
+        handle.write("\n")
