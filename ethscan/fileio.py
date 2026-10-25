@@ -113,7 +113,10 @@ def write_text(path: str | Path, content: str, *, encoding: str = "utf-8") -> No
         content: Text content to write.
         encoding: File encoding (defaults to utf-8).
     """
-    with open(path, "w", encoding=encoding) as handle:
+    p = Path(path)
+    if p.parent and str(p.parent) != ".":
+        p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, "w", encoding=encoding) as handle:
         handle.write(content)
 
 
@@ -125,6 +128,9 @@ def write_json(path: str | Path, data: Any, *, indent: int = 2) -> None:
         data: Data to serialize as JSON.
         indent: JSON indentation (defaults to 2).
     """
-    with open(path, "w", encoding="utf-8") as handle:
+    p = Path(path)
+    if p.parent and str(p.parent) != ".":
+        p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, "w", encoding="utf-8") as handle:
         json.dump(data, handle, indent=indent)
         handle.write("\n")

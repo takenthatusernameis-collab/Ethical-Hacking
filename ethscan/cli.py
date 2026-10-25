@@ -3592,11 +3592,9 @@ def config(
     if init_path:
         sample = dump_default_config()
         try:
-            parent_dir = os.path.dirname(os.path.abspath(init_path))
-            if parent_dir and not os.path.isdir(parent_dir):
-                os.makedirs(parent_dir, exist_ok=True)
-            with open(init_path, "w", encoding="utf-8") as handle:
-                handle.write(sample)
+            from ethscan.fileio import write_text
+
+            write_text(init_path, sample)
         except OSError as exc:
             click.echo(f"Error writing config: {exc}", err=True)
             raise SystemExit(1)
