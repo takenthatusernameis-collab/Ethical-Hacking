@@ -74,7 +74,12 @@ def _connect(
     ``login(...)`` and ``close()`` -- mirroring the ``ftplib.FTP`` interface.
     """
     client = connector()
-    client.connect(host, port, timeout=timeout)
+    try:
+        client.connect(host, port, timeout=timeout)
+    except BaseException:
+        with contextlib.suppress(Exception):
+            client.close()
+        raise
     return client
 
 

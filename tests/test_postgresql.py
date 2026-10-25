@@ -1,5 +1,6 @@
 """Tests for the ethscan postgresql module."""
 
+import contextlib
 import json
 import socket
 import threading
@@ -672,10 +673,13 @@ def test_send_recv_no_data():
 
 def test_send_recv_recv_timeout():
     # Server accepts and holds the connection open; client recv times out.
-    port, _held = _start_tcp_server_never_sends()
+    port, held = _start_tcp_server_never_sends()
     data, err = _send_recv("127.0.0.1", port, _build_startup_request(), 0.1)
     assert data is None
     assert err is None  # recv timeout returns (None, None); connect timeout returns "Timeout"
+    if "conn" in held:
+        with contextlib.suppress(Exception):
+            held["conn"].close()
 
 
 def test_send_recv_connect_timeout():

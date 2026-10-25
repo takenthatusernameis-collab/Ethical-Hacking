@@ -1,6 +1,7 @@
 """Stale DNS record detection module for ethscan."""
 from __future__ import annotations
 
+import contextlib
 import csv
 import io
 import socket
@@ -91,14 +92,16 @@ def resolve_cname(domain: str, timeout: float = DEFAULT_TIMEOUT) -> str | None:
 
 def check_tcp_connect(ip: str, port: int = 80, timeout: float = DEFAULT_TIMEOUT) -> bool:
     """Check if an IP is reachable via TCP connect."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(timeout)
         sock.connect((ip, port))
-        sock.close()
         return True
     except Exception:  # noqa: BLE001 - transport can raise any type
         return False
+    finally:
+        with contextlib.suppress(Exception):
+            sock.close()
 
 
 def check_ip_reachable(ip: str, timeout: float = DEFAULT_TIMEOUT) -> bool:
