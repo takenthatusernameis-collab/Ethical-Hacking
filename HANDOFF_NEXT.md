@@ -8,7 +8,7 @@ speculative change was made.
 ### What was inspected (evidence-based, not assumed)
 
 - `git status --porcelain` → empty; branch `main` tracking `origin/main`,
-  up to date with remote (HEAD `09c1faa`).
+  up to date with remote (HEAD `b005977`).
 - `python -m pytest tests/ -q` → 5205 passed, 51 skipped, 0 warnings.
 - `python -m ruff check ethscan/ tests/` → All checks passed.
 - Offline CLI smoke tests: `validate --ports 80,443,8000-9000 --cidr 192.168.1.0/30`
@@ -28,7 +28,7 @@ speculative change was made.
 
 ## What was actually verified
 
-- `git status --porcelain` → empty (working tree clean, HEAD at `09c1faa`,
+- `git status --porcelain` → empty (working tree clean, HEAD at `b005977`,
   in sync with origin/main)
 - `python -m pytest tests/ -q` → 5205 passed, 51 skipped, 0 warnings
 - `python -m ruff check ethscan/ tests/` → All checks passed
