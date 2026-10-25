@@ -112,23 +112,39 @@ def load_config(explicit: str | None = None) -> dict[str, Any]:
         return dict(DEFAULT_CONFIG)
 
     try:
+        if yaml is None:
+            raise OSError("PyYAML is required to load configuration files")
         data = yaml.safe_load(read_text(path))
     # A file whose YAML nests deeper than the parser can read raises a
     # ``RecursionError``, which is not a ``yaml.YAMLError``: it is a file
     # that cannot be parsed, and it is reported like a file with broken YAML.
-    except (yaml.YAMLError, RecursionError) as exc:
+    except Exception as exc:
+        if yaml is not None and isinstance(exc, getattr(yaml, "YAMLError", Exception)):
+            return {
+                "defaults": {},
+                "commands": {},
+                "_path": str(path),
+                "_parse_error": f"Failed to parse {path}: {exc}",
+            }
+        if isinstance(exc, RecursionError):
+            return {
+                "defaults": {},
+                "commands": {},
+                "_path": str(path),
+                "_parse_error": f"Failed to parse {path}: {exc}",
+            }
+        if isinstance(exc, OSError):
+            return {
+                "defaults": {},
+                "commands": {},
+                "_path": str(path),
+                "_parse_error": f"Failed to read {path}: {exc}",
+            }
         return {
             "defaults": {},
             "commands": {},
             "_path": str(path),
             "_parse_error": f"Failed to parse {path}: {exc}",
-        }
-    except OSError as exc:
-        return {
-            "defaults": {},
-            "commands": {},
-            "_path": str(path),
-            "_parse_error": f"Failed to read {path}: {exc}",
         }
 
     if not isinstance(data, dict):
