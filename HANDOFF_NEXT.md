@@ -1,11 +1,13 @@
 ## What changed this session
 
-- `ethscan/fileio.py`: added `write_text` and `write_json` helpers (Path support consistent with existing read helpers).
+- `tests/test_fileio.py`: added tests for the `write_text` and `write_json` helpers (content written, encoding parameter, trailing newline, Path support). The helpers themselves (`ethscan/fileio.py`) were added in the previous session.
 
 ## What was actually verified
 
-- `python -m ruff check ethscan/ tests/` → All checks passed
-- `python -m pytest tests/ -q` → 5205 passed, 51 skipped
+- `python -m ruff check ethscan/ tests/` → All checks passed (1 import-sort fix applied).
+- `python -m pytest tests/test_fileio.py -q` → 19 passed.
+- `python -m pytest tests/ -q` → 5210 passed, 51 skipped (was 5205 passed before this session).
+- `python -m mypy ethscan/` → no new errors in `fileio.py` or `test_fileio.py` (497 pre-existing errors elsewhere, unchanged).
 
 ## What remains unresolved
 

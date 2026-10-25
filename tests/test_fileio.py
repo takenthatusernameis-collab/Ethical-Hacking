@@ -1,8 +1,15 @@
-"""Unit tests for the shared input-file readers."""
+"""Unit tests for the shared input-file readers and writers."""
 
 import pytest
 
-from ethscan.fileio import is_utf8, load_json, read_lines, read_text
+from ethscan.fileio import (
+    is_utf8,
+    load_json,
+    read_lines,
+    read_text,
+    write_json,
+    write_text,
+)
 
 
 def test_read_text_reads_the_whole_file(tmp_path) -> None:
@@ -95,3 +102,33 @@ def test_is_utf8_accepts_a_character_that_straddles_two_blocks(tmp_path) -> None
     path = tmp_path / "file.txt"
     path.write_bytes(b"a" * 65535 + "é".encode())
     assert is_utf8(str(path)) is True
+
+
+def test_write_text_writes_the_content(tmp_path) -> None:
+    path = tmp_path / "file.txt"
+    write_text(path, "hello\nworld\n")
+    assert path.read_text() == "hello\nworld\n"
+
+
+def test_write_text_uses_the_given_encoding(tmp_path) -> None:
+    path = tmp_path / "file.txt"
+    write_text(path, "café", encoding="utf-16")
+    assert path.read_bytes().decode("utf-16") == "café"
+
+
+def test_write_json_writes_the_data(tmp_path) -> None:
+    path = tmp_path / "file.json"
+    write_json(path, {"port": 80, "host": "127.0.0.1"})
+    assert load_json(path) == {"port": 80, "host": "127.0.0.1"}
+
+
+def test_write_json_ends_with_a_newline(tmp_path) -> None:
+    path = tmp_path / "file.json"
+    write_json(path, {"a": 1})
+    assert path.read_bytes().endswith(b"\n")
+
+
+def test_write_json_writes_a_path_object(tmp_path) -> None:
+    path = tmp_path / "file.json"
+    write_json(tmp_path / "file.json", {"a": 1})
+    assert load_json(path) == {"a": 1}
