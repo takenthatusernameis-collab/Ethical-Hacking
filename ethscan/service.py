@@ -150,8 +150,9 @@ def grab_banner(host: str, port: int, timeout: float) -> tuple[int, str | None, 
     detected_service = None
     if banner and service_name:
         if service_name in SERVICE_SIGNATURES:
-            for pattern, name in SERVICE_SIGNATURES[service_name]:
-                match = pattern.search(banner)
+            sigs = SERVICE_SIGNATURES.get(service_name) or []
+            for pattern, name in sigs:  # type: ignore
+                match = pattern.search(banner)  # type: ignore
                 if match:
                     detected_service = name or (match.group(1) if match.groups() else service_name.upper())
                     break
@@ -202,7 +203,16 @@ def run_service(
                     entry["service"] = service
                 results.append(entry)
 
-    results.sort(key=lambda x: x["port"])
+    def _port_key(x: object) -> int:
+        try:
+            if isinstance(x, dict):
+                val = x.get("port")
+                return int(val or 0)
+        except Exception:
+            pass
+        return 0
+
+    results.sort(key=_port_key)  # type: ignore[arg-type]
 
     return {
         "target": target,
@@ -228,18 +238,21 @@ def format_service_report_markdown(data: dict[str, object]) -> str:
     lines.append(f"- **Services Found:** {data['services_found']}")
     lines.append("")
 
-    if data["results"]:
+    results = data.get("results") or []
+    if results:
         lines.append("## Detected Services")
         lines.append("| Port | Service | Banner |")
         lines.append("|------|---------|--------|")
-        for result in data["results"]:
-            port = result["port"]
-            service = result.get("service", "Unknown")
-            banner = result.get("banner", "")
+        for result in results:  # type: ignore
+            res = result  # type: ignore
+            port = res.get("port")
+            service = res.get("service", "Unknown")
+            banner = res.get("banner", "") or ""
             if banner:
-                banner = banner.replace("|", "\\|")
-                if len(banner) > 80:
-                    banner = banner[:77] + "..."
+                banner_str = str(banner).replace("|", "\\|")
+                if len(banner_str) > 80:
+                    banner_str = banner_str[:77] + "..."
+                banner = banner_str
             lines.append(f"| {port} | {service} | {banner} |")
     else:
         lines.append("*No services detected.*")
@@ -252,9 +265,11 @@ def format_service_report_csv(data: dict[str, object]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["port", "service", "banner"])
-    for result in data.get("results", []):
-        port = result.get("port", "")
-        service = result.get("service", "")
-        banner = result.get("banner", "").replace("\n", " ").replace("\r", "")
+    results = data.get("results") or []
+    for result in results:  # type: ignore
+        res = result  # type: ignore
+        port = res.get("port", "")
+        service = res.get("service", "")
+        banner = str(res.get("banner", "") or "").replace("\n", " ").replace("\r", "")
         writer.writerow([port, service, banner])
     return output.getvalue().rstrip("\r\n")

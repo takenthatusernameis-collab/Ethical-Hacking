@@ -177,14 +177,16 @@ def run_nmap(
     total_ports_scanned = 0
     total_open_ports = 0
 
-    for host in hosts:
-        host_addr = host["address"]
-        hostnames = host.get("hostnames", [])
-        ports = host.get("ports", [])
+    for host in hosts:  # type: ignore
+        host_dict = host  # type: ignore
+        host_addr = host_dict["address"]
+        hostnames = host_dict.get("hostnames", []) or []
+        ports = host_dict.get("ports", []) or []
 
-        for port_info in ports:
+        for port_info in ports:  # type: ignore
+            port_dict = port_info  # type: ignore
             total_ports_scanned += 1
-            if port_info["state"] != "open":
+            if port_dict["state"] != "open":
                 continue
 
             total_open_ports += 1
@@ -192,44 +194,44 @@ def run_nmap(
             service_entry = {
                 "host": host_addr,
                 "hostnames": hostnames,
-                "port": port_info["port"],
-                "protocol": port_info["protocol"],
-                "service_name": port_info["service_name"],
-                "product": port_info["product"],
-                "version": port_info["version"],
-                "extrainfo": port_info["extrainfo"],
-                "ostype": port_info["ostype"],
-                "banner": port_info["banner"],
+                "port": port_dict["port"],
+                "protocol": port_dict["protocol"],
+                "service_name": port_dict.get("service_name"),
+                "product": port_dict.get("product"),
+                "version": port_dict.get("version"),
+                "extrainfo": port_dict.get("extrainfo"),
+                "ostype": port_dict.get("ostype"),
+                "banner": port_dict.get("banner"),
             }
             all_services.append(service_entry)
 
             # Try to match against vulnerability database using product/version
-            product = port_info["product"]
-            version = port_info["version"]
-            port_num = port_info["port"]
+            product = port_dict.get("product")
+            version = port_dict.get("version")
+            port_num = port_dict.get("port")
 
             # First try: use product and version directly
-            findings = match_service_vulns(product, version, port=port_num)
+            findings = match_service_vulns(product or "", version or "", port=port_num)  # type: ignore
 
             # Second try: if no findings, try parsing the banner for product/version
-            if not findings and port_info["banner"]:
-                parsed_product, parsed_version = parse_banner(port_info["banner"])
-                findings = match_service_vulns(parsed_product, parsed_version, port=port_num)
+            if not findings and port_dict.get("banner"):
+                parsed_product, parsed_version = parse_banner(port_dict.get("banner") or "")
+                findings = match_service_vulns(parsed_product, parsed_version, port=port_num)  # type: ignore
 
             # Add host context to findings
-            for finding in findings:
-                finding["host"] = host_addr
-                finding["service_name"] = port_info["service_name"]
-                finding["state"] = port_info["state"]
+            for finding in findings:  # type: ignore
+                finding["host"] = host_addr  # type: ignore
+                finding["service_name"] = port_dict.get("service_name")  # type: ignore
+                finding["state"] = port_dict.get("state")  # type: ignore
                 if hostnames:
-                    finding["hostnames"] = hostnames
+                    finding["hostnames"] = hostnames  # type: ignore
 
-            all_findings.extend(findings)
+            all_findings.extend(findings)  # type: ignore
 
     # Count by severity
     severity_counts: dict[str, int] = {name: 0 for name in SEVERITIES}
-    for finding in all_findings:
-        level = str(finding.get("severity", "")).lower()
+    for finding in all_findings:  # type: ignore
+        level = str((finding or {}).get("severity", "")).lower()
         if level in severity_counts:
             severity_counts[level] += 1
 
@@ -242,14 +244,14 @@ def run_nmap(
 
     return {
         "input_file": input_file,
-        "hosts_scanned": len(hosts),
+        "hosts_scanned": len(hosts),  # type: ignore
         "total_ports_scanned": total_ports_scanned,
         "total_open_ports": total_open_ports,
         "services_detected": len(all_services),
-        "findings": all_findings,
         "finding_count": len(all_findings),
         "severity_counts": severity_counts,
         "services": all_services,
+        "findings": all_findings,
         "notes": notes,
     }
 
@@ -307,7 +309,7 @@ def format_nmap_report_markdown(data: dict[str, object]) -> str:
     severity_counts = data.get("severity_counts") or {}
     lines.append("## Severity Summary")
     for name in SEVERITIES:
-        lines.append(f"- **{name.capitalize()}:** {severity_counts.get(name, 0)}")
+        lines.append(f"- **{name.capitalize()}:** {(severity_counts.get(name, 0) if isinstance(severity_counts, dict) else 0)}")
     lines.append("")
 
     services = data.get("services") or []
@@ -315,31 +317,33 @@ def format_nmap_report_markdown(data: dict[str, object]) -> str:
         lines.append("## Detected Services")
         lines.append("| Host | Hostnames | Port | Protocol | Service | Product | Version |")
         lines.append("|------|-----------|------|----------|---------|---------|---------|")
-        for svc in services:
-            hostnames = ", ".join(svc.get("hostnames") or [])
+        for svc in services:  # type: ignore
+            svc_dict = svc  # type: ignore
+            hostnames = ", ".join(svc_dict.get("hostnames") or [])  # type: ignore
             lines.append(
-                f"| {_escape(svc.get('host', ''))} | {_escape(hostnames)} | "
-                f"{svc.get('port', '')} | {_escape(svc.get('protocol', ''))} | "
-                f"{_escape(svc.get('service_name', ''))} | "
-                f"{_escape(svc.get('product', ''))} | "
-                f"{_escape(svc.get('version', ''))} |"
+                f"| {_escape(svc_dict.get('host', ''))} | {_escape(hostnames)} | "
+                f"{svc_dict.get('port', '')} | {_escape(svc_dict.get('protocol', ''))} | "
+                f"{_escape(svc_dict.get('service_name', ''))} | "
+                f"{_escape(svc_dict.get('product', ''))} | "
+                f"{_escape(svc_dict.get('version', ''))} |"
             )
         lines.append("")
 
     findings = data.get("findings") or []
     lines.append("## Vulnerability Findings")
     if findings:
-        for finding in findings:
+        for finding in findings:  # type: ignore
+            finding_dict = finding  # type: ignore
             lines.append(
-                f"### {finding['id']} ({str(finding['severity']).upper()})"
+                f"### {finding_dict.get('id')} ({str(finding_dict.get('severity')).upper()})"
             )
-            lines.append(f"- **Type:** {finding['kind']}")
-            detail = _escape(_finding_detail(finding))
+            lines.append(f"- **Type:** {finding_dict.get('kind')}")
+            detail = _escape(_finding_detail(finding_dict))  # type: ignore
             if detail:
                 lines.append(f"- **Details:** {detail}")
-            lines.append(f"- **Title:** {_escape(str(finding['title']))}")
+            lines.append(f"- **Title:** {_escape(str(finding_dict.get('title')))}")
             lines.append(
-                f"- **Description:** {_escape(str(finding['description']))}"
+                f"- **Description:** {_escape(str(finding_dict.get('description')))}"
             )
             lines.append("")
     else:
@@ -349,7 +353,7 @@ def format_nmap_report_markdown(data: dict[str, object]) -> str:
     notes = data.get("notes") or []
     if notes:
         lines.append("## Notes")
-        for note in notes:
+        for note in notes:  # type: ignore
             lines.append(f"- {note}")
         lines.append("")
 
@@ -380,14 +384,37 @@ def format_nmap_report_csv(data: dict[str, object]) -> str:
             "title",
         ]
     )
-    for finding in data.get("findings") or []:
-        hostnames = finding.get("hostnames") or []
+    for finding in data.get("findings") or []:  # type: ignore
+        finding_dict = finding  # type: ignore
+        hostnames = finding_dict.get("hostnames") or []  # type: ignore
         host = ", ".join(str(name) for name in hostnames)
         if not host:
-            host = str(finding.get("host") or "")
-        addr = str(finding.get("host") or "")
-        port = finding.get("port", "")
-        state = str(finding.get("state", "open") or "open")
+            host = str(finding_dict.get("host") or "")
+        addr = str(finding_dict.get("host") or "")
+        port = finding_dict.get("port", "")
+        state = str(finding_dict.get("state", "open") or "open")
+        service = str(finding_dict.get("service_name") or finding_dict.get("service") or "")
+        product = str(finding_dict.get("product") or "")
+        version = str(finding_dict.get("version") or "")
+        cve_id = str(finding_dict.get("id") or "")
+        severity = str(finding_dict.get("severity") or "")
+        score = finding_dict.get("score", "")
+        title = str(finding_dict.get("title") or "")
+        writer.writerow(
+            [
+                host,
+                addr,
+                port,
+                state,
+                service,
+                product,
+                version,
+                cve_id,
+                severity,
+                score,
+                title,
+            ]
+        )
         service = str(finding.get("service_name") or "")
         product = str(finding.get("product") or "")
         version = str(finding.get("version") or "")
