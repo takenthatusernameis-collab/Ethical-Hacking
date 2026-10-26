@@ -1,8 +1,7 @@
 ## What changed this session
-None (no code changes). Verified current state only.
+- ethscan/cli.py: `config` command now validates the loaded configuration (using known commands/options) and surfaces warnings in JSON/Markdown/CSV output for better visibility.
 
 ## What was actually verified
-- `git status --short` → clean
 - `python -m pytest tests/ -q` → 5221 passed, 51 skipped, 0 warnings
 - `python -m ruff check ethscan/ tests/` → All checks passed
 

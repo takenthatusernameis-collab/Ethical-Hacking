@@ -3616,6 +3616,15 @@ def config(
     path = loaded.get("_path")
     parse_error = loaded.get("_parse_error")
 
+    known_commands = sorted(cli.commands.keys())
+    known_options: dict[str, set[str]] = {
+        name: {str(param.name) for param in command.params if param.name is not None}
+        for name, command in cli.commands.items()
+    }
+    warnings = validate_config(
+        loaded, known_commands=known_commands, known_options=known_options
+    )
+
     # --output-format takes precedence over the deprecated --format alias
     chosen_format = output_fmt if output_fmt is not None else fmt
 
@@ -3627,9 +3636,15 @@ def config(
         }
         if isinstance(parse_error, str):
             payload["parse_error"] = parse_error
+        if warnings:
+            payload["warnings"] = warnings
         output = json.dumps(payload, indent=2, default=str)
     elif chosen_format == "csv":
         output = format_config_report_csv(loaded)
+        if warnings:
+            # Append warnings as comment lines for CSV to preserve structure
+            warning_lines = ["# Warning: " + w for w in warnings]
+            output = output + "\n" + "\n".join(warning_lines) if output else "\n".join(warning_lines)
     else:
         lines = ["# ethscan Configuration", ""]
         if path:
@@ -3640,6 +3655,12 @@ def config(
             lines.append("")
             lines.append("## Parse Error")
             lines.append(f"```\n{parse_error}\n```")
+            lines.append("")
+        if warnings:
+            lines.append("")
+            lines.append("## Warnings")
+            for w in warnings:
+                lines.append(f"- {w}")
             lines.append("")
         lines.append("")
 
