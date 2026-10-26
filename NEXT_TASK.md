@@ -1,12 +1,11 @@
 ## Status: COMPLETE
 
-Repository verified. One bounded, demonstrated bug was found and fixed this session: `config --out` leaked a failure when the parent directory did not exist.
+Repository verified. One bounded, demonstrated gap was closed this session: test coverage for `ethscan.fileio.write_text` / `write_json` creating missing parent directories, a contract now load-bearing for `config --out` and `config --init`.
 
 ### What was actually verified
 
-- `python -m pytest tests/ -q` → 5215 passed, 51 skipped, 0 warnings (was 5213).
+- `python -m pytest tests/ -q` → 5218 passed, 51 skipped, 0 warnings (was 5215 before the 3 new tests).
 - `python -m ruff check ethscan/ tests/` → All checks passed.
-- `python -m ethscan config --out /tmp/cfg-missing/deep/config.json` → writes the report and creates the parent directories (exit 0), confirmed by hand after the fix.
 
 ### What remains unresolved
 

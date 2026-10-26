@@ -110,6 +110,22 @@ def test_write_text_writes_the_content(tmp_path) -> None:
     assert path.read_text() == "hello\nworld\n"
 
 
+def test_write_text_creates_missing_parent_dirs(tmp_path) -> None:
+    """write_text creates the parent directories when they do not exist."""
+    path = tmp_path / "deep" / "nested" / "file.txt"
+    write_text(path, "hello\n")
+    assert path.read_text() == "hello\n"
+    assert path.parent.is_dir()
+
+
+def test_write_text_refuses_a_directory(tmp_path) -> None:
+    """Writing to an existing directory is refused, not turned into a file."""
+    path = tmp_path / "adir"
+    path.mkdir()
+    with pytest.raises(OSError):
+        write_text(path, "hello\n")
+
+
 def test_write_text_uses_the_given_encoding(tmp_path) -> None:
     path = tmp_path / "file.txt"
     write_text(path, "café", encoding="utf-16")
@@ -120,6 +136,14 @@ def test_write_json_writes_the_data(tmp_path) -> None:
     path = tmp_path / "file.json"
     write_json(path, {"port": 80, "host": "127.0.0.1"})
     assert load_json(path) == {"port": 80, "host": "127.0.0.1"}
+
+
+def test_write_json_creates_missing_parent_dirs(tmp_path) -> None:
+    """write_json creates the parent directories when they do not exist."""
+    path = tmp_path / "deep" / "nested" / "file.json"
+    write_json(path, {"a": 1})
+    assert load_json(path) == {"a": 1}
+    assert path.parent.is_dir()
 
 
 def test_write_json_ends_with_a_newline(tmp_path) -> None:
