@@ -9,11 +9,11 @@
 
 ## What remains unresolved
 
-None.
+None — repository complete.
 
 ## Which approaches have already failed and why
 
-None.
+- Ran `python -m mypy ethscan/`: 477 errors in 47 files. Not pursued: nearly all are `object` type errors cascading from optional dependencies that are not installed (`dnspython`, etc.; `ignore_missing_imports = true` in `pyproject.toml:27-30`). Only 3 errors are in core code (`cli.py:441`, `cli.py:490` — `get_error_hint(None)`/`type_cast_value(None, ...)` click-stub typing; `cli.py:1815` — `list[str]` vs `list[str | TLSVersion] | None` invariance), and they are typing-stub issues, not runtime bugs (tests pass). mypy is not part of the project's verification pipeline (pytest + ruff only). Fixing 477 environmental errors is not a bounded one-session task.
 
 ## One precise next task
 
