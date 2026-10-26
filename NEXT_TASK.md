@@ -1,9 +1,8 @@
 ## Status: COMPLETE
 
-Repository verified clean with all tests passing and lint passing. No code changes required.
-
 ### What was actually verified
-- `python -m pytest tests/ -q` → 5225 passed, 51 skipped, 0 warnings.
+- `.github/workflows/ci.yml` YAML parses cleanly.
+- `python -m pytest tests/ -q` → 5225 passed, 51 skipped.
 - `python -m ruff check ethscan/ tests/` → All checks passed.
 
 ### What remains unresolved
