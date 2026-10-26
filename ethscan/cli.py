@@ -2324,10 +2324,20 @@ def osdetect(
         if results is None:
             results = []
         elif not isinstance(results, list):
+            # The banners file holds no 'results' list. The error report must
+            # carry the same shape as a normal run_osdetect result so that the
+            # JSON, Markdown and CSV formatters can all render it without
+            # raising (the Markdown formatter indexes data['host'] and
+            # data['ports_probed'] directly).
             error_report = {
                 "target": target,
-                "os_matches": [],
-                "confidence": 0.0,
+                "host": None,
+                "timeout": timeout,
+                "ports_probed": 0,
+                "probes": [],
+                "inferred_os": [],
+                "inferred_os_count": 0,
+                "banners_provided": False,
                 "notes": ["Banners data holds no 'results' list"],
             }
             chosen_format = output_fmt if output_fmt is not None else fmt
