@@ -12719,6 +12719,54 @@ def test_config_unknown_command_warns(tmp_path) -> None:
     assert "nonexistentcmd" in parsed["commands"]
 
 
+def test_config_unknown_command_warns_in_json_output(tmp_path) -> None:
+    """An unknown command in the config surfaces a warning in JSON output."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("commands:\n  nonexistentcmd:\n    foo: bar\n")
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(cli, ["--config", str(cfg), "config"])
+    assert result.exit_code == 0, result.output
+    parsed = json.loads(result.output)
+    assert "warnings" in parsed
+    assert any("nonexistentcmd" in w for w in parsed["warnings"])
+
+
+def test_config_unknown_command_warns_in_markdown_output(tmp_path) -> None:
+    """An unknown command in the config surfaces a warning in markdown output."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("commands:\n  nonexistentcmd:\n    foo: bar\n")
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(
+        cli, ["--config", str(cfg), "config", "--format", "markdown"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "## Warnings" in result.output
+    assert "Unknown command 'nonexistentcmd'" in result.output
+
+
+def test_config_unknown_command_warns_in_csv_output(tmp_path) -> None:
+    """An unknown command in the config surfaces a warning in CSV output."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("commands:\n  nonexistentcmd:\n    foo: bar\n")
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(cli, ["--config", str(cfg), "config", "--format", "csv"])
+    assert result.exit_code == 0, result.output
+    assert "# Warning:" in result.output
+    assert "Unknown command 'nonexistentcmd'" in result.output
+
+
+def test_config_unknown_option_warns_in_json_output(tmp_path) -> None:
+    """An unknown option for a command surfaces a warning in JSON output."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("commands:\n  scan:\n    potrs: common\n")
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(cli, ["--config", str(cfg), "config"])
+    assert result.exit_code == 0, result.output
+    parsed = json.loads(result.output)
+    assert "warnings" in parsed
+    assert any("potrs" in w and "scan" in w for w in parsed["warnings"])
+
+
 def test_config_applies_to_scan_command(tmp_path) -> None:
     """Test config values apply to the scan command."""
     cfg = tmp_path / "ethscan.yaml"

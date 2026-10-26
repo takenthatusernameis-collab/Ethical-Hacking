@@ -1,8 +1,10 @@
 ## What changed this session
-- ethscan/cli.py: `config` command now validates the loaded configuration (using known commands/options) and surfaces warnings in JSON/Markdown/CSV output for better visibility.
+- tests/test_cli.py: added four CLI-level tests verifying that the `config`
+  command surfaces configuration warnings in its JSON, Markdown, and CSV output
+  (unknown command warning, unknown option warning) instead of only in stderr.
 
 ## What was actually verified
-- `python -m pytest tests/ -q` → 5221 passed, 51 skipped, 0 warnings
+- `python -m pytest tests/ -q` → 5225 passed, 51 skipped, 0 warnings
 - `python -m ruff check ethscan/ tests/` → All checks passed
 
 ## What remains unresolved
@@ -12,4 +14,6 @@ None.
 None this session.
 
 ## One precise next task
-None — repository complete. If new work arrives, implement the smallest change solving a demonstrated problem and verify with `python -m pytest tests/ -q` + `python -m ruff check ethscan/ tests/`.
+None — repository complete. If new work arrives, implement the smallest change
+solving a demonstrated problem and verify with `python -m pytest tests/ -q` +
+`python -m ruff check ethscan/ tests/`.
