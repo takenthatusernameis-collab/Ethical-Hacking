@@ -2,7 +2,7 @@
 
 ## Status: COMPLETE
 
-Repository complete and verified. Added unit tests for the `write_text` and `write_json` helpers in `ethscan/fileio.py`.
+Repository complete and verified. Removed the unused `import os` in `ethscan/cli.py:5` (ruff F401).
 
 ### What was actually verified
 

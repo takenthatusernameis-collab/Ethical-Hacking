@@ -1,6 +1,6 @@
 ## Status: COMPLETE
 
-Repository complete and verified with small packaging/typing improvements plus tests for the new file write helpers.
+Repository complete and verified. Removed the unused `import os` in `ethscan/cli.py` that ruff flagged (F401); the previous handoff's claim that `ruff check` passed was incorrect.
 
 ### What was actually verified
 
