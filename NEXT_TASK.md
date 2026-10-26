@@ -1,8 +1,6 @@
 ## Status: COMPLETE
 
-Added CLI-level test coverage for the `config` command's warning output:
-warnings for unknown commands and unknown options now have tests asserting they
-appear in the JSON, Markdown, and CSV output of `ethscan config`.
+Repository verified clean with all tests passing and lint passing. No code changes required.
 
 ### What was actually verified
 - `python -m pytest tests/ -q` → 5225 passed, 51 skipped, 0 warnings.
@@ -12,6 +10,4 @@ appear in the JSON, Markdown, and CSV output of `ethscan config`.
 None.
 
 ### One precise next task
-None — repository complete. If new work arrives, implement the smallest change
-solving a demonstrated problem and verify with `python -m pytest tests/ -q` +
-`python -m ruff check ethscan/ tests/`.
+None — repository complete. If new work arrives, implement the smallest change solving a demonstrated problem and verify with `python -m pytest tests/ -q` + `python -m ruff check ethscan/ tests/`.
