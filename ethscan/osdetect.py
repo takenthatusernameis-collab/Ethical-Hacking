@@ -467,6 +467,7 @@ def run_osdetect(
         "ports_probed": len(port_list),
         "probes": probes,
         "inferred_os": inferred,
+        "os_matches": inferred,
         "inferred_os_count": len(inferred),
         "banners_provided": bool(banners),
         "notes": notes,

@@ -2336,6 +2336,7 @@ def osdetect(
                 "ports_probed": 0,
                 "probes": [],
                 "inferred_os": [],
+                "os_matches": [],
                 "inferred_os_count": 0,
                 "banners_provided": False,
                 "notes": ["Banners data holds no 'results' list"],
