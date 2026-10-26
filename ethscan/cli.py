@@ -644,11 +644,12 @@ def _load_json_file(path: str, param_hint: str) -> dict[str, Any]:
 def _write_output(out_path: str, output: str, message: str | None = None) -> None:
     """Write a report to a file, reporting an unusable path as a usage error.
 
-    The output path of a command is a plain path, so it can point at a
-    directory, at a path whose directory does not exist or at a name that the
-    file system refuses. ``open`` reports those with an ``OSError`` (or with a
-    ``ValueError`` for a name that holds a null byte), which would reach the
-    user as a raw traceback.
+    The parent directory of ``out_path`` is created when it does not exist, the
+    same way ``config --init`` writes its sample file: a report whose directory
+    was never created is a path the user meant to use, not a usage error. A
+    path that still cannot be written -- a directory, a path whose parent is a
+    file, a name the file system refuses -- is reported as a ``--out`` usage
+    error instead of reaching the user as a raw traceback.
 
     Args:
         out_path: The path of the file to write.
@@ -659,9 +660,13 @@ def _write_output(out_path: str, output: str, message: str | None = None) -> Non
     Raises:
         click.BadParameter: If the file cannot be written.
     """
+    # The parent directory is created when it does not exist, the same way
+    # ``config --init`` writes its sample file: a report whose directory was
+    # never created is a path the user meant to use, not a usage error.
     try:
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(output)
+        from ethscan.fileio import write_text
+
+        write_text(out_path, output)
     except (OSError, ValueError) as exc:
         raise click.BadParameter(str(exc), param_hint="'--out'") from exc
     click.echo(message or f"Report written to {out_path}")

@@ -12384,6 +12384,38 @@ def test_cidr_output_format_csv_out(tmp_path) -> None:
     assert "192.168.1.0/24" in content
 
 
+def test_cidr_out_creates_missing_parent_dirs(tmp_path) -> None:
+    """A --out path whose directory does not exist is created, not refused.
+
+    ``config --init`` already creates the parent directories of its sample
+    file, so the report commands should behave the same way: a path the user
+    meant to use is written, and only a path that still cannot be written is a
+    usage error.
+    """
+    out_file = tmp_path / "missing" / "deep" / "report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cidr", "--cidr", "192.168.1.0/24", "--out", str(out_file)],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Report written" in result.output
+    assert out_file.exists()
+    assert "192.168.1.0/24" in out_file.read_text()
+
+
+def test_cidr_out_refuses_a_directory(tmp_path) -> None:
+    """A --out path that is itself a directory is a usage error."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cidr", "--cidr", "192.168.1.0/24", "--out", str(tmp_path)],
+    )
+    assert result.exit_code == 2
+    assert "Invalid value for '--out'" in result.output
+    assert "Is a directory" in result.output
+
+
 def test_cidr_format_csv_alias() -> None:
     """Test cidr command with deprecated --format csv alias."""
     runner = CliRunner()
@@ -23783,16 +23815,24 @@ def test_an_over_long_nameserver_is_not_a_traceback() -> None:
 # --- An output path that cannot be written ----------------------------------
 #
 # The output path of a command is a plain path, so it can point at a
-# directory, at a path whose directory does not exist or at a name that the
-# file system refuses. ``open`` reports those with an ``OSError`` (or with a
+# directory, at a name the file system refuses or at a path that is not
+# writable. ``open`` reports those with an ``OSError`` (or with a
 # ``ValueError`` for a name that holds a null byte), which used to reach the
 # user as a raw traceback.
+#
+# A path whose *parent directory does not exist* is NOT in this set: the
+# parent directory is created, the same way ``config --init`` writes its sample
+# file. Only a path that still cannot be written after that is a usage error.
 
 
 def test_an_unusable_output_path_is_a_usage_error(tmp_path) -> None:
     """An output path that cannot be written must be refused cleanly."""
     runner = CliRunner()
-    unusable = (str(tmp_path), str(tmp_path / "missing" / "report.json"), "x" * 300)
+    unusable = (
+        str(tmp_path),  # a directory
+        "x" * 300,  # a name the file system refuses
+        "/nonexistent-root-dir-xyz/report.json",  # parent does not exist and cannot be created
+    )
     for command in ("web", "hash", "whois", "dns"):
         args = [command]
         if command != "hash":
@@ -23808,6 +23848,28 @@ def test_an_unusable_output_path_is_a_usage_error(tmp_path) -> None:
             assert "Traceback (most recent call last)" not in result.output, (
                 f"{command} --out {path!r}: leaked a traceback\n{result.output}"
             )
+
+
+def test_an_output_path_with_a_missing_parent_dir_is_created(tmp_path) -> None:
+    """A --out path whose directory does not exist is created, not refused.
+
+    This is the same contract ``config --init`` already honours: a path the
+    user meant to use is written, and only a path that still cannot be written
+    is a usage error.
+    """
+    runner = CliRunner()
+    out_file = tmp_path / "missing" / "deep" / "report.json"
+    for command, extra in (
+        ("web", ["--target", "127.0.0.1"]),
+        ("hash", ["--password", "password"]),
+        ("whois", ["--target", "127.0.0.1"]),
+        ("dns", ["--target", "127.0.0.1"]),
+    ):
+        result = runner.invoke(cli, [command, *extra, "--out", str(out_file)])
+        assert result.exit_code == 0, f"{command} --out {out_file}: {result.output}"
+        assert "Report written" in result.output
+        assert out_file.exists()
+        out_file.unlink()
 
 
 def test_a_writable_output_path_still_writes_the_report(tmp_path) -> None:
