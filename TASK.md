@@ -2,10 +2,9 @@
 
 ## Status: COMPLETE
 
-Repository complete and verified. Removed the unused `import os` in `ethscan/cli.py:5` (ruff F401).
+Repository complete and verified. No changes required this session — ruff and pytest all pass.
 
 ### What was actually verified
 
-- `git status --porcelain` (tracked changes only)
-- `python -m pytest tests/ -q` → 5210 passed, 51 skipped, 0 warnings
 - `python -m ruff check ethscan/ tests/` → All checks passed
+- `python -m pytest tests/ -q` → 5213 passed, 51 skipped, 0 warnings
