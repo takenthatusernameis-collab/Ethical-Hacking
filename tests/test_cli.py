@@ -12655,6 +12655,34 @@ def test_config_out_markdown(tmp_path) -> None:
     assert "ethscan Configuration" in out_file.read_text()
 
 
+def test_config_out_creates_missing_parent_dirs(tmp_path) -> None:
+    """A `config --out` path whose directory does not exist is created.
+
+    The report commands all delegate to ``ethscan.fileio.write_text``, which
+    creates the parent directory of the path it writes, so a path the user
+    meant to use is written instead of being refused as a usage error. The
+    ``config`` command used to open its ``--out`` path directly and leaked the
+    failure as an error message instead.
+    """
+    out_file = tmp_path / "missing" / "deep" / "config.json"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["config", "--out", str(out_file)])
+    assert result.exit_code == 0, result.output
+    assert "Report written" in result.output
+    assert out_file.exists()
+    parsed = json.loads(out_file.read_text())
+    assert parsed["config_file"] is None
+
+
+def test_config_out_refuses_a_directory(tmp_path) -> None:
+    """A `config --out` path that is itself a directory is a usage error."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["config", "--out", str(tmp_path)])
+    assert result.exit_code == 1
+    assert "Error writing output" in result.output
+    assert "Is a directory" in result.output
+
+
 def test_config_invalid_yaml_shows_parse_error(tmp_path) -> None:
     """Test config command surfaces parse errors."""
     cfg = tmp_path / "bad.yaml"

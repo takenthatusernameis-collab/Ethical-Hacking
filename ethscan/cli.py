@@ -3683,8 +3683,9 @@ def config(
 
     if out_path:
         try:
-            with open(out_path, "w", encoding="utf-8") as handle:
-                handle.write(output)
+            from ethscan.fileio import write_text
+
+            write_text(out_path, output)
         except (OSError, ValueError) as exc:
             click.echo(f"Error writing output: {exc}", err=True)
             raise SystemExit(1)
