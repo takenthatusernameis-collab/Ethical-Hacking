@@ -1,12 +1,17 @@
 ## Status: COMPLETE
 
-Repository verified. Previous session closed a demonstrated test gap: test coverage for `ethscan.fileio.write_text` / `write_json` creating missing parent directories (contract load-bearing for `config --out` and `config --init`). All tests pass.
+Added CLI-level test coverage for `config --init` (the only write path of the
+`config` command that was not exercised at the CLI boundary): it writes a
+valid, loadable sample config, creates missing parent directories, and rejects
+`--init` used together with `--out`.
 
 ### What changed
-- No code changes in this session (handoff refresh only).
+- tests/test_config.py: added three CLI-level tests for `config --init`
+  (sample config is loadable via `load_config`, missing parent dirs are
+  created, `--init` and `--out` are mutually exclusive).
 
 ### What was actually verified
-- `python -m pytest tests/ -q` → 5218 passed, 51 skipped, 0 warnings.
+- `python -m pytest tests/ -q` → 5221 passed, 51 skipped, 0 warnings.
 - `python -m ruff check ethscan/ tests/` → All checks passed.
 
 ### What remains unresolved

@@ -1,7 +1,7 @@
 """Tests for the ethscan configuration module."""
 
-
 import yaml
+from click.testing import CliRunner
 
 from ethscan import cli
 from ethscan.config import (
@@ -424,3 +424,64 @@ def test_format_config_report_csv_includes_parse_error(tmp_path) -> None:
     output = format_config_report_csv(config)
     assert "parse_error" in output
     assert "bad parse" in output
+
+
+# ---------------------------------------------------------------------------
+# CLI-level ``config --init``
+# ---------------------------------------------------------------------------
+
+
+def test_config_cli_init_writes_a_sample_config(tmp_path) -> None:
+    """``config --init`` writes a sample config the config loader can read.
+
+    The written file must be valid YAML that ``load_config`` parses into the
+    documented schema, so a user can initialize a config and start using it.
+    """
+    init_path = tmp_path / "ethscan.yaml"
+    runner = CliRunner()
+    result = runner.invoke(cli.cli, ["config", "--init", str(init_path)])
+    assert result.exit_code == 0, result.output
+    assert init_path.is_file()
+    assert init_path.read_text() == dump_default_config()
+    loaded = load_config(str(init_path))
+    assert loaded["defaults"] == {"timeout": 5.0, "workers": 50, "format": "json"}
+    assert "scan" in loaded["commands"]
+    assert "subdomains" in loaded["commands"]
+
+
+def test_config_cli_init_creates_missing_parent_dirs(tmp_path) -> None:
+    """``config --init`` creates the parent directories of the target path.
+
+    ``config --init`` writes through ``write_text``, so a path whose parents do
+    not exist yet is still a valid destination.
+    """
+    init_path = tmp_path / "deep" / "nested" / "ethscan.yaml"
+    runner = CliRunner()
+    result = runner.invoke(cli.cli, ["config", "--init", str(init_path)])
+    assert result.exit_code == 0, result.output
+    assert init_path.is_file()
+    assert init_path.parent.is_dir()
+    assert load_config(str(init_path))["defaults"] == {
+        "timeout": 5.0,
+        "workers": 50,
+        "format": "json",
+    }
+
+
+def test_config_cli_init_refuses_out_together(tmp_path) -> None:
+    """``config --init`` and ``--out`` are mutually exclusive.
+
+    ``--init`` writes a sample config and has no report to redirect, so the two
+    options cannot be used together and the command reports a usage error
+    instead of silently ignoring ``--out``.
+    """
+    init_path = tmp_path / "ethscan.yaml"
+    out_path = tmp_path / "out.txt"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.cli, ["config", "--init", str(init_path), "--out", str(out_path)]
+    )
+    assert result.exit_code == 2, result.output
+    assert "--init and --out cannot be used together" in result.output
+    assert not init_path.is_file()
+    assert not out_path.is_file()
