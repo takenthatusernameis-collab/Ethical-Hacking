@@ -4,9 +4,12 @@
 - Added `.github/workflows/ci.yml`: runs `python -m ruff check ethscan/ tests/` and `python -m pytest tests/ -q` on push, pull_request, and workflow_dispatch.
 
 ### What was actually verified
-- `.github/workflows/ci.yml` YAML parses cleanly.
+- `.github/workflows/ci.yml` YAML parses cleanly (Python yaml.safe_load).
 - `python -m ruff check ethscan/ tests/` → All checks passed.
-- `python -m pytest tests/ -q` → 5225 passed, 51 skipped.
+- `python -m pytest tests/ -q` → 5225 passed, 51 skipped (skips are due to optional `dnspython`).
+- All 55 README-documented commands exist in `ethscan/cli.py`.
+- `python -m ethscan --help` and `ethscan --version` work.
+- `pip install -e .` succeeds.
 
 ### What remains unresolved
 None.
@@ -16,3 +19,5 @@ None.
 
 ### One precise next task
 None — repository complete. If new work arrives, implement the smallest change solving a demonstrated problem and verify with `python -m pytest tests/ -q` + `python -m ruff check ethscan/ tests/`.
+
+(End of file - total 18 lines)
