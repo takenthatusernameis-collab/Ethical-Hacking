@@ -1,16 +1,16 @@
 ## What changed this session
-- Restored `.github/workflows/ci.yml` (ruff lint + pytest on push/pull_request), which had been deleted in commit `521e664` — a regression that left the project without its own CI gate while prior handoffs claimed CI verification had passed.
+- Restored `.github/workflows/ci.yml` (ruff lint + pytest on push/pull_request) from commit `3fdd2ba`. The workflow was missing from the working tree (deleted in `521e664`).
 
 ## What was actually verified
 - `python -m ruff check ethscan/ tests/` → All checks passed.
 - `python -m pytest tests/ -q` → 5225 passed, 51 skipped.
-- Restored `ci.yml` matches the version from commit `3fdd2ba` exactly (verified via `git show 3fdd2ba:.github/workflows/ci.yml`).
+- Restored `ci.yml` matches the version from commit `3fdd2ba` exactly.
 
 ## What remains unresolved
 - None.
 
 ## Which approaches have already failed and why
-- The "repository is complete, nothing to do" handoff was itself unreliable: it asserted CI verification while the CI workflow file was missing from the tree. Always re-verify claims against the actual working tree, not prior handoff files.
+- Trusting prior handoff claims without re-checking the working tree: earlier handoffs asserted CI verification while `ci.yml` was absent from the tree.
 
 ## One precise next task
-None — repository complete. If new work arrives, implement the smallest change solving a demonstrated problem and verify with `python -m pytest tests/ -q` + `python -m ruff check ethscan/ tests/`.
+None — repository is in a verified passing state. If new requirements arrive, implement the smallest change solving a demonstrated problem and verify with `python -m pytest tests/ -q` and `python -m ruff check ethscan/ tests/` before committing.
