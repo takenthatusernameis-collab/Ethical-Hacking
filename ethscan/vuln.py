@@ -12,6 +12,7 @@ import hmac
 import io
 import json
 import re
+from typing import cast
 
 from ethscan.service import run_service
 from ethscan.target import parse_url
@@ -152,7 +153,7 @@ SERVICE_VULNS: list[dict[str, object]] = [
     },
 ]
 
-PROTOCOL_VULNS = [
+PROTOCOL_VULNS: list[dict[str, object]] = [
     {
         "kind": "protocol",
         "id": "CVE-2014-3566",
@@ -188,7 +189,7 @@ PROTOCOL_VULNS = [
     },
 ]
 
-CIPHER_VULNS = [
+CIPHER_VULNS: list[dict[str, object]] = [
     {
         "kind": "cipher",
         "id": "CVE-2013-2566",
@@ -234,7 +235,7 @@ CIPHER_VULNS = [
     },
 ]
 
-CERTIFICATE_VULNS = [
+CERTIFICATE_VULNS: list[dict[str, object]] = [
     {
         "kind": "certificate",
         "id": "WEAK-RSA-KEY",
@@ -735,7 +736,8 @@ def match_cipher_vulns(
     findings: list[dict[str, object]] = []
     for cipher in supported_ciphers:
         for entry in CIPHER_VULNS:
-            if entry["cipher_pattern"].search(str(cipher)):
+            pattern = cast(re.Pattern[str], entry["cipher_pattern"])
+            if pattern.search(str(cipher)):
                 findings.append(_finding(entry, cipher=cipher))
     return findings
 
@@ -762,11 +764,11 @@ def match_certificate_vulns(cert_data: dict | None) -> list[dict[str, object]]:
     signature = str(cert_data.get("signature_algorithm") or "").lower()
 
     for entry in CERTIFICATE_VULNS:
-        check = entry["check"]
+        check = cast(str, entry["check"])
         if check == "key_size_below":
-            if isinstance(key_size, int) and key_size < entry["value"]:
+            if isinstance(key_size, int) and key_size < cast(int, entry["value"]):
                 findings.append(_finding(entry, key_size=key_size))
-        elif check == "signature_contains" and entry["value"] in signature:
+        elif check == "signature_contains" and cast(str, entry["value"]) in signature:
             findings.append(
                 _finding(
                     entry,
