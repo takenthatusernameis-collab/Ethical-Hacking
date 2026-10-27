@@ -415,14 +415,18 @@ def format_tls_report_markdown(data: dict[str, object]) -> str:
     lines.append(f"- **Versions Tested:** {data.get('versions_tested', 0)}")
     lines.append(f"- **Ciphers Tested:** {data.get('ciphers_tested', 0)}")
     supported_versions = data.get("supported_versions") or []
+    if not isinstance(supported_versions, list):
+        supported_versions = []
     lines.append(
         f"- **Supported Versions:** "
-        f"{', '.join(supported_versions) if supported_versions else 'None'}"
+        f"{', '.join(str(v) for v in supported_versions) if supported_versions else 'None'}"
     )
     lines.append(f"- **Supported Ciphers:** {data.get('supported_cipher_count', 0)}")
     lines.append("")
 
     notes = data.get("notes") or []
+    if not isinstance(notes, list):
+        notes = []
     if notes:
         lines.append("## Findings")
         for note in notes:
@@ -431,17 +435,21 @@ def format_tls_report_markdown(data: dict[str, object]) -> str:
 
     lines.append("## Protocol Versions")
     versions = data.get("versions") or []
+    if not isinstance(versions, list):
+        versions = []
     if versions:
         lines.append("| Version | Supported | Negotiated Cipher | Negotiated Protocol | Error |")
         lines.append("|---------|-----------|-------------------|---------------------|-------|")
         for result in versions:
-            supported = "Yes" if result["supported"] else "No"
+            if not isinstance(result, dict):
+                continue
+            supported = "Yes" if result.get("supported") else "No"
             cipher_name = result.get("negotiated_cipher") or ""
             protocol = result.get("negotiated_protocol") or ""
-            error = (result.get("error") or "").replace("|", "\\|")
+            error = str(result.get("error") or "").replace("|", "\\|")
             error = _truncate(error, 60)
             lines.append(
-                f"| {result['version']} | {supported} | {cipher_name} | {protocol} | {error} |"
+                f"| {result.get('version')} | {supported} | {cipher_name} | {protocol} | {error} |"
             )
     else:
         lines.append("*No protocol versions tested.*")
@@ -449,15 +457,19 @@ def format_tls_report_markdown(data: dict[str, object]) -> str:
 
     lines.append("## Cipher Suites")
     ciphers = data.get("ciphers") or []
+    if not isinstance(ciphers, list):
+        ciphers = []
     if ciphers:
         lines.append("| Cipher | Supported | Negotiated Version | Error |")
         lines.append("|--------|-----------|--------------------|-------|")
         for result in ciphers:
-            supported = "Yes" if result["supported"] else "No"
+            if not isinstance(result, dict):
+                continue
+            supported = "Yes" if result.get("supported") else "No"
             protocol = result.get("negotiated_version") or ""
-            error = (result.get("error") or "").replace("|", "\\|")
+            error = str(result.get("error") or "").replace("|", "\\|")
             error = _truncate(error, 60)
-            lines.append(f"| {result['cipher']} | {supported} | {protocol} | {error} |")
+            lines.append(f"| {result.get('cipher')} | {supported} | {protocol} | {error} |")
     else:
         lines.append("*No cipher suites tested.*")
     lines.append("")
@@ -482,7 +494,12 @@ def format_tls_report_csv(data: dict[str, object]) -> str:
     target = data.get("target", "")
     host = data.get("host", "")
     port = data.get("port", "")
-    for result in data.get("versions") or []:
+    versions_list = data.get("versions") or []
+    if not isinstance(versions_list, list):
+        versions_list = []
+    for result in versions_list:
+        if not isinstance(result, dict):
+            continue
         writer.writerow([
             target,
             host,
@@ -493,7 +510,12 @@ def format_tls_report_csv(data: dict[str, object]) -> str:
             result.get("negotiated_cipher") or result.get("negotiated_protocol") or "",
             result.get("error") or "",
         ])
-    for result in data.get("ciphers") or []:
+    ciphers_list = data.get("ciphers") or []
+    if not isinstance(ciphers_list, list):
+        ciphers_list = []
+    for result in ciphers_list:
+        if not isinstance(result, dict):
+            continue
         writer.writerow([
             target,
             host,

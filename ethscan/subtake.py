@@ -23,6 +23,7 @@ try:
     import dns.resolver
     DNS_AVAILABLE = True
 except Exception:  # noqa: BLE001
+    dns = None  # type: ignore[assignment]
     DNS_AVAILABLE = False
 
 DEFAULT_SUBDOMAINS = [
@@ -329,7 +330,7 @@ def resolve_cname(hostname: str, timeout: float = 2.0, resolver: str | None = No
 def resolve_a_records(hostname: str, timeout: float = 2.0, resolver: str | None = None) -> list[str]:
     """Resolve A records (IPv4 addresses) for a hostname."""
     ips: list[str] = []
-    if resolver and DNS_AVAILABLE:
+    if resolver and DNS_AVAILABLE and dns is not None:
         try:
             dns_resolver = dns.resolver.Resolver()
             dns_resolver.timeout = timeout
@@ -349,7 +350,12 @@ def resolve_a_records(hostname: str, timeout: float = 2.0, resolver: str | None 
         try:
             socket.setdefaulttimeout(timeout)
             results = socket.getaddrinfo(hostname, None, socket.AF_INET)
-            ips = sorted({r[4][0] for r in results})
+            ips_list: set[str] = set()
+            for r in results:
+                addr = r[4][0]
+                if isinstance(addr, str):
+                    ips_list.add(addr)
+            ips = sorted(ips_list)
         finally:
             socket.setdefaulttimeout(previous)
     except Exception:  # noqa: BLE001, S110 - resolver can raise any type
@@ -360,7 +366,7 @@ def resolve_a_records(hostname: str, timeout: float = 2.0, resolver: str | None 
 def resolve_aaaa_records(hostname: str, timeout: float = 2.0, resolver: str | None = None) -> list[str]:
     """Resolve AAAA records (IPv6 addresses) for a hostname."""
     ips: list[str] = []
-    if resolver and DNS_AVAILABLE:
+    if resolver and DNS_AVAILABLE and dns is not None:
         try:
             dns_resolver = dns.resolver.Resolver()
             dns_resolver.timeout = timeout
@@ -380,7 +386,12 @@ def resolve_aaaa_records(hostname: str, timeout: float = 2.0, resolver: str | No
         try:
             socket.setdefaulttimeout(timeout)
             results = socket.getaddrinfo(hostname, None, socket.AF_INET6)
-            ips = sorted({r[4][0] for r in results})
+            ips_list: set[str] = set()
+            for r in results:
+                addr = r[4][0]
+                if isinstance(addr, str):
+                    ips_list.add(addr)
+            ips = sorted(ips_list)
         finally:
             socket.setdefaulttimeout(previous)
     except Exception:  # noqa: BLE001, S110 - resolver can raise any type
@@ -501,9 +512,14 @@ def run_subtake(
             takeover = check_takeover_signature(cname)
             if takeover:
                 http_body = check_http_fingerprint(hostname, http_timeout)
-                if http_body and takeover["fingerprint"].lower() in http_body.lower():
-                    takeover["http_confirmed"] = True
-                    takeover["evidence"] = http_body[:500]
+                if isinstance(http_body, str) and takeover.get("fingerprint"):
+                    fp = str(takeover["fingerprint"])
+                    if fp.lower() in http_body.lower():
+                        takeover["http_confirmed"] = True
+                        takeover["evidence"] = http_body[:500]
+                    else:
+                        takeover["http_confirmed"] = False
+                        takeover["evidence"] = "CNAME points to vulnerable service (no HTTP confirmation)"
                 else:
                     takeover["http_confirmed"] = False
                     takeover["evidence"] = "CNAME points to vulnerable service (no HTTP confirmation)"
@@ -535,9 +551,9 @@ def run_subtake(
                     "takeover": None,
                     "error": f"{exc.__class__.__name__}: {exc}",
                 }
-            hostname = result["hostname"]
-            if hostname not in seen_hostnames:
-                seen_hostnames.add(hostname)
+            hostname_res = result.get("hostname")
+            if isinstance(hostname_res, str) and hostname_res not in seen_hostnames:
+                seen_hostnames.add(hostname_res)
                 all_results.append(result)
 
     return {
@@ -546,7 +562,7 @@ def run_subtake(
         "subdomains_tested": len(labels),
         "vulnerable_count": len(vulnerable),
         "vulnerable": vulnerable,
-        "all_results": sorted(all_results, key=lambda r: r["hostname"]),
+        "all_results": sorted(all_results, key=lambda r: str(r.get("hostname", ""))),
         "resolver": resolver,
         "dnspython_available": DNS_AVAILABLE,
     }
@@ -580,10 +596,19 @@ def format_subtake_report_csv(data: dict[str, object]) -> str:
             "http_confirmed",
         ]
     )
-    for entry in data.get("all_results", []) or []:
+    all_results_data = data.get("all_results") or []
+    if not isinstance(all_results_data, list):
+        all_results_data = []
+    for entry in all_results_data:
         takeover = entry.get("takeover") or {}
+        if not isinstance(takeover, dict):
+            takeover = {}
         a_records = entry.get("a_records") or []
         aaaa_records = entry.get("aaaa_records") or []
+        if not isinstance(a_records, list):
+            a_records = []
+        if not isinstance(aaaa_records, list):
+            aaaa_records = []
         writer.writerow(
             [
                 entry.get("subdomain", ""),
@@ -618,13 +643,18 @@ def format_subtake_report_markdown(data: dict[str, object]) -> str:
     lines.append("")
 
     lines.append("## Vulnerable Subdomains (Potential Takeover)")
-    if data["vulnerable"]:
+    vuln_list = data.get("vulnerable") or []
+    if isinstance(vuln_list, list) and vuln_list:
         lines.append("| Subdomain | Hostname | CNAME | Service | Fingerprint | HTTP Confirmed |")
         lines.append("|-----------|----------|-------|---------|-------------|----------------|")
-        for entry in data["vulnerable"]:
+        for entry in vuln_list:
+            if not isinstance(entry, dict):
+                continue
             takeover = entry.get("takeover") or {}
+            if not isinstance(takeover, dict):
+                takeover = {}
             lines.append(
-                f"| {entry['subdomain']} | {entry['hostname']} | "
+                f"| {entry.get('subdomain', '')} | {entry.get('hostname', '')} | "
                 f"{_escape(str(takeover.get('cname', 'N/A')))} | "
                 f"{_escape(str(takeover.get('service', 'Unknown')))} | "
                 f"{_escape(str(takeover.get('fingerprint', '')))} | "
@@ -637,16 +667,25 @@ def format_subtake_report_markdown(data: dict[str, object]) -> str:
     lines.append("## All Results")
     lines.append("| Subdomain | Hostname | CNAME | A Records | AAAA Records | Vulnerable |")
     lines.append("|-----------|----------|-------|-----------|--------------|------------|")
-    for entry in data["all_results"]:
-        takeover = entry.get("takeover") or {}
-        cname = entry.get("cname") or "N/A"
-        a_recs = ", ".join(entry.get("a_records") or []) or "N/A"
-        aaaa_recs = ", ".join(entry.get("aaaa_records") or []) or "N/A"
-        vuln = "Yes" if entry.get("vulnerable") else "No"
-        lines.append(
-            f"| {entry['subdomain']} | {entry['hostname']} | "
-            f"{_escape(str(cname))} | {_escape(a_recs)} | {_escape(aaaa_recs)} | {vuln} |"
-        )
+    all_list = data.get("all_results") or []
+    if isinstance(all_list, list):
+        for entry in all_list:
+            if not isinstance(entry, dict):
+                continue
+            cname = entry.get("cname") or "N/A"
+            a_recs_list = entry.get("a_records") or []
+            aaaa_recs_list = entry.get("aaaa_records") or []
+            if not isinstance(a_recs_list, list):
+                a_recs_list = []
+            if not isinstance(aaaa_recs_list, list):
+                aaaa_recs_list = []
+            a_recs = ", ".join(str(x) for x in a_recs_list) or "N/A"
+            aaaa_recs = ", ".join(str(x) for x in aaaa_recs_list) or "N/A"
+            vuln = "Yes" if entry.get("vulnerable") else "No"
+            lines.append(
+                f"| {entry.get('subdomain', '')} | {entry.get('hostname', '')} | "
+                f"{_escape(str(cname))} | {_escape(a_recs)} | {_escape(aaaa_recs)} | {vuln} |"
+            )
     lines.append("")
 
     return "\n".join(lines)

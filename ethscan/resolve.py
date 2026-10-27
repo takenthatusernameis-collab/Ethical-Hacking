@@ -5,6 +5,7 @@ import csv
 import io
 import ipaddress
 import socket
+from typing import Any
 
 from ethscan.target import parse_url
 
@@ -14,6 +15,7 @@ try:
     import dns.reversename
     DNS_AVAILABLE = True
 except Exception:  # noqa: BLE001
+    dns = None  # type: ignore[assignment]
     DNS_AVAILABLE = False
 
 
@@ -60,8 +62,12 @@ def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str
         try:
             socket.setdefaulttimeout(timeout)
             results = socket.getaddrinfo(domain, None, socket.AF_INET)
-            ips = [r[4][0] for r in results]
-            return sorted(set(ips))
+            ips_list: set[str] = set()
+            for r in results:
+                addr = r[4][0]
+                if isinstance(addr, str):
+                    ips_list.add(addr)
+            return sorted(ips_list)
         finally:
             socket.setdefaulttimeout(previous)
     except Exception:  # noqa: BLE001 - resolver can raise any type
@@ -75,8 +81,12 @@ def resolve_aaaa_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[
         try:
             socket.setdefaulttimeout(timeout)
             results = socket.getaddrinfo(domain, None, socket.AF_INET6)
-            ips = [r[4][0] for r in results]
-            return sorted(set(ips))
+            ips_list: set[str] = set()
+            for r in results:
+                addr = r[4][0]
+                if isinstance(addr, str):
+                    ips_list.add(addr)
+            return sorted(ips_list)
         finally:
             socket.setdefaulttimeout(previous)
     except Exception:  # noqa: BLE001 - resolver can raise any type

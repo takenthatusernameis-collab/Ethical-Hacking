@@ -461,18 +461,28 @@ def format_s3_report_markdown(data: dict[str, object]) -> str:
     lines.append(f"- **Workers:** {data['workers']}")
     lines.append(f"- **Wordlist Used:** {'Yes' if data['wordlist_used'] else 'No'}")
     lines.append(f"- **Candidates Tested:** {data['candidates_tested']}")
-    lines.append(f"- **Regions Checked:** {', '.join(data.get('regions_checked', []) or [])}")
-    lines.append(f"- **Public Buckets:** {len(data['public_buckets'])}")
-    lines.append(f"- **Private Buckets:** {len(data['private_buckets'])}")
-    lines.append(f"- **Existing Buckets:** {len(data['existing_buckets'])}")
+    regions_checked = data.get('regions_checked') or []
+    if not isinstance(regions_checked, list):
+        regions_checked = []
+    lines.append(f"- **Regions Checked:** {', '.join(str(r) for r in regions_checked)}")
+    public_buckets = data.get('public_buckets')
+    private_buckets = data.get('private_buckets')
+    existing_buckets = data.get('existing_buckets')
+    lines.append(f"- **Public Buckets:** {len(public_buckets) if isinstance(public_buckets, list) else 0}")
+    lines.append(f"- **Private Buckets:** {len(private_buckets) if isinstance(private_buckets, list) else 0}")
+    lines.append(f"- **Existing Buckets:** {len(existing_buckets) if isinstance(existing_buckets, list) else 0}")
     lines.append("")
 
     public = data.get("public_buckets") or []
+    if not isinstance(public, list):
+        public = []
     lines.append("## Public Buckets (Accessible)")
     if public:
         lines.append("| Bucket | Region | URL | DNS Resolved |")
         lines.append("|--------|--------|-----|--------------|")
         for entry in public:
+            if not isinstance(entry, dict):
+                continue
             lines.append(
                 f"| {_escape(entry.get('bucket', ''))} | "
                 f"{_escape(entry.get('region', ''))} | "
@@ -484,11 +494,15 @@ def format_s3_report_markdown(data: dict[str, object]) -> str:
     lines.append("")
 
     results = data.get("results") or []
+    if not isinstance(results, list):
+        results = []
     lines.append("## All Bucket Results")
     if results:
         lines.append("| Bucket | Region | Exists | Public | Status | DNS Resolved | Error |")
         lines.append("|--------|--------|--------|--------|--------|--------------|-------|")
         for entry in results:
+            if not isinstance(entry, dict):
+                continue
             lines.append(
                 f"| {_escape(entry.get('bucket', ''))} | "
                 f"{_escape(entry.get('region', ''))} | "
@@ -503,6 +517,8 @@ def format_s3_report_markdown(data: dict[str, object]) -> str:
     lines.append("")
 
     notes = data.get("notes") or []
+    if not isinstance(notes, list):
+        notes = []
     if notes:
         lines.append("## Notes")
         for note in notes:
@@ -548,8 +564,12 @@ def format_s3_report_csv(data: dict[str, object]) -> str:
         "error",
     ])
     results = data.get("results") or []
+    if not isinstance(results, list):
+        results = []
     domain = data.get("domain", "")
     for entry in results:
+        if not isinstance(entry, dict):
+            continue
         writer.writerow([
             data.get("target", ""),
             domain,

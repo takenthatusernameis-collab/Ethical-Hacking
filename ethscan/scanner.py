@@ -1,4 +1,3 @@
-"""Port scanner module for ethscan."""
 from __future__ import annotations
 
 import csv
@@ -6,6 +5,7 @@ import io
 import json
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any
 
 
 def scan_port(host: str, port: int, timeout: float = 1.0) -> tuple[int, bool]:
@@ -88,7 +88,7 @@ def parse_port_range(port_spec: str) -> list[int]:
         PortSpecError: If a port is out of range (0-{max}), a range is inverted
             (start > end), or a token is non-numeric.
     """
-    ports = set()
+    ports_set: set[int] = set()
     for part in port_spec.split(","):
         part = part.strip()
         if not part:
@@ -116,7 +116,7 @@ def parse_port_range(port_spec: str) -> list[int]:
                 raise PortSpecError(
                     f"Port out of range (0-{MAX_PORT}) in range {part!r}"
                 )
-            ports.update(range(start, end + 1))
+            ports_set.update(range(start, end + 1))
         else:
             try:
                 port = int(part)
@@ -124,8 +124,8 @@ def parse_port_range(port_spec: str) -> list[int]:
                 raise PortSpecError(f"Invalid port number {part!r}")
             if not (0 <= port <= MAX_PORT):
                 raise PortSpecError(f"Port {port} out of range (0-{MAX_PORT})")
-            ports.add(port)
-    return sorted(ports)
+            ports_set.add(port)
+    return sorted(ports_set)
 
 
 def resolve_port_list(ports: str, profile: str | None = None) -> list[int]:
@@ -175,7 +175,7 @@ FAST_PORTS = [
 FULL_PORTS = sorted(set(list(range(1, 1025)) + COMMON_PORTS))
 
 
-PROFILE_DEFAULTS = {
+PROFILE_DEFAULTS: dict[str, dict[str, Any]] = {
     "fast": {"ports": FAST_PORTS, "timeout": 0.5, "workers": 200},
     "normal": {"ports": COMMON_PORTS, "timeout": 1.0, "workers": 100},
     "full": {"ports": FULL_PORTS, "timeout": 2.0, "workers": 50},
@@ -184,7 +184,7 @@ PROFILE_DEFAULTS = {
 
 def get_common_ports() -> list[int]:
     """Return list of common ports to scan."""
-    return COMMON_PORTS.copy()
+    return list(COMMON_PORTS)
 
 
 def get_all_ports() -> list[int]:
@@ -204,13 +204,16 @@ def get_profile_ports(profile: str) -> list[int]:
     Raises:
         ValueError: If profile is not recognized.
     """
-    profile = profile.lower()
-    if profile not in PROFILE_DEFAULTS:
+    profile_key = profile.lower()
+    if profile_key not in PROFILE_DEFAULTS:
         raise ValueError(f"Unknown profile: {profile}. Valid profiles: {', '.join(sorted(PROFILE_DEFAULTS.keys()))}")
-    return PROFILE_DEFAULTS[profile]["ports"].copy()
+    ports_val = PROFILE_DEFAULTS[profile_key]["ports"]
+    if isinstance(ports_val, list):
+        return list(ports_val)
+    return list(ports_val)
 
 
-def get_profile_defaults(profile: str) -> dict:
+def get_profile_defaults(profile: str) -> dict[str, Any]:
     """Return default timeout and workers for the given profile.
 
     Args:
@@ -222,12 +225,12 @@ def get_profile_defaults(profile: str) -> dict:
     Raises:
         ValueError: If profile is not recognized.
     """
-    profile = profile.lower()
-    if profile not in PROFILE_DEFAULTS:
+    profile_key = profile.lower()
+    if profile_key not in PROFILE_DEFAULTS:
         raise ValueError(f"Unknown profile: {profile}. Valid profiles: {', '.join(sorted(PROFILE_DEFAULTS.keys()))}")
     return {
-        "timeout": PROFILE_DEFAULTS[profile]["timeout"],
-        "workers": PROFILE_DEFAULTS[profile]["workers"],
+        "timeout": PROFILE_DEFAULTS[profile_key]["timeout"],
+        "workers": PROFILE_DEFAULTS[profile_key]["workers"],
     }
 
 
@@ -242,16 +245,24 @@ def format_scan_report_markdown(data: dict[str, object]) -> str:
     lines.append(f"- **Target:** {data['target']}")
     lines.append(f"- **Host:** {data['host']}")
     lines.append(f"- **Ports Scanned:** {data['ports_scanned']}")
-    lines.append(f"- **Open Ports:** {', '.join(map(str, data['open_ports'])) if data['open_ports'] else 'None'}")
+    open_ports = data.get('open_ports') or []
+    if not isinstance(open_ports, list):
+        open_ports = []
+    lines.append(f"- **Open Ports:** {', '.join(map(str, open_ports)) if open_ports else 'None'}")
     lines.append("")
 
-    if data["details"]:
+    details = data.get("details") or []
+    if not isinstance(details, list):
+        details = []
+    if details:
         lines.append("## Port Details")
         lines.append("| Port | Status |")
         lines.append("|------|--------|")
-        for detail in data["details"]:
-            status = "Open" if detail["open"] else "Closed"
-            lines.append(f"| {detail['port']} | {status} |")
+        for detail in details:
+            if not isinstance(detail, dict):
+                continue
+            status = "Open" if detail.get("open") else "Closed"
+            lines.append(f"| {detail.get('port')} | {status} |")
     else:
         lines.append("*No ports scanned.*")
 
@@ -263,6 +274,11 @@ def format_scan_report_csv(data: dict[str, object]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["port", "open"])
-    for detail in data.get("details", []):
-        writer.writerow([detail["port"], "true" if detail["open"] else "false"])
+    details = data.get("details") or []
+    if not isinstance(details, list):
+        details = []
+    for detail in details:
+        if not isinstance(detail, dict):
+            continue
+        writer.writerow([detail.get("port"), "true" if detail.get("open") else "false"])
     return output.getvalue().rstrip("\r\n")

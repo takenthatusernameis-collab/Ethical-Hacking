@@ -12,6 +12,7 @@ import json
 import platform
 import re
 import subprocess
+from typing import Any
 
 from ethscan.fileio import read_text
 
@@ -21,7 +22,7 @@ def _is_linux() -> bool:
     return platform.system().lower() == "linux"
 
 
-def _parse_proc_net_wireless(filepath: str = "/proc/net/wireless") -> list[dict]:
+def _parse_proc_net_wireless(filepath: str = "/proc/net/wireless") -> list[dict[str, Any]]:
     """Parse /proc/net/wireless for interface status.
 
     The file is read leniently: a byte that is not valid UTF-8 is replaced
@@ -35,7 +36,7 @@ def _parse_proc_net_wireless(filepath: str = "/proc/net/wireless") -> list[dict]
         The interfaces parsed from the file, or an empty list when it cannot
         be read.
     """
-    interfaces: list[dict] = []
+    interfaces: list[dict[str, Any]] = []
     try:
         lines = read_text(filepath).split("\n")
     except OSError:
@@ -69,9 +70,9 @@ def _parse_proc_net_wireless(filepath: str = "/proc/net/wireless") -> list[dict]
     return interfaces
 
 
-def _run_iwlist_scan(interface: str) -> list[dict]:
+def _run_iwlist_scan(interface: str) -> list[dict[str, Any]]:
     """Run iwlist scan on the given interface and parse results."""
-    aps: list[dict] = []
+    aps: list[dict[str, Any]] = []
     try:
         result = subprocess.run(
             ["iwlist", interface, "scan"],
@@ -121,7 +122,7 @@ def _run_iwlist_scan(interface: str) -> list[dict]:
 
     cells = output.split("Cell ")
     for cell in cells[1:]:  # Skip first split part
-        ap = {"bssid": "", "ssid": "", "channel": None, "frequency": None, "encryption": "unknown", "signal_dbm": None, "quality": None}
+        ap: dict[str, Any] = {"bssid": "", "ssid": "", "channel": None, "frequency": None, "encryption": "unknown", "signal_dbm": None, "quality": None}
         lines = cell.split("\n")
         for line in lines:
             line = line.strip()
@@ -158,9 +159,9 @@ def _run_iwlist_scan(interface: str) -> list[dict]:
     return aps
 
 
-def _run_iw_scan(interface: str) -> list[dict]:
+def _run_iw_scan(interface: str) -> list[dict[str, Any]]:
     """Run iw scan on the given interface and parse results (modern alternative to iwlist)."""
-    aps: list[dict] = []
+    aps: list[dict[str, Any]] = []
     try:
         result = subprocess.run(
             ["iw", "dev", interface, "scan"],
@@ -210,7 +211,7 @@ def _run_iw_scan(interface: str) -> list[dict]:
     wpa1_pattern = re.compile(r"WPA:\s+.*")
     wpa2_pattern = re.compile(r"RSN:\s+.*")
 
-    current_ap = None
+    current_ap: dict[str, Any] | None = None
     for line in output.split("\n"):
         line = line.strip()
         m = bss_pattern.search(line)
@@ -247,7 +248,7 @@ def _run_iw_scan(interface: str) -> list[dict]:
     return aps
 
 
-def _scan_interface(interface: str) -> list[dict]:
+def _scan_interface(interface: str) -> list[dict[str, Any]]:
     """Scan a single interface using available tools."""
     # Try iw first (modern), then iwlist (legacy)
     aps = _run_iw_scan(interface)
@@ -256,7 +257,7 @@ def _scan_interface(interface: str) -> list[dict]:
     return _run_iwlist_scan(interface)
 
 
-def run_wifi(interface: str | None = None) -> dict:
+def run_wifi(interface: str | None = None) -> dict[str, Any]:
     """Run Wi-Fi reconnaissance.
 
     Args:
@@ -265,7 +266,7 @@ def run_wifi(interface: str | None = None) -> dict:
     Returns:
         Dictionary with scan results including interfaces, access_points, notes, and platform info.
     """
-    result = {
+    result: dict[str, Any] = {
         "platform": platform.system(),
         "platform_supported": _is_linux(),
         "interfaces": [],
@@ -286,7 +287,7 @@ def run_wifi(interface: str | None = None) -> dict:
         return result
 
     # Determine which interfaces to scan
-    target_interfaces = []
+    target_interfaces: list[str] = []
     if interface:
         # User specified an interface - check if it exists
         iface_names = [i["interface"] for i in iface_status]
@@ -300,7 +301,7 @@ def run_wifi(interface: str | None = None) -> dict:
         target_interfaces = [i["interface"] for i in iface_status]
 
     # Scan each interface
-    all_aps = []
+    all_aps: list[dict[str, Any]] = []
     for iface in target_interfaces:
         try:
             aps = _scan_interface(iface)
@@ -320,22 +321,29 @@ def run_wifi(interface: str | None = None) -> dict:
     result["access_points"] = all_aps
 
     # Deduplicate by BSSID (keep strongest signal)
-    seen: dict[str, dict] = {}
+    seen: dict[str, dict[str, Any]] = {}
     for ap in all_aps:
-        bssid = ap["bssid"]
-        if bssid not in seen or (ap["signal_dbm"] is not None and seen[bssid]["signal_dbm"] is not None and ap["signal_dbm"] > seen[bssid]["signal_dbm"]):
+        bssid = ap.get("bssid")
+        if not bssid:
+            continue
+        if bssid not in seen:
             seen[bssid] = ap
+        else:
+            sig_new = ap.get("signal_dbm")
+            sig_old = seen[bssid].get("signal_dbm")
+            if isinstance(sig_new, (int, float)) and isinstance(sig_old, (int, float)) and sig_new > sig_old:
+                seen[bssid] = ap
     result["access_points"] = list(seen.values())
 
     return result
 
 
-def format_wifi_report_json(results: dict) -> str:
+def format_wifi_report_json(results: dict[str, Any]) -> str:
     """Format Wi-Fi scan results as JSON."""
     return json.dumps(results, indent=2)
 
 
-def format_wifi_report_markdown(results: dict) -> str:
+def format_wifi_report_markdown(results: dict[str, Any]) -> str:
     """Format Wi-Fi scan results as Markdown."""
     lines = ["# Wi-Fi Reconnaissance Report", ""]
 
@@ -362,18 +370,20 @@ def format_wifi_report_markdown(results: dict) -> str:
         lines.append("| Interface | BSSID | SSID | Channel | Freq (GHz) | Encryption | Signal (dBm) | Quality |")
         lines.append("|-----------|-------|------|---------|------------|------------|--------------|---------|")
         for ap in results["access_points"]:
-            ssid = ap["ssid"] if ap["ssid"] else "<hidden>"
-            freq = f"{ap['frequency']:.3f}" if ap["frequency"] else "N/A"
-            channel = str(ap["channel"]) if ap["channel"] else "N/A"
-            signal = str(ap["signal_dbm"]) if ap["signal_dbm"] is not None else "N/A"
-            quality = ap["quality"] if ap["quality"] else "N/A"
-            lines.append(f"| {ap['interface']} | {ap['bssid']} | {ssid} | {channel} | {freq} | {ap['encryption']} | {signal} | {quality} |")
+            ssid = ap["ssid"] if ap.get("ssid") else "<hidden>"
+            freq_val = ap.get("frequency")
+            freq = f"{freq_val:.3f}" if isinstance(freq_val, (int, float)) else "N/A"
+            channel = str(ap["channel"]) if ap.get("channel") else "N/A"
+            signal_val = ap.get("signal_dbm")
+            signal = str(signal_val) if signal_val is not None else "N/A"
+            quality = ap.get("quality") if ap.get("quality") else "N/A"
+            lines.append(f"| {ap.get('interface')} | {ap.get('bssid')} | {ssid} | {channel} | {freq} | {ap.get('encryption')} | {signal} | {quality} |")
     else:
         lines.append("*No access points discovered.*")
     lines.append("")
 
     # Notes
-    if results["notes"]:
+    if results.get("notes"):
         lines.append("## Notes")
         for note in results["notes"]:
             lines.append(f"- {note}")
@@ -381,7 +391,7 @@ def format_wifi_report_markdown(results: dict) -> str:
     return "\n".join(lines)
 
 
-def format_wifi_report_csv(results: dict) -> str:
+def format_wifi_report_csv(results: dict[str, Any]) -> str:
     """Format Wi-Fi scan results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)
@@ -408,9 +418,11 @@ def format_wifi_report_csv(results: dict) -> str:
     writer.writerow(["interface", "bssid", "ssid", "channel", "frequency_ghz", "encryption", "signal_dbm", "quality"])
     for ap in results.get("access_points", []):
         ssid = ap.get("ssid", "") if ap.get("ssid") else "<hidden>"
-        freq = f"{ap['frequency']:.3f}" if ap.get("frequency") else "N/A"
+        freq_val = ap.get("frequency")
+        freq = f"{freq_val:.3f}" if isinstance(freq_val, (int, float)) else "N/A"
         channel = str(ap.get("channel")) if ap.get("channel") else "N/A"
-        signal = str(ap.get("signal_dbm")) if ap.get("signal_dbm") is not None else "N/A"
+        signal_val = ap.get("signal_dbm")
+        signal = str(signal_val) if signal_val is not None else "N/A"
         quality = ap.get("quality", "") if ap.get("quality") else "N/A"
         writer.writerow([
             ap.get("interface", ""),

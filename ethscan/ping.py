@@ -388,7 +388,11 @@ def run_ping(
     successful = [p for p in probes if p.get("response_type") in (RESP_ECHO_REPLY, RESP_CONNECTED, RESP_RST)]
     failed = [p for p in probes if p.get("response_type") in (RESP_NO_RESPONSE, RESP_TIMEOUT)]
 
-    rtts = [p["rtt_ms"] for p in successful if p.get("rtt_ms") is not None]
+    rtts: list[float] = []
+    for p in successful:
+        rtt_val = p.get("rtt_ms")
+        if isinstance(rtt_val, (int, float)):
+            rtts.append(float(rtt_val))
     rtt_min = min(rtts) if rtts else None
     rtt_max = max(rtts) if rtts else None
     rtt_avg = round(sum(rtts) / len(rtts), 2) if rtts else None
@@ -446,14 +450,19 @@ def format_ping_report_markdown(data: dict[str, object]) -> str:
         lines.append(f"- **RTT Avg:** {data['rtt_avg_ms']} ms")
     lines.append("")
 
-    probes = data.get("probes") or []
-    if probes:
+    probes_list = data.get("probes") or []
+    if not isinstance(probes_list, list):
+        probes_list = []
+    if probes_list:
         lines.append("## Probe Results")
         lines.append("| Seq | IP | RTT (ms) | Response |")
         lines.append("|-----|-----|----------|----------|")
-        for probe in probes:
+        for probe in probes_list:
+            if not isinstance(probe, dict):
+                continue
             seq = probe.get("sequence", "")
-            ip = str(probe.get("ip") or "*").replace("|", "\\|")
+            ip_val = probe.get("ip")
+            ip = str(ip_val or "*").replace("|", "\\|")
             rtt = probe.get("rtt_ms")
             rtt_str = str(rtt) if rtt is not None else "N/A"
             response = str(probe.get("response_type") or "").replace("|", "\\|")
@@ -461,6 +470,8 @@ def format_ping_report_markdown(data: dict[str, object]) -> str:
         lines.append("")
 
     notes = data.get("notes") or []
+    if not isinstance(notes, list):
+        notes = []
     if notes:
         lines.append("## Notes")
         for note in notes:
@@ -483,7 +494,12 @@ def format_ping_report_csv(data: dict[str, object]) -> str:
         "response_type",
         "error",
     ])
-    for probe in data.get("probes") or []:
+    probes_list = data.get("probes") or []
+    if not isinstance(probes_list, list):
+        probes_list = []
+    for probe in probes_list:
+        if not isinstance(probe, dict):
+            continue
         rtt = probe.get("rtt_ms")
         writer.writerow([
             data.get("target", ""),
