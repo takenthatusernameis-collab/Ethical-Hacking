@@ -10,6 +10,7 @@ import re
 import socket
 import struct
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import cast
 
 from ethscan.target import parse_url
 
@@ -344,9 +345,9 @@ def _match_os_from_banner(banner: str) -> list[str]:
     """Match an OS signature against a service banner."""
     matches: list[str] = []
     for entry in OS_SIGNATURES:
-        for pattern, label in entry["patterns"]:
+        for pattern, label in cast(list[tuple[re.Pattern[str], str]], entry["patterns"]):
             if pattern.search(banner):
-                matches.append(entry["name"])
+                matches.append(cast(str, entry["name"]))
                 break
     return matches
 
@@ -355,9 +356,9 @@ def _match_os_from_ttl(ttl: int) -> list[str]:
     """Infer possible OS families from an observed TTL value."""
     matches: list[str] = []
     for entry in OS_SIGNATURES:
-        low, high = entry["ttl_range"]
+        low, high = cast(tuple[int, int], entry["ttl_range"])
         if low <= ttl <= high:
-            matches.append(entry["name"])
+            matches.append(cast(str, entry["name"]))
     return matches
 
 
@@ -367,7 +368,7 @@ def _match_os_from_behavior(behavior: dict[str, object]) -> list[str]:
     response = str(behavior.get("response") or "")
 
     # Windows typically sends RST in response to a FIN on a closed port
-    if response == "RST" and "FIN" in behavior.get("probe_type", ""):
+    if response == "RST" and "FIN" in str(behavior.get("probe_type", "")):
         matches.append("Windows")
     # Linux typically ignores FIN on closed ports (no response)
     if response == "NO-RESPONSE" and "FIN" in str(behavior.get("probe_type", "")):
@@ -432,7 +433,7 @@ def run_osdetect(
             }
             for port in port_list
         ]
-    probes.sort(key=lambda r: r["port"])
+    probes.sort(key=lambda r: cast(int, r["port"]))
 
     # Cross-reference banners when provided
     os_matches: list[str] = []
@@ -487,17 +488,17 @@ def format_osdetect_report_markdown(data: dict[str, object]) -> str:
     lines.append(f"- **Ports Probed:** {data['ports_probed']}")
     inferred = data.get("inferred_os") or []
     lines.append(
-        f"- **Inferred OS:** {', '.join(inferred) if inferred else 'Unknown'}"
+        f"- **Inferred OS:** {', '.join(cast(list[str], inferred)) if inferred else 'Unknown'}"
     )
     lines.append("")
 
     lines.append("## TCP/IP Stack Probes")
-    probes = data.get("probes") or []
+    probes = cast(list[dict[str, object]], data.get("probes") or [])
     if probes:
         lines.append("| Port | Probe | Connected | Response | Flags Observed | Error |")
         lines.append("|------|-------|-----------|----------|----------------|-------|")
         for probe in probes:
-            connected = "Yes" if probe["connected"] else "No"
+            connected = "Yes" if cast(bool, probe["connected"]) else "No"
             probe_type = str(probe.get("probe_type") or "").replace("|", "\\|")
             response = str(probe.get("response") or "").replace("|", "\\|")
             flags = str(probe.get("flags_observed") or "").replace("|", "\\|")
@@ -509,7 +510,7 @@ def format_osdetect_report_markdown(data: dict[str, object]) -> str:
         lines.append("*No probes performed.*")
     lines.append("")
 
-    notes = data.get("notes") or []
+    notes = cast(list[str], data.get("notes") or [])
     if notes:
         lines.append("## Notes")
         for note in notes:
@@ -533,7 +534,7 @@ def format_osdetect_report_csv(data: dict[str, object]) -> str:
         "flags_observed",
         "error",
     ])
-    for probe in data.get("probes") or []:
+    for probe in cast(list[dict[str, object]], data.get("probes") or []):
         writer.writerow([
             data.get("target", ""),
             data.get("host", ""),
@@ -544,7 +545,7 @@ def format_osdetect_report_csv(data: dict[str, object]) -> str:
             probe.get("flags_observed") or "",
             probe.get("error") or "",
         ])
-    for os_name in data.get("inferred_os") or []:
+    for os_name in cast(list[str], data.get("inferred_os") or []):
         writer.writerow([
             data.get("target", ""),
             data.get("host", ""),
