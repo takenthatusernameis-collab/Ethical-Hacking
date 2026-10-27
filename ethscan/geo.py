@@ -14,6 +14,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import cast
 
 from ethscan.fileio import load_json
 from ethscan.target import parse_url
@@ -304,7 +305,7 @@ def format_geo_report_markdown(data: dict[str, object]) -> str:
         )
     lines.append("")
 
-    geo = data.get("geolocation")
+    geo = cast(dict[str, object] | None, data.get("geolocation"))
     if geo:
         lines.append("## Geolocation Data")
         if geo.get("status") == "success":
@@ -340,13 +341,14 @@ def format_geo_report_markdown(data: dict[str, object]) -> str:
         lines.append("*No geolocation data available.*")
     lines.append("")
 
-    hops = data.get("hops") or []
+    hops = cast(list[dict[str, object]], data.get("hops") or [])
     if data.get("recursive") and hops:
         lines.append("## Hop Geolocation")
         lines.append("| Hop | IP | Host | Response | RTT Avg (ms) | Country | City | ISP |")
         lines.append("|-----|----|------|----------|--------------|---------|------|-----|")
         for hop in hops:
-            hop_geo = hop.get("geolocation") or {}
+            hop = cast(dict[str, object], hop)
+            hop_geo = cast(dict[str, object], hop.get("geolocation") or {})
             country = hop_geo.get("country", "")
             city = hop_geo.get("city", "")
             isp = hop_geo.get("isp", "")
@@ -362,11 +364,11 @@ def format_geo_report_markdown(data: dict[str, object]) -> str:
             )
         lines.append("")
 
-    notes = data.get("notes") or []
+    notes = cast(list[object], data.get("notes") or [])
     if notes:
         lines.append("## Notes")
         for note in notes:
-            lines.append(f"- {note}")
+            lines.append(f"- {cast(str, note)}")
         lines.append("")
 
     return "\n".join(lines)
@@ -435,7 +437,7 @@ def _geo_csv_row(
         ])
     else:
         row.extend(["", "", "", ""])
-    return row
+    return cast(list[str], row)
 
 
 def format_geo_report_csv(data: dict[str, object]) -> str:
@@ -453,10 +455,10 @@ def format_geo_report_csv(data: dict[str, object]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(_geo_csv_header())
-    target = data.get("target", "")
-    geo = data.get("geolocation") or {}
+    target = cast(str, data.get("target", ""))
+    geo = cast(dict[str, object], data.get("geolocation") or {})
     writer.writerow(_geo_csv_row(target, data.get("ip"), geo))
-    for hop in data.get("hops") or []:
-        hop_geo = hop.get("geolocation") or {}
+    for hop in cast(list[dict[str, object]], data.get("hops") or []):
+        hop_geo = cast(dict[str, object], hop.get("geolocation") or {})
         writer.writerow(_geo_csv_row(target, hop.get("ip"), hop_geo, hop))
     return output.getvalue().rstrip("\r\n")
