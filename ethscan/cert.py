@@ -15,6 +15,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import Any
 
 from ethscan.fileio import load_json
 from ethscan.target import parse_url
@@ -97,7 +98,7 @@ def _is_cache_valid(entry: dict, ttl: int = CACHE_TTL) -> bool:
 
 def _fetch_cert_data(
     domain: str, timeout: float = DEFAULT_TIMEOUT, api_url: str | None = None
-) -> dict | None:
+) -> dict[str, Any] | None:
     """Fetch certificate transparency data from the public API."""
     base = (api_url or DEFAULT_API_URL).rstrip("/") + "/"
     url = f"{base}?q=%25.{domain}&output=json"
@@ -122,7 +123,7 @@ def _get_cached_or_fetch(
     use_cache: bool,
     offline_fallback: bool,
     api_url: str | None,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Get cert data from cache or fetch from API."""
     cache = _load_cache() if use_cache else {}
 
@@ -155,22 +156,23 @@ def _get_cached_or_fetch(
     return data
 
 
-def _extract_subdomains(cert_data: dict[str, object]) -> list[str]:
+def _extract_subdomains(cert_data: dict[str, Any]) -> list[str]:
     """Extract unique subdomain names from CT entries."""
     names: list[str] = []
-    seen: set = set()
+    seen: set[str] = set()
     entries = cert_data.get("entries") or []
-    for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        name = entry.get("name_value") or entry.get("common_name") or ""
-        if not name:
-            continue
-        for token in str(name).splitlines():
-            token = token.strip().lower()
-            if token and token not in seen:
-                seen.add(token)
-                names.append(token)
+    if isinstance(entries, list):
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            name = entry.get("name_value") or entry.get("common_name") or ""
+            if not name:
+                continue
+            for token in str(name).splitlines():
+                token = token.strip().lower()
+                if token and token not in seen:
+                    seen.add(token)
+                    names.append(token)
     return sorted(names)
 
 
@@ -180,7 +182,7 @@ def run_cert(
     use_cache: bool = True,
     offline_fallback: bool = True,
     api_url: str | None = None,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Search Certificate Transparency logs for TARGET.
 
     Args:
@@ -242,32 +244,35 @@ def run_cert(
         DEFAULT_API_URL = original_api
 
 
-def format_cert_report_json(data: dict[str, object]) -> str:
+def format_cert_report_json(data: dict[str, Any]) -> str:
     """Format cert results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_cert_report_markdown(data: dict[str, object]) -> str:
+def format_cert_report_markdown(data: dict[str, Any]) -> str:
     """Format cert results as Markdown."""
     lines = ["# ethscan Certificate Transparency Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Domain:** {data['domain']}")
-    if data.get("ip"):
-        lines.append(f"- **Resolved IP:** {data['ip']}")
-    lines.append(f"- **Timeout:** {data['timeout']}s")
-    lines.append(f"- **Cache Enabled:** {'Yes' if data['use_cache'] else 'No'}")
-    lines.append(f"- **Offline Fallback:** {'Yes' if data['offline_fallback'] else 'No'}")
+    lines.append(f"- **Target:** {data.get('target', '')}")
+    lines.append(f"- **Domain:** {data.get('domain', '')}")
+    ip = data.get("ip")
+    if ip:
+        lines.append(f"- **Resolved IP:** {ip}")
+    lines.append(f"- **Timeout:** {data.get('timeout', '')}s")
+    lines.append(f"- **Cache Enabled:** {'Yes' if data.get('use_cache') else 'No'}")
+    lines.append(f"- **Offline Fallback:** {'Yes' if data.get('offline_fallback') else 'No'}")
     lines.append("")
 
     cert = data.get("cert_data")
     subdomains = data.get("subdomains") or []
+    if not isinstance(subdomains, list):
+        subdomains = []
     lines.append(f"- **Subdomains Found:** {len(subdomains)}")
     lines.append("")
 
-    if cert:
+    if isinstance(cert, dict):
         lines.append("## Certificate Transparency Data")
         if cert.get("error"):
-            lines.append(f"- **Error:** {cert['error']}")
+            lines.append(f"- **Error:** {cert.get('error')}")
         else:
             lines.append(f"- **Entries Found:** {cert.get('count', 0)}")
             if cert.get("cached"):
@@ -288,7 +293,7 @@ def format_cert_report_markdown(data: dict[str, object]) -> str:
         lines.append("")
 
     notes = data.get("notes") or []
-    if notes:
+    if isinstance(notes, list) and notes:
         lines.append("## Notes")
         for note in notes:
             lines.append(f"- {note}")
@@ -297,7 +302,7 @@ def format_cert_report_markdown(data: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_cert_report_csv(data: dict[str, object]) -> str:
+def format_cert_report_csv(data: dict[str, Any]) -> str:
     """Format cert results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)
@@ -306,7 +311,7 @@ def format_cert_report_csv(data: dict[str, object]) -> str:
     domain = data.get("domain", "")
     ip = data.get("ip") or ""
     subdomains = data.get("subdomains") or []
-    if subdomains:
+    if isinstance(subdomains, list) and subdomains:
         for name in subdomains:
             writer.writerow([target, domain, ip, name])
     else:

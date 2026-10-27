@@ -14,6 +14,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import Any
 
 from ethscan.fileio import load_json
 from ethscan.target import parse_url
@@ -99,7 +100,7 @@ def _is_cache_valid(entry: dict, ttl: int = CACHE_TTL) -> bool:
 
 def _fetch_mac_data(
     mac: str, timeout: float = DEFAULT_TIMEOUT, api_url: str | None = None
-) -> dict | None:
+) -> dict[str, Any] | None:
     """Fetch MAC vendor data from the public OUI API."""
     base = (api_url or DEFAULT_API_URL).rstrip("/") + "/"
     url = f"{base}{mac}"
@@ -118,7 +119,7 @@ def _get_cached_or_fetch(
     use_cache: bool,
     offline_fallback: bool,
     api_url: str | None,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Get MAC vendor data from cache or fetch from API."""
     cache = _load_cache() if use_cache else {}
 
@@ -162,11 +163,11 @@ def run_mac(
     use_cache: bool = True,
     offline_fallback: bool = True,
     api_url: str | None = None,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Look up the vendor for a MAC address (target).
 
     Args:
-        target: MAC address, hostname, or URL (e.g., "00:1A:2B:3C:4D:5E", "00-1A-2B-3C-4D-5E").
+        target: MAC address, hostname, or URL (e.g., "00:1A:2B:3C:4D:5E", "00-1A:2B:3C:4D:5E").
         timeout: API request timeout in seconds.
         use_cache: Whether to use local filesystem cache.
         offline_fallback: Whether to use stale cache when API is unavailable.
@@ -238,29 +239,29 @@ def _is_mac_address(value: str) -> bool:
     return True
 
 
-def format_mac_report_json(data: dict[str, object]) -> str:
+def format_mac_report_json(data: dict[str, Any]) -> str:
     """Format MAC vendor results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_mac_report_markdown(data: dict[str, object]) -> str:
+def format_mac_report_markdown(data: dict[str, Any]) -> str:
     """Format MAC vendor results as Markdown."""
     lines = ["# ethscan MAC Vendor Lookup Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
+    lines.append(f"- **Target:** {data.get('target', '')}")
     if data.get("mac"):
-        lines.append(f"- **MAC Address:** {data['mac']}")
+        lines.append(f"- **MAC Address:** {data.get('mac')}")
     if data.get("oui"):
-        lines.append(f"- **OUI:** {data['oui']}")
-    lines.append(f"- **Timeout:** {data['timeout']}s")
-    lines.append(f"- **Cache Enabled:** {'Yes' if data['use_cache'] else 'No'}")
-    lines.append(f"- **Offline Fallback:** {'Yes' if data['offline_fallback'] else 'No'}")
+        lines.append(f"- **OUI:** {data.get('oui')}")
+    lines.append(f"- **Timeout:** {data.get('timeout', '')}s")
+    lines.append(f"- **Cache Enabled:** {'Yes' if data.get('use_cache') else 'No'}")
+    lines.append(f"- **Offline Fallback:** {'Yes' if data.get('offline_fallback') else 'No'}")
     lines.append("")
 
     mac_data = data.get("mac_data")
-    if mac_data:
+    if isinstance(mac_data, dict):
         lines.append("## MAC Vendor Data")
         if mac_data.get("error"):
-            lines.append(f"- **Error:** {mac_data['error']}")
+            lines.append(f"- **Error:** {mac_data.get('error')}")
         else:
             vendor = mac_data.get("vendor")
             if vendor:
@@ -275,7 +276,7 @@ def format_mac_report_markdown(data: dict[str, object]) -> str:
         lines.append("")
 
     notes = data.get("notes") or []
-    if notes:
+    if isinstance(notes, list) and notes:
         lines.append("## Notes")
         for note in notes:
             lines.append(f"- {note}")
@@ -284,7 +285,7 @@ def format_mac_report_markdown(data: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_mac_report_csv(data: dict[str, object]) -> str:
+def format_mac_report_csv(data: dict[str, Any]) -> str:
     """Format MAC vendor results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)
@@ -298,6 +299,8 @@ def format_mac_report_csv(data: dict[str, object]) -> str:
         "error",
     ])
     mac_data = data.get("mac_data") or {}
+    if not isinstance(mac_data, dict):
+        mac_data = {}
     writer.writerow([
         data.get("target", ""),
         data.get("mac") or "",

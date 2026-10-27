@@ -17,12 +17,13 @@ import csv
 import io
 import ipaddress
 import json
+from typing import Any
 
 MAX_PORT = 65535
 MAX_EXPANDED_IPS = 256
 
 
-def _validate_port_spec(spec: str) -> dict[str, object]:
+def _validate_port_spec(spec: str) -> dict[str, Any]:
     """Validate and expand a single port specification string.
 
     Accepts comma-separated ports and ranges, e.g. ``"80,443,8000-9000"``.
@@ -114,7 +115,7 @@ def _validate_port_spec(spec: str) -> dict[str, object]:
     }
 
 
-def _format_network_info(network: ipaddress._BaseNetwork) -> dict[str, object]:
+def _format_network_info(network: ipaddress._BaseNetwork) -> dict[str, Any]:
     """Build a structured network-info dictionary for a network object.
 
     Includes address range, netmask, broadcast, host range, and counts.
@@ -147,7 +148,7 @@ def _format_network_info(network: ipaddress._BaseNetwork) -> dict[str, object]:
     return info
 
 
-def _validate_cidr(spec: str) -> dict[str, object]:
+def _validate_cidr(spec: str) -> dict[str, Any]:
     """Validate a single CIDR/network specification string.
 
     Accepts CIDR notation (``192.168.1.0/24``) or bare IPs (``192.168.1.1``,
@@ -194,7 +195,7 @@ def _validate_cidr(spec: str) -> dict[str, object]:
 def run_validate(
     ports: str | None = None,
     cidrs: str | None = None,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Validate and expand port specifications and CIDR inputs.
 
     Args:
@@ -219,7 +220,7 @@ def run_validate(
         for spec in cidr_specs:
             cidr_results.append(_validate_cidr(spec))
 
-    total_valid = all(r["valid"] for r in port_results + cidr_results) if (port_results or cidr_results) else False
+    total_valid = all(bool(r.get("valid", False)) for r in port_results + cidr_results) if (port_results or cidr_results) else False
     notes: list[str] = []
     if not port_results and not cidr_results:
         notes.append("No port or CIDR specifications provided; nothing to validate.")
@@ -232,13 +233,21 @@ def run_validate(
     else:
         notes.append("One or more specifications were invalid; see error fields.")
 
-    all_ports = sorted({p for r in port_results for p in r["ports"]})
-    summary = {
+    all_ports: set[int] = set()
+    for r in port_results:
+        ports_val = r.get("ports", [])
+        if isinstance(ports_val, list):
+            try:
+                all_ports.update(int(p) for p in ports_val)
+            except Exception:
+                pass
+
+    summary: dict[str, Any] = {
         "ports_specified": len(port_results),
-        "ports_valid": sum(1 for r in port_results if r["valid"]),
-        "ports_total": len(all_ports),
+        "ports_valid": sum(1 for r in port_results if r.get("valid")),
+        "ports_total": len(sorted(all_ports)),
         "cidrs_specified": len(cidr_results),
-        "cidrs_valid": sum(1 for r in cidr_results if r["valid"]),
+        "cidrs_valid": sum(1 for r in cidr_results if r.get("valid")),
         "all_valid": total_valid,
     }
 
@@ -250,7 +259,7 @@ def run_validate(
     }
 
 
-def format_validate_report_json(data: dict[str, object]) -> str:
+def format_validate_report_json(data: dict[str, Any]) -> str:
     """Format validation results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
@@ -260,11 +269,14 @@ def _escape(value: str) -> str:
     return value.replace("|", "\\|")
 
 
-def _ports_to_ranges(ports: list[int]) -> str:
+def _ports_to_ranges(ports: list[int] | list[Any]) -> str:
     """Render a list of ports as compact range strings (e.g. ``80,443,8000-8002``)."""
     if not ports:
         return ""
-    sorted_ports = sorted(ports)
+    try:
+        sorted_ports = sorted(int(p) for p in ports)
+    except (TypeError, ValueError):
+        return ""
     ranges: list[str] = []
     start = prev = sorted_ports[0]
     for port in sorted_ports[1:]:
@@ -285,71 +297,88 @@ def _ports_to_ranges(ports: list[int]) -> str:
 
 
 
-def format_validate_report_csv(data: dict[str, object]) -> str:
+def format_validate_report_csv(data: dict[str, Any]) -> str:
     """Format validation results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["type", "spec", "valid", "detail"])
     port_results = data.get("ports", []) or []
-    for r in port_results:
-        spec = str(r.get("spec", ""))
-        valid = "true" if r.get("valid") else "false"
-        if r.get("valid"):
-            ports = r.get("ports", [])
-            if ports:
-                detail = _ports_to_ranges(ports)
+    if isinstance(port_results, list):
+        for r in port_results:
+            if not isinstance(r, dict):
+                continue
+            spec = str(r.get("spec", ""))
+            valid_flag = bool(r.get("valid"))
+            valid = "true" if valid_flag else "false"
+            if valid_flag:
+                ports_val = r.get("ports", [])
+                if ports_val:
+                    detail = _ports_to_ranges(ports_val)  # type: ignore
+                else:
+                    detail = str(r.get("count", 0))
             else:
-                detail = str(r.get("count", 0))
-        else:
-            detail = str(r.get("error") or "")
-        writer.writerow(["port", spec, valid, detail])
+                detail = str(r.get("error") or "")
+            writer.writerow(["port", spec, valid, detail])
     cidr_results = data.get("cidrs", []) or []
-    for r in cidr_results:
-        spec = str(r.get("spec", ""))
-        valid = "true" if r.get("valid") else "false"
-        if r.get("valid"):
-            network = r.get("network") or {}
-            canonical = network.get("canonical") or r.get("canonical") or spec
-            detail = str(canonical)
-        else:
-            detail = str(r.get("error") or "")
-        writer.writerow(["cidr", spec, valid, detail])
+    if isinstance(cidr_results, list):
+        for r in cidr_results:
+            if not isinstance(r, dict):
+                continue
+            spec = str(r.get("spec", ""))
+            valid_flag = bool(r.get("valid"))
+            valid = "true" if valid_flag else "false"
+            if valid_flag:
+                network = r.get("network") or {}
+                if isinstance(network, dict):
+                    canonical = network.get("canonical") or r.get("canonical") or spec
+                else:
+                    canonical = r.get("canonical") or spec
+                detail = str(canonical)
+            else:
+                detail = str(r.get("error") or "")
+            writer.writerow(["cidr", spec, valid, detail])
     return output.getvalue().rstrip("\r\n")
 
-def format_validate_report_markdown(data: dict[str, object]) -> str:
+def format_validate_report_markdown(data: dict[str, Any]) -> str:
     """Format validation results as Markdown."""
     lines: list[str] = ["# ethscan Validate Report", ""]
 
     summary = data.get("summary", {}) or {}
-    lines.append("## Summary")
-    lines.append(f"- **Port Specs Provided:** {summary.get('ports_specified', 0)}")
-    lines.append(f"- **Port Specs Valid:** {summary.get('ports_valid', 0)}")
-    lines.append(f"- **Total Ports Expanded:** {summary.get('ports_total', 0)}")
-    lines.append(f"- **CIDR Specs Provided:** {summary.get('cidrs_specified', 0)}")
-    lines.append(f"- **CIDR Specs Valid:** {summary.get('cidrs_valid', 0)}")
-    all_valid = summary.get("all_valid", False)
-    lines.append(f"- **All Valid:** {'Yes' if all_valid else 'No'}")
-    lines.append("")
+    if isinstance(summary, dict):
+        lines.append("## Summary")
+        lines.append(f"- **Port Specs Provided:** {summary.get('ports_specified', 0)}")
+        lines.append(f"- **Port Specs Valid:** {summary.get('ports_valid', 0)}")
+        lines.append(f"- **Total Ports Expanded:** {summary.get('ports_total', 0)}")
+        lines.append(f"- **CIDR Specs Provided:** {summary.get('cidrs_specified', 0)}")
+        lines.append(f"- **CIDR Specs Valid:** {summary.get('cidrs_valid', 0)}")
+        all_valid = summary.get("all_valid", False)
+        lines.append(f"- **All Valid:** {'Yes' if all_valid else 'No'}")
+        lines.append("")
+    else:
+        lines.append("## Summary")
+        lines.append("")
 
     port_results = data.get("ports", []) or []
-    if port_results:
+    if isinstance(port_results, list) and port_results:
         lines.append("## Port Specifications")
         lines.append("| Specification | Valid | Expanded Ports | Count | Error |")
         lines.append("|---------------|-------|-----------------|-------|-------|")
         for r in port_results:
-            valid = r["valid"]
-            ports = r.get("ports", [])
-            if valid and ports:
-                expanded = _ports_to_ranges(ports)
+            if not isinstance(r, dict):
+                continue
+            valid_flag = bool(r.get("valid"))
+            ports_val = r.get("ports", [])
+            if valid_flag and ports_val:
+                expanded = _ports_to_ranges(ports_val)  # type: ignore
                 if len(expanded) > 80:
                     expanded = expanded[:77] + "..."
             else:
                 expanded = ""
             count = r.get("count", 0)
             error = _escape(str(r.get("error") or ""))
-            valid_str = "Yes" if valid else "No"
+            valid_str = "Yes" if valid_flag else "No"
             lines.append(
-                f"| {_escape(str(r['spec']))} | {valid_str} | {expanded} | {count} | {error} |"
+                f"| {_escape(str(r.get('spec', '')))} | {valid_str} | {expanded} | {count} | {error} |"
             )
         lines.append("")
     else:
@@ -358,21 +387,31 @@ def format_validate_report_markdown(data: dict[str, object]) -> str:
         lines.append("")
 
     cidr_results = data.get("cidrs", []) or []
-    if cidr_results:
+    if isinstance(cidr_results, list) and cidr_results:
         lines.append("## CIDR / Network Specifications")
         lines.append("| Specification | Valid | Canonical | Network | Broadcast | Range | Addresses | Error |")
         lines.append("|---------------|-------|-----------|---------|-----------|-------|-----------|-------|")
         for r in cidr_results:
-            if r["valid"]:
+            if not isinstance(r, dict):
+                continue
+            if r.get("valid"):
                 net = r.get("network") or {}
-                canonical = _escape(str(r.get("canonical") or ""))
-                network_addr = _escape(str(net.get("network_address") or ""))
-                broadcast = _escape(str(net.get("broadcast_address") or "")) if net.get("broadcast_address") else "N/A"
-                range_str = (
-                    f"{_escape(str(net.get('first_host', '')))} - "
-                    f"{_escape(str(net.get('last_host', '')))}"
-                )
-                total = net.get("total_addresses", "?")
+                if isinstance(net, dict):
+                    canonical = _escape(str(r.get("canonical") or net.get("canonical") or ""))
+                    network_addr = _escape(str(net.get("network_address") or ""))
+                    broadcast_addr = net.get("broadcast_address")
+                    broadcast = _escape(str(broadcast_addr)) if broadcast_addr else "N/A"
+                    range_str = (
+                        f"{_escape(str(net.get('first_host', '')))} - "
+                        f"{_escape(str(net.get('last_host', '')))}"
+                    )
+                    total = net.get("total_addresses", "?")
+                else:
+                    canonical = _escape(str(r.get("canonical") or ""))
+                    network_addr = ""
+                    broadcast = "N/A"
+                    range_str = ""
+                    total = ""
                 error = ""
                 valid_str = "Yes"
             else:
@@ -384,7 +423,7 @@ def format_validate_report_markdown(data: dict[str, object]) -> str:
                 error = _escape(str(r.get("error") or ""))
                 valid_str = "No"
             lines.append(
-                f"| {_escape(str(r['spec']))} | {valid_str} | {canonical} | "
+                f"| {_escape(str(r.get('spec', '')))} | {valid_str} | {canonical} | "
                 f"{network_addr} | {broadcast} | {range_str} | {total} | {error} |"
             )
         lines.append("")
@@ -394,7 +433,7 @@ def format_validate_report_markdown(data: dict[str, object]) -> str:
         lines.append("")
 
     notes = data.get("notes", []) or []
-    if notes:
+    if isinstance(notes, list) and notes:
         lines.append("## Notes")
         for note in notes:
             lines.append(f"- {_escape(str(note))}")

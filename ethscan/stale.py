@@ -4,8 +4,10 @@ from __future__ import annotations
 import contextlib
 import csv
 import io
+import json
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any
 
 from ethscan.fileio import read_lines
 from ethscan.target import parse_url
@@ -49,7 +51,7 @@ def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str
         try:
             socket.setdefaulttimeout(timeout)
             results = socket.getaddrinfo(domain, None, socket.AF_INET)
-            ips = [r[4][0] for r in results]
+            ips = [str(r[4][0]) for r in results]
             return sorted(set(ips))
         finally:
             socket.setdefaulttimeout(previous)
@@ -64,7 +66,7 @@ def resolve_aaaa_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[
         try:
             socket.setdefaulttimeout(timeout)
             results = socket.getaddrinfo(domain, None, socket.AF_INET6)
-            ips = [r[4][0] for r in results]
+            ips = [str(r[4][0]) for r in results]
             return sorted(set(ips))
         finally:
             socket.setdefaulttimeout(previous)
@@ -111,9 +113,9 @@ def check_ip_reachable(ip: str, timeout: float = DEFAULT_TIMEOUT) -> bool:
     return any(check_tcp_connect(ip, port, timeout) for port in (80, 443, 22))
 
 
-def resolve_domain_all(domain: str, timeout: float) -> dict[str, object]:
+def resolve_domain_all(domain: str, timeout: float) -> dict[str, Any]:
     """Resolve all record types for a domain and check reachability."""
-    result: dict[str, object] = {
+    result: dict[str, Any] = {
         "domain": domain,
         "A": [],
         "AAAA": [],
@@ -167,7 +169,7 @@ def run_stale(
     targets: list[str],
     timeout: float = DEFAULT_TIMEOUT,
     max_workers: int = DEFAULT_MAX_WORKERS,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Detect stale DNS records for a list of domains.
 
     Args:
@@ -181,7 +183,7 @@ def run_stale(
     normalized_targets = [_normalize_domain(t) for t in targets]
     unique_targets = sorted(set(normalized_targets))
 
-    results: list[dict[str, object]] = []
+    results: list[dict[str, Any]] = []
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_domain = {
@@ -204,8 +206,8 @@ def run_stale(
                     }
                 )
 
-    stale_results = [r for r in results if r["stale"]]
-    fresh_results = [r for r in results if not r["stale"]]
+    stale_results = [r for r in results if r.get("stale")]
+    fresh_results = [r for r in results if not r.get("stale")]
 
     return {
         "targets": targets,
@@ -217,48 +219,58 @@ def run_stale(
     }
 
 
-def format_stale_report_json(data: dict[str, object]) -> str:
+def format_stale_report_json(data: dict[str, Any]) -> str:
     """Format stale detection results as JSON."""
-    import json
     return json.dumps(data, indent=2, default=str)
 
 
-def format_stale_report_markdown(data: dict[str, object]) -> str:
+def format_stale_report_markdown(data: dict[str, Any]) -> str:
     """Format stale detection results as Markdown."""
     lines = ["# ethscan Stale DNS Record Detection Report", ""]
-    lines.append(f"- **Total Checked:** {data['total_checked']}")
-    lines.append(f"- **Stale Records:** {data['stale_count']}")
-    lines.append(f"- **Fresh Records:** {data['fresh_count']}")
+    lines.append(f"- **Total Checked:** {data.get('total_checked', 0)}")
+    lines.append(f"- **Stale Records:** {data.get('stale_count', 0)}")
+    lines.append(f"- **Fresh Records:** {data.get('fresh_count', 0)}")
     lines.append("")
 
-    if data["stale_results"]:
+    stale_results = data.get("stale_results") or []
+    if isinstance(stale_results, list) and stale_results:
         lines.append("## Stale Records")
         lines.append("| Domain | A Records | AAAA Records | CNAME | Stale Reasons |")
         lines.append("|--------|-----------|--------------|-------|---------------|")
-        for entry in data["stale_results"]:
-            a_str = ", ".join(entry["A"]) if entry["A"] else "None"
-            aaaa_str = ", ".join(entry["AAAA"]) if entry["AAAA"] else "None"
-            cname_str = entry["CNAME"] or "None"
-            reasons_str = "; ".join(entry["stale_reasons"])
-            lines.append(f"| {entry['domain']} | {a_str} | {aaaa_str} | {cname_str} | {reasons_str} |")
+        for entry in stale_results:
+            if not isinstance(entry, dict):
+                continue
+            a_list = entry.get("A") or []
+            aaaa_list = entry.get("AAAA") or []
+            a_str = ", ".join(str(x) for x in a_list) if a_list else "None"
+            aaaa_str = ", ".join(str(x) for x in aaaa_list) if aaaa_list else "None"
+            cname_str = entry.get("CNAME") or "None"
+            reasons = entry.get("stale_reasons") or []
+            reasons_str = "; ".join(str(x) for x in reasons)
+            lines.append(f"| {entry.get('domain', '')} | {a_str} | {aaaa_str} | {cname_str} | {reasons_str} |")
         lines.append("")
 
-    if data.get("results"):
+    results = data.get("results") or []
+    if isinstance(results, list) and results:
         lines.append("## All Results")
         lines.append("| Domain | A Records | AAAA Records | CNAME | Stale |")
         lines.append("|--------|-----------|--------------|-------|-------|")
-        for entry in data["results"]:
-            a_str = ", ".join(entry["A"]) if entry["A"] else "None"
-            aaaa_str = ", ".join(entry["AAAA"]) if entry["AAAA"] else "None"
-            cname_str = entry["CNAME"] or "None"
-            stale_str = "Yes" if entry["stale"] else "No"
-            lines.append(f"| {entry['domain']} | {a_str} | {aaaa_str} | {cname_str} | {stale_str} |")
+        for entry in results:
+            if not isinstance(entry, dict):
+                continue
+            a_list = entry.get("A") or []
+            aaaa_list = entry.get("AAAA") or []
+            a_str = ", ".join(str(x) for x in a_list) if a_list else "None"
+            aaaa_str = ", ".join(str(x) for x in aaaa_list) if aaaa_list else "None"
+            cname_str = entry.get("CNAME") or "None"
+            stale_str = "Yes" if entry.get("stale") else "No"
+            lines.append(f"| {entry.get('domain', '')} | {a_str} | {aaaa_str} | {cname_str} | {stale_str} |")
         lines.append("")
 
     return "\n".join(lines)
 
 
-def format_stale_report_csv(data: dict[str, object]) -> str:
+def format_stale_report_csv(data: dict[str, Any]) -> str:
     """Format stale detection results as CSV.
 
     Emits a header row followed by one row per domain with columns:
@@ -269,12 +281,18 @@ def format_stale_report_csv(data: dict[str, object]) -> str:
     writer.writerow(["domain", "A_records", "AAAA_records", "CNAME", "stale", "stale_reasons"])
 
     results = data.get("results", []) or []
-    for entry in results:
-        a_str = ", ".join(entry.get("A", []) or [])
-        aaaa_str = ", ".join(entry.get("AAAA", []) or [])
-        cname_str = entry.get("CNAME") or ""
-        stale_str = "true" if entry.get("stale") else "false"
-        reasons_str = "; ".join(entry.get("stale_reasons", []) or [])
-        writer.writerow([entry.get("domain", ""), a_str, aaaa_str, cname_str, stale_str, reasons_str])
+    if isinstance(results, list):
+        for entry in results:
+            if not isinstance(entry, dict):
+                continue
+            a_list = entry.get("A") or []
+            aaaa_list = entry.get("AAAA") or []
+            a_str = ", ".join(str(x) for x in a_list)
+            aaaa_str = ", ".join(str(x) for x in aaaa_list)
+            cname_str = entry.get("CNAME") or ""
+            stale_str = "true" if entry.get("stale") else "false"
+            reasons = entry.get("stale_reasons") or []
+            reasons_str = "; ".join(str(x) for x in reasons)
+            writer.writerow([entry.get("domain", ""), a_str, aaaa_str, cname_str, stale_str, reasons_str])
 
     return output.getvalue().rstrip("\r\n")

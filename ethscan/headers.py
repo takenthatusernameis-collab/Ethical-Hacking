@@ -3,11 +3,12 @@
 import csv
 import io
 import json
+from typing import Any
 
 from ethscan.web import _parse_url, check_security_headers, fetch_headers
 
 
-def run_headers(target: str, timeout: float = 5.0) -> dict[str, object]:
+def run_headers(target: str, timeout: float = 5.0) -> dict[str, Any]:
     """Run security headers check against TARGET.
 
     Args:
@@ -22,7 +23,7 @@ def run_headers(target: str, timeout: float = 5.0) -> dict[str, object]:
     fetched = fetch_headers(url, timeout=timeout)
     headers = dict(fetched)
 
-    results: dict[str, object] = {
+    results: dict[str, Any] = {
         "target": target,
         "host": host,
         "port": port,
@@ -42,43 +43,48 @@ def run_headers(target: str, timeout: float = 5.0) -> dict[str, object]:
     return results
 
 
-def format_headers_report_json(data: dict[str, object]) -> str:
+def format_headers_report_json(data: dict[str, Any]) -> str:
     """Format security headers check results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_headers_report_markdown(data: dict[str, object]) -> str:
+def format_headers_report_markdown(data: dict[str, Any]) -> str:
     """Format security headers check results as Markdown."""
     lines = ["# ethscan Security Headers Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Host:** {data['host']}")
-    lines.append(f"- **Port:** {data['port']}")
-    lines.append(f"- **HTTPS:** {'Yes' if data['secure'] else 'No'}")
+    lines.append(f"- **Target:** {data.get('target', '')}")
+    lines.append(f"- **Host:** {data.get('host', '')}")
+    lines.append(f"- **Port:** {data.get('port', '')}")
+    lines.append(f"- **HTTPS:** {'Yes' if data.get('secure') else 'No'}")
     if data.get("error"):
-        lines.append(f"- **Error:** {data['error']}")
+        lines.append(f"- **Error:** {data.get('error')}")
     lines.append("")
 
-    sh = data["security_headers"]
-    lines.append("## Security Headers")
-    lines.append(f"- Present: {sh['present_count']}/{sh['total']}")
-    if sh["present"]:
-        lines.append("- Present headers:")
-        for header in sh["present"]:
-            lines.append(f"  - `{header}`")
-    if sh["missing"]:
-        lines.append("- Missing headers:")
-        for header in sh["missing"]:
-            lines.append(f"  - `{header}`")
+    sh = data.get("security_headers") or {}
+    if isinstance(sh, dict):
+        lines.append("## Security Headers")
+        lines.append(f"- Present: {sh.get('present_count', 0)}/{sh.get('total', 0)}")
+        present = sh.get("present") or []
+        missing = sh.get("missing") or []
+        if present:
+            lines.append("- Present headers:")
+            for header in present:
+                lines.append(f"  - `{header}`")
+        if missing:
+            lines.append("- Missing headers:")
+            for header in missing:
+                lines.append(f"  - `{header}`")
     lines.append("")
 
     return "\n".join(lines)
 
 
-def format_headers_report_csv(data: dict[str, object]) -> str:
+def format_headers_report_csv(data: dict[str, Any]) -> str:
     """Format security headers check results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)
-    sh = data["security_headers"]
+    sh = data.get("security_headers") or {}
+    if not isinstance(sh, dict):
+        sh = {}
     writer.writerow(["field", "value"])
     writer.writerow(["target", data.get("target", "")])
     writer.writerow(["host", data.get("host", "")])
@@ -90,8 +96,8 @@ def format_headers_report_csv(data: dict[str, object]) -> str:
     writer.writerow(["total", sh.get("total", 0)])
     writer.writerow([])
     writer.writerow(["header", "status"])
-    for header in sh.get("present", []):
+    for header in sh.get("present", []) or []:
         writer.writerow([header, "present"])
-    for header in sh.get("missing", []):
+    for header in sh.get("missing", []) or []:
         writer.writerow([header, "missing"])
     return output.getvalue().rstrip("\r\n")
