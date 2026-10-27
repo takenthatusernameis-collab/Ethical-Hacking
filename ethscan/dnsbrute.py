@@ -470,7 +470,7 @@ def run_dnsbrute(
                 "zone": zone,
                 "depth": depth,
                 "success": bool(result.get("success")),
-                "records_count": int(result.get("records_count") or 0),
+                "records_count": int(cast(int, result.get("records_count") or 0)),
                 "records": result.get("records") or [],
                 "error": result.get("error"),
             }
@@ -492,8 +492,8 @@ def run_dnsbrute(
     _run_axfr_for_zone(domain, ns_list, 1)
 
     axfr_success = any(bool(entry.get("success")) for entry in axfr_results)
-    axfr_total_records = sum(int(entry.get("records_count") or 0) for entry in axfr_results)
-    recursive_total_records = sum(int(entry.get("records_count") or 0) for entry in recursive_axfr_results)
+    axfr_total_records = sum(int(cast(int, entry.get("records_count") or 0)) for entry in axfr_results)
+    recursive_total_records = sum(int(cast(int, entry.get("records_count") or 0)) for entry in recursive_axfr_results)
 
     results: list[dict[str, object]] = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -520,8 +520,8 @@ def run_dnsbrute(
         "recursive_axfr_total_records": recursive_total_records,
         "subdomains_tested": len(labels),
         "resolved_count": len(resolved),
-        "resolved": sorted(resolved, key=lambda entry: entry["subdomain"]),
-        "all_results": sorted(results, key=lambda entry: entry["subdomain"]),
+        "resolved": sorted(resolved, key=lambda entry: cast(str, entry["subdomain"])),
+        "all_results": sorted(results, key=lambda entry: cast(str, entry["subdomain"])),
         "resolver": resolver,
         "recursive": recursive,
         "max_depth": max_depth if recursive else 0,
