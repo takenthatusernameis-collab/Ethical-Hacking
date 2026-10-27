@@ -10,6 +10,7 @@ import csv
 import io
 import json
 import time
+from typing import cast
 
 KNOWN_ALGORITHMS = {
     "none": "none",
@@ -51,9 +52,6 @@ def _decode_json_segment(segment: str) -> dict | None:
         return None
     try:
         data = json.loads(raw.decode("utf-8", errors="replace"))
-    # A segment whose JSON nests deeper than the parser can read raises a
-    # ``RecursionError``, which is neither a ``UnicodeDecodeError`` nor a
-    # ``JSONDecodeError``: it is a segment that cannot be read.
     except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
         return None
     return data if isinstance(data, dict) else None
@@ -146,8 +144,10 @@ def run_jwt(token: str, now: float | None = None) -> dict[str, object]:
         result["finding_count"] = len(findings)
         return result
 
-    header = parsed["header"]
-    payload = parsed["payload"]
+    header_raw = parsed["header"]
+    payload_raw = parsed["payload"]
+    header = header_raw if isinstance(header_raw, dict) else None
+    payload = payload_raw if isinstance(payload_raw, dict) else None
 
     if header is None:
         findings.append("Could not decode header segment (invalid base64url or non-JSON)")
@@ -164,7 +164,7 @@ def run_jwt(token: str, now: float | None = None) -> dict[str, object]:
             result["algorithm_type"] = "none"
             findings.append("Unsigned token (alg=none): signature verification is impossible")
         elif alg in KNOWN_ALGORITHMS:
-            result["algorithm_type"] = KNOWN_ALGORITHMS[alg]
+            result["algorithm_type"] = KNOWN_ALGORITHMS[cast(str, alg)]
         elif alg is None:
             findings.append("Header has no alg claim")
         else:
@@ -172,12 +172,14 @@ def run_jwt(token: str, now: float | None = None) -> dict[str, object]:
             findings.append(f"Unknown algorithm: {alg}")
 
     if payload is not None:
+        standard_claims_result: dict[str, object] = result["standard_claims"]  # type: ignore[assignment]
+        other_claims_result: dict[str, object] = result["other_claims"]  # type: ignore[assignment]
         for key in STANDARD_CLAIMS:
             if key in payload:
-                result["standard_claims"][key] = payload[key]
+                standard_claims_result[key] = payload[key]
         for key, value in payload.items():
             if key not in STANDARD_CLAIMS:
-                result["other_claims"][key] = value
+                other_claims_result[key] = value
 
         exp = payload.get("exp")
         if isinstance(exp, (int, float)):
@@ -214,22 +216,26 @@ def format_jwt_report_json(data: dict[str, object]) -> str:
 def format_jwt_report_markdown(data: dict[str, object]) -> str:
     """Format JWT inspection results as Markdown."""
     lines = ["# ethscan JWT Inspection Report", ""]
-    lines.append(f"- **Valid Structure:** {'Yes' if data['valid_structure'] else 'No'}")
-    lines.append(f"- **Segments:** {data['segment_count']}")
-    lines.append(f"- **Has Signature:** {'Yes' if data['has_signature'] else 'No'}")
-    lines.append(f"- **Token Length:** {data['token_length']}")
+    lines.append(f"- **Valid Structure:** {'Yes' if data.get('valid_structure') else 'No'}")
+    lines.append(f"- **Segments:** {data.get('segment_count')}")
+    lines.append(f"- **Has Signature:** {'Yes' if data.get('has_signature') else 'No'}")
+    lines.append(f"- **Token Length:** {data.get('token_length')}")
     lines.append("")
 
-    if not data["valid_structure"]:
+    if not data.get("valid_structure"):
         lines.append(f"*Error: {data.get('error', 'unknown error')}*")
         lines.append("")
         lines.append("## Findings")
-        for finding in data.get("findings") or []:
-            lines.append(f"- {finding}")
+        findings_err = data.get("findings") or []
+        if isinstance(findings_err, list):
+            for finding in findings_err:
+                if isinstance(finding, str):
+                    lines.append(f"- {finding}")
         lines.append("")
         return "\n".join(lines)
 
-    header = data.get("header") or {}
+    header_raw = data.get("header") or {}
+    header = header_raw if isinstance(header_raw, dict) else {}
     lines.append("## Header")
     lines.append(f"- **Algorithm:** {header.get('alg', '-')}")
     lines.append(f"- **Algorithm Type:** {data.get('algorithm_type') or '-'}")
@@ -246,7 +252,8 @@ def format_jwt_report_markdown(data: dict[str, object]) -> str:
             lines.append(f"| {_escape(str(key))} | {_escape(_format_value(value))} |")
     lines.append("")
 
-    claims = data.get("claims") or {}
+    claims_raw = data.get("claims") or {}
+    claims = claims_raw if isinstance(claims_raw, dict) else {}
     lines.append("## Claims")
     if "iss" in claims:
         lines.append(f"- **Issuer (iss):** {_escape(_format_value(claims['iss']))}")
@@ -270,7 +277,8 @@ def format_jwt_report_markdown(data: dict[str, object]) -> str:
         lines.append(f"- **Not Before (nbf):** {_format_timestamp(nbf)} ({status})")
     lines.append("")
 
-    other_claims = data.get("other_claims") or {}
+    other_claims_raw = data.get("other_claims") or {}
+    other_claims = other_claims_raw if isinstance(other_claims_raw, dict) else {}
     if other_claims:
         lines.append("## Other Claims")
         lines.append("| Claim | Value |")
@@ -281,9 +289,10 @@ def format_jwt_report_markdown(data: dict[str, object]) -> str:
 
     lines.append("## Findings")
     findings = data.get("findings") or []
-    if findings:
+    if findings and isinstance(findings, list):
         for finding in findings:
-            lines.append(f"- {finding}")
+            if isinstance(finding, str):
+                lines.append(f"- {finding}")
     else:
         lines.append("- No issues detected")
     lines.append("")
@@ -308,28 +317,28 @@ def format_jwt_report_csv(data: dict[str, object]) -> str:
     if data.get("error"):
         writer.writerow(["error", data.get("error")])
 
-    # Standard claims
-    standard_claims = data.get("standard_claims") or {}
+    standard_claims_raw = data.get("standard_claims") or {}
+    standard_claims = standard_claims_raw if isinstance(standard_claims_raw, dict) else {}
     if standard_claims:
         writer.writerow([])
         writer.writerow(["standard_claim", "value"])
         for key, value in sorted(standard_claims.items()):
             writer.writerow([key, value])
 
-    # Other claims
-    other_claims = data.get("other_claims") or {}
+    other_claims_raw = data.get("other_claims") or {}
+    other_claims = other_claims_raw if isinstance(other_claims_raw, dict) else {}
     if other_claims:
         writer.writerow([])
         writer.writerow(["other_claim", "value"])
         for key, value in sorted(other_claims.items()):
             writer.writerow([key, value])
 
-    # Findings
     findings = data.get("findings") or []
-    if findings:
+    if findings and isinstance(findings, list):
         writer.writerow([])
         writer.writerow(["finding"])
         for finding in findings:
-            writer.writerow([finding])
+            if isinstance(finding, str):
+                writer.writerow([finding])
 
     return output.getvalue().rstrip("\r\n")

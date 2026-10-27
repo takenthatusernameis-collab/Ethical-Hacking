@@ -212,7 +212,7 @@ def _resolve_nameservers(domain: str, timeout: float) -> list[str]:
         try:
             socket.setdefaulttimeout(timeout)
             results = socket.getaddrinfo(domain, DNS_PORT, socket.AF_INET, socket.SOCK_DGRAM)
-            ips = sorted({r[4][0] for r in results})
+            ips = sorted({r[4][0] for r in results if isinstance(r[4], tuple) and len(r[4]) > 0 and isinstance(r[4][0], str)})
             return ips
         finally:
             socket.setdefaulttimeout(previous)
@@ -562,80 +562,109 @@ def _markdown_escape(text: object) -> str:
 def format_dnssec_report_markdown(data: dict[str, object]) -> str:
     """Format DNSSEC results as Markdown."""
     lines = ["# ethscan DNSSEC Validation Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Domain:** {data['domain']}")
-    lines.append(f"- **Validated:** {'Yes' if data['validated'] else 'No'}")
-    lines.append(f"- **dnspython Available:** {'Yes' if data['dnspython_available'] else 'No (stdlib only)'}")
+    lines.append(f"- **Target:** {data.get('target')}")
+    lines.append(f"- **Domain:** {data.get('domain')}")
+    lines.append(f"- **Validated:** {'Yes' if data.get('validated') else 'No'}")
+    lines.append(f"- **dnspython Available:** {'Yes' if data.get('dnspython_available') else 'No (stdlib only)'}")
     lines.append("")
 
-    dnskey = data["dnskey"]
+    dnskey = data.get("dnskey")
     lines.append("## DNSKEY Records")
-    if dnskey.get("success") and dnskey.get("keys"):
+    if isinstance(dnskey, dict) and dnskey.get("success") and dnskey.get("keys"):
         lines.append("| Name | Flags | Protocol | Algorithm | Key Tag |")
         lines.append("|------|-------|----------|-----------|---------|")
-        for key in dnskey["keys"]:
-            lines.append(
-                f"| {_markdown_escape(key['name'])} | "
-                f"{key['flags']} | "
-                f"{key['protocol']} | "
-                f"{_markdown_escape(key['algorithm_name'])} | "
-                f"{key.get('key_tag', 'N/A')} |"
-            )
-    elif dnskey.get("success"):
+        keys_list = dnskey.get("keys") or []
+        if isinstance(keys_list, list):
+            for key in keys_list:
+                if not isinstance(key, dict):
+                    continue
+                lines.append(
+                    f"| {_markdown_escape(key.get('name'))} | "
+                    f"{key.get('flags')} | "
+                    f"{key.get('protocol')} | "
+                    f"{_markdown_escape(key.get('algorithm_name'))} | "
+                    f"{key.get('key_tag', 'N/A')} |"
+                )
+    elif isinstance(dnskey, dict) and dnskey.get("success"):
         lines.append("*No DNSKEY records found (unsigned zone)*")
-    else:
+    elif isinstance(dnskey, dict):
         lines.append(f"*Query failed: {dnskey.get('error', 'unknown error')}*")
+    else:
+        lines.append("*Query failed: unknown error*")
     lines.append("")
 
-    ds = data["ds"]
+    ds = data.get("ds")
     lines.append("## DS Records (Parent Zone)")
-    if ds.get("success") and ds.get("records"):
+    if isinstance(ds, dict) and ds.get("success") and ds.get("records"):
         lines.append("| Name | Key Tag | Algorithm | Digest Type | Digest |")
         lines.append("|------|---------|-----------|-------------|--------|")
-        for record in ds["records"]:
-            lines.append(
-                f"| {_markdown_escape(record['name'])} | "
-                f"{record['key_tag']} | "
-                f"{_markdown_escape(record['algorithm_name'])} | "
-                f"{_markdown_escape(record['digest_type_name'])} | "
-                f"{_markdown_escape(record['digest'])} |"
-            )
-    elif ds.get("success"):
+        recs_list = ds.get("records") or []
+        if isinstance(recs_list, list):
+            for record in recs_list:
+                if not isinstance(record, dict):
+                    continue
+                lines.append(
+                    f"| {_markdown_escape(record.get('name'))} | "
+                    f"{record.get('key_tag')} | "
+                    f"{_markdown_escape(record.get('algorithm_name'))} | "
+                    f"{_markdown_escape(record.get('digest_type_name'))} | "
+                    f"{_markdown_escape(record.get('digest'))} |"
+                )
+    elif isinstance(ds, dict) and ds.get("success"):
         lines.append("*No DS records found at parent zone*")
-    else:
+    elif isinstance(ds, dict):
         error = ds.get("error")
         if error:
             lines.append(f"*Query failed: {error}*")
         else:
             lines.append("*Query failed: unknown error*")
+    else:
+        lines.append("*Query failed: unknown error*")
     lines.append("")
 
     if data.get("chain"):
         lines.append("## Chain of Trust")
-        for i, link in enumerate(data["chain"]):
-            lines.append(f"### Level {i + 1}: {link['zone']}")
-            if "dnskey" in link:
-                dk = link["dnskey"]
-                if dk.get("success") and dk.get("keys"):
-                    lines.append(f"- **DNSKEYs:** {len(dk['keys'])} key(s) found")
-                elif dk.get("success"):
-                    lines.append("- **DNSKEYs:** None (unsigned)")
-                else:
-                    lines.append(f"- **DNSKEY Error:** {dk.get('error')}")
-            if "ds" in link:
-                ds_rec = link["ds"]
-                if ds_rec.get("success") and ds_rec.get("records"):
-                    lines.append(f"- **DS Records:** {len(ds_rec['records'])} record(s) found")
-                elif ds_rec.get("success"):
-                    lines.append("- **DS Records:** None")
-                else:
-                    lines.append(f"- **DS Error:** {ds_rec.get('error')}")
-            lines.append("")
+        chain = data.get("chain") or []
+        if isinstance(chain, list):
+            for i, link in enumerate(chain):
+                if not isinstance(link, dict):
+                    continue
+                lines.append(f"### Level {i + 1}: {link.get('zone')}")
+                if "dnskey" in link:
+                    dk = link["dnskey"]
+                    if isinstance(dk, dict):
+                        if dk.get("success") and dk.get("keys"):
+                            keys_list = dk.get("keys") or []
+                            if isinstance(keys_list, list):
+                                lines.append(f"- **DNSKEYs:** {len(keys_list)} key(s) found")
+                            else:
+                                lines.append("- **DNSKEYs:** key(s) found")
+                        elif dk.get("success"):
+                            lines.append("- **DNSKEYs:** None (unsigned)")
+                        else:
+                            lines.append(f"- **DNSKEY Error:** {dk.get('error')}")
+                if "ds" in link:
+                    ds_rec = link["ds"]
+                    if isinstance(ds_rec, dict):
+                        if ds_rec.get("success") and ds_rec.get("records"):
+                            recs = ds_rec.get("records") or []
+                            if isinstance(recs, list):
+                                lines.append(f"- **DS Records:** {len(recs)} record(s) found")
+                            else:
+                                lines.append("- **DS Records:** record(s) found")
+                        elif ds_rec.get("success"):
+                            lines.append("- **DS Records:** None")
+                        else:
+                            lines.append(f"- **DS Error:** {ds_rec.get('error')}")
+                lines.append("")
 
     if data.get("notes"):
         lines.append("## Notes")
-        for note in data["notes"]:
-            lines.append(f"- {note}")
+        notes = data.get("notes") or []
+        if isinstance(notes, list):
+            for note in notes:
+                if isinstance(note, str):
+                    lines.append(f"- {note}")
         lines.append("")
 
     return "\n".join(lines)
@@ -705,20 +734,20 @@ def _dnssec_status_row(
     result: dict[str, object],
     item_key: str,
 ) -> list[str]:
-    """Build a CSV status row summarizing a DNSKEY/DS query.
-
-    Captures the query success/error and record count so a failed or
-    record-less zone does not lose its diagnostic information, mirroring the
-    Markdown formatter's status lines.
-    """
+    """Build a CSV status row summarizing a DNSKEY/DS query."""
     items = result.get(item_key) or []
+    count_str = "0"
+    if isinstance(items, list):
+        count_str = str(len(items))
+    elif isinstance(items, (int, float)):
+        count_str = str(items)
     return _dnssec_row(
         target,
         domain,
         validated,
         record_type,
         name=name,
-        count=str(len(items)),
+        count=count_str,
         success="true" if result.get("success") else "false",
         error=str(result.get("error") or ""),
     )
@@ -741,61 +770,82 @@ def format_dnssec_report_csv(data: dict[str, object]) -> str:
     writer = csv.writer(output)
     writer.writerow(_dnssec_csv_header())
 
-    target = data.get("target", "")
-    domain = data.get("domain", "")
+    target = data.get("target") or ""
+    domain = data.get("domain") or ""
     validated = bool(data.get("validated"))
+    target_s = str(target)
+    domain_s = str(domain)
+    validated_b = bool(validated)
 
     # DNSKEY records (mirrors the Markdown "DNSKEY Records" table)
     dnskey = data.get("dnskey") or {}
-    keys = dnskey.get("keys") or []
-    if keys:
-        for key in keys:
-            writer.writerow(_dnssec_row(
-                target,
-                domain,
-                validated,
-                "dnskey",
-                name=str(key.get("name", "")),
-                flags=str(key.get("flags", "")),
-                protocol=str(key.get("protocol", "")),
-                algorithm=str(key.get("algorithm_name") or key.get("algorithm", "")),
-                key_tag=str(key.get("key_tag", "")),
+    if isinstance(dnskey, dict):
+        keys = dnskey.get("keys") or []
+        if isinstance(keys, list) and keys:
+            for key in keys:
+                if not isinstance(key, dict):
+                    continue
+                writer.writerow(_dnssec_row(
+                    target_s,
+                    domain_s,
+                    validated_b,
+                    "dnskey",
+                    name=str(key.get("name", "")),
+                    flags=str(key.get("flags", "")),
+                    protocol=str(key.get("protocol", "")),
+                    algorithm=str(key.get("algorithm_name") or key.get("algorithm", "")),
+                    key_tag=str(key.get("key_tag", "")),
+                ))
+        else:
+            writer.writerow(_dnssec_status_row(
+                target_s, domain_s, validated_b, "dnskey", "", dnskey, "keys"
             ))
     else:
         writer.writerow(_dnssec_status_row(
-            target, domain, validated, "dnskey", "", dnskey, "keys"
+            target_s, domain_s, validated_b, "dnskey", "", {}, "keys"
         ))
 
     # DS records (mirrors the Markdown "DS Records (Parent Zone)" table)
     ds = data.get("ds") or {}
-    records = ds.get("records") or []
-    if records:
-        for record in records:
-            writer.writerow(_dnssec_row(
-                target,
-                domain,
-                validated,
-                "ds",
-                name=str(record.get("name", "")),
-                algorithm=str(record.get("algorithm_name") or record.get("algorithm", "")),
-                key_tag=str(record.get("key_tag", "")),
-                digest_type=str(record.get("digest_type_name") or record.get("digest_type", "")),
-                digest=str(record.get("digest", "")),
+    if isinstance(ds, dict):
+        records = ds.get("records") or []
+        if isinstance(records, list) and records:
+            for record in records:
+                if not isinstance(record, dict):
+                    continue
+                writer.writerow(_dnssec_row(
+                    target_s,
+                    domain_s,
+                    validated_b,
+                    "ds",
+                    name=str(record.get("name", "")),
+                    algorithm=str(record.get("algorithm_name") or record.get("algorithm", "")),
+                    key_tag=str(record.get("key_tag", "")),
+                    digest_type=str(record.get("digest_type_name") or record.get("digest_type", "")),
+                    digest=str(record.get("digest", "")),
+                ))
+        else:
+            writer.writerow(_dnssec_status_row(
+                target_s, domain_s, validated_b, "ds", "", ds, "records"
             ))
     else:
         writer.writerow(_dnssec_status_row(
-            target, domain, validated, "ds", "", ds, "records"
+            target_s, domain_s, validated_b, "ds", "", {}, "records"
         ))
 
     # Chain of trust (mirrors the Markdown "Chain of Trust" section)
-    for link in data.get("chain") or []:
-        zone = str(link.get("zone", ""))
-        for sub_key, item_key in (("dnskey", "keys"), ("ds", "records")):
-            sub = link.get(sub_key)
-            if not sub:
+    chain = data.get("chain") or []
+    if isinstance(chain, list):
+        for link in chain:
+            if not isinstance(link, dict):
                 continue
-            writer.writerow(_dnssec_status_row(
-                target, domain, validated, "chain", zone, sub, item_key
-            ))
+            zone = str(link.get("zone", ""))
+            for sub_key, item_key in (("dnskey", "keys"), ("ds", "records")):
+                sub = link.get(sub_key)
+                if not isinstance(sub, dict):
+                    continue
+                writer.writerow(_dnssec_status_row(
+                    target_s, domain_s, validated_b, "chain", zone, sub, item_key
+                ))
 
     return output.getvalue().rstrip("\r\n")
