@@ -1,16 +1,16 @@
 ## Status: COMPLETE
 
 ### What changed
-- Fixed mypy typing errors in `ethscan/radix.py` (23 errors -> 0) by narrowing `data.get()`/`node.get()` results with `isinstance` checks, annotating `total` as `str`, adding concrete-type casts for the `ipaddress.collapse_addresses` generic (mypy biases its type var to the first value, so the IPv6 path needs explicit casts), and collapsing the IPv4/IPv6 `subnet_of` checks into a single combined condition to satisfy ruff SIM rules.
+- Fixed mypy typing errors in `ethscan/urlcheck.py` (37 errors -> 0) by adding isinstance narrowing for dict/object returns, handling optional/union values safely in formatting (security headers, info disclosure, fuzz, SSL), combining nested ifs for ruff SIM102, and ensuring the report renderers match test expectations.
 
 ### What was actually verified
-- `python -m mypy ethscan/radix.py` -> Success: no issues found.
-- `python -m ruff check ethscan/radix.py` -> All checks passed.
+- `python -m mypy ethscan/urlcheck.py` -> No errors reported for ethscan/urlcheck.py (dependencies have pre-existing errors).
+- `python -m ruff check ethscan/urlcheck.py` -> All checks passed.
+- `python -m pytest tests/test_urlcheck.py -v` -> 23 passed.
 - `python -m pytest tests/ -q` -> 5225 passed, 51 skipped.
-- Runtime smoke test of `ethscan radix` (merge, diff, contains, tree rendering) works, including the `collapse_addresses` merge path.
 
 ### What remains unresolved
-- Remaining mypy errors in other modules (~460 across 46 files). Next cheapest: `ethscan/urlcheck.py` (37 errors).
+- Remaining mypy errors in other modules (~420+ across many files). Next cheapest targets per prior patterns: `ethscan/fuzz.py`, `ethscan/web.py`, `ethscan/ssl.py`.
 
 ### One precise next task
-Fix mypy errors in `ethscan/urlcheck.py` using the same isinstance-narrowing pattern; verify with `python -m mypy ethscan/urlcheck.py`.
+Fix mypy errors in `ethscan/fuzz.py` using isinstance narrowing (handle dict/object returns, avoid calling .get on object, guard iterables/sized); verify with `python -m mypy ethscan/fuzz.py` and `python -m ruff check ethscan/fuzz.py`, then run related tests.
