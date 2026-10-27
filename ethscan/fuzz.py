@@ -6,9 +6,10 @@ import http.client
 import io
 import json
 import urllib.error
-import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import cast
+from urllib.parse import SplitResult
 
 from ethscan.fileio import read_lines
 from ethscan.target import check_target_host, parse_url, strip_userinfo, url_port
@@ -62,7 +63,7 @@ def _normalize_base_url(target: str) -> str:
         normalized = "https://" + normalized
     check_target_host(normalized)
     parsed = parse_url(normalized)
-    url_port(parsed)
+    url_port(cast("SplitResult", parsed))
     return f"{parsed.scheme}://{strip_userinfo(parsed.netloc)}"
 
 
@@ -142,9 +143,13 @@ def run_fuzz(
 
     # Sort results to maintain consistent order (by original path order)
     path_to_index = {path: i for i, path in enumerate(paths)}
-    results.sort(key=lambda r: path_to_index.get(r.get("path", ""), 0))
+    results.sort(key=lambda r: path_to_index.get(cast("str", r.get("path", "")), 0))
 
-    non_404 = [r for r in results if r.get("status_code") and r["status_code"] != 404]
+    non_404 = []
+    for r in results:
+        status_code = cast("int | None", r.get("status_code"))
+        if status_code is not None and status_code != 404:
+            non_404.append(r)
 
     return {
         "target": target,
@@ -166,14 +171,14 @@ def format_fuzz_report_markdown(data: dict[str, object]) -> str:
     lines.append(f"- **Target:** {data['target']}")
     lines.append(f"- **Base URL:** {data['base_url']}")
     lines.append(f"- **Paths Tested:** {data['paths_tested']}")
-    lines.append(f"- **Findings (non-404):** {len(data['findings'])}")
+    lines.append(f"- **Findings (non-404):** {len(cast('list[object]', data['findings']))}")
     lines.append("")
 
     if data["findings"]:
         lines.append("## Findings")
         lines.append("| Path | Status Code |")
         lines.append("|------|-------------|")
-        for finding in data["findings"]:
+        for finding in cast("list[dict[str, object]]", data["findings"]):
             code = finding["status_code"]
             path = finding["path"]
             lines.append(f"| {path} | {code} |")
@@ -182,7 +187,7 @@ def format_fuzz_report_markdown(data: dict[str, object]) -> str:
     lines.append("## All Results")
     lines.append("| Path | Status Code | Error |")
     lines.append("|------|-------------|-------|")
-    for result in data["all_results"]:
+    for result in cast("list[dict[str, object]]", data["all_results"]):
         code = result["status_code"] if result["status_code"] is not None else "N/A"
         error = result["error"] or ""
         lines.append(f"| {result['path']} | {code} | {error} |")
@@ -195,7 +200,8 @@ def format_fuzz_report_csv(data: dict[str, object]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["target", "base_url", "path", "status_code", "error", "is_finding"])
-    for result in data.get("all_results", []):
+    all_results = cast("list[dict[str, object]]", data.get("all_results", []))
+    for result in all_results:
         status_code = result.get("status_code")
         is_finding = status_code is not None and status_code != 404
         writer.writerow([
