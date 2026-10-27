@@ -216,6 +216,8 @@ def format_cidr_report_markdown(data: dict[str, object]) -> str:
     lines.append("")
 
     network = data["network"]
+    if not isinstance(network, dict):
+        network = {}
     lines.append("## Network Information")
     lines.append("| Field | Value |")
     lines.append("|-------|-------|")
@@ -236,18 +238,18 @@ def format_cidr_report_markdown(data: dict[str, object]) -> str:
     lines.append("")
 
     contains = data.get("contains")
-    if contains is not None:
+    if isinstance(contains, dict):
         lines.append("## Membership Test")
-        lines.append(f"- **IP Tested:** {contains['ip']}")
-        lines.append(f"- **In Network:** {'Yes' if contains['in_network'] else 'No'}")
+        lines.append(f"- **IP Tested:** {contains.get('ip')}")
+        lines.append(f"- **In Network:** {'Yes' if contains.get('in_network') else 'No'}")
         lines.append("")
 
     diff = data.get("diff")
-    if diff is not None:
+    if isinstance(diff, dict):
         lines.append("## Set Difference (In First, Not In Second)")
-        lines.append(f"- **Diff CIDR:** {diff['diff_cidr']}")
-        lines.append(f"- **Difference Networks:** {diff['difference_network_count']}")
-        lines.append(f"- **Total Difference Addresses:** {diff['total_diff_addresses']}")
+        lines.append(f"- **Diff CIDR:** {diff.get('diff_cidr')}")
+        lines.append(f"- **Difference Networks:** {diff.get('difference_network_count')}")
+        lines.append(f"- **Total Difference Addresses:** {diff.get('total_diff_addresses')}")
         lines.append("")
         lines.append("### Difference Networks")
         lines.append("| Network | Address Range | Total Addresses |")
@@ -257,7 +259,7 @@ def format_cidr_report_markdown(data: dict[str, object]) -> str:
                 network = ipaddress.ip_network(net_str, strict=False)
                 start = str(network.network_address)
                 end = str(network.broadcast_address) if network.version == 4 else str(network[-1])
-                total = network.num_addresses
+                total: object = network.num_addresses
             except ValueError:
                 start = end = ""
                 total = "?"
@@ -286,9 +288,15 @@ def format_cidr_report_csv(data: dict[str, object]) -> str:
         "diff_first",
         "diff_last",
     ])
-    network = data.get("network") or {}
-    contains = data.get("contains") or {}
-    diff = data.get("diff") or {}
+    network = data.get("network")
+    if not isinstance(network, dict):
+        network = {}
+    contains = data.get("contains")
+    if not isinstance(contains, dict):
+        contains = {}
+    diff = data.get("diff")
+    if not isinstance(diff, dict):
+        diff = {}
     writer.writerow([
         data.get("cidr", ""),
         network.get("network_address", ""),
