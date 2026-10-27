@@ -1,17 +1,17 @@
 ## Status: COMPLETE
 
 ### What changed
-- Fixed mypy typing errors in `ethscan/fuzz.py` (6 errors -> 0) by casting `ParseResult` to `SplitResult` for `url_port`, narrowing `object` dict values with `cast` in sort key, findings list, and all_results iteration, and guarding `len` with a cast to Sized.
+- Fixed mypy typing errors in `ethscan/whois.py` (17 errors -> 0) by adding `cast` import and narrowing `dict[str, object]` values: `parsed` dict cast in markdown/csv formatters, `nameservers`/`status_codes` list casts, `data["raw"]` str cast, `recursive_hops` list-of-dicts cast, and per-hop `hop_parsed` dict cast with `cast('str', ...)` on field accesses.
 
 ### What was actually verified
-- `python -m mypy ethscan/fuzz.py` -> Success: no issues found in 1 source file.
-- `python -m ruff check ethscan/fuzz.py` -> All checks passed.
-- `python -m pytest tests/test_fuzz.py -q` -> 28 passed.
+- `python -m mypy ethscan/whois.py` -> Success: no issues found in 1 source file.
+- `python -m ruff check ethscan/whois.py` -> All checks passed.
+- `python -m pytest tests/test_whois.py -q` -> 42 passed.
 
 ### What remains unresolved
-- Remaining mypy errors in other modules (~460 across 46 files). Do NOT delete `.github/workflows/ci.yml`; it is the verified baseline.
+- Remaining mypy errors in other modules (~210 across 38 files).
 
 ### One precise next task
-Fix mypy errors in `ethscan/web.py` using the same isinstance-narrowing/cast pattern; verify with `python -m mypy ethscan/web.py` and `python -m ruff check ethscan/web.py`, then run related tests.
+Fix mypy errors in next module with most errors; inspect `python -m mypy ethscan/` to pick.
 
 (End of file - total 16 lines)

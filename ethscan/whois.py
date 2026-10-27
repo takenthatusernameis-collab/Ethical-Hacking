@@ -5,6 +5,7 @@ import csv
 import io
 import re
 import socket
+from typing import cast
 
 from ethscan.target import parse_url
 
@@ -277,7 +278,7 @@ def format_whois_report_json(data: dict[str, object]) -> str:
 
 def format_whois_report_markdown(data: dict[str, object]) -> str:
     """Format WHOIS results as Markdown."""
-    parsed = data["parsed"]
+    parsed = cast("dict[str, object]", data["parsed"])
     lines = ["# ethscan WHOIS Lookup Report", ""]
     lines.append(f"- **Target:** {data['target']}")
     lines.append(f"- **Server:** {data['server']}:{data['port']}")
@@ -294,22 +295,22 @@ def format_whois_report_markdown(data: dict[str, object]) -> str:
 
     if parsed["nameservers"]:
         lines.append("## Nameservers")
-        for ns in parsed["nameservers"]:
+        for ns in cast("list[str]", parsed["nameservers"]):
             lines.append(f"- {ns}")
         lines.append("")
 
     if parsed["status_codes"]:
         lines.append("## Status Codes")
-        for status in parsed["status_codes"]:
+        for status in cast("list[str]", parsed["status_codes"]):
             lines.append(f"- {status}")
         lines.append("")
 
     lines.append("## Raw Response")
     lines.append("```")
-    lines.append(data["raw"].strip())
+    lines.append(cast("str", data["raw"]).strip())
     lines.append("```")
 
-    recursive_hops = data.get("recursive_hops") or []
+    recursive_hops = cast("list[dict[str, object]]", data.get("recursive_hops") or [])
     if data.get("recursive") and recursive_hops:
         lines.append("")
         lines.append("## Recursive WHOIS Queries")
@@ -317,20 +318,20 @@ def format_whois_report_markdown(data: dict[str, object]) -> str:
             depth = hop.get("depth", 0)
             server = hop.get("server", "N/A")
             port = hop.get("port", 43)
-            hop_parsed = hop.get("parsed") or {}
+            hop_parsed = cast("dict[str, object]", hop.get("parsed") or {})
             error = hop.get("error")
             if error:
                 lines.append(f"- **Depth {depth}:** {server}:{port} - {error}")
                 continue
             lines.append(f"- **Depth {depth}:** {server}:{port}")
             if hop_parsed.get("registrar"):
-                lines.append(f"  - Registrar: {hop_parsed['registrar']}")
+                lines.append(f"  - Registrar: {cast('str', hop_parsed['registrar'])}")
             if hop_parsed.get("creation_date"):
-                lines.append(f"  - Creation Date: {hop_parsed['creation_date']}")
+                lines.append(f"  - Creation Date: {cast('str', hop_parsed['creation_date'])}")
             if hop_parsed.get("expiration_date"):
-                lines.append(f"  - Expiration Date: {hop_parsed['expiration_date']}")
+                lines.append(f"  - Expiration Date: {cast('str', hop_parsed['expiration_date'])}")
             if hop_parsed.get("registrant_org"):
-                lines.append(f"  - Registrant Org: {hop_parsed['registrant_org']}")
+                lines.append(f"  - Registrant Org: {cast('str', hop_parsed['registrant_org'])}")
             referral = hop.get("referral_server")
             if referral:
                 lines.append(f"  - Referral Server: {referral}")
@@ -348,7 +349,7 @@ def format_whois_report_csv(data: dict[str, object]) -> str:
     """Format WHOIS results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)
-    parsed = data.get("parsed", {})
+    parsed = cast("dict[str, object]", data.get("parsed", {}))
     writer.writerow(["field", "value"])
     writer.writerow(["target", data.get("target", "")])
     writer.writerow(["server", data.get("server", "")])
@@ -357,17 +358,17 @@ def format_whois_report_csv(data: dict[str, object]) -> str:
     writer.writerow(["creation_date", parsed.get("creation_date") or ""])
     writer.writerow(["expiration_date", parsed.get("expiration_date") or ""])
     writer.writerow(["registrant_org", parsed.get("registrant_org") or ""])
-    writer.writerow(["nameservers", ";".join(parsed.get("nameservers") or [])])
-    writer.writerow(["status_codes", ";".join(parsed.get("status_codes") or [])])
+    writer.writerow(["nameservers", ";".join(cast("list[str]", parsed.get("nameservers") or []))])
+    writer.writerow(["status_codes", ";".join(cast("list[str]", parsed.get("status_codes") or []))])
     if data.get("error"):
         writer.writerow(["error", data["error"]])
 
-    recursive_hops = data.get("recursive_hops") or []
+    recursive_hops = cast("list[dict[str, object]]", data.get("recursive_hops") or [])
     if recursive_hops:
         writer.writerow([])
         writer.writerow(["recursive_hop_depth", "server", "port", "registrar", "creation_date", "expiration_date", "registrant_org", "referral_server", "error"])
         for hop in recursive_hops:
-            hop_parsed = hop.get("parsed") or {}
+            hop_parsed = cast("dict[str, object]", hop.get("parsed") or {})
             writer.writerow([
                 hop.get("depth", ""),
                 hop.get("server", ""),
