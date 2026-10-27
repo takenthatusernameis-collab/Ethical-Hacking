@@ -1,7 +1,7 @@
 ## Status: COMPLETE
 
 ### What changed
-- Added `.github/workflows/ci.yml` (ruff lint + pytest on push/pull_request and workflow_dispatch), which was missing from the working tree and from HEAD despite the prior handoff claiming it was restored (commit `1b7f1d2` added it, but a later commit removed it). Content restored from commit `1b7f1d2`.
+- Restored `.github/workflows/ci.yml` from commit `1b7f1d2` (ruff lint + pytest on push/pull_request/workflow_dispatch). The file was missing from working tree despite prior handoff claims.
 
 ### What was actually verified
 - `python -m ruff check ethscan/ tests/` → All checks passed.

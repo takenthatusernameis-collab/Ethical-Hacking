@@ -1,5 +1,5 @@
 ## What changed this session
-- Added `.github/workflows/ci.yml` (ruff lint + pytest on push/pull_request), restored from commit `1b7f1d2`. The workflow was missing from the working tree and from HEAD despite the prior handoff claiming it was restored.
+- Restored `.github/workflows/ci.yml` from commit `1b7f1d2` (ruff lint + pytest on push/pull_request/workflow_dispatch). It was missing from the working tree.
 
 ## What was actually verified
 - `python -m ruff check ethscan/ tests/` → All checks passed.
