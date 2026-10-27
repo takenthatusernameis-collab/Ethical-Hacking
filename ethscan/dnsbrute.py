@@ -6,6 +6,7 @@ import io
 import socket
 import struct
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import cast
 
 from ethscan.dns import resolve_a_records, resolve_aaaa_records, resolve_with_dnspython
 from ethscan.subdomains import DEFAULT_SUBDOMAINS
@@ -274,16 +275,19 @@ def query_axfr_raw(
         return _axfr_result(nameserver, False, [], message)
 
     parsed = parse_dns_response(data)
-    if not parsed["valid"]:
+    if not parsed.get("valid"):
         return _axfr_result(nameserver, False, [], "invalid response")
-    if parsed["response_code"] != 0:
-        code_name = parsed["response_code_name"]
+    if parsed.get("response_code") != 0:
+        code_name = parsed.get("response_code_name")
         return _axfr_result(nameserver, False, [], f"transfer refused ({code_name})")
-    if parsed["answer_count"] == 0:
+    if parsed.get("answer_count") == 0:
         return _axfr_result(nameserver, False, [], "empty response (no records)")
 
+    parsed_answers = parsed.get("answers") or []
     records = [
-        str(answer["name"]) for answer in parsed["answers"] if answer["name"]
+        str(cast(dict[str, object], answer).get("name", ""))
+        for answer in cast(list[object], parsed_answers)
+        if cast(dict[str, object], answer).get("name")
     ]
     return _axfr_result(nameserver, True, records, None)
 
@@ -465,10 +469,10 @@ def run_dnsbrute(
                 "nameserver": ns,
                 "zone": zone,
                 "depth": depth,
-                "success": result["success"],
-                "records_count": result["records_count"],
-                "records": result["records"],
-                "error": result["error"],
+                "success": bool(result.get("success")),
+                "records_count": int(result.get("records_count") or 0),
+                "records": result.get("records") or [],
+                "error": result.get("error"),
             }
             if depth == 1:
                 axfr_results.append(axfr_entry)
@@ -476,19 +480,20 @@ def run_dnsbrute(
                 recursive_axfr_results.append(axfr_entry)
 
             # If successful and we can recurse deeper, extract NS records and continue
-            if result["success"] and depth < max_depth:
-                ns_records = _extract_ns_records(result["records"])
+            if result.get("success") and depth < max_depth:
+                records = result.get("records") or []
+                ns_records = _extract_ns_records(cast(list[str], records))
                 # Filter to only nameservers that are subdomains of the original domain
-                filtered_ns = [ns for ns in ns_records if _is_subdomain_of(ns, domain)]
+                filtered_ns = [ns_name for ns_name in ns_records if _is_subdomain_of(ns_name, domain)]
                 if filtered_ns:
                     _run_axfr_for_zone(zone, filtered_ns, depth + 1)
 
     # Initial AXFR attempts
     _run_axfr_for_zone(domain, ns_list, 1)
 
-    axfr_success = any(entry["success"] for entry in axfr_results)
-    axfr_total_records = sum(entry["records_count"] for entry in axfr_results)
-    recursive_total_records = sum(entry["records_count"] for entry in recursive_axfr_results)
+    axfr_success = any(bool(entry.get("success")) for entry in axfr_results)
+    axfr_total_records = sum(int(entry.get("records_count") or 0) for entry in axfr_results)
+    recursive_total_records = sum(int(entry.get("records_count") or 0) for entry in recursive_axfr_results)
 
     results: list[dict[str, object]] = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -499,7 +504,7 @@ def run_dnsbrute(
         for future in as_completed(future_to_label):
             results.append(future.result())
 
-    resolved = [entry for entry in results if entry["a"] or entry["aaaa"]]
+    resolved = [entry for entry in results if entry.get("a") or entry.get("aaaa")]
 
     return {
         "target": target,
@@ -539,11 +544,13 @@ def _format_records_table(lines: list[str], entries: list[dict[str, object]]) ->
     lines.append("| Subdomain | Hostname | A | AAAA |")
     lines.append("|-----------|----------|---|------|")
     for entry in entries:
-        a_records = ", ".join(entry["a"]) if entry["a"] else "N/A"
-        aaaa_records = ", ".join(entry["aaaa"]) if entry["aaaa"] else "N/A"
+        a_raw = entry.get("a") or []
+        aaaa_raw = entry.get("aaaa") or []
+        a_records = ", ".join(str(x) for x in cast(list[object], a_raw)) if a_raw else "N/A"
+        aaaa_records = ", ".join(str(x) for x in cast(list[object], aaaa_raw)) if aaaa_raw else "N/A"
         lines.append(
-            f"| {_markdown_escape(entry['subdomain'])} | "
-            f"{_markdown_escape(entry['hostname'])} | "
+            f"| {_markdown_escape(entry.get('subdomain'))} | "
+            f"{_markdown_escape(entry.get('hostname'))} | "
             f"{_markdown_escape(a_records)} | "
             f"{_markdown_escape(aaaa_records)} |"
         )
@@ -553,43 +560,47 @@ def _format_records_table(lines: list[str], entries: list[dict[str, object]]) ->
 def format_dnsbrute_report_markdown(data: dict[str, object]) -> str:
     """Format DNS brute force results as Markdown."""
     lines = ["# ethscan DNS Brute Force Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Domain:** {data['domain']}")
-    lines.append(f"- **Zone:** {data['zone']}")
-    nameservers = ", ".join(data["nameservers"]) if data["nameservers"] else "None"
+    lines.append(f"- **Target:** {data.get('target')}")
+    lines.append(f"- **Domain:** {data.get('domain')}")
+    lines.append(f"- **Zone:** {data.get('zone')}")
+    ns_list_md = cast(list[object], data.get("nameservers") or [])
+    nameservers = ", ".join(str(x) for x in ns_list_md) if ns_list_md else "None"
     lines.append(
-        f"- **Nameservers:** {nameservers} (source: {data['nameserver_source']})"
+        f"- **Nameservers:** {nameservers} (source: {data.get('nameserver_source')})"
     )
     resolver = data.get("resolver")
     if resolver:
         lines.append(
-            f"- **Resolver:** {resolver} (dnspython: {'Yes' if data['dnspython_available'] else 'No'})"
+            f"- **Resolver:** {resolver} (dnspython: {'Yes' if data.get('dnspython_available') else 'No'})"
         )
     lines.append(
         f"- **dnspython Available:** "
-        f"{'Yes' if data['dnspython_available'] else 'No (stdlib only)'}"
+        f"{'Yes' if data.get('dnspython_available') else 'No (stdlib only)'}"
     )
     if data.get("recursive"):
         lines.append(f"- **Recursive AXFR:** Yes (max depth: {data.get('max_depth', 0)})")
         lines.append(f"- **Recursive AXFR Records:** {data.get('recursive_axfr_total_records', 0)}")
-    lines.append(f"- **AXFR Successful:** {'Yes' if data['axfr_success'] else 'No'}")
-    lines.append(f"- **AXFR Records:** {data['axfr_total_records']}")
-    lines.append(f"- **Subdomains Tested:** {data['subdomains_tested']}")
-    lines.append(f"- **Resolved:** {data['resolved_count']}")
+    lines.append(f"- **AXFR Successful:** {'Yes' if data.get('axfr_success') else 'No'}")
+    lines.append(f"- **AXFR Records:** {data.get('axfr_total_records')}")
+    lines.append(f"- **Subdomains Tested:** {data.get('subdomains_tested')}")
+    lines.append(f"- **Resolved:** {data.get('resolved_count')}")
     lines.append("")
 
     lines.append("## AXFR Attempts")
-    if data["axfr"]:
-        for entry in data["axfr"]:
-            lines.append(f"### {entry['nameserver']} (zone: {entry.get('zone', data['zone'])}, depth: {entry.get('depth', 1)})")
-            lines.append(f"- **Success:** {'Yes' if entry['success'] else 'No'}")
-            lines.append(f"- **Records:** {entry['records_count']}")
-            if entry["error"]:
-                lines.append(f"- **Error:** {entry['error']}")
-            if entry["records"]:
+    axfr_entries = cast(list[object], data.get("axfr") or [])
+    if axfr_entries:
+        for entry_raw in axfr_entries:
+            entry = cast(dict[str, object], entry_raw)
+            lines.append(f"### {entry.get('nameserver')} (zone: {entry.get('zone', data.get('zone'))}, depth: {entry.get('depth', 1)})")
+            lines.append(f"- **Success:** {'Yes' if entry.get('success') else 'No'}")
+            lines.append(f"- **Records:** {entry.get('records_count')}")
+            if entry.get("error"):
+                lines.append(f"- **Error:** {entry.get('error')}")
+            records_axfr = cast(list[object], entry.get("records") or [])
+            if records_axfr:
                 lines.append("")
                 lines.append("```")
-                for record in entry["records"]:
+                for record in records_axfr:
                     lines.append(str(record))
                 lines.append("```")
             lines.append("")
@@ -598,29 +609,31 @@ def format_dnsbrute_report_markdown(data: dict[str, object]) -> str:
         lines.append("")
 
     # Recursive AXFR attempts
-    recursive_axfr = data.get("recursive_axfr", [])
+    recursive_axfr = cast(list[object], data.get("recursive_axfr", []) or [])
     if recursive_axfr:
         lines.append("## Recursive AXFR Attempts")
-        for entry in recursive_axfr:
-            lines.append(f"### {entry['nameserver']} (zone: {entry.get('zone', data['zone'])}, depth: {entry.get('depth', 0)})")
-            lines.append(f"- **Success:** {'Yes' if entry['success'] else 'No'}")
-            lines.append(f"- **Records:** {entry['records_count']}")
-            if entry["error"]:
-                lines.append(f"- **Error:** {entry['error']}")
-            if entry["records"]:
+        for entry_raw in recursive_axfr:
+            entry = cast(dict[str, object], entry_raw)
+            lines.append(f"### {entry.get('nameserver')} (zone: {entry.get('zone', data.get('zone'))}, depth: {entry.get('depth', 0)})")
+            lines.append(f"- **Success:** {'Yes' if entry.get('success') else 'No'}")
+            lines.append(f"- **Records:** {entry.get('records_count')}")
+            if entry.get("error"):
+                lines.append(f"- **Error:** {entry.get('error')}")
+            records_axfr_r = cast(list[object], entry.get("records") or [])
+            if records_axfr_r:
                 lines.append("")
                 lines.append("```")
-                for record in entry["records"]:
+                for record in records_axfr_r:
                     lines.append(str(record))
                 lines.append("```")
             lines.append("")
         lines.append("")
 
     lines.append("## Resolved Subdomains")
-    _format_records_table(lines, data["resolved"])
+    _format_records_table(lines, cast(list[dict[str, object]], data.get("resolved") or []))
 
     lines.append("## All Results")
-    _format_records_table(lines, data["all_results"])
+    _format_records_table(lines, cast(list[dict[str, object]], data.get("all_results") or []))
 
     return "\n".join(lines)
 
@@ -649,14 +662,16 @@ def _dnsbrute_subdomain_row(
     target: str, domain: str, entry: dict[str, object]
 ) -> list[str]:
     """Build a CSV row for a subdomain brute-force result."""
-    a_records = entry.get("a") or []
-    aaaa_records = entry.get("aaaa") or []
+    a_raw = entry.get("a") or []
+    aaaa_raw = entry.get("aaaa") or []
+    a_records = cast(list[object], a_raw)
+    aaaa_records = cast(list[object], aaaa_raw)
     return [
         target,
         domain,
         "subdomain",
-        entry.get("subdomain", ""),
-        entry.get("hostname", ""),
+        str(entry.get("subdomain", "")),
+        str(entry.get("hostname", "")),
         " ".join(str(ip) for ip in a_records),
         " ".join(str(ip) for ip in aaaa_records),
         "true" if (a_records or aaaa_records) else "false",
@@ -682,11 +697,11 @@ def _dnsbrute_axfr_row(
         "",
         "",
         "",
-        entry.get("nameserver", ""),
-        entry.get("zone", domain),
+        str(entry.get("nameserver", "")),
+        str(entry.get("zone", domain)),
         str(entry.get("depth", 1)),
         "true" if entry.get("success") else "false",
-        entry.get("error", ""),
+        str(entry.get("error", "") or ""),
         record,
     ]
 
@@ -705,30 +720,34 @@ def format_dnsbrute_report_csv(data: dict[str, object]) -> str:
     writer = csv.writer(output)
     writer.writerow(_dnsbrute_csv_header())
 
-    target = data.get("target", "")
-    domain = data.get("domain", "")
+    target = str(data.get("target", "") or "")
+    domain = str(data.get("domain", "") or "")
 
     # Subdomain brute-force results
-    for entry in data.get("all_results", []):
-        writer.writerow(_dnsbrute_subdomain_row(target, domain, entry))
+    for entry in cast(list[object], data.get("all_results", []) or []):
+        writer.writerow(_dnsbrute_subdomain_row(target, domain, cast(dict[str, object], entry)))
 
     # Initial AXFR attempts
-    for entry in data.get("axfr", []):
-        records = entry.get("records", [])
+    for entry in cast(list[object], data.get("axfr", []) or []):
+        entry_dict = cast(dict[str, object], entry)
+        records_raw = entry_dict.get("records", []) or []
+        records = cast(list[object], records_raw)
         if records:
             for record in records:
-                writer.writerow(_dnsbrute_axfr_row(target, domain, entry, record, "axfr"))
+                writer.writerow(_dnsbrute_axfr_row(target, domain, entry_dict, str(record), "axfr"))
         else:
             # Emit a row even for failed/empty AXFR attempts to preserve metadata
-            writer.writerow(_dnsbrute_axfr_row(target, domain, entry, "", "axfr"))
+            writer.writerow(_dnsbrute_axfr_row(target, domain, entry_dict, "", "axfr"))
 
     # Recursive AXFR attempts
-    for entry in data.get("recursive_axfr", []):
-        records = entry.get("records", [])
+    for entry in cast(list[object], data.get("recursive_axfr", []) or []):
+        entry_dict = cast(dict[str, object], entry)
+        records_raw = entry_dict.get("records", []) or []
+        records = cast(list[object], records_raw)
         if records:
             for record in records:
-                writer.writerow(_dnsbrute_axfr_row(target, domain, entry, record, "recursive_axfr"))
+                writer.writerow(_dnsbrute_axfr_row(target, domain, entry_dict, str(record), "recursive_axfr"))
         else:
-            writer.writerow(_dnsbrute_axfr_row(target, domain, entry, "", "recursive_axfr"))
+            writer.writerow(_dnsbrute_axfr_row(target, domain, entry_dict, "", "recursive_axfr"))
 
     return output.getvalue().rstrip("\r\n")
