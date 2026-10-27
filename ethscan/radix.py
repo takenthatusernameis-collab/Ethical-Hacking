@@ -10,6 +10,7 @@ from __future__ import annotations
 import csv
 import io
 import ipaddress
+from typing import cast
 
 from ethscan.cidr import normalize_cidr
 
@@ -106,6 +107,20 @@ def _contains_in_merged(merged: list[ipaddress._BaseNetwork], ip: str) -> tuple[
     return False, None
 
 
+def _collapse_v4_networks(
+    first: ipaddress.IPv4Network, second: ipaddress.IPv4Network
+) -> list[ipaddress.IPv4Network]:
+    """Collapse two IPv4 networks into a single supernet when possible."""
+    return list(ipaddress.collapse_addresses([first, second]))
+
+
+def _collapse_v6_networks(
+    first: ipaddress.IPv6Network, second: ipaddress.IPv6Network
+) -> list[ipaddress.IPv6Network]:
+    """Collapse two IPv6 networks into a single supernet when possible."""
+    return list(ipaddress.collapse_addresses([first, second]))
+
+
 def _subtract_networks(
     minuend: list[ipaddress._BaseNetwork],
     subtrahend: list[ipaddress._BaseNetwork],
@@ -165,8 +180,24 @@ def _merge_networks(networks: list[ipaddress._BaseNetwork]) -> list[ipaddress._B
         if net.version != last.version:
             merged.append(net)
             continue
+        collapsed: list[ipaddress.IPv4Network] | list[ipaddress.IPv6Network] | None = None
         try:
-            collapsed = list(ipaddress.collapse_addresses([last, net]))
+            if isinstance(last, ipaddress.IPv4Network) and isinstance(
+                net, ipaddress.IPv4Network
+            ):
+                collapsed = _collapse_v4_networks(
+                    cast(ipaddress.IPv4Network, last),
+                    cast(ipaddress.IPv4Network, net),
+                )
+            elif isinstance(last, ipaddress.IPv6Network) and isinstance(
+                net, ipaddress.IPv6Network
+            ):
+                collapsed = _collapse_v6_networks(
+                    cast(ipaddress.IPv6Network, last),
+                    cast(ipaddress.IPv6Network, net),
+                )
+            else:
+                collapsed = None
         except ValueError:
             collapsed = None
         if collapsed and len(collapsed) == 1:
@@ -260,10 +291,14 @@ def _build_radix_node(
                 right_nets.append(net)
         left_node = _build_radix_node(left_nets, depth + 1, max_depth)
         right_node = _build_radix_node(right_nets, depth + 1, max_depth)
+        children = node.get("children", [])
+        if not isinstance(children, list):
+            children = []
         if left_node is not None:
-            node["children"].append({"side": "left (0)", "node": left_node})
+            children.append({"side": "left (0)", "node": left_node})
         if right_node is not None:
-            node["children"].append({"side": "right (1)", "node": right_node})
+            children.append({"side": "right (1)", "node": right_node})
+        node["children"] = children
 
     return node
 
@@ -404,9 +439,14 @@ def _render_node_md(node: dict[str, object], lines: list[str], depth: int = 0) -
     start = node.get("start_address", "")
     end = node.get("end_address", "")
     total = node.get("total_addresses", 0)
-    networks = node.get("networks", []) or []
+    networks = node.get("networks", [])
+    if not isinstance(networks, list):
+        networks = []
     lines.append(f"{indent}- **{prefix}** | {start} - {end} | {total} addresses | {len(networks)} net(s)")
-    for child in node.get("children", []) or []:
+    children = node.get("children", [])
+    if not isinstance(children, list):
+        children = []
+    for child in children:
         side = child.get("side", "")
         child_node = child.get("node")
         if child_node is not None:
@@ -428,12 +468,15 @@ def format_radix_report_markdown(data: dict[str, object]) -> str:
     lines.append("## Merged Networks")
     lines.append("| Network | Address Range | Total Addresses |")
     lines.append("|---------|---------------|-----------------|")
-    for net_str in data.get("merged", []) or []:
+    merged = data.get("merged", [])
+    if not isinstance(merged, list):
+        merged = []
+    for net_str in merged:
         try:
             network = ipaddress.ip_network(net_str, strict=False)
             start = str(network.network_address)
             end = str(network.broadcast_address) if network.version == 4 else str(network[-1])
-            total = network.num_addresses
+            total = str(network.num_addresses)
         except ValueError:
             start = end = ""
             total = "?"
@@ -441,6 +484,8 @@ def format_radix_report_markdown(data: dict[str, object]) -> str:
     lines.append("")
 
     root = data.get("radix_tree")
+    if not isinstance(root, dict):
+        root = None
     if root is not None:
         lines.append("## Radix Tree")
         lines.append("")
@@ -448,6 +493,8 @@ def format_radix_report_markdown(data: dict[str, object]) -> str:
         lines.append("")
 
     contains = data.get("contains")
+    if not isinstance(contains, dict):
+        contains = None
     if contains is not None:
         lines.append("## Membership Test")
         lines.append(f"- **IP Tested:** {contains['ip']}")
@@ -457,6 +504,8 @@ def format_radix_report_markdown(data: dict[str, object]) -> str:
         lines.append("")
 
     diff = data.get("diff")
+    if not isinstance(diff, dict):
+        diff = None
     if diff is not None:
         lines.append("## Set Difference (In First, Not In Second)")
         lines.append(f"- **Diff CIDRs Provided:** {diff['diff_network_count']}")
@@ -467,12 +516,15 @@ def format_radix_report_markdown(data: dict[str, object]) -> str:
         lines.append("### Difference Networks")
         lines.append("| Network | Address Range | Total Addresses |")
         lines.append("|---------|---------------|-----------------|")
-        for net_str in diff.get("difference", []) or []:
+        difference = diff.get("difference", [])
+        if not isinstance(difference, list):
+            difference = []
+        for net_str in difference:
             try:
                 network = ipaddress.ip_network(net_str, strict=False)
                 start = str(network.network_address)
                 end = str(network.broadcast_address) if network.version == 4 else str(network[-1])
-                total = network.num_addresses
+                total = str(network.num_addresses)
             except ValueError:
                 start = end = ""
                 total = "?"
@@ -502,7 +554,11 @@ def format_radix_report_csv(data: dict[str, object]) -> str:
         ])
 
     cidrs = data.get("cidrs", [])
+    if not isinstance(cidrs, list):
+        cidrs = []
     merged = data.get("merged", [])
+    if not isinstance(merged, list):
+        merged = []
     compression_ratio = data.get("compression_ratio", 0.0)
 
     # Build a mapping from original CIDR to merged CIDR
@@ -515,6 +571,8 @@ def format_radix_report_csv(data: dict[str, object]) -> str:
     diff_cidr = ""
     if has_diff:
         diff = data.get("diff", {})
+        if not isinstance(diff, dict):
+            diff = {}
         diff_cidrs = diff.get("diff_cidrs", [])
         if diff_cidrs:
             diff_cidr = diff_cidrs[0]
@@ -523,7 +581,15 @@ def format_radix_report_csv(data: dict[str, object]) -> str:
         orig_net = ipaddress.ip_network(original, strict=False)
         matched_merged = original
         for m_net in merged_networks:
-            if orig_net.subnet_of(m_net):
+            if (
+                isinstance(orig_net, ipaddress.IPv4Network)
+                and isinstance(m_net, ipaddress.IPv4Network)
+                and orig_net.subnet_of(m_net)
+            ) or (
+                isinstance(orig_net, ipaddress.IPv6Network)
+                and isinstance(m_net, ipaddress.IPv6Network)
+                and orig_net.subnet_of(m_net)
+            ):
                 matched_merged = str(m_net)
                 break
 
