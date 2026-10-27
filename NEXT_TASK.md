@@ -10,5 +10,3 @@ None.
 
 ### One precise next task
 None — repository complete. If new work arrives, implement the smallest change solving a demonstrated problem and verify with `python -m pytest tests/ -q` + `python -m ruff check ethscan/ tests/`.
-
-(End of file - total 12 lines)
