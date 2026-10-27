@@ -10,7 +10,8 @@ import socket
 import ssl
 import urllib.error
 import urllib.request
-from typing import Any
+from typing import Any, cast
+from urllib.parse import SplitResult
 
 from ethscan.target import (
     check_target_host,
@@ -77,10 +78,10 @@ def _parse_url(target: str) -> tuple[str, int, bool]:
     scheme = parsed.scheme.lower()
     if scheme == "https":
         is_secure = True
-        port = url_port(parsed) or 443
+        port = url_port(cast("SplitResult", parsed)) or 443
     else:
         is_secure = False
-        port = url_port(parsed) or 80
+        port = url_port(cast("SplitResult", parsed)) or 80
     return host, port, is_secure
 
 
@@ -211,7 +212,7 @@ def check_ssl_configuration(host: str, port: int = 443, timeout: float = 5.0) ->
                                 handle.write(pem)
                                 cert_path = handle.name
                             try:
-                                cert = ssl._ssl._test_decode_cert(cert_path)
+                                cert = cast(Any, ssl)._ssl._test_decode_cert(cert_path)
                             finally:
                                 with contextlib.suppress(Exception):
                                     os.unlink(cert_path)
@@ -224,7 +225,8 @@ def check_ssl_configuration(host: str, port: int = 443, timeout: float = 5.0) ->
                         cert = ssock.getpeercert()
                     except Exception:  # noqa: BLE001 - getpeercert may raise arbitrarily
                         cert = None
-                result["chain_length"] = len(ssock.get_verified_chain()) if ssock.get_verified_chain() else 0
+                _chain = cast(Any, ssock).get_verified_chain() if hasattr(ssock, "get_verified_chain") else None
+                result["chain_length"] = len(_chain) if _chain else 0
                 if cert:
                     subject = dict(
                         item[0] for item in cert.get("subject", ()) if isinstance(item, tuple) and len(item) >= 2
@@ -239,12 +241,12 @@ def check_ssl_configuration(host: str, port: int = 443, timeout: float = 5.0) ->
                     if not_after:
                         from datetime import datetime
                         try:
-                            expiry = datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")
+                            expiry = datetime.strptime(cast(str, not_after), "%b %d %H:%M:%S %Y %Z")
                             from datetime import timezone
                             now_utc = datetime.now(timezone.utc)
                             expiry_tz = expiry.replace(tzinfo=timezone.utc)
-                            result["days_remaining"] = (expiry_tz - now_utc).days
-                            result["valid"] = result["days_remaining"] > 0
+                            result["days_remaining"] = cast(int, (expiry_tz - now_utc).days)
+                            result["valid"] = cast(int, result["days_remaining"]) > 0
                         except (ValueError, TypeError):
                             result["valid"] = False
     except Exception as exc:  # noqa: BLE001 - TLS/connection failures are heterogeneous
@@ -317,7 +319,7 @@ def format_web_report_markdown(data: dict[str, object]) -> str:
     lines.append("")
 
     if "security_headers" in data:
-        sh = data["security_headers"]
+        sh = cast(dict[str, Any], data["security_headers"])
         lines.append("## Security Headers")
         lines.append(f"- Present: {sh['present_count']}/{sh['total']}")
         if sh["present"]:
@@ -331,7 +333,7 @@ def format_web_report_markdown(data: dict[str, object]) -> str:
         lines.append("")
 
     if "information_disclosure" in data:
-        findings = data["information_disclosure"]
+        findings = cast(list[dict[str, Any]], data["information_disclosure"])
         lines.append("## Information Disclosure")
         if findings:
             lines.append("| Header | Value | Description |")
@@ -343,7 +345,7 @@ def format_web_report_markdown(data: dict[str, object]) -> str:
         lines.append("")
 
     if "ssl" in data:
-        ssl_info = data["ssl"]
+        ssl_info = cast(dict[str, Any], data["ssl"])
         lines.append("## SSL/TLS")
         if ssl_info.get("error"):
             lines.append(f"- **Error:** {ssl_info['error']}")
@@ -379,7 +381,7 @@ def format_web_report_csv(data: dict[str, object]) -> str:
     writer.writerow(["error", data.get("error") or ""])
 
     if "security_headers" in data:
-        sh = data["security_headers"]
+        sh = cast(dict[str, Any], data["security_headers"])
         writer.writerow([])
         writer.writerow(["security_header", "status"])
         for header in sh.get("present", []):
@@ -388,14 +390,14 @@ def format_web_report_csv(data: dict[str, object]) -> str:
             writer.writerow([header, "missing"])
 
     if "information_disclosure" in data:
-        findings = data["information_disclosure"]
+        findings = cast(list[dict[str, Any]], data["information_disclosure"])
         writer.writerow([])
         writer.writerow(["disclosure_header", "value", "description"])
         for finding in findings:
             writer.writerow([finding.get("header", ""), finding.get("value", ""), finding.get("description", "")])
 
     if "ssl" in data:
-        ssl_info = data["ssl"]
+        ssl_info = cast(dict[str, Any], data["ssl"])
         writer.writerow([])
         writer.writerow(["ssl_field", "value"])
         writer.writerow(["valid", "true" if ssl_info.get("valid") else "false"])
