@@ -8,6 +8,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+from typing import cast
 
 from ethscan.dns import run_dns
 from ethscan.geo import run_geo
@@ -86,7 +87,7 @@ def run_recon(
 
     # Subdomains enumeration
     if "subdomains" in enabled_modules:
-        results["modules_run"].append("subdomains")
+        cast(list, results["modules_run"]).append("subdomains")
         try:
             results["subdomains"] = run_subdomains(
                 target,
@@ -96,11 +97,11 @@ def run_recon(
                 resolver=resolver,
             )
         except Exception as exc:  # noqa: BLE001 - module failures are heterogeneous
-            results["notes"].append(f"subdomains module failed: {exc}")
+            cast(list, results["notes"]).append(f"subdomains module failed: {exc}")
 
     # DNS record enumeration
     if "dns" in enabled_modules:
-        results["modules_run"].append("dns")
+        cast(list, results["modules_run"]).append("dns")
         try:
             results["dns"] = run_dns(
                 target,
@@ -109,11 +110,11 @@ def run_recon(
                 timeout=timeout,
             )
         except Exception as exc:  # noqa: BLE001 - module failures are heterogeneous
-            results["notes"].append(f"dns module failed: {exc}")
+            cast(list, results["notes"]).append(f"dns module failed: {exc}")
 
     # WHOIS lookup
     if "whois" in enabled_modules:
-        results["modules_run"].append("whois")
+        cast(list, results["modules_run"]).append("whois")
         try:
             results["whois"] = run_whois(
                 target,
@@ -122,11 +123,11 @@ def run_recon(
                 timeout=timeout,
             )
         except Exception as exc:  # noqa: BLE001 - module failures are heterogeneous
-            results["notes"].append(f"whois module failed: {exc}")
+            cast(list, results["notes"]).append(f"whois module failed: {exc}")
 
     # Geolocation lookup
     if "geo" in enabled_modules:
-        results["modules_run"].append("geo")
+        cast(list, results["modules_run"]).append("geo")
         try:
             results["geo"] = run_geo(
                 target,
@@ -136,11 +137,11 @@ def run_recon(
                 api_url=geo_api_url,
             )
         except Exception as exc:  # noqa: BLE001 - module failures are heterogeneous
-            results["notes"].append(f"geo module failed: {exc}")
+            cast(list, results["notes"]).append(f"geo module failed: {exc}")
 
     # TCP traceroute
     if "trace" in enabled_modules:
-        results["modules_run"].append("trace")
+        cast(list, results["modules_run"]).append("trace")
         try:
             results["trace"] = run_trace(
                 target,
@@ -150,7 +151,7 @@ def run_recon(
                 probes_per_hop=trace_probes_per_hop,
             )
         except Exception as exc:  # noqa: BLE001 - module failures are heterogeneous
-            results["notes"].append(f"trace module failed: {exc}")
+            cast(list, results["notes"]).append(f"trace module failed: {exc}")
 
     return results
 
@@ -170,11 +171,11 @@ def format_recon_report_markdown(data: dict[str, object]) -> str:
     lines = ["# ethscan Reconnaissance Report", ""]
     lines.append(f"- **Target:** {data['target']}")
     lines.append(f"- **Domain:** {data['domain']}")
-    lines.append(f"- **Modules Run:** {', '.join(data['modules_run']) if data['modules_run'] else 'None'}")
+    lines.append(f"- **Modules Run:** {', '.join(cast(list, data['modules_run'])) if data['modules_run'] else 'None'}")
     lines.append("")
 
     # Subdomains section
-    subdomains = data.get("subdomains")
+    subdomains = cast(dict[str, object] | None, data.get("subdomains"))
     if subdomains:
         lines.append("## Subdomain Enumeration")
         lines.append(f"- **Subdomains Tested:** {subdomains.get('subdomains_tested', 0)}")
@@ -184,12 +185,13 @@ def format_recon_report_markdown(data: dict[str, object]) -> str:
             lines.append(f"- **Resolver:** {resolver} (dnspython: {'Yes' if subdomains.get('dnspython_available') else 'No'})")
         lines.append("")
 
-        resolved = subdomains.get("resolved", [])
+        resolved = cast(list, subdomains.get("resolved", []))
         if resolved:
             lines.append("### Resolved Subdomains")
             lines.append("| Subdomain | Hostname | IP |")
             lines.append("|-----------|----------|----|")
-            for entry in resolved:
+            for entry_raw in resolved:
+                entry = cast(dict[str, object], entry_raw)
                 lines.append(
                     f"| {_markdown_escape(entry['subdomain'])} | "
                     f"{_markdown_escape(entry['hostname'])} | "
@@ -198,14 +200,14 @@ def format_recon_report_markdown(data: dict[str, object]) -> str:
             lines.append("")
 
     # DNS section
-    dns = data.get("dns")
+    dns = cast(dict[str, object] | None, data.get("dns"))
     if dns:
         lines.append("## DNS Record Enumeration")
-        lines.append(f"- **Record Types Queried:** {', '.join(dns.get('record_types_queried', []))}")
+        lines.append(f"- **Record Types Queried:** {', '.join(cast(list, dns.get('record_types_queried', [])))}")
         lines.append(f"- **dnspython Available:** {'Yes' if dns.get('dnspython_available') else 'No'}")
         lines.append("")
 
-        records = dns.get("records", {})
+        records = cast(dict, dns.get("records", {}))
         for rtype, values in records.items():
             lines.append(f"### {rtype} Records")
             if values:
@@ -216,10 +218,10 @@ def format_recon_report_markdown(data: dict[str, object]) -> str:
             lines.append("")
 
     # WHOIS section
-    whois = data.get("whois")
+    whois = cast(dict[str, object] | None, data.get("whois"))
     if whois:
         lines.append("## WHOIS Lookup")
-        parsed = whois.get("parsed", {})
+        parsed = cast(dict[str, object], whois.get("parsed", {}))
         lines.append(f"- **Server:** {whois.get('server', 'N/A')}:{whois.get('port', 'N/A')}")
         lines.append(f"- **Registrar:** {parsed.get('registrar') or 'N/A'}")
         lines.append(f"- **Creation Date:** {parsed.get('creation_date') or 'N/A'}")
@@ -227,14 +229,14 @@ def format_recon_report_markdown(data: dict[str, object]) -> str:
         lines.append(f"- **Registrant Organization:** {parsed.get('registrant_org') or 'N/A'}")
         lines.append("")
 
-        nameservers = parsed.get("nameservers", [])
+        nameservers = cast(list, parsed.get("nameservers", []))
         if nameservers:
             lines.append("### Nameservers")
             for ns in nameservers:
                 lines.append(f"- {ns}")
             lines.append("")
 
-        status_codes = parsed.get("status_codes", [])
+        status_codes = cast(list, parsed.get("status_codes", []))
         if status_codes:
             lines.append("### Status Codes")
             for status in status_codes:
@@ -242,10 +244,10 @@ def format_recon_report_markdown(data: dict[str, object]) -> str:
             lines.append("")
 
     # Geolocation section
-    geo = data.get("geo")
+    geo = cast(dict[str, object] | None, data.get("geo"))
     if geo:
         lines.append("## IP Geolocation")
-        geo_data = geo.get("geolocation")
+        geo_data = cast(dict[str, object] | None, geo.get("geolocation"))
         if geo_data:
             if geo_data.get("status") == "success":
                 fields_map = {
@@ -281,7 +283,7 @@ def format_recon_report_markdown(data: dict[str, object]) -> str:
         lines.append("")
 
     # Traceroute section
-    trace = data.get("trace")
+    trace = cast(dict[str, object] | None, data.get("trace"))
     if trace:
         lines.append("## TCP Traceroute")
         lines.append(f"- **Port:** {trace.get('port', 'N/A')}")
@@ -296,12 +298,13 @@ def format_recon_report_markdown(data: dict[str, object]) -> str:
         lines.append(f"- **Destination Reached:** {'Yes' if dest else 'No'}")
         lines.append("")
 
-        hops = trace.get("hops", [])
+        hops = cast(list, trace.get("hops", []))
         if hops:
             lines.append("### Hop Table")
             lines.append("| Hop | IP | RTT (ms) | Response | Reached |")
             lines.append("|-----|-----|----------|----------|---------|")
-            for hop in hops:
+            for hop_raw in hops:
+                hop = cast(dict[str, object], hop_raw)
                 hop_num = hop.get("hop", "")
                 ip = str(hop.get("ip") or "*").replace("|", "\\|")
                 rtt = hop.get("rtt_avg_ms")
@@ -312,7 +315,7 @@ def format_recon_report_markdown(data: dict[str, object]) -> str:
             lines.append("")
 
     # Notes
-    notes = data.get("notes", [])
+    notes = cast(list, data.get("notes", []))
     if notes:
         lines.append("## Notes")
         for note in notes:
@@ -331,49 +334,51 @@ def format_recon_report_csv(data: dict[str, object]) -> str:
     writer.writerow(["meta", "target", data.get("target", "")])
     writer.writerow(["meta", "domain", data.get("domain", "")])
     writer.writerow(
-        ["meta", "modules_run", ",".join(data.get("modules_run") or [])]
+        ["meta", "modules_run", ",".join(cast(list, data.get("modules_run") or []))]
     )
 
-    subdomains = data.get("subdomains")
+    subdomains = cast(dict[str, object] | None, data.get("subdomains"))
     if subdomains:
-        for entry in subdomains.get("resolved") or []:
+        for entry_raw in cast(list, subdomains.get("resolved") or []):
+            entry = cast(dict[str, object], entry_raw)
             writer.writerow(
                 ["subdomains", entry.get("hostname", ""), entry.get("ip") or ""]
             )
 
-    dns = data.get("dns")
+    dns = cast(dict[str, object] | None, data.get("dns"))
     if dns:
-        for rtype, values in (dns.get("records") or {}).items():
-            for value in values or []:
+        for rtype, values in (cast(dict, dns.get("records") or {})).items():
+            for value in cast(list, values or []):
                 writer.writerow(["dns", str(rtype), str(value)])
 
-    whois = data.get("whois")
+    whois = cast(dict[str, object] | None, data.get("whois"))
     if whois:
-        parsed = whois.get("parsed") or {}
+        parsed = cast(dict[str, object], whois.get("parsed") or {})
         for key in ("registrar", "creation_date", "expiration_date", "registrant_org"):
             if parsed.get(key):
                 writer.writerow(["whois", key, str(parsed.get(key))])
-        for ns in parsed.get("nameservers") or []:
+        for ns in cast(list, parsed.get("nameservers") or []):
             writer.writerow(["whois", "nameserver", str(ns)])
-        for status in parsed.get("status_codes") or []:
+        for status in cast(list, parsed.get("status_codes") or []):
             writer.writerow(["whois", "status_code", str(status)])
 
-    geo = data.get("geo")
+    geo = cast(dict[str, object] | None, data.get("geo"))
     if geo:
-        geo_data = geo.get("geolocation") or {}
+        geo_data = cast(dict[str, object], geo.get("geolocation") or {})
         for key in ("query", "country", "regionName", "city", "lat", "lon", "isp", "org", "as", "reverse"):
             if geo_data.get(key) is not None and geo_data.get(key) != "":
                 writer.writerow(["geo", key, str(geo_data.get(key))])
 
-    trace = data.get("trace")
+    trace = cast(dict[str, object] | None, data.get("trace"))
     if trace:
-        for hop in trace.get("hops") or []:
+        for hop_raw in cast(list, trace.get("hops") or []):
+            hop = cast(dict[str, object], hop_raw)
             hop_num = hop.get("hop", hop.get("ttl", ""))
             writer.writerow(
                 ["trace", f"hop_{hop_num}", hop.get("ip") or ""]
             )
 
-    for note in data.get("notes") or []:
+    for note in cast(list, data.get("notes") or []):
         writer.writerow(["notes", "", str(note)])
 
     return output.getvalue().rstrip("\r\n")
