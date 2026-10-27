@@ -12,7 +12,7 @@ import hmac
 import io
 import json
 import re
-from typing import cast
+from typing import Any, cast
 
 from ethscan.service import run_service
 from ethscan.target import parse_url
@@ -794,6 +794,8 @@ def match_tls_vulns(tls_data: dict) -> list[dict[str, object]]:
     """
     document, _ = _tls_document(tls_data)
     findings: list[dict[str, object]] = []
+    if document is None:
+        return findings
     findings.extend(match_protocol_vulns(document["supported_versions"]))
     findings.extend(match_cipher_vulns(document["supported_ciphers"]))
     return findings
@@ -813,6 +815,8 @@ def match_ssl_vulns(ssl_data: dict) -> list[dict[str, object]]:
         List of matching vulnerability findings.
     """
     document, _ = _certificate_document(ssl_data)
+    if document is None:
+        return []
     return match_certificate_vulns(document["cert"])
 
 
@@ -910,7 +914,7 @@ def run_vuln(
         findings: list[dict[str, object]] = []
         services_checked = 0
         banners: list[str] = []
-        for entry in svc_data.get("results") or []:
+        for entry in cast(list, (svc_data or {}).get("results") or []):
             if not isinstance(entry, dict):
                 continue
             banner = entry.get("banner")
@@ -949,8 +953,8 @@ def run_vuln(
             if min_rank is not None:
                 findings = [
                     f for f in findings
-                    if _severity_rank(f.get("severity")) is not None
-                    and _severity_rank(f.get("severity")) >= min_rank
+                    if _severity_rank(cast(str | None, f.get("severity"))) is not None
+                    and cast(int, _severity_rank(cast(str | None, f.get("severity")))) >= min_rank
                 ]
 
         severity_counts: dict[str, int] = {name: 0 for name in SEVERITIES}
@@ -983,8 +987,8 @@ def run_vuln(
 
         # Scan the current host
         result = _scan_host(current_host, depth, ports, services, tls, certificate)
-        all_findings.extend(result["findings"])
-        all_notes.extend(result["notes"])
+        all_findings.extend(cast(list[dict[str, object]], result.get("findings") or []))
+        all_notes.extend(cast(list[str], result.get("notes") or []))
 
         if depth == 0:
             # Track initial host results
@@ -995,7 +999,7 @@ def run_vuln(
         # Extract hosts from banners for next recursion level
         if depth < max_depth:
             discovered_hosts: list[str] = []
-            for banner in result.get("banners", []):
+            for banner in cast(list, result.get("banners", []) or []):
                 discovered_hosts.extend(_extract_hosts_from_banner(banner))
 
             for discovered_host in discovered_hosts:
@@ -1023,8 +1027,8 @@ def run_vuln(
     else:
         # Non-recursive: just scan the initial host
         initial_result = _scan_host(host, 0, ports, services, tls, certificate)
-        all_findings.extend(initial_result["findings"])
-        all_notes.extend(initial_result["notes"])
+        all_findings.extend(cast(list[dict[str, object]], initial_result.get("findings") or []))
+        all_notes.extend(cast(list[str], initial_result.get("notes") or []))
         initial_scan_results["services_checked"] = initial_result["services_checked"]
         initial_scan_results["tls_checked"] = initial_result["tls_checked"]
         initial_scan_results["certificate_checked"] = initial_result["certificate_checked"]
@@ -1059,11 +1063,13 @@ def run_vuln(
 
 
 def format_vuln_report_json(data: dict[str, object]) -> str:
+    data = cast(dict[str, Any], data)
     """Format vulnerability check results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
 def format_vuln_report_csv(data: dict[str, object]) -> str:
+    data = cast(dict[str, Any], data)
     """Format vulnerability check results as CSV.
 
     Emits a header row followed by one row per finding with columns:
@@ -1083,7 +1089,7 @@ def format_vuln_report_csv(data: dict[str, object]) -> str:
             "description",
         ]
     )
-    for finding in data.get("findings") or []:
+    for finding in cast(list, data.get("findings") or []):
         writer.writerow(
             [
                 finding.get("id", ""),
@@ -1131,6 +1137,7 @@ def _escape(value: str) -> str:
 
 
 def format_vuln_report_markdown(data: dict[str, object]) -> str:
+    data = cast(dict[str, Any], data)
     """Format vulnerability check results as Markdown."""
     lines = ["# ethscan Vulnerability Report", ""]
     lines.append(f"- **Target:** {data['target']}")
@@ -1156,16 +1163,16 @@ def format_vuln_report_markdown(data: dict[str, object]) -> str:
     if data.get("recursive"):
         lines.append("- **Recursive:** Yes")
         lines.append(f"- **Max Depth:** {data.get('max_depth', 0)}")
-        lines.append(f"- **Recursive Hosts Scanned:** {len(data.get('recursive_hosts_scanned', []))}")
+        lines.append(f"- **Recursive Hosts Scanned:** {len(cast(list, data.get('recursive_hosts_scanned', []) or []))}")
     lines.append("")
 
-    severity_counts = data.get("severity_counts") or {}
+    severity_counts = cast(dict, data.get("severity_counts") or {})
     lines.append("## Severity Summary")
     for name in SEVERITIES:
         lines.append(f"- **{name.capitalize()}:** {severity_counts.get(name, 0)}")
     lines.append("")
 
-    findings = data.get("findings") or []
+    findings = cast(list, data.get("findings") or [])
     lines.append("## Findings")
     if findings:
         for finding in findings:
@@ -1185,7 +1192,7 @@ def format_vuln_report_markdown(data: dict[str, object]) -> str:
         lines.append("*No known vulnerabilities matched.*")
         lines.append("")
 
-    notes = data.get("notes") or []
+    notes = cast(list, data.get("notes") or [])
     if notes:
         lines.append("## Notes")
         for note in notes:
@@ -1193,22 +1200,22 @@ def format_vuln_report_markdown(data: dict[str, object]) -> str:
         lines.append("")
 
     if data.get("recursive"):
-        recursive_hosts = data.get("recursive_hosts_scanned") or []
-        recursive_findings = data.get("recursive_findings") or []
+        recursive_hosts = cast(list, data.get("recursive_hosts_scanned") or [])
+        recursive_findings = cast(list, data.get("recursive_findings") or [])
         if recursive_hosts or recursive_findings:
             lines.append("## Recursive Scan Results")
             if recursive_hosts:
                 lines.append("### Hosts Scanned")
                 lines.append("| Host | Depth | Findings |")
                 lines.append("|------|-------|----------|")
-                for rf in recursive_findings:
+                for rf in cast(list, recursive_findings):
                     lines.append(
                         f"| {rf['host']} | {rf['depth']} | {rf['finding_count']} |"
                     )
                 lines.append("")
             if recursive_findings:
                 lines.append("### Recursive Findings")
-                for rf in recursive_findings:
+                for rf in cast(list, recursive_findings):
                     lines.append(f"#### Host: {rf['host']} (Depth {rf['depth']})")
                     lines.append(f"- **Services Checked:** {rf['services_checked']}")
                     lines.append(f"- **Findings:** {rf['finding_count']}")
