@@ -659,3 +659,32 @@ def test_dns_transport_failure_is_reported_not_raised(monkeypatch) -> None:
 
     assert isinstance(results, dict)
     assert results["records"]["A"] == []
+
+def test_run_dns_server_without_dnspython_returns_empty(monkeypatch) -> None:
+    import ethscan.dns as dns_mod
+    monkeypatch.setattr(dns_mod, "DNS_AVAILABLE", False)
+    data = dns_mod.run_dns("example.com", record_types=["MX"], server="8.8.8.8")
+    assert data["records"]["MX"] == []
+
+
+def test_format_dns_report_markdown_records_not_dict() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "record_types_queried": "A",
+        "records": "not-a-dict",
+        "dnspython_available": False,
+    }
+    out = format_dns_report_markdown(data)
+    assert "Record Types Queried:** A" in out
+    assert "example.com" in out
+
+
+def test_format_dns_report_csv_non_list_values() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "records": {"TXT": "single-value"},
+    }
+    out = format_dns_report_csv(data)
+    assert "single-value" in out
