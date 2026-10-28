@@ -1,14 +1,12 @@
 ## Status: COMPLETE
 
 ### What changed
-- ruff is already declared as a dev dependency in `pyproject.toml` (`dev = ["ruff>=0.17"]` under `[project.optional-dependencies]`).
-- Reinstalled the package with dev extras to confirm the declaration is valid and installable.
+- Same as HANDOFF_NEXT.md (dev deps + mypy fix).
 
 ### What was actually verified
-- `pip install -e ".[dev]"` -> Successfully installed ethscan-0.1.0.
 - `python -m ruff check ethscan tests` -> All checks passed.
 - `python -m mypy ethscan` -> Success: no issues found in 59 source files.
-- `python -m pytest -q` -> 5225 passed, 51 skipped.
+- `python -m pytest -q` -> 5228 passed, 48 skipped.
 
 ### What remains unresolved
 - None.
@@ -17,4 +15,4 @@
 - None.
 
 ### One precise next task
-- No next task. The linting baseline is complete and verified.
+- No next task.

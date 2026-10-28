@@ -395,7 +395,12 @@ def _query_dnskey_dnspython(
         if server:
             resolver.nameservers = [server]
         request = dns.message.make_query(domain, dns.rdatatype.DNSKEY, want_dnssec=True)
-        response = dns.query.udp(request, resolver.nameservers[0], timeout=timeout)
+        server_addr = resolver.nameservers[0]
+        if hasattr(server_addr, "address"):
+            server_addr = getattr(server_addr, "address")
+        if not isinstance(server_addr, str):
+            server_addr = str(server_addr)
+        response = dns.query.udp(request, server_addr, timeout=timeout)
         keys = []
         for answer in response.answer:
             for rdata in answer:
@@ -430,7 +435,12 @@ def _query_ds_dnspython(
         if server:
             resolver.nameservers = [server]
         request = dns.message.make_query(domain, dns.rdatatype.DS, want_dnssec=True)
-        response = dns.query.udp(request, resolver.nameservers[0], timeout=timeout)
+        server_addr = resolver.nameservers[0]
+        if hasattr(server_addr, "address"):
+            server_addr = getattr(server_addr, "address")
+        if not isinstance(server_addr, str):
+            server_addr = str(server_addr)
+        response = dns.query.udp(request, server_addr, timeout=timeout)
         records = []
         for answer in response.answer:
             for rdata in answer:
