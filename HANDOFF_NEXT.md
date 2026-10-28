@@ -1,21 +1,21 @@
 ## Status: COMPLETE
 
 ### What changed
-- Added `TestCheckTCPConnect::test_success_ipv6` to `tests/test_stale.py` (one new test). No source change.
+- Added 10 tests to `tests/test_resolve.py`, covering previously uncovered branches of `ethscan.resolve` (record-type failure swallowing in `run_resolve`, gethostbyaddr failure without dnspython, unknown-type handling with and without dnspython, dnspython import failure, non-list formatter branches). No source changes.
 
 ### What was actually verified
-- Local: ruff/mypy/pytest all pass (5229 passed, 48 skipped).
-- The new test pins the IPv6 branch of `ethscan.stale.check_tcp_connect` introduced in commit 6b17872, which had no dedicated test coverage.
+- `pytest tests/test_resolve.py` -> 69 passed.
+- `ruff check ethscan/ tests/` -> All checks passed.
+- Full suite `pytest -q` -> 5239 passed, 48 skipped.
+- `ethscan/resolve.py` coverage: 91% -> 99%; remaining misses (lines 225, 232-233) are unreachable defensive code.
 
 ### What remains unresolved
-- None.
+- None blocking. `ethscan/dns.py` is the next-lowest coverage module at 92%.
 
 ### Which approaches failed and why
 - None.
 
 ### One precise next task
-- None.
+- Add tests to `tests/test_dns.py` to raise `ethscan/dns.py` coverage from 92% (12 missing statements). Identify missing lines with `python -m coverage report --include="ethscan/dns.py" -m`, then keep `ruff check ethscan/ tests/` and the full suite green.
 
-(End of file - total 16 lines)
-
-Verified: 2026-10-28 (ruff/mypy/pytest all passing).
+Verified: 2026-10-28 (ruff/mypy/pytest all passing; coverage 5239 passed, 48 skipped).

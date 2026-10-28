@@ -970,3 +970,176 @@ def test_resolve_ptr_records_failure_of_unnamed_type_is_reported(monkeypatch) ->
     monkeypatch.setattr("ethscan.resolve.socket.gethostbyaddr", boom)
 
     assert ethscan.resolve.resolve_ptr_records("1.2.3.4", 0.1) == []
+
+
+def test_resolve_ptr_records_gethostbyaddr_failure_without_dnspython(monkeypatch) -> None:
+    """Without dnspython, a gethostbyaddr failure returns [] instead of raising."""
+    import ethscan.resolve
+
+    def boom(*args, **kwargs):
+        raise OSError("hostile reverse lookup")
+
+    monkeypatch.setattr("ethscan.resolve.socket.gethostbyaddr", boom)
+    orig = ethscan.resolve.DNS_AVAILABLE
+    try:
+        ethscan.resolve.DNS_AVAILABLE = False
+        assert ethscan.resolve.resolve_ptr_records("1.2.3.4", 0.1) == []
+    finally:
+        ethscan.resolve.DNS_AVAILABLE = orig
+
+
+def test_run_resolve_aaaa_records_failure_is_swallowed(monkeypatch) -> None:
+    """A failing AAAA lookup is reported as empty records, not raised."""
+    import ethscan.resolve
+
+    def boom(domain, timeout=2.0):
+        raise RuntimeError("hostile AAAA lookup")
+
+    monkeypatch.setattr("ethscan.resolve.resolve_aaaa_records", boom)
+
+    results = ethscan.resolve.run_resolve("example.com", record_types=["AAAA"], timeout=0.1)
+    assert results["records"]["AAAA"] == []
+
+
+def test_run_resolve_cname_records_failure_is_swallowed(monkeypatch) -> None:
+    """A failing CNAME lookup is reported as empty records, not raised."""
+    import ethscan.resolve
+
+    def boom(domain, timeout=2.0, server=None):
+        raise RuntimeError("hostile CNAME lookup")
+
+    monkeypatch.setattr("ethscan.resolve.resolve_cname_records", boom)
+
+    results = ethscan.resolve.run_resolve("example.com", record_types=["CNAME"], timeout=0.1)
+    assert results["records"]["CNAME"] == []
+
+
+def test_run_resolve_ptr_records_failure_is_swallowed(monkeypatch) -> None:
+    """A failing PTR lookup is reported as empty records, not raised."""
+    import ethscan.resolve
+
+    def boom(ip, timeout=2.0, server=None):
+        raise RuntimeError("hostile PTR lookup")
+
+    monkeypatch.setattr("ethscan.resolve.resolve_ptr_records", boom)
+
+    results = ethscan.resolve.run_resolve("8.8.8.8", record_types=["PTR"], timeout=0.1)
+    assert results["records"]["PTR"] == []
+
+
+def test_run_resolve_unknown_type_without_dnspython_is_ignored(monkeypatch) -> None:
+    """Unknown record types are ignored when dnspython is unavailable."""
+    import ethscan.resolve
+
+    orig = ethscan.resolve.DNS_AVAILABLE
+    try:
+        ethscan.resolve.DNS_AVAILABLE = False
+        results = ethscan.resolve.run_resolve("example.com", record_types=["A", "MX"], timeout=0.1)
+        assert "A" in results["records"]
+        assert "MX" not in results["records"]
+    finally:
+        ethscan.resolve.DNS_AVAILABLE = orig
+
+
+def test_run_resolve_unknown_type_dnspython_failure_is_swallowed(monkeypatch) -> None:
+    """A dnspython failure for an unknown record type is swallowed, not raised."""
+    from ethscan import resolve
+
+    class DummyResolver:
+        def __init__(self):
+            self.timeout = None
+            self.lifetime = None
+            self.nameservers = None
+
+        def resolve(self, domain, rtype):
+            raise _ResolveError("fail")
+
+    class FakeDns:
+        exception = type("exception", (), {"DNSException": Exception})
+        resolver = type("resolver", (), {"Resolver": DummyResolver})
+
+    orig = resolve.DNS_AVAILABLE
+    try:
+        resolve.DNS_AVAILABLE = True
+        resolve.dns = FakeDns()
+        results = resolve.run_resolve("example.com", record_types=["BOGUS"], timeout=1.0)
+        assert "BOGUS" not in results["records"]
+    finally:
+        resolve.DNS_AVAILABLE = orig
+
+
+def test_resolve_dnspython_import_failure_degrades_gracefully(monkeypatch) -> None:
+    """When dnspython cannot be imported, the module falls back to stdlib-only."""
+    import importlib
+    import sys
+
+    import ethscan.resolve as resolve_mod
+
+    original_modules = {
+        name: sys.modules.get(name) for name in ("dns", "dns.resolver", "dns.exception", "dns.reversename")
+    }
+    try:
+        sys.modules["dns"] = None
+        for name in ("dns.resolver", "dns.exception", "dns.reversename"):
+            sys.modules.pop(name, None)
+
+        importlib.reload(resolve_mod)
+
+        assert resolve_mod.DNS_AVAILABLE is False
+        assert resolve_mod.dns is None
+        assert resolve_mod.resolve_cname_records("example.com") == []
+        assert isinstance(resolve_mod.resolve_ptr_records("127.0.0.1"), list)
+        assert resolve_mod.resolve_with_dnspython("example.com", "MX") == []
+    finally:
+        for name, value in original_modules.items():
+            if value is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = value
+        importlib.reload(resolve_mod)
+
+
+def test_format_resolve_report_markdown_record_types_queried_non_list() -> None:
+    """Non-list record types queried are rendered as-is in markdown."""
+    data = {
+        "target": "example.com",
+        "normalized": "example.com",
+        "is_ip": False,
+        "record_types_queried": "A",
+        "records": {"A": ["1.2.3.4"]},
+        "dnspython_available": False,
+        "server": None,
+    }
+    output = format_resolve_report_markdown(data)
+    assert "- **Record Types Queried:** A" in output
+
+
+def test_format_resolve_report_markdown_values_not_list() -> None:
+    """Non-list record values are rendered as a single line in markdown."""
+    data = {
+        "target": "example.com",
+        "normalized": "example.com",
+        "is_ip": False,
+        "record_types_queried": ["A"],
+        "records": {"A": "1.2.3.4"},
+        "dnspython_available": False,
+        "server": None,
+    }
+    output = format_resolve_report_markdown(data)
+    assert "- 1.2.3.4" in output
+
+
+def test_format_resolve_report_csv_values_not_list() -> None:
+    """Non-list record values are written as a single CSV row."""
+    data = {
+        "target": "example.com",
+        "normalized": "example.com",
+        "is_ip": False,
+        "record_types_queried": ["A"],
+        "records": {"A": "1.2.3.4"},
+        "dnspython_available": False,
+        "server": None,
+    }
+    output = format_resolve_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[1] == ["example.com", "example.com", "A", "1.2.3.4"]
