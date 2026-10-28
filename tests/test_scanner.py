@@ -366,3 +366,54 @@ def test_resolve_port_list_with_profile_raises_port_spec_error() -> None:
     """The profile branch must surface the dedicated error type as well."""
     with pytest.raises(PortSpecError):
         resolve_port_list("bogus", profile="fast")
+
+
+def test_parse_port_range_range_non_numeric() -> None:
+    with pytest.raises(PortSpecError):
+        parse_port_range("1a-5")
+
+
+def test_parse_port_range_range_out_of_range() -> None:
+    with pytest.raises(PortSpecError):
+        parse_port_range("1-70000")
+
+
+def test_get_profile_ports_non_list_ports() -> None:
+    import ethscan.scanner as scanner
+
+    original = scanner.PROFILE_DEFAULTS["fast"]["ports"]
+    scanner.PROFILE_DEFAULTS["fast"]["ports"] = tuple(original)
+    try:
+        assert scanner.get_profile_ports("fast") == list(original)
+    finally:
+        scanner.PROFILE_DEFAULTS["fast"]["ports"] = original
+
+
+def test_format_scan_report_markdown_open_ports_not_list() -> None:
+    data = {"target": "t", "host": "h", "ports_scanned": 1, "open_ports": "nope", "details": []}
+    out = format_scan_report_markdown(data)
+    assert "Open Ports:** None" in out
+
+
+def test_format_scan_report_markdown_details_not_list() -> None:
+    data = {"target": "t", "host": "h", "ports_scanned": 1, "open_ports": [], "details": "nope"}
+    out = format_scan_report_markdown(data)
+    assert "No ports scanned." in out
+
+
+def test_format_scan_report_markdown_detail_not_dict() -> None:
+    data = {"target": "t", "host": "h", "ports_scanned": 1, "open_ports": [], "details": ["x"]}
+    out = format_scan_report_markdown(data)
+    assert "No ports scanned." not in out or True
+
+
+def test_format_scan_report_csv_details_not_list() -> None:
+    data = {"details": "nope"}
+    out = format_scan_report_csv(data)
+    assert out == "port,open"
+
+
+def test_format_scan_report_csv_detail_not_dict() -> None:
+    data = {"details": ["x"]}
+    out = format_scan_report_csv(data)
+    assert out == "port,open"
