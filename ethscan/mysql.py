@@ -117,7 +117,7 @@ def _parse_handshake(data: bytes) -> dict[str, Any]:
     pos += 1
 
     # Null-terminated server version string
-    server_version_bytes: list[bytearray] = []
+    server_version_bytes: list[int] = []
     while pos < len(payload):
         b = payload[pos]
         pos += 1

@@ -545,7 +545,11 @@ def format_ssh_report_csv(data: dict[str, object]) -> str:
         "description",
     ])
     findings = data.get("findings") or []
+    if not isinstance(findings, list):
+        findings = []
     for finding in findings:
+        if not isinstance(finding, dict):
+            continue
         writer.writerow([
             finding.get("type", ""),
             finding.get("algorithm", ""),

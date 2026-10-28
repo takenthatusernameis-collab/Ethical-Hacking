@@ -556,8 +556,8 @@ def run_netbios(
 
     request = _build_nbns_query(name=name, suffix=suffix, transaction_id=0)
     data, err = _send_recv(host, server_port, request, timeout, connector=connector)
-    if err:
-        results["error"] = f"node status request failed: {err}"
+    if err or data is None:
+        results["error"] = f"node status request failed: {err or 'no response'}"
         return results
 
     try:

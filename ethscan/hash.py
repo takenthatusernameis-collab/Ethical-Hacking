@@ -532,12 +532,14 @@ def format_hash_report_markdown(data: dict[str, object]) -> str:
         lines.append("*No passwords provided for hashing.*")
     lines.append("")
 
-    notes = data.get("notes") or []
-    if notes:
-        lines.append("## Notes")
-        for note in notes:
-            lines.append(f"- {note}")
-        lines.append("")
+    notes_val = data.get("notes")
+    if notes_val:
+        note_list = notes_val if isinstance(notes_val, (list, tuple)) else [notes_val]
+        if note_list:
+            lines.append("## Notes")
+            for note in note_list:
+                lines.append(f"- {note}")
+            lines.append("")
 
     return "\n".join(lines)
 

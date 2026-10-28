@@ -120,8 +120,7 @@ def _trace_single(
         rtt_list: list[float] = []
         hop_ip = None
         reached_hop = False
-        probes_done = 0
-        probe_results = []
+        probe_results: list[dict[str, Any]] = []
         for probes_done in range(1, max(1, probes_per_hop) + 1):
             res = _probe_once(dst_ip, port, ttl, timeout)
             if res.get("error"):
@@ -222,7 +221,7 @@ def _extract_hop_ips(hops: list[dict[str, Any]]) -> list[str]:
     ips: set[str] = set()
     for hop in hops:
         ip = hop.get("ip")
-        if ip and not hop.get("reached_destination", False):
+        if isinstance(ip, str) and ip and not hop.get("reached_destination", False):
             ips.add(ip)
     return list(ips)
 
@@ -248,7 +247,7 @@ def run_trace(
         return main_result
 
     # Extract intermediate hop IPs
-    hop_ips = _extract_hop_ips(main_result.get("hops", []))
+    hop_ips = _extract_hop_ips(main_result.get("hops", []) or [])
     if not hop_ips:
         main_result.setdefault("notes", []).append("Recursive tracing enabled but no intermediate hops found")
         main_result["recursive"] = True
@@ -308,7 +307,8 @@ def format_trace_report_markdown(result: dict[str, Any]) -> str:
     if result.get("error"):
         lines.append(f"**Error:** {result.get('error')}")
     if result.get("notes"):
-        for n in result.get("notes"):
+        notes = result.get("notes") or []
+        for n in notes:
             lines.append(f"**Note:** {n}")
     lines.append("")
 
@@ -321,7 +321,8 @@ def format_trace_report_markdown(result: dict[str, Any]) -> str:
         for h in hops:
             hop_no = h.get("hop", h.get("ttl", "?"))
             ip = h.get("ip") or "*"
-            host = h.get("host") or ip or "*"
+            host_raw = h.get("host") or ip or "*"
+            host = str(host_raw)
             resp = h.get("response_type") or ("REACHED" if h.get("reached") else "NO-RESPONSE")
             rtt = _fmt_rtt(h.get("rtt_avg_ms") or h.get("rtt_ms"))
             reached = "Yes" if (h.get("reached_destination") or h.get("reached")) else "No"
@@ -329,8 +330,8 @@ def format_trace_report_markdown(result: dict[str, Any]) -> str:
     else:
         lines.append("No hops recorded.")
     lines.append("")
-    reached = result.get("destination_reached") or result.get("reached_destination") or result.get("reached")
-    lines.append(f"**Reached target:** {'Yes' if reached else 'No'}")
+    reached_flag = result.get("destination_reached") or result.get("reached_destination") or result.get("reached")
+    lines.append(f"**Reached target:** {'Yes' if bool(reached_flag) else 'No'}")
 
     # Add recursive trace sections
     recursive_traces = result.get("recursive_traces", [])
@@ -372,7 +373,7 @@ def format_trace_report_markdown(result: dict[str, Any]) -> str:
                 lines.append("No hops recorded.")
             lines.append("")
             trace_reached = trace_res.get("destination_reached") or trace_res.get("reached_destination") or trace_res.get("reached")
-            lines.append(f"**Reached target:** {'Yes' if trace_reached else 'No'}")
+            lines.append(f"**Reached target:** {'Yes' if bool(trace_reached) else 'No'}")
             lines.append("")
 
     return "\n".join(lines)
