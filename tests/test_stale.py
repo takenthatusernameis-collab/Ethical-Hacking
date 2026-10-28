@@ -162,6 +162,22 @@ class TestCheckTCPConnect:
         mock_sock.connect.assert_called_once_with(("192.168.1.1", 80))
         mock_sock.close.assert_called_once()
 
+    @patch("socket.socket")
+    def test_success_ipv6(self, mock_socket):
+        """An IPv6 target opens an AF_INET6 socket and connects with a 4-tuple.
+
+        The connect branch for IPv6 addresses was added to ``check_tcp_connect``
+        (a bare ``host:port`` tuple is not valid for an IPv6 socket); this test
+        pins the family and the call shape so the branch is exercised.
+        """
+        mock_sock = MagicMock()
+        mock_socket.return_value = mock_sock
+        result = check_tcp_connect("2001:db8::1", 80, 1.0)
+        assert result is True
+        assert mock_socket.call_args.args[0] is socket.AF_INET6
+        mock_sock.connect.assert_called_once_with(("2001:db8::1", 80, 0, 0))
+        mock_sock.close.assert_called_once()
+
     @patch("socket.socket", side_effect=ConnectionRefusedError)
     def test_refused(self, mock_socket):
         result = check_tcp_connect("192.168.1.1", 80, 1.0)
