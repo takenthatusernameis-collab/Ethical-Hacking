@@ -239,7 +239,7 @@ def run_validate(
         if isinstance(ports_val, list):
             try:
                 all_ports.update(int(p) for p in ports_val)
-            except Exception:
+            except (ValueError, TypeError):
                 pass
 
     summary: dict[str, Any] = {

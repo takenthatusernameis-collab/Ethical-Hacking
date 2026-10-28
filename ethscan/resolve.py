@@ -5,7 +5,6 @@ import csv
 import io
 import ipaddress
 import socket
-from typing import Any
 
 from ethscan.target import parse_url
 

@@ -1,14 +1,16 @@
-## Status: COMPLETE
+## Status: PENDING
 
 ### What changed
-- Fixed mypy typing errors in `ethscan/ntp.py` (3 errors -> 0): cast `_send_recv` result to bytes for `_parse_time_response`, `_parse_monlist_response`, and `len(mon_data)`.
+- None yet.
 
 ### What was actually verified
-- `python -m mypy ethscan/ntp.py` -> Success: no issues found.
-- `python -m pytest tests/test_ntp.py -q` -> 47 passed.
+- None yet.
 
 ### What remains unresolved
-- Remaining mypy errors in other modules (~14 across 7 files).
+- ruff is configured in `pyproject.toml` but not declared as a dependency, so it is not installed by `pip install -r requirements.txt` and not enforced.
+
+### Which approaches failed and why
+- None.
 
 ### One precise next task
-Fix mypy errors in `ethscan/netbios.py` (1 error); inspect `python -m mypy ethscan/netbios.py`.
+- Declare ruff as a dev dependency: add `dev = ["ruff>=0.17"]` to `[project.optional-dependencies]` in `pyproject.toml`, then run `pip install -e ".[dev]"` and `python -m ruff check ethscan tests` to confirm the lint config is enforced and clean.

@@ -148,11 +148,9 @@ def _decode_cert(ssock) -> dict:
             if ssl_mod is not None and hasattr(ssl_mod, "_test_decode_cert"):
                 return ssl_mod._test_decode_cert(cert_path)
             # Fallback to parsing via standard library if possible
-            with open(cert_path, "r") as f:
-                pem_data = f.read()
             try:
                 return ssl._ssl._test_decode_cert(cert_path)  # type: ignore[attr-defined]
-            except Exception:
+            except Exception:  # noqa: BLE001 -- defensive fallback for a private C API
                 return ssock.getpeercert() or {}
         except (ValueError, OSError, ssl.SSLError):
             return ssock.getpeercert() or {}
