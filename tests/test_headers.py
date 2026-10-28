@@ -29,6 +29,20 @@ def test_run_headers_offline_target(monkeypatch):
     assert results["security_headers"]["missing_count"] == len(SECURITY_HEADERS)
 
 
+def test_run_headers_propagates_fetch_error(monkeypatch):
+    """When fetch_headers returns an object carrying an .error, it is propagated."""
+    class FakeFetch(dict):
+        error = "connection refused"
+
+    def mock_fetch_headers(url, timeout=5.0):
+        return FakeFetch()
+
+    monkeypatch.setattr("ethscan.headers.fetch_headers", mock_fetch_headers)
+
+    results = run_headers("https://example.com", timeout=1.0)
+    assert results["error"] == "connection refused"
+
+
 def test_run_headers_with_headers(monkeypatch):
     """Test run_headers when some security headers are present."""
     mock_headers = {
@@ -288,3 +302,30 @@ def test_format_headers_report_csv_escaping() -> None:
     output = format_headers_report_csv(data)
     assert '"X-Custom,Header",present' in output
     assert '"Header,With,Comma",missing' in output
+
+
+def test_format_headers_report_markdown_error_line() -> None:
+    # Line 59: markdown renders the error field when data["error"] is truthy
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "error": "connection refused",
+        "security_headers": {"present_count": 0, "total": 0, "present": [], "missing": []},
+    }
+    output = format_headers_report_markdown(data)
+    assert "**Error:** connection refused" in output
+
+
+def test_format_headers_report_csv_security_headers_not_dict() -> None:
+    # Line 87: when security_headers is a truthy non-dict, fall back to {}
+    data = {
+        "target": "example.com",
+        "security_headers": "not-a-dict",
+    }
+    output = format_headers_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+    assert "present_count,0" in lines
+    assert "header,status" in lines
