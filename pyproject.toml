@@ -13,6 +13,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+dev = [
+    "ruff>=0.17",
+]
 dns = [
     "dnspython>=2.0",
 ]
