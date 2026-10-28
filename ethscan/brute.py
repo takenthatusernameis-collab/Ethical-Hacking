@@ -253,13 +253,19 @@ def format_brute_report_csv(data: dict[str, object]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["username", "password", "success", "error"])
-    for result in data.get("results", []):
+    results_obj = data.get("results", [])
+    results: list[dict[str, object]] = list(results_obj) if isinstance(results_obj, (list, tuple)) else []
+    for result in results:
+        username = result.get("username", "")
+        password = result.get("password") or ""
+        success = bool(result.get("success"))
+        error = result.get("error") or ""
         writer.writerow(
             [
-                result.get("username", ""),
-                result.get("password", "") or "",
-                "true" if result.get("success") else "false",
-                result.get("error", "") or "",
+                "" if username is None else str(username),
+                "" if password is None else str(password),
+                "true" if success else "false",
+                "" if error is None else str(error),
             ]
         )
     return output.getvalue().rstrip("\r\n")
@@ -273,31 +279,40 @@ def format_brute_report_json(data: dict[str, object]) -> str:
 def format_brute_report_markdown(data: dict[str, object]) -> str:
     """Format brute-force results as Markdown."""
     lines = ["# ethscan Brute Force Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Host:** {data['host']}")
-    lines.append(f"- **Protocol:** {data['protocol']}")
-    lines.append(f"- **Port:** {data['port']}")
-    lines.append(f"- **Attempts:** {data['attempts']}")
-    lines.append(f"- **Successful Logins:** {data['successful_count']}")
+    lines.append(f"- **Target:** {data.get('target')}")
+    lines.append(f"- **Host:** {data.get('host')}")
+    lines.append(f"- **Protocol:** {data.get('protocol')}")
+    lines.append(f"- **Port:** {data.get('port')}")
+    lines.append(f"- **Attempts:** {data.get('attempts')}")
+    lines.append(f"- **Successful Logins:** {data.get('successful_count')}")
     lines.append("")
 
+    successful_obj = data.get("successful")
+    successful: list[dict[str, object]] = list(successful_obj) if isinstance(successful_obj, (list, tuple)) else []
+
     lines.append("## Successful Logins")
-    if data["successful"]:
+    if successful:
         lines.append("| Username | Password |")
         lines.append("|----------|----------|")
-        for entry in data["successful"]:
-            lines.append(f"| {entry['username']} | {entry['password']} |")
+        for entry in successful:
+            username = entry.get("username") or ""
+            password = entry.get("password") or ""
+            lines.append(f"| {username} | {password} |")
     else:
         lines.append("*No successful logins.*")
     lines.append("")
 
+    results_obj = data.get("results")
+    results: list[dict[str, object]] = list(results_obj) if isinstance(results_obj, (list, tuple)) else []
+
     lines.append("## All Attempts")
     lines.append("| Username | Password | Success | Error |")
     lines.append("|----------|----------|---------|-------|")
-    for result in data["results"]:
-        password = result["password"] or ""
-        success = "Yes" if result["success"] else "No"
-        error = result["error"] or ""
-        lines.append(f"| {result['username']} | {password} | {success} | {error} |")
+    for result in results:
+        password = result.get("password") or ""
+        success = "Yes" if result.get("success") else "No"
+        error = result.get("error") or ""
+        username = result.get("username") or ""
+        lines.append(f"| {username} | {password} | {success} | {error} |")
 
     return "\n".join(lines)

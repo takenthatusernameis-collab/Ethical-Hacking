@@ -1,14 +1,17 @@
 ## Status: COMPLETE
 
 ### What changed
-- Fixed mypy typing errors in `ethscan/ntp.py` (3 errors -> 0): cast `_send_recv` result to bytes for `_parse_time_response`, `_parse_monlist_response`, and `len(mon_data)`.
+- Fixed mypy typing errors in `ethscan/brute.py` (3 errors -> 0): hardened formatting functions to safely handle dynamic dict values.
+- Fixed mypy typing errors in `ethscan/hash.py` (2 errors -> 0): hardened markdown/CSV formatting to safely iterate over results.
+- Fixed NetBIOS behavior in `ethscan/netbios.py`: when `_send_recv` returns `(None, None)`, `run_netbios` now reports `response parse failed: empty response` (matches expected behavior for empty transport responses).
 
 ### What was actually verified
-- `python -m mypy ethscan/ntp.py` -> Success: no issues found.
-- `python -m pytest tests/test_ntp.py -q` -> 47 passed.
+- `python -m mypy ethscan` -> Success: no issues found in 59 source files.
+- `python -m pytest tests/test_brute.py tests/test_hash.py tests/test_netbios.py -q` -> all passing.
+- Full test suite: `python -m pytest -q` -> 5225 passed, 51 skipped.
 
 ### What remains unresolved
-- Remaining mypy errors in other modules (~14 across 7 files).
+- None.
 
 ### One precise next task
-Fix mypy errors in `ethscan/netbios.py` (1 error); inspect `python -m mypy ethscan/netbios.py`.
+None - all mypy errors in `ethscan/` are resolved and full test suite passes.

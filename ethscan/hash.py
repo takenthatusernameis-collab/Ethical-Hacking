@@ -506,19 +506,22 @@ def _escape(value: str) -> str:
 def format_hash_report_markdown(data: dict[str, object]) -> str:
     """Format hash results as a Markdown string."""
     lines = ["# ethscan Password Hash Report", ""]
-    lines.append(f"- **Algorithm:** {data['algorithm']}")
-    lines.append(f"- **Passwords Hashed:** {data['passwords_hashed']}")
+    algorithm = data.get("algorithm")
+    lines.append(f"- **Algorithm:** {algorithm}")
+    lines.append(f"- **Passwords Hashed:** {data.get('passwords_hashed')}")
     if data.get("salt"):
         lines.append("- **Salt:** applied (prepended to password)")
     if data.get("pepper"):
         lines.append("- **Pepper:** applied (HMAC key)")
     if data.get("iterations"):
-        lines.append(f"- **Iterations:** {data['iterations']}")
-    if data.get("salt_value"):
-        lines.append(f"- **Salt Value:** `{_escape(str(data['salt_value']))}`")
+        lines.append(f"- **Iterations:** {data.get('iterations')}")
+    salt_value = data.get("salt_value")
+    if salt_value:
+        lines.append(f"- **Salt Value:** `{_escape(str(salt_value))}`")
     lines.append("")
 
-    results = data.get("results") or []
+    results_obj = data.get("results") or []
+    results: list[dict[str, object]] = list(results_obj) if isinstance(results_obj, (list, tuple)) else []
     if results:
         lines.append("| Password | Algorithm | Hash |")
         lines.append("|----------|-----------|------|")
@@ -624,9 +627,11 @@ def format_hash_report_csv(data: dict[str, object]) -> str:
         "match",
         "error",
     ])
-    results = data.get("results") or []
+    results_obj = data.get("results") or []
+    results: list[dict[str, object]] = list(results_obj) if isinstance(results_obj, (list, tuple)) else []
     algorithm = data.get("algorithm", "")
     for entry in results:
+        match_val = entry.get("match")
         writer.writerow([
             entry.get("password", ""),
             entry.get("hash") or entry.get("digest") or "",
@@ -635,7 +640,7 @@ def format_hash_report_csv(data: dict[str, object]) -> str:
             "true" if entry.get("pepper") else "false",
             entry.get("iterations") if entry.get("iterations") is not None else "",
             entry.get("computed") or "",
-            "true" if entry.get("match") is True else ("false" if entry.get("match") is False else ""),
+            "true" if match_val is True else ("false" if match_val is False else ""),
             entry.get("error") or "",
         ])
     return output.getvalue().rstrip("\r\n")
