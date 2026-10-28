@@ -1,16 +1,17 @@
 ## Status: COMPLETE
 
 ### What changed
-- Restored `.github/workflows/ci.yml` from commit `c99d0ff`. Committed at HEAD.
+- Fixed mypy typing errors in `ethscan/cli.py` (14 errors -> 0) via cast narrowing: `get_error_hint`/`type_cast_value` Context args, `run_tls` versions arg, and `error_report` dict value type annotation. Committed at HEAD.
 
 ### What was actually verified
-- `git show HEAD:.github/workflows/ci.yml` -> file present and tracked in HEAD.
-- `python -m ruff check ethscan/ tests/` -> All checks passed.
-- `python -m pytest tests/ -q` -> 5225 passed, 51 skipped.
-- `git status --short` -> clean working tree after commit.
+- `python -m mypy ethscan/cli.py` -> Success: no issues found in 1 source file.
+- `python -m mypy ethscan/` -> 52 errors -> 46 errors (cli.py clean).
+- `python -m pytest tests/test_cli.py -q` -> 1000 passed.
+- `python -m pytest tests/test_osdetect.py tests/test_tls.py -q` -> 136 passed.
+- `python -m ruff check ethscan/cli.py` -> clean (remaining 3 ruff errors in resolve.py/validate.py are pre-existing baseline, unrelated).
 
 ### What remains unresolved
-- None.
+- Remaining mypy errors in other modules (~46 across 21 files).
 
 ### One precise next task
-None — repository in verified passing state with `.github/workflows/ci.yml` restored and committed. Do NOT delete `.github/workflows/ci.yml`; it is the verified baseline.
+Fix mypy errors in next module with most errors; inspect `python -m mypy ethscan/` to pick.
