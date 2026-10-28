@@ -107,28 +107,6 @@ def url_port(parsed: SplitResult | ParseResult) -> int | None:
         return parsed.port
     except ValueError as exc:
         raise TargetSpecError(str(exc)) from exc
-    """Return the port of a parsed URL, or ``None`` when it carries no port.
-
-    ``urllib.parse`` raises a bare ``ValueError`` when the port is not an
-    integer ("Port could not be cast to integer value as 'x'") or is out of
-    range. The error is re-raised as a :class:`TargetSpecError` with the
-    original message intact, so the CLI can report it as a usage error while
-    modules that treat an unusable target as a failed probe keep the exact
-    wording they report today.
-
-    Args:
-        parsed: The result of ``urllib.parse.urlparse`` (or ``urlsplit``).
-
-    Returns:
-        The port number, or ``None`` when the URL has no port.
-
-    Raises:
-        TargetSpecError: If the port is not a valid port number.
-    """
-    try:
-        return parsed.port
-    except ValueError as exc:
-        raise TargetSpecError(str(exc)) from exc
 
 
 def check_port(port: int | str) -> int:

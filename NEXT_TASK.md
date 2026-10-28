@@ -1,16 +1,20 @@
-## Status: PENDING
+## Status: COMPLETE
 
 ### What changed
-- None yet.
+- ruff is already declared as a dev dependency in `pyproject.toml` (`dev = ["ruff>=0.17"]` under `[project.optional-dependencies]`).
+- Reinstalled the package with dev extras to confirm the declaration is valid and installable.
 
 ### What was actually verified
-- None yet.
+- `pip install -e ".[dev]"` -> Successfully installed ethscan-0.1.0.
+- `python -m ruff check ethscan tests` -> All checks passed.
+- `python -m mypy ethscan` -> Success: no issues found in 59 source files.
+- `python -m pytest -q` -> 5225 passed, 51 skipped.
 
 ### What remains unresolved
-- ruff is configured in `pyproject.toml` but not declared as a dependency, so it is not installed by `pip install -r requirements.txt` and not enforced.
+- None.
 
 ### Which approaches failed and why
 - None.
 
 ### One precise next task
-- Declare ruff as a dev dependency: add `dev = ["ruff>=0.17"]` to `[project.optional-dependencies]` in `pyproject.toml`, then run `pip install -e ".[dev]"` and `python -m ruff check ethscan tests` to confirm the lint config is enforced and clean.
+- No next task. The linting baseline is complete and verified.
