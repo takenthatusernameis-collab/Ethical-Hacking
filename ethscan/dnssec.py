@@ -397,7 +397,7 @@ def _query_dnskey_dnspython(
         request = dns.message.make_query(domain, dns.rdatatype.DNSKEY, want_dnssec=True)
         server_addr = resolver.nameservers[0]
         if hasattr(server_addr, "address"):
-            server_addr = getattr(server_addr, "address")
+            server_addr = server_addr.address
         if not isinstance(server_addr, str):
             server_addr = str(server_addr)
         response = dns.query.udp(request, server_addr, timeout=timeout)
@@ -437,7 +437,7 @@ def _query_ds_dnspython(
         request = dns.message.make_query(domain, dns.rdatatype.DS, want_dnssec=True)
         server_addr = resolver.nameservers[0]
         if hasattr(server_addr, "address"):
-            server_addr = getattr(server_addr, "address")
+            server_addr = server_addr.address
         if not isinstance(server_addr, str):
             server_addr = str(server_addr)
         response = dns.query.udp(request, server_addr, timeout=timeout)

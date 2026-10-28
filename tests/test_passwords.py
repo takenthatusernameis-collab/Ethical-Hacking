@@ -380,7 +380,7 @@ def test_evaluate_password_salt_pepper_different_algorithm() -> None:
 def test_audit_passwords_with_salt() -> None:
     results = audit_passwords(["password", "123456"], salt="mysalt", algorithm="sha256")
     assert len(results) == 2
-    for pwd, eval_data in results:
+    for _pwd, eval_data in results:
         assert eval_data["salt"] is True
         assert eval_data["pepper"] is False
         assert eval_data["length"] == 64
@@ -389,7 +389,7 @@ def test_audit_passwords_with_salt() -> None:
 def test_audit_passwords_with_pepper() -> None:
     results = audit_passwords(["password", "123456"], pepper="mysecret", algorithm="sha256")
     assert len(results) == 2
-    for pwd, eval_data in results:
+    for _pwd, eval_data in results:
         assert eval_data["salt"] is False
         assert eval_data["pepper"] is True
         assert eval_data["length"] == 64

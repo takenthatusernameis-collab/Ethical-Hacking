@@ -52,7 +52,7 @@ def test_normalize_cidr_strips_whitespace() -> None:
 def test_normalize_cidr_empty_raises() -> None:
     try:
         _normalize_cidr("")
-        assert False, "Expected ValueError"
+        raise AssertionError("Expected ValueError")
     except ValueError:
         pass
 
@@ -745,7 +745,7 @@ def test_cidr_subtract_triggers_extend_with_mock() -> None:
 def test_cidr_normalize_empty_raises() -> None:
     try:
         _normalize_cidr("   ")
-        assert False, "should raise"
+        raise AssertionError("should raise")
     except ValueError:
         pass
 

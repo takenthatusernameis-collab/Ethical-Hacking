@@ -78,7 +78,7 @@ def test_normalize_target():
     # Invalid
     try:
         _normalize_target("")
-        assert False, "Expected ValueError"
+        raise AssertionError("Expected ValueError")
     except ValueError:
         pass
 

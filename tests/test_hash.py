@@ -62,7 +62,7 @@ def test_normalize_algorithm_strips_whitespace() -> None:
 def test_normalize_algorithm_unsupported_raises() -> None:
     try:
         _normalize_algorithm("ripemd160")
-        assert False, "Expected ValueError"
+        raise AssertionError("Expected ValueError")
     except ValueError:
         pass
 
@@ -180,7 +180,7 @@ def test_compute_ntlm_uses_md4_of_utf16le() -> None:
     if not MD4_AVAILABLE:
         try:
             _compute_ntlm("password")
-            assert False, "Expected ValueError"
+            raise AssertionError("Expected ValueError")
         except ValueError:
             return
     import hashlib
@@ -195,7 +195,7 @@ def test_compute_md4_unavailable_when_no_openssl() -> None:
     else:
         try:
             _compute_md4("password")
-            assert False, "Expected ValueError"
+            raise AssertionError("Expected ValueError")
         except ValueError:
             pass
 
@@ -206,7 +206,7 @@ def test_compute_hash_ntlm_unavailable_when_md4_missing() -> None:
     else:
         try:
             _compute_hash("password", "ntlm")
-            assert False, "Expected ValueError"
+            raise AssertionError("Expected ValueError")
         except ValueError:
             pass
 
@@ -250,7 +250,7 @@ def test_run_hash_normalizes_algorithm() -> None:
 def test_run_hash_unsupported_algorithm_raises() -> None:
     try:
         run_hash(["password"], "ripemd160")
-        assert False, "Expected ValueError"
+        raise AssertionError("Expected ValueError")
     except ValueError:
         pass
 
@@ -529,7 +529,7 @@ def test_compute_peppered_hash_matches_inline() -> None:
 def test_compute_peppered_hash_unsupported_algorithm() -> None:
     try:
         _compute_peppered_hash("password", "ntlm", "pepper")
-        assert False, "Expected ValueError"
+        raise AssertionError("Expected ValueError")
     except ValueError:
         pass
 
@@ -561,7 +561,7 @@ def test_compute_password_hash_salt_and_pepper_combined() -> None:
 def test_compute_password_hash_pepper_unsupported_raises() -> None:
     try:
         _compute_password_hash("password", "ntlm", pepper="pepper")
-        assert False, "Expected ValueError"
+        raise AssertionError("Expected ValueError")
     except ValueError:
         pass
 
@@ -586,7 +586,7 @@ def test_compute_pbkdf2_hash_known_value() -> None:
 def test_compute_pbkdf2_hash_unsupported_algorithm() -> None:
     try:
         _compute_pbkdf2_hash("password", "ntlm", "saltvalue", 1000)
-        assert False, "Expected ValueError"
+        raise AssertionError("Expected ValueError")
     except ValueError:
         pass
 
@@ -594,12 +594,12 @@ def test_compute_pbkdf2_hash_unsupported_algorithm() -> None:
 def test_compute_pbkdf2_hash_non_positive_iterations() -> None:
     try:
         _compute_pbkdf2_hash("password", "sha256", "saltvalue", 0)
-        assert False, "Expected ValueError"
+        raise AssertionError("Expected ValueError")
     except ValueError:
         pass
     try:
         _compute_pbkdf2_hash("password", "sha256", "saltvalue", -5)
-        assert False, "Expected ValueError"
+        raise AssertionError("Expected ValueError")
     except ValueError:
         pass
 
@@ -621,7 +621,7 @@ def test_compute_password_hash_iterations() -> None:
 def test_compute_password_hash_iterations_requires_salt() -> None:
     try:
         _compute_password_hash("password", "sha256", iterations=1000)
-        assert False, "Expected ValueError"
+        raise AssertionError("Expected ValueError")
     except ValueError:
         pass
 
@@ -655,7 +655,7 @@ def test_compute_password_hash_iterations_ntlm_error() -> None:
         _compute_password_hash(
             "password", "ntlm", salt="saltvalue", iterations=1000
         )
-        assert False, "Expected ValueError"
+        raise AssertionError("Expected ValueError")
     except ValueError:
         pass
 

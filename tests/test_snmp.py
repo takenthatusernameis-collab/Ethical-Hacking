@@ -959,7 +959,7 @@ def test_parse_tlv_truncated_at_length_end() -> None:
     data = bytes([0x30, 0x82, 0x01])  # first is 0x82 -> needs 2 more length bytes, but only 1
     try:
         _parse_tlv(data, 0)
-        assert False, "should raise"
+        raise AssertionError("should raise")
     except ValueError:
         pass
 
@@ -1013,7 +1013,7 @@ def test_parse_snmp_message_varbind_not_sequence() -> None:
     # Easier to construct via malformed payload
     try:
         snmp._parse_snmp_message(b"bad")
-        assert False
+        raise AssertionError()
     except ValueError:
         pass
 
@@ -1023,7 +1023,7 @@ def test_parse_snmp_message_trailing_data() -> None:
     msg = snmp._build_get_request(0, "public", ["1.3.6.1.2.1.1.1.0"])
     try:
         snmp._parse_snmp_message(msg + b"extra")
-        assert False
+        raise AssertionError()
     except ValueError:
         pass
 
@@ -1034,7 +1034,7 @@ def test_parse_snmp_message_bad_version_tag() -> None:
     bad = b"\x30\x0d" + b"\x04\x06public" + snmp._encode_tlv(snmp.TAG_GET_REQUEST, b"")
     try:
         snmp._parse_snmp_message(bad)
-        assert False
+        raise AssertionError()
     except ValueError:
         pass
 
@@ -1044,7 +1044,7 @@ def test_parse_snmp_message_bad_community_tag() -> None:
     bad = b"\x30\x0d" + snmp._encode_integer(0) + b"\x02\x01\x01" + snmp._encode_tlv(snmp.TAG_GET_REQUEST, b"")
     try:
         snmp._parse_snmp_message(bad)
-        assert False
+        raise AssertionError()
     except ValueError:
         pass
 
@@ -1056,7 +1056,7 @@ def test_parse_snmp_message_trailing_after_pdu() -> None:
     msg = snmp._encode_tlv(snmp.TAG_SEQUENCE, inner)
     try:
         snmp._parse_snmp_message(msg)
-        assert False
+        raise AssertionError()
     except ValueError:
         pass
 
@@ -1069,7 +1069,7 @@ def test_parse_snmp_message_bad_request_id() -> None:
     msg = snmp._encode_tlv(snmp.TAG_SEQUENCE, inner)
     try:
         snmp._parse_snmp_message(msg)
-        assert False
+        raise AssertionError()
     except ValueError:
         pass
 
@@ -1082,7 +1082,7 @@ def test_parse_snmp_message_bad_error_status() -> None:
     msg = snmp._encode_tlv(snmp.TAG_SEQUENCE, inner)
     try:
         snmp._parse_snmp_message(msg)
-        assert False
+        raise AssertionError()
     except ValueError:
         pass
 
@@ -1095,7 +1095,7 @@ def test_parse_snmp_message_bad_error_index() -> None:
     msg = snmp._encode_tlv(snmp.TAG_SEQUENCE, inner)
     try:
         snmp._parse_snmp_message(msg)
-        assert False
+        raise AssertionError()
     except ValueError:
         pass
 
@@ -1108,7 +1108,7 @@ def test_parse_snmp_message_bad_varbindlist() -> None:
     msg = snmp._encode_tlv(snmp.TAG_SEQUENCE, inner)
     try:
         snmp._parse_snmp_message(msg)
-        assert False
+        raise AssertionError()
     except ValueError:
         pass
 
@@ -1122,7 +1122,7 @@ def test_parse_snmp_message_varbind_oid_wrong_tag() -> None:
     msg = snmp._encode_tlv(snmp.TAG_SEQUENCE, inner)
     try:
         snmp._parse_snmp_message(msg)
-        assert False
+        raise AssertionError()
     except ValueError:
         pass
 

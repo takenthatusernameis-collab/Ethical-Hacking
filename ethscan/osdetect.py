@@ -345,7 +345,7 @@ def _match_os_from_banner(banner: str) -> list[str]:
     """Match an OS signature against a service banner."""
     matches: list[str] = []
     for entry in OS_SIGNATURES:
-        for pattern, label in cast(list[tuple[re.Pattern[str], str]], entry["patterns"]):
+        for pattern, _label in cast(list[tuple[re.Pattern[str], str]], entry["patterns"]):
             if pattern.search(banner):
                 matches.append(cast(str, entry["name"]))
                 break

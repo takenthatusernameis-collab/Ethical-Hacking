@@ -43,4 +43,4 @@ ignore_missing_imports = true
 line-length = 88
 
 [tool.ruff.lint]
-select = ["F", "BLE001", "S110"]
+select = ["F", "BLE001", "S110", "B"]

@@ -17260,8 +17260,8 @@ def test_validate_output_format_default_is_json() -> None:
     # Should be valid JSON (default)
     try:
         json.loads(result.output)
-    except json.JSONDecodeError:
-        assert False, "Default output should be valid JSON"
+    except json.JSONDecodeError as e:
+        raise AssertionError("Default output should be valid JSON") from e
 def test_geo_help_shows_output_format():
     runner = CliRunner()
     result = runner.invoke(cli, ["geo", "--help"])
@@ -20115,8 +20115,8 @@ def test_redis_default_is_json(monkeypatch) -> None:
     assert result.exit_code == 0
     try:
         json.loads(result.output)
-    except json.JSONDecodeError:
-        assert False, "Default should be JSON"
+    except json.JSONDecodeError as e:
+        raise AssertionError("Default should be JSON") from e
 
 
 def test_redis_output_format_precedence(monkeypatch) -> None:
@@ -20254,8 +20254,8 @@ def test_smb_default_is_json(monkeypatch) -> None:
     assert result.exit_code == 0
     try:
         json.loads(result.output)
-    except json.JSONDecodeError:
-        assert False, "Default should be JSON"
+    except json.JSONDecodeError as e:
+        raise AssertionError("Default should be JSON") from e
 
 
 def test_smb_output_format_precedence(monkeypatch) -> None:
@@ -20447,8 +20447,8 @@ def test_ldap_default_is_json(monkeypatch) -> None:
     assert result.exit_code == 0
     try:
         json.loads(result.output)
-    except json.JSONDecodeError:
-        assert False, "Default should be JSON"
+    except json.JSONDecodeError as e:
+        raise AssertionError("Default should be JSON") from e
 
 
 def test_ldap_output_format_precedence(monkeypatch) -> None:

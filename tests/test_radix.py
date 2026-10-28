@@ -56,7 +56,7 @@ def test_normalize_cidr_strips_whitespace() -> None:
 def test_normalize_cidr_empty_raises() -> None:
     try:
         _normalize_cidr("")
-        assert False, "Expected ValueError"
+        raise AssertionError("Expected ValueError")
     except ValueError:
         pass
 
@@ -312,7 +312,7 @@ def test_run_radix_empty() -> None:
 def test_run_radix_invalid_cidr_raises() -> None:
     try:
         run_radix(["not-a-cidr"])
-        assert False, "Expected ValueError"
+        raise AssertionError("Expected ValueError")
     except ValueError:
         pass
 

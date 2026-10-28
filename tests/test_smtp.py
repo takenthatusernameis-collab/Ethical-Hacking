@@ -504,7 +504,7 @@ def test_read_response_timeout_with_no_lines_raises() -> None:
     except _socket.timeout:
         pass
     else:
-        assert False, "expected timeout"
+        raise AssertionError("expected timeout")
 
 
 def test_read_response_recv_returns_empty_breaks() -> None:
@@ -603,7 +603,7 @@ def test_send_command_closed_while_sending_raises() -> None:
     except OSError as e:
         assert "connection closed" in str(e)
     else:
-        assert False, "expected OSError"
+        raise AssertionError("expected OSError")
 
 
 def test_run_smtp_banner_read_timeout_raises_and_returns() -> None:
