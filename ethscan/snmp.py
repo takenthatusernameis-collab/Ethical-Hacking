@@ -20,7 +20,7 @@ import csv
 import io
 import json
 import socket
-from typing import Any
+from typing import Any, cast
 
 from ethscan.target import TargetSpecError, check_port, parse_url, url_port
 
@@ -453,7 +453,7 @@ def _probe_community(
             last_error = f"{version_label} request failed: {err}"
             continue
         try:
-            message = _parse_snmp_message(data)
+            message = _parse_snmp_message(cast(bytes, data))
         except ValueError as exc:
             last_error = f"{version_label} response parse failed: {exc}"
             continue
@@ -594,14 +594,14 @@ def format_snmp_report_markdown(data: dict[str, Any]) -> str:
         else:
             lines.append(f"- **{label}:** {_escape_markdown(value)}")
 
-    valid = data.get("valid_communities") or []
-    if valid:
+    communities = data.get("valid_communities") or []
+    if communities:
         lines.append("")
         lines.append("## Assessment")
         lines.append(
-            f"- **Valid communities:** {', '.join(_escape_markdown(c) if c else '(empty)' for c in valid)}"
+            f"- **Valid communities:** {', '.join(_escape_markdown(c) if c else '(empty)' for c in communities)}"
         )
-        default_valid = [c for c in valid if c in ("public", "private", "default", "")]
+        default_valid = [c for c in communities if c in ("public", "private", "default", "")]
         if default_valid:
             lines.append(
                 "- **Misconfiguration:** default community strings are accepted "

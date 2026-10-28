@@ -1,14 +1,14 @@
 ## Status: COMPLETE
 
 ### What changed
-- Fixed mypy typing errors in `ethscan/redis.py` (5 errors -> 0): `url_port` via cast to `SplitResult`, and `_parse_resp`/`_parse_info`/`_parse_config` calls via cast to `bytes`.
+- Fixed mypy typing errors in `ethscan/snmp.py` (2 errors -> 0): cast `_parse_snmp_message(data)` arg to bytes; renamed shadowed `valid` variable to `communities` to resolve type conflict.
 
 ### What was actually verified
-- `python -m mypy ethscan/redis.py` -> Success: no issues found.
-- `python -m pytest tests/test_redis.py -q` -> 106 passed.
+- `python -m mypy ethscan/snmp.py` -> Success: no issues found.
+- `python -m pytest tests/test_snmp.py -q` -> 114 passed.
 
 ### What remains unresolved
-- Remaining mypy errors in other modules (~41 across 20 files).
+- Remaining mypy errors in other modules (~17 across 8 files).
 
 ### One precise next task
-Fix mypy errors in `ethscan/dns.py` (5 errors); inspect `python -m mypy ethscan/dns.py`.
+Fix mypy errors in `ethscan/ntp.py` (3 errors); inspect `python -m mypy ethscan/ntp.py`.
