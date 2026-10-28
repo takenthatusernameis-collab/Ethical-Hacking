@@ -1,18 +1,16 @@
 ## Status: COMPLETE
 
 ### What changed
-- Added 3 tests to `tests/test_headers.py`. `ethscan/headers.py` now 100% coverage.
+- Added 2 hostile and 2 usable targets to `tests/test_target.py` covering the query-only (no slash) branch of `_path_of` (lines 217-222).
 
 ### What was actually verified
-- `python -m pytest tests/test_headers.py -q` -> 17 passed.
+- `pytest tests/test_target.py -q` -> 230 passed.
 - `ruff check ethscan/ tests/` -> All checks passed.
-- Full suite `pytest -q` -> 5275 passed, 48 skipped.
-- `ethscan/headers.py` coverage 100%.
+- Full suite `pytest -q` -> 5278 passed, 48 skipped.
+- `ethscan/target.py` coverage: 95% -> 100% (78 stmts, 0 miss).
 
 ### What remains unresolved
-- None. Next candidate: `ethscan/target.py` at 95% (4 miss).
+- None. Next candidate: `ethscan/stale.py` at 93% (184 stmts, 12 miss).
 
 ### One precise next task
-- Add tests to `tests/test_target.py` to raise `ethscan/target.py` coverage, identifying missing lines via coverage report, keeping ruff and full suite green.
-
-(End of file - total 15 lines)
+- Raise `ethscan/stale.py` coverage from 93% (184 stmts, 12 miss) by adding tests for its missing branches to `tests/test_stale.py`, keeping `ruff check ethscan/ tests/` and the full pytest suite green. Use `python -m coverage report --include="ethscan/stale.py" -m` to identify missing lines first.

@@ -572,6 +572,7 @@ HOSTILE_PATH_TARGETS = (
     "https://example.com/?q=a\tb",
     "http://example.com/a b",
     "example.com/a b",
+    "https://example.com?q=a b",
 )
 
 USABLE_PATH_TARGETS = (
@@ -581,6 +582,8 @@ USABLE_PATH_TARGETS = (
     "https://example.com/path?query=1",
     "https://example.com/path#frag",
     "https://example.com/path?query=1#frag",
+    "https://example.com?q=1",
+    "https://example.com?q=1#frag",
     "example.com",
     "https://example.com",
 )
