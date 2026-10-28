@@ -63,7 +63,7 @@ A modular, offline-first ethical hacking toolkit written in Python.
 
 ## Configuration
 
-ethscan reads an optional YAML config file that persists default options across commands. The file may live in the current working directory (`ethscan.yaml` / `ethscan.yml`) or in your home directory (`~/.ethscan.yaml` / `~/.ethscan.yml`).
+ethscan reads an optional YAML config file that persists default options across commands. The file may live in the current working directory (`ethscan.yaml` / `ethscan.yml`) or in your home directory (`~/.ethscan.yaml` / `~/.ethscan.yml`). XDG Base Directory locations are also supported: `$XDG_CONFIG_HOME/ethscan/ethscan.yaml` (or `$XDG_CONFIG_HOME/ethscan/ethscan.yml`, or `$XDG_CONFIG_HOME/ethscan.yaml`) and `~/.config/ethscan/ethscan.yaml` when `XDG_CONFIG_HOME` is not set.
 
 ```yaml
 # Global defaults applied to every command that does not override them.

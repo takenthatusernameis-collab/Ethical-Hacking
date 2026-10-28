@@ -2,7 +2,9 @@
 
 Loads an optional ``ethscan.yaml`` configuration file that persists default
 options across commands. The file may live in the current working directory
-(``ethscan.yaml``) or in the user's home directory (``~/.ethscan.yaml``).
+(``ethscan.yaml``), in the user's home directory (``~/.ethscan.yaml``),
+or in the XDG Base Directory (``$XDG_CONFIG_HOME/ethscan/`` or
+``~/.config/ethscan/``).
 
 The YAML schema is::
 
@@ -31,6 +33,7 @@ from __future__ import annotations
 
 import csv
 import io
+import os
 from pathlib import Path
 from typing import Any
 
@@ -51,6 +54,13 @@ CONFIG_CANDIDATES: list[str] = [
     ".ethscan.yml",
 ]
 
+XDG_CONFIG_CANDIDATES: list[str] = [
+    "ethscan/ethscan.yaml",
+    "ethscan/ethscan.yml",
+    "ethscan.yaml",
+    "ethscan.yml",
+]
+
 # Default config used when no file is found.
 DEFAULT_CONFIG: dict[str, Any] = {
     "defaults": {},
@@ -63,7 +73,9 @@ def _candidate_paths(explicit: str | None = None) -> list[Path]:
 
     When ``explicit`` is provided it is prepended to the standard candidates.
     The first two candidates are relative to the current working directory;
-    the last two are relative to the user's home directory (``Path.home()``).
+    the next two are relative to the user's home directory (``Path.home()``);
+    XDG Base Directory locations are also searched if ``XDG_CONFIG_HOME`` is
+    set or ``~/.config`` exists.
     """
     paths: list[Path] = []
     if explicit:
@@ -74,6 +86,14 @@ def _candidate_paths(explicit: str | None = None) -> list[Path]:
             paths.append(home / candidate)
         else:
             paths.append(Path(candidate))
+
+    xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
+    if xdg_config_home:
+        xdg_base = Path(xdg_config_home)
+    else:
+        xdg_base = home / ".config"
+    for candidate in XDG_CONFIG_CANDIDATES:
+        paths.append(xdg_base / candidate)
     return paths
 
 
