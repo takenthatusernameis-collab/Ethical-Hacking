@@ -96,9 +96,13 @@ def check_tcp_connect(ip: str, port: int = 80, timeout: float = DEFAULT_TIMEOUT)
     """Check if an IP is reachable via TCP connect."""
     sock = None
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        addr_family = socket.AF_INET6 if ":" in ip else socket.AF_INET
+        sock = socket.socket(addr_family, socket.SOCK_STREAM)
         sock.settimeout(timeout)
-        sock.connect((ip, port))
+        if addr_family == socket.AF_INET6:
+            sock.connect((ip, port, 0, 0))
+        else:
+            sock.connect((ip, port))
         return True
     except Exception:  # noqa: BLE001 - transport can raise any type
         return False
