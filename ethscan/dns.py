@@ -176,11 +176,8 @@ def run_dns(
 
     if workers <= 1:
         for rtype in valid_types:
-            try:
-                rtype_key, values = resolve_type(rtype)
-                results[rtype_key] = values
-            except Exception:  # noqa: BLE001  # noqa: BLE001 - resolver can raise any type
-                results[rtype.upper()] = []
+            rtype_key, values = resolve_type(rtype)
+            results[rtype_key] = values
     else:
         try:
             with ThreadPoolExecutor(max_workers=workers) as executor:

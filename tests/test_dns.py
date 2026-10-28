@@ -688,3 +688,41 @@ def test_format_dns_report_csv_non_list_values() -> None:
     }
     out = format_dns_report_csv(data)
     assert "single-value" in out
+
+
+class _RaisingFuture:
+    def result(self):
+        raise RuntimeError("boom")
+
+
+class _RaisingExecutor:
+    def __init__(self, *a, **k):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def submit(self, fn, *a, **k):
+        return _RaisingFuture()
+
+
+def test_run_dns_parallel_future_result_raises(monkeypatch) -> None:
+    monkeypatch.setattr("ethscan.dns.ThreadPoolExecutor", _RaisingExecutor)
+    results = run_dns("example.com", record_types=["A", "MX"], timeout=1.0, workers=2)
+    assert results["records"]["A"] == []
+    assert results["records"]["MX"] == []
+
+
+class _ExplodingExecutor:
+    def __init__(self, *a, **k):
+        raise RuntimeError("boom")
+
+
+def test_run_dns_parallel_executor_raises(monkeypatch) -> None:
+    monkeypatch.setattr("ethscan.dns.ThreadPoolExecutor", _ExplodingExecutor)
+    results = run_dns("example.com", record_types=["A", "MX"], timeout=1.0, workers=2)
+    assert results["records"]["A"] == []
+    assert results["records"]["MX"] == []
