@@ -230,14 +230,33 @@ class TestResolveDomainAll:
         assert result["stale"] is False
         assert result["stale_reasons"] == []
 
-    @patch("ethscan.stale.resolve_a_records", return_value=[])
+    @patch("ethscan.stale.resolve_a_records", return_value=["192.168.1.1"])
+    @patch("ethscan.stale.resolve_aaaa_records", side_effect=RuntimeError("boom"))
+    @patch("ethscan.stale.resolve_cname", return_value=None)
+    @patch("ethscan.stale.check_ip_reachable", return_value=True)
+    def test_aaaa_exception_branch(self, mock_check_ip, mock_cname, mock_aaaa, mock_a):
+        result = resolve_domain_all("example.com", 1.0)
+        assert result["AAAA"] == []
+        assert result["stale"] is False
+
+    @patch("ethscan.stale.resolve_a_records", return_value=["192.168.1.1"])
+    @patch("ethscan.stale.resolve_aaaa_records", return_value=[])
+    @patch("ethscan.stale.resolve_cname", side_effect=RuntimeError("boom"))
+    @patch("ethscan.stale.check_ip_reachable", return_value=True)
+    def test_cname_exception_branch(self, mock_check_ip, mock_cname, mock_aaaa, mock_a):
+        result = resolve_domain_all("example.com", 1.0)
+        assert result["CNAME"] is None
+        assert result["stale"] is False
+
+    @patch("ethscan.stale.resolve_a_records", side_effect=RuntimeError("dns fail"))
     @patch("ethscan.stale.resolve_aaaa_records", return_value=[])
     @patch("ethscan.stale.resolve_cname", return_value=None)
     @patch("ethscan.stale.check_ip_reachable", return_value=False)
-    def test_no_records_stale(self, mock_check_ip, mock_cname, mock_aaaa, mock_a):
+    def test_a_records_exception_stale(self, mock_check_ip, mock_cname, mock_aaaa, mock_a):
         result = resolve_domain_all("example.com", 1.0)
+        assert result["A"] == []
         assert result["stale"] is True
-        assert "No DNS records resolved" in result["stale_reasons"][0]
+        assert "DNS resolution failed" in result["stale_reasons"][0]
 
     @patch("ethscan.stale.resolve_a_records", return_value=["192.168.1.1"])
     @patch("ethscan.stale.resolve_aaaa_records", return_value=[])
@@ -284,6 +303,18 @@ class TestRunStale:
         assert results["total_checked"] == 1
         assert mock_resolve.call_count == 1
 
+    @patch("ethscan.stale.resolve_domain_all")
+    def test_future_exception_in_thread_pool(self, mock_resolve):
+        def raise_exc(domain, timeout):
+            raise RuntimeError("thread boom")
+
+        mock_resolve.side_effect = raise_exc
+
+        results = run_stale(["a.com"], timeout=1.0, max_workers=1)
+        assert results["total_checked"] == 1
+        assert results["results"][0]["stale"] is True
+        assert "thread boom" in results["results"][0]["stale_reasons"][0]
+
 
 class TestFormatters:
     def test_json_format(self):
@@ -322,6 +353,30 @@ class TestFormatters:
         output = format_stale_report_markdown(data)
         assert "**Stale Records:** 0" in output
         assert "**Fresh Records:** 1" in output
+
+    def test_markdown_with_stale_and_all_empty_nonlist(self):
+        data = {
+            "total_checked": 0,
+            "stale_count": 0,
+            "fresh_count": 0,
+            "stale_results": None,
+            "results": None,
+        }
+        output = format_stale_report_markdown(data)
+        assert "Stale DNS Record Detection Report" in output
+
+    def test_markdown_with_non_dict_entries(self):
+        data = {
+            "total_checked": 1,
+            "stale_count": 1,
+            "fresh_count": 0,
+            "stale_results": ["not-a-dict"],
+            "results": ["not-a-dict"],
+        }
+        output = format_stale_report_markdown(data)
+        # Headers are added when list is non-empty even if entries are skipped
+        assert "Stale Records" in output
+        assert "All Results" in output
 
 
 class TestCSVFormatter:
@@ -390,6 +445,16 @@ class TestCSVFormatter:
         assert "1.1.1|1" in lines[1]
         assert "cname|example.com" in lines[1]
         assert "reason|1; reason|2" in lines[1]
+
+    def test_csv_format_non_list_results(self):
+        data = {"results": None}
+        output = format_stale_report_csv(data)
+        assert output == "domain,A_records,AAAA_records,CNAME,stale,stale_reasons"
+
+    def test_csv_format_with_non_dict_entries(self):
+        data = {"results": ["not-a-dict"]}
+        output = format_stale_report_csv(data)
+        assert output == "domain,A_records,AAAA_records,CNAME,stale,stale_reasons"
 
 
 def test_stale_transport_failure_is_reported_not_raised(monkeypatch) -> None:

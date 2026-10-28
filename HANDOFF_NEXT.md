@@ -1,16 +1,15 @@
 ## Status: COMPLETE
 
 ### What changed
-- Added 2 hostile and 2 usable targets to `tests/test_target.py` covering the query-only (no slash) branch of `_path_of` (lines 217-222).
+- Added tests to `tests/test_stale.py` covering AAAA/CNAME exceptions in `resolve_domain_all`, A-record exception path, thread-pool exception handling in `run_stale`, and defensive branches in Markdown/CSV formatters (non-dict entries, None lists).
 
 ### What was actually verified
-- `pytest tests/test_target.py -q` -> 230 passed.
+- `python -m pytest tests/test_stale.py --cov=ethscan.stale --cov-report=term-missing` -> 47 passed, `ethscan/stale.py` 100% coverage (184 stmts, 0 miss).
 - `ruff check ethscan/ tests/` -> All checks passed.
-- Full suite `pytest -q` -> 5278 passed, 48 skipped.
-- `ethscan/target.py` coverage: 95% -> 100% (78 stmts, 0 miss).
+- Full suite `pytest -q` -> 5325 passed, 48 skipped.
 
 ### What remains unresolved
-- None. Next candidate: `ethscan/stale.py` at 93% (184 stmts, 12 miss).
+- None obvious. Check coverage of remaining modules if desired (e.g. other modules below 100%).
 
 ### One precise next task
-- Raise `ethscan/stale.py` coverage from 93% (184 stmts, 12 miss) by adding tests for its missing branches to `tests/test_stale.py`, keeping `ruff check ethscan/ tests/` and the full pytest suite green. Use `python -m coverage report --include="ethscan/stale.py" -m` to identify missing lines first.
+- Review modules with low coverage via `python -m coverage report -m` and add targeted tests for one module (smallest area of missing coverage first) while keeping `ruff check ethscan/ tests/` and the full pytest suite green.
