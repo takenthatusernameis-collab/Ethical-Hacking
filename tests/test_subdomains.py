@@ -787,3 +787,171 @@ def test_subdomains_transport_failure_is_reported_not_raised(monkeypatch) -> Non
     assert isinstance(results, dict)
     assert results["resolved"] == []
     assert all(entry["ip"] is None for entry in results["all_results"])
+
+
+# ---------------------------------------------------------------------------
+# _enumerate_depth exception branches (lines 180-192)
+# ---------------------------------------------------------------------------
+
+
+def test_enumerate_depth_inner_future_failure_falls_back_to_label(monkeypatch) -> None:
+    """When a future's result raises, the inner except records the label with no IP (lines 180-186)."""
+    import ethscan.subdomains
+
+    def raising_resolve(subdomain, domain, timeout=2.0, resolver=None):
+        raise RuntimeError("worker exploded")
+
+    monkeypatch.setattr("ethscan.subdomains.resolve_subdomain", raising_resolve)
+
+    results = ethscan.subdomains.run_subdomains("example.com", subdomains=["www", "mail"])
+
+    assert results["resolved"] == []
+    hostnames = {entry["hostname"] for entry in results["all_results"]}
+    assert hostnames == {"www.example.com", "mail.example.com"}
+    assert all(entry["ip"] is None for entry in results["all_results"])
+
+
+class _FailingExecutor:
+    """A ThreadPoolExecutor stand-in whose submit always raises."""
+
+    def __init__(self, max_workers=None, thread_name_prefix=""):
+        self.max_workers = max_workers
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def submit(self, fn, *args, **kwargs):
+        raise RuntimeError("executor broken")
+
+
+def test_enumerate_depth_outer_executor_failure_falls_back_to_labels(monkeypatch) -> None:
+    """When the executor itself fails, the outer except records every label with no IP (lines 187-192)."""
+    import ethscan.subdomains
+
+    monkeypatch.setattr("ethscan.subdomains.ThreadPoolExecutor", _FailingExecutor)
+
+    results = ethscan.subdomains.run_subdomains("example.com", subdomains=["www", "mail"])
+
+    assert results["resolved"] == []
+    assert results["subdomains_tested"] == 2
+    hostnames = {entry["hostname"] for entry in results["all_results"]}
+    assert hostnames == {"www.example.com", "mail.example.com"}
+    assert all(entry["ip"] is None for entry in results["all_results"])
+
+
+# ---------------------------------------------------------------------------
+# Formatter non-dict entry branches (lines 307, 318, 329, 342, 360)
+# ---------------------------------------------------------------------------
+
+
+def test_format_subdomains_report_markdown_resolved_non_dict_entries() -> None:
+    """Non-dict entries in the resolved list are skipped (line 307)."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "subdomains_tested": 1,
+        "resolved_count": 1,
+        "resolved": [
+            "not-a-dict",
+            {"subdomain": "www", "hostname": "www.example.com", "ip": "1.2.3.4"},
+            42,
+        ],
+        "all_results": [],
+    }
+    output = format_subdomains_report_markdown(data)
+    assert "www.example.com" in output
+    assert "not-a-dict" not in output
+
+
+def test_format_subdomains_report_markdown_all_results_non_dict_entries() -> None:
+    """Non-dict entries in all_results are skipped (line 318)."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "subdomains_tested": 1,
+        "resolved_count": 0,
+        "resolved": [],
+        "all_results": [
+            None,
+            {"subdomain": "www", "hostname": "www.example.com", "ip": None},
+        ],
+    }
+    output = format_subdomains_report_markdown(data)
+    assert "www.example.com" in output
+    assert "None" not in output.split("## All Results", 1)[1]
+
+
+def test_format_subdomains_report_markdown_per_depth_non_dict_entries() -> None:
+    """Non-dict per_depth entries are skipped (line 329)."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "subdomains_tested": 2,
+        "resolved_count": 1,
+        "resolved": [],
+        "all_results": [],
+        "per_depth": [
+            "not-a-dict",
+            {
+                "depth": 1,
+                "subdomains_tested": 2,
+                "resolved_count": 1,
+                "results": [
+                    {"subdomain": "dev", "hostname": "dev.www.example.com", "ip": "1.2.3.5"},
+                ],
+            },
+        ],
+        "recursive": True,
+        "max_depth": 2,
+    }
+    output = format_subdomains_report_markdown(data)
+    assert "### Depth 1" in output
+    assert "dev.www.example.com" in output
+    assert "not-a-dict" not in output
+
+
+def test_format_subdomains_report_markdown_recursive_results_non_dict_entries() -> None:
+    """Non-dict entries in a depth's results are skipped (line 342)."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "subdomains_tested": 2,
+        "resolved_count": 1,
+        "resolved": [],
+        "all_results": [],
+        "per_depth": [
+            {
+                "depth": 1,
+                "subdomains_tested": 2,
+                "resolved_count": 1,
+                "results": [
+                    [],
+                    {"subdomain": "dev", "hostname": "dev.www.example.com", "ip": "1.2.3.5"},
+                ],
+            },
+        ],
+        "recursive": True,
+        "max_depth": 2,
+    }
+    output = format_subdomains_report_markdown(data)
+    assert "dev.www.example.com" in output
+
+
+def test_format_subdomains_report_csv_all_results_non_dict_entries() -> None:
+    """Non-dict entries in all_results are skipped by the CSV formatter (line 360)."""
+    data = {
+        "all_results": [
+            "not-a-dict",
+            123,
+            {"subdomain": "www", "hostname": "www.example.com", "ip": "1.2.3.4"},
+        ]
+    }
+    output = format_subdomains_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "subdomain,hostname,ip,resolved"
+    assert "www,www.example.com,1.2.3.4,true" in lines
+    assert not any("not-a-dict" in line for line in lines)
+    assert not any(",123," in line for line in lines)
