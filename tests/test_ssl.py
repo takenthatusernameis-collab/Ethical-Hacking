@@ -1,6 +1,8 @@
 """Tests for the ethscan ssl module."""
 
 
+import ssl
+
 from ethscan.ssl import (
     _normalize_host,
     _parse_cert,
@@ -623,3 +625,75 @@ def test_wrap_socket():
         sslmod._wrap_socket(DummyCtx(), 'example.com', 443, 5)
     finally:
         socket.create_connection = orig
+
+
+def test_inspect_certificate_retry_ssl_error(monkeypatch) -> None:
+    calls = {"n": 0}
+
+    def fake_wrap(context, host, port, timeout):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise ssl.SSLError("first")
+        raise ssl.SSLError("second")
+
+    monkeypatch.setattr("ethscan.ssl._wrap_socket", fake_wrap)
+    result = inspect_certificate("example.com")
+    assert result["error"] == "('second',)"
+    assert result["cert"] is None
+
+
+def test_inspect_certificate_retry_oserror(monkeypatch) -> None:
+    calls = {"n": 0}
+
+    def fake_wrap(context, host, port, timeout):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise ssl.SSLError("first")
+        raise OSError("osboom")
+
+    monkeypatch.setattr("ethscan.ssl._wrap_socket", fake_wrap)
+    result = inspect_certificate("example.com")
+    assert result["error"] == "osboom"
+
+
+def test_inspect_certificate_retry_generic_exception(monkeypatch) -> None:
+    calls = {"n": 0}
+
+    def fake_wrap(context, host, port, timeout):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise ssl.SSLError("first")
+        raise KeyError("boom")
+
+    monkeypatch.setattr("ethscan.ssl._wrap_socket", fake_wrap)
+    result = inspect_certificate("example.com")
+    assert result["error"] == "'boom'"
+
+
+def test_decode_cert_fallback_private_api(monkeypatch, tmp_path) -> None:
+    import ssl as _ssl
+
+    class FakeSock:
+        def getpeercert(self, binary=False):
+            if binary:
+                return b"certbytes"
+            return {"subject": ()}
+
+    # Force first branch unavailable
+    monkeypatch.setattr(_ssl, "_ssl", None, raising=False)
+    # ensure _ssl module lacks _test_decode_cert
+    if hasattr(_ssl, "_ssl") and _ssl._ssl is not None:
+        monkeypatch.delattr(_ssl._ssl, "_test_decode_cert", raising=False)
+
+    # Make DER_cert_to_PEM_cert work
+    monkeypatch.setattr(_ssl, "DER_cert_to_PEM_cert", lambda b: "PEM", raising=False)
+
+    # Make _test_decode_cert raise via missing attribute by ensuring getattr None path
+    # Ensure ssl._ssl exists but no _test_decode_cert
+    fake_mod = type("m", (), {})()
+    monkeypatch.setattr(_ssl, "_ssl", fake_mod, raising=False)
+
+    sock = FakeSock()
+    from ethscan import ssl as sslmod
+    out = sslmod._decode_cert(sock)
+    assert isinstance(out, dict)
