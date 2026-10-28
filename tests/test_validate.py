@@ -559,3 +559,127 @@ def test_format_validate_report_markdown_truncation_direct_construct() -> None:
     }
     out = format_validate_report_markdown(data)
     assert "..." in out
+
+
+# ---------------------------------------------------------------------------
+# Defensive / non-ideal input branches (coverage)
+# ---------------------------------------------------------------------------
+
+
+def test_ports_to_ranges_non_numeric_values() -> None:
+    # Lines 278-279: TypeError/ValueError branch returns ""
+    assert _ports_to_ranges(["abc"]) == ""
+    assert _ports_to_ranges([None, 1]) == ""
+
+
+def test_run_validate_ports_with_non_numeric_entries(monkeypatch) -> None:
+    # Lines 242-243: the per-port all_ports update swallows ValueError/TypeError.
+    # _validate_port_spec normally returns ints, so force a non-int result to hit the
+    # defensive except branch and confirm run_validate does not raise.
+    import ethscan.validate as v
+
+    def fake(spec: str) -> dict[str, object]:
+        return {"spec": spec, "valid": True, "ports": ["abc", None], "count": 0, "error": None}
+
+    monkeypatch.setattr(v, "_validate_port_spec", fake)
+    result = v.run_validate(ports="x")
+    assert result["summary"]["ports_total"] == 0
+    assert result["summary"]["ports_specified"] == 1
+
+
+def test_format_validate_report_csv_port_non_dict_entries_skipped() -> None:
+    # Line 309: non-dict port entries are skipped via continue
+    data = {
+        "ports": ["not-a-dict", {"spec": "80", "valid": True, "ports": [80], "count": 1, "error": None}],
+        "cidrs": [],
+        "summary": {"ports_specified": 1, "ports_valid": 1, "ports_total": 1, "cidrs_specified": 0, "cidrs_valid": 0, "all_valid": True},
+        "notes": [],
+    }
+    output = format_validate_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "type,spec,valid,detail"
+    assert len(lines) == 2  # only the dict entry produced a row
+    assert "80" in lines[1]
+
+
+def test_format_validate_report_csv_cidr_non_dict_entries_skipped() -> None:
+    # Line 326: non-dict cidr entries are skipped via continue
+    data = {
+        "ports": [],
+        "cidrs": ["nope", {"spec": "192.168.1.0/24", "valid": True, "canonical": "192.168.1.0/24", "network": {"canonical": "192.168.1.0/24", "network_address": "192.168.1.0", "broadcast_address": "192.168.1.255", "first_host": "192.168.1.1", "last_host": "192.168.1.254", "total_addresses": 256}, "error": None}],
+        "summary": {"ports_specified": 0, "ports_valid": 0, "ports_total": 0, "cidrs_specified": 1, "cidrs_valid": 1, "all_valid": True},
+        "notes": [],
+    }
+    output = format_validate_report_csv(data)
+    lines = output.splitlines()
+    assert len(lines) == 2
+    assert "cidr" in lines[1]
+
+
+def test_format_validate_report_csv_cidr_valid_network_not_dict() -> None:
+    # Line 335: valid cidr whose network is a truthy non-dict falls to canonical from result
+    data = {
+        "ports": [],
+        "cidrs": [{"spec": "192.168.1.0/24", "valid": True, "canonical": "192.168.1.0/24", "network": "raw-string-net", "error": None}],
+        "summary": {"ports_specified": 0, "ports_valid": 0, "ports_total": 0, "cidrs_specified": 1, "cidrs_valid": 1, "all_valid": True},
+        "notes": [],
+    }
+    output = format_validate_report_csv(data)
+    lines = output.splitlines()
+    assert len(lines) == 2
+    assert "192.168.1.0/24" in lines[1]
+    assert "true" in lines[1]
+
+
+def test_format_validate_report_markdown_summary_not_dict() -> None:
+    # Lines 358-359: summary is not a dict -> fallback empty Summary section
+    data = {
+        "ports": [],
+        "cidrs": [],
+        "summary": ["not", "a", "dict"],
+        "notes": [],
+    }
+    output = format_validate_report_markdown(data)
+    assert "## Summary" in output
+    assert "Port Specs Provided" not in output
+
+
+def test_format_validate_report_markdown_port_non_dict_entries_skipped() -> None:
+    # Line 368: non-dict port entries are skipped in markdown
+    data = {
+        "ports": ["nope", {"spec": "80", "valid": True, "ports": [80], "count": 1, "error": None}],
+        "cidrs": [],
+        "summary": {"ports_specified": 1, "ports_valid": 1, "ports_total": 1, "cidrs_specified": 0, "cidrs_valid": 0, "all_valid": True},
+        "notes": [],
+    }
+    output = format_validate_report_markdown(data)
+    assert "## Port Specifications" in output
+    assert "80" in output
+    assert "nope" not in output
+
+
+def test_format_validate_report_markdown_cidr_non_dict_entries_skipped() -> None:
+    # Line 396: non-dict cidr entries are skipped in markdown
+    data = {
+        "ports": [],
+        "cidrs": ["nope", {"spec": "192.168.1.0/24", "valid": True, "canonical": "192.168.1.0/24", "network": {"canonical": "192.168.1.0/24", "network_address": "192.168.1.0", "broadcast_address": "192.168.1.255", "first_host": "192.168.1.1", "last_host": "192.168.1.254", "total_addresses": 256}, "error": None}],
+        "summary": {"ports_specified": 0, "ports_valid": 0, "ports_total": 0, "cidrs_specified": 1, "cidrs_valid": 1, "all_valid": True},
+        "notes": [],
+    }
+    output = format_validate_report_markdown(data)
+    assert "## CIDR / Network Specifications" in output
+    assert "192.168.1.0/24" in output
+    assert "nope" not in output
+
+
+def test_format_validate_report_markdown_cidr_valid_network_not_dict() -> None:
+    # Lines 410-414: valid cidr whose network is a truthy non-dict uses fallback fields
+    data = {
+        "ports": [],
+        "cidrs": [{"spec": "192.168.1.0/24", "valid": True, "canonical": "192.168.1.0/24", "network": "raw-string-net", "error": None}],
+        "summary": {"ports_specified": 0, "ports_valid": 0, "ports_total": 0, "cidrs_specified": 1, "cidrs_valid": 1, "all_valid": True},
+        "notes": [],
+    }
+    output = format_validate_report_markdown(data)
+    assert "192.168.1.0/24" in output
+    assert "N/A" in output
