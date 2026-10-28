@@ -16,3 +16,5 @@
 - None.
 
 (End of file - total 16 lines)
+
+Verified: 2026-10-28 (ruff/mypy/pytest all passing).
