@@ -3614,7 +3614,7 @@ def config(
             write_text(init_path, sample)
         except OSError as exc:
             click.echo(f"Error writing config: {exc}", err=True)
-            raise SystemExit(1)
+            raise SystemExit(1) from None
         click.echo(f"Sample config written to {init_path}")
         return
 
@@ -3722,7 +3722,7 @@ def config(
             write_text(out_path, output)
         except (OSError, ValueError) as exc:
             click.echo(f"Error writing output: {exc}", err=True)
-            raise SystemExit(1)
+            raise SystemExit(1) from None
         click.echo(f"Report written to {out_path}")
     else:
         click.echo(output)
@@ -3846,7 +3846,7 @@ def completion(
         results = run_completion(cli, shell=effective_shell, prog_name=prog_name)
     except ValueError as exc:
         click.echo(str(exc), err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
     # --output-format takes precedence over the deprecated --format alias
     chosen_format = output_fmt if output_fmt is not None else fmt

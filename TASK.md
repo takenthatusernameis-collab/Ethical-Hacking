@@ -1,23 +1,23 @@
 ## Status: COMPLETE
 
 ### What changed
-- Added a `[tool.ruff]` lint configuration to `pyproject.toml` (`line-length = 88`, rules `F`, `BLE001`, `S110`) — the project previously had no linter configured.
-- Fixed 5 lint errors surfaced by ruff:
-  - `ethscan/resolve.py:8`: removed unused `from typing import Any` (F401).
-  - `ethscan/ssl.py:151-152`: removed dead `pem_data = f.read()` block (F841).
-  - `ethscan/ssl.py:155`: annotated the intentional defensive `except Exception` with `# noqa: BLE001` (private C API fallback).
-  - `ethscan/validate.py:242`: narrowed `except Exception` to `except (ValueError, TypeError)` (BLE001/S110).
+- Fixed 5 ruff `B904` errors (raise inside `except` without `from err` / `from None`):
+  - `ethscan/cli.py:3617`: `raise SystemExit(1)` -> `raise SystemExit(1) from None` (OSError handler)
+  - `ethscan/cli.py:3725`: `raise SystemExit(1)` -> `raise SystemExit(1) from None` ((OSError, ValueError) handler)
+  - `ethscan/cli.py:3849`: `raise SystemExit(1)` -> `raise SystemExit(1) from None` (ValueError handler)
+  - `ethscan/scanner.py:107-110`: bound `except ValueError as err` and chained `raise PortSpecError(...) from err`
+  - `ethscan/scanner.py:123-124`: bound `except ValueError as err` and chained `raise PortSpecError(...) from err`
 
 ### What was actually verified
-- `python -m ruff check ethscan tests` -> All checks passed.
+- `python -m ruff check ethscan tests` -> All checks passed (exit 0). Previously failed with 5 B904 errors.
 - `python -m mypy ethscan` -> Success: no issues found in 59 source files.
-- `python -m pytest -q` -> 5225 passed, 51 skipped.
+- `python -m pytest -q` -> 5228 passed, 48 skipped (exit 0).
 
 ### What remains unresolved
-- ruff is configured but not declared as a project/dev dependency, so it is not installed by `pip install -r requirements.txt` and not enforced anywhere yet.
+- No project CI workflow enforces ruff/mypy/pytest on push or pull requests (only the Kilo controller workflow exists in `.github/workflows/main.yml`).
 
 ### Which approaches failed and why
 - None.
 
 ### One precise next task
-- Declare ruff as a dev dependency (add `dev = ["ruff>=0.17"]` to `[project.optional-dependencies]` in `pyproject.toml`) and verify `python -m ruff check ethscan tests` still passes after install.
+- Add a GitHub Actions CI workflow (`.github/workflows/ci.yml`) that runs `python -m ruff check ethscan tests`, `python -m mypy ethscan`, and `python -m pytest -q` on `push` and `pull_request` to `main`. Constraints: `ubuntu-latest`, install deps from `requirements.txt` plus dev tools, keep it small and reversible, do not modify `.github/workflows/main.yml` (Kilo controller). Verify with `python -m ruff check ethscan tests`, `python -m mypy ethscan`, `python -m pytest -q` locally before completing.

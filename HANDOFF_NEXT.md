@@ -1,7 +1,7 @@
 ## Status: COMPLETE
 
 ### What changed
-- No code changes in this session (repository already in clean, passing state).
+- Fixed 5 ruff `B904` errors in `ethscan/cli.py` (3) and `ethscan/scanner.py` (2) by chaining re-raised exceptions with `from err` / `from None` inside `except` clauses.
 
 ### What was actually verified
 - `python -m ruff check ethscan tests` -> All checks passed.
@@ -9,10 +9,10 @@
 - `python -m pytest -q` -> 5228 passed, 48 skipped.
 
 ### What remains unresolved
-- None.
+- No project CI workflow enforces ruff/mypy/pytest on push or pull requests.
 
 ### Which approaches failed and why
 - None.
 
 ### One precise next task
-- No next task. All lint, typecheck, and tests pass. If new requirements arrive, inspect and address them with smallest verifiable changes.
+- Add a GitHub Actions CI workflow (`.github/workflows/ci.yml`) that runs ruff, mypy, and pytest on push/pull_request to `main`. Do not modify `.github/workflows/main.yml`. Verify locally before completing.

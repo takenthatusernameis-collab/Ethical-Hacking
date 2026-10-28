@@ -104,10 +104,10 @@ def parse_port_range(port_spec: str) -> list[int]:
             try:
                 start = int(start_str)
                 end = int(end_str)
-            except ValueError:
+            except ValueError as err:
                 raise PortSpecError(
                     f"Invalid port number in range {part!r}"
-                )
+                ) from err
             if start > end:
                 raise PortSpecError(
                     f"Invalid range {part!r}: start ({start}) > end ({end})"
@@ -120,8 +120,8 @@ def parse_port_range(port_spec: str) -> list[int]:
         else:
             try:
                 port = int(part)
-            except ValueError:
-                raise PortSpecError(f"Invalid port number {part!r}")
+            except ValueError as err:
+                raise PortSpecError(f"Invalid port number {part!r}") from err
             if not (0 <= port <= MAX_PORT):
                 raise PortSpecError(f"Port {port} out of range (0-{MAX_PORT})")
             ports_set.add(port)
