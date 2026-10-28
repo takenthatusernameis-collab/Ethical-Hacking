@@ -1,7 +1,7 @@
 ## Status: COMPLETE
 
 ### What changed
-- No code changes in this session (repo already in clean passing state from prior handoffs).
+- No code changes in this session (repository already in clean, passing state).
 
 ### What was actually verified
 - `python -m ruff check ethscan tests` -> All checks passed.
@@ -15,4 +15,4 @@
 - None.
 
 ### One precise next task
-- No next task. All lint, typecheck, and tests pass with dev dependencies configured.
+- No next task. All lint, typecheck, and tests pass. If new requirements arrive, inspect and address them with smallest verifiable changes.
