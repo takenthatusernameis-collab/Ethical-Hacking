@@ -1,14 +1,14 @@
 ## Status: COMPLETE
 
 ### What changed
-- Fixed mypy typing errors in `ethscan/snmp.py` (2 errors -> 0): cast `_parse_snmp_message(data)` arg to bytes; renamed shadowed `valid` variable to `communities` to resolve type conflict.
+- Fixed mypy typing errors in `ethscan/ntp.py` (3 errors -> 0): cast `_send_recv` result to bytes for `_parse_time_response`, `_parse_monlist_response`, and `len(mon_data)`.
 
 ### What was actually verified
-- `python -m mypy ethscan/snmp.py` -> Success: no issues found.
-- `python -m pytest tests/test_snmp.py -q` -> 114 passed.
+- `python -m mypy ethscan/ntp.py` -> Success: no issues found.
+- `python -m pytest tests/test_ntp.py -q` -> 47 passed.
 
 ### What remains unresolved
-- Remaining mypy errors in other modules (~17 across 8 files).
+- Remaining mypy errors in other modules (~14 across 7 files).
 
 ### One precise next task
-Fix mypy errors in `ethscan/ntp.py` (3 errors); inspect `python -m mypy ethscan/ntp.py`.
+Fix mypy errors in `ethscan/netbios.py` (1 error); inspect `python -m mypy ethscan/netbios.py`.

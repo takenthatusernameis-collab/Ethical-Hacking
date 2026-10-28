@@ -17,7 +17,7 @@ import io
 import json
 import socket
 import struct
-from typing import Any
+from typing import Any, cast
 
 from ethscan.target import TargetSpecError, check_port, parse_url, url_port
 
@@ -297,7 +297,7 @@ def run_ntp(
             results["error"] = f"time request failed: {time_err}"
             return results
 
-        time_resp = _parse_time_response(time_data)
+        time_resp = _parse_time_response(cast(bytes, time_data))
         results["time_response"] = time_resp
 
         if "error" in time_resp:
@@ -310,13 +310,13 @@ def run_ntp(
             if mon_err:
                 results["monlist_response"] = {"error": f"monlist request failed: {mon_err}"}
             else:
-                mon_resp = _parse_monlist_response(mon_data)
+                mon_resp = _parse_monlist_response(cast(bytes, mon_data))
                 results["monlist_response"] = mon_resp
 
                 if mon_resp.get("peer_count", 0) > 0:
                     results["is_reflector"] = True
                     req_len = len(monlist_req)
-                    resp_len = len(mon_data)
+                    resp_len = len(cast(bytes, mon_data))
                     if req_len > 0:
                         results["amplification_factor"] = round(resp_len / req_len, 2)
     # A hostile server must never crash the command: whatever it sends is
