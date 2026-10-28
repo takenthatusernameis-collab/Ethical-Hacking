@@ -667,6 +667,18 @@ def test_run_dns_server_without_dnspython_returns_empty(monkeypatch) -> None:
     assert data["records"]["MX"] == []
 
 
+def test_run_dns_resolver_unexpected_exception_is_swallowed(monkeypatch) -> None:
+    """run_dns swallows an unexpected exception raised inside resolve_type (lines 172-173)."""
+
+    def raising_resolve_a(domain, timeout=2.0):
+        raise RuntimeError("unexpected resolver failure")
+
+    monkeypatch.setattr("ethscan.dns.resolve_a_records", raising_resolve_a)
+
+    results = run_dns("example.com", record_types=["A"], timeout=1.0, workers=1)
+    assert results["records"]["A"] == []
+
+
 def test_format_dns_report_markdown_records_not_dict() -> None:
     data = {
         "target": "example.com",

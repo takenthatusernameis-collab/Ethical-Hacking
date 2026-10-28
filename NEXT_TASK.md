@@ -11,7 +11,7 @@
 - `ethscan/target.py` coverage: 95% -> 100% (78 stmts, 0 miss).
 
 ### What remains unresolved
-- None. Next candidate: `ethscan/stale.py` at 93% (184 stmts, 12 miss).
+- None. `ethscan/stale.py` reached 100% in a prior session; `ethscan/dns.py` reached 100% in this session.
 
 ### One precise next task
-- Raise `ethscan/stale.py` coverage from 93% (184 stmts, 12 miss) by adding tests for its missing branches to `tests/test_stale.py`, keeping `ruff check ethscan/ tests/` and the full pytest suite green. Use `python -m coverage report --include="ethscan/stale.py" -m` to identify missing lines first.
+- Raise `ethscan/radix.py` coverage from 94% (340 stmts, 19 miss: lines 181-182, 200-202, 206-209, 267-268, 296, 444, 448, 473, 488, 521, 558, 561, 575) by adding tests to `tests/test_radix.py`, keeping `ruff check ethscan/ tests/` and the full pytest suite green. Use `python -m coverage report --include="ethscan/radix.py" -m` to identify missing lines first.

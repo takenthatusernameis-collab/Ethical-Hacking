@@ -24,4 +24,5 @@
 - None. Coverage measurement via an isolated `tests/test_resolve.py` run produced a stale/misleading report (reload artifacts); the full-suite run is the authoritative check.
 
 ### One precise next task
-- Raise `ethscan/dns.py` coverage from 92% (147 stmts, 12 miss) by adding tests for its missing branches to `tests/test_dns.py`, keeping `ruff check ethscan/ tests/` and the full pytest suite green. Use `python -m coverage report --include="ethscan/dns.py" -m` to identify the missing lines first.
+- COMPLETE: `ethscan/dns.py` is now 100% (144 stmts, 0 miss) after adding `test_run_dns_resolver_unexpected_exception_is_swallowed` to `tests/test_dns.py` covering the outer `except Exception` in `resolve_type` (lines 172-173) via a mocking resolver that raises `RuntimeError`.
+- Next: raise `ethscan/radix.py` coverage from 94% (340 stmts, 19 miss: lines 181-182, 200-202, 206-209, 267-268, 296, 444, 448, 473, 488, 521, 558, 561, 575) by adding tests to `tests/test_radix.py`, keeping `ruff check ethscan/ tests/` and the full pytest suite green. Use `python -m coverage report --include="ethscan/radix.py" -m` to identify missing lines first.

@@ -12,4 +12,5 @@
 - None obvious. Check coverage of remaining modules if desired (e.g. other modules below 100%).
 
 ### One precise next task
-- Review modules with low coverage via `python -m coverage report -m` and add targeted tests for one module (smallest area of missing coverage first) while keeping `ruff check ethscan/ tests/` and the full pytest suite green.
+- COMPLETE: `ethscan/dns.py` is now 100% (144 stmts, 0 miss).
+- Next: raise `ethscan/radix.py` coverage from 94% (340 stmts, 19 miss: lines 181-182, 200-202, 206-209, 267-268, 296, 444, 448, 473, 488, 521, 558, 561, 575) by adding tests to `tests/test_radix.py`, keeping `ruff check ethscan/ tests/` and the full pytest suite green. Use `python -m coverage report --include="ethscan/radix.py" -m` to identify missing lines first.
