@@ -255,13 +255,19 @@ def format_resolve_report_json(data: dict[str, object]) -> str:
 
 def format_resolve_report_markdown(data: dict[str, object]) -> str:
     """Format resolve results as Markdown."""
-    records = data["records"]
+    records_obj = data["records"]
+    records = records_obj if isinstance(records_obj, dict) else {}
     lines = ["# ethscan DNS Forward/Reverse Resolution Report", ""]
     lines.append(f"- **Target:** {data['target']}")
     lines.append(f"- **Normalized:** {data['normalized']}")
     lines.append(f"- **Type:** {'IP Address' if data['is_ip'] else 'Domain Name'}")
-    lines.append(f"- **Record Types Queried:** {', '.join(data['record_types_queried'])}")
-    lines.append(f"- **dnspython Available:** {'Yes' if data['dnspython_available'] else 'No (stdlib only)'}")
+    record_types_queried = data.get("record_types_queried", [])
+    if isinstance(record_types_queried, (list, tuple, set)):
+        lines.append(f"- **Record Types Queried:** {', '.join(str(r) for r in record_types_queried)}")
+    else:
+        lines.append(f"- **Record Types Queried:** {record_types_queried}")
+    dnspython_available = data.get("dnspython_available", False)
+    lines.append(f"- **dnspython Available:** {'Yes' if dnspython_available else 'No (stdlib only)'}")
     server = data.get("server")
     if server:
         lines.append(f"- **Custom Resolver:** {server}")
@@ -273,8 +279,11 @@ def format_resolve_report_markdown(data: dict[str, object]) -> str:
     for rtype, values in records.items():
         lines.append(f"## {rtype} Records")
         if values:
-            for value in values:
-                lines.append(f"- {_escape(str(value))}")
+            if isinstance(values, (list, tuple, set)):
+                for value in values:
+                    lines.append(f"- {_escape(str(value))}")
+            else:
+                lines.append(f"- {_escape(str(values))}")
         else:
             lines.append("*No records found*")
         lines.append("")
@@ -287,12 +296,22 @@ def format_resolve_report_csv(data: dict[str, object]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["target", "normalized", "record_type", "record_value"])
-    for rtype, values in (data.get("records") or {}).items():
-        for value in values or []:
+    records_obj = data.get("records") or {}
+    records: dict[str, object] = records_obj if isinstance(records_obj, dict) else {}
+    for rtype, values in records.items():
+        if isinstance(values, (list, tuple, set)):
+            for value in values:
+                writer.writerow([
+                    data.get("target", ""),
+                    data.get("normalized", ""),
+                    str(rtype),
+                    str(value),
+                ])
+        elif values is not None:
             writer.writerow([
                 data.get("target", ""),
                 data.get("normalized", ""),
                 str(rtype),
-                str(value),
+                str(values),
             ])
     return output.getvalue().rstrip("\r\n")

@@ -63,7 +63,7 @@ def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str
         try:
             socket.setdefaulttimeout(timeout)
             results = socket.getaddrinfo(domain, None, socket.AF_INET)
-            ips = [r[4][0] for r in results]
+            ips = [str(r[4][0]) for r in results]
             return sorted(set(ips))
         finally:
             socket.setdefaulttimeout(previous)
@@ -86,7 +86,7 @@ def resolve_aaaa_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[
         try:
             socket.setdefaulttimeout(timeout)
             results = socket.getaddrinfo(domain, None, socket.AF_INET6)
-            ips = [r[4][0] for r in results]
+            ips = [str(r[4][0]) for r in results]
             return sorted(set(ips))
         finally:
             socket.setdefaulttimeout(previous)
@@ -216,11 +216,18 @@ def format_dns_report_json(data: dict[str, object]) -> str:
 def format_dns_report_markdown(data: dict[str, object]) -> str:
     """Format DNS results as Markdown."""
     records = data["records"]
+    if not isinstance(records, dict):
+        records = {}
     lines = ["# ethscan DNS Record Enumeration Report", ""]
     lines.append(f"- **Target:** {data['target']}")
     lines.append(f"- **Domain:** {data['domain']}")
-    lines.append(f"- **Record Types Queried:** {', '.join(data['record_types_queried'])}")
-    lines.append(f"- **dnspython Available:** {'Yes' if data['dnspython_available'] else 'No (stdlib only)'}")
+    record_types_queried = data.get("record_types_queried", [])
+    if isinstance(record_types_queried, (list, tuple, set)):
+        lines.append(f"- **Record Types Queried:** {', '.join(str(r) for r in record_types_queried)}")
+    else:
+        lines.append(f"- **Record Types Queried:** {record_types_queried}")
+    dnspython_available = data.get("dnspython_available", False)
+    lines.append(f"- **dnspython Available:** {'Yes' if dnspython_available else 'No (stdlib only)'}")
     lines.append("")
 
     for rtype, values in records.items():
@@ -246,10 +253,14 @@ def format_dns_report_csv(data: dict[str, object]) -> str:
     writer = csv.writer(output)
     writer.writerow(["target", "domain", "record_type", "record_value"])
 
-    records = data.get("records", {}) or {}
+    records_obj = data.get("records", {}) or {}
+    records: dict[str, object] = records_obj if isinstance(records_obj, dict) else {}
     for rtype, values in records.items():
         record_type = str(rtype)
-        for value in values or []:
-            writer.writerow([data.get("target", ""), data.get("domain", ""), record_type, str(value)])
+        if isinstance(values, (list, tuple, set)):
+            for value in values:
+                writer.writerow([data.get("target", ""), data.get("domain", ""), record_type, str(value)])
+        elif values is not None:
+            writer.writerow([data.get("target", ""), data.get("domain", ""), record_type, str(values)])
 
     return output.getvalue().rstrip("\r\n")
