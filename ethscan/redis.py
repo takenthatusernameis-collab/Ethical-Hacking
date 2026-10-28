@@ -21,7 +21,8 @@ import csv
 import io
 import json
 import socket
-from typing import Any
+from typing import Any, cast
+from urllib.parse import SplitResult
 
 from ethscan.target import TargetSpecError, check_port, parse_url, url_port
 
@@ -40,7 +41,7 @@ def _normalize_target(target: str) -> tuple[str, int]:
     if "://" in normalized:
         parsed = parse_url(normalized)
         host = parsed.hostname or ""
-        port = url_port(parsed)
+        port = url_port(cast("SplitResult", parsed))
     else:
         host = normalized
         port = None
@@ -303,7 +304,7 @@ def run_redis(
             if ping_err:
                 results["error"] = f"ping request failed: {ping_err}"
                 return results
-            ping_resp, _ = _parse_resp(ping_data)
+            ping_resp, _ = _parse_resp(cast("bytes", ping_data))
             if isinstance(ping_resp, bytes):
                 results["ping"] = ping_resp.decode("utf-8", errors="replace")
             elif isinstance(ping_resp, str):
@@ -322,13 +323,13 @@ def run_redis(
             if info_err:
                 results["error"] = f"info request failed: {info_err}"
                 return results
-            parsed_info = _parse_info(info_data)
+            parsed_info = _parse_info(cast("bytes", info_data))
             if not parsed_info:
                 # try full INFO
                 info_req2 = _build_resp_array("INFO")
                 info_data2, info_err2 = _send_recv(host, server_port, info_req2, timeout, connector=connector)
                 if not info_err2:
-                    parsed_info = _parse_info(info_data2)
+                    parsed_info = _parse_info(cast("bytes", info_data2))
             results["info"] = parsed_info
             results["accessible"] = True
 
@@ -339,7 +340,7 @@ def run_redis(
             if config_err:
                 results["error"] = f"config request failed: {config_err}"
                 return results
-            parsed_config = _parse_config(config_data)
+            parsed_config = _parse_config(cast("bytes", config_data))
             results["config"] = parsed_config
             findings = _assess_dangerous(parsed_config)
             results["dangerous_findings"] = findings
