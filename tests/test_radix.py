@@ -909,3 +909,88 @@ def test_run_radix_accepts_a_diff_from_the_other_address_family() -> None:
     result = run_radix(["192.168.1.0/24"], diff=["2001:db8::/32"])
     assert result["diff"]["diff_cidrs"] == ["2001:db8::/32"]
     assert result["diff"]["difference"] == ["192.168.1.0/24"]
+
+
+def test_render_node_md_non_list_networks_and_children():
+    from ethscan.radix import _render_node_md
+    node = {"prefix": "p", "start_address": "s", "end_address": "e",
+            "total_addresses": 1, "networks": "nope", "children": "nope"}
+    lines = []
+    _render_node_md(node, lines)
+    assert any("p" in l for l in lines)
+
+
+def test_format_markdown_defensive_branches():
+    data = {
+        "network_count": 1,
+        "merged_network_count": 1,
+        "total_input_addresses": 1,
+        "total_merged_addresses": 1,
+        "compression_ratio": 1.0,
+        "merge_enabled": True,
+        "merged": "nope",
+        "radix_tree": "nope",
+        "contains": "nope",
+        "diff": "nope",
+    }
+    out = format_radix_report_markdown(data)
+    assert "ethscan Radix Tree Report" in out
+
+
+def test_format_markdown_diff_non_list_difference():
+    data = {
+        "network_count": 1,
+        "merged_network_count": 1,
+        "total_input_addresses": 1,
+        "total_merged_addresses": 1,
+        "compression_ratio": 1.0,
+        "merge_enabled": True,
+        "merged": ["10.0.0.0/8"],
+        "radix_tree": None,
+        "diff": {
+            "diff_network_count": 1,
+            "diff_merged_network_count": 1,
+            "difference_network_count": 1,
+            "total_diff_addresses": 1,
+            "difference": "nope",
+            "diff_cidrs": [],
+        },
+    }
+    out = format_radix_report_markdown(data)
+    assert "Set Difference" in out
+
+
+def test_format_csv_defensive_branches():
+    data = {
+        "cidrs": "nope",
+        "merged": "nope",
+        "compression_ratio": 1.0,
+        "diff": "nope",
+    }
+    out = format_radix_report_csv(data)
+    assert "original_cidr" in out
+
+
+def test_format_csv_diff_cidrs_empty():
+    data = {
+        "cidrs": ["10.0.0.0/8"],
+        "merged": ["10.0.0.0/8"],
+        "compression_ratio": 1.0,
+        "diff": {"diff_cidrs": []},
+    }
+    out = format_radix_report_csv(data)
+    assert "10.0.0.0/8" in out
+
+
+def test_merge_overlapping_larger_second():
+    nets = [ipaddress.ip_network("10.0.0.0/24"), ipaddress.ip_network("10.0.0.0/16")]
+    out = _merge_networks(nets)
+    assert out
+
+
+def test_collapse_value_error_branch(monkeypatch):
+    import ethscan.radix as r
+    monkeypatch.setattr(r, "_collapse_v4_networks", lambda a, b: (_ for _ in ()).throw(ValueError()))
+    nets = [ipaddress.ip_network("192.168.0.0/24"), ipaddress.ip_network("192.168.1.0/24")]
+    out = _merge_networks(nets)
+    assert out
