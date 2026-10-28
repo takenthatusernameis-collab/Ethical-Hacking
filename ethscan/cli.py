@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, cast
 
 import click
 from click.core import ParameterSource
@@ -305,6 +305,7 @@ from ethscan.subtake import (
 )
 from ethscan.target import TargetSpecError
 from ethscan.tls import (
+    VersionSpec,
     format_tls_report_csv,
     format_tls_report_json,
     format_tls_report_markdown,
@@ -434,11 +435,12 @@ def _config_value_error(
     param: click.Parameter,
     detail: str,
     path: str | None,
+    ctx: click.Context | None = None,
 ) -> click.UsageError:
     """Build the usage error reported for a config value that cannot be used."""
     where = f" in the config file {path}" if path else " in the config"
     return click.UsageError(
-        f"Invalid value for {param.get_error_hint(None)}{where}: {detail}"
+        f"Invalid value for {param.get_error_hint(cast(click.Context, ctx))}{where}: {detail}"
     )
 
 
@@ -487,7 +489,7 @@ def _check_config_value(
     try:
         # The context is only used to describe the option in an error
         # message, and the option knows its own name.
-        param.type_cast_value(None, text)
+        param.type_cast_value(cast(click.Context, None), text)
     except click.UsageError as exc:
         raise _config_value_error(param, exc.message, path) from exc
     return text
@@ -1817,7 +1819,7 @@ def tls(
             target,
             port=port,
             timeout=timeout,
-            versions=version_list,
+            versions=cast(list[VersionSpec] | None, version_list),
             ciphers=cipher_list,
             max_workers=workers,
         )
@@ -2329,7 +2331,7 @@ def osdetect(
             # JSON, Markdown and CSV formatters can all render it without
             # raising (the Markdown formatter indexes data['host'] and
             # data['ports_probed'] directly).
-            error_report = {
+            error_report: dict[str, object] = {
                 "target": target,
                 "host": None,
                 "timeout": timeout,
