@@ -847,7 +847,15 @@ def test_format_ntp_report_markdown_with_timestamps() -> None:
     assert "N/A" in output
 
 
-def test_format_ntp_report_markdown_monlist_error() -> None:
+def test_run_ntp_connector_exception_caught() -> None:
+    def _boom(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    result = run_ntp("ntp.example.com", timeout=2.0, check_monlist=False, connector=_boom)
+    assert result["error"] == "ntp probe failed: boom"
+
+
+def test_format_ntp_report_markdown_monlist_error_with_note() -> None:
     data = {
         "target": "ntp.example.com",
         "host": "ntp.example.com",
@@ -858,10 +866,11 @@ def test_format_ntp_report_markdown_monlist_error() -> None:
             "mode": 4,
             "stratum": 2,
         },
-        "monlist_response": {"error": "monlist request failed"},
+        "monlist_response": {"error": "monlist request failed", "extra": True, "more": "blocked"},
         "is_reflector": False,
         "amplification_factor": None,
         "error": None,
     }
     output = format_ntp_report_markdown(data)
     assert "monlist request failed" in output
+    assert "blocked" in output

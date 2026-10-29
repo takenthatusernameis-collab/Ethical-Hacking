@@ -369,8 +369,11 @@ def format_ntp_report_markdown(data: dict[str, Any]) -> str:
     if mon_resp:
         lines.append("")
         lines.append("## Monlist Response (Amplification Check)")
-        if mon_resp.get("error"):
-            lines.append(f"- **Error:** {mon_resp['error']}")
+        err = mon_resp.get("error")
+        if err:
+            lines.append(f"- **Error:** {err}")
+            if mon_resp.get("extra") is True and mon_resp.get("more"):
+                lines.append(f"- **Note:** {mon_resp['more']}")
         else:
             lines.append(f"- **Leap Indicator:** {mon_resp.get('leap_indicator', 'N/A')}")
             lines.append(f"- **Version:** {mon_resp.get('version', 'N/A')}")
@@ -388,8 +391,6 @@ def format_ntp_report_markdown(data: dict[str, Any]) -> str:
                 lines.append("- **Peers:**")
                 for peer in mon_resp.get("peers", []):
                     lines.append(f"  - {peer['address']}:{peer['port']} (mode={peer['mode']}, version={peer['version']})")
-            if mon_resp.get("error"):
-                lines.append(f"- **Error:** {mon_resp['error']}")
 
     if data.get("is_reflector"):
         lines.append("")
