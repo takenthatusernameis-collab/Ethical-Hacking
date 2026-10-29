@@ -629,3 +629,46 @@ def test_run_ftp_transport_failure_unnamed_type_on_connect_reported(monkeypatch)
     result = ftp.run_ftp("127.0.0.1", connector=BadFTP)
     assert result["error"] is not None
     assert "hostile" in result["error"]
+
+
+def test_run_ftp_banner_eof_error_reported() -> None:
+    """Cover lines 135-137: getwelcome raising EOFError reports 'server closed'."""
+    class _EofBanner:
+        def connect(self, host, port, timeout=30):
+            return "220 ready"
+
+        def getwelcome(self):
+            raise EOFError("server closed the connection")
+
+        def login(self, user="anonymous", passwd="", account=""):
+            raise ftplib.Error("530 Login incorrect")
+
+        def close(self):
+            pass
+
+    result = run_ftp("ftp.example.com", timeout=2.0, connector=_EofBanner)
+    assert result["connected"] is True
+    assert result["banner"] is None
+    assert result["error"] == "banner read failed: server closed the connection"
+
+
+def test_run_ftp_anonymous_login_unnamed_exception_reported() -> None:
+    """Cover lines 177-180: an unnamed exception during login is reported."""
+    class _BoomLogin:
+        def connect(self, host, port, timeout=30):
+            return "220 ready"
+
+        def getwelcome(self):
+            return "220 ready"
+
+        def login(self, user="anonymous", passwd="", account=""):
+            raise RuntimeError("hostile login transport")
+
+        def close(self):
+            pass
+
+    result = run_ftp("ftp.example.com", timeout=2.0, connector=_BoomLogin)
+    assert result["connected"] is True
+    assert result["anonymous_login"] is None
+    assert result["error"] == "login failed: hostile login transport"
+    assert result["anonymous_message"] == "login failed: hostile login transport"

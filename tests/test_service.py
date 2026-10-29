@@ -567,3 +567,40 @@ def test_grab_banner_initial_recv_oserror_caught(monkeypatch) -> None:
     assert port_ret == 80
     assert banner_ret is None
     assert service is None
+
+
+def test_grab_banner_service_without_signatures(monkeypatch) -> None:
+    """Cover line 162: a known service with no signature patterns falls back to upper()."""
+    class FakeSock:
+        def settimeout(self, timeout):
+            pass
+
+        def recv(self, n):
+            return b"some dns banner\r\n"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    fake = FakeSock()
+    monkeypatch.setattr("ethscan.service.socket.create_connection", lambda addr, timeout=None: fake)
+    port_ret, banner_ret, service = grab_banner("127.0.0.1", 53, 2.0)
+    assert port_ret == 53
+    assert banner_ret is not None
+    assert service == "DNS"  # COMMON_SERVICE_PORTS[53] == 'dns' -> upper(), no signatures
+
+
+def test_run_service_sort_key_fallback_for_non_int_port(monkeypatch) -> None:
+    """Cover lines 211-213: a non-int port value falls through to the sort-key fallback."""
+    def mock_grab_banner(host, port, timeout):
+        # Return a port that is not an int so _port_key's int() conversion raises.
+        return "not-a-port", "banner", "TestService"
+
+    monkeypatch.setattr("ethscan.service.grab_banner", mock_grab_banner)
+
+    result = run_service("example.com", ports=[80], timeout=1.0)
+
+    assert result["services_found"] == 1
+    assert result["results"][0]["port"] == "not-a-port"

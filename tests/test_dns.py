@@ -553,6 +553,8 @@ def test_dns_availability_flag_true(monkeypatch) -> None:
     dns_pkg.__path__ = []
     dns_resolver = types.ModuleType("dns.resolver")
     dns_exception = types.ModuleType("dns.exception")
+    dns_enum = types.ModuleType("dns.enum")
+    dns_message = types.ModuleType("dns.message")
 
     class DNSException(Exception):
         pass
@@ -569,10 +571,14 @@ def test_dns_availability_flag_true(monkeypatch) -> None:
     dns_resolver.Resolver = Resolver
     dns_pkg.resolver = dns_resolver
     dns_pkg.exception = dns_exception
+    dns_pkg.enum = dns_enum
+    dns_pkg.message = dns_message
 
     monkeypatch.setitem(sys.modules, "dns", dns_pkg)
     monkeypatch.setitem(sys.modules, "dns.resolver", dns_resolver)
     monkeypatch.setitem(sys.modules, "dns.exception", dns_exception)
+    monkeypatch.setitem(sys.modules, "dns.enum", dns_enum)
+    monkeypatch.setitem(sys.modules, "dns.message", dns_message)
 
     import ethscan.dns as dns_mod
     reload(dns_mod)
@@ -583,6 +589,7 @@ def test_dns_availability_flag_true(monkeypatch) -> None:
         monkeypatch.delitem(sys.modules, "dns.resolver", raising=False)
         monkeypatch.delitem(sys.modules, "dns.message", raising=False)
         monkeypatch.delitem(sys.modules, "dns.exception", raising=False)
+        monkeypatch.delitem(sys.modules, "dns.enum", raising=False)
         reload(dns_mod)
 
 

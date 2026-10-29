@@ -473,7 +473,7 @@ def test_format_tls_report_markdown_no_data() -> None:
         "supported_ciphers": [],
         "supported_version_count": 0,
         "supported_cipher_count": 0,
-        "notes": [],
+"notes": [],
     }
     output = format_tls_report_markdown(data)
     assert "*No protocol versions tested.*" in output
@@ -610,6 +610,180 @@ def test_format_tls_report_csv() -> None:
 
 def test_format_tls_report_csv_empty() -> None:
     data = {"target": "example.com", "host": "example.com", "port": 443, "versions": [], "ciphers": []}
+    output = format_tls_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert len(reader) == 1
+    assert reader[0][0] == "target"
+
+
+def test_format_tls_report_markdown_malformed_supported_versions() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "versions_tested": 0,
+        "ciphers_tested": 0,
+        "versions": [],
+        "ciphers": [],
+        "supported_versions": "not-a-list",
+        "supported_ciphers": [],
+        "supported_version_count": 0,
+        "supported_cipher_count": 0,
+        "notes": [],
+    }
+    output = format_tls_report_markdown(data)
+    assert "**Supported Versions:** None" in output
+
+
+def test_format_tls_report_markdown_malformed_notes() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "versions_tested": 0,
+        "ciphers_tested": 0,
+        "versions": [],
+        "ciphers": [],
+        "supported_versions": [],
+        "supported_ciphers": [],
+        "supported_version_count": 0,
+        "supported_cipher_count": 0,
+        "notes": "not-a-list",
+    }
+    output = format_tls_report_markdown(data)
+    assert "## Findings" not in output
+
+
+def test_format_tls_report_markdown_malformed_versions() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "versions_tested": 0,
+        "ciphers_tested": 0,
+        "versions": "not-a-list",
+        "ciphers": [],
+        "supported_versions": [],
+        "supported_ciphers": [],
+        "supported_version_count": 0,
+        "supported_cipher_count": 0,
+        "notes": [],
+    }
+    output = format_tls_report_markdown(data)
+    assert "*No protocol versions tested.*" in output
+
+
+def test_format_tls_report_markdown_versions_with_non_dict_entries() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "versions_tested": 1,
+        "ciphers_tested": 0,
+        "versions": ["not-a-dict"],
+        "ciphers": [],
+        "supported_versions": [],
+        "supported_ciphers": [],
+        "supported_version_count": 0,
+        "supported_cipher_count": 0,
+        "notes": [],
+    }
+    output = format_tls_report_markdown(data)
+    assert "## Protocol Versions" in output
+    assert "| Version | Supported | Negotiated Cipher | Negotiated Protocol | Error |" in output
+    assert "*No protocol versions tested.*" not in output
+
+
+def test_format_tls_report_markdown_malformed_ciphers() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "versions_tested": 0,
+        "ciphers_tested": 0,
+        "versions": [],
+        "ciphers": "not-a-list",
+        "supported_versions": [],
+        "supported_ciphers": [],
+        "supported_version_count": 0,
+        "supported_cipher_count": 0,
+        "notes": [],
+    }
+    output = format_tls_report_markdown(data)
+    assert "*No cipher suites tested.*" in output
+
+
+def test_format_tls_report_markdown_ciphers_with_non_dict_entries() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "versions_tested": 0,
+        "ciphers_tested": 1,
+        "versions": [],
+        "ciphers": ["not-a-dict"],
+        "supported_versions": [],
+        "supported_ciphers": [],
+        "supported_version_count": 0,
+        "supported_cipher_count": 0,
+        "notes": [],
+    }
+    output = format_tls_report_markdown(data)
+    assert "## Cipher Suites" in output
+    assert "| Cipher | Supported | Negotiated Version | Error |" in output
+    assert "*No cipher suites tested.*" not in output
+
+
+def test_format_tls_report_csv_malformed_versions() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "versions": "not-a-list",
+        "ciphers": [],
+    }
+    output = format_tls_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert len(reader) == 1
+    assert reader[0][0] == "target"
+
+
+def test_format_tls_report_csv_versions_with_non_dict_entries() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "versions": ["not-a-dict"],
+        "ciphers": [],
+    }
+    output = format_tls_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert len(reader) == 1
+    assert reader[0][0] == "target"
+
+
+def test_format_tls_report_csv_malformed_ciphers() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "versions": [],
+        "ciphers": "not-a-list",
+    }
+    output = format_tls_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert len(reader) == 1
+    assert reader[0][0] == "target"
+
+
+def test_format_tls_report_csv_ciphers_with_non_dict_entries() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "versions": [],
+        "ciphers": ["not-a-dict"],
+    }
     output = format_tls_report_csv(data)
     reader = list(csv.reader(io.StringIO(output)))
     assert len(reader) == 1

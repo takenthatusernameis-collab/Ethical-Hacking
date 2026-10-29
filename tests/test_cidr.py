@@ -819,3 +819,34 @@ def test_run_cidr_accepts_a_diff_from_the_other_address_family() -> None:
     result = run_cidr("192.168.1.0/24", diff="2001:db8::/32")
     assert result["diff"]["diff_cidr"] == "2001:db8::/32"
     assert result["diff"]["difference"] == ["192.168.1.0/24"]
+
+
+def test_format_cidr_report_markdown_malformed_network() -> None:
+    """Cover line 220: a non-dict network is replaced with an empty dict."""
+    data = {
+        "cidr": "192.168.1.0/24",
+        "ip_version": "IPv4",
+        "network": "not-a-dict",
+    }
+    output = format_cidr_report_markdown(data)
+    assert "## Network Information" in output
+    assert "| Network Address |  |" in output
+
+
+def test_format_cidr_report_csv_malformed_network() -> None:
+    """Cover line 293: a non-dict network is replaced with an empty dict."""
+    import csv
+    import io
+
+    data = {
+        "cidr": "192.168.1.0/24",
+        "network": "not-a-dict",
+        "contains": None,
+        "diff": None,
+    }
+    output = format_cidr_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0][0] == "cidr"
+    assert reader[1][0] == "192.168.1.0/24"
+    # network_address column is index 1; should be empty since network was not a dict.
+    assert reader[1][1] == ""

@@ -485,3 +485,27 @@ def test_config_cli_init_refuses_out_together(tmp_path) -> None:
     assert "--init and --out cannot be used together" in result.output
     assert not init_path.is_file()
     assert not out_path.is_file()
+
+
+def test_candidate_paths_xdg_base_fallback(tmp_path, monkeypatch) -> None:
+    """Cover line 94: when XDG_CONFIG_HOME is unset, ~/.config is used."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", "")
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    paths = _candidate_paths()
+    # The XDG candidates are appended relative to tmp_path/.config.
+    assert any(p == tmp_path / ".config" / "ethscan/ethscan.yaml" for p in paths)
+
+
+def test_load_config_yaml_is_none(tmp_path, monkeypatch) -> None:
+    """Cover line 135: when PyYAML is not importable, load_config reports it."""
+    path = tmp_path / "ethscan.yaml"
+    path.write_text("defaults: {}\n")
+    import ethscan.config as cfg
+
+    monkeypatch.setattr(cfg, "yaml", None)
+    config = cfg.load_config(str(path))
+    assert config["defaults"] == {}
+    assert config["commands"] == {}
+    assert config["_path"] == str(path)
+    assert "_parse_error" in config
+    assert "PyYAML is required" in config["_parse_error"]
