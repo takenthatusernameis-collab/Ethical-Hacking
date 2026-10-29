@@ -448,6 +448,23 @@ def test_format_ssh_report_csv_pipe_escaping() -> None:
     assert "pipe|desc" in output
 
 
+def test_format_ssh_report_csv_non_list_findings() -> None:
+    """Non-list findings are normalized to an empty list (ssh.py:549)."""
+    data = _ssh_result(findings="notalist")
+    output = format_ssh_report_csv(data)
+    lines = [line.rstrip("\r") for line in output.strip().split("\n")]
+    assert lines == ["type,algorithm,severity,description"]
+
+
+def test_format_ssh_report_csv_non_dict_findings() -> None:
+    """Non-dict finding items are skipped (ssh.py:552)."""
+    data = _ssh_result(findings=["not a dict", 42, None, {"type": "x"}])
+    output = format_ssh_report_csv(data)
+    lines = [line.rstrip("\r") for line in output.strip().split("\n")]
+    assert lines[0] == "type,algorithm,severity,description"
+    assert len(lines) == 2
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
