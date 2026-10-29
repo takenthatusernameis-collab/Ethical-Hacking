@@ -606,6 +606,24 @@ def test_format_cert_report_markdown_fail() -> None:
     assert "No subdomains discovered" in output
 
 
+def test_format_cert_report_markdown_treats_a_non_list_subdomains_as_empty() -> None:
+    """A subdomains value that is not a list is reported as zero, not rendered."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "ip": "93.184.216.34",
+        "timeout": 10.0,
+        "use_cache": True,
+        "offline_fallback": True,
+        "cert_data": None,
+        "subdomains": "not a list",
+        "notes": [],
+    }
+    output = format_cert_report_markdown(data)
+    assert "**Subdomains Found:** 0" in output
+    assert "No subdomains discovered" in output
+
+
 def test_format_cert_report_markdown_no_data() -> None:
     data = {
         "target": "nonexistent.invalid.domain.tld",
