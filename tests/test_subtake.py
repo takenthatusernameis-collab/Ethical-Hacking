@@ -702,6 +702,174 @@ def test_format_subtake_report_csv_pipe_escaping() -> None:
     assert lines[1] == 'www,www.example.com,mybucket.s3.amazonaws.com,"1.2.3.4, 5.6.7.8",,true,AWS S3,"finger""print,with,comma",false'
 
 
+def test_format_subtake_report_csv_malformed_all_results() -> None:
+    """Non-list all_results is normalized to an empty list."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "subdomains_tested": 0,
+        "vulnerable_count": 0,
+        "all_results": "not-a-list",
+    }
+    output = format_subtake_report_csv(data)
+    assert output == "subdomain,hostname,cname,a_records,aaaa_records,vulnerable,service,fingerprint,http_confirmed"
+
+
+def test_format_subtake_report_csv_non_dict_takeover() -> None:
+    """Non-dict takeover is normalized to an empty dict."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "subdomains_tested": 1,
+        "vulnerable_count": 0,
+        "vulnerable": [],
+        "all_results": [
+            {
+                "subdomain": "www",
+                "hostname": "www.example.com",
+                "takeover": "not-a-dict",
+            }
+        ],
+    }
+    output = format_subtake_report_csv(data)
+    lines = output.splitlines()
+    assert lines[1] == "www,www.example.com,,,,false,,,false"
+
+
+def test_format_subtake_report_csv_non_list_a_records() -> None:
+    """Non-list a_records is normalized to an empty list."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "subdomains_tested": 1,
+        "vulnerable_count": 0,
+        "vulnerable": [],
+        "all_results": [
+            {
+                "subdomain": "www",
+                "hostname": "www.example.com",
+                "a_records": "not-a-list",
+            }
+        ],
+    }
+    output = format_subtake_report_csv(data)
+    lines = output.splitlines()
+    assert lines[1] == "www,www.example.com,,,,false,,,false"
+
+
+def test_format_subtake_report_csv_non_list_aaaa_records() -> None:
+    """Non-list aaaa_records is normalized to an empty list."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "subdomains_tested": 1,
+        "vulnerable_count": 0,
+        "vulnerable": [],
+        "all_results": [
+            {
+                "subdomain": "www",
+                "hostname": "www.example.com",
+                "aaaa_records": "not-a-list",
+            }
+        ],
+    }
+    output = format_subtake_report_csv(data)
+    lines = output.splitlines()
+    assert lines[1] == "www,www.example.com,,,,false,,,false"
+
+
+def test_format_subtake_report_markdown_non_dict_vulnerable_entries() -> None:
+    """Non-dict vulnerable entries are skipped."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "subdomains_tested": 1,
+        "vulnerable_count": 1,
+        "vulnerable": ["not-a-dict"],
+        "all_results": [],
+    }
+    output = format_subtake_report_markdown(data)
+    assert "## Vulnerable Subdomains (Potential Takeover)" in output
+    assert "www.example.com" not in output
+
+
+def test_format_subtake_report_markdown_non_dict_takeover() -> None:
+    """Non-dict takeover is normalized to an empty dict."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "subdomains_tested": 1,
+        "vulnerable_count": 1,
+        "vulnerable": [
+            {
+                "subdomain": "www",
+                "hostname": "www.example.com",
+                "vulnerable": True,
+                "takeover": "not-a-dict",
+            }
+        ],
+        "all_results": [],
+    }
+    output = format_subtake_report_markdown(data)
+    assert "## Vulnerable Subdomains (Potential Takeover)" in output
+    assert "| www | www.example.com | N/A | Unknown |  | No |" in output
+
+
+def test_format_subtake_report_markdown_non_dict_all_results_entries() -> None:
+    """Non-dict all_results entries are skipped."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "subdomains_tested": 1,
+        "vulnerable_count": 0,
+        "vulnerable": [],
+        "all_results": ["not-a-dict"],
+    }
+    output = format_subtake_report_markdown(data)
+    assert "## All Results" in output
+    assert "www.example.com" not in output
+
+
+def test_format_subtake_report_markdown_non_list_a_records() -> None:
+    """Non-list a_records is normalized to an empty list."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "subdomains_tested": 1,
+        "vulnerable_count": 0,
+        "vulnerable": [],
+        "all_results": [
+            {
+                "subdomain": "www",
+                "hostname": "www.example.com",
+                "a_records": "not-a-list",
+            }
+        ],
+    }
+    output = format_subtake_report_markdown(data)
+    assert "| www | www.example.com | N/A | N/A | N/A | No |" in output
+
+
+def test_format_subtake_report_markdown_non_list_aaaa_records() -> None:
+    """Non-list aaaa_records is normalized to an empty list."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "subdomains_tested": 1,
+        "vulnerable_count": 0,
+        "vulnerable": [],
+        "all_results": [
+            {
+                "subdomain": "www",
+                "hostname": "www.example.com",
+                "aaaa_records": "not-a-list",
+            }
+        ],
+    }
+    output = format_subtake_report_markdown(data)
+    assert "| www | www.example.com | N/A | N/A | N/A | No |" in output
+
+
 def test_resolve_cname_socket_canonname(monkeypatch) -> None:
     """resolve_cname returns the socket canonname when dnspython is unavailable."""
 
