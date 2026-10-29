@@ -726,6 +726,20 @@ def test_format_mac_report_csv_error() -> None:
     assert reader[1][6] == "Failed to fetch MAC vendor data"
 
 
+def test_format_mac_report_csv_mac_data_not_dict() -> None:
+    """Non-dict mac_data falls back to an empty dict in CSV (line 303)."""
+    data = {
+        "target": "00:1A:2B:3C:4D:5E",
+        "mac": "00:1a:2b:3c:4d:5e",
+        "oui": "001a2b3c",
+        "mac_data": "not-a-dict",
+    }
+    output = format_mac_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0] == ["target", "mac", "oui", "vendor", "cached", "offline_fallback", "error"]
+    assert reader[1] == ["00:1A:2B:3C:4D:5E", "00:1a:2b:3c:4d:5e", "001a2b3c", "", "false", "false", ""]
+
+
 def test_resolver_failure_of_an_unknown_type_is_reported(monkeypatch) -> None:
     """A resolver that fails with an unknown error type is a failed lookup, not a raise."""
 

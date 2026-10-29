@@ -709,3 +709,119 @@ def test_format_urlcheck_report_markdown_info_disclosure_table() -> None:
     assert "| Server | Apache/2.2.3 | Reveals server software version. |" in output
     assert "| X-Powered-By | PHP/7.4.0 | Reveals technology stack. |" in output
     assert "No information disclosure headers detected." not in output
+
+
+def test_format_urlcheck_report_markdown_summary_not_dict() -> None:
+    """Non-dict summary falls back to an empty dict (line 141)."""
+    data = {
+        "target": "https://example.com",
+        "normalized_target": "https://example.com",
+        "port": 443,
+        "timeout": 5.0,
+        "workers": 10,
+        "summary": "not-a-dict",
+    }
+    out = format_urlcheck_report_markdown(data)
+    assert "**Total Findings:** 0" in out
+    assert "**Web Checks Run:** None" in out
+
+
+def test_format_urlcheck_report_markdown_web_checks_run_not_list() -> None:
+    """Non-list/tuple web_checks_run takes the str() branch (line 148)."""
+    data = {
+        "target": "https://example.com",
+        "normalized_target": "https://example.com",
+        "port": 443,
+        "timeout": 5.0,
+        "workers": 10,
+        "summary": {
+            "total_findings": 0,
+            "web_checks_run": "headers",
+            "fuzz_enabled": False,
+            "ssl_checked": False,
+        },
+    }
+    out = format_urlcheck_report_markdown(data)
+    assert "**Web Checks Run:** headers" in out
+
+
+def test_format_urlcheck_report_markdown_web_error_string() -> None:
+    """A string web error is emitted in the markdown report (line 167)."""
+    data = {
+        "target": "https://example.com",
+        "normalized_target": "https://example.com",
+        "port": 443,
+        "timeout": 5.0,
+        "workers": 10,
+        "web": {"host": "example.com", "port": 443, "error": "TLS handshake failed"},
+    }
+    out = format_urlcheck_report_markdown(data)
+    assert "- **Error:** TLS handshake failed" in out
+
+
+def test_format_urlcheck_report_markdown_fuzz_findings_not_list() -> None:
+    """Non-list/tuple fuzz findings fall back to an empty list (line 246)."""
+    data = {
+        "target": "https://example.com",
+        "normalized_target": "https://example.com",
+        "port": 443,
+        "timeout": 5.0,
+        "workers": 10,
+        "fuzz": {"base_url": "https://example.com", "paths_tested": 2, "findings": "not-a-list"},
+    }
+    out = format_urlcheck_report_markdown(data)
+    assert "### All Results" in out
+
+
+def test_format_urlcheck_report_csv_summary_not_dict() -> None:
+    """Non-dict summary falls back to an empty dict in CSV (line 335)."""
+    data = {
+        "target": "https://example.com",
+        "normalized_target": "https://example.com",
+        "summary": "not-a-dict",
+    }
+    output = format_urlcheck_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0] == ["section", "key", "value"]
+    assert ["summary", "total_findings", "0"] in reader
+
+
+def test_format_urlcheck_report_csv_web_checks_run_not_list() -> None:
+    """Non-list/tuple web_checks_run is written as-is in CSV (line 343)."""
+    data = {
+        "target": "https://example.com",
+        "normalized_target": "https://example.com",
+        "summary": {
+            "total_findings": 0,
+            "web_checks_run": "headers",
+            "fuzz_enabled": False,
+            "ssl_checked": False,
+        },
+    }
+    output = format_urlcheck_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert ["summary", "web_checks_run", "headers"] in reader
+
+
+def test_format_urlcheck_report_csv_web_error() -> None:
+    """A truthy web error is written as a CSV row (line 354)."""
+    data = {
+        "target": "https://example.com",
+        "normalized_target": "https://example.com",
+        "web": {"error": "connection refused"},
+    }
+    output = format_urlcheck_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert ["web", "error", "connection refused"] in reader
+
+
+def test_format_urlcheck_report_csv_cert_not_dict() -> None:
+    """Non-dict cert falls back to an empty dict in CSV (line 378)."""
+    data = {
+        "target": "https://example.com",
+        "normalized_target": "https://example.com",
+        "ssl": {"valid": True, "cert": None},
+    }
+    output = format_urlcheck_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert ["ssl", "valid", "true"] in reader
