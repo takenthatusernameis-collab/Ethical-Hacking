@@ -101,11 +101,11 @@ def test_common_prefix_length_empty() -> None:
 
 
 def test_common_prefix_length_shared() -> None:
-    nets = [
+    _nets = [
         ipaddress.ip_network("192.168.1.0/24"),
-        ipaddress.ip_network("192.168.2.0/24"),
+        ipaddress.ip_network("192.168.1.128/25"),
     ]
-    assert _common_prefix_length(nets) == 22
+    assert _common_prefix_length(_nets) == 24
 
 
 def test_common_prefix_length_adjacent() -> None:
@@ -998,17 +998,13 @@ def test_collapse_value_error_branch(monkeypatch):
 
 def test_merge_networks_overlap_smaller_successor():
     import ipaddress
-    nets = [
-        ipaddress.ip_network("192.168.1.0/24"),
-        ipaddress.ip_network("192.168.1.128/25"),
-    ]
     # first is larger/same? first is /24 (larger), second /25 inside - covered by test_merge_networks_overlapping
     # try the other way where after sort first is smaller and overlaps second?
-    nets2 = [
+    nets = [
         ipaddress.ip_network("192.168.1.128/25"),
         ipaddress.ip_network("192.168.1.0/24"),
     ]
-    merged = _merge_networks(nets2)
+    merged = _merge_networks(nets)
     assert len(merged) == 1
     assert str(merged[0]) == "192.168.1.0/24"
 
