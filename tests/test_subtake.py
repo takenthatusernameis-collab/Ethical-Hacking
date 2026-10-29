@@ -324,6 +324,40 @@ def test_run_subtake_no_http_confirmation(monkeypatch) -> None:
     assert "CNAME points to vulnerable service" in takeover["evidence"]
 
 
+def test_run_subtake_no_http_fingerprint(monkeypatch) -> None:
+    """CNAME matches vulnerable service but check_http_fingerprint returns None -> else branch (523-525)."""
+
+    def mock_resolve_cname(hostname, timeout=2.0, resolver=None):
+        if hostname == "www.example.com":
+            return "mybucket.s3.amazonaws.com"
+        return None
+
+    def mock_resolve_a(hostname, timeout=2.0, resolver=None):
+        return []
+
+    def mock_resolve_aaaa(hostname, timeout=2.0, resolver=None):
+        return []
+
+    def mock_check_http(hostname, timeout=5.0):
+        return None
+
+    monkeypatch.setattr("ethscan.subtake.resolve_cname", mock_resolve_cname)
+    monkeypatch.setattr("ethscan.subtake.resolve_a_records", mock_resolve_a)
+    monkeypatch.setattr("ethscan.subtake.resolve_aaaa_records", mock_resolve_aaaa)
+    monkeypatch.setattr("ethscan.subtake.check_http_fingerprint", mock_check_http)
+
+    results = run_subtake(
+        "example.com",
+        subdomains=["www"],
+        timeout=1.0,
+    )
+    assert results["vulnerable_count"] == 1
+    vuln = results["vulnerable"][0]
+    takeover = vuln["takeover"]
+    assert takeover["http_confirmed"] is False
+    assert "CNAME points to vulnerable service" in takeover["evidence"]
+
+
 def test_format_subtake_report_json() -> None:
     data = {
         "target": "example.com",

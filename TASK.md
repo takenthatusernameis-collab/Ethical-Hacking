@@ -1,22 +1,19 @@
 ## Status: COMPLETE
 
 ### What changed
-- No source changes in this session. Verified repository state from previous handoff.
+- Added test `test_run_subtake_no_http_fingerprint` in `tests/test_subtake.py` to cover `run_subtake` when CNAME matches a vulnerable service but `check_http_fingerprint` returns `None` (test-only).
 
 ### What was actually verified
-- `python -m coverage run -m pytest tests/test_radix.py tests/test_cve.py tests/test_subtake.py -q` -> 278 passed.
-- Coverage: `ethscan/cve.py` 99% (miss 348-349), `ethscan/radix.py` 95% (miss defensive fallbacks), `ethscan/subtake.py` 99% (miss 19, 524-525).
-- Full suite: `python -m pytest -q` -> 5355 passed, 51 skipped, 1 pre-existing failure (`tests/test_dnssec.py::test_dnssec_inner_dns_import_failure`).
-- `python -m ruff check ethscan/ tests/` -> 10 pre-existing errors, no new errors.
+- `python -m coverage run -m pytest tests/test_subtake.py -q` -> 72 passed.
+- Coverage for `ethscan/subtake.py`: 99% (miss line 19 - try-import guard for optional dns modules).
+- Full suite not re-run in this session (focused verification only).
 
 ### What remains unresolved
-- `ethscan/cve.py` 348-349 unreachable dead code without source changes (deferred).
-- `ethscan/radix.py` defensive exception paths (181-185,196-198,216,222-225,236-240,295-296,324) difficult to cover without source changes/pathological objects.
-- `ethscan/subtake.py` 524-525 else branch (HTTP fingerprint missing/non-string) - testable with mocking.
-- Pre-existing dnssec env-related failure.
+- `ethscan/subtake.py` line 19: optional dns import guard (missed depending on coverage/import state; try-block import guard, hard to cover without changing import mechanics).
+- Pre-existing issues from prior handoffs: `ethscan/cve.py` lines 348-349 (unreachable without source change), `ethscan/radix.py` defensive fallbacks hard to cover, pre-existing `tests/test_dnssec.py::test_dnssec_inner_dns_import_failure`.
 
 ### Which approaches failed and why
-- None. No changes attempted; only verification performed.
+- None. Test-only change succeeded.
 
 ### One precise next task
-- Test-only: cover `ethscan/subtake.py` lines 523-525 in `run_subtake` by mocking `check_http_fingerprint` to return `None` when a takeover signature matches (e.g., CNAME to github.io). Assert `http_confirmed` False and evidence message set. Run focused tests+coverage on `tests/test_subtake.py`.
+- Consider covering `ethscan/subtake.py` line 19 (dns.enum/dns.message import try/except) if feasible with test isolation, or accept as defensive/import-guard line. Alternatively, look at other files with easy coverage gaps - `ethscan/cve.py` 348-349 is unreachable; `ethscan/radix.py` has defensive paths. Pick the smallest test-only opportunity.
