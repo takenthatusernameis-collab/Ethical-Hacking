@@ -1006,3 +1006,174 @@ def test_resolve_s3_endpoint_restores_default_socket_timeout(monkeypatch) -> Non
     monkeypatch.setattr("ethscan.s3.socket", fake)
     assert _resolve_s3_endpoint("bucket", "us-east-1") == "1.2.3.4"
     assert fake.timeout_values == [DEFAULT_TIMEOUT, 42.0]
+
+
+# ---------------------------------------------------------------------------
+# Formatter defensive-branch coverage (non-list / non-dict input)
+# ---------------------------------------------------------------------------
+
+
+def test_format_s3_report_markdown_regions_checked_not_list() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "region": "us-east-1",
+        "timeout": 5.0,
+        "workers": 20,
+        "wordlist_used": False,
+        "candidates_tested": 0,
+        "regions_checked": "us-east-1",
+        "results": [],
+        "public_buckets": [],
+        "private_buckets": [],
+        "existing_buckets": [],
+        "notes": [],
+    }
+    output = format_s3_report_markdown(data)
+    assert "**Regions Checked:**" in output
+
+
+def test_format_s3_report_markdown_public_buckets_not_list() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "region": "us-east-1",
+        "timeout": 5.0,
+        "workers": 20,
+        "wordlist_used": False,
+        "candidates_tested": 0,
+        "regions_checked": [],
+        "results": [],
+        "public_buckets": "not-a-list",
+        "private_buckets": [],
+        "existing_buckets": [],
+        "notes": [],
+    }
+    output = format_s3_report_markdown(data)
+    assert "No publicly accessible buckets found" in output
+
+
+def test_format_s3_report_markdown_public_buckets_non_dict_entry() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "region": "us-east-1",
+        "timeout": 5.0,
+        "workers": 20,
+        "wordlist_used": False,
+        "candidates_tested": 0,
+        "regions_checked": [],
+        "results": [],
+        "public_buckets": ["not-a-dict"],
+        "private_buckets": [],
+        "existing_buckets": [],
+        "notes": [],
+    }
+    output = format_s3_report_markdown(data)
+    assert "| Bucket | Region | URL | DNS Resolved |" in output
+    assert "| not-a-dict |" not in output
+
+
+def test_format_s3_report_markdown_results_not_list() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "region": "us-east-1",
+        "timeout": 5.0,
+        "workers": 20,
+        "wordlist_used": False,
+        "candidates_tested": 0,
+        "regions_checked": [],
+        "results": "not-a-list",
+        "public_buckets": [],
+        "private_buckets": [],
+        "existing_buckets": [],
+        "notes": [],
+    }
+    output = format_s3_report_markdown(data)
+    assert "No buckets were tested" in output
+
+
+def test_format_s3_report_markdown_results_non_dict_entry() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "region": "us-east-1",
+        "timeout": 5.0,
+        "workers": 20,
+        "wordlist_used": False,
+        "candidates_tested": 0,
+        "regions_checked": [],
+        "results": ["not-a-dict"],
+        "public_buckets": [],
+        "private_buckets": [],
+        "existing_buckets": [],
+        "notes": [],
+    }
+    output = format_s3_report_markdown(data)
+    assert "| Bucket | Region | Exists | Public | Status | DNS Resolved | Error |" in output
+    assert "| not-a-dict |" not in output
+
+
+def test_format_s3_report_markdown_notes_not_list() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "region": "us-east-1",
+        "timeout": 5.0,
+        "workers": 20,
+        "wordlist_used": False,
+        "candidates_tested": 0,
+        "regions_checked": [],
+        "results": [],
+        "public_buckets": [],
+        "private_buckets": [],
+        "existing_buckets": [],
+        "notes": "not-a-list",
+    }
+    output = format_s3_report_markdown(data)
+    assert "No buckets were tested" in output
+
+
+def test_format_s3_report_csv_results_not_list() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "region": "us-east-1",
+        "timeout": 5.0,
+        "workers": 20,
+        "wordlist_used": False,
+        "candidates_tested": 0,
+        "regions_checked": [],
+        "results": "not-a-list",
+        "public_buckets": [],
+        "private_buckets": [],
+        "existing_buckets": [],
+        "notes": [],
+    }
+    output = format_s3_report_csv(data)
+    lines = output.strip().split("\n")
+    assert lines[0] == "target,domain,bucket,region,url,status_code,dns_resolved,exists,public,error"
+    assert len(lines) == 1
+
+
+def test_format_s3_report_csv_results_non_dict_entry() -> None:
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "region": "us-east-1",
+        "timeout": 5.0,
+        "workers": 20,
+        "wordlist_used": False,
+        "candidates_tested": 0,
+        "regions_checked": [],
+        "results": ["not-a-dict"],
+        "public_buckets": [],
+        "private_buckets": [],
+        "existing_buckets": [],
+        "notes": [],
+    }
+    output = format_s3_report_csv(data)
+    lines = output.strip().split("\n")
+    assert lines[0] == "target,domain,bucket,region,url,status_code,dns_resolved,exists,public,error"
+    assert len(lines) == 1

@@ -1,22 +1,21 @@
 ## Status: COMPLETE
 
 ### What changed
-- No source changes. Inspected codebase state from previous handoff (tests added for CVE cache non-mapping case). All tests verified.
+- No source changes. Added 8 tests to `tests/test_s3.py` covering all 8 previously-missing defensive branches in `ethscan/s3.py` formatters.
 
 ### What was actually verified
-- `pytest tests/test_radix.py tests/test_cve.py tests/test_subtake.py -q` -> 278 passed.
-- Coverage (focused): `ethscan/cve.py` 99% (2 miss: 348-349, dead/unreachable), `ethscan/radix.py` 95% (20 miss in defensive/fallback branches), `ethscan/subtake.py` 99% (3 miss: line 19 try-block import guard, lines 524-525 else branch in takeover HTTP confirmation).
-- Full suite earlier: `python -m pytest -q` -> 5355 passed, 51 skipped, 1 failed: `tests/test_dnssec.py::test_dnssec_inner_dns_import_failure` (pre-existing; dnspython not installed in env, unrelated).
-- Lint: `ruff check ethscan/ tests/` -> 10 pre-existing errors (unchanged), no new errors introduced.
+- `pytest tests/test_s3.py -q` -> 67 passed.
+- `ethscan/s3.py` coverage: 100% (0 miss; was 97%, 8 miss at lines 466, 478, 485, 498, 504, 521, 568, 571).
+- `ruff check ethscan/s3.py tests/test_s3.py` -> All checks passed.
+- Full suite: 5371 passed, 48 skipped, 2 pre-existing failures unchanged. `ethscan/subtake.py` remains 100%.
 
 ### What remains unresolved
-- `ethscan/cve.py` 348-349: `items` always a list in `run_cve()` flow, so `isinstance(items, dict)` branch unreachable without source change. Deferred per prior decision.
-- `ethscan/radix.py` 95% (missing: exception fallbacks in `_merge_networks` around 181-185, 196-198, 216, 222-225, 236-240; try/except in node construction 295-296; children-type guard fallback 324). Many are defensive and hard to trigger without crafting pathological objects; some may require source changes to make reachable. Prior sessions considered not covering without source changes.
-- `ethscan/subtake.py` 99%: line 19 is in try-import of optional dns modules (missed in some coverage runs depending on import state); lines 524-525 are the `else` branch when `http_body` not a string or no fingerprint (e.g., HTTP fingerprint fails). Can potentially be covered by a test with a takeover match but `check_http_fingerprint` returning None - need to see if feasible without changing source.
-- Pre-existing `test_dnssec_inner_dns_import_failure`.
+- `ethscan/radix.py` 95% (20 defensive/fallback miss lines; hard to cover test-only).
+- `ethscan/cve.py` 348-349 unreachable without source change.
+- Pre-existing `test_dnssec_inner_dns_import_failure` and `test_dnsbrute_probe_failure_is_reported_not_raised` failures.
 
 ### Which approaches failed and why
-- None in this session (read-only verification). Previous session covered CVE cache non-mapping case. No test-only changes made now.
+- None in this session. `radix.py`/`cve.py` defensive lines previously deemed not test-only-feasible; `s3.py` branches were confirmed test-only and are now covered.
 
 ### One precise next task
-- Cover `ethscan/subtake.py` lines 524-525 with a unit test: create a scenario where CNAME matches a known vulnerable signature but `check_http_fingerprint` returns None (or non-string), ensuring the else branch at 523-525 executes (sets http_confirmed False and evidence about no HTTP confirmation). This is test-only and feasible. Do **not** touch source. Verify with focused coverage for `ethscan/subtake.py`.
+- Cover the smallest remaining test-only coverage gap: inspect `ethscan/ping.py` (97%, 7 miss at 374-375, 455, 462, 474, 499, 502) or `ethscan/urlcheck.py` (97%, 8 miss at 141, 148, 167, 246, 335, 343, 354, 378), add test-only cases that trigger the missing lines, verify with `coverage report --include="ethscan/<file>.py" -m` and `ruff check ethscan/<file>.py tests/test_<file>.py`. Do NOT attempt `radix.py`/`cve.py` 348-349 without a source-change justification.
