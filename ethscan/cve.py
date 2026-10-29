@@ -344,9 +344,6 @@ def run_cve(
         nvd_errors: list[str] = []
 
         items: list[object] = service_list
-        if isinstance(items, dict):
-            inner_services = items.get("services")
-            items = inner_services if isinstance(inner_services, list) else []
 
         if isinstance(services, dict) and services_file:
             results = services.get("results")

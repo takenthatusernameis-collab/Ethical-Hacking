@@ -1,21 +1,22 @@
 ## Status: COMPLETE (this session)
 
 ### What changed
-- `tests/test_dnssec.py`: added `test_format_dnssec_report_markdown_ds_records_skip_non_dict` and `test_format_dnssec_report_csv_ds_records_skip_non_dict` covering `ethscan/dnssec.py:614` and `ethscan/dnssec.py:824`. Test-only; no source modifications.
+- `ethscan/cve.py`: removed unreachable dead code at the `items` assignment (was checking if `items` is dict and extracting `services` - unreachable since `items` comes from `service_list` which is a list). No behavior change.
+- `tests/test_cve.py`: formatted by ruff.
 
 ### What was actually verified
-- `pytest tests/test_dnssec.py -q` -> 111 passed; `pytest -q` full suite -> 5392 passed, 48 skipped, 0 failed.
-- `ruff check tests/test_dnssec.py ethscan/dnssec.py` -> All checks passed.
-- `ethscan/dnssec.py` coverage -> 100% (0 miss; was 99%, 2 miss at 614, 824). Total coverage 99% (83 miss; was 85).
+- `pytest tests/test_cve.py -q` -> 82 passed
+- `coverage report --include="ethscan/cve.py" -m` -> 100% (was 99%)
+- `ruff check ethscan/cve.py tests/test_cve.py` -> All checks passed
+- Full suite: `pytest -q` -> 5393 passed, 48 skipped, 0 failed
+- `coverage report --include="ethscan/ntp.py,ethscan/radix.py" -m` -> ntp.py 100%, radix.py 95% (20 miss)
 
 ### What remains unresolved
-- `ethscan/radix.py` 95% (20 miss; not test-only-feasible).
-- `ethscan/cve.py` lines 348-349 (dead; `items` always a list; requires source change).
-- `ethscan/ntp.py` line 392 (dead defensive code; requires source refactor).
-- Other small misses in cli.py, hash.py, mongodb.py, mssql.py, mysql.py, oracle.py, osdetect.py, postgresql.py.
+- `ethscan/radix.py` 95% (20 miss): defensive try/except blocks in `_merge_networks` and `_build_radix_node`. Not clearly test-only feasible without refactoring or complex mocking.
 
 ### Which approaches failed and why
-- `ntp.py:392`/`cve.py:348-349`/`radix.py`: not test-only-feasible / dead code; prior test-based attempts failed. `web.py:318`, `wifi.py:328`, `dnssec.py:614`, `dnssec.py:824` confirmed test-only feasible and now covered.
+- ntp.py:392 pattern from handoff not present in current codebase; ntp.py already 100% covered.
+- radix.py defensive paths require forcing exceptions in sorting/grouping with real objects - difficult without changing implementation.
 
 ### One precise next task
-- All test-only-feasible small coverage gaps are closed. Next bounded task: `ethscan/ntp.py:392` (single miss) — restructure monlist-response handling so the error-check is reachable without changing behavior, add a test in `tests/test_ntp.py`, verify ntp.py -> 100% coverage and ruff + ntp tests pass; otherwise defer as out of scope for test-only work.
+- Investigate `ethscan/radix.py` uncovered except branches (181-185, 196-198, 216, 222-225, 236-240, 295-296, 324). Try to make them testable via minimal safe refactors (dependency injection or extracting fallbacks) without behavior changes. Add tests to `tests/test_radix.py`. If unreachable without disproportionate changes, document and defer.

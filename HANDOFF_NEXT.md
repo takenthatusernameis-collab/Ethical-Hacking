@@ -1,23 +1,23 @@
 ## Status: COMPLETE (this session)
 
 ### What changed
-- `tests/test_dnssec.py`: added `test_format_dnssec_report_markdown_ds_records_skip_non_dict` and `test_format_dnssec_report_csv_ds_records_skip_non_dict`, covering `ethscan/dnssec.py:614` and `ethscan/dnssec.py:824` (the `if not isinstance(record, dict): continue` branches in the DS-records formatting loops). Test-only; no source modifications.
+- `ethscan/cve.py`: removed unreachable code `if isinstance(items, dict): inner_services = items.get("services"); items = inner_services if isinstance(inner_services, list) else []` (lines 347-349). The variable `items` was always assigned a list from `service_list`; this defensive branch was unreachable. Source change only (no behavior change).
+- `tests/test_cve.py`: auto-formatted by ruff (whitespace).
 
 ### What was actually verified
-- `pytest tests/test_dnssec.py -q` -> 111 passed.
-- `python -m ruff check tests/test_dnssec.py ethscan/dnssec.py` -> All checks passed.
-- `coverage report --include="ethscan/dnssec.py" -m` -> `ethscan/dnssec.py` 100% (0 miss; was 99%, 2 miss at 614, 824).
-- Full suite: `python -m pytest -q` -> 5392 passed, 48 skipped, 0 failed.
-- Total coverage: 99% (83 miss; was 85).
+- `python -m pytest tests/test_cve.py -q` -> 82 passed.
+- `python -m coverage run -m pytest tests/test_cve.py -q && python -m coverage report --include="ethscan/cve.py" -m` -> `ethscan/cve.py` 100% (0 miss; was 99%, 2 miss at 348-349).
+- `python -m ruff check ethscan/cve.py tests/test_cve.py` -> All checks passed.
+- Full suite: `python -m pytest -q` -> 5393 passed, 48 skipped, 0 failed.
+- `python -m coverage report --include="ethscan/ntp.py,ethscan/radix.py" -m` -> `ethscan/ntp.py` 100% (0 miss), `ethscan/radix.py` 95% (20 miss).
 
 ### What remains unresolved
-- `ethscan/radix.py` 95% (20 miss; not test-only-feasible).
-- `ethscan/cve.py` lines 348-349 (dead code, requires source change).
-- `ethscan/ntp.py` line 392 (dead code, requires source refactor).
-- Other small misses in cli.py, hash.py, mongodb.py, mssql.py, mysql.py, oracle.py, osdetect.py, postgresql.py.
+- `ethscan/radix.py` 95% (20 miss): defensive/fallback branches in `_merge_networks` (181-185, 196-198, 216, 222-225, 236-240) and in `_build_radix_node` (295-296, 324). Not obviously testable without complex mocking of `ipaddress` internals or forcing exceptions in sorting/grouping logic; likely requires source refactoring to make error paths reachable without changing behavior.
+- Other small misses exist in other modules (per earlier reports) but were not the focus of assigned task.
 
 ### Which approaches failed and why
-- `ntp.py:392`, `cve.py:348-349`, `radix.py`: dead / not test-only-feasible without a source change; prior test-based attempts failed. `web.py:318`, `wifi.py:328`, `dnssec.py:614`, `dnssec.py:824` confirmed test-only feasible and now covered.
+- Attempted to find dead code patterns matching previous handoff descriptions (e.g., nested `if mon_resp.get("error")` in ntp report formatting); current codebase state differs from described pattern - `ethscan/ntp.py` is already at 100% coverage with passing tests. No test-only fix needed for ntp.
+- `radix.py` defensive branches use broad `try/except Exception` around sorting/grouping; constructing inputs that trigger these specific except paths while keeping behavior correct is non-trivial and may require invasive changes.
 
 ### One precise next task
-- All test-only-feasible small coverage gaps are closed. Remaining gaps require a source change that does not fix a bug. Recommended next bounded task: `ethscan/ntp.py:392` (single miss) — refactor the monlist-response handling so the error-check is reachable without changing behavior, add a test in `tests/test_ntp.py`, verify ntp.py -> 100% coverage and ruff + ntp tests pass; otherwise defer and record the gap as out of scope for test-only work.
+- Focus on `ethscan/radix.py` lines 181-185, 196-198, 216, 222-225, 236-240, 295-296, 324. Inspect each except block to see if it can be made reachable via dependency injection/mocking or small restructuring (e.g., extract sorting into a helper that can fail predictably) without changing observable behavior. Add targeted tests in `tests/test_radix.py`. Verify `coverage report --include="ethscan/radix.py" -m` improves toward 100% and `ruff check ethscan/radix.py tests/test_radix.py` + radix tests pass. If any path remains unreachable without changing behavior or introducing complexity disproportionate to the gain, document evidence and stop - do not force speculative changes.

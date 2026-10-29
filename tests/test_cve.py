@@ -1563,7 +1563,7 @@ def test_cve_scan_import_fallback_to_ethscan_service(monkeypatch) -> None:
     called = []
     import ethscan.service as svc_mod
 
-    orig = getattr(svc_mod, "run_service")
+    orig = svc_mod.run_service
 
     def wrapped(*a, **kw):
         called.append(True)
