@@ -174,14 +174,14 @@ def _merge_networks(networks: list[ipaddress._BaseNetwork]) -> list[ipaddress._B
         # group by version to avoid comparing different versions
         by_ver = {}
         for n in networks:
-            by_ver.setdefault(getattr(n, 'version'), []).append(n)
+            by_ver.setdefault(n.version, []).append(n)
         sorted_nets = []
         for v in sorted(by_ver.keys()):
             sorted_nets.extend(sorted(by_ver[v], key=lambda n: (n.network_address, -n.prefixlen)))
-    except Exception:
+    except Exception:  # noqa: BLE001
         try:
             sorted_nets = sorted(networks, key=lambda n: (n.network_address, -n.prefixlen))
-        except Exception:
+        except Exception:  # noqa: BLE001
             sorted_nets = list(networks)
     merged: list[ipaddress._BaseNetwork] = []
     for net in sorted_nets:
@@ -193,7 +193,7 @@ def _merge_networks(networks: list[ipaddress._BaseNetwork]) -> list[ipaddress._B
             if getattr(net, 'version', None) != getattr(last, 'version', None):
                 merged.append(net)
                 continue
-        except Exception:
+        except Exception:  # noqa: BLE001
             merged.append(net)
             continue
         collapsed: list[ipaddress.IPv4Network] | list[ipaddress.IPv6Network] | None = None
@@ -228,15 +228,15 @@ def _merge_networks(networks: list[ipaddress._BaseNetwork]) -> list[ipaddress._B
     try:
         by_ver = {}
         for n in merged:
-            by_ver.setdefault(getattr(n, 'version'), []).append(n)
+            by_ver.setdefault(n.version, []).append(n)
         result = []
         for v in sorted(by_ver.keys()):
             result.extend(sorted(by_ver[v], key=lambda n: n.network_address))
         merged = result
-    except Exception:
+    except Exception:  # noqa: BLE001
         try:
             merged = sorted(merged, key=lambda n: n.network_address)
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
     return merged
 
