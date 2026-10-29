@@ -520,6 +520,20 @@ def test_run_wifi_linux_with_scan_results() -> None:
                     assert ap["interface"] == "wlan0"
 
 
+def test_run_wifi_drops_ap_without_bssid() -> None:
+    """An access point without a BSSID is skipped during deduplication
+    (ethscan/wifi.py:328)."""
+    ifaces = [{"interface": "wlan0", "status": 0, "link_quality": 45.0, "signal_level": -45.0, "noise_level": -256.0}]
+    aps = [
+        {"ssid": "NoBssid", "channel": 1, "signal_dbm": -50},
+        {"bssid": "00:11:22:33:44:55", "ssid": "Network1", "signal_dbm": -65},
+    ]
+    with patch("ethscan.wifi._parse_proc_net_wireless", return_value=ifaces), patch("ethscan.wifi._scan_interface", return_value=aps), patch("platform.system", return_value="Linux"):
+                result = run_wifi()
+                assert len(result["access_points"]) == 1
+                assert result["access_points"][0]["bssid"] == "00:11:22:33:44:55"
+
+
 def test_run_wifi_specific_interface() -> None:
     ifaces = [
         {"interface": "wlan0", "status": 0, "link_quality": 45.0, "signal_level": -45.0, "noise_level": -256.0},

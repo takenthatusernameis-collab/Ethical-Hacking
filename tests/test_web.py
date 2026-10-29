@@ -1181,3 +1181,16 @@ def test_format_web_report_markdown_with_notes() -> None:
     output = format_web_report_markdown(data)
     assert '## Notes' in output
     assert 'Some extra context' in output
+
+
+def test_format_web_report_markdown_with_error() -> None:
+    """Test top-level error renders in markdown report."""
+    data = {
+        'target': 'https://example.com',
+        'host': 'example.com',
+        'port': 443,
+        'secure': True,
+        'error': 'Connection refused',
+    }
+    output = format_web_report_markdown(data)
+    assert '**Error:** Connection refused' in output
