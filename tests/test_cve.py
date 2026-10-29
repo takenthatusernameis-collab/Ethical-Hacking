@@ -1364,3 +1364,45 @@ def test_cli_cve_services_file_non_utf8_no_traceback(tmp_path: object) -> None:
     combined = (result.stdout or "") + (result.stderr or "")
     assert "Traceback" not in combined
     assert "UnicodeDecodeError" not in combined
+
+
+def test_format_cve_report_csv_skips_non_dict_entries() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "timeout": 0.5,
+        "use_cache": True,
+        "offline_fallback": True,
+        "api_url": None,
+        "severity_filter": None,
+        "min_severity_filter": None,
+        "ports": None,
+        "services_checked": 0,
+        "cve_entries": [42, "nope"],
+        "cve_count": 0,
+        "severity_counts": {},
+        "notes": [],
+    }
+    output = format_cve_report_csv(data)
+    assert output.splitlines()[0].startswith("source,port")
+
+
+def test_format_cve_report_markdown_skips_non_dict_entries() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "timeout": 0.5,
+        "use_cache": True,
+        "offline_fallback": True,
+        "api_url": None,
+        "severity_filter": None,
+        "min_severity_filter": None,
+        "ports": None,
+        "services_checked": 0,
+        "cve_entries": [42, "nope"],
+        "cve_count": 0,
+        "severity_counts": {},
+        "notes": [],
+    }
+    output = format_cve_report_markdown(data)
+    assert "## CVE Findings" in output
