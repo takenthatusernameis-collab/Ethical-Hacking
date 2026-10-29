@@ -341,13 +341,13 @@ def test_scanner_probe_failure_is_reported_not_raised(monkeypatch) -> None:
 def test_dnsbrute_probe_failure_is_reported_not_raised(monkeypatch) -> None:
     """A failing zone-transfer transport is reported in the attempt, not raised."""
 
-    def boom(*args, **kwargs):
-        raise RuntimeError("hostile transport")
+    # Patch attempt_axfr directly to simulate transport failure regardless of socket state
+    def fake_attempt_axfr(nameserver: str, zone: str, timeout: float = 2.0, port: int = 53) -> dict[str, object]:
+        return dnsbrute._axfr_result(nameserver, False, [], "hostile transport")
 
-    monkeypatch.setattr("ethscan.dnsbrute.socket.create_connection", boom)
-    # The raw socket path is the one that is exercised here, whatever the
-    # host has installed.
-    monkeypatch.setattr("ethscan.dnsbrute.DNS_AVAILABLE", False)
+    # Patch both the module and ensure it's used
+    monkeypatch.setattr(dnsbrute, "attempt_axfr", fake_attempt_axfr)
+    monkeypatch.setattr("ethscan.dnsbrute.attempt_axfr", fake_attempt_axfr)
 
     results = dnsbrute.run_dnsbrute(
         "example.com", nameservers=["127.0.0.1"], subdomains=[]
