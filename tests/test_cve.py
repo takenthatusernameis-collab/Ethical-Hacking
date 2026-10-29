@@ -1000,6 +1000,13 @@ def test_load_cache_invalid_json(tmp_path, monkeypatch) -> None:
     assert _load_cache() == {}
 
 
+def test_load_cache_valid_json_but_not_dict(tmp_path, monkeypatch) -> None:
+    cache_file = tmp_path / "cve_cache.json"
+    cache_file.write_text("[1, 2, 3]", encoding="utf-8")
+    monkeypatch.setattr("ethscan.cve.CACHE_FILE", cache_file)
+    assert _load_cache() == {}
+
+
 def test_save_cache_os_error(tmp_path, monkeypatch) -> None:
     cache_file = tmp_path / "cve_cache.json"
     monkeypatch.setattr("ethscan.cve.CACHE_FILE", cache_file)

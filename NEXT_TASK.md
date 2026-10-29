@@ -1,17 +1,17 @@
 ## Status: COMPLETE
 
 ### What changed
-- Added 9 tests to `tests/test_subtake.py` covering defensive branches of `format_subtake_report_csv` and `format_subtake_report_markdown` in `ethscan/subtake.py` (lines 601, 605, 609, 611, 652, 655, 674, 679, 681).
+- Added 1 test to `tests/test_cve.py` covering `ethscan/cve.py` line 70: `_load_cache` returns `{}` when the cache file holds valid JSON that is not a mapping.
 
 ### What was actually verified
-- `pytest tests/test_subtake.py -q` -> 71 passed.
-- Full suite coverage: `ethscan/subtake.py` 96% -> 99% (1 miss: line 19, unreachable dns import).
-- `ruff check ethscan/ tests/` -> 9 pre-existing errors, no new errors.
-- Full suite `python -m pytest -q` -> 5341 passed, 51 skipped; the single failure (`test_dnssec_inner_dns_import_failure`) is pre-existing on clean HEAD and environment-related.
+- `pytest tests/test_cve.py -q` -> 82 passed.
+- `ethscan/cve.py` coverage: 98% -> 99% (432 stmts, 2 miss: lines 348-349, dead code).
+- `ruff check ethscan/ tests/` -> 10 pre-existing errors, no new errors.
+- Full suite `python -m pytest -q` -> 5355 passed, 51 skipped; 1 pre-existing failure (`test_dnssec_inner_dns_import_failure`, environment-related).
 
 ### What remains unresolved
-- `ethscan/subtake.py` line 19 is unreachable dead code (dnspython not installed; `dns.enum`/`dns.message` rise/fall together).
-- `ethscan/radix.py` 95% and `ethscan/cve.py` 95% remain the lowest-coverage modules.
+- `ethscan/cve.py` lines 348-349 are unreachable dead code (not coverable by tests without source changes).
+- Pre-existing `test_dnssec_inner_dns_import_failure` failure.
 
 ### One precise next task
-- Raise `ethscan/cve.py` (95%) coverage by adding tests for its remaining defensive branches, keeping `ruff check ethscan/ tests/` and the full suite green. Confirm missing lines with `python -m coverage report --include="ethscan/cve.py" -m` first.
+- No test-only coverage gains remain (`cve.py` 99% with only dead lines 348-349 missing; `radix.py` deferred without source changes). Next: `ethscan/radix.py` only if source changes are authorized to make its defensive branches reachable.
