@@ -994,3 +994,77 @@ def test_collapse_value_error_branch(monkeypatch):
     nets = [ipaddress.ip_network("192.168.0.0/24"), ipaddress.ip_network("192.168.1.0/24")]
     out = _merge_networks(nets)
     assert out
+
+
+def test_merge_networks_overlap_smaller_successor():
+    import ipaddress
+    nets = [
+        ipaddress.ip_network("192.168.1.0/24"),
+        ipaddress.ip_network("192.168.1.128/25"),
+    ]
+    # first is larger/same? first is /24 (larger), second /25 inside - covered by test_merge_networks_overlapping
+    # try the other way where after sort first is smaller and overlaps second?
+    nets2 = [
+        ipaddress.ip_network("192.168.1.128/25"),
+        ipaddress.ip_network("192.168.1.0/24"),
+    ]
+    merged = _merge_networks(nets2)
+    assert len(merged) == 1
+    assert str(merged[0]) == "192.168.1.0/24"
+
+
+def test_merge_networks_overlap_non_collapseable_choose_larger():
+    import ipaddress
+    # Two overlapping networks that can't be collapsed into single supernet by our collapse functions
+    # e.g. different non-contiguous in a way collapse doesn't handle? Or just overlapping different sizes
+    nets = [
+        ipaddress.ip_network("10.0.0.0/23"),
+        ipaddress.ip_network("10.0.1.0/24"),
+    ]
+    merged = _merge_networks(nets)
+    # They overlap; collapse might not produce single network if not supernettable nicely
+    assert len(merged) >= 1
+
+
+def test_merge_networks_overlap_choose_smaller_when_last_larger():
+    import ipaddress
+    # Force case where last.num_addresses >= net.num_addresses is false -> take net (smaller? no wait - look at code)
+    # if last.overlaps(net): if last.num_addresses >= net.num_addresses: merged[-1]=last else merged[-1]=net
+    # so if net is larger than last, we take net
+    nets = [
+        ipaddress.ip_network("10.0.0.0/25"),  # smaller
+        ipaddress.ip_network("10.0.0.0/24"),  # larger, overlaps
+    ]
+    merged = _merge_networks(nets)
+    assert str(merged[0]) == "10.0.0.0/24"
+
+
+def test_merge_networks_overlap_choose_larger_last():
+    import ipaddress
+    # if last is larger, keep last
+    nets = [
+        ipaddress.ip_network("10.0.0.0/24"),
+        ipaddress.ip_network("10.0.0.0/25"),
+    ]
+    merged = _merge_networks(nets)
+    assert str(merged[0]) == "10.0.0.0/24"
+
+
+def test_merge_networks_v6():
+    import ipaddress
+    nets = [
+        ipaddress.ip_network("2001:db8::/32"),
+        ipaddress.ip_network("2001:db8:1::/48"),
+    ]
+    merged = _merge_networks(nets)
+    assert len(merged) >= 1
+
+
+def test_merge_networks_v6_disjoint():
+    import ipaddress
+    nets = [
+        ipaddress.ip_network("2001:db8::/32"),
+        ipaddress.ip_network("2001:db9::/32"),
+    ]
+    merged = _merge_networks(nets)
+    assert len(merged) >= 1

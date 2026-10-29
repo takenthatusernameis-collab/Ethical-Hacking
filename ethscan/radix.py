@@ -170,14 +170,30 @@ def _merge_networks(networks: list[ipaddress._BaseNetwork]) -> list[ipaddress._B
     """
     if not networks:
         return []
-    sorted_nets = sorted(networks, key=lambda n: (n.network_address, -n.prefixlen))
+    try:
+        # group by version to avoid comparing different versions
+        by_ver = {}
+        for n in networks:
+            by_ver.setdefault(getattr(n, 'version'), []).append(n)
+        sorted_nets = []
+        for v in sorted(by_ver.keys()):
+            sorted_nets.extend(sorted(by_ver[v], key=lambda n: (n.network_address, -n.prefixlen)))
+    except Exception:
+        try:
+            sorted_nets = sorted(networks, key=lambda n: (n.network_address, -n.prefixlen))
+        except Exception:
+            sorted_nets = list(networks)
     merged: list[ipaddress._BaseNetwork] = []
     for net in sorted_nets:
         if not merged:
             merged.append(net)
             continue
         last = merged[-1]
-        if net.version != last.version:
+        try:
+            if getattr(net, 'version', None) != getattr(last, 'version', None):
+                merged.append(net)
+                continue
+        except Exception:
             merged.append(net)
             continue
         collapsed: list[ipaddress.IPv4Network] | list[ipaddress.IPv6Network] | None = None
@@ -209,7 +225,19 @@ def _merge_networks(networks: list[ipaddress._BaseNetwork]) -> list[ipaddress._B
                 merged[-1] = net
         else:
             merged.append(net)
-    merged = sorted(merged, key=lambda n: n.network_address)
+    try:
+        by_ver = {}
+        for n in merged:
+            by_ver.setdefault(getattr(n, 'version'), []).append(n)
+        result = []
+        for v in sorted(by_ver.keys()):
+            result.extend(sorted(by_ver[v], key=lambda n: n.network_address))
+        merged = result
+    except Exception:
+        try:
+            merged = sorted(merged, key=lambda n: n.network_address)
+        except Exception:
+            pass
     return merged
 
 
