@@ -841,3 +841,18 @@ def test_osdetect_transport_failure_is_reported_not_raised(monkeypatch) -> None:
     probe = results["probes"][0]
     assert probe["response"] == "NO-RESPONSE"
     assert "hostile transport" in (probe.get("error") or "")
+
+
+def test_run_osdetect_invalid_max_workers_reports_probes() -> None:
+    """A non-positive max_workers fails executor creation; the outer except
+    reports NO-RESPONSE probes for every port instead of raising (lines 424-425)."""
+    result = run_osdetect("example.com", ports=[22, 80], max_workers=0)
+    assert result["ports_probed"] == 2
+    assert len(result["probes"]) == 2
+    assert {p["port"] for p in result["probes"]} == {22, 80}
+    for probe in result["probes"]:
+        assert probe["connected"] is False
+        assert probe["response"] == "NO-RESPONSE"
+        assert probe["probe_type"] == "SYN"
+        assert probe["flags_observed"] is None
+        assert probe["error"]
