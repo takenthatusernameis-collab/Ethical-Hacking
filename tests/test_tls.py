@@ -1081,3 +1081,69 @@ def test_build_context_default_version_unchanged(monkeypatch) -> None:
     ctx = _build_context()
     assert ctx.minimum_version == ssl.TLSVersion.MINIMUM_SUPPORTED
     assert ctx.maximum_version == ssl.TLSVersion.MAXIMUM_SUPPORTED
+
+
+def test_format_tls_report_markdown_non_list_fields() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "versions_tested": 1,
+        "ciphers_tested": 1,
+        "supported_versions": "TLSv1_2",  # truthy non-list
+        "notes": "bad",  # truthy non-list
+        "versions": "bad",  # truthy non-list
+        "ciphers": "bad",  # truthy non-list
+    }
+    output = format_tls_report_markdown(data)
+    assert "**Supported Versions:** None" in output
+    assert "*No protocol versions tested.*" in output
+    assert "*No cipher suites tested.*" in output
+
+
+def test_format_tls_report_markdown_non_dict_entries() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "versions_tested": 1,
+        "ciphers_tested": 1,
+        "supported_versions": ["TLSv1_2"],
+        "notes": [],
+        "versions": ["not-a-dict"],
+        "ciphers": [{"cipher": "AES", "supported": True, "error": None, "negotiated_version": "TLSv1.2"}, 123],
+    }
+    output = format_tls_report_markdown(data)
+    # Non-dict version entries are skipped
+    assert "not-a-dict" not in output
+    # Non-dict cipher entry skipped
+    assert output.count("| AES |") == 1
+
+
+def test_format_tls_report_csv_non_list_fields() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "versions": "bad",  # truthy non-list
+        "ciphers": 123,  # truthy non-list
+    }
+    output = format_tls_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert len(reader) == 1
+
+
+def test_format_tls_report_csv_non_dict_entries() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "versions": [{"version": "TLSv1_2", "supported": True, "error": None, "negotiated_cipher": "AES", "negotiated_protocol": "TLSv1.2"}, "bad"],
+        "ciphers": [{"cipher": "AES", "supported": False, "error": None, "negotiated_version": None}, None],
+    }
+    output = format_tls_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    # Header + 1 valid version + 1 valid cipher = 3 rows
+    assert len(reader) == 3
+    assert reader[1][4] == "TLSv1_2"
+    assert reader[2][4] == "AES"
