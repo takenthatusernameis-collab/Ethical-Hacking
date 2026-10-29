@@ -1175,3 +1175,150 @@ def test_ping_socket_creation_failure_of_unnamed_type_is_reported(monkeypatch) -
     assert probe["response_type"] == ethscan.ping.RESP_NO_RESPONSE
     assert "hostile transport" in (probe.get("error") or "")
     assert results["failed"] == 1
+
+
+def test_run_ping_raw_socket_creation_exception_sets_none(monkeypatch) -> None:
+    """run_ping catches exception from _try_create_raw_socket."""
+    import ethscan.ping as ping_mod
+
+    def mock_probe_icmp(host, timeout=2.0, ttl=64, raw_socket=None, identifier=0, sequence=0, payload=b"", resolved_ip=None, port=80):
+        return {
+            "ip": resolved_ip,
+            "rtt_ms": 1.0,
+            "ttl": ttl,
+            "sequence": sequence,
+            "response_type": RESP_CONNECTED,
+            "error": None,
+        }
+
+    def raise_exc():
+        raise OSError("permission denied")
+
+    orig_probe = ping_mod.probe_icmp
+    orig_raw = ping_mod._try_create_raw_socket
+    ping_mod.probe_icmp = mock_probe_icmp
+    ping_mod._try_create_raw_socket = raise_exc
+    try:
+        result = run_ping("example.com", count=1, timeout=1.0, ttl=64)
+        assert result["raw_socket_available"] is False
+        assert any("Raw ICMP socket unavailable" in n for n in result.get("notes", []))
+    finally:
+        ping_mod.probe_icmp = orig_probe
+        ping_mod._try_create_raw_socket = orig_raw
+
+
+def test_run_ping_probe_icmp_exception_caught(monkeypatch) -> None:
+    """run_ping catches exception from probe_icmp per probe."""
+    import ethscan.ping as ping_mod
+
+    def raise_exc(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    orig_probe = ping_mod.probe_icmp
+    orig_raw = ping_mod._try_create_raw_socket
+    ping_mod.probe_icmp = raise_exc
+    ping_mod._try_create_raw_socket = lambda: None
+    try:
+        result = run_ping("example.com", count=2, timeout=1.0, ttl=64)
+        assert len(result["probes"]) == 2
+        for p in result["probes"]:
+            assert p["response_type"] == RESP_NO_RESPONSE
+            assert p["error"] == "boom"
+        assert result["successful"] == 0
+        assert result["failed"] == 2
+    finally:
+        ping_mod.probe_icmp = orig_probe
+        ping_mod._try_create_raw_socket = orig_raw
+
+
+def test_format_ping_report_markdown_with_non_list_probes_and_notes() -> None:
+    """format_ping_report_markdown handles non-list probes/notes and non-dict probes."""
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "ip": "1.2.3.4",
+        "count": 1,
+        "timeout": 1.0,
+        "ttl": 64,
+        "port": 80,
+        "raw_socket_available": False,
+        "successful": 0,
+        "failed": 1,
+        "rtt_min_ms": None,
+        "rtt_max_ms": None,
+        "rtt_avg_ms": None,
+        "probes": "not-a-list",
+        "notes": None,
+    }
+    out = format_ping_report_markdown(data)
+    assert "# ethscan Ping Report" in out
+    assert "Raw ICMP Socket" in out
+
+
+def test_format_ping_report_markdown_probes_non_dict_and_pipes() -> None:
+    """format_ping_report_markdown skips non-dict probes."""
+    data = {
+        "target": "test.com",
+        "host": "test.com",
+        "ip": "1.2.3.4",
+        "count": 1,
+        "timeout": 1.0,
+        "ttl": 64,
+        "port": 80,
+        "raw_socket_available": True,
+        "successful": 1,
+        "failed": 0,
+        "rtt_min_ms": 1.0,
+        "rtt_max_ms": 2.0,
+        "rtt_avg_ms": 1.5,
+        "probes": ["bad", {"sequence": 1, "ip": "1.2.3.4|5", "rtt_ms": 1.2, "response_type": "echo|reply"}],
+        "notes": ["note with pipes"],
+    }
+    out = format_ping_report_markdown(data)
+    assert "1.2.3.4\\|5" in out
+    assert "echo\\|reply" in out
+    assert "note with pipes" in out
+
+
+def test_format_ping_report_csv_non_list_probes_and_non_dict() -> None:
+    """format_ping_report_csv handles non-list probes and non-dict probe entries."""
+    data = {
+        "target": "example.com",
+        "ip": "1.2.3.4",
+        "probes": "bad",
+    }
+    out = format_ping_report_csv(data)
+    # header only
+    assert out.splitlines()[0] == "target,ip,sequence,rtt_ms,ttl,response_type,error"
+    assert len(out.splitlines()) == 1
+
+    data2 = {
+        "target": "example.com",
+        "ip": "1.2.3.4",
+        "probes": ["bad", {"sequence": 1, "ip": None, "rtt_ms": None, "ttl": 64, "response_type": "x", "error": ""}],
+    }
+    out2 = format_ping_report_csv(data2)
+    lines = out2.splitlines()
+    assert lines[1].startswith("example.com,,1,,64,x,")
+
+
+def test_format_ping_report_markdown_notes_non_list() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "ip": "1.2.3.4",
+        "count": 1,
+        "timeout": 1.0,
+        "ttl": 64,
+        "port": 80,
+        "raw_socket_available": False,
+        "successful": 0,
+        "failed": 1,
+        "rtt_min_ms": None,
+        "rtt_max_ms": None,
+        "rtt_avg_ms": None,
+        "probes": [],
+        "notes": "bad",
+    }
+    out = format_ping_report_markdown(data)
+    assert "# ethscan Ping Report" in out
