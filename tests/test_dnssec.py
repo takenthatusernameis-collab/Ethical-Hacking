@@ -1764,3 +1764,41 @@ def test_dnssec_outer_except_on_later_import_failure(monkeypatch) -> None:
             if k.startswith("dns"):
                 monkeypatch.delitem(sys.modules, k, raising=False)
         reload(dnssec_mod)
+
+
+def test_format_dnssec_report_markdown_ds_records_skip_non_dict():
+    from ethscan import dnssec
+
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "validated": False,
+        "dnskey": {"success": False, "error": "no dnskey"},
+        "ds": {
+            "success": True,
+            "records": ["not-a-dict", 42, None],
+        },
+        "chain": [],
+        "notes": [],
+    }
+    md = dnssec.format_dnssec_report_markdown(data)
+    assert "## DS Records (Parent Zone)" in md
+    assert "| Name |" in md
+
+
+def test_format_dnssec_report_csv_ds_records_skip_non_dict():
+    from ethscan import dnssec
+
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "validated": False,
+        "dnskey": {"success": False, "error": "no dnskey"},
+        "ds": {
+            "success": True,
+            "records": ["not-a-dict", {"name": "x", "key_tag": 1, "algorithm": 5, "digest_type": 2, "digest_type_name": "SHA-256", "digest": "ab"}, 42],
+        },
+        "chain": [],
+    }
+    csv_out = dnssec.format_dnssec_report_csv(data)
+    assert "ds,x," in csv_out
