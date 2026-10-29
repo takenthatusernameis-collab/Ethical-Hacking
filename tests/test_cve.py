@@ -1616,3 +1616,30 @@ def test_cve_scan_nvd_lookup_exception_caught(monkeypatch, tmp_path: object) -> 
     res = cve.run_cve("example.com", services_file=str(sf))
     # Exception caught, should not crash
     assert res["services_checked"] == 1
+
+
+def test_cve_scan_service_detection_raises_caught(monkeypatch) -> None:
+    from ethscan import cve
+    import ethscan.service as svc_mod
+
+    def fake_run_service(*args, **kwargs):
+        raise ValueError("boom")
+
+    monkeypatch.setattr(svc_mod, "run_service", fake_run_service)
+    monkeypatch.setattr(cve, "_lookup_cve_id", lambda p, v: None)
+    res = cve.run_cve("example.com")
+    assert any("Service detection failed: boom" in str(n) for n in res["notes"])
+    assert res["services_checked"] == 0
+
+
+def test_cve_scan_skips_non_dict_entry_in_service_list(monkeypatch) -> None:
+    from ethscan import cve
+    import ethscan.service as svc_mod
+
+    def fake_run_service(target, ports=None, timeout=None, max_workers=None):
+        return {"services": [42, {"banner": "Apache/2.4.49", "port": 80}]}
+
+    monkeypatch.setattr(svc_mod, "run_service", fake_run_service)
+    monkeypatch.setattr(cve, "_lookup_cve_id", lambda p, v: None)
+    res = cve.run_cve("example.com")
+    assert res["services_checked"] == 1
