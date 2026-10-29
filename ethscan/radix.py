@@ -172,7 +172,7 @@ def _merge_networks(networks: list[ipaddress._BaseNetwork]) -> list[ipaddress._B
         return []
     try:
         # group by version to avoid comparing different versions
-        by_ver = {}
+        by_ver: dict[int, list[ipaddress._BaseNetwork]] = {}
         for n in networks:
             by_ver.setdefault(n.version, []).append(n)
         sorted_nets = []
