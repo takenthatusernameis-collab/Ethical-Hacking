@@ -1068,3 +1068,15 @@ def test_merge_networks_v6_disjoint():
     ]
     merged = _merge_networks(nets)
     assert len(merged) >= 1
+
+
+def test_merge_networks_mixed_families_kept_separate():
+    """Different IP versions are not compared or collapsed (lines 193-195)."""
+    import ipaddress
+
+    nets = [
+        ipaddress.ip_network("10.0.0.0/8"),
+        ipaddress.ip_network("2001:db8::/32"),
+    ]
+    merged = _merge_networks(nets)
+    assert [str(n) for n in merged] == ["10.0.0.0/8", "2001:db8::/32"]

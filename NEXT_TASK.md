@@ -1,17 +1,17 @@
 ## Status: COMPLETE
 
 ### What changed
-- Added 2 hostile and 2 usable targets to `tests/test_target.py` covering the query-only (no slash) branch of `_path_of` (lines 217-222).
-- No source changes to `ethscan/target.py`.
+- Added `test_merge_networks_mixed_families_kept_separate` to `tests/test_radix.py`, covering the version-mismatch branch of `ethscan/radix.py` `_merge_networks` (lines 193-195).
+- No source changes to `ethscan/radix.py`.
 
 ### What was actually verified
-- `pytest tests/test_target.py -q` -> 230 passed.
-- `ruff check ethscan/ tests/` -> All checks passed.
-- Full suite `pytest -q` -> 5278 passed, 48 skipped.
-- `ethscan/target.py` coverage: 95% -> 100% (78 stmts, 0 miss).
+- `pytest tests/test_radix.py -q` -> 125 passed.
+- `ethscan/radix.py` coverage: 94% -> 95% (367 stmts, 20 miss).
+- `ruff check ethscan/ tests/` -> no new errors (9 pre-existing on clean HEAD).
+- Full suite `pytest -q` -> 5297 passed, 51 skipped.
 
 ### What remains unresolved
-- None. `ethscan/stale.py` reached 100% in a prior session; `ethscan/dns.py` reached 100% in this session.
+- `ethscan/radix.py` lines 181-185, 196-198, 216, 222-225, 236-240, 295-296, 324 are dead defensive code, unreachable without source changes.
 
 ### One precise next task
-- Raise `ethscan/radix.py` coverage from 94% (340 stmts, 19 miss: lines 181-182, 200-202, 206-209, 267-268, 296, 444, 448, 473, 488, 521, 558, 561, 575) by adding tests to `tests/test_radix.py`, keeping `ruff check ethscan/ tests/` and the full pytest suite green. Use `python -m coverage report --include="ethscan/radix.py" -m` to identify missing lines first.
+- Raise another sub-100% module by adding tests, keeping ruff and full suite green. Most bounded candidate: `ethscan/tls.py` at 95% (210 stmts, 10 miss: lines 419, 429, 439, 445, 461, 467, 499, 502, 515, 518). Confirm missing lines with `python -m coverage report --include="ethscan/tls.py" -m` first.
