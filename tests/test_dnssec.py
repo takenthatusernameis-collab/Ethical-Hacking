@@ -1508,3 +1508,259 @@ def test_run_dnssec_does_not_crash_on_hostile_exception(monkeypatch):
     results = dnssec_mod.run_dnssec("example.com", timeout=1.0)
     assert results["validated"] is False
     assert any("DNSKEY query failed" in n for n in results["notes"])
+
+
+def test_dnssec_dns_availability_flag_false(monkeypatch) -> None:
+    """DNS_AVAILABLE is False when dns is not importable (the except branch)."""
+    import sys
+    from importlib import reload
+
+    monkeypatch.setitem(sys.modules, "dns", None)
+    import ethscan.dnssec as dnssec_mod
+    reload(dnssec_mod)
+    try:
+        assert dnssec_mod.DNS_AVAILABLE is False
+    finally:
+        monkeypatch.delitem(sys.modules, "dns", raising=False)
+        reload(dnssec_mod)
+
+
+def test_dnssec_inner_dns_import_failure(monkeypatch) -> None:
+    """Inner try/except when dns.enum or dns.message fail to import."""
+    import sys
+    from importlib import reload
+
+    for k in list(sys.modules):
+        if k.startswith("ethscan.dnssec") or k == "dnssec":
+            monkeypatch.delitem(sys.modules, k, raising=False)
+
+    import types
+    fake_dns = types.ModuleType("dns")
+    fake_dns.dnssec = types.ModuleType("dns.dnssec")
+    fake_dns.exception = Exception
+    fake_dns.flags = types.ModuleType("dns.flags")
+    fake_dns.message = None  # fail inner import
+    fake_dns.query = types.ModuleType("dns.query")
+    fake_dns.resolver = types.SimpleNamespace()
+    monkeypatch.setitem(sys.modules, "dns", fake_dns)
+    monkeypatch.setitem(sys.modules, "dns.enum", types.ModuleType("dns.enum"))
+    monkeypatch.setitem(sys.modules, "dns.message", None)
+    monkeypatch.setitem(sys.modules, "dns.dnssec", fake_dns.dnssec)
+    monkeypatch.setitem(sys.modules, "dns.exception", fake_dns.exception)
+    monkeypatch.setitem(sys.modules, "dns.flags", fake_dns.flags)
+    monkeypatch.setitem(sys.modules, "dns.query", fake_dns.query)
+    monkeypatch.setitem(sys.modules, "dns.resolver", fake_dns.resolver)
+    import ethscan.dnssec as dnssec_mod
+    reload(dnssec_mod)
+    try:
+        assert dnssec_mod.DNS_AVAILABLE is True
+    finally:
+        for k in list(sys.modules):
+            if k.startswith("dns"):
+                monkeypatch.delitem(sys.modules, k, raising=False)
+        reload(dnssec_mod)
+
+
+def test_format_dnssec_report_markdown_skips_non_dicts_and_branches():
+    from ethscan import dnssec
+
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "validated": False,
+        "dnskey": {"success": True, "keys": ["bad", {"name": "x", "flags": 256, "protocol": 3, "algorithm_name": "RSASHA256", "key_tag": 12345}]},
+        "ds": {"success": False, "error": "no ds"},
+        "chain": [
+            "bad",
+            {
+                "zone": "example.com.",
+                "dnskey": {"success": True, "keys": 2},  # not a list
+                "ds": {"success": True, "records": "x"},  # not a list
+            },
+            {
+                "zone": "com.",
+                "dnskey": {"success": True, "keys": [{"bad": 1}]},  # keys list has non-dict? keys is list of dicts but let us see - in our code we check if each key is dict in markdown? Looking up markdown again: in markdown for DNSKEY (line ~588-597 in our earlier view), we do iterate keys_list and if not isinstance(key,dict): continue. Also we just added a non-dict "bad" to keys_list - so we need to test that. Also in the chain case at line ~649-652, if keys_list is list we do len; else say "key(s) found" - so passing keys as int 2 hits line ~651. Similarly ds records as non-list string hits ~664.
+            },
+        ],
+        "notes": ["note1", 123],
+    }
+    md = dnssec.format_dnssec_report_markdown(data)
+    assert "*No DNSKEY records found" not in md  # has keys
+    assert "Query failed" in md
+
+
+def test_format_dnssec_report_markdown_dnskey_not_dict_and_ds_not_dict():
+    from ethscan import dnssec
+
+    data = {
+        "target": "t",
+        "domain": "d",
+        "validated": True,
+        "dnskey": "bad",
+        "ds": "bad",
+        "chain": None,
+        "notes": None,
+    }
+    md = dnssec.format_dnssec_report_markdown(data)
+    assert "unknown error" in md
+
+
+def test_format_dnssec_report_csv_branches():
+    from ethscan import dnssec
+
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "validated": False,
+        "dnskey": {"success": True, "keys": ["bad", {"name": "x", "flags": 256, "protocol": 3, "algorithm_name": "RSASHA256", "key_tag": 12345}]},
+        "ds": {"success": False, "error": "no ds"},
+        "chain": [
+            "bad",
+            {
+                "zone": "example.com.",
+                "dnskey": {"success": True, "keys": 2},
+                "ds": {"success": True, "records": "x"},
+            },
+        ],
+    }
+    csv_out = dnssec.format_dnssec_report_csv(data)
+    assert "chain" in csv_out
+
+
+def test_format_dnssec_report_csv_missing_keys():
+    from ethscan import dnssec
+
+    data = {
+        "target": "t",
+        "domain": "d",
+        "validated": True,
+        "dnskey": "bad",
+        "ds": "bad",
+        "chain": [],
+    }
+    csv_out = dnssec.format_dnssec_report_csv(data)
+    assert "dnskey" in csv_out
+
+
+def test_format_dnssec_report_csv_dnskey_non_list_keys_empty():
+    from ethscan import dnssec
+
+    data = {
+        "target": "t",
+        "domain": "d",
+        "validated": True,
+        "dnskey": {"success": False, "keys": [], "error": "fail"},
+        "ds": {"success": True, "records": None},
+        "chain": [{"zone": "z.", "dnskey": {"success": True}, "ds": {"success": False, "error": "x"}}],
+    }
+    csv_out = dnssec.format_dnssec_report_csv(data)
+    assert csv_out
+
+
+class HostileExc(Exception):
+    pass
+
+
+def test_run_dnssec_catches_hostile_exception_in_main_try(monkeypatch):
+    import ethscan.dnssec as dnssec_mod
+
+    def boom(*args, **kwargs):
+        raise HostileExc("boom")
+
+    monkeypatch.setattr(dnssec_mod, "_query_dnskey_dnspython", boom)
+    monkeypatch.setattr(dnssec_mod, "DNS_AVAILABLE", True)
+    results = dnssec_mod.run_dnssec("example.com")
+    assert results["validated"] is False
+    assert results["dnskey"]["success"] is False
+    assert "dnssec probe failed" in str(results["dnskey"]["error"])
+
+
+def test_format_dnssec_report_markdown_dnskey_success_no_keys():
+    from ethscan import dnssec
+    data = {
+        "target": "t",
+        "domain": "d",
+        "validated": False,
+        "dnskey": {"success": True, "keys": []},
+        "ds": {"success": False},
+        "chain": [],
+        "notes": [],
+    }
+    md = dnssec.format_dnssec_report_markdown(data)
+    assert "*No DNSKEY records found" in md
+
+
+def test_format_dnssec_report_markdown_ds_success_no_records():
+    from ethscan import dnssec
+    data = {
+        "target": "t",
+        "domain": "d",
+        "validated": False,
+        "dnskey": {"success": False, "error": "err"},
+        "ds": {"success": True, "records": []},
+        "chain": [],
+        "notes": [],
+    }
+    md = dnssec.format_dnssec_report_markdown(data)
+    assert "*No DS records found" in md
+
+
+def test_format_dnssec_report_markdown_chain_dnskey_keys_list_int():
+    from ethscan import dnssec
+    data = {
+        "target": "t",
+        "domain": "d",
+        "validated": False,
+        "dnskey": {"success": False},
+        "ds": {"success": False},
+        "chain": [{"zone": "com.", "dnskey": {"success": True, "keys": 3}}],
+        "notes": [],
+    }
+    md = dnssec.format_dnssec_report_markdown(data)
+    assert "key(s) found" in md
+
+
+def test_format_dnssec_report_markdown_chain_ds_records_not_list():
+    from ethscan import dnssec
+    data = {
+        "target": "t",
+        "domain": "d",
+        "validated": False,
+        "dnskey": {"success": False},
+        "ds": {"success": False},
+        "chain": [{"zone": "com.", "ds": {"success": True, "records": "x"}}],
+        "notes": [],
+    }
+    md = dnssec.format_dnssec_report_markdown(data)
+    assert "record(s) found" in md
+
+
+def test_dnssec_outer_except_on_later_import_failure(monkeypatch) -> None:
+    import sys
+    from importlib import reload
+
+    for k in list(sys.modules):
+        if k.startswith("ethscan.dnssec") or k == "dnssec":
+            monkeypatch.delitem(sys.modules, k, raising=False)
+
+    import types
+    fake_dns = types.ModuleType("dns")
+    # inner imports succeed
+    monkeypatch.setitem(sys.modules, "dns", fake_dns)
+    monkeypatch.setitem(sys.modules, "dns.enum", types.ModuleType("dns.enum"))
+    monkeypatch.setitem(sys.modules, "dns.message", types.ModuleType("dns.message"))
+    # make later import fail
+    monkeypatch.setitem(sys.modules, "dns.dnssec", None)
+    monkeypatch.setitem(sys.modules, "dns.exception", Exception)
+    monkeypatch.setitem(sys.modules, "dns.flags", types.ModuleType("dns.flags"))
+    monkeypatch.setitem(sys.modules, "dns.query", types.ModuleType("dns.query"))
+    monkeypatch.setitem(sys.modules, "dns.resolver", types.SimpleNamespace())
+    import ethscan.dnssec as dnssec_mod
+    reload(dnssec_mod)
+    try:
+        assert dnssec_mod.DNS_AVAILABLE is False
+    finally:
+        for k in list(sys.modules):
+            if k.startswith("dns"):
+                monkeypatch.delitem(sys.modules, k, raising=False)
+        reload(dnssec_mod)

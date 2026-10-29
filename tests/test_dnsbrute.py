@@ -1969,3 +1969,81 @@ def test_attempt_axfr_swallows_unlisted_exceptions(monkeypatch, exc):
         assert result["records"] == []
     finally:
         _restore_dnsbrute(monkeypatch)
+
+
+def test_dnsbrute_dns_availability_flag_false(monkeypatch) -> None:
+    """DNS_AVAILABLE is False when dns is not importable (the except branch)."""
+    import sys
+    from importlib import reload
+
+    monkeypatch.setitem(sys.modules, "dns", None)
+    import ethscan.dnsbrute as dnsbrute_mod
+    reload(dnsbrute_mod)
+    try:
+        assert dnsbrute_mod.DNS_AVAILABLE is False
+    finally:
+        monkeypatch.delitem(sys.modules, "dns", raising=False)
+        reload(dnsbrute_mod)
+
+
+def test_dnsbrute_inner_dns_import_failure(monkeypatch) -> None:
+    """Inner try/except when dns.enum or dns.message fail to import."""
+    import sys
+    from importlib import reload
+
+    # Create a fake dns module where dns.enum fails
+    import types
+
+    fake_dns = types.ModuleType("dns")
+    fake_dns.exception = Exception
+    fake_dns.resolver = types.SimpleNamespace()
+    # Make dns.enum import fail
+    fake_dns.enum = types.ModuleType("dns.enum")
+    # But we want the inner try to hit except - simulate by making importing fail
+    # Easier: remove enum and make it raise on attribute access? Or just reload in controlled way
+    monkeypatch.setitem(sys.modules, "dns", fake_dns)
+    monkeypatch.setitem(sys.modules, "dns.enum", None)  # will raise
+    monkeypatch.setitem(sys.modules, "dns.message", types.ModuleType("dns.message"))
+    monkeypatch.setitem(sys.modules, "dns.exception", fake_dns.exception)
+    monkeypatch.setitem(sys.modules, "dns.resolver", fake_dns.resolver)
+    import ethscan.dnsbrute as dnsbrute_mod
+    reload(dnsbrute_mod)
+    try:
+        assert dnsbrute_mod.DNS_AVAILABLE is True
+    finally:
+        # Cleanup
+        for k in list(sys.modules):
+            if k.startswith("dns"):
+                monkeypatch.delitem(sys.modules, k, raising=False)
+        reload(dnsbrute_mod)
+
+
+def test_dnsbrute_inner_dns_import_failure_exact(monkeypatch) -> None:
+    """Inner try/except when dns.message fails to import after dns.enum."""
+    import sys
+    from importlib import reload
+
+    for k in list(sys.modules):
+        if k.startswith("ethscan.dnsbrute") or k == "dnsbrute":
+            monkeypatch.delitem(sys.modules, k, raising=False)
+
+    import types
+    fake_dns = types.ModuleType("dns")
+    fake_dns.exception = Exception
+    fake_dns.resolver = types.SimpleNamespace()
+    monkeypatch.setitem(sys.modules, "dns", fake_dns)
+    # dns.enum import succeeds
+    monkeypatch.setitem(sys.modules, "dns.enum", types.ModuleType("dns.enum"))
+    # dns.message fails
+    monkeypatch.setitem(sys.modules, "dns.message", None)
+    monkeypatch.setitem(sys.modules, "dns.exception", fake_dns.exception)
+    monkeypatch.setitem(sys.modules, "dns.resolver", fake_dns.resolver)
+    import ethscan.dnsbrute as dnsbrute_mod
+    reload(dnsbrute_mod)
+    try:
+        assert dnsbrute_mod.DNS_AVAILABLE is True
+    finally:
+        for k in list(sys.modules):
+            if k.startswith("dns"):
+                monkeypatch.delitem(sys.modules, k, raising=False)
+        reload(dnsbrute_mod)
