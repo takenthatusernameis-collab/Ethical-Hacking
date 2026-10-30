@@ -8645,7 +8645,7 @@ def test_osdetect_banners_file_option(tmp_path, monkeypatch) -> None:
     )
 
     runner = CliRunner()
-    result = runner.invoke(
+    runner.invoke(
         cli,
         [
             "osdetect",
