@@ -71,12 +71,17 @@ def _bracket_ipv6_netloc(parsed: ParseResult) -> ParseResult:
     toolkit brackets it before the host is read, the way a URL that the user
     typed correctly would have parsed it.
 
-    A literal is detected with :mod:`ipaddress`: the whole netloc is tried
-    first (a bare literal with no port), then the netloc with its last
-    colon-separated part removed (a literal with an optional port). A netloc
-    that is already bracketed, that holds no IPv6 literal, or that carries a
-    userinfo is left unchanged, because bracketing it would change the host
-    the user gave.
+    A literal is detected with :mod:`ipaddress`. The port of the authority is
+    the last colon-separated part when it is all digits; the literal is the
+    rest. The literal-with-a-port form is tried first, because an IPv6 literal
+    with a port is the common case and because the whole netloc can itself be
+    a valid IPv6 literal (for example ``2001:db8::1:6379`` is one), which would
+    swallow the port if it were tried first. When the literal-with-a-port form
+    does not hold a literal, the whole netloc is tried as a bare literal, so a
+    target such as ``redis://2001:db8::1`` is bracketed too. A netloc that is
+    already bracketed, that holds no IPv6 literal, or that carries a userinfo
+    is left unchanged, because bracketing it would change the host the user
+    gave.
 
     Args:
         parsed: The result of ``urllib.parse.urlparse``.
@@ -88,15 +93,26 @@ def _bracket_ipv6_netloc(parsed: ParseResult) -> ParseResult:
     netloc = parsed.netloc
     if not netloc or "[" in netloc:
         return parsed
-    # A literal with an optional port: try the whole netloc first, then the
-    # netloc with its last colon-separated part removed.
-    candidates = [netloc]
-    port_part = None
+    # A literal with an optional port. The port is the last colon-separated
+    # part when it is all digits; the literal is the rest. The literal is
+    # tried first, because an IPv6 literal with a port is the common case and
+    # because the whole netloc can itself be a valid IPv6 literal (for example
+    # ``2001:db8::1:6379`` is one), which would swallow the port if it were
+    # tried first.
+    port_part: str | None = None
+    host_part = netloc
     if ":" in netloc:
-        host_part, _, p = netloc.rpartition(":")
-        if p:
-            port_part = p
-            candidates.append(host_part)
+        head, _, tail = netloc.rpartition(":")
+        if tail and tail.isdigit():
+            port_part = tail
+            host_part = head
+    # The literal-with-a-port form is tried first: an IPv6 literal with a port
+    # is the common case, and the whole netloc can itself be a valid IPv6
+    # literal (for example ``2001:db8::1:6379`` is one), which would swallow
+    # the port if it were tried first. When that form does not hold a literal,
+    # the whole netloc is tried as a bare literal, so a target such as
+    # ``redis://2001:db8::1`` is bracketed too.
+    candidates = [host_part, netloc]
     for candidate in candidates:
         try:
             ip = ipaddress.ip_address(candidate)
@@ -108,8 +124,6 @@ def _bracket_ipv6_netloc(parsed: ParseResult) -> ParseResult:
         if candidate == netloc:
             new_netloc = "[" + candidate + "]"
         else:
-            if port_part is None:
-                continue
             new_netloc = "[" + candidate + "]:" + port_part
         return parsed._replace(netloc=new_netloc)
     return parsed
