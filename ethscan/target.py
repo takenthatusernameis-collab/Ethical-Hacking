@@ -38,6 +38,7 @@ library error to a click usage error happens in :mod:`ethscan.cli`.
 """
 from __future__ import annotations
 
+import ipaddress
 import re
 from urllib.parse import ParseResult, SplitResult, unquote, urlparse
 
@@ -59,6 +60,54 @@ class TargetSpecError(ValueError):
     """
 
 
+def _bracket_ipv6_netloc(parsed: ParseResult) -> ParseResult:
+    """Bracket an unbracketed IPv6 literal in the authority of ``parsed``.
+
+    ``urllib.parse.urlparse`` reads the authority of a URL that carries an
+    unbracketed IPv6 literal as ``host:port``: it takes the text after the
+    first colon as the port, so ``https://2001:db8::1`` parses with
+    ``hostname == "2001"`` and ``port == "db8::1"``. The literal is only valid
+    in the authority when it is bracketed (``https://[2001:db8::1]``), so the
+    toolkit brackets it before the host is read, the way a URL that the user
+    typed correctly would have parsed it.
+
+    A literal is detected with :mod:`ipaddress`: the whole netloc is tried
+    first (a bare literal with no port), then the netloc with its last
+    colon-separated part removed (a literal with an optional port). A netloc
+    that is already bracketed, that holds no IPv6 literal, or that carries a
+    userinfo is left unchanged, because bracketing it would change the host
+    the user gave.
+
+    Args:
+        parsed: The result of ``urllib.parse.urlparse``.
+
+    Returns:
+        ``parsed`` with its netloc bracketed when it holds an unbracketed
+        IPv6 literal, ``parsed`` unchanged otherwise.
+    """
+    netloc = parsed.netloc
+    if not netloc or "[" in netloc:
+        return parsed
+    # A literal with an optional port: try the whole netloc first, then the
+    # netloc with its last colon-separated part removed.
+    candidates = [netloc]
+    if ":" in netloc:
+        host_part, _, port_part = netloc.rpartition(":")
+        if port_part:
+            candidates.append(host_part)
+    for candidate in candidates:
+        try:
+            ipaddress.ip_address(candidate)
+        except ValueError:
+            continue
+        if candidate == netloc:
+            new_netloc = "[" + candidate + "]"
+        else:
+            new_netloc = "[" + candidate + "]:" + port_part
+        return parsed._replace(netloc=new_netloc)
+    return parsed
+
+
 def parse_url(url: str) -> ParseResult:
     """Parse a URL, raising :class:`TargetSpecError` when urllib refuses it.
 
@@ -69,19 +118,26 @@ def parse_url(url: str) -> ParseResult:
     report it as a usage error while modules that treat an unusable target as
     a failed probe keep working unchanged.
 
+    An authority that holds an unbracketed IPv6 literal is bracketed before
+    the host is read: ``urllib.parse`` otherwise reads the text after the
+    first colon as the port and returns a truncated host, so a target such as
+    ``https://2001:db8::1`` would be probed as the host ``2001``.
+
     Args:
         url: The URL to parse.
 
     Returns:
-        The parsed URL, exactly as ``urllib.parse.urlparse`` returns it.
+        The parsed URL, exactly as ``urllib.parse.urlparse`` returns it when
+        the authority carries no unbracketed IPv6 literal.
 
     Raises:
         TargetSpecError: If the URL cannot be parsed.
     """
     try:
-        return urlparse(url)
+        parsed = _bracket_ipv6_netloc(urlparse(url))
     except ValueError as exc:
         raise TargetSpecError(str(exc)) from exc
+    return parsed
 
 
 def url_port(parsed: SplitResult | ParseResult) -> int | None:
