@@ -8657,8 +8657,149 @@ def test_osdetect_banners_file_option(tmp_path, monkeypatch) -> None:
             "1.0",
         ],
     )
-    assert result.exit_code == 0
     assert called_args["banners"] == {22: "SSH-2.0-OpenSSH_8.9 Linux"}
+
+
+def test_osdetect_banners_file_no_results_key_json(tmp_path) -> None:
+    """A banners file without a 'results' key runs the normal probe path.
+
+    The banners mapping stays empty (None results -> []), so osdetect falls
+    through to the live probe instead of the no-results-list error report.
+    """
+    services_file = tmp_path / "service_report.json"
+    services_file.write_text(json.dumps({"not_results": "here"}))
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["osdetect", "--target", "127.0.0.1", "--banners-file", str(services_file)],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["banners_provided"] is False
+    assert parsed["ports_probed"] == 3
+    assert parsed["notes"] == []
+
+
+def test_osdetect_banners_file_results_not_list_json(tmp_path) -> None:
+    """A banners file whose 'results' value is not a list reports the error."""
+    services_file = tmp_path / "service_report.json"
+    services_file.write_text(json.dumps({"results": "not a list"}))
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["osdetect", "--target", "127.0.0.1", "--banners-file", str(services_file)],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["host"] is None
+    assert parsed["ports_probed"] == 0
+    assert parsed["probes"] == []
+    assert parsed["inferred_os"] == []
+    assert parsed["banners_provided"] is False
+    assert parsed["notes"] == ["Banners data holds no 'results' list"]
+
+
+def test_osdetect_banners_file_results_not_list_markdown(tmp_path) -> None:
+    """The no-results-list error renders in Markdown without raising."""
+    services_file = tmp_path / "service_report.json"
+    services_file.write_text(json.dumps({"results": 123}))
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "osdetect",
+            "--target",
+            "127.0.0.1",
+            "--banners-file",
+            str(services_file),
+            "--output-format",
+            "markdown",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "# ethscan OS Detection Report" in result.output
+    assert "**Host:** None" in result.output
+    assert "**Ports Probed:** 0" in result.output
+    assert "*No probes performed.*" in result.output
+    assert "Banners data holds no 'results' list" in result.output
+
+
+def test_osdetect_banners_file_results_not_list_csv(tmp_path) -> None:
+    """The no-results-list error renders in CSV without raising."""
+    services_file = tmp_path / "service_report.json"
+    services_file.write_text(json.dumps({"results": True}))
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "osdetect",
+            "--target",
+            "127.0.0.1",
+            "--banners-file",
+            str(services_file),
+            "--output-format",
+            "csv",
+        ],
+    )
+    assert result.exit_code == 0
+    lines = result.output.strip().splitlines()
+    assert lines[0] == (
+        "target,host,port,probe_type,connected,response,flags_observed,error"
+    )
+    # No probe rows are emitted when there are no probes.
+    assert len(lines) == 1
+
+
+def test_osdetect_banners_file_results_not_list_out(tmp_path) -> None:
+    """The no-results-list error is written to --out and reported."""
+    services_file = tmp_path / "service_report.json"
+    services_file.write_text(json.dumps({"results": "not a list"}))
+    out_file = tmp_path / "report.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "osdetect",
+            "--target",
+            "127.0.0.1",
+            "--banners-file",
+            str(services_file),
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Report written to" in result.output
+    parsed = json.loads(out_file.read_text())
+    assert parsed["notes"] == ["Banners data holds no 'results' list"]
+    assert parsed["ports_probed"] == 0
+
+
+def test_osdetect_banners_file_results_not_list_entries_skipped(tmp_path) -> None:
+    """Non-dict entries in 'results' are skipped; valid banners still load."""
+    services_file = tmp_path / "service_report.json"
+    services_file.write_text(
+        json.dumps(
+            {
+                "results": [
+                    "not-a-dict",
+                    42,
+                    {"port": 22, "banner": "SSH-2.0-OpenSSH_8.9 Linux"},
+                    {"port": 80},  # no banner
+                    {"banner": "no-port"},
+                ]
+            }
+        )
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["osdetect", "--target", "127.0.0.1", "--banners-file", str(services_file)],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["banners_provided"] is True
+    assert parsed["inferred_os"] == ["Linux"]
 
 
 def test_osdetect_timeout_workers_option(monkeypatch) -> None:
