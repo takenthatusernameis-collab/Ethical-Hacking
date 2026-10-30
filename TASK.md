@@ -1,19 +1,19 @@
-## Status: COMPLETE (this session)
+## Status: IN PROGRESS (this session)
 
 ### What changed
-- None. Inspected and verified repository state only.
+- Added targeted tests: `tests/test_hash_extra.py` (cover MD4 normalization/unavailable paths, PBKDF2+pepper unsupported algorithm) and `tests/test_ssh_extra.py` (cover generic exception and empty-payload read paths). Fixed minor lint issues.
 
 ### What was actually verified
 - `python -m ruff check ethscan/ tests/` -> `All checks passed!`
-- `python -m mypy ethscan/` -> `Success: no issues found in 59 source files`
-- `python -m coverage run -m pytest -q` -> `5405 passed, 50 skipped, 0 failed` (111.89s)
-- `python -m coverage report -m` -> `TOTAL 50381 stmts, 353 miss, 99% cover`
+- `python -m mypy ethscan/` and targeted mypy for new tests -> `Success: no issues found`
+- New tests: `python -m pytest tests/test_hash_extra.py tests/test_ssh_extra.py -q` -> `5 passed`
+- Coverage on modified targets improved (hash/ssh uncovered reduced in exercised paths)
 
 ### What remains unresolved
-- None justified. Remaining misses (~353 lines) are confined to defensive/unreachable branches (e.g. `ethscan/radix.py`, `ethscan/ssh.py` exception paths when optional deps missing, other single-line defensive cases). Verified unreachable with real inputs/available deps; no demonstrated bug/feature/gap requires changes.
+- Module-level MD4 init branches (hash.py:36-37) remain hard to exercise without reload tricks; other residual misses are defensive/unreachable as before.
 
 ### Which approaches failed and why
 - None this session.
 
 ### One precise next task
-- Task complete. Confirm green state on demand (`ruff`, `mypy`, `pytest` with coverage). If a new feature/bugfix/demonstrated defect is reported, pick the smallest verifiable change addressing it. Do not push speculative coverage/refactors.
+- If desired, add a controlled reload test for MD4 init fallback with clean module isolation, or leave as-is (defensive). Otherwise proceed to address any newly reported defect.
