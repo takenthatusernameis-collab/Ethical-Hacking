@@ -996,6 +996,24 @@ def test_collapse_value_error_branch(monkeypatch):
     assert out
 
 
+def test_merge_networks_overlap_collapse_failure_keep_last(monkeypatch: pytest.MonkeyPatch) -> None:
+    import ethscan.radix as r
+    monkeypatch.setattr(r, "_collapse_v4_networks", lambda a, b: (_ for _ in ()).throw(ValueError()))
+    nets = [ipaddress.ip_network("10.0.0.0/25", strict=False), ipaddress.ip_network("10.0.0.64/26", strict=False)]
+    merged = _merge_networks(nets)
+    assert len(merged) == 1
+    assert str(merged[0]) == "10.0.0.0/25"
+
+
+def test_merge_networks_overlap_collapse_failure_take_net(monkeypatch: pytest.MonkeyPatch) -> None:
+    import ethscan.radix as r
+    monkeypatch.setattr(r, "_collapse_v4_networks", lambda a, b: (_ for _ in ()).throw(ValueError()))
+    nets = [ipaddress.ip_network("10.0.0.0/26", strict=False), ipaddress.ip_network("10.0.0.32/25", strict=False)]
+    merged = _merge_networks(nets)
+    assert len(merged) == 1
+    assert str(merged[0]) == "10.0.0.0/25"
+
+
 def test_merge_networks_overlap_smaller_successor():
     import ipaddress
     # first is larger/same? first is /24 (larger), second /25 inside - covered by test_merge_networks_overlapping
