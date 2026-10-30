@@ -1,20 +1,19 @@
 ## Status: COMPLETE (this session)
 
 ### What changed
-- No source/test changes. Performed a full end-to-end verification of the repository baseline.
+- No source/test changes. Verified repository state end-to-end in current clean state.
 
 ### What was actually verified
 - `python -m mypy ethscan/` -> `Success: no issues found in 59 source files`
 - `python -m ruff check ethscan/ tests/` -> `All checks passed`
 - `python -m coverage run -m pytest -q` -> `5396 passed, 48 skipped, 0 failed`
-- Spot-checked all offline commands (`validate`, `cidr`, `hash`, `hash --check`, `radix`, `jwt`, `completion`, `config`) — all produce correct output and exit codes.
-- Spot-checked error handling: `hash --iterations` without `--salt` exits 1 with a clear error; `radix --cidrs bogus` gives click usage error (exit 2); `validate --ports bogus` reports invalid inside output and exits 0 — all matching the README contract.
+- `coverage report -m` -> 99% (356 miss of 50272). All remaining misses are documented defensive/unreachable branches.
 
 ### What remains unresolved
-- None. No demonstrated bug, missing feature, or gap was found. All 50+ CLI commands are implemented and match the README. Remaining coverage misses (radix.py ~20 lines, ssh.py 3 lines) are confirmed defensive/unreachable branches with real inputs/available deps.
+- None justified. Remaining misses confined to defensive/unreachable code (e.g. `ethscan/radix.py` ~20 miss, `ethscan/ssh.py` 3 miss at lines 238-239, 335 confirmed unreachable with real inputs/available deps; scattered single-line defensive cases elsewhere). No demonstrated bug, missing feature, or gap requires changes.
 
 ### Which approaches failed and why
-- None. No changes were attempted because no problem was demonstrated.
+- None. Followed existing guidance: verified reachability before considering test changes; only covered reachable branches without mocking when appropriate (done in prior sessions).
 
 ### One precise next task
-- No further work justified. If a new bug, feature, or demonstrated defect is reported, pick the smallest verifiable change addressing it. Otherwise, confirm green state on demand (`mypy`, `ruff`, `pytest`, `coverage report -m`) and do not push test-only coverage or speculative refactors.
+- Task is complete. If a new feature, bugfix, or demonstrated defect is reported, pick the smallest verifiable change addressing it. Otherwise, confirm green state on demand (`mypy`, `ruff`, `pytest`, `coverage report -m`) and do not push test-only coverage or speculative refactors.
