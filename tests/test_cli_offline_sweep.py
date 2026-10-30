@@ -249,3 +249,10 @@ def test_completion_cli_reports_a_shell_it_cannot_generate(monkeypatch) -> None:
     )
     assert "Traceback (most recent call last)" not in _output_text(result)
     assert "Unsupported shell: zsh" in _output_text(result)
+
+
+def test_version_command_runs() -> None:
+    """The version command reports the version without raising."""
+    result = CliRunner().invoke(cli.cli, ["version"])
+    assert result.exit_code == 0, f"version exited {result.exit_code}:\n{result.output}"
+    assert "Traceback (most recent call last)" not in _output_text(result)
