@@ -124,7 +124,7 @@ def _bracket_ipv6_netloc(parsed: ParseResult) -> ParseResult:
         if candidate == netloc:
             new_netloc = "[" + candidate + "]"
         else:
-            new_netloc = "[" + candidate + "]:" + port_part
+            new_netloc = "[" + candidate + "]:" + (port_part or "")
         return parsed._replace(netloc=new_netloc)
     return parsed
 
