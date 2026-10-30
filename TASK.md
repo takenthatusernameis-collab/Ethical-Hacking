@@ -6,7 +6,7 @@
 ### What was actually verified
 - `python -m ruff check ethscan/ tests/` -> `All checks passed!`
 - `python -m mypy ethscan/` -> `Success: no issues found in 59 source files`
-- `python -m coverage run -m pytest -q` -> `5405 passed, 50 skipped, 0 failed` (111.14s)
+- `python -m coverage run -m pytest -q` -> `5405 passed, 50 skipped, 0 failed` (111.89s)
 - `python -m coverage report -m` -> `TOTAL 50381 stmts, 353 miss, 99% cover`
 
 ### What remains unresolved
