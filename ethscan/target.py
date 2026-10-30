@@ -91,18 +91,25 @@ def _bracket_ipv6_netloc(parsed: ParseResult) -> ParseResult:
     # A literal with an optional port: try the whole netloc first, then the
     # netloc with its last colon-separated part removed.
     candidates = [netloc]
+    port_part = None
     if ":" in netloc:
-        host_part, _, port_part = netloc.rpartition(":")
-        if port_part:
+        host_part, _, p = netloc.rpartition(":")
+        if p:
+            port_part = p
             candidates.append(host_part)
     for candidate in candidates:
         try:
-            ipaddress.ip_address(candidate)
+            ip = ipaddress.ip_address(candidate)
         except ValueError:
+            continue
+        # Only bracket IPv6 literals, not IPv4
+        if isinstance(ip, ipaddress.IPv4Address):
             continue
         if candidate == netloc:
             new_netloc = "[" + candidate + "]"
         else:
+            if port_part is None:
+                continue
             new_netloc = "[" + candidate + "]:" + port_part
         return parsed._replace(netloc=new_netloc)
     return parsed
