@@ -5159,5 +5159,53 @@ def oracle(
         click.echo(output)
 
 
+@cli.command()
+@click.option(
+    "--output-format",
+    "output_fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default=None,
+    help="Output format (json, markdown, or csv). Overrides --format.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "markdown", "csv"]),
+    default="json",
+    show_default=True,
+    help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(writable=True),
+    help="Output file path (default: stdout)",
+)
+def version(
+    fmt: str,
+    output_fmt: str | None,
+    out_path: str | None,
+) -> None:
+    """Show ethscan version information."""
+    from ethscan import __version__
+
+    data = {"version": __version__}
+    chosen_format = output_fmt if output_fmt is not None else fmt
+
+    if chosen_format == "json":
+        import json
+
+        output = json.dumps(data, indent=2) + "\n"
+    elif chosen_format == "csv":
+        output = "version\n" + f"{data['version']}\n"
+    else:
+        output = f"ethscan {data['version']}\n"
+
+    if out_path:
+        _write_output(out_path, output)
+    else:
+        click.echo(output.rstrip())
+
+
 if __name__ == "__main__":
     cli()
