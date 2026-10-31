@@ -34,6 +34,22 @@ def test_cli_version() -> None:
     assert "0.1.0" in result.output
 
 
+def test_cli_version_csv() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["version", "--output-format", "csv"])
+    assert result.exit_code == 0
+    lines = result.output.splitlines()
+    assert lines[0] == "version"
+    assert lines[1] == "0.1.0"
+
+
+def test_cli_version_markdown() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["version", "--format", "markdown"])
+    assert result.exit_code == 0
+    assert result.output.rstrip() == "ethscan 0.1.0"
+
+
 def test_cli_help_lists_commands() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["--help"])
