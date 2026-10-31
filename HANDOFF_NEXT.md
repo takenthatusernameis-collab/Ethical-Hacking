@@ -1,20 +1,20 @@
 ## Status: COMPLETE (this session)
 
 ### What changed
-- Added two tests to tests/test_whois.py covering the top-level ``error`` branches in ethscan/whois.py: ``format_whois_report_markdown`` (line 286) and ``format_whois_report_csv`` (line 364), following the existing formatter test pattern (construct a data dict, call the formatter, assert on output).
+- Added one test to tests/test_smtp.py covering the ``except Exception: break`` branch at ethscan/smtp.py:134 (reached when ``_read_response`` gets a non-``socket.timeout``/non-``OSError`` exception from ``recv`` after partial lines have already been read), following the existing ``_read_response`` fake-socket test pattern (a small ``HostileSock`` returning one continuation line then raising ``ValueError``).
 
 ### What was actually verified
-- tests/test_whois.py: 44 passed.
-- Coverage on ethscan/whois.py: 100% (was 99%; lines 286, 364 now covered).
-- ruff check tests/test_whois.py ethscan/whois.py: all checks passed.
-- Full suite: python -m pytest -q -> 5410 passed, 53 skipped (was 5408 passed before the change).
+- tests/test_smtp.py: 66 passed.
+- Coverage on ethscan/smtp.py: line 134 now covered; only line 247 remains missed (provably unreachable defensive code: ``_connect`` failure leaves ``sock=None`` and the inner try catches everything, so the outer ``except`` with ``sock`` set never runs).
+- ruff check tests/test_smtp.py ethscan/smtp.py: all checks passed.
+- Full suite: python -m pytest -q -> 5411 passed, 53 skipped (was 5410 passed before the change). Total missed statements: 70 -> 69.
 
 ### What remains unresolved
-- Remaining small coverage gaps across the package are mostly mock-dependent ``except`` branches: resolve.py:232-233, postgresql.py:355-356, smtp.py:134/247, ssh.py:335, plus larger-gap modules mssql.py (9 lines), mysql.py (3), oracle.py (4), vuln.py (6).
-- Some gaps were investigated and are unreachable defensive code, not defects: redis.py:58-59 (outer condition requires host.startswith("["), so "]:", can never be at index 0), resolve.py:225 ("should not happen" defensive continue), postgresql.py:202 (guard unreachable under while pos < n). Consistent with the radix.py precedent: leave these, do not add tests for unreachable states.
+- smtp.py:247 unreachable defensive branch (leave it, consistent with the radix.py precedent).
+- Remaining small coverage gaps across the package: postgresql.py:202, 355-356 (unreachable; connector errors are caught inside ``_send_recv``), resolve.py:225 (unreachable defensive continue), 232-233, ssh.py:335, plus larger-gap modules mssql.py (9 lines), mysql.py (3), oracle.py (4), vuln.py (6), hash.py (7), cli.py (5), and env-dependent subdomains.py:17 / subtake.py:19 (dnspython import branches).
 
 ### Which approaches failed and why
 - None this session.
 
 ### One precise next task
-- Close the next reachable gap in a single module, e.g. ethscan/postgresql.py:355-356 (``except Exception as exc: error = str(exc)``) by mocking the connector to raise in a run_postgresql test, or smtp.py:134/247 via a socket raising a non-timeout/OSError exception. Maintain existing architecture and test patterns; skip unreachable defensive branches.
+- Close the next reachable gap in a single module, e.g. ethscan/ssh.py:335 or ethscan/resolve.py:232-233 (mock-dependent ``except`` branches) by adding a targeted test following existing patterns; skip provably unreachable defensive branches (postgresql.py:202/355-356, smtp.py:247, radix.py defensive lines) and env-dependent dnspython import branches.

@@ -588,6 +588,27 @@ def test_read_response_timeout_after_partial_lines_breaks() -> None:
     assert lines == ["250-continue"]
 
 
+def test_read_response_recv_non_oserror_exception_breaks() -> None:
+    """A non-timeout/OSError recv error with partial lines breaks (line 134)."""
+    class HostileSock:
+        def __init__(self) -> None:
+            self._calls = 0
+
+        def settimeout(self, timeout: float) -> None:
+            pass
+
+        def recv(self, n: int) -> bytes:
+            self._calls += 1
+            if self._calls == 1:
+                return b"250-continue\r\n"
+            raise ValueError("hostile recv error")
+
+    s = HostileSock()
+    lines = _read_response(s, 1.0)
+    assert lines == ["250-continue"]
+    assert s._calls == 2
+
+
 def test_send_command_closed_while_sending_raises() -> None:
     """If send returns 0, raise OSError."""
     class ClosedSock:
