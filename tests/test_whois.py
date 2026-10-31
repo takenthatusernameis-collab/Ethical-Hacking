@@ -770,9 +770,33 @@ def test_format_whois_report_markdown_empty_raw() -> None:
     assert "## Nameservers" not in output  # Section should not appear
     assert "## Status Codes" not in output  # Section should not appear
     assert "## Raw Response" in output
-    assert "```" in output
+    assert "```" in output  # Empty raw response
     assert "" in output  # Empty raw response
     assert "```" in output  # Closing backticks
+
+
+def test_format_whois_report_markdown_with_error() -> None:
+    """Top-level error is reported in the markdown report (line 286)."""
+    from ethscan.whois import format_whois_report_markdown
+
+    data = {
+        "target": "example.com",
+        "server": "whois.iana.org",
+        "port": 43,
+        "raw": "some raw",
+        "parsed": {
+            "registrar": None,
+            "creation_date": None,
+            "expiration_date": None,
+            "nameservers": [],
+            "registrant_org": None,
+            "status_codes": [],
+            "raw": "some raw",
+        },
+        "error": "Connection timeout",
+    }
+    output = format_whois_report_markdown(data)
+    assert "- **Error:** Connection timeout" in output
 
 
 # ---------------------------------------------------------------------------
@@ -860,6 +884,22 @@ def test_format_whois_report_csv_escaping() -> None:
     output = format_whois_report_csv(data)
     assert '"Registrar, Inc."' in output
     assert '"Org ""quoted"""' in output
+
+
+def test_format_whois_report_csv_with_error() -> None:
+    """Top-level error row is emitted in the CSV report (line 364)."""
+    data = {
+        "target": "example.com",
+        "server": "whois.iana.org",
+        "port": 43,
+        "parsed": {
+            "registrar": "Example Registrar",
+        },
+        "error": "Connection timeout",
+    }
+    output = format_whois_report_csv(data)
+    lines = output.splitlines()
+    assert "error,Connection timeout" in lines
 
 
 def test_run_whois_recursive_referral_equals_current_server(monkeypatch) -> None:
