@@ -855,6 +855,8 @@ def test_run_resolve_dnspython_unknown_exception_swallowed(monkeypatch) -> None:
         raise RuntimeError("boom")
 
     monkeypatch.setattr(resolve_mod, "resolve_with_dnspython", boom)
+    results = resolve_mod.run_resolve("example.com", record_types=["BOGUS"], timeout=1.0)
+    assert "BOGUS" not in results["records"]
 def test_run_resolve_a_exception_sets_empty(monkeypatch) -> None:
     import ethscan.resolve as resolve_mod
 
