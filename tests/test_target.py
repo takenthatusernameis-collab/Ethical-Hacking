@@ -731,6 +731,16 @@ def test_parse_url_error_is_still_a_value_error() -> None:
         parse_url("http://[::1")
 
 
+def test_parse_url_brackets_unbracketed_ipv6_bare() -> None:
+    """An unbracketed bare IPv6 literal is bracketed."""
+    assert parse_url("https://2001:db8::1").netloc == "[2001:db8::1]"
+
+
+def test_parse_url_brackets_unbracketed_ipv6_with_port() -> None:
+    """An unbracketed IPv6 literal carrying a port is bracketed."""
+    assert parse_url("https://2001:db8::1:8080").netloc == "[2001:db8::1]:8080"
+
+
 def test_parse_url_returns_the_same_result_as_urlparse() -> None:
     """A URL that urllib accepts is parsed exactly as before."""
     for url in (
