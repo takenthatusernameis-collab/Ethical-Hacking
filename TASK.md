@@ -1,24 +1,25 @@
 ## Status: COMPLETE (this session)
 
 ### What changed
-- Added ``test_config_hash_passwords_non_scalar_item_rejected`` covering ``_config_value_text``'s multiple-option non-scalar-item branch (cli.py:463-466) via a config file with ``commands:\n  hash:\n    passwords:\n      - password\n      - {foo: bar}\n``.
-- Added ``test_config_scan_workers_non_scalar_rejected`` covering ``_config_value_text``'s non-multiple non-scalar branch (cli.py:469-472) via ``commands:\n  scan:\n    workers: [1, 2]\n``.
-- Both tests follow the existing config-file/wrong-type patterns and use ``CliRunner(mix_stderr=False)`` so stderr is asserted separately.
+- Fixed `_format_network_info` host-range computation in `ethscan/validate.py:131-141` so that `/31` (IPv4) and `/127` (IPv6) networks report the correct usable host as `first_host`/`last_host` instead of the network address.
+- The previous two-branch logic (`total > 2` / `else`) returned `network[0]` for two-address networks. The new logic matches the identical helper in `ethscan/cidr.py:84-91` and `ethscan/radix.py:349-356` (three-branch: `total > 2` / `total == 2` / `else`).
+- Added `test_format_network_info_ipv4_31` and `test_format_network_info_ipv6_127` to `tests/test_validate.py` to lock in the fix.
 
 ### What was actually verified
-- tests/test_cli.py::test_config_hash_passwords_non_scalar_item_rejected passes.
-- tests/test_cli.py::test_config_scan_workers_non_scalar_rejected passes.
-- Coverage on ethscan/cli.py: 464 and 469-472 now covered; remaining cli.py misses are only 523, 531, 4818 (documented provably unreachable defensive lines, skipped per precedent).
-- ruff check tests/test_cli.py ethscan/cli.py: all checks passed.
-- Full suite: python -m pytest -q -> 5432 passed, 53 skipped (was 5430 before this change; +2 tests, no regressions).
+- `tests/test_validate.py::test_format_network_info_ipv4_31` passes.
+- `tests/test_validate.py::test_format_network_info_ipv6_127` passes.
+- Full suite: `python -m pytest -q` -> 5437 passed, 50 skipped (was 5435 before this change; +2 tests, no regressions).
+- `python -m ruff check ethscan/validate.py tests/test_validate.py`: all checks passed.
+- `python -m mypy ethscan/validate.py`: Success, no issues.
+- End-to-end CLI verified: `python -m ethscan validate --cidr 192.168.1.0/31,2001:db8::/127,10.0.0.0/8 --output-format markdown` now prints `192.168.1.1 - 192.168.1.1` and `2001:db8::1 - 2001:db8::1` in the Range column.
 
 ### What remains unresolved
-- cli.py:523/531 (``_CheckedDefaultMap.get`` / ``_param`` when a config key matches no command param) -- provably unreachable defensive lines, documented as skip per the radix.py precedent.
-- cli.py:4818 (netbios ``if suffix is None: suffix_value = 0x00``) -- provably unreachable: ``--suffix`` defaults to 0, not None (skip, radix precedent).
-- All other modules: remaining gaps are provably unreachable defensive branches or env-dependent import branches -- skip per precedent; hash.py gaps are MD4-availability/env-dependent or unreachable.
+- None for this change. The `validate` host-range logic is now consistent across `validate.py`, `cidr.py`, and `radix.py`.
 
 ### Which approaches failed and why
-- Initial run used ``CliRunner()`` without ``mix_stderr=False``, which raised ``ValueError: stderr not separately captured`` when accessing ``.stderr``; fixed by using ``CliRunner(mix_stderr=False)`` matching the existing wrong-type test pattern.
+- No failed approaches. The bug was found by comparing the three near-identical `_format_network_info` implementations; `validate.py` was the outlier.
 
 ### One precise next task
-- None: the cli.py coverage work is complete. All remaining gaps are documented as provably unreachable / env-dependent and skipped per precedent. The next agent should start a fresh bounded task rather than resume coverage work.
+- None required. The next agent should start a fresh bounded task rather than resume this line of work.
+
+(End of file - total 24 lines)
