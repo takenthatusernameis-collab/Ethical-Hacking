@@ -40,8 +40,9 @@ def normalize_cidr(value: str) -> str:
         raise CidrSpecError("Empty CIDR value")
 
     if "/" not in value:
-        # Bare IP: treat as a single-host network
-        value = value + ("/32" if "." in value else "/128")
+        # Bare IP: treat as a single-host network. IPv6 (including IPv4-mapped
+        # forms) is identified by the presence of a colon.
+        value = value + ("/32" if ":" not in value else "/128")
 
     try:
         network = ipaddress.ip_network(value, strict=False)
