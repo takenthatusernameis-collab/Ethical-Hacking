@@ -130,11 +130,15 @@ def _format_network_info(network: ipaddress._BaseNetwork) -> dict[str, Any]:
         "netmask": str(network.netmask),
         "broadcast_address": str(network.broadcast_address) if is_v4 else None,
         "wildcard_mask": str(network.hostmask),
-        "first_host": str(network[1]) if total > 2 else str(network[0]),
-        "last_host": (
-            str(network[-1] if network.version == 6 else network[-2])
+        "first_host": (
+            str(network[1])
             if total > 2
-            else str(network[0])
+            else str(network[1]) if total == 2 else str(network.network_address)
+        ),
+        "last_host": (
+            str(network[-2] if is_v4 else network[-1])
+            if total > 2
+            else str(network[1]) if total == 2 else str(network.network_address)
         ),
         "total_addresses": total,
         "prefixlen": network.prefixlen,
