@@ -4715,6 +4715,56 @@ def test_hash_passwords_from_config_list(tmp_path) -> None:
     assert "5f4dcc3b5aa765d61d8327deb882cf99" in result.output
 
 
+def test_config_hash_passwords_non_scalar_item_rejected(tmp_path) -> None:
+    """A non-scalar item in a multiple-option config list is rejected.
+
+    ``--password`` is ``multiple=True``, so a config value of
+    ``passwords: [password, {foo: bar}]`` reaches ``_config_value_text`` and
+    the dict item hits the non-scalar-item branch (cli.py:463-466).
+    """
+    config_file = tmp_path / "ethscan.yaml"
+    config_file.write_text("commands:\n  hash:\n    passwords:\n      - password\n      - {foo: bar}\n")
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(
+        cli,
+        [
+            "--config",
+            str(config_file),
+            "hash",
+            "--algorithm",
+            "md5",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 2
+    assert (
+        "Invalid value for '--password'" in result.stderr
+        or "Invalid value for '--password'" in result.output
+    )
+
+
+def test_config_scan_workers_non_scalar_rejected(tmp_path) -> None:
+    """A non-scalar value for a single option is rejected.
+
+    ``--workers`` is a single (non-multiple) option, so a config value of
+    ``workers: [1, 2]`` reaches ``_config_value_text`` and hits the
+    non-multiple non-scalar branch (cli.py:469-472).
+    """
+    config_file = tmp_path / "ethscan.yaml"
+    config_file.write_text("commands:\n  scan:\n    workers: [1, 2]\n")
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(
+        cli,
+        ["--config", str(config_file), "scan", "--target", "127.0.0.1"],
+    )
+    assert result.exit_code == 2
+    assert (
+        "Invalid value for '--workers'" in result.stderr
+        or "Invalid value for '--workers'" in result.output
+    )
+
+
 def test_report_profile_with_all_ports_keyword(monkeypatch) -> None:
     """The ``report`` command shares the profile/ports resolution logic."""
     called_args = {}
