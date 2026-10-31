@@ -4688,6 +4688,33 @@ def test_scan_profile_preserves_config_file_timeout_and_workers(tmp_path, monkey
     assert called_args["max_workers"] == 100
 
 
+def test_hash_passwords_from_config_list(tmp_path) -> None:
+    """A config-file list for a multiple option is converted to text.
+
+    ``--password`` is ``multiple=True``, so a config value of
+    ``passwords: ["password"]`` reaches ``_config_value_text`` through the
+    command's ``default_map`` and each scalar item is joined as text
+    (cli.py:467-468).
+    """
+    config_file = tmp_path / "ethscan.yaml"
+    config_file.write_text("commands:\n  hash:\n    passwords:\n      - password\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "--config",
+            str(config_file),
+            "hash",
+            "--algorithm",
+            "md5",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "5f4dcc3b5aa765d61d8327deb882cf99" in result.output
+
+
 def test_report_profile_with_all_ports_keyword(monkeypatch) -> None:
     """The ``report`` command shares the profile/ports resolution logic."""
     called_args = {}
