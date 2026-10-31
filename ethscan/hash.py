@@ -90,6 +90,8 @@ def _compute_ntlm(password: str) -> str:
 
     NTLM is the MD4 of the UTF-16LE-encoded password.
     """
+    if not MD4_AVAILABLE:
+        raise ValueError("MD4 is not available on this platform (OpenSSL build).")
     utf16 = password.encode("utf-16-le")
     return hashlib.new("md4", utf16).hexdigest()
 
