@@ -844,7 +844,8 @@ def test_run_resolve_with_arbitrary_record_type_dnspython() -> None:
 
 
 def test_run_resolve_with_unsupported_and_mixed_types() -> None:
-    from ethscan import resolve
+    pass
+
 
 def test_run_resolve_dnspython_unknown_exception_swallowed(monkeypatch) -> None:
     import ethscan.resolve as resolve_mod

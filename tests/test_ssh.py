@@ -687,7 +687,7 @@ def test_get_host_key_info_paramiko_success(monkeypatch) -> None:
     fake_paramiko.Transport = lambda sock: fake_transport
 
     fake_sock = MagicMock()
-    monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *a, **k: fake_sock)
+    monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *_a, **_k: fake_sock)
     monkeypatch.setattr("ethscan.ssh.paramiko", fake_paramiko, raising=False)
     monkeypatch.setattr("ethscan.ssh.PARAMIKO_AVAILABLE", True)
 
@@ -707,7 +707,7 @@ def test_get_host_key_info_paramiko_exception(monkeypatch) -> None:
     fake_paramiko.Transport = lambda sock: fake_transport
 
     fake_sock = MagicMock()
-    monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *a, **k: fake_sock)
+    monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *_a, **_k: fake_sock)
     monkeypatch.setattr("ethscan.ssh.paramiko", fake_paramiko, raising=False)
     monkeypatch.setattr("ethscan.ssh.PARAMIKO_AVAILABLE", True)
 
@@ -718,8 +718,7 @@ def test_get_host_key_info_paramiko_oserror(monkeypatch) -> None:
     fake_paramiko = types.ModuleType("paramiko")
     fake_paramiko.Transport = MagicMock()
 
-    fake_sock = MagicMock()
-    def raise_oserror(*args, **kwargs):
+    def raise_oserror(*_args, **_kwargs):
         raise OSError("connection refused")
 
     monkeypatch.setattr("ethscan.ssh.socket.create_connection", raise_oserror)

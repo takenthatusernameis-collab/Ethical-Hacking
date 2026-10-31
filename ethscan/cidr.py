@@ -44,7 +44,7 @@ def normalize_cidr(value: str) -> str:
         try:
             addr = ipaddress.ip_address(value)
             value = value + ("/32" if addr.version == 4 else "/128")
-        except Exception:
+        except (ValueError, OSError):
             # For invalid bare tokens, the CLI tests expect /128 suffix
             # in the error message for a generic 'bogus' style string.
             value = value + "/128"
