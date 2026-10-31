@@ -4807,24 +4807,20 @@ def netbios(
     target: str,
     port: int | None,
     name: str,
-    suffix: int | None,
+    suffix: int,
     timeout: float,
     fmt: str,
     output_fmt: str | None,
     out_path: str | None,
 ) -> None:
     """Run NetBIOS (NBNS) NODE STATUS reconnaissance (names, flags, MAC)."""
-    if suffix is None:
-        suffix_value = 0x00
-    else:
-        suffix_value = suffix
 
     results = run_netbios(
         target,
         port=port,
         timeout=timeout,
         name=name,
-        suffix=suffix_value,
+        suffix=suffix,
     )
 
     chosen_format = output_fmt if output_fmt is not None else fmt
