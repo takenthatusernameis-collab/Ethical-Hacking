@@ -421,6 +421,17 @@ def test_run_vuln_unparseable_banner(monkeypatch) -> None:
     assert results["finding_count"] == 0
 
 
+def test_run_vuln_nonstr_banner_skipped(monkeypatch) -> None:
+    def mock_run_service(host, ports=None, timeout=3.0, max_workers=50):
+        return {"results": [42, {"port": 80, "banner": 123}]}
+
+    monkeypatch.setattr("ethscan.vuln.run_service", mock_run_service)
+
+    results = run_vuln("example.com")
+    assert results["services_checked"] == 0
+    assert results["finding_count"] == 0
+
+
 def test_run_vuln_ports_passed_through(monkeypatch) -> None:
     called_args = {}
 
