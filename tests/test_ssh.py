@@ -616,6 +616,27 @@ def test_read_packet_oserror() -> None:
     assert _read_packet(sock) is None
 
 
+def test_read_packet_struct_error() -> None:
+    sock = MagicMock()
+    def bad_unpack(*args, **kwargs):
+        raise struct.error("bad length")
+    sock.recv.return_value = b"\x00\x00\x00\x01"
+    # patch struct.unpack to raise
+    import ethscan.ssh as ssh_mod
+    orig = ssh_mod.struct.unpack
+    try:
+        ssh_mod.struct.unpack = bad_unpack
+        assert _read_packet(sock) is None
+    finally:
+        ssh_mod.struct.unpack = orig
+
+
+def test_read_packet_generic_exception() -> None:
+    sock = MagicMock()
+    sock.recv.side_effect = RuntimeError("weird error")
+    assert _read_packet(sock) is None
+
+
 # ---------------------------------------------------------------------------
 # _parse_kexinit edge cases
 # ---------------------------------------------------------------------------
@@ -687,6 +708,21 @@ def test_get_host_key_info_paramiko_exception(monkeypatch) -> None:
 
     fake_sock = MagicMock()
     monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *a, **k: fake_sock)
+    monkeypatch.setattr("ethscan.ssh.paramiko", fake_paramiko, raising=False)
+    monkeypatch.setattr("ethscan.ssh.PARAMIKO_AVAILABLE", True)
+
+    assert _get_host_key_info_paramiko("example.com", 22, 1.0) is None
+
+
+def test_get_host_key_info_paramiko_oserror(monkeypatch) -> None:
+    fake_paramiko = types.ModuleType("paramiko")
+    fake_paramiko.Transport = MagicMock()
+
+    fake_sock = MagicMock()
+    def raise_oserror(*args, **kwargs):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr("ethscan.ssh.socket.create_connection", raise_oserror)
     monkeypatch.setattr("ethscan.ssh.paramiko", fake_paramiko, raising=False)
     monkeypatch.setattr("ethscan.ssh.PARAMIKO_AVAILABLE", True)
 

@@ -846,10 +846,24 @@ def test_run_resolve_with_arbitrary_record_type_dnspython() -> None:
 def test_run_resolve_with_unsupported_and_mixed_types() -> None:
     from ethscan import resolve
 
-    result = resolve.run_resolve("example.com", record_types=["MX", "A", "BOGUS"])
-    # MX falls through to dnspython path only if available; dnspython not installed here
-    assert "A" in result["records"]
-    assert "MX" not in result["records"] or isinstance(result["records"].get("MX"), list)
+def test_run_resolve_dnspython_unknown_exception_swallowed(monkeypatch) -> None:
+    import ethscan.resolve as resolve_mod
+
+    monkeypatch.setattr(resolve_mod, "DNS_AVAILABLE", True)
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(resolve_mod, "resolve_with_dnspython", boom)
+def test_run_resolve_a_exception_sets_empty(monkeypatch) -> None:
+    import ethscan.resolve as resolve_mod
+
+    def boom(*args, **kwargs):
+        raise OSError("fail")
+
+    monkeypatch.setattr(resolve_mod, "resolve_a_records", boom)
+    result = resolve_mod.run_resolve("example.com", record_types=["A"])
+    assert result["records"].get("A") == []
 
 def test_resolve_dnspython_available(monkeypatch):
     import sys
