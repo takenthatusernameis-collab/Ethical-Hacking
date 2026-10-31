@@ -24246,3 +24246,14 @@ def test_a_standard_input_that_is_not_utf8_is_read_leniently() -> None:
         assert "Traceback (most recent call last)" not in result.output, (
             f"{command}: leaked a traceback\n{result.output}"
         )
+
+
+def test_cli_hash_config_list_passwords(tmp_path) -> None:
+    """A config list value for a multiple option exercises _config_value_text's list branch."""
+    config_file = tmp_path / "ethscan.yaml"
+    config_file.write_text("defaults:\n  passwords:\n    - foo\n    - bar\n")
+    from click.testing import CliRunner
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--config", str(config_file), "hash"])
+    assert result.exit_code == 0
+    assert '"passwords_hashed": 2' in result.output
