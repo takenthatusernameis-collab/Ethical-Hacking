@@ -953,3 +953,21 @@ def test_normalize_target_ipv6_bracket_end_nonpositive_branch():
     # Another: maybe "[ ]:123" gives bracket_end 2>0 (] followed by space, then colon - but ']: ' not equal to ']:'; wait "]: " not found as ']:')
     # Let us check - "[ ]:123" means ] is followed by space, not colon directly? "]: " vs "]:"
     pass
+
+
+def test_run_redis_assess_raises(monkeypatch):
+    def fake(host, port, req, timeout):
+        s = req.decode("utf-8", errors="replace")
+        if "PING" in s:
+            return b"+PONG\r\n", None
+        elif "INFO" in s:
+            content = b"redis_version:7.0.0\r\n"
+            return b"$" + str(len(content)).encode("ascii") + b"\r\n" + content + b"\r\n", None
+        elif "CONFIG" in s:
+            content = b"bind 0.0.0.0\r\n"
+            return b"$" + str(len(content)).encode("ascii") + b"\r\n" + content + b"\r\n", None
+        return None, None
+
+    monkeypatch.setattr("ethscan.redis._assess_dangerous", lambda cfg: (_ for _ in ()).throw(ValueError("boom")))
+    res = run_redis("example.com", port=6379, timeout=1.0, connector=fake, probes=["ping", "info", "config"])
+    assert res["error"] == "redis probe failed: boom"
