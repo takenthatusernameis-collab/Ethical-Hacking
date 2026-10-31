@@ -390,3 +390,10 @@ def test_parse_buildinfo_handles_decode_edge_case():
     # Try to construct data that might exercise edge cases
     _parse_buildinfo_response(b'')
     _parse_buildinfo_response(b'\x00\x00\x00\x00' * 5)
+
+
+def test_run_mongodb_parse_failure_reported(monkeypatch):
+    monkeypatch.setattr("ethscan.mongodb._parse_buildinfo_response", lambda r: (_ for _ in ()).throw(ValueError("parse boom")))
+    result = run_mongodb("localhost", connector=lambda *a: (b"\x00", None))
+    assert result["accessible"] is False
+    assert "parse boom" in result["error"]
