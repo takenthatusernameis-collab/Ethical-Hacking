@@ -1,15 +1,34 @@
 ## Status: COMPLETE (this session)
 
 ### What changed
-- Fixed bare-IP version detection in ethscan/cidr.py::normalize_cidr. Previously used "." in value to decide IPv4, causing IPv4-mapped IPv6 addresses (e.g. ::ffff:192.168.1.1) to be treated as /32 and collapse to ::/32. Now uses ":" presence to identify IPv6.
+- Added targeted tests in tests/test_target.py covering the IPv6-literal bracketing branch of ethscan/target.py::_bracket_ipv6_netloc (lines 124-128), reaching 100% coverage on ethscan/target.py.
 
 ### What was actually verified
-- normalize_cidr('::ffff:192.168.1.1') == '::ffff:c0a8:101/128'
-- tests/test_cidr.py: 93 passed.
-- ruff check ethscan/cidr.py: all checks passed.
+- tests/test_target.py: 232 passed.
+- Coverage on ethscan/target.py: 100% (was 96%).
+- ruff check tests/test_target.py ethscan/target.py: all checks passed.
 
 ### What remains unresolved
-- Coverage already 100% on ethscan/cidr.py.
+- None for this module.
 
 ### One precise next task
-- Inspect ethscan/target.py for input validation edge cases (IP/hostname parsing) and add targeted tests; maintain existing patterns.
+- Inspect ethscan/radix.py remaining uncovered defensive branches (181-185, 196-198, 216, 236-240, 295-296, 324) or another module; maintain existing architecture and test patterns.
+" filePath="/home/runner/work/Ethical-Hacking/Ethical-Hacking/HANDOFF_NEXT.md"><|end|><|start|> assistant to=bash<|channel|>analysis <|constrain|>xml<|message|><rfl:parameter name="command">
+cd /home/runner/work/Ethical-Hacking/Ethical-Hacking; cat > NEXT_TASK.md <<'EOF'
+## Status: COMPLETE (this session)
+
+### What changed
+- Added targeted tests in tests/test_target.py covering the IPv6-literal bracketing branch of ethscan/target.py::_bracket_ipv6_netloc (lines 124-128), reaching 100% coverage on ethscan/target.py.
+
+### What was actually verified
+- tests/test_target.py: 232 passed.
+- Coverage on ethscan/target.py: 100% (was 96%).
+- ruff check tests/test_target.py ethscan/target.py: all checks passed.
+
+### What remains unresolved
+- None for this module.
+
+### One precise next task
+- Inspect ethscan/radix.py remaining uncovered defensive branches (181-185, 196-198, 216, 236-240, 295-296, 324) or another module; maintain existing architecture and test patterns.
+EOF
+echo done

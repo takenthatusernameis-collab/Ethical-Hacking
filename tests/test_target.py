@@ -741,3 +741,20 @@ def test_parse_url_returns_the_same_result_as_urlparse() -> None:
         "http://user:pass@example.com",
     ):
         assert parse_url(url) == urlparse(url)
+
+
+def test_parse_url_brackets_unbracketed_ipv6_literal() -> None:
+    """An unbracketed IPv6 literal in the authority is bracketed before parsing."""
+    parsed = parse_url("https://2001:db8::1")
+    assert parsed.netloc == "[2001:db8::1]"
+    assert parsed.hostname == "2001:db8::1"
+
+    parsed2 = parse_url("redis://2001:db8::1:6379")
+    assert parsed2.netloc == "[2001:db8::1]:6379"
+    assert parsed2.hostname == "2001:db8::1"
+    assert parsed2.port == 6379
+
+
+def test_parse_url_leaves_already_bracketed_or_ipv4_unchanged() -> None:
+    parsed = parse_url("http://[::1]:443")
+    assert parsed.netloc == "[::1]:443"
