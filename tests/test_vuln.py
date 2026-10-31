@@ -1453,6 +1453,33 @@ def test_run_vuln_reports_an_unusable_certificate_document() -> None:
     assert "Certificate data holds no 'cert' object" in results["notes"]
 
 
+def test_run_vuln_reports_services_document_that_is_not_an_object() -> None:
+    """A services document that is not an object is reported, not raised."""
+    results = run_vuln("example.com", services="not an object")
+
+    assert results["services_checked"] == 0
+    assert results["findings"] == []
+    assert "Service data is not a JSON object" in results["notes"]
+
+
+def test_run_vuln_reports_tls_document_that_is_not_an_object() -> None:
+    """A TLS document that is not an object is reported, not raised."""
+    results = run_vuln("example.com", tls="not an object")
+
+    assert results["tls_checked"] is True
+    assert results["findings"] == []
+    assert "TLS data is not a JSON object" in results["notes"]
+
+
+def test_run_vuln_reports_certificate_document_that_is_not_an_object() -> None:
+    """A certificate document that is not an object is reported, not raised."""
+    results = run_vuln("example.com", certificate="not an object")
+
+    assert results["certificate_checked"] is True
+    assert results["findings"] == []
+    assert "Certificate data is not a JSON object" in results["notes"]
+
+
 def test_match_certificate_vulns_ignores_a_key_size_that_is_not_a_number() -> None:
     """A key size that is not a number matches nothing, it is not a crash."""
     assert match_certificate_vulns({"key_size": "small"}) == []
@@ -1467,6 +1494,16 @@ def test_match_tls_vulns_ignores_names_that_are_not_held_in_a_list() -> None:
     """Names that are not held in a list match nothing."""
     assert match_tls_vulns({"supported_versions": 5}) == []
     assert match_tls_vulns({"supported_ciphers": 5}) == []
+
+
+def test_match_tls_vulns_ignores_none_document() -> None:
+    """A None TLS document matches nothing."""
+    assert match_tls_vulns(None) == []
+
+
+def test_match_ssl_vulns_ignores_none_document() -> None:
+    """A None SSL document matches nothing."""
+    assert match_ssl_vulns(None) == []
 
 
 def test_match_ssl_vulns_ignores_a_certificate_that_is_not_an_object() -> None:
