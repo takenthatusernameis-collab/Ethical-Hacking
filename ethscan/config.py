@@ -273,6 +273,12 @@ def validate_config(
     option dest names that command accepts, and each configured option that
     is not accepted by its command is reported as a warning. A typo in a
     config option name would otherwise be silently ignored.
+
+    Global ``defaults`` are validated against the union of every command's
+    accepted options, because they are merged into each command's default map.
+    A typo in ``defaults`` (e.g. ``timeot`` instead of ``timeout``) is merged
+    into every command's default map and silently ignored by Click, exactly
+    like a typo under a single command, so it is reported here too.
     """
     warnings: list[str] = []
     parse_error = config.get("_parse_error")
@@ -283,8 +289,23 @@ def validate_config(
     defaults = config.get("defaults")
     commands = config.get("commands")
 
-    if defaults is not None and not isinstance(defaults, dict):
-        warnings.append("'defaults' must be a mapping")
+    if defaults is not None:
+        if not isinstance(defaults, dict):
+            warnings.append("'defaults' must be a mapping")
+        elif known_options:
+            # Validate against the union of every command's accepted options.
+            # An empty ``known_options`` mapping means the caller did not
+            # supply command information, so defaults cannot be checked and
+            # are left alone (a value valid for one command but not another
+            # must not be flagged as noise).
+            known_default_options = set().union(*known_options.values())
+            if known_default_options:
+                for key in defaults:
+                    if not _option_is_known(key, known_default_options):
+                        warnings.append(
+                            f"Unknown option '{key}' in global defaults "
+                            "(no such option for any command)"
+                        )
 
     if commands is not None:
         if not isinstance(commands, dict):

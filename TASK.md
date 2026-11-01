@@ -1,22 +1,22 @@
 ## Status: COMPLETE (this session)
 
 ### What changed
-- Nothing. The repository was already in a verified complete state; no source or test changes were made this session. The prior `ethscan/cli.py` `--iterations`/`--salt` usage-error fix remains in place and intact.
+- **`ethscan/config.py`** (`validate_config`): global `defaults` option names are now validated against the union of every command's accepted option dests, and unknown keys are reported as warnings. Previously only `commands.<cmd>.<opt>` typos were checked; a typo in `defaults` (e.g. `timeot`) was merged into every command's default map and silently ignored by Click.
+- **`tests/test_config.py`**: added `test_validate_config_unknown_default_option`, `test_validate_config_known_default_option_clean`, `test_validate_config_format_key_in_defaults_is_known`.
+- **`tests/test_cli.py`**: added `test_config_unknown_default_option_warning` and `test_config_known_default_option_no_warning`.
 
-### What was actually verified (this session)
-- `python -m pytest -q` -> 5453 passed, 53 skipped (full suite green; the 3 extra skips vs. the prior claim are environmental: dnspython not installed -> `test_dnsbrute` x2 and `test_dnssec` x1; remaining skips are docstring/sweep exclusions, not regressions).
+### What was actually verified
+- `python -m pytest -q` -> 5458 passed, 53 skipped (full suite green).
 - `python -m ruff check .` -> All checks passed.
 - `python -m mypy ethscan/` -> Success, no issues found in 59 source files.
-- `git status --short` -> clean working tree; HEAD == origin/main (single commit 45d5895).
-- `grep -rn "TODO\|FIXME\|XXX\|NotImplementedError" ethscan/ tests/` -> no matches (exit 1).
-- Every module in `ethscan/` has a corresponding `tests/test_*.py` file (1:1 mapping confirmed).
-- All README-documented commands are registered in `ethscan/cli.py`.
+- Reproduced the defect before fixing: `defaults: {timeot: 5.0}` produced no warning, while `commands: {scan: {timeot: ...}}` did. After the fix the defaults typo is warned identically.
+- End-to-end stderr assertion passes.
 
 ### What remains unresolved
-- Nothing in-repo. `.github/workflows/test.yml` is maintainer-managed and excluded by the kilo controller; requires maintainer to add it with appropriate permissions. Not an in-repo agent task. Existing CI is kilo-controller infra (`.github/workflows/main.yml` + `kilo-workflow-audit.yml`), not project test CI.
+- Nothing in-repo. `.github/workflows/test.yml` is maintainer-managed and excluded by the kilo controller.
 
 ### Which approaches failed and why
-- None this session. No speculative changes were made because no demonstrated problem existed beyond the already-fixed `hash --iterations` usage-error inconsistency.
+- None. The defect was found by behavioral audit, not by trusting prior "complete" claims.
 
 ### One precise next task
-- No bounded in-repo task remains. Do not resume coverage work. If a maintainer adds `.github/workflows/test.yml`, verify the Actions run passes across ubuntu/macos/windows.
+- None. Repository is in a verified complete state with one real defect fixed.

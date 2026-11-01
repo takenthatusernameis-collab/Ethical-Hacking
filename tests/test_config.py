@@ -267,6 +267,37 @@ def test_validate_config_defaults_are_not_option_checked() -> None:
     assert warnings == []
 
 
+def test_validate_config_unknown_default_option() -> None:
+    """A typo in global defaults is flagged, because defaults are merged into
+    every command's default map and would otherwise be silently ignored."""
+    warnings = validate_config(
+        {"defaults": {"timeot": 5.0}, "commands": {}},
+        known_commands=[],
+        known_options={"scan": {"ports", "profile", "timeout", "workers"}},
+    )
+    assert any("timeot" in w and "defaults" in w for w in warnings)
+
+
+def test_validate_config_known_default_option_clean() -> None:
+    """A default option accepted by at least one command produces no warning."""
+    warnings = validate_config(
+        {"defaults": {"timeout": 5.0}, "commands": {}},
+        known_commands=[],
+        known_options={"scan": {"ports", "profile", "timeout", "workers"}},
+    )
+    assert warnings == []
+
+
+def test_validate_config_format_key_in_defaults_is_known() -> None:
+    """The documented ``format`` key remaps to ``fmt`` and is known in defaults."""
+    warnings = validate_config(
+        {"defaults": {"format": "markdown"}, "commands": {}},
+        known_commands=[],
+        known_options={"scan": {"fmt", "output_fmt", "ports"}},
+    )
+    assert warnings == []
+
+
 def test_validate_config_with_real_cli_commands() -> None:
     """The real CLI commands are used to validate configured options."""
     known_options = {
@@ -288,6 +319,20 @@ def test_validate_config_with_real_cli_commands() -> None:
         known_options=known_options,
     )
     assert any("bogus-option" in w and "scan" in w for w in warnings)
+    # An unknown option in global defaults produces a warning too.
+    warnings = validate_config(
+        {"defaults": {"bogus-default": 1}, "commands": {}},
+        known_commands=sorted(known_options),
+        known_options=known_options,
+    )
+    assert any("bogus-default" in w and "defaults" in w for w in warnings)
+    # A valid global default produces no warning.
+    warnings = validate_config(
+        {"defaults": {"timeout": 5.0}, "commands": {}},
+        known_commands=sorted(known_options),
+        known_options=known_options,
+    )
+    assert warnings == []
 
 
 def test_dump_default_config_is_yaml() -> None:

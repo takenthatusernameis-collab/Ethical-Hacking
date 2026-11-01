@@ -12845,6 +12845,28 @@ def test_config_option_unknown_bogus_warning(tmp_path) -> None:
     assert "Unknown option 'bogus' for command 'cidr'" in result.stderr
 
 
+def test_config_unknown_default_option_warning(tmp_path) -> None:
+    """A typo in global defaults emits a warning on stderr, because defaults are
+    merged into every command's default map and would otherwise be silently
+    ignored."""
+    config_file = tmp_path / "ethscan.yaml"
+    config_file.write_text("defaults:\n  timeot: 5.0\n")
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(cli, ["--config", str(config_file), "scan", "--help"])
+    assert result.exit_code == 0
+    assert "Unknown option 'timeot' in global defaults" in result.stderr
+
+
+def test_config_known_default_option_no_warning(tmp_path) -> None:
+    """A default option accepted by at least one command emits no warning."""
+    config_file = tmp_path / "ethscan.yaml"
+    config_file.write_text("defaults:\n  timeout: 5.0\n")
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(cli, ["--config", str(config_file), "scan", "--help"])
+    assert result.exit_code == 0
+    assert "Unknown option" not in result.stderr
+
+
 def test_config_option_format_key_no_warning(tmp_path) -> None:
     """Documented format key in config does not emit an unknown-option warning."""
     config_file = tmp_path / "ethscan.yaml"
