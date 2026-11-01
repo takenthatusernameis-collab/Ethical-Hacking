@@ -3228,8 +3228,7 @@ def cidr(cidr: str, contains: str | None, diff: str | None, fmt: str, output_fmt
 def hash_cmd(passwords, password_file, algorithm, salt, pepper, iterations, check_digest, fmt, output_fmt, out_path) -> None:
     """Generate cryptographic hashes for passwords (MD5, SHA-1, SHA-256, SHA-512, NTLM, MD4)."""
     if iterations is not None and not salt:
-        click.echo("Error: --iterations requires --salt to be supplied.")
-        raise click.exceptions.Exit(1)
+        raise click.UsageError("--iterations requires --salt to be supplied.")
 
     password_list = list(passwords)
     if not password_list and password_file:

@@ -1,7 +1,7 @@
 ## Status: COMPLETE (this session)
 
 ### What changed
-- No code change this session. Re-verified repository baseline independently (this session: pytest 5456 passed/50 skipped, ruff clean, mypy clean on 59 files, git tree clean at 86be7c2).
+- `ethscan/cli.py`: the `hash` command's `--iterations` without `--salt` validation now raises `click.UsageError("--iterations requires --salt to be supplied.")` instead of `click.echo(...) + raise click.exceptions.Exit(1)`, matching the project's usage-error contract (exit code 2, stderr).
 
 ### What was actually verified
 - `python -m pytest -q` -> 5456 passed, 50 skipped.
@@ -16,5 +16,3 @@
 
 ### One precise next task
 - None. Repository is in a verified complete state. Next agent should not resume coverage work; if a maintainer adds `.github/workflows/test.yml`, verify the Actions run passes across ubuntu/macos/windows.
-
-(End of file)
