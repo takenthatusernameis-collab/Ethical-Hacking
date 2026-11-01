@@ -140,6 +140,7 @@ def _format_network_info(network: ipaddress._BaseNetwork) -> dict[str, Any]:
             if total > 2
             else str(network[1]) if total == 2 else str(network.network_address)
         ),
+        "usable_host_count": max(0, total - 2) if is_v4 else max(0, total - 1),
         "total_addresses": total,
         "prefixlen": network.prefixlen,
     }
