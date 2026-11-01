@@ -1,7 +1,7 @@
 ## Status: VERIFIED COMPLETE (no bounded in-repo task remains)
 
 ### What changed
-- No code changes this session. Re-verified the repository baseline after the prior handoff.
+- No code changes this session. Re-verified repository baseline.
 
 ### What was actually verified
 - `python -m pytest -q` -> 5439 passed, 50 skipped (full suite green).
