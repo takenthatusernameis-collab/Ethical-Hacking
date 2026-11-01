@@ -20,3 +20,5 @@
 
 ### One precise next task
 - No bounded in-repo task remains. Do not resume coverage work. If a maintainer adds `.github/workflows/test.yml`, verify the Actions run passes across ubuntu/macos/windows.
+
+(End of file)
