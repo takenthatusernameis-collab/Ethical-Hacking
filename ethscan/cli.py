@@ -3611,9 +3611,13 @@ def config(
             from ethscan.fileio import write_text
 
             write_text(init_path, sample)
-        except OSError as exc:
-            click.echo(f"Error writing config: {exc}", err=True)
-            raise SystemExit(1) from None
+        except (OSError, ValueError) as exc:
+            # Report an unusable ``--init`` path as a usage error (exit code 2)
+            # with the ``--init`` hint, the same way ``_write_output`` reports
+            # an unusable ``--out`` path and the way every other command does.
+            # The README contract is that invalid option values are usage
+            # errors; ``--init`` takes a path just like ``--out``.
+            raise click.BadParameter(str(exc), param_hint="'--init'") from exc
         click.echo(f"Sample config written to {init_path}")
         return
 

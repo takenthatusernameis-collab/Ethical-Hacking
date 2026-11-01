@@ -22033,8 +22033,16 @@ def test_radix_no_cidrs_error() -> None:
     assert "at least one CIDR network is required" in result.output
 
 def test_config_init_write_error(tmp_path, monkeypatch) -> None:
+    """An unusable ``--init`` path is a usage error (exit code 2).
+
+    ``--init`` takes a path just like ``--out``; both delegate to
+    ``write_text`` and both should report an unusable path as a usage error
+    with the matching option hint, per the README contract that invalid
+    option values are usage errors.
+    """
     runner = CliRunner()
     original_open = open
+
     def mock_open(*args, **kwargs):
         mode = kwargs.get('mode', '')
         if len(args) > 1:
@@ -22042,10 +22050,13 @@ def test_config_init_write_error(tmp_path, monkeypatch) -> None:
         if 'w' in str(mode):
             raise OSError('disk full')
         return original_open(*args, **kwargs)
+
     monkeypatch.setattr('builtins.open', mock_open)
     result = runner.invoke(cli, ['config', '--init', str(tmp_path / 'x.yaml')])
-    assert result.exit_code == 1
-    assert 'Error writing config' in result.output
+    assert result.exit_code == 2
+    assert "Invalid value for '--init'" in result.output
+    assert "disk full" in result.output
+    assert "Traceback (most recent call last)" not in result.output
 
 def test_config_out_write_error(tmp_path, monkeypatch) -> None:
     cfg = tmp_path / 'ethscan.yaml'
