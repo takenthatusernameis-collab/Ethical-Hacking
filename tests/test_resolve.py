@@ -370,6 +370,37 @@ def test_format_resolve_report_csv_empty_records() -> None:
     assert reader[0] == ["target", "normalized", "record_type", "record_value"]
 
 
+def test_resolve_wrapper_single_record_type(monkeypatch) -> None:
+    from ethscan import resolve
+
+    calls = []
+
+    def fake_run_resolve(target, record_types=None, server=None, timeout=5.0):
+        calls.append((target, record_types, server, timeout))
+        return {"target": target, "normalized": target, "records": {"A": ["1.2.3.4"]}}
+
+    monkeypatch.setattr(resolve, "run_resolve", fake_run_resolve)
+    result = resolve.resolve("example.com", record_type="A", timeout=2.0)
+    assert result["records"]["A"] == ["1.2.3.4"]
+    assert calls[0][0] == "example.com"
+    assert calls[0][1] == ["A"]
+    assert calls[0][3] == 2.0
+
+
+def test_resolve_wrapper_default_record_type(monkeypatch) -> None:
+    from ethscan import resolve
+
+    calls = []
+
+    def fake_run_resolve(target, record_types=None, server=None, timeout=5.0):
+        calls.append(record_types)
+        return {"target": target, "normalized": target, "records": {"A": []}}
+
+    monkeypatch.setattr(resolve, "run_resolve", fake_run_resolve)
+    resolve.resolve("example.com")
+    assert calls[0] == ["A"]
+
+
 def test_format_resolve_report_csv_comma_value() -> None:
     data = {
         "target": "example.com",

@@ -1113,6 +1113,13 @@ def test_build_radix_with_bad_networks_mixed() -> None:
     assert isinstance(res, dict)
 
 
+def test_build_radix_with_all_bad_networks() -> None:
+    from ethscan import radix
+
+    res = radix.build_radix_tree(["notanetwork", "also-bad"])
+    assert res == {}
+
+
 def test_build_radix_merge_fallbacks() -> None:
     from ethscan import radix
     import ipaddress
