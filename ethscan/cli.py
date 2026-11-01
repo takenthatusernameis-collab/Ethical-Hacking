@@ -1059,9 +1059,10 @@ def web(target: str, checks: str, timeout: float, fmt: str, output_fmt: str | No
     valid = {"headers", "info_disclosure", "ssl"}
     unknown = [c for c in check_list if c not in valid]
     if unknown:
-        click.echo(f"Unknown checks: {', '.join(unknown)}")
-        click.echo(f"Valid checks: {', '.join(sorted(valid))}")
-        return
+        raise click.UsageError(
+            f"Unknown checks: {', '.join(unknown)}. "
+            f"Valid checks: {', '.join(sorted(valid))}"
+        )
 
     results = run_web_checks(target, check_list, timeout=timeout)
 
@@ -1507,9 +1508,10 @@ def dns(
     valid_types = {"A", "AAAA", "MX", "NS", "TXT", "CNAME", "SOA"}
     unknown = [t for t in types_list if t not in valid_types]
     if unknown:
-        click.echo(f"Unknown record types: {', '.join(unknown)}")
-        click.echo(f"Valid types: {', '.join(sorted(valid_types))}")
-        return
+        raise click.UsageError(
+            f"Unknown record types: {', '.join(unknown)}. "
+            f"Valid types: {', '.join(sorted(valid_types))}"
+        )
 
     results = run_dns(target, record_types=types_list, server=server, timeout=timeout, workers=workers)
 
@@ -1583,9 +1585,10 @@ def resolve(
         valid_types = {"A", "AAAA", "CNAME", "PTR"}
         unknown = [t for t in types_list if t not in valid_types]
         if unknown:
-            click.echo(f"Unknown record types: {', '.join(unknown)}")
-            click.echo(f"Valid types: {', '.join(sorted(valid_types))}")
-            return
+            raise click.UsageError(
+                f"Unknown record types: {', '.join(unknown)}. "
+                f"Valid types: {', '.join(sorted(valid_types))}"
+            )
 
     results = run_resolve(target, record_types=types_list, server=server, timeout=timeout)
 
@@ -1824,8 +1827,11 @@ def tls(
             max_workers=workers,
         )
     except ValueError as exc:
-        click.echo(str(exc))
-        return
+        # A TLS version or cipher the tool does not support is an unusable
+        # option value: report it as a usage error (exit code 2) with the
+        # usage banner, the same way every other command reports an unusable
+        # option value, instead of a bare "Error:" line and exit 0.
+        raise click.UsageError(str(exc)) from exc
 
     # --output-format takes precedence over the deprecated --format alias
     chosen_format = output_fmt if output_fmt is not None else fmt
@@ -2133,9 +2139,10 @@ def urlcheck(
     valid = {"headers", "info_disclosure", "ssl"}
     unknown = [c for c in check_list if c not in valid]
     if unknown:
-        click.echo(f"Unknown checks: {', '.join(unknown)}")
-        click.echo(f"Valid checks: {', '.join(sorted(valid))}")
-        return
+        raise click.UsageError(
+            f"Unknown checks: {', '.join(unknown)}. "
+            f"Valid checks: {', '.join(sorted(valid))}"
+        )
 
     wordlist = load_fuzz_wordlist(wordlist_path) if wordlist_path else None
 

@@ -1908,8 +1908,9 @@ def test_web_unknown_check() -> None:
         cli,
         ["web", "--target", "https://example.com", "--checks", "bogus", "--timeout", "1.0"],
     )
-    assert result.exit_code == 0
+    assert result.exit_code == 2
     assert "Unknown checks" in result.output
+    assert "Valid checks" in result.output
 
 
 def test_web_help() -> None:
@@ -3199,8 +3200,9 @@ def test_dns_unknown_type() -> None:
             "1.0",
         ],
     )
-    assert result.exit_code == 0
+    assert result.exit_code == 2
     assert "Unknown record types" in result.output
+    assert "Valid types" in result.output
 
 
 def test_dns_server_option(monkeypatch) -> None:
@@ -5817,9 +5819,10 @@ def test_tls_unknown_version() -> None:
             "1.0",
         ],
     )
-    assert result.exit_code == 0
+    assert result.exit_code == 2
     assert "Unknown TLS versions" in result.output
     assert "BOGUS" in result.output
+    assert "Valid versions" in result.output
 
 
 def test_tls_out_option(tmp_path, monkeypatch) -> None:
@@ -8098,8 +8101,9 @@ def test_urlcheck_unknown_check() -> None:
             "1.0",
         ],
     )
-    assert result.exit_code == 0
+    assert result.exit_code == 2
     assert "Unknown checks" in result.output
+    assert "Valid checks" in result.output
 
 
 def test_urlcheck_wordlist_option(tmp_path, monkeypatch) -> None:
@@ -15051,9 +15055,10 @@ def test_resolve_unknown_types_rejected() -> None:
     result = runner.invoke(
         cli, ["resolve", "--target", "example.com", "--types", "A,FOO"]
     )
-    assert result.exit_code == 0
+    assert result.exit_code == 2
     assert "Unknown record types" in result.output
     assert "FOO" in result.output
+    assert "Valid types" in result.output
 
 
 def test_resolve_server_option(monkeypatch) -> None:
