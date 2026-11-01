@@ -1,7 +1,7 @@
 ## Status: VERIFIED COMPLETE (no bounded in-repo task remains)
 
 ### What changed
-- No code changes this session. Inspected repository state and verified current baseline.
+- No code changes this session. Re-verified the repository baseline after the prior handoff.
 
 ### What was actually verified
 - `python -m pytest -q` -> 5439 passed, 50 skipped (full suite green).
@@ -9,7 +9,6 @@
 - `python -m mypy ethscan/` -> Success, no issues found in 59 source files.
 - `git status --short` -> clean working tree (HEAD at origin/main).
 - `grep -rn "TODO\|FIXME\|XXX" ethscan/ tests/` -> no matches.
-- Host-range logic consistent across `ethscan/validate.py`, `ethscan/cidr.py`, `ethscan/radix.py` (including /31 and /127 cases).
 
 ### What remains unresolved
 - Nothing in-repo. All tests pass, lint/typecheck clean, no TODOs/FIXMEs.
