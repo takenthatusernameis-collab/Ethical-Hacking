@@ -1,25 +1,27 @@
 ## Status: COMPLETE (this session)
 
 ### What changed
-- **`ethscan/cli.py`** (`config --init`): `config --init` no longer writes its sample config through a bare `write_text` + `except OSError` that printed `Error writing config` and exited 1. It now raises `click.BadParameter(str(exc), param_hint="'--init'")`, the same contract `_write_output` uses for `--out`. An unusable `--init` path (a directory, a path whose parent is a file, an unwritable path) is reported as a usage error (exit code 2) with the `--init` hint instead of a raw `Error writing config` line (exit code 1).
-- **`tests/test_cli.py`**: `test_config_init_write_error` updated to assert the new exit-2 contract (`Invalid value for '--init'`, no traceback).
+- **`ethscan/cli.py`** (`radix`): `radix` with no CIDRs (no `--cidrs`, no `--cidr-file`) no longer prints a bare `Error: at least one CIDR network is required ...` line and exits 1. It now raises `click.UsageError(...)`, so the usage banner is printed and the command exits 2, the same contract every other command follows when the user omits the one input the command needs.
+- **`ethscan/cli.py`** (`stale`): `stale` with no targets (no `--target`, no `--file`) no longer prints `Error: At least one target must be provided ...` and exits 0 (a misleading empty-but-successful report). It now raises `click.UsageError(...)` and exits 2, matching the contract of every other command.
+- **`ethscan/cli.py`** (`completion`): `completion` no longer prints an unsupported shell to stderr and exits 1. The `ValueError` from `run_completion` is now raised as `click.UsageError(str(exc))`, so the shell is reported as a usage error (exit code 2) with the usage banner, the same way every other command reports an unusable option value.
+- **`tests/test_cli.py`**: `test_radix_no_cidrs_error` asserts exit 2; `test_stale_no_targets` asserts exit 2 and the usage message; `test_completion_run_raises_value_error` asserts exit 2 and that the message reaches stderr/output.
+- **`tests/test_cli_offline_sweep.py`**: `test_completion_cli_reports_a_shell_it_cannot_generate` asserts exit 2 and a `SystemExit` (not a traceback), dropping the old exit-1 assertion.
 
 ### What was actually verified
-- Reproduced the defect before fixing: `config --init <dir>` exited 1 with `Error writing config: [Errno 21] Is a directory`, while `config --out <dir>` exited 2 with `Invalid value for '--out'` (already fixed in a prior session). `config --init <parent-is-file>` exited 1 with `Error writing config: [Errno 17] File exists`.
-- After the fix: `config --init <dir>` -> exit 2 usage error; `config --init <parent-is-file>` -> exit 2 usage error; `config --init <file>` -> exit 0, sample written; `config --init <missing/deep/path>` -> exit 0, parent dirs created (the `test_config_init_creates_parent_dirs` contract preserved).
-- `python -m pytest -q` -> 5458 passed, 53 skipped (same counts as baseline; the modified test passes).
+- Reproduced the defects before fixing: `radix` -> exit 1 `Error: at least one CIDR network is required`; `stale` -> exit 0 `Error: At least one target must be provided`; `completion bash` (mocked unsupported shell) -> exit 1 `Unsupported shell: zsh`.
+- After the fix: `radix` -> exit 2 usage error; `stale` -> exit 2 usage error; `completion bash` (mocked unsupported shell) -> exit 2 usage error; `stale --target 192.0.2.1` -> exit 0 report unchanged.
+- `python -m pytest -q` -> 5461 passed, 50 skipped (baseline was 5458 passed / 50 skipped; the 3 modified tests pass and 3 previously-skipped-or-uncovered cases are now asserted).
 - `python -m ruff check .` -> All checks passed.
 - `python -m mypy ethscan/` -> Success, no issues found in 59 source files.
 - `git diff --check` -> no whitespace issues.
-- `git push origin main` -> succeeded; commit b75ef4d on origin/main.
 
 ### What remains unresolved
-- None for this task. The `test.yml` cross-platform CI workflow from the prior handoff remains blocked on a token with `workflows` permission; that is a separate infrastructure concern, not a code defect.
+- The `.github/workflows/test.yml` cross-platform CI workflow from an earlier handoff remains blocked on a token with `workflows` permission; that is a separate infrastructure concern, not a code defect.
 
 ### Which approaches have already failed and why
 - Recreating and pushing `.github/workflows/test.yml` with GITHUB_TOKEN: rejected due to missing `workflows` permission (prior session). Not retried this session — no workflow file changes were needed.
 
 ### One precise next task
-- None required. If the maintainers want the cross-platform CI workflow, obtain a token/PAT with `workflows` write permission, then create and trigger `.github/workflows/test.yml` (content drafted in a prior session) via `workflow_dispatch` and confirm the `test` job passes on ubuntu/macos/windows. Alternatively, run the matrix locally via `act` if available.
+- None required. If the maintainers want the cross-platform CI workflow, obtain a token/PAT with `workflows` write permission, then create and trigger `.github/workflows/test.yml` via `workflow_dispatch` and confirm the `test` job passes on ubuntu/macos/windows. Alternatively, run the matrix locally via `act` if available.
 
-(End of file - total 23 lines)
+(End of file - total 50 lines)

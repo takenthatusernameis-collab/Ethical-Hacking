@@ -3372,8 +3372,13 @@ def radix(
         cidrs.extend(option_cidrs)
 
     if not cidrs:
-        click.echo("Error: at least one CIDR network is required (via --cidrs or --cidr-file).", err=True)
-        raise SystemExit(1)
+        # A command that takes no input at all is a usage error, not a runtime
+        # failure: the user omitted the one thing the command needs. Report it
+        # the way every other command does, with the usage banner and exit
+        # code 2, instead of a bare "Error:" line and exit code 1.
+        raise click.UsageError(
+            "at least one CIDR network is required (via --cidrs or --cidr-file)"
+        )
 
     _check_cidrs(file_cidrs, "'--cidr-file'")
     _check_cidrs(option_cidrs, "'--cidrs'")
@@ -3847,8 +3852,11 @@ def completion(
     try:
         results = run_completion(cli, shell=effective_shell, prog_name=prog_name)
     except ValueError as exc:
-        click.echo(str(exc), err=True)
-        raise SystemExit(1) from None
+        # A completion request that cannot be fulfilled is a usage error
+        # (exit code 2), not a runtime failure: it names a shell the tool does
+        # not support, so report it the way every other command reports an
+        # unusable option value instead of a bare "Error:" line and exit 1.
+        raise click.UsageError(str(exc)) from exc
 
     # --output-format takes precedence over the deprecated --format alias
     chosen_format = output_fmt if output_fmt is not None else fmt
@@ -4291,8 +4299,13 @@ def stale(
     if target_file:
         all_targets.extend(load_domains_from_file(target_file))
     if not all_targets:
-        click.echo("Error: At least one target must be provided via --target or --file", err=True)
-        return
+        # Omitting the one input the command needs is a usage error, not an
+        # empty-but-successful report: print the usage banner and exit 2, the
+        # way every other command does, instead of a bare "Error:" line and a
+        # misleading exit code 0.
+        raise click.UsageError(
+            "at least one target must be provided via --target or --file"
+        )
 
     results = run_stale(all_targets, timeout=timeout, max_workers=workers)
 

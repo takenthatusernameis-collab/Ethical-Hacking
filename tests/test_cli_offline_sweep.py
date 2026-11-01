@@ -236,14 +236,15 @@ def test_completion_cli_reports_a_shell_it_cannot_generate(monkeypatch) -> None:
 
     The shell is one of the ones the option accepts, but the completion
     machinery of click does not know it (yet), so the command reports the
-    shell it cannot generate a script for and exits 1.
+    shell it cannot generate a script for as a usage error (exit code 2),
+    the same way every other command reports an unusable option value.
     """
     monkeypatch.setattr("ethscan.completion._available_shells", lambda: {"bash": object()})
 
     result = CliRunner().invoke(cli.cli, ["completion", "zsh"])
 
-    assert result.exit_code == 1, f"exited {result.exit_code}:\n{result.output}"
-    # The command reports the shell and exits; it does not raise.
+    assert result.exit_code == 2, f"exited {result.exit_code}:\n{result.output}"
+    # The command reports the shell and exits; it does not raise a traceback.
     assert isinstance(result.exception, SystemExit), (
         f"the command raised {result.exception!r} instead of reporting the shell"
     )

@@ -22029,7 +22029,7 @@ def test_cve_profile_with_all_keyword(monkeypatch) -> None:
 def test_radix_no_cidrs_error() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["radix"])
-    assert result.exit_code == 1
+    assert result.exit_code == 2
     assert "at least one CIDR network is required" in result.output
 
 def test_config_init_write_error(tmp_path, monkeypatch) -> None:
@@ -22101,13 +22101,14 @@ def test_completion_run_raises_value_error(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.cli.run_completion", mock_run)
     runner = CliRunner(mix_stderr=False)
     result = runner.invoke(cli, ["completion", "--shell", "bash"])
-    assert result.exit_code == 1
+    assert result.exit_code == 2
+    assert "bad shell" in (result.stderr or result.output)
 
 def test_stale_no_targets() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["stale"])
-    assert result.exit_code == 0
-    assert "At least one target must be provided" in result.output
+    assert result.exit_code == 2
+    assert "at least one target must be provided" in result.output
 
 def test_hash_file_out_markdown(tmp_path) -> None:
     pw = tmp_path / 'p.txt'
