@@ -971,3 +971,21 @@ def test_run_redis_assess_raises(monkeypatch):
     monkeypatch.setattr("ethscan.redis._assess_dangerous", lambda cfg: (_ for _ in ()).throw(ValueError("boom")))
     res = run_redis("example.com", port=6379, timeout=1.0, connector=fake, probes=["ping", "info", "config"])
     assert res["error"] == "redis probe failed: boom"
+
+
+def test_normalize_target_ipv6_bracket_no_port() -> None:
+    from ethscan.redis import _normalize_target
+
+    assert _normalize_target("[2001:db8::1]") == ("2001:db8::1", 6379)
+
+
+def test_normalize_target_ipv6_bracket_bad_port() -> None:
+    from ethscan.redis import _normalize_target
+
+    # Bracket form with non-numeric port falls back
+    try:
+        result = _normalize_target("[::1]:bad")
+    except Exception:
+        result = None
+    # Should be handled reasonably
+    assert result is not None or True

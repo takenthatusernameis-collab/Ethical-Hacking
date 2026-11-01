@@ -748,3 +748,37 @@ def test_run_postgresql_transport_failure_of_unnamed_type_is_reported(monkeypatc
     results = run_postgresql("localhost")
     assert results["accessible"] is False
     assert "hostile transport" in results["error"]
+
+
+def test_parse_startup_response_force_empty_msg_type() -> None:
+    class EmptyMsg(bytes):
+        def __getitem__(self, key):
+            if isinstance(key, slice):
+                start = key.start if key.start is not None else 0
+                stop = key.stop if key.stop is not None else len(self)
+                if stop == start + 1 and (key.step is None or key.step == 1):
+                    return b""
+            return super().__getitem__(key)
+
+    result = _parse_startup_response(EmptyMsg(b"abcd"))
+    assert result["parameters"] == {}
+
+
+def test_run_postgresql_no_probes_list() -> None:
+    from ethscan.postgresql import run_postgresql
+
+    result = run_postgresql("localhost", probes=[])
+    assert result["accessible"] is False
+    assert result["error"] is None
+
+
+def test_run_postgresql_startup_no_response(monkeypatch) -> None:
+    from ethscan import postgresql
+
+    def fake_send_recv(host, port, data, timeout, connector=None):
+        return None, None
+
+    monkeypatch.setattr(postgresql, "_send_recv", fake_send_recv)
+    result = postgresql.run_postgresql("localhost", probes=["startup"])
+    assert result["accessible"] is False
+    assert "No response" in result["error"]

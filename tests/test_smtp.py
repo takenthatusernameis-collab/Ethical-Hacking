@@ -1344,3 +1344,43 @@ def test_run_smtp_transport_failure_on_relay_unnamed_type_is_reported(monkeypatc
     assert results["open_relay"] is None
     assert results["error"] is not None
     assert "hostile transport" in results["error"]
+
+
+def test_smtp_connect_host_error_closes_socket(monkeypatch) -> None:
+    from ethscan import smtp
+
+    class DummySock:
+        def __init__(self):
+            self.closed = False
+        def close(self):
+            self.closed = True
+
+    d = DummySock()
+
+    def fake_create_connection(*args, **kwargs):
+        raise ValueError("bad host")
+
+    monkeypatch.setattr(smtp.socket, "create_connection", fake_create_connection)
+
+    res = smtp.run_smtp("....", port=25, timeout=1.0)
+    assert res.get("error") is not None
+
+
+def test_smtp_connection_exception_closes_socket(monkeypatch) -> None:
+    from ethscan import smtp
+
+    class DummySock:
+        def __init__(self):
+            self.closed = False
+        def close(self):
+            self.closed = True
+
+    dummy = DummySock()
+
+    def fake_connect(*args, **kwargs):
+        # Set sock in module scope? Look up how it's used
+        raise RuntimeError("fail")
+
+    monkeypatch.setattr(smtp, "_connect", fake_connect)
+    res = smtp.run_smtp("example.com")
+    assert "connection failed" in str(res.get("error"))

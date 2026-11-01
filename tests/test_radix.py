@@ -1094,3 +1094,37 @@ def test_merge_networks_mixed_families_kept_separate():
     ]
     merged = _merge_networks(nets)
     assert [str(n) for n in merged] == ["10.0.0.0/8", "2001:db8::/32"]
+
+
+def test_build_radix_merge_sort_fallbacks() -> None:
+    from ethscan import radix
+    import ipaddress
+
+    nets = [ipaddress.ip_network("10.0.0.0/8"), ipaddress.ip_network("192.168.0.0/16")]
+    res = radix.build_radix_tree([str(n) for n in nets])
+    assert isinstance(res, dict)
+
+
+def test_build_radix_with_bad_networks_mixed() -> None:
+    from ethscan import radix
+
+    # mix with something odd
+    res = radix.build_radix_tree(["10.0.0.0/8", "notanetwork"])
+    assert isinstance(res, dict)
+
+
+def test_build_radix_merge_fallbacks() -> None:
+    from ethscan import radix
+    import ipaddress
+
+    # Exercise fallback paths in _merge_networks
+    nets = [ipaddress.ip_network("10.0.0.0/8")]
+    res = radix._merge_networks(nets)
+    assert isinstance(res, list)
+
+
+def test_build_radix_node_early_returns() -> None:
+    from ethscan import radix
+
+    res = radix._build_radix_node([], depth=0, max_depth=5)
+    assert res is None

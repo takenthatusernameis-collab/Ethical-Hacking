@@ -1160,3 +1160,28 @@ def test_format_resolve_report_csv_values_not_list() -> None:
     output = format_resolve_report_csv(data)
     reader = list(csv.reader(io.StringIO(output)))
     assert reader[1] == ["example.com", "example.com", "A", "1.2.3.4"]
+
+
+def test_resolve_specific_type_all_supported_continues() -> None:
+    from ethscan import resolve
+
+    # When a type is in all_supported but not explicitly handled in our branches,
+    # we should continue (line ~225). Try to force this case.
+    result = resolve.resolve("example.com", record_type="MX")  # MX might go to dnspython path
+    assert isinstance(result, dict)
+
+
+def test_run_resolve_type_in_all_supported_continues_path() -> None:
+    from ethscan import resolve
+
+    # Force path where record_type is in all_supported but hits the continue branch
+    # NS is in all_supported; let us see how run_resolve behaves
+    result = resolve.run_resolve("example.com", record_types=["NS"])
+    assert isinstance(result, dict)
+
+
+def test_run_resolve_ptr_on_ip() -> None:
+    from ethscan import resolve
+
+    result = resolve.run_resolve("8.8.8.8", record_types=["PTR"])
+    assert isinstance(result, dict)
