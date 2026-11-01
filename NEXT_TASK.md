@@ -1,10 +1,10 @@
 ## Status: COMPLETE (this session)
 
 ### What changed
-- `ethscan/cli.py`: the `hash` command's `--iterations` without `--salt` validation now raises `click.UsageError("--iterations requires --salt to be supplied.")` instead of `click.echo(...) + raise click.exceptions.Exit(1)`, matching the project's usage-error contract (exit code 2, stderr).
+- Nothing. Repository already verified complete; no changes made this session.
 
 ### What was actually verified
-- `python -m pytest -q` -> 5456 passed, 50 skipped.
+- `python -m pytest -q` -> 5453 passed, 53 skipped (full suite green; skips are environmental dnspython/sweep exclusions).
 - `python -m ruff check .` -> All checks passed.
 - `python -m mypy ethscan/` -> Success, no issues found in 59 source files.
 - `grep -rn "TODO\|FIXME\|XXX\|NotImplementedError" ethscan/ tests/` -> no matches.
