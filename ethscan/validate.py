@@ -143,6 +143,7 @@ def _format_network_info(network: ipaddress._BaseNetwork) -> dict[str, Any]:
         "usable_host_count": max(0, total - 2) if is_v4 else max(0, total - 1),
         "total_addresses": total,
         "prefixlen": network.prefixlen,
+        "is_private": network.is_private,
     }
 
     if total <= MAX_EXPANDED_IPS:

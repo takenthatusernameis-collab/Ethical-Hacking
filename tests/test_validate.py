@@ -264,6 +264,20 @@ def test_format_network_info_ipv6_127() -> None:
     assert info["last_host"] == "2001:db8::1"
 
 
+def test_format_network_info_is_private_ipv4() -> None:
+    info = _format_network_info(ipaddress.ip_network("192.168.1.0/24"))
+    assert info["is_private"] is True
+    info = _format_network_info(ipaddress.ip_network("8.8.8.0/24"))
+    assert info["is_private"] is False
+
+
+def test_format_network_info_is_private_ipv6() -> None:
+    info = _format_network_info(ipaddress.ip_network("fc00::/7"))
+    assert info["is_private"] is True
+    info = _format_network_info(ipaddress.ip_network("2001:4860::/32"))
+    assert info["is_private"] is False
+
+
 # ---------------------------------------------------------------------------
 # _ports_to_ranges
 # ---------------------------------------------------------------------------
