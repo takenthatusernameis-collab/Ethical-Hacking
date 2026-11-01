@@ -1,24 +1,36 @@
 ## Status: COMPLETE (this session)
 
 ### What changed
-- **`ethscan/config.py`** (`validate_config`): global `defaults` option names are now validated against the union of every command's accepted option dests, and unknown keys are reported as warnings. Previously only `commands.<cmd>.<opt>` typos were checked; a typo in `defaults` (e.g. `timeot`) was merged into every command's default map and silently ignored by Click. The docstring already claimed typos were caught, so this was a real gap between contract and behavior.
-- **`tests/test_config.py`**: added `test_validate_config_unknown_default_option`, `test_validate_config_known_default_option_clean`, `test_validate_config_format_key_in_defaults_is_known`; the pre-existing `test_validate_config_defaults_are_not_option_checked` (empty `known_options` sentinel) still passes because defaults are only checked when the caller supplies real command information.
-- **`tests/test_cli.py`**: added `test_config_unknown_default_option_warning` and `test_config_known_default_option_no_warning` (end-to-end stderr assertions).
+- Nothing. Repository already verified complete; no changes made this session.
+- The three handoff files (TASK.md, NEXT_TASK.md, HANDOFF_NEXT.md) were refreshed to record this session's independent verification.
 
 ### What was actually verified (this session)
-- `python -m pytest -q` -> **5458 passed, 53 skipped** (was 5453; +5 new tests). Full suite green.
+- `python -m pytest -q` -> 5458 passed, 53 skipped (full suite green).
 - `python -m ruff check .` -> All checks passed.
 - `python -m mypy ethscan/` -> Success, no issues found in 59 source files.
-- Reproduced the defect before fixing: `defaults: {timeot: 5.0}` produced **no** warning, while `commands: {scan: {timeot: ...}}` did. After the fix the defaults typo is warned identically.
-- End-to-end: `ethscan --config <yaml with defaults typo> scan --target 127.0.0.1 --ports 80` prints `Warning: Unknown option 'timeot' in global defaults (no such option for any command)` on stderr and still runs.
-- Re-verified all README-documented behavioral contracts still hold (usage errors exit 2, validate/mysql/s3 exit 0, config --init/--out mutual exclusion, config --init writes sample, config report format precedence, hash --check match/mismatch/unknown-length, hash --iterations requires --salt, audit stdin, config `format` remap + CLI override).
-- `git status --short` -> clean except the 3 intended files.
+- 53/53 `ethscan/` modules have a matching `tests/test_*.py`.
+- No TODO/FIXME/NotImplementedError markers anywhere in source or tests.
+- README-documented behavioral contracts spot-checked end-to-end, all passing:
+  - usage errors exit 2 (bad --ports, bad --cidr, mixed IPv4/IPv6 radix, target path with space, config --init + --out together);
+  - probe-failure commands exit 0 and report inside their own output (mysql port out of range, validate bad spec);
+  - `config --init` writes the sample file;
+  - config `format` key is remapped to the working `fmt` dest and actually changes output format;
+  - `--output-format` overrides the deprecated `--format` alias;
+  - `hash --check` renders MATCH/MISMATCH/UNKNOWN correctly in json/markdown/csv, including unknown digest lengths;
+  - `hash --iterations` requires `--salt`;
+  - salted hash write-then-check round-trip matches;
+  - `audit` reads stdin and honors `--sort`/`--sort-asc`/`--sort-desc`;
+  - `report --output` alias works;
+  - `web` rejects a space in the target path but allows a fragment.
+- `git status --short` -> clean; HEAD at origin/main.
 
 ### What remains unresolved
-- Nothing in-repo. The maintainer-managed `.github/workflows/test.yml` situation is unchanged and out of scope for in-repo agents (the kilo controller restores tracked workflow files and excludes `.github/workflows/**` from checkpoint commits).
+- Nothing in-repo. `.github/workflows/` holds only the maintainer-managed `main.yml` and `kilo-workflow-audit.yml` (restored by the kilo controller and excluded from checkpoint commits). There is no `test.yml` in this repository to add or verify.
 
-### Which approaches failed and why
-- None. The defect was found by behavioral audit, not by trusting prior "complete" claims. No speculative changes.
+### Which approaches have already failed and why
+- None. No changes were attempted. The prior "complete" claims were independently verified by behavioral audit rather than accepted on faith; the `markdown` stray file at the repo root (a leftover test artifact from the initial commit, holding a JSON object, not referenced by any source) was inspected and left untouched since removing tracked history is out of scope and it is not a defect.
 
 ### One precise next task
-- None. Repository is in a verified complete state with one real defect fixed. If a maintainer adds `.github/workflows/test.yml`, verify the Actions run passes across ubuntu/macos/windows.
+- None. Repository is in a verified complete state. If a maintainer adds `.github/workflows/test.yml`, verify the Actions run passes across ubuntu/macos/windows.
+
+(End of file - total 40 lines)
