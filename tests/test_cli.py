@@ -12931,12 +12931,19 @@ def test_config_out_creates_missing_parent_dirs(tmp_path) -> None:
 
 
 def test_config_out_refuses_a_directory(tmp_path) -> None:
-    """A `config --out` path that is itself a directory is a usage error."""
+    """A `config --out` path that is itself a directory is a usage error.
+
+    ``config`` delegates its ``--out`` to ``_write_output`` the same way every
+    other command does, so the failure is a usage error (exit code 2) with the
+    ``--out`` hint, matching the README contract that invalid option values are
+    usage errors.
+    """
     runner = CliRunner()
     result = runner.invoke(cli, ["config", "--out", str(tmp_path)])
-    assert result.exit_code == 1
-    assert "Error writing output" in result.output
+    assert result.exit_code == 2
+    assert "Invalid value for '--out'" in result.output
     assert "Is a directory" in result.output
+    assert "Traceback (most recent call last)" not in result.output
 
 
 def test_config_invalid_yaml_shows_parse_error(tmp_path) -> None:
@@ -22055,8 +22062,10 @@ def test_config_out_write_error(tmp_path, monkeypatch) -> None:
         return original_open(*args, **kwargs)
     monkeypatch.setattr('builtins.open', mock_open)
     result = runner.invoke(cli, ['config', '--config', str(cfg), '--format', 'json', '--out', str(out_file)])
-    assert result.exit_code == 1
-    assert 'Error writing output' in result.output
+    assert result.exit_code == 2
+    assert "Invalid value for '--out'" in result.output
+    assert "disk full" in result.output
+    assert "Traceback (most recent call last)" not in result.output
 
 def test_config_with_file_markdown(tmp_path) -> None:
     cfg = tmp_path / 'ethscan.yaml'

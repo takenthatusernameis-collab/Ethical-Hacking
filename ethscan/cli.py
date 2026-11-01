@@ -3715,14 +3715,13 @@ def config(
         output = "\n".join(lines)
 
     if out_path:
-        try:
-            from ethscan.fileio import write_text
-
-            write_text(out_path, output)
-        except (OSError, ValueError) as exc:
-            click.echo(f"Error writing output: {exc}", err=True)
-            raise SystemExit(1) from None
-        click.echo(f"Report written to {out_path}")
+        # Delegate to ``_write_output`` the same way every other command does,
+        # so an unusable ``--out`` path is reported as a usage error (exit code
+        # 2) instead of a raw ``Error writing output`` line (exit code 1). The
+        # README contract is that invalid option values are usage errors, and
+        # ``scan --out <dir>`` already behaves that way; ``config`` was the
+        # outlier.
+        _write_output(out_path, output)
     else:
         click.echo(output)
 
