@@ -1827,6 +1827,8 @@ def tls(
             max_workers=workers,
         )
     except ValueError as exc:
+        if isinstance(exc, TargetSpecError):
+            raise
         # A TLS version or cipher the tool does not support is an unusable
         # option value: report it as a usage error (exit code 2) with the
         # usage banner, the same way every other command reports an unusable
