@@ -1,4 +1,5 @@
 # Next Task
-Verify `.github/workflows/test.yml` on GitHub Actions across ubuntu/macos/windows.
 
-Blocked: current token lacks `workflows` permission, so the workflow file cannot be pushed. Obtain a PAT with `workflows` scope (or run matrix via `act` locally), then create the workflow and trigger it.
+None required. The `config --out` exit-code inconsistency is fixed and verified (commit b577037 on origin/main).
+
+If a follow-up is desired, the cross-platform CI workflow (`.github/workflows/test.yml`) from the prior handoff is still blocked on a token with `workflows` permission — obtain a PAT with `workflows` scope (or run the matrix locally via `act`), then create and trigger the workflow.
