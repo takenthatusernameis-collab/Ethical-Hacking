@@ -7,9 +7,9 @@
 - `python -m pytest -q` -> 5456 passed, 50 skipped (full suite green).
 - `python -m ruff check .` -> All checks passed.
 - `python -m mypy ethscan/` -> Success, no issues found in 59 source files.
-- `git status --short` -> clean working tree; HEAD == origin/main.
-- `grep -rn "TODO\|FIXME\|XXX\|NotImplementedError" ethscan/ tests/` -> no matches.
-- Every module in `ethscan/` has a corresponding `tests/test_*.py` file.
+- `git status --short` -> clean working tree; HEAD == origin/main (2402c58).
+- `grep -rn "TODO\|FIXME\|XXX\|NotImplementedError" ethscan/ tests/` -> no matches (exit 1).
+- Every module in `ethscan/` has a corresponding `tests/test_*.py` file (1:1 mapping confirmed via comm).
 
 ### What remains unresolved
 - Nothing in-repo. `.github/workflows/test.yml` is maintainer-managed and excluded by the kilo controller; requires maintainer to add it with appropriate permissions. Not an in-repo agent task.
