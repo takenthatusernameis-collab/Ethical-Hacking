@@ -7,12 +7,13 @@
 - `python -m pytest -q` -> 5456 passed, 50 skipped (full suite green).
 - `python -m ruff check .` -> All checks passed.
 - `python -m mypy ethscan/` -> Success, no issues found in 59 source files.
-- `git status --short` -> clean working tree; HEAD == origin/main (2402c58).
+- `git status --short` -> clean working tree; HEAD == origin/main.
 - `grep -rn "TODO\|FIXME\|XXX\|NotImplementedError" ethscan/ tests/` -> no matches (exit 1).
-- Every module in `ethscan/` has a corresponding `tests/test_*.py` file (1:1 mapping confirmed via comm).
+- Every module in `ethscan/` has a corresponding `tests/test_*.py` file (1:1 mapping confirmed via `comm`; only sweep/extra test helpers lack a 1:1 module, which is expected).
+- Module:test comparison: `comm -23 <(modules) <(tests)` empty; no module is missing a test.
 
 ### What remains unresolved
-- Nothing in-repo. `.github/workflows/test.yml` is maintainer-managed and excluded by the kilo controller; requires maintainer to add it with appropriate permissions. Not an in-repo agent task.
+- Nothing in-repo. `.github/workflows/test.yml` is maintainer-managed and excluded by the kilo controller; requires maintainer to add it with appropriate permissions. Not an in-repo agent task. Existing CI is kilo-controller infra (`.github/workflows/main.yml` + `kilo-workflow-audit.yml`), not project test CI.
 
 ### Which approaches failed and why
 - None this session. No speculative changes were made because no demonstrated problem exists (baseline is green across tests, lint, and types).
