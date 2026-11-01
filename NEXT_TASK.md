@@ -1,12 +1,13 @@
 ## Status: COMPLETE (this session)
 
 ### What changed
-- No code change this session. Re-verified the repository baseline after the prior handoff.
+- No code change this session. Re-verified repository baseline.
 
 ### What was actually verified
-- `python -m pytest -q` -> 5439 passed, 50 skipped.
-- `python -m ruff check ethscan/ tests/` -> All checks passed.
-- `grep -rn "TODO\|FIXME\|XXX"` in ethscan/tests -> no matches.
+- `python -m pytest -q` -> 5456 passed, 50 skipped.
+- `python -m ruff check .` -> All checks passed.
+- `python -m mypy ethscan/` -> Success, no issues found in 59 source files.
+- `grep -rn "TODO\|FIXME\|XXX" ethscan/ tests/` -> no matches.
 - Working tree clean, HEAD == origin/main.
 
 ### What remains unresolved

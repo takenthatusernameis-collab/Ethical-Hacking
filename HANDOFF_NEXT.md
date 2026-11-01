@@ -4,8 +4,8 @@
 - No code changes this session. Re-verified repository baseline.
 
 ### What was actually verified
-- `python -m pytest -q` -> 5439 passed, 50 skipped (full suite green).
-- `python -m ruff check ethscan/ tests/` -> All checks passed.
+- `python -m pytest -q` -> 5456 passed, 50 skipped (full suite green).
+- `python -m ruff check .` -> All checks passed.
 - `python -m mypy ethscan/` -> Success, no issues found in 59 source files.
 - `git status --short` -> clean working tree (HEAD at origin/main).
 - `grep -rn "TODO\|FIXME\|XXX" ethscan/ tests/` -> no matches.
