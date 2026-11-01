@@ -73,7 +73,7 @@ def _format_network_info(network: ipaddress._BaseNetwork) -> dict[str, object]:
         netmask = str(network.netmask)
         broadcast = str(network.broadcast_address) if network.broadcast_address else None
         wildcard = str(network.hostmask)
-        usable_hosts = 1 if network.num_addresses == 2 else max(0, network.num_addresses - 2)
+        usable_hosts = max(0, network.num_addresses - 2)
     else:
         netmask = str(network.netmask)
         broadcast = None
