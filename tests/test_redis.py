@@ -985,7 +985,7 @@ def test_normalize_target_ipv6_bracket_bad_port() -> None:
     # Bracket form with non-numeric port falls back
     try:
         result = _normalize_target("[::1]:bad")
-    except Exception:
+    except Exception:  # noqa: BLE001
         result = None
     # Should be handled reasonably
     assert result is not None or True

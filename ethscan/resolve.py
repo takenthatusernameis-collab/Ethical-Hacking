@@ -314,3 +314,7 @@ def format_resolve_report_csv(data: dict[str, object]) -> str:
                 str(values),
             ])
     return output.getvalue().rstrip("\r\n")
+
+def resolve(target: str, record_type: str = "A", **kwargs) -> dict[str, object]:
+    """Compatibility wrapper around run_resolve for a single record type."""
+    return run_resolve(target, record_types=[record_type], **kwargs)

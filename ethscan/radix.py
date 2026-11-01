@@ -368,6 +368,31 @@ def _format_network_info(network: ipaddress._BaseNetwork) -> dict[str, object]:
     }
 
 
+def build_radix_tree(values: list[str]) -> dict[str, object]:
+    """Build a radix tree node from a list of CIDR strings.
+
+    Invalid entries are skipped so callers can pass mixed input. Returns an
+    empty dict when no valid networks remain.
+    """
+    networks: list[ipaddress._BaseNetwork] = []
+    for raw in values:
+        try:
+            normalized = normalize_cidr(raw)
+            networks.append(ipaddress.ip_network(normalized, strict=False))
+        except (ValueError, RadixSpecError):
+            continue
+    if not networks:
+        return {}
+    if len({net.version for net in networks}) > 1:
+        # Fall back to building per family by returning first family only.
+        v4 = [n for n in networks if n.version == 4]
+        v6 = [n for n in networks if n.version == 6]
+        networks = v4 if v4 else v6
+    merged = _merge_networks(networks)
+    root = _build_radix_node(merged, depth=0, max_depth=64)
+    return root if root is not None else {}
+
+
 def run_radix(
     cidrs: list[str],
     merge: bool = True,

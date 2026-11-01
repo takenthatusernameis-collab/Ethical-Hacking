@@ -1355,7 +1355,7 @@ def test_smtp_connect_host_error_closes_socket(monkeypatch) -> None:
         def close(self):
             self.closed = True
 
-    d = DummySock()
+    DummySock()
 
     def fake_create_connection(*args, **kwargs):
         raise ValueError("bad host")
@@ -1375,7 +1375,7 @@ def test_smtp_connection_exception_closes_socket(monkeypatch) -> None:
         def close(self):
             self.closed = True
 
-    dummy = DummySock()
+    DummySock()
 
     def fake_connect(*args, **kwargs):
         # Set sock in module scope? Look up how it's used
