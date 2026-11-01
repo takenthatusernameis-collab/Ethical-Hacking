@@ -5,7 +5,7 @@
 - Re-verified current state against prior handoffs.
 
 ### What was actually verified
-- `git status --short` -> clean; HEAD at 192b18c.
+- `git status --short` -> clean; HEAD at b223082.
 - `python -m pytest -q` -> 5458 passed, 53 skipped (full suite green).
 - `python -m ruff check .` -> All checks passed.
 - `python -m mypy ethscan/` -> Success, no issues found in 59 source files.

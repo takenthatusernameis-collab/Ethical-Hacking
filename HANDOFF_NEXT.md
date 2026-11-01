@@ -4,7 +4,7 @@
 - Nothing. Inspected prior handoffs (HANDOFF_NEXT.md, TASK.md, NEXT_TASK.md); confirmed clean state.
 
 ### What was actually verified
-- `git status --short` -> clean; HEAD at 192b18c (on main, tracking origin/main).
+- `git status --short` -> clean; HEAD at b223082 (on main, tracking origin/main).
 - `python -m pytest -q` -> 5458 passed, 53 skipped.
 - `python -m ruff check .` -> All checks passed.
 - `python -m mypy ethscan/` -> Success, no issues found in 59 source files.
