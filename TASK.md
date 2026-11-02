@@ -1,28 +1,24 @@
-## Status: COMPLETE (baseline verified this session)
+## Status: IN PROGRESS (baseline re-verified this session; CI workflow drafted, blocked on token)
 
-### What changed
-- No code changes. The working tree is clean; all existing fixes (radix/stale/completion exit-2 usage errors; config --out/--init exit-2) remain intact.
+### What changed this session
+- Re-verified the baseline: `python -m pytest -q` -> 5461 passed, 50 skipped; `python -m ruff check .` -> clean; `python -m mypy ethscan/` -> clean, 59 source files.
+- Drafted `.github/workflows/test.yml` (uncommitted): cross-platform test job (pytest + ruff + mypy) on ubuntu-latest/macos-latest/windows-latest via `workflow_dispatch` (also push/PR to main).
+- Validated `test.yml` YAML parses cleanly (ruby + pyyaml).
 
 ### What was actually verified
-- `python -m pytest -q` -> 5461 passed, 50 skipped (all skips intentional: commands without the swept option, or excluded from a sweep).
-- `python -m ruff check .` -> All checks passed.
-- `python -m mypy ethscan/` -> Success, no issues found in 59 source files.
-- `pip install -e .` -> installs cleanly; the `ethscan` console script is produced.
-- Real CLI (`/home/runner/work/_temp/kilo-home/.local/bin/ethscan`):
-  - `ethscan --help` -> exit 0
-  - `ethscan radix` (no CIDRs) -> exit 2, usage banner + "at least one CIDR network is required"
-  - `ethscan stale` (no targets) -> exit 2, usage banner + "at least one target must be provided"
-- `git status` -> clean; `git diff --check` -> no whitespace issues (verified in prior session).
+- Baseline checks all pass (see above).
+- `test.yml` is syntactically valid YAML with a single `test` job and the 3-OS matrix.
+- `act` is NOT installed in this environment (exit 1); the matrix cannot be executed locally here.
 
 ### What remains unresolved
-- The cross-platform CI workflow (`.github/workflows/test.yml`) from an earlier handoff remains blocked on a token/PAT with `workflows` write permission. That is infrastructure-only, not a code defect.
-- `act` is not available in this environment, so the matrix cannot be run locally here.
+- `.github/workflows/test.yml` is a local, uncommitted draft. It cannot be pushed or triggered via `workflow_dispatch` without a PAT/token with `workflows` write permission for this repository. That is an infrastructure blocker, not a code defect.
+- The cross-platform matrix (macos/windows runners) cannot be verified locally without `act` or a token.
 
 ### Which approaches have already failed and why
-- Recreating and pushing `.github/workflows/test.yml` with GITHUB_TOKEN: rejected due to missing `workflows` permission (prior session). Not retried.
+- Pushing `.github/workflows/test.yml` with GITHUB_TOKEN: rejected previously, missing `workflows` permission. Not retried.
 - Running the matrix via `act`: `act` is not installed in this environment.
 
 ### One precise next task
-- Obtain a PAT/token with `workflows` write permission, create `.github/workflows/test.yml` (pytest + ruff + mypy on ubuntu-latest/macos-latest/windows-latest), trigger it via `workflow_dispatch`, and confirm the `test` job passes on all three platforms. If a token cannot be obtained, leave this as a documented infrastructure blocker; no code change is required.
+- Obtain a PAT/token with `workflows` write permission, commit `.github/workflows/test.yml` (already drafted at `.github/workflows/test.yml`), push to main, trigger via `workflow_dispatch`, and confirm the `test` job passes on ubuntu-latest, macos-latest, and windows-latest. If a token cannot be obtained, leave the uncommitted draft in place and document it as an infrastructure blocker; no further code change is required.
 
 (End of file)
