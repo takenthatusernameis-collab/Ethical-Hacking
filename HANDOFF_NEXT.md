@@ -1,22 +1,22 @@
-## Status: BLOCKED (infrastructure) - test.yml absent on main; push requires workflows write scope
+# Status: BLOCKED (infrastructure) - test.yml committed locally (abeac23), push requires workflows write scope
 
 ### What changed this session
-- Confirmed real state: `main` == `origin/main` == `fe5022f` (fully in sync; `git rev-list` both directions = 0). Commit `fe5022f` deleted `.github/workflows/test.yml`, so test.yml is ABSENT on both local and remote. The previous HANDOFF_NEXT.md (local main at `581d4f9` ahead of `origin/main` `6c71225`) is stale.
-- Re-verified local checks: `python -m ruff check .` -> All checks passed. `python -m pytest -q` -> 5459 passed / 2 failed / 50 skipped (2 failures in `tests/test_file_option_sweep.py` are pre-existing hostile `--out` timeouts for `recon`/`whois`, unrelated to the workflow task).
-- Recovered `test.yml` content from git history: commit `581d4f9` contains the full workflow file (`git show 581d4f9:.github/workflows/test.yml`).
+- Re-created `.github/workflows/test.yml` from git history commit `581d4f9` and committed locally as `abeac23` ("Add cross-platform test workflow"). File exists locally in `.github/workflows/test.yml`.
+- Attempted `git push origin main`; push rejected by GitHub App token (lacks `workflows` write scope).
+- Verified baseline state: `main` (local) is at `abeac23`, `origin/main` still at `fe5022f`. Local ruff: All checks passed. Local pytest: 5459 passed / 2 failed / 50 skipped (pre-existing hostile `--out` timeouts for `recon`/`whois`, unrelated).
 
 ### What was actually verified
-- `git rev-parse main origin/main HEAD` all resolve to `fe5022f`.
-- `git show main:.github/workflows/test.yml` -> fatal: path does not exist.
-- `.github/workflows/` contains only `kilo-workflow-audit.yml` and `main.yml`.
-- `GH_TOKEN`/`GITHUB_TOKEN` present but is a GitHub App token lacking `workflows` write scope; push of workflow files is rejected.
+- `git show 581d4f9:.github/workflows/test.yml` recovered (35 lines, cross-platform matrix ubuntu/macos/windows, Python 3.12).
+- `git add .github/workflows/test.yml && git commit` succeeded -> `abeac23`.
+- `git push origin main` -> remote rejected: refusing to allow GitHub App to create/update workflow without `workflows` permission.
+- `git rev-parse main origin/main` -> main=`abeac23`, origin/main=`fe5022f`.
 
 ### What remains unresolved
-- Re-create `.github/workflows/test.yml` (content recoverable from commit `581d4f9`), commit it, and `git push origin main`. Push is blocked until a token with `workflows` write scope is obtained.
-- Trigger and verify cross-platform `test` workflow (ubuntu-latest, macos-latest, windows-latest) after push.
+- Push `abeac23` to `origin/main` to land the workflow. Requires a PAT/GitHub App token with `workflows` write scope.
+- After push, trigger `workflow_dispatch` for `test` and confirm ubuntu-latest/macos-latest/windows-latest pass.
 
 ### Which approaches have already failed and why
-- Pushing with `GH_TOKEN` (GitHub App token): lacks `workflows` permission. Requires a different token/PAT with `workflows` write scope.
+- Pushing with current `GH_TOKEN` (GitHub App token): lacks `workflows` permission. Remote rejects workflow file creation/update.
 
 ### One precise next task
-Obtain a PAT/GitHub App token with `workflows` write scope. Then: re-create `.github/workflows/test.yml` from `git show 581d4f9:.github/workflows/test.yml`, commit it, `git push origin main` (currently `main` == `origin/main` == `fe5022f` so push will add test.yml), trigger `workflow_dispatch` for `test`, and confirm ubuntu-latest/macos-latest/windows-latest pass. If no token available: durable state is `test.yml` content in git history commit `581d4f9`; `main`==`origin/main`==`fe5022f` with test.yml absent. Treat as infrastructure blocker; no further code change required without a token.
+Obtain a token with `workflows` write scope. Push `abeac23` to `origin/main` (`git push origin main`). Trigger `workflow_dispatch` on `test` workflow and verify all three OS matrices pass. If token unavailable: durable state is workflow content in history (581d4f9) and committed locally (abeac23); origin/main remains at `fe5022f` without test.yml. Treat as infrastructure blocker.
