@@ -1,24 +1,16 @@
-# Status: BLOCKED (infrastructure) - test.yml absent on remote; push requires workflows write scope
+# Status: BLOCKED (infrastructure) - test.yml push requires workflows write scope
 
 ### What changed this session
-- Installed `pytest`, `ruff`, and `dnspython` (declared dependency in requirements.txt) in the environment to enable local verification.
-- Re-ran full test suite: `5461 passed, 50 skipped` (previously `5458 passed, 53 skipped`; 3 dnsbrute/dnssec tests unblocked by dnspython install; remaining 50 skips are intentional "no input file options" / module-exclusion skips).
-- Confirmed `ruff check ethscan tests`: All checks passed.
-- Working tree clean; no repo code changes made (only environment package installs).
+- Restored `.github/workflows/test.yml` from git history (`09cd757`) into working tree and committed locally as `461e1e1` ("Restore test.yml workflow").
+- Push to `origin/main` rejected: GitHub App token lacks `workflows` permission (403), unchanged blocker.
 
 ### What was actually verified
-- `git rev-parse main` and `origin/main` both -> `dae3e07`.
-- `git ls-tree HEAD .github/workflows/` -> no `test.yml`.
-- `git show 09cd757:.github/workflows/test.yml` -> exists (31 lines, cross-platform matrix).
-- `curl actions/permissions` with `$GH_TOKEN` -> 403 (blocker confirmed, unchanged).
-- Baseline health: `python -m ethscan --help` exits 0; `cidr` returns valid JSON; full pytest suite + ruff pass.
+- `git push origin main` -> remote rejected: `refusing to allow a GitHub App to create or update workflow .github/workflows/test.yml without workflows permission`.
+- Local commit `461e1e1` contains test.yml (31 lines, cross-platform matrix).
+- Baseline health unchanged: pytest/ruff green previously.
 
 ### What remains unresolved
-- Push `test.yml` to `origin/main`. Requires PAT/GitHub App token with `workflows` write scope; none available in this environment.
-- After push, trigger `workflow_dispatch` for `test` and confirm ubuntu-latest/macos-latest/windows-latest pass.
-
-### Which approaches have already failed and why
-- Pushing with current `GH_TOKEN` (GitHub App token): lacks `workflows` permission (403). Cannot retry without a different token.
+- Push `461e1e1` to `origin/main`. Requires PAT/GitHub App token with `workflows` write scope; none available.
 
 ### One precise next task
-Obtain a token with `workflows` write scope. Restore `.github/workflows/test.yml` from git history (`09cd757`/`13eaed2`). `git push origin main`. Trigger `workflow_dispatch` on `test` and verify all three OS matrices pass. If no token: durable state is workflow content in git history; `origin/main` remains at `dae3e07` without test.yml. Local verification baseline is green (pytest + ruff pass).
+Obtain a token with `workflows` write scope. `git push origin main` (commit `461e1e1` already prepared). Then trigger `workflow_dispatch` on `test` and confirm ubuntu/macos/windows pass. If no token: durable state is commit `461e1e1` locally plus history; origin/main stays at `dae3e07`.
