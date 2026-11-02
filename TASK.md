@@ -2,18 +2,19 @@
 Land `.github/workflows/test.yml` on remote/main if possible; otherwise record durable state and hand off.
 
 ## Current state (verified)
-- `main` and `origin/main` at `448519f` (merged PR #2 for dnspython fix).
-- `requirements.txt` on remote/main contains `dnspython>=2.0` (already present).
-- `test.yml` exists only on local branch `preserve/test-workflow` at commit `057eb37` (`.github/workflows/test.yml`).
-- Local verification: `python -m pytest -q` -> 5461 passed, 50 skipped; `python -m ruff check .` clean; `python -m mypy ethscan/` clean (59 files).
-- Cannot push workflow files with current `GH_TOKEN` (403: missing `workflows` write scope). `gh pr create` also blocked (403). `act` not installed.
+- `origin/main` and `main` both at `043c93e`; `test.yml` ABSENT on remote/main.
+- `test.yml` exists on local branch `preserve/test-workflow` @ `057eb37`.
+- `git merge --ff-only preserve/test-workflow` NOT possible: `main` (`043c93e`) not an ancestor of `preserve/test-workflow`.
+- `.github/workflows/test.yml` landed on local `main` at commit `ec824d7` ("Add cross-platform test workflow"); source unchanged.
+- `git push origin main` REJECTED: `refusing to allow a GitHub App to create or update workflow .github/workflows/test.yml without workflows permission`.
+- Local verification: workflow YAML valid; `ruff check .` clean; `pytest` 5461 passed / 50 skipped; `mypy ethscan/` clean (59 files).
 
 ## Next actions
-1. Obtain a PAT with `workflows` (write) scope for this repo.
-2. If available: `git checkout main && git merge --ff-only preserve/test-workflow && git push origin main`, then trigger `test` workflow via `workflow_dispatch` and confirm ubuntu/macos/windows pass.
-3. If not available: treat as infrastructure blocker. Durable remote state is correct; `test.yml` remains local-only. No code change needed.
+1. Obtain a PAT/GitHub App token with `workflows` (write) scope.
+2. If available: `git push origin main` (commit `ec824d7` ready, 1 commit ahead of `origin/main`), then trigger `test` workflow via `workflow_dispatch` and confirm ubuntu/macos/windows pass.
+3. If not available: treat as infrastructure blocker. Durable local state is commit `ec824d7` (test.yml ready to push); `origin/main` stays at `043c93e`. No code change needed.
 
 ## Evidence
-- `git log --oneline -3`: 448519f, 9b9a571, c76fb52
-- `git branch -a`: preserve/test-workflow local; remotes/origin/main, remotes/origin/fix/dnspython-requirements
-- Push attempts show workflows permission required to create/update `.github/workflows/*`.
+- Push rejection message (this session): missing `workflows` permission.
+- `git rev-list --count origin/main..main` -> 1 (local commit `ec824d7` ready to push).
+- `git log --oneline -3`: ec824d7, 043c93e, 448519f
