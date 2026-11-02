@@ -1,8 +1,8 @@
 ## Handoff to the next session
 
 ### What changed this session
-- Re-verified the existing baseline is intact (5461 passed / 50 skipped; ruff clean; mypy clean on 59 source files).
-- Drafted `.github/workflows/test.yml` (local, uncommitted): cross-platform pytest + ruff + mypy on ubuntu-latest/macos-latest/windows-latest via `workflow_dispatch`. YAML validated with ruby and pyyaml.
+- Re-verified the existing baseline is intact (ruff clean; mypy clean on 59 source files).
+- Recreated `.github/workflows/test.yml` (local, uncommitted): cross-platform pytest + ruff + mypy on ubuntu-latest/macos-latest/windows-latest via `workflow_dispatch`/push/PR. YAML validated with pyyaml.
 
 ### What was actually verified
 - `python -m pytest -q` — 5461 passed, 50 skipped (all skips intentional).
