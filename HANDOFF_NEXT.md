@@ -1,30 +1,25 @@
-## Status: PARTIAL (dnspython fix landed on remote/main; test.yml still local-only)
+## Status: BLOCKED (infrastructure) - no further code changes possible
 
 ### What changed this session
-- Verified true local state: `.github/workflows/test.yml` is NOT on local `main` (HEAD tracks only `kilo-workflow-audit.yml` and `main.yml`). The prior handoff's claim that `test.yml` was committed on `main` was incorrect — commit `057eb37` ("Add cross-platform test workflow", adds `test.yml`) is not an ancestor of `main`.
-- Pushed local `main` (`c76fb52..9b9a571`) to `origin/main` — SUCCESS. This landed `c67f0be` (`dnspython>=2.0` in `requirements.txt`) on remote `main`. Push was NOT blocked because it touches no `.github/workflows/*` files (the workflows-permission gate only rejects pushes that create/update workflow files).
-- Preserved the dangling `test.yml` commit on new local branch `preserve/test-workflow` (points to `057eb37`, contains `.github/workflows/test.yml`).
+- Reconciled repo state; confirmed `main`/`origin/main` at `448519f` with dnspython fix already merged/pushed.
+- Verified local test suite and lint/typecheck all pass.
+- Preserved `test.yml` on `preserve/test-workflow` (commit `057eb37`).
 
-### What was actually verified (this session, 2026-11-02)
-- `git push origin main` -> `c76fb52..9b9a571 main -> main` (accepted; no workflows touched).
-- `origin/main` == `9b9a571`; `requirements.txt` on origin/main contains `dnspython>=2.0`.
-- `python -m pytest -q` -> 5461 passed, 50 skipped (all remaining skips intentional sweep exclusions).
-- `python -m ruff check .` -> All checks passed.
-- `python -m mypy ethscan/` -> Success: no issues in 59 source files.
+### What was actually verified
+- `git rev-parse origin/main main` -> `448519f` / `448519f`
+- `python -m pytest -q` -> 5461 passed, 50 skipped
+- `python -m ruff check .` -> All checks passed
+- `python -m mypy ethscan/` -> Success: no issues in 59 source files
+- Push of workflow files fails with `GH_TOKEN` (403, missing `workflows` write scope)
 
 ### What remains unresolved
-- `test.yml` not on remote/main. Requires a token with `workflows` write scope to push `.github/workflows/*`.
-- `GH_TOKEN` lacks `workflows` write permission (403 on actions/permissions API) and lacks `pull-requests` write scope (403 on createPullRequest).
-- Cross-platform CI never triggered; `act` not installed.
+- Land `.github/workflows/test.yml` on remote/main (requires token with `workflows` write scope)
+- Trigger and verify cross-platform `test` workflow
 
 ### Which approaches have already failed and why
-- `git push origin main` with `GH_TOKEN` WHEN main contained `test.yml`: rejected ("refusing to allow a GitHub App to create or update workflow `.github/workflows/test.yml` without `workflows` permission"). No longer relevant — current `main` has no `test.yml` and the push just succeeded.
-- Querying actions/permissions with `GH_TOKEN`: 403.
-- `gh pr create` with `GH_TOKEN`: 403 (Resource not accessible by integration).
-- Local matrix validation via `act`: not installed.
+- Pushing/modifying `.github/workflows/*` with current `GH_TOKEN`: 403 (workflows permission missing)
+- `gh pr create`: 403 (insufficient scope)
+- `act`: not installed for local matrix validation
 
 ### One precise next task
-- Obtain a token/PAT with `workflows` (write) scope for this repository.
-- Then: push the `test.yml` work onto `main`, e.g. `git checkout main && git merge --ff-only preserve/test-workflow && git push origin main` (or cherry-pick `057eb37`). This adds `.github/workflows/test.yml` only — `dnspython` is already on remote/main so no conflict.
-- Trigger the `test` workflow via `workflow_dispatch` and confirm the `test` job passes on ubuntu-latest, macos-latest, windows-latest.
-- If no such token is available: durable remote state is `origin/main` at `9b9a571` with `dnspython>=2.0`; `test.yml` exists only on local branch `preserve/test-workflow` (commit `057eb37`). Document as infrastructure blocker; no further code change required.
+Obtain a PAT with `workflows` write scope. Then: `git checkout main && git merge --ff-only preserve/test-workflow && git push origin main`. Trigger `workflow_dispatch` for `test` and verify ubuntu-latest, macos-latest, windows-latest pass. If unavailable, durable remote state is correct (`origin/main` at `448519f` with `dnspython>=2.0`); `test.yml` remains only on `preserve/test-workflow` — infrastructure blocker, no code change required.
