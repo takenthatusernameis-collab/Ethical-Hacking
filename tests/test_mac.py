@@ -7,6 +7,8 @@ import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from ethscan.mac import (
     _extract_oui,
     _fetch_mac_data,
@@ -400,6 +402,62 @@ def test_run_mac_hostname_unresolvable(monkeypatch) -> None:
     assert any("Could not resolve" in note for note in result["notes"])
 
 
+def test_run_mac_ip_address_v4(monkeypatch) -> None:
+    """A bare IPv4 target is not a MAC address and must not hit the vendor API."""
+    called = []
+
+    def fake_resolve(host):
+        called.append(host)
+        return "00:1a:2b:3c:4d:5e"
+
+    monkeypatch.setattr("ethscan.mac._resolve_host", fake_resolve)
+    monkeypatch.setattr("ethscan.mac._get_cached_or_fetch",
+                        lambda *a, **kw: pytest.fail("vendor API must not be called for an IP target"))
+
+    result = run_mac("192.168.1.1", timeout=1.0, use_cache=False)
+
+    assert called == []  # _resolve_host must not be called for a bare IP
+    assert result["target"] == "192.168.1.1"
+    assert result["mac"] is None
+    assert result["oui"] is None
+    assert result["mac_data"] is None
+    assert any("IP address, not a MAC address" in note for note in result["notes"])
+
+
+def test_run_mac_ip_address_v6(monkeypatch) -> None:
+    """A bare IPv6 target is reported the same way as an IPv4 target."""
+    monkeypatch.setattr("ethscan.mac._resolve_host",
+                        lambda h: pytest.fail("resolution must not be attempted for an IP target"))
+    monkeypatch.setattr("ethscan.mac._get_cached_or_fetch",
+                        lambda *a, **kw: pytest.fail("vendor API must not be called for an IP target"))
+
+    result = run_mac("::1", timeout=1.0, use_cache=False)
+
+    assert result["target"] == "::1"
+    assert result["mac"] is None
+    assert result["oui"] is None
+    assert result["mac_data"] is None
+    assert any("IP address, not a MAC address" in note for note in result["notes"])
+
+
+def test_run_mac_ip_address_restores_default_api_url(monkeypatch) -> None:
+    """run_mac must restore DEFAULT_API_URL even on the IP early-return path."""
+    import ethscan.mac as macmod
+
+    monkeypatch.setattr("ethscan.mac._resolve_host",
+                        lambda h: pytest.fail("resolution must not be attempted for an IP target"))
+    original = macmod.DEFAULT_API_URL
+
+    run_mac(
+        "10.0.0.1",
+        timeout=1.0,
+        use_cache=False,
+        api_url="https://custom.example.com",
+    )
+
+    assert macmod.DEFAULT_API_URL == original
+
+
 def test_run_mac_unresolvable_restores_default_api_url(monkeypatch) -> None:
     """run_mac must restore DEFAULT_API_URL even on the early-return path.
 
@@ -421,6 +479,31 @@ def test_run_mac_unresolvable_restores_default_api_url(monkeypatch) -> None:
     )
 
     assert macmod.DEFAULT_API_URL == original
+
+
+def test_is_ip_address_true_v4() -> None:
+    from ethscan.mac import _is_ip_address
+
+    assert _is_ip_address("192.168.1.1") is True
+    assert _is_ip_address("8.8.8.8") is True
+    assert _is_ip_address("127.0.0.1") is True
+
+
+def test_is_ip_address_true_v6() -> None:
+    from ethscan.mac import _is_ip_address
+
+    assert _is_ip_address("::1") is True
+    assert _is_ip_address("fd00::1") is True
+    assert _is_ip_address("2001:db8::1") is True
+
+
+def test_is_ip_address_false() -> None:
+    from ethscan.mac import _is_ip_address
+
+    assert _is_ip_address("00:1A:2B:3C:4D:5E") is False
+    assert _is_ip_address("example.com") is False
+    assert _is_ip_address("not-an-ip") is False
+    assert _is_ip_address("") is False
 
 
 def test_run_mac_success(monkeypatch) -> None:
