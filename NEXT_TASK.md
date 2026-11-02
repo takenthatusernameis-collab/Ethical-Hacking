@@ -1,7 +1,17 @@
 # Next Task
 
-None required. The `radix`, `stale`, and `completion` CLI exit-code inconsistencies were fixed and verified (commits cef94f1, ee52e10). All tests pass (5461 passed, 50 skipped), lint and mypy are clean.
+No code change is required this session: the ethscan toolkit is complete and fully verified
+(5461 passed, 50 skipped; ruff clean; mypy clean; the `ethscan` console script installs and
+honors the exit-2 usage-error contract for `radix`/`stale` with no input).
 
-If follow-up is desired, the cross-platform CI workflow (`.github/workflows/test.yml`) from a prior handoff remains blocked on a token with `workflows` permission — obtain a PAT with `workflows` scope (or run the matrix locally via `act`), then create and trigger the workflow.
+The one remaining item is the cross-platform CI workflow, which is blocked on infrastructure,
+not a code defect:
+
+- Obtain a PAT/token with `workflows` write permission for this repository.
+- Create `.github/workflows/test.yml` running pytest, `ruff check .`, and `mypy ethscan/`
+  on ubuntu-latest, macos-latest, and windows-latest.
+- Trigger it via `workflow_dispatch` and confirm the `test` job passes on all three platforms.
+- If a token cannot be obtained, leave this as a documented infrastructure blocker. `act` is
+  not available in this environment, so the matrix cannot be validated locally here.
 
 (End of file)
