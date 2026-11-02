@@ -1,7 +1,7 @@
 ## Status: BLOCKED (infrastructure only)
 
 ### What changed this session
-- Created `.github/workflows/test.yml` (local, uncommitted): cross-platform pytest + ruff + mypy on ubuntu-latest/macos-latest/windows-latest via `workflow_dispatch`/push/PR. Added `pytest` install step; YAML validated with pyyaml.
+- Recreated `.github/workflows/test.yml` (local, uncommitted): cross-platform pytest + ruff + mypy on ubuntu-latest/macos-latest/windows-latest via `workflow_dispatch`/push/PR. Added dependency install step; YAML validated with pyyaml.
 - Re-verified baseline: `python -m pytest -q` -> 5461 passed, 50 skipped; `python -m ruff check .` -> clean; `python -m mypy ethscan/` -> clean, 59 source files.
 
 ### What was actually verified

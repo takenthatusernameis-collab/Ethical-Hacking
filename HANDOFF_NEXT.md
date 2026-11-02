@@ -1,8 +1,8 @@
 ## Handoff to the next session
 
 ### What changed this session
-- Re-verified the existing baseline is intact (ruff clean; mypy clean on 59 source files).
 - Recreated `.github/workflows/test.yml` (local, uncommitted): cross-platform pytest + ruff + mypy on ubuntu-latest/macos-latest/windows-latest via `workflow_dispatch`/push/PR. YAML validated with pyyaml.
+- Re-verified the existing baseline is intact (5461 passed / 50 skipped; ruff clean; mypy clean on 59 source files).
 
 ### What was actually verified
 - `python -m pytest -q` — 5461 passed, 50 skipped (all skips intentional).
@@ -20,6 +20,4 @@
 - `act` local matrix: not installed in this environment.
 
 ### One precise next task
-- Obtain a PAT with `workflows` write permission, commit `.github/workflows/test.yml` (draft already in place), push to main, trigger via `workflow_dispatch`, and confirm the `test` job passes on all three platforms. If a token cannot be obtained, document it as an infrastructure blocker; no code change required.
-
-(End of file)
+- Obtain a PAT/token with `workflows` write permission, commit `.github/workflows/test.yml` (draft already in place), push to main, trigger via `workflow_dispatch`, and confirm the `test` job passes on all three platforms. If a token cannot be obtained, document it as an infrastructure blocker; no code change required.

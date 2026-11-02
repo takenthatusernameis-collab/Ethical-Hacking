@@ -2,7 +2,7 @@
 
 Obtain a PAT/token with `workflows` write permission for this repository, then:
 
-- Commit `.github/workflows/test.yml` (created this session; uncommitted). It runs pytest, `ruff check .`, and `mypy ethscan/` on ubuntu-latest, macos-latest, and windows-latest, triggered by `workflow_dispatch` (plus push/PR to main).
+- Commit `.github/workflows/test.yml` (recreated this session; uncommitted). It runs pytest, `ruff check .`, and `mypy ethscan/` on ubuntu-latest, macos-latest, and windows-latest, triggered by `workflow_dispatch` (plus push/PR to main).
 - Push to main and trigger the workflow via `workflow_dispatch`.
 - Confirm the `test` job passes on all three platforms.
 
