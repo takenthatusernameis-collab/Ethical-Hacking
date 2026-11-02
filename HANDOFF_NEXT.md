@@ -1,37 +1,30 @@
-## Status: PARTIAL (one durable change landed remotely)
+## Status: PARTIAL (dnspython fix landed on remote/main; test.yml still local-only)
 
 ### What changed this session
-- Re-created `.github/workflows/test.yml` from git history (was deleted at HEAD `35feae0` and absent from the working tree). Committed locally on `main` as `057eb37`. Still NOT on remote (push blocked).
-- Added `dnspython>=2.0` to `requirements.txt` (`24d9774` on `main`). This un-skips 3 tests that were skipped with `dnspython not installed` on all CI platforms, since the workflow installs `pip install -r requirements.txt`.
-- Pushed the requirements fix to a new remote branch `fix/dnspython-requirements` (commit `c67f0be`) that does NOT touch `.github/workflows/`, so it was accepted. PR creation via `gh` was blocked (token lacks `pull-requests` write scope).
-
-### What changed this session (this session)
-- No code or workflow changes made; this session re-verified local state only (blocker is infra, not code).
+- Verified true local state: `.github/workflows/test.yml` is NOT on local `main` (HEAD tracks only `kilo-workflow-audit.yml` and `main.yml`). The prior handoff's claim that `test.yml` was committed on `main` was incorrect — commit `057eb37` ("Add cross-platform test workflow", adds `test.yml`) is not an ancestor of `main`.
+- Pushed local `main` (`c76fb52..9b9a571`) to `origin/main` — SUCCESS. This landed `c67f0be` (`dnspython>=2.0` in `requirements.txt`) on remote `main`. Push was NOT blocked because it touches no `.github/workflows/*` files (the workflows-permission gate only rejects pushes that create/update workflow files).
+- Preserved the dangling `test.yml` commit on new local branch `preserve/test-workflow` (points to `057eb37`, contains `.github/workflows/test.yml`).
 
 ### What was actually verified (this session, 2026-11-02)
-- `python -m pytest -q` -> 5461 passed, 50 skipped (remaining skips are intentional sweep exclusions only; 0 non-sweep skips).
+- `git push origin main` -> `c76fb52..9b9a571 main -> main` (accepted; no workflows touched).
+- `origin/main` == `9b9a571`; `requirements.txt` on origin/main contains `dnspython>=2.0`.
+- `python -m pytest -q` -> 5461 passed, 50 skipped (all remaining skips intentional sweep exclusions).
 - `python -m ruff check .` -> All checks passed.
-- `python -m mypy ethscan/` -> Success: no issues found in 59 source files.
-- `.github/workflows/test.yml` parses as valid YAML; matrix `os: [ubuntu-latest, macos-latest, windows-latest]`, `fail-fast: false`, runs ruff + mypy + pytest.
-- Remote branch `fix/dnspython-requirements` confirmed present at `c67f0be`.
-- `GH_TOKEN` re-confirmed present but still lacks `workflows` write and `pull-requests` write scopes (same 403s as prior session).
+- `python -m mypy ethscan/` -> Success: no issues in 59 source files.
 
 ### What remains unresolved
-- `.github/workflows/test.yml` not on remote/main. GitHub refuses pushes touching `.github/workflows/*` without `workflows` write permission.
-- `GH_TOKEN` lacks `workflows` write permission (403 on `actions/permissions` API) and lacks `pull-requests` write scope (403 on `createPullRequest`).
+- `test.yml` not on remote/main. Requires a token with `workflows` write scope to push `.github/workflows/*`.
+- `GH_TOKEN` lacks `workflows` write permission (403 on actions/permissions API) and lacks `pull-requests` write scope (403 on createPullRequest).
 - Cross-platform CI never triggered; `act` not installed.
 
 ### Which approaches have already failed and why
-- `git push origin main` with `GH_TOKEN`: rejected ("refusing to allow a GitHub App to create or update workflow `.github/workflows/test.yml` without `workflows` permission").
+- `git push origin main` with `GH_TOKEN` WHEN main contained `test.yml`: rejected ("refusing to allow a GitHub App to create or update workflow `.github/workflows/test.yml` without `workflows` permission"). No longer relevant — current `main` has no `test.yml` and the push just succeeded.
 - Querying actions/permissions with `GH_TOKEN`: 403.
 - `gh pr create` with `GH_TOKEN`: 403 (Resource not accessible by integration).
 - Local matrix validation via `act`: not installed.
-- Directly committing requirements fix on `main` and pushing: blocked by the same workflows-permission gate, because `main`'s history contains `test.yml`.
 
 ### One precise next task
-- Obtain a token/PAT with BOTH `workflows` (write) and `pull-requests` (write) scope for this repository.
-- Then either: (a) push `main` to include `test.yml` and open a PR for `fix/dnspython-requirements`, or (b) rebase `test.yml` onto a branch that also carries the requirements fix and push that single branch.
+- Obtain a token/PAT with `workflows` (write) scope for this repository.
+- Then: push the `test.yml` work onto `main`, e.g. `git checkout main && git merge --ff-only preserve/test-workflow && git push origin main` (or cherry-pick `057eb37`). This adds `.github/workflows/test.yml` only — `dnspython` is already on remote/main so no conflict.
 - Trigger the `test` workflow via `workflow_dispatch` and confirm the `test` job passes on ubuntu-latest, macos-latest, windows-latest.
-- If no such token is available, the durable remote state is: branch `fix/dnspython-requirements` with the requirements fix; `test.yml` remains local/untracked-to-remote on `main`. Document as infrastructure blocker; no further code change required.
-
-(End of file - total 39 lines)
+- If no such token is available: durable remote state is `origin/main` at `9b9a571` with `dnspython>=2.0`; `test.yml` exists only on local branch `preserve/test-workflow` (commit `057eb37`). Document as infrastructure blocker; no further code change required.
