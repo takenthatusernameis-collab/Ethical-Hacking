@@ -2,21 +2,21 @@
 Land `.github/workflows/test.yml` on remote/main if possible; otherwise record durable state and hand off.
 
 ## Current state (verified)
-- `origin/main` = `0dab185`; `main` (local) = `09cd757` ("Add cross-platform test workflow"). Local is 1 commit ahead of remote; NOT in sync.
-- `.github/workflows/test.yml` EXISTS locally (commit `09cd757`) but is ABSENT on `origin/main` (`0dab185`).
-- Workflow content recovered from git history commit `581d4f9`/`abeac23` and committed locally as `09cd757` (36 lines, cross-platform matrix ubuntu/macos/windows, Python 3.12, `permissions: contents: read`).
-- `git push origin main` REJECTED: `refusing to allow a GitHub App to create or update workflow .github/workflows/test.yml without workflows permission` (GH_TOKEN/GITHUB_TOKEN is a GitHub App token without `workflows` write scope; confirmed 403 on `actions/permissions` API).
-- Local verification: `ruff check .` All checks passed. `pytest -q` -> 5459 passed / 2 failed / 50 skipped; the 2 failures (`tests/test_file_option_sweep.py` hostile `--out` timeouts for `recon`/`whois`) are pre-existing and unrelated to the workflow task.
+- `origin/main` = `dae3e07`; `main` (local) = `dae3e07`. In sync, working tree clean. `git push origin main` has nothing new to push.
+- `.github/workflows/test.yml` is ABSENT (deleted in `dae3e07`; present only in git history commits `09cd757` and `13eaed2`, 31 lines, cross-platform matrix ubuntu/macos/windows, Python 3.12, `permissions: contents: read`).
+- `git push origin main` for test.yml was PREVIOUSLY rejected: `refusing to allow a GitHub App to create or update workflow .github/workflows/test.yml without workflows permission`.
+- `GH_TOKEN`/`GITHUB_TOKEN` is a GitHub App token without `workflows` write scope: confirmed `403 Resource not accessible by integration` on `https://api.github.com/repos/takenthatusernameis-collab/Ethical-Hacking/actions/permissions`.
+- Baseline health: `python -m ethscan --help` exits 0; `python -m ethscan cidr --cidr 192.168.1.0/24 --output-format json` returns valid JSON. `pytest`/`ruff` not installed in this environment (full suite not runnable here).
 
 ## Next actions
 1. Obtain a PAT/GitHub App token with `workflows` (write) scope.
-2. If available: `git push origin main` (adds test.yml), then trigger `test` workflow via `workflow_dispatch` and confirm ubuntu/macos/windows pass.
-3. If not available: treat as infrastructure blocker. Durable state is `test.yml` content in local commit `09cd757` and git history `581d4f9`/`abeac23`; `origin/main` stays at `0dab185` without test.yml. No further code change needed without a token.
+2. If available: restore `test.yml` from git history (`09cd757`/`13eaed2`), `git push origin main`, then trigger `test` via `workflow_dispatch` and confirm ubuntu/macos/windows pass.
+3. If not available: treat as infrastructure blocker. Durable state is `test.yml` content in git history (`09cd757`/`13eaed2`); `origin/main` stays at `dae3e07` without test.yml. No further code change needed without a token.
 
 ## Evidence
-- `git rev-parse origin/main` -> `0dab185`; `git rev-parse main` -> `09cd757`.
-- `git show main:.github/workflows/test.yml` -> exists (36 lines). `git show origin/main:.github/workflows/test.yml` -> path does not exist.
-- `git push origin main` -> remote rejected (workflows permission missing).
-- `GH_TOKEN`/`GITHUB_TOKEN` is a GitHub App token without `workflows` write scope (403 on `https://api.github.com/repos/{owner}/{repo}/actions/permissions`).
+- `git rev-parse main` -> `dae3e07`; `git rev-parse origin/main` -> `dae3e07` (in sync).
+- `git ls-tree HEAD .github/workflows/` -> only `kilo-workflow-audit.yml` and `main.yml`; no `test.yml`.
+- `git show 09cd757:.github/workflows/test.yml` -> exists (31 lines).
+- `curl $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/permissions -H "Authorization: Bearer $GH_TOKEN"` -> 403 `Resource not accessible by integration`.
 
-(End of file - total 38 lines)
+(End of file)
