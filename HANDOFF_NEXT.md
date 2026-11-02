@@ -5,12 +5,16 @@
 - Added `dnspython>=2.0` to `requirements.txt` (`24d9774` on `main`). This un-skips 3 tests that were skipped with `dnspython not installed` on all CI platforms, since the workflow installs `pip install -r requirements.txt`.
 - Pushed the requirements fix to a new remote branch `fix/dnspython-requirements` (commit `c67f0be`) that does NOT touch `.github/workflows/`, so it was accepted. PR creation via `gh` was blocked (token lacks `pull-requests` write scope).
 
-### What was actually verified
+### What changed this session (this session)
+- No code or workflow changes made; this session re-verified local state only (blocker is infra, not code).
+
+### What was actually verified (this session, 2026-11-02)
 - `python -m pytest -q` -> 5461 passed, 50 skipped (remaining skips are intentional sweep exclusions only; 0 non-sweep skips).
 - `python -m ruff check .` -> All checks passed.
 - `python -m mypy ethscan/` -> Success: no issues found in 59 source files.
 - `.github/workflows/test.yml` parses as valid YAML; matrix `os: [ubuntu-latest, macos-latest, windows-latest]`, `fail-fast: false`, runs ruff + mypy + pytest.
 - Remote branch `fix/dnspython-requirements` confirmed present at `c67f0be`.
+- `GH_TOKEN` re-confirmed present but still lacks `workflows` write and `pull-requests` write scopes (same 403s as prior session).
 
 ### What remains unresolved
 - `.github/workflows/test.yml` not on remote/main. GitHub refuses pushes touching `.github/workflows/*` without `workflows` write permission.

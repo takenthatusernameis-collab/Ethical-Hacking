@@ -15,6 +15,7 @@ Evidence/constraints:
 - `GH_TOKEN` lacks `pull-requests` write scope (403 on `createPullRequest`) — `gh pr create` fails.
 - `fix/dnspython-requirements` is already on the remote (no workflows touched), so only a token with `pull-requests` write is needed to merge it.
 - `act` not installed; cannot validate the matrix locally.
+- Re-verified this session (2026-11-02): `pytest` 5461 passed / 50 skipped; `ruff check .` clean; `mypy ethscan/` clean (59 files). No code change needed — blocker is purely infra (token scopes).
 
 If no such token is available, the durable remote state is the `fix/dnspython-requirements` branch; `test.yml` remains local-only on `main`. Treat as infrastructure blocker.
 
