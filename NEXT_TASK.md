@@ -1,18 +1,21 @@
 # Next Task
 
-Obtain a PAT/token with `workflows` write permission for this repository, then:
+Obtain a token/PAT with `workflows` (write) and `pull-requests` (write) scope for this repository, then:
 
-1. `git add .github/workflows/test.yml` and commit it (message like "Add cross-platform test workflow").
-2. Push to `main` (`git push origin main`). Workflow runs ruff, mypy (ethscan/), pytest on ubuntu-latest/macos-latest/windows-latest on push/PR to main and workflow_dispatch.
-3. Trigger via `workflow_dispatch`.
-4. Confirm `test` job passes on all three platforms.
+1. Land `.github/workflows/test.yml` on remote/main (currently committed locally as `057eb37` but push-blocked).
+2. Merge the already-pushed branch `fix/dnspython-requirements` (commit `c67f0be`) into `main` — it carries the `dnspython>=2.0` requirements addition that un-skips 3 DNS tests on CI.
+3. Trigger the `test` workflow via `workflow_dispatch`.
+4. Confirm the `test` job passes on ubuntu-latest, macos-latest, windows-latest.
 
 Evidence/constraints:
-- test.yml restored locally from git history (deleted at 35feae0), valid YAML, matrix configured.
-- Local verification: ruff clean; mypy clean (59 files); pytest 5458 passed/53 skipped.
-- test.yml untracked, not committed, not pushed.
-- GH_TOKEN lacks workflows write permission (403 on actions/permissions). Pushes to .github/workflows/* rejected.
-- No PAT with workflows write permission available in this environment.
-- act not installed; cannot validate matrix locally.
+- `requirements.txt` now includes `dnspython>=2.0`; local full suite 5461 passed / 50 skipped (all remaining skips are intentional sweep exclusions).
+- Local verification: `ruff check .` clean; `mypy ethscan/` clean (59 files).
+- `test.yml` restored locally from git history (deleted at `35feae0`), valid YAML, matrix configured.
+- `GH_TOKEN` lacks `workflows` write permission (403 on actions/permissions) — pushes to `.github/workflows/*` rejected.
+- `GH_TOKEN` lacks `pull-requests` write scope (403 on `createPullRequest`) — `gh pr create` fails.
+- `fix/dnspython-requirements` is already on the remote (no workflows touched), so only a token with `pull-requests` write is needed to merge it.
+- `act` not installed; cannot validate the matrix locally.
 
-If unavailable, leave test.yml untracked/local and treat as infrastructure blocker.
+If no such token is available, the durable remote state is the `fix/dnspython-requirements` branch; `test.yml` remains local-only on `main`. Treat as infrastructure blocker.
+
+(End of file - total 24 lines)
