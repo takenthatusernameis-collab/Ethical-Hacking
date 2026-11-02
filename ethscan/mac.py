@@ -188,6 +188,22 @@ def run_mac(
         # (only if it is not already a MAC address).
         notes: list[str] = []
         if not _is_mac_address(mac):
+            # A bare IP address is not a MAC address and carries no OUI: it is
+            # not a host whose MAC can be resolved, so it is reported the same
+            # way as an unresolvable host instead of being sent to the vendor
+            # API as a made-up MAC.
+            if _is_ip_address(mac):
+                notes.append(f"Target {mac!r} is an IP address, not a MAC address")
+                return {
+                    "target": target,
+                    "mac": None,
+                    "oui": None,
+                    "timeout": timeout,
+                    "use_cache": use_cache,
+                    "offline_fallback": offline_fallback,
+                    "mac_data": None,
+                    "notes": notes,
+                }
             resolved_mac = _resolve_host(mac)
             if resolved_mac is not None:
                 notes.append(f"Resolved host {mac!r} to {resolved_mac}")
@@ -234,6 +250,23 @@ def _is_mac_address(value: str) -> bool:
         return False
     try:
         int(cleaned, 16)
+    except ValueError:
+        return False
+    return True
+
+
+def _is_ip_address(value: str) -> bool:
+    """Return True if the value is a bare IPv4 or IPv6 address.
+
+    An IP address is not a MAC address and carries no OUI, so it must not be
+    treated as a host whose MAC can be resolved: ``run_mac`` reports it the same
+    way as an unresolvable host instead of fabricating an OUI from its octets
+    and sending it to the vendor API.
+    """
+    import ipaddress
+
+    try:
+        ipaddress.ip_address(value)
     except ValueError:
         return False
     return True
