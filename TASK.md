@@ -1,16 +1,15 @@
 # Task
-Repo is feature-complete and green; the only outstanding bounded task is landing CI.
+Repo is feature-complete and green. The only outstanding item is landing CI (`.github/workflows/test.yml`), which is blocked on a `workflows`-scoped GitHub token that is not available in this session.
 
 ## Current state (verified this session)
-- `HEAD == 082ef3a` (local), `origin/main == b599148` (remote); working tree clean except the committed-but-unpushed changes.
-- Baseline health: `python -m ruff check ethscan tests` → "All checks passed!"; `python -m pytest -q` → 5539 passed / 50 skipped (exit 0). Re-confirmed 2026-11-03T21:45:00Z.
-
-## What changed this session
-- Created `.github/workflows/test.yml` (ruff + pytest on push/PR) and added `pytest>=8.0` to `dev` extras in `pyproject.toml`. Committed as `082ef3a`.
-- `git push origin main` rejected: token lacks `workflows` permission. Commit remains local and ready to push.
+- `HEAD == origin/main == 498a1ca`; working tree clean.
+- `.github/workflows/test.yml` is ABSENT (deleted in commit 498a1ca; not present locally or on remote).
+- Baseline health: `python -m ruff check ethscan tests` → "All checks passed!" (exit 0); `python -m pytest -q` → 5539 passed / 50 skipped (exit 0); `python -m ethscan --help` works; `import ethscan` → 0.1.0.
+- Last real source change: `f54795d headers: avoid blind exception catch around web server version assessment`. All later commits are control-marker/test.yml churn only.
 
 ## Next actions
-1. If a `workflows`-scoped token becomes available: `git push origin main`, then re-run `python -m ruff check ethscan tests` and `python -m pytest -q`.
-2. Otherwise: no bounded feature task available; `test.yml` landing is blocked on token scope.
+1. Do NOT re-attempt `git push origin main` for `test.yml`: the GitHub App token lacks `workflows` scope and push is deterministically rejected with 403 "refusing to allow a GitHub App to create or update workflow ... without workflows permission". This is a permission problem, not fixable by renaming/rewriting the file.
+2. When a `workflows`-scoped token becomes available: restore `.github/workflows/test.yml` from commit `082ef3a` (`git show 082ef3a:.github/workflows/test.yml`), commit, `git push origin main`, then re-run `python -m ruff check ethscan tests` and `python -m pytest -q`.
+3. Otherwise: no bounded feature task remains; the repo is feature-complete and green. Do not create speculative work.
 
-(End of file - total 14 lines)
+(End of file)
