@@ -401,7 +401,7 @@ class _TargetGroup(click.Group):
     type=click.Path(),
     help="Path to an ethscan.yaml config file (default: ethscan.yaml or ~/.ethscan.yaml).",
 )
-@click.version_option(__version__, "-v", "--version")
+@click.version_option(__version__, "-v", "-V", "--version")
 @click.pass_context
 def cli(ctx, config_path: str | None) -> None:
     """ethscan: ethical hacking toolkit."""
