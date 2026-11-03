@@ -29,6 +29,7 @@ from ethscan.snmp import (
     _encode_oid,
     _encode_oid_value,
     _encode_tlv,
+    _assess_snmp_version,
     _normalize_target,
     _parse_oid,
     _parse_snmp_message,
@@ -1355,3 +1356,28 @@ def test_send_recv_real_socket_path_closes_socket(monkeypatch) -> None:
     assert data == b"resp"
     assert err is None
     assert fake.closed is True
+
+
+# ---------------------------------------------------------------------------
+# _assess_snmp_version
+# ---------------------------------------------------------------------------
+
+
+def test_assess_snmp_version_linux_old() -> None:
+    findings = _assess_snmp_version("Linux router 4.4.0")
+    assert any("SNMP system version: 4.4.0" in f for f in findings)
+    assert any("Old SNMP system version" in f for f in findings)
+
+
+def test_assess_snmp_version_linux_modern() -> None:
+    findings = _assess_snmp_version("Linux router 5.10.0")
+    assert any("SNMP system version: 5.10.0" in f for f in findings)
+    assert not any("Old" in f for f in findings)
+
+
+def test_assess_snmp_version_none() -> None:
+    assert _assess_snmp_version(None) == []
+
+
+def test_assess_snmp_version_no_match() -> None:
+    assert _assess_snmp_version("some device") == []
