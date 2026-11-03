@@ -15,6 +15,7 @@ import pytest
 
 from ethscan.ftp import (
     DEFAULT_PORT,
+    _assess_ftp_version,
     _connect,
     _normalize_target,
     format_ftp_report_csv,
@@ -236,6 +237,57 @@ def test_connect_real_ftplib_refused() -> None:
 
 
 # ---------------------------------------------------------------------------
+# _assess_ftp_version
+# ---------------------------------------------------------------------------
+
+
+def test_assess_ftp_version_modern() -> None:
+    # vsFTPd 3.x is current; the version is reported but not flagged.
+    findings = _assess_ftp_version("220 (vsFTPd 3.0.3)")
+    assert "FTP server version: 3.0.3" in findings
+    assert not any("out of support" in f for f in findings)
+
+
+def test_assess_ftp_version_old() -> None:
+    # vsFTPd 2.x is out of support.
+    findings = _assess_ftp_version("220 (vsFTPd 2.3.4)")
+    assert "FTP server version: 2.3.4" in findings
+    assert any("Old FTP server version detected" in f for f in findings)
+    assert any("out of support" in f for f in findings)
+
+
+def test_assess_ftp_version_proftpd_old() -> None:
+    # ProFTPD 1.x is out of support.
+    findings = _assess_ftp_version("220 ProFTPD 1.3.5 Server")
+    assert "FTP server version: 1.3.5" in findings
+    assert any("out of support" in f for f in findings)
+
+
+def test_assess_ftp_version_none() -> None:
+    assert _assess_ftp_version(None) == []
+
+
+def test_assess_ftp_version_empty() -> None:
+    assert _assess_ftp_version("") == []
+
+
+def test_assess_ftp_version_no_version() -> None:
+    # A banner without a server version yields no findings.
+    assert _assess_ftp_version("220 ftp.example.com FTP server ready") == []
+
+
+def test_assess_ftp_version_ip_address_not_flagged() -> None:
+    # An IPv4 address in the banner must not be mistaken for a version.
+    assert _assess_ftp_version("220 192.168.1.1 FTP server ready") == []
+
+
+def test_assess_ftp_version_case_insensitive() -> None:
+    findings = _assess_ftp_version("220 (VsFtPd 2.3.4)")
+    assert "FTP server version: 2.3.4" in findings
+    assert any("out of support" in f for f in findings)
+
+
+# ---------------------------------------------------------------------------
 # run_ftp – against local fake FTP client
 # ---------------------------------------------------------------------------
 
@@ -396,6 +448,33 @@ def test_run_ftp_port_override() -> None:
     assert result["port"] == 2121
 
 
+def test_run_ftp_flags_old_version() -> None:
+    # An old vsFTPd banner produces an out-of-support version finding.
+    def factory():
+        c = _FakeFTP()
+        c.config = {"banner": "220 (vsFTPd 2.3.4)", "anonymous_allowed": True}
+        return c
+
+    result = run_ftp("ftp.example.com", timeout=2.0, connector=factory)
+    assert result["connected"] is True
+    assert result["banner"] == "220 (vsFTPd 2.3.4)"
+    assert any("Old FTP server version detected" in f for f in result["findings"])
+    assert any("out of support" in f for f in result["findings"])
+
+
+def test_run_ftp_modern_version_no_old_finding() -> None:
+    # A modern vsFTPd banner reports the version without an old-version flag.
+    def factory():
+        c = _FakeFTP()
+        c.config = {"banner": "220 (vsFTPd 3.0.3)", "anonymous_allowed": True}
+        return c
+
+    result = run_ftp("ftp.example.com", timeout=2.0, connector=factory)
+    assert result["connected"] is True
+    assert "FTP server version: 3.0.3" in result["findings"]
+    assert not any("out of support" in f for f in result["findings"])
+
+
 def test_run_ftp_real_connection_refused() -> None:
     # Integration check: real ftplib against a closed port.
     result = run_ftp("127.0.0.1", port=1, timeout=1.0)
@@ -497,6 +576,7 @@ _FTP_SAMPLE = {
     "anonymous_message": "anonymous login successful",
     "check_anonymous": True,
     "error": None,
+    "findings": [],
 }
 
 _FTP_SAMPLE_DENIED = {
@@ -510,6 +590,7 @@ _FTP_SAMPLE_DENIED = {
     "anonymous_message": "530 Login incorrect",
     "check_anonymous": True,
     "error": None,
+    "findings": [],
 }
 
 _FTP_SAMPLE_FAILED = {
@@ -560,6 +641,15 @@ def test_format_ftp_report_markdown_not_checked() -> None:
     data = {**_FTP_SAMPLE, "anonymous_login": None, "anonymous_message": None, "check_anonymous": False}
     output = format_ftp_report_markdown(data)
     assert "Anonymous Login:** not checked" in output
+
+
+def test_format_ftp_report_markdown_with_findings() -> None:
+    data = {**_FTP_SAMPLE, "findings": ["FTP server version: 2.3.4", "Old FTP server version detected (version 2.3.4; out of support, may lack security updates)"]}
+    output = format_ftp_report_markdown(data)
+    assert "## Findings" in output
+    assert "FTP server version: 2.3.4" in output
+    assert "Old FTP server version detected" in output
+    assert "out of support" in output
 
 
 def test_format_ftp_report_markdown_connection_failed() -> None:

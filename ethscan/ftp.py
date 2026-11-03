@@ -16,6 +16,7 @@ import csv
 import ftplib
 import io
 import json
+import re
 import socket
 from typing import Any
 
@@ -83,6 +84,37 @@ def _connect(
     return client
 
 
+def _assess_ftp_version(banner: str | None) -> list[str]:
+    """Assess the FTP banner and return version-related findings.
+
+    FTP greetings commonly embed the server version (for example
+    ``220 (vsFTPd 3.0.3)`` or ``220 ProFTPD 1.3.5 Server``). Only version
+    tokens attached to a known FTP server name are assessed, so IPv4
+    addresses and other dotted numbers in the banner are never mistaken for
+    a version. Versions with a major component below 3 are treated as out of
+    support.
+    """
+    findings: list[str] = []
+    if not banner:
+        return findings
+    match = re.search(
+        r"\b(?:vsFTPd|ProFTPD|FileZilla|Pure-FTPd|Microsoft FTP)\b[^\d]{0,30}(\d+(?:\.\d+){1,2})",
+        banner,
+        re.IGNORECASE,
+    )
+    if not match:
+        return findings
+    version = match.group(1)
+    major = int(version.split(".")[0])
+    findings.append(f"FTP server version: {version}")
+    if major < 3:
+        findings.append(
+            f"Old FTP server version detected (version {version}; "
+            "out of support, may lack security updates)"
+        )
+    return findings
+
+
 def run_ftp(
     target: str,
     port: int | None = None,
@@ -120,6 +152,7 @@ def run_ftp(
         "anonymous_login": None,
         "anonymous_message": None,
         "check_anonymous": check_anonymous,
+        "findings": [],
         "error": None,
     }
 
@@ -132,6 +165,7 @@ def run_ftp(
                 welcome = client.getwelcome()
                 results["banner"] = welcome
                 results["welcome_message"] = welcome
+                results["findings"].extend(_assess_ftp_version(welcome))
             except EOFError:
                 results["error"] = "banner read failed: server closed the connection"
                 return results
@@ -211,6 +245,14 @@ def format_ftp_report_markdown(data: dict[str, Any]) -> str:
         lines.append("- **Anonymous Login:** not checked")
     if data.get("anonymous_message"):
         lines.append(f"- **Anonymous Message:** {data['anonymous_message']}")
+    findings = data.get("findings") or []
+    if findings:
+        lines.append("")
+        lines.append("## Findings")
+        lines.append("")
+        for f in findings:
+            lines.append(f"- {f}")
+        lines.append("")
     if data.get("error"):
         lines.append("")
         lines.append(f"- **Error:** {data['error']}")
