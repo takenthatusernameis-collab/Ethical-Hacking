@@ -480,17 +480,26 @@ def _probe_community(
 
 
 _SNMP_VERSION_RE = re.compile(
-    r"\b(Linux|Cisco IOS|Windows|FreeBSD|JunOS|Android)\b[^\d]{0,30}(\d+(?:\.\d+){1,2})",
-    re.IGNORECASE,
+    r"\b(Linux|Cisco IOS(?:\s+XE|\s+XR)?|IOS(?:\s+XE)?|Windows(?:\s+Server)?|FreeBSD|JunOS|Android|Net-SNMP|OpenBSD|HP(?:-UX)?|VMware ESXi)\b.{0,80}?(\d+(?:\.\d+){1,3})",
+    re.IGNORECASE | re.DOTALL,
 )
 
 _SNMP_MIN_MAJOR = {
     "linux": 5,
     "cisco ios": 15,
+    "cisco ios xe": 3,
+    "cisco ios xr": 6,
+    "ios": 15,
+    "ios xe": 3,
     "windows": 10,
+    "windows server": 2016,
     "freebsd": 12,
     "junos": 18,
     "android": 10,
+    "net-snmp": 5,
+    "openbsd": 7,
+    "hp-ux": 11,
+    "vmware esxi": 7,
 }
 
 

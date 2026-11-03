@@ -1381,3 +1381,15 @@ def test_assess_snmp_version_none() -> None:
 
 def test_assess_snmp_version_no_match() -> None:
     assert _assess_snmp_version("some device") == []
+
+
+def test_assess_snmp_version_cisco_old() -> None:
+    findings = _assess_snmp_version("Cisco IOS Software, C2960 Software 12.2")
+    assert any("SNMP system version: 12.2" in f for f in findings)
+    assert any("Old SNMP system version" in f for f in findings)
+
+
+def test_assess_snmp_version_freebsd_old() -> None:
+    findings = _assess_snmp_version("FreeBSD 11.3-RELEASE")
+    assert any("SNMP system version: 11.3" in f for f in findings)
+    assert any("Old SNMP system version" in f for f in findings)
