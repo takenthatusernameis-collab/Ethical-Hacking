@@ -4,12 +4,12 @@ Session: executed previous agent assignment (land .github/workflows/test.yml on 
 
 ## What changed
 - None (infrastructure/permissions blocker; no code/workflow changes made this session).
-- HEAD advanced to `151a442` (in sync with `origin/main`); working tree clean. `test.yml` remains ABSENT from HEAD (`.github/workflows/` contains only `kilo-workflow-audit.yml`, `main.yml`).
+- HEAD advanced to `1eaa1a0` (in sync with `origin/main`); working tree clean. `test.yml` remains ABSENT from HEAD (`.github/workflows/` contains only `kilo-workflow-audit.yml`, `main.yml`).
 - `test.yml` content preserved in git history (`09cd757`/`461e1e1`, 31 lines, cross-platform ubuntu/macos/windows, Python 3.12, `permissions: contents: read`).
 
 ## What was actually verified
-- Baseline: `python -m ethscan --help` exit 0; `python -m ruff check ethscan tests` clean ("All checks passed!"); `python -m pytest -q` 5461 passed, 50 skipped.
-- Repo state: `main == origin/main == HEAD == 151a442` (clean, in sync). `git ls-tree HEAD .github/workflows/` -> only `kilo-workflow-audit.yml`, `main.yml`; no `test.yml`.
+- Baseline: `python -m ethscan --help` exit 0; `python -m ruff check ethscan tests` clean ("All checks passed!"); `python -m pytest -q` 5472 passed, 50 skipped.
+- Repo state: `main == origin/main == HEAD == 1eaa1a0` (clean, in sync). `git ls-tree HEAD .github/workflows/` -> only `kilo-workflow-audit.yml`, `main.yml`; no `test.yml`.
 - Credentials re-confirmed: `GH_TOKEN` and `GITHUB_TOKEN` identical GitHub App token (`ghs_...`); `actions/permissions` API returns `403 Resource not accessible by integration`. `git push origin main` with test.yml previously rejected: `refusing to allow a GitHub App to create or update workflow .github/workflows/test.yml without workflows permission`. `workflow_dispatch` to `actions/workflows/test.yml/dispatches` returned 403. No PAT with `workflows` write scope available; no `.git-credentials`.
 
 ## What remains unresolved
