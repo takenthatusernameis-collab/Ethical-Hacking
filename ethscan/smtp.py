@@ -17,6 +17,7 @@ import contextlib
 import csv
 import io
 import json
+import re
 import socket
 import time
 from typing import Any
@@ -183,6 +184,61 @@ def _classify_vrfy(code: int) -> tuple[bool | None, str]:
     return (None, f"code {code}")
 
 
+# Known SMTP server identifiers and the minimum major version still in
+# support. SMTP banners commonly embed the server version (for example
+# ``220 mail.example.com ESMTP Postfix 3.3.2`` or ``220 James SMTP Server
+# 2.3.2``). Only version tokens attached to a known server name are
+# assessed, so IPv4 addresses and other dotted numbers in the banner are
+# never mistaken for a version.
+_SMTP_SERVER_VERSIONS: list[tuple[str, int]] = [
+    ("Postfix", 3),
+    ("Sendmail", 9),
+    ("Exim", 4),
+    ("Courier", 1),
+    ("Qmail", 1),
+    ("James", 3),
+    ("hMailServer", 1),
+    ("MailEnable", 10),
+    ("Coremail", 1),
+    ("Zimbra", 8),
+]
+
+_SMTP_VERSION_RE = re.compile(
+    r"\b(" + "|".join(name for name, _ in _SMTP_SERVER_VERSIONS) + r")"
+    r"[^\d]{0,30}(\d+(?:\.\d+){1,2})",
+    re.IGNORECASE,
+)
+
+
+def _assess_smtp_version(banner: str | None) -> list[str]:
+    """Assess the SMTP banner and return version-related findings.
+
+    SMTP greetings commonly embed the server version (for example
+    ``220 mail.example.com ESMTP Postfix 3.3.2`` or ``220 James SMTP Server
+    2.3.2``). Only version tokens attached to a known SMTP server name are
+    assessed, so IPv4 addresses and other dotted numbers in the banner are
+    never mistaken for a version. Versions whose major component is below the
+    server's minimum supported major version are treated as out of support.
+    """
+    findings: list[str] = []
+    if not banner:
+        return findings
+    match = _SMTP_VERSION_RE.search(banner)
+    if not match:
+        return findings
+    server_name, version = match.group(1), match.group(2)
+    major = int(version.split(".")[0])
+    findings.append(f"SMTP server version: {version}")
+    for name, min_major in _SMTP_SERVER_VERSIONS:
+        if server_name.lower() == name.lower() and major < min_major:
+            findings.append(
+                f"Old SMTP server version detected (version {version}; "
+                "out of support, may lack security updates)"
+            )
+            break
+    return findings
+
+
 def run_smtp(
     target: str,
     port: int | None = None,
@@ -223,6 +279,7 @@ def run_smtp(
         "capabilities": [],
         "users": [],
         "open_relay": None,
+        "findings": [],
         "error": None,
     }
 
@@ -233,6 +290,7 @@ def run_smtp(
         try:
             banner_lines = _read_response(sock, timeout)
             results["banner"] = banner_lines[0] if banner_lines else None
+            results["findings"].extend(_assess_smtp_version(results["banner"]))
         except (socket.timeout, OSError) as exc:
             results["error"] = f"banner read failed: {exc}"
             return results
@@ -375,6 +433,14 @@ def format_smtp_report_markdown(data: dict[str, Any]) -> str:
         relay_str = "VULNERABLE" if data["open_relay"] else "not vulnerable"
         lines.append("")
         lines.append(f"- **Open Relay:** {relay_str}")
+    findings = data.get("findings") or []
+    if findings:
+        lines.append("")
+        lines.append("## Findings")
+        lines.append("")
+        for f in findings:
+            lines.append(f"- {f}")
+        lines.append("")
     if data.get("error"):
         lines.append("")
         lines.append(f"- **Error:** {data['error']}")

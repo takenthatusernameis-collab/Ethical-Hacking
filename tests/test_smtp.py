@@ -11,6 +11,7 @@ import pytest
 
 from ethscan.smtp import (
     DEFAULT_PORT,
+    _assess_smtp_version,
     _classify_vrfy,
     _normalize_target,
     _parse_smtp_response,
@@ -207,6 +208,93 @@ def test_classify_vrfy_unknown_code() -> None:
 
 
 # ---------------------------------------------------------------------------
+# _assess_smtp_version
+# ---------------------------------------------------------------------------
+
+
+def test_assess_smtp_version_modern() -> None:
+    # Postfix 3.x is current; the version is reported but not flagged.
+    findings = _assess_smtp_version("220 mail.example.com ESMTP Postfix 3.3.2")
+    assert "SMTP server version: 3.3.2" in findings
+    assert not any("out of support" in f for f in findings)
+
+
+def test_assess_smtp_version_old() -> None:
+    # Postfix 2.x is out of support.
+    findings = _assess_smtp_version("220 mail.example.com ESMTP Postfix 2.11.3")
+    assert "SMTP server version: 2.11.3" in findings
+    assert any("Old SMTP server version detected" in f for f in findings)
+    assert any("out of support" in f for f in findings)
+
+
+def test_assess_smtp_version_sendmail_old() -> None:
+    findings = _assess_smtp_version("220 mail.example.com ESMTP Sendmail 8.15.0")
+    assert "SMTP server version: 8.15.0" in findings
+    assert any("out of support" in f for f in findings)
+
+
+def test_assess_smtp_version_exim_modern() -> None:
+    findings = _assess_smtp_version("220 mail.example.com ESMTP Exim 4.96.2")
+    assert "SMTP server version: 4.96.2" in findings
+    assert not any("out of support" in f for f in findings)
+
+
+def test_assess_smtp_version_exim_old() -> None:
+    findings = _assess_smtp_version("220 mail.example.com ESMTP Exim 3.20")
+    assert "SMTP server version: 3.20" in findings
+    assert any("out of support" in f for f in findings)
+
+
+def test_assess_smtp_version_none() -> None:
+    assert _assess_smtp_version(None) == []
+
+
+def test_assess_smtp_version_empty() -> None:
+    assert _assess_smtp_version("") == []
+
+
+def test_assess_smtp_version_no_version() -> None:
+    # A banner without a known server version yields no findings.
+    assert _assess_smtp_version("220 mail.example.com ESMTP") == []
+
+
+def test_assess_smtp_version_ip_address_not_flagged() -> None:
+    # An IPv4 address in the banner must not be mistaken for a version.
+    assert _assess_smtp_version("220 192.168.1.1 ESMTP") == []
+
+
+def test_assess_smtp_version_case_insensitive() -> None:
+    findings = _assess_smtp_version("220 mail.example.com ESMTP POSTFIX 2.11.3")
+    assert "SMTP server version: 2.11.3" in findings
+    assert any("out of support" in f for f in findings)
+
+
+def test_assess_smtp_version_unknown_server_ignored() -> None:
+    # A version token attached to an unknown server name is not assessed.
+    assert _assess_smtp_version("220 mail.example.com ESMTP FooMail 2.0") == []
+
+
+def test_assess_smtp_version_james_old() -> None:
+    findings = _assess_smtp_version("220 James SMTP Server 2.3.2")
+    assert "SMTP server version: 2.3.2" in findings
+    assert any("out of support" in f for f in findings)
+
+
+def test_assess_smtp_version_james_modern() -> None:
+    # James 3.x is current; reported but not flagged.
+    findings = _assess_smtp_version("220 James SMTP Server 3.0.0")
+    assert "SMTP server version: 3.0.0" in findings
+    assert not any("out of support" in f for f in findings)
+
+
+def test_assess_smtp_version_two_digit_major() -> None:
+    # MailEnable 10.x is current; reported but not flagged.
+    findings = _assess_smtp_version("220 MailEnable 10.0.0 ESMTP")
+    assert "SMTP server version: 10.0.0" in findings
+    assert not any("out of support" in f for f in findings)
+
+
+# ---------------------------------------------------------------------------
 # run_smtp – against the local fake SMTP server
 # ---------------------------------------------------------------------------
 
@@ -315,6 +403,33 @@ def test_run_smtp_relay_code_path_skipped_without_ehlo(fake_smtp) -> None:
     assert result["open_relay"] is None
 
 
+def test_run_smtp_flags_old_version(fake_smtp) -> None:
+    # An old Postfix banner produces an out-of-support version finding.
+    host, port, server = fake_smtp
+    server.smtp_config["banner"] = "220 mail.example.com ESMTP Postfix 2.11.3"
+    result = run_smtp(f"{host}:{port}", timeout=2.0, check_starttls=False, check_relay=False)
+    assert result["banner"] == "220 mail.example.com ESMTP Postfix 2.11.3"
+    assert any("Old SMTP server version detected" in f for f in result["findings"])
+    assert any("out of support" in f for f in result["findings"])
+
+
+def test_run_smtp_modern_version_no_old_finding(fake_smtp) -> None:
+    # A modern Postfix banner reports the version without an old-version flag.
+    host, port, server = fake_smtp
+    server.smtp_config["banner"] = "220 mail.example.com ESMTP Postfix 3.5.0"
+    result = run_smtp(f"{host}:{port}", timeout=2.0, check_starttls=False, check_relay=False)
+    assert "SMTP server version: 3.5.0" in result["findings"]
+    assert not any("out of support" in f for f in result["findings"])
+
+
+def test_run_smtp_no_version_no_finding(fake_smtp) -> None:
+    # A banner without a known server version yields no findings.
+    host, port, server = fake_smtp
+    server.smtp_config["banner"] = "220 fake.smtp.example ESMTP ethscan"
+    result = run_smtp(f"{host}:{port}", timeout=2.0, check_starttls=False, check_relay=False)
+    assert result["findings"] == []
+
+
 # ---------------------------------------------------------------------------
 # _read_response / _send_command against the fake server
 # ---------------------------------------------------------------------------
@@ -342,7 +457,7 @@ _SAMPLE = {
     "host": "mail.example.com",
     "port": 25,
     "connected": True,
-    "banner": "220 mail.example.com ESMTP Postfix",
+    "banner": "220 mail.example.com ESMTP Postfix 3.3.2",
     "ehlo_success": True,
     "starttls_advertised": True,
     "starttls_checked": True,
@@ -352,6 +467,7 @@ _SAMPLE = {
         {"user": "root", "found": False, "description": "no such user", "code": 550, "error": None},
     ],
     "open_relay": False,
+    "findings": ["SMTP server version: 3.3.2"],
     "error": None,
 }
 
@@ -364,6 +480,7 @@ def test_format_smtp_report_json() -> None:
     assert parsed["open_relay"] is False
     assert len(parsed["users"]) == 2
     assert parsed["users"][1]["found"] is False
+    assert parsed["findings"] == ["SMTP server version: 3.3.2"]
 
 
 def test_format_smtp_report_markdown() -> None:
@@ -374,6 +491,8 @@ def test_format_smtp_report_markdown() -> None:
     assert "VRFY User Enumeration" in output
     assert "admin" in output
     assert "**Open Relay:** not vulnerable" in output
+    assert "## Findings" in output
+    assert "SMTP server version: 3.3.2" in output
 
 
 def test_format_smtp_report_markdown_no_users() -> None:
@@ -389,11 +508,39 @@ def test_format_smtp_report_markdown_no_users() -> None:
         "capabilities": [],
         "users": [],
         "open_relay": True,
+        "findings": [],
         "error": None,
     }
     output = format_smtp_report_markdown(data)
     assert "VRFY User Enumeration" not in output
     assert "**Open Relay:** VULNERABLE" in output
+    assert "## Findings" not in output
+
+
+def test_format_smtp_report_markdown_findings() -> None:
+    data = {
+        "target": "mail.example.com",
+        "host": "mail.example.com",
+        "port": 25,
+        "connected": True,
+        "banner": "220 mail.example.com ESMTP Postfix 2.11.3",
+        "ehlo_success": True,
+        "starttls_advertised": True,
+        "starttls_checked": True,
+        "capabilities": ["STARTTLS"],
+        "users": [],
+        "open_relay": False,
+        "findings": [
+            "SMTP server version: 2.11.3",
+            "Old SMTP server version detected (version 2.11.3; "
+            "out of support, may lack security updates)",
+        ],
+        "error": None,
+    }
+    output = format_smtp_report_markdown(data)
+    assert "## Findings" in output
+    assert "SMTP server version: 2.11.3" in output
+    assert "out of support" in output
 
 
 def test_format_smtp_report_markdown_connection_failed() -> None:
