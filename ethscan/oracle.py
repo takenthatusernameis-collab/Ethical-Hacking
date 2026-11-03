@@ -325,8 +325,20 @@ def _assess_version(accept_resp: dict[str, Any]) -> list[str]:
     version = accept_resp.get("version")
     if version:
         findings.append(f"Oracle TNS server version: {version}")
-        # Optionally, we could parse the version to determine if it's old?
-        # We'll skip for now.
+        # The version is rendered as ``major.minor...`` (e.g. ``12.2.0.1``
+        # for Oracle Database 12cR2). The major number maps to the release:
+        # 8=8i, 9=9i, 10=10g, 11=11g, 12=12c, 18=18c, 19=19c, 21=21c,
+        # 23=23ai. Releases with major < 12 are out of support and flagged
+        # accordingly.
+        try:
+            major = int(str(version).split(".")[0])
+            if major < 12:
+                findings.append(
+                    f"Old Oracle server version detected (major {major}; "
+                    "out of support, may lack security features)"
+                )
+        except (ValueError, AttributeError):
+            pass
     if accept_resp.get("error"):
         findings.append(f"Error: {accept_resp['error']}")
     return findings

@@ -144,6 +144,30 @@ def test_assess_version():
     assert any("Error: Some error" in f for f in findings)
 
 
+def test_assess_version_old():
+    """Old Oracle major versions are flagged as out of support."""
+    accept_resp = {"version": "11.2.0.4.0", "error": None}
+    findings = _assess_version(accept_resp)
+    assert any("Oracle TNS server version: 11.2.0.4.0" in f for f in findings)
+    assert any("Old Oracle server version detected" in f for f in findings)
+
+
+def test_assess_version_modern():
+    """Modern Oracle major versions are not flagged as old."""
+    accept_resp = {"version": "19.0.0.0.0", "error": None}
+    findings = _assess_version(accept_resp)
+    assert any("Oracle TNS server version: 19.0.0.0.0" in f for f in findings)
+    assert not any("Old Oracle server version detected" in f for f in findings)
+
+
+def test_assess_version_none():
+    """A missing version produces no version finding."""
+    accept_resp = {"version": None, "error": None}
+    findings = _assess_version(accept_resp)
+    assert not any("Oracle TNS server version" in f for f in findings)
+    assert not any("Old Oracle" in f for f in findings)
+
+
 def _mock_connector_success(host, port, request, timeout):
     """Mock connector that returns a successful Accept response."""
     # We'll return an Accept packet with version 0x03EF (1007)
