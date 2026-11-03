@@ -487,6 +487,35 @@ def _send_recv(
 # ---------------------------------------------------------------------------
 
 
+def _assess_ldap_version(vendor_versions: list[str] | None) -> list[str]:
+    """Assess LDAP vendor version and return any out-of-support findings."""
+    findings: list[str] = []
+    if not vendor_versions:
+        return findings
+    for value in vendor_versions:
+        if not value:
+            continue
+        text = str(value)
+        if "openldap" not in text.lower():
+            continue
+        # OpenLDAP banners look like "OpenLDAP: 2.4.49" or "OpenLDAP 2.6.3".
+        import re
+
+        match = re.search(r"(\d+)\.(\d+)", text)
+        if not match:
+            continue
+        try:
+            major, minor = int(match.group(1)), int(match.group(2))
+        except ValueError:
+            continue
+        if (major, minor) < (2, 5):
+            findings.append(
+                f"Old OpenLDAP server version detected ({major}.{minor}; "
+                "out of support, may lack security features)"
+            )
+    return findings
+
+
 def _build_banner(results: dict[str, Any]) -> str | None:
     """Build a short human-readable banner from the probe results."""
     if not results.get("accessible"):
@@ -603,13 +632,15 @@ def run_ldap(
                 for entry in parsed_search.get("entries") or []:
                     for attr, values in (entry.get("attributes") or {}).items():
                         merged.setdefault(attr, []).extend(values)
-                results["root_dse"] = merged
-                done_code = parsed_search.get("result_code")
-                if done_code is not None and done_code != 0 and not merged:
-                    results["root_dse_error"] = (
-                        f"root DSE search returned "
-                        f"{parsed_search.get('result_code_name') or done_code}"
-                    )
+        results["root_dse"] = merged
+        for note in _assess_ldap_version(merged.get("vendorVersion")):
+            results["notes"].append(note)
+        done_code = parsed_search.get("result_code")
+        if done_code is not None and done_code != 0 and not merged:
+            results["root_dse_error"] = (
+                f"root DSE search returned "
+                f"{parsed_search.get('result_code_name') or done_code}"
+            )
     # A hostile server must never crash the command: whatever it sends is
     # reported through the module's own failure field.
     except Exception as exc:  # noqa: BLE001 - a remote answer must not raise
