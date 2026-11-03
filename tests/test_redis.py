@@ -11,6 +11,7 @@ from ethscan.redis import (
     DEFAULT_PORT,
     DEFAULT_PROBES,
     _assess_dangerous,
+    _assess_redis,
     _build_resp_array,
     _markdown_escape,
     _normalize_target,
@@ -135,7 +136,7 @@ def test_run_redis_all_probes():
     res = run_redis("example.com", port=6379, timeout=5.0, connector=fake)
     assert res["ping"] == "PONG"
     assert res["info"]["redis_version"] == "6.2.0"
-    assert "bind is set to 0.0.0.0" in res["dangerous_findings"][0]
+    assert any("bind is set to 0.0.0.0" in f for f in res["dangerous_findings"])
 
 
 def test_format_redis_json():
@@ -489,6 +490,35 @@ def test_assess_dangerous_multiple_findings():
 
 def test_assess_dangerous_no_findings():
     findings = _assess_dangerous({"bind": "127.0.0.1", "requirepass": "secret"})
+    assert findings == []
+
+
+def test_assess_redis_old_version():
+    """Old Redis major versions are flagged as out of support."""
+    info = {"redis_version": "6.2.0", "os": "Linux"}
+    findings = _assess_redis(info)
+    assert any("Redis server version: 6.2.0" in f for f in findings)
+    assert any("Old Redis server version detected" in f for f in findings)
+
+
+def test_assess_redis_modern_version():
+    """Modern Redis major versions are not flagged as old."""
+    info = {"redis_version": "7.0.0", "os": "Linux"}
+    findings = _assess_redis(info)
+    assert any("Redis server version: 7.0.0" in f for f in findings)
+    assert not any("Old Redis server version detected" in f for f in findings)
+
+
+def test_assess_redis_version_none():
+    """A missing version produces no version finding."""
+    info = {"os": "Linux"}
+    findings = _assess_redis(info)
+    assert not any("Redis server version" in f for f in findings)
+    assert not any("Old Redis" in f for f in findings)
+
+
+def test_assess_redis_empty_dict():
+    findings = _assess_redis({})
     assert findings == []
 
 

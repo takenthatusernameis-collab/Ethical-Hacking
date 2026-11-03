@@ -258,6 +258,27 @@ def _assess_dangerous(config: dict[str, str]) -> list[str]:
     return findings
 
 
+def _assess_redis(info: dict[str, str]) -> list[str]:
+    """Assess Redis INFO data and return findings."""
+    findings: list[str] = []
+    version = info.get("redis_version")
+    if version:
+        findings.append(f"Redis server version: {version}")
+        # Redis 7.x is the current stable release. Releases with major < 7
+        # (Redis 6.x and earlier) are out of support and may lack security
+        # features, so they are flagged accordingly.
+        try:
+            major = int(str(version).split(".")[0])
+            if major < 7:
+                findings.append(
+                    f"Old Redis server version detected (major {major}; "
+                    "out of support, may lack security features)"
+                )
+        except (ValueError, AttributeError):
+            pass
+    return findings
+
+
 def run_redis(
     target: str,
     port: int | None = None,
@@ -332,6 +353,7 @@ def run_redis(
                     parsed_info = _parse_info(cast("bytes", info_data2))
             results["info"] = parsed_info
             results["accessible"] = True
+            results["dangerous_findings"].extend(_assess_redis(parsed_info))
 
         # Run CONFIG GET *
         if "config" in probe_list:
@@ -343,7 +365,7 @@ def run_redis(
             parsed_config = _parse_config(cast("bytes", config_data))
             results["config"] = parsed_config
             findings = _assess_dangerous(parsed_config)
-            results["dangerous_findings"] = findings
+            results["dangerous_findings"].extend(findings)
             results["accessible"] = True
 
     # A hostile server must never crash the command: whatever it sends is
