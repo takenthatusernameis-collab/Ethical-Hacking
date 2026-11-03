@@ -6,6 +6,7 @@ import csv
 import http.client
 import io
 import json
+import re
 import socket
 import ssl
 import urllib.error
@@ -39,6 +40,68 @@ INFO_DISCLOSURE_HEADERS: dict[str, str] = {
     "X-ASPNET-Version": "Reveals ASP.NET version.",
     "X-ASPNET-Mvc-Version": "Reveals ASP.NET MVC version.",
 }
+
+
+# Known web server identifiers and the minimum major version still in
+# support. Versions whose major component is below the server's minimum
+# supported major version are treated as out of support.
+_WEB_SERVER_VERSIONS: list[tuple[str, int]] = [
+    ("Apache", 2),
+    ("nginx", 1),
+    ("lighttpd", 1),
+    ("IIS", 10),
+    ("Microsoft-IIS", 10),
+]
+
+_WEB_SERVER_VERSION_RE = re.compile(
+    r"\b(" + "|".join(name for name, _ in _WEB_SERVER_VERSIONS) + r")"
+    r"(?:/|\s+)(\d+(?:\.\d+){0,2})",
+    re.IGNORECASE,
+)
+
+
+def _assess_web_server_version(server_header: str | None) -> list[str]:
+    """Assess the Server header and return version-related findings."""
+    findings: list[str] = []
+    if not server_header:
+        return findings
+    match = _WEB_SERVER_VERSION_RE.search(server_header)
+    if not match:
+        return findings
+    server_name, version = match.group(1), match.group(2)
+    try:
+        major = int(version.split(".")[0])
+    except (ValueError, IndexError):
+        return findings
+    findings.append(f"Web server version: {version}")
+    name_lower = server_name.lower().replace("-", "")
+    if name_lower == "microsoftiis":
+        name_lower = "iis"
+    if name_lower == "apache" and major < 2:
+        findings.append(
+            f"Old web server version detected (version {version}; "
+            "out of support, may lack security updates)"
+        )
+        return findings
+    if name_lower == "nginx" and major < 1:
+        findings.append(
+            f"Old web server version detected (version {version}; "
+            "out of support, may lack security updates)"
+        )
+        return findings
+    if name_lower == "lighttpd" and major < 1:
+        findings.append(
+            f"Old web server version detected (version {version}; "
+            "out of support, may lack security updates)"
+        )
+        return findings
+    if name_lower == "iis" and major < 10:
+        findings.append(
+            f"Old web server version detected (version {version}; "
+            "out of support, may lack security updates)"
+        )
+        return findings
+    return findings
 
 
 class FetchedHeaders(dict):
@@ -299,6 +362,15 @@ def run_web_checks(target: str, checks: list[str], timeout: float = 5.0) -> dict
         else:
             results["ssl"] = {"error": "Target is not HTTPS", "valid": False}
 
+    # Assess web server version from Server header
+    findings_web = _assess_web_server_version(headers.get("server"))
+    if findings_web:
+        existing_findings = results.get("findings")
+        if isinstance(existing_findings, list):
+            existing_findings.extend(findings_web)
+        else:
+            results["findings"] = list(findings_web)
+
     return results
 
 
@@ -339,9 +411,18 @@ def format_web_report_markdown(data: dict[str, object]) -> str:
             lines.append("| Header | Value | Description |")
             lines.append("|--------|-------|-------------|")
             for finding in findings:
-                lines.append(f"| {finding['header']} | {finding['value']} | {finding['description']} |")
+                lines.append(
+                    f"| {finding['header']} | {finding['value']} | {finding['description']} |"
+                )
         else:
             lines.append("No information disclosure headers detected.")
+        lines.append("")
+
+    findings = data.get("findings") or []
+    if isinstance(findings, list) and findings:
+        lines.append("## Findings")
+        for f in findings:
+            lines.append(f"- {f}")
         lines.append("")
 
     if "ssl" in data:

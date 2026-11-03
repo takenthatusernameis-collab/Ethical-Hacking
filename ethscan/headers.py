@@ -40,6 +40,16 @@ def run_headers(target: str, timeout: float = 5.0) -> dict[str, Any]:
 
     results["security_headers"] = check_security_headers(headers)
 
+    # Assess web server version from Server header
+    try:
+        from ethscan.web import _assess_web_server_version
+
+        findings_web = _assess_web_server_version(headers.get("server"))
+        if findings_web:
+            results["findings"] = list(findings_web)
+    except Exception:
+        pass
+
     return results
 
 
@@ -49,7 +59,7 @@ def format_headers_report_json(data: dict[str, Any]) -> str:
 
 
 def format_headers_report_markdown(data: dict[str, Any]) -> str:
-    """Format security headers check results as Markdown."""
+    """Format headers report as Markdown."""
     lines = ["# ethscan Security Headers Report", ""]
     lines.append(f"- **Target:** {data.get('target', '')}")
     lines.append(f"- **Host:** {data.get('host', '')}")
@@ -74,6 +84,13 @@ def format_headers_report_markdown(data: dict[str, Any]) -> str:
             for header in missing:
                 lines.append(f"  - `{header}`")
     lines.append("")
+
+    findings = data.get("findings") or []
+    if isinstance(findings, list) and findings:
+        lines.append("## Findings")
+        for f in findings:
+            lines.append(f"- {f}")
+        lines.append("")
 
     return "\n".join(lines)
 
