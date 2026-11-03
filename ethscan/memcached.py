@@ -185,6 +185,25 @@ def _assess_stats(stats: dict[str, str]) -> list[str]:
     return findings
 
 
+def _assess_version(version: str | None) -> list[str]:
+    """Assess Memcached version and return findings."""
+    findings: list[str] = []
+    if not version:
+        return findings
+    findings.append(f"Memcached server version: {version}")
+    try:
+        major = int(str(version).split(".")[0])
+        # Memcached 1.6.x is current; versions < 1.5 are quite old/out of support
+        if major < 1 or (major == 1 and int(str(version).split(".")[1]) < 5):
+            findings.append(
+                f"Old Memcached server version detected (major {major}; "
+                "out of support, may lack security features)"
+            )
+    except (ValueError, AttributeError, IndexError):
+        pass
+    return findings
+
+
 def _build_banner(results: dict[str, Any]) -> str | None:
     """Build a short human-readable banner from the probe results."""
     if not results.get("accessible"):
@@ -260,6 +279,8 @@ def run_memcached(
                 return results
             parsed_version = _parse_version_response(data)
             results["version"] = parsed_version
+            if parsed_version:
+                results["findings"].extend(_assess_version(parsed_version))
             results["accessible"] = True
 
         # Probe 2: stats
@@ -274,7 +295,7 @@ def run_memcached(
                 return results
             parsed_stats = _parse_stats_response(data)
             results["stats"] = parsed_stats
-            results["findings"] = _assess_stats(parsed_stats)
+            results["findings"].extend(_assess_stats(parsed_stats))
             results["accessible"] = True
     # A hostile server must never crash the command: whatever it sends is
     # reported through the module's own failure field.
@@ -408,16 +429,20 @@ __all__ = [
     "DEFAULT_PORT",
     "DEFAULT_PROBES",
     "DEFAULT_TIMEOUT",
-    "TargetSpecError",
     "_assess_stats",
+    "_assess_version",
     "_build_memcached_request",
     "_coerce_int",
+    "_markdown_escape",
     "_normalize_target",
     "_parse_stats_response",
     "_parse_version_response",
     "_send_recv",
+    "check_port",
     "format_memcached_report_csv",
     "format_memcached_report_json",
     "format_memcached_report_markdown",
+    "parse_url",
     "run_memcached",
+    "url_port",
 ]

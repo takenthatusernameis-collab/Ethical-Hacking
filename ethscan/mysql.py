@@ -292,10 +292,24 @@ def _assess_handshake(handshake: dict[str, Any]) -> list[str]:
         findings.append(f"MySQL/MariaDB server version: {version}")
         # Check for very old versions as a simple heuristic
         v_lower = version.lower()
-        if any(x in v_lower for x in ("5.0.", "5.1.", "4.")):
-            findings.append("Old MySQL version detected (potentially unsupported)")
         if "mariadb" in v_lower:
             findings.append("MariaDB server detected")
+        # Try to parse major version for more precise flagging
+        try:
+            # Strip common suffixes
+            ver_clean = version.split("-", 1)[0]
+            major = int(ver_clean.split(".")[0])
+            if major < 5:
+                findings.append("Old MySQL version detected (potentially unsupported)")
+            elif major == 5 and any(x in v_lower for x in ("5.0.", "5.1.", "4.")):
+                findings.append("Old MySQL version detected (potentially unsupported)")
+            elif major == 5 and ("5.0" in ver_clean or "5.1" in ver_clean):
+                findings.append("Old MySQL version detected (potentially unsupported)")
+            elif major == 4:
+                findings.append("Old MySQL version detected (potentially unsupported)")
+        except Exception:
+            if any(x in v_lower for x in ("5.0.", "5.1.", "4.")):
+                findings.append("Old MySQL version detected (potentially unsupported)")
 
     capabilities = handshake.get("capabilities")
     if capabilities is not None:

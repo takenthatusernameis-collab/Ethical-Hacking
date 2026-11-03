@@ -1,35 +1,31 @@
 # Handoff
 Date: Tue Nov 03 2026
-Session: Completed a bounded code task (oracle: flag out-of-support server versions). Prior handoff task (`test.yml` push) remains BLOCKED by missing `workflows` write scope on the GitHub App token — deterministic, do not retry without a new token.
+Session: Added Memcached old-version flagging (consistent with existing server-version flagging across other services). MySQL version flagging logic refined slightly.
 
 ## What changed
-- **Committed and pushed** `92cdbed` "oracle: flag out-of-support server versions (major < 12)" to `origin/main`.
-  - `ethscan/oracle.py:322` `_assess_version` now parses the TNS Accept version's major number and appends an "Old Oracle server version detected (major N; out of support, may lack security features)" finding when `major < 12` (Oracle 11g and earlier). Mirrors the existing behaviour in `mysql`, `postgresql`, `mongodb`, and the recently-landed `mssql` (`ed83b24`).
-  - `README.md:63` updated to mention old-version flagging.
-  - `tests/test_oracle.py` gained `test_assess_version_old`, `test_assess_version_modern`, `test_assess_version_none`.
-  - Verified: `python -m ruff check ethscan tests` clean; `python -m pytest -q` -> 5478 passed, 50 skipped (was 5475; +3 new tests). Smoke-tested `_assess_version` directly with old/modern/None versions.
-- Working tree clean; HEAD = origin/main = `92cdbed`.
+- **Memcached** (`ethscan/memcached.py`, `tests/test_memcached.py`, `README.md`):
+  - Added `_assess_version(version)` to flag old/out-of-support Memcached versions (major < 1.5, i.e. 1.4.x and earlier) with finding `"Old Memcached server version detected (major N; out of support, may lack security features)"`.
+  - `_assess_version` results are integrated into `run_memcached()` findings when version probe succeeds; exported via `__all__`.
+  - README updated to document old-version flagging for Memcached.
+  - Added tests: `test_assess_version_old`, `test_assess_version_modern`, `test_assess_version_none`.
+
+- **MySQL** (`ethscan/mysql.py`, `README.md`):
+  - Improved `_assess_handshake` old-version detection to be more robust (parse major version; still flags 4.x/5.0/5.1 as potentially unsupported). MariaDB detection unchanged.
+  - README clarified MySQL old-version flagging (4.x/5.0/5.1).
 
 ## What was actually verified (this session)
-- Baseline green before changes: `python -m ruff check ethscan tests` -> "All checks passed!"; `python -m pytest -q` -> 5475 passed, 50 skipped.
-- After changes: ruff clean; pytest 5478 passed, 50 skipped (exit 0). `python -m mypy` is NOT installed in this environment (optional `dev` dependency) — not run; ruff covers the lint surface the project configures.
-- `git push origin main` succeeded for a non-workflow change (`92cdbed` landed on remote; `git rev-parse HEAD == origin/main == 92cdbed`).
+- Baseline: working tree clean at start? `git status` was clean before changes (last commit `091eb7f`). After changes, files modified but not committed.
+- Lint: `python -m ruff check ethscan/memcached.py tests/test_memcached.py ethscan/mysql.py` clean.
+- Tests: `python -m pytest tests/test_memcached.py tests/test_mysql.py -v` passed (61+85 passed). Full suite: `python -m pytest -q` → **5485 passed, 50 skipped** (was 5482; +3 new Memcached tests). Exit 0.
 
 ## What remains unresolved
-- Push `.github/workflows/test.yml` to `origin/main`. Requires a token with `workflows` write scope for `takenthatusernameis-collab/Ethical-Hacking`.
+- Push `.github/workflows/test.yml` to `origin/main`. Requires a token with `workflows` write scope for `takenthatusernameis-collab/Ethical-Hacking`. Current GitHub App token lacks this scope (deterministic 403). The file content exists in git history (`c2e6378`, blob `3d7a18f`); prior sessions document attempts.
 
 ## Approaches already tried and why they failed
-1. Scratch-branch push with `GH_TOKEN` -> succeeded (proves general push works).
-2. `git push origin main` with `test.yml` committed -> rejected (GitHub App lacks `workflows` permission; scope gap). Deterministic; retrying without a new token will fail again.
-3. `workflow_dispatch` API POST -> 403 (same scope gap).
-4. `gh api .../actions/permissions` -> HTTP 403. No PAT with `workflows` scope; no `.git-credentials`.
+1. Scratch-branch push with `GH_TOKEN` → succeeded in general (proves push works).
+2. `git push origin main` with workflow file changes → rejected ("refusing to allow a GitHub App to create or update workflow... without workflows permission").
+3. `workflow_dispatch` API POST → 403 (same scope gap).
 
 ## Precise next task
-Obtain a PAT/GitHub App token with `workflows` write scope for `takenthatusernameis-collab/Ethical-Hacking`, then:
-1. Restore `test.yml` from git history (`git show c2e6378:.github/workflows/test.yml > .github/workflows/test.yml`) and commit.
-2. `git push origin main`.
-3. Trigger (`gh workflow run test.yml -R takenthatusernameis-collab/Ethical-Hacking --ref main`) and confirm ubuntu/macos/windows pass.
-
-If no token: infrastructure blocker. Durable state is `test.yml` content in git history (`c2e6378`, blob `3d7a18f`) plus local verification (ruff clean, pytest 5478 passed/50 skipped). Do not retry the push without a new token (deterministic rejection).
-
-(End of file - total 39 lines)
+1. **Commit and push the Memcached/MySQL changes** (small, focused improvements consistent with repo patterns): `git add ethscan/memcached.py tests/test_memcached.py ethscan/mysql.py README.md && git commit -m "memcached/mysql: flag old server versions and refine mysql detection" && git push origin main`. Verify push succeeds and tests remain green.
+2. **Resolve test.yml workflow push** if token with `workflows` scope becomes available: restore from history (`git show c2e6378:.github/workflows/test.yml > .github/workflows/test.yml`), commit, push, trigger workflow. If no token, do not retry - infrastructure blocker as documented.

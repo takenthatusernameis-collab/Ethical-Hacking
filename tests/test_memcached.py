@@ -10,6 +10,7 @@ from ethscan.memcached import (
     DEFAULT_PORT,
     DEFAULT_PROBES,
     _assess_stats,
+    _assess_version,
     _build_banner,
     _build_memcached_request,
     _coerce_int,
@@ -618,3 +619,18 @@ def test_format_memcached_report_markdown_with_findings():
     assert "## Findings" in output
     assert "- evictions are occurring (cache pressure)" in output
     assert "- no cache hits recorded" in output
+
+
+def test_assess_version_old():
+    findings = _assess_version("1.4.25")
+    assert any("Memcached server version: 1.4.25" in fr for fr in findings)
+    assert any("Old Memcached server version detected" in fr for fr in findings)
+
+def test_assess_version_modern():
+    findings = _assess_version("1.6.14")
+    assert any("Memcached server version: 1.6.14" in fr for fr in findings)
+    assert not any("Old Memcached server version detected" in fr for fr in findings)
+
+def test_assess_version_none():
+    findings = _assess_version(None)
+    assert findings == []
