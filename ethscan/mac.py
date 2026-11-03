@@ -3,6 +3,11 @@
 Resolves a MAC address to its vendor via OUI lookup using a public OUI
 database API (api.macvendors.com) with filesystem caching and offline
 fallback. Stdlib only.
+
+A target that is a bare IP address, or a hostname that resolves to an IP
+address (``socket.gethostbyname`` returns an IPv4 address, never a MAC),
+is reported as unusable instead of being sent to the vendor API as a
+made-up MAC, which would report a vendor for the IP's first 24 bits.
 """
 from __future__ import annotations
 
@@ -206,6 +211,27 @@ def run_mac(
                 }
             resolved_mac = _resolve_host(mac)
             if resolved_mac is not None:
+                # ``_resolve_host`` uses ``socket.gethostbyname``, which returns an
+                # IPv4 address, never a MAC address. A hostname therefore resolves
+                # to an IP, and that IP must not be sent to the vendor API as a
+                # made-up MAC: it would report a vendor for the IP's first 24
+                # bits. Such a target is reported the same way as an unresolvable
+                # host instead.
+                if _is_ip_address(resolved_mac):
+                    notes.append(
+                        f"Resolved host {mac!r} to {resolved_mac}, which is an IP "
+                        f"address, not a MAC address"
+                    )
+                    return {
+                        "target": target,
+                        "mac": None,
+                        "oui": None,
+                        "timeout": timeout,
+                        "use_cache": use_cache,
+                        "offline_fallback": offline_fallback,
+                        "mac_data": None,
+                        "notes": notes,
+                    }
                 notes.append(f"Resolved host {mac!r} to {resolved_mac}")
                 mac = resolved_mac
             else:

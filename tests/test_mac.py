@@ -440,6 +440,77 @@ def test_run_mac_ip_address_v6(monkeypatch) -> None:
     assert any("IP address, not a MAC address" in note for note in result["notes"])
 
 
+def test_run_mac_hostname_resolves_to_ip(monkeypatch) -> None:
+    """A hostname that resolves to an IP is not a MAC and must not hit the vendor API.
+
+    ``_resolve_host`` uses ``socket.gethostbyname``, which returns an IPv4
+    address, never a MAC address. The resolved IP must not be sent to the
+    vendor API as a made-up MAC, which would report a vendor for the IP's
+    first 24 bits.
+    """
+    called = []
+
+    def fake_resolve(host):
+        called.append(host)
+        return "93.184.216.34"
+
+    monkeypatch.setattr("ethscan.mac._resolve_host", fake_resolve)
+    monkeypatch.setattr(
+        "ethscan.mac._get_cached_or_fetch",
+        lambda *a, **kw: pytest.fail("vendor API must not be called for a host that resolves to an IP"),
+    )
+
+    result = run_mac("example.com", timeout=1.0, use_cache=False)
+
+    assert called == ["example.com"]
+    assert result["target"] == "example.com"
+    assert result["mac"] is None
+    assert result["oui"] is None
+    assert result["mac_data"] is None
+    assert any(
+        "93.184.216.34" in note and "IP address, not a MAC address" in note
+        for note in result["notes"]
+    )
+
+
+def test_run_mac_hostname_resolves_to_ipv6(monkeypatch) -> None:
+    """A hostname that resolves to an IPv6 literal is reported the same way."""
+    monkeypatch.setattr("ethscan.mac._resolve_host", lambda h: "2001:db8::1")
+    monkeypatch.setattr(
+        "ethscan.mac._get_cached_or_fetch",
+        lambda *a, **kw: pytest.fail("vendor API must not be called for a host that resolves to an IP"),
+    )
+
+    result = run_mac("example.com", timeout=1.0, use_cache=False)
+
+    assert result["mac"] is None
+    assert result["oui"] is None
+    assert result["mac_data"] is None
+    assert any("2001:db8::1" in note and "IP address, not a MAC address" in note
+               for note in result["notes"])
+
+
+def test_run_mac_hostname_resolves_to_ip_restores_default_api_url(monkeypatch) -> None:
+    """run_mac must restore DEFAULT_API_URL on the IP-after-resolution path."""
+    import ethscan.mac as macmod
+
+    monkeypatch.setattr("ethscan.mac._resolve_host", lambda h: "93.184.216.34")
+    monkeypatch.setattr(
+        "ethscan.mac._get_cached_or_fetch",
+        lambda *a, **kw: pytest.fail("vendor API must not be called for a host that resolves to an IP"),
+    )
+    original = macmod.DEFAULT_API_URL
+
+    run_mac(
+        "example.com",
+        timeout=1.0,
+        use_cache=False,
+        api_url="https://custom.example.com",
+    )
+
+    assert macmod.DEFAULT_API_URL == original
+
+
 def test_run_mac_ip_address_restores_default_api_url(monkeypatch) -> None:
     """run_mac must restore DEFAULT_API_URL even on the IP early-return path."""
     import ethscan.mac as macmod

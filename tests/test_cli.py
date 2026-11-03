@@ -5,6 +5,7 @@ import json
 import os
 import tempfile
 
+import pytest
 from click.testing import CliRunner
 
 from ethscan.cli import cli
@@ -13253,6 +13254,51 @@ def test_mac_out_option_markdown(tmp_path, monkeypatch) -> None:
     assert "Report written" in result.output
     assert out_file.exists()
     assert "MAC Vendor Lookup Report" in out_file.read_text()
+
+
+def test_mac_hostname_resolves_to_ip_json(monkeypatch) -> None:
+    """A hostname that resolves to an IP is reported as unusable, not as a vendor lookup.
+
+    ``_resolve_host`` uses ``socket.gethostbyname``, which returns an IPv4
+    address, never a MAC address. The resolved IP must not be sent to the
+    vendor API as a made-up MAC, which would report a vendor for the IP's
+    first 24 bits.
+    """
+    monkeypatch.setattr("ethscan.mac._resolve_host", lambda h: "93.184.216.34")
+    monkeypatch.setattr(
+        "ethscan.mac._get_cached_or_fetch",
+        lambda *a, **kw: pytest.fail("vendor API must not be called for a host that resolves to an IP"),
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["mac", "--target", "example.com", "--format", "json", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "93.184.216.34" in result.output
+    assert "IP address, not a MAC address" in result.output
+    assert "null" in result.output  # mac, oui, mac_data are all null
+
+
+def test_mac_hostname_resolves_to_ip_markdown(monkeypatch) -> None:
+    """The same path renders a Markdown report that notes the unusable target."""
+    monkeypatch.setattr("ethscan.mac._resolve_host", lambda h: "93.184.216.34")
+    monkeypatch.setattr(
+        "ethscan.mac._get_cached_or_fetch",
+        lambda *a, **kw: pytest.fail("vendor API must not be called for a host that resolves to an IP"),
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["mac", "--target", "example.com", "--format", "markdown", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "MAC Vendor Lookup Report" in result.output
+    assert "93.184.216.34" in result.output
+    assert "IP address, not a MAC address" in result.output
+    assert "No MAC vendor data available" in result.output
 
 
 # ---------------------------------------------------------------------------
