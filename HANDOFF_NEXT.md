@@ -1,27 +1,25 @@
 # Handoff
 Date: Tue Nov 03 2026
-Session: Re-created `.github/workflows/test.yml` from dangling commit `497bc4b` and committed as `06baf8e`; push still blocked on `workflows` token scope (re-attempted, got 403). Re-verified baseline green. No bounded feature task found.
+Session: Verified repo state; no code changes. Baseline green. No bounded feature task found.
 
 ## What changed (this session)
-- Restored `.github/workflows/test.yml` from `497bc4b` and committed as `06baf8e` ("test: add CI test workflow (ruff + pytest on push/PR)").
-- No source code changes. Repo remains feature-complete and green.
+- No source/workflow/code changes. Working tree clean (only untracked/irrelevant files none). State: HEAD `97b2ee0`, no `.github/workflows/test.yml` present (was deleted in `97b2ee0`).
 
 ## What was actually verified (this session)
 - `python -m ruff check ethscan tests` → "All checks passed!" (exit 0)
-- `python -m pytest -q` → 5539 passed / 50 skipped, exit 0
+- `python -m pytest -q` → 5539 passed / 50 skipped (exit 0)
 - `python -m ethscan --help` works; `import ethscan` → 0.1.0
-- `git rev-parse HEAD` → `06baf8e` (carries test.yml); `git rev-parse origin/main` → `3eafad2` (does not include our new commit)
-- `.github/workflows/test.yml` content matches `497bc4b` exactly (22 lines, ruff + pytest on push/PR, ubuntu-latest, python 3.10)
-- Push attempt: `git push origin main` → 403 "refusing to allow a GitHub App to create or update workflow `.github/workflows/test.yml` without `workflows` permission"
+- `git status` clean; `git log --oneline -3` shows docs commits around prior workflow attempts
+- Inspected prior attempts: test.yml was added in `06baf8e` from dangling `497bc4b` but push blocked by `workflows` token scope (403); later deleted in `97b2ee0`. Recreating/renaming cannot bypass missing `workflows` scope.
 
 ## What remains unresolved
-- Landing `.github/workflows/test.yml` on `origin/main` is blocked: the GitHub App token lacks `workflows` scope. The file IS committed locally at `06baf8e`; only the push fails.
-- No pending bounded feature task.
+- Landing CI workflow `.github/workflows/test.yml` (based on `497bc4b` content) on `origin/main` blocked: GitHub App token lacks `workflows` permission. No way to push workflow files with current token.
+- No bounded feature/bug task identified as actionable and verifiable in this session.
 
 ## Approaches already tried and why they failed
-- Push with current GitHub App token (multiple times) → deterministic 403 / missing `workflows` permission. Token cannot create/update workflow files. Changing workflow name/path/message will not bypass this. Do not repeat.
-- Restoring and committing succeeded each time; only remote push is blocked.
+- Restore+commit test.yml (`06baf8e`) and push → 403 "refusing to allow... create/update workflow ... without `workflows` permission" (deterministic). Repeated attempts fail same way. Deleting/recreating/name changes won't help.
+- Multiple doc handoffs recorded attempts.
 
 ## Precise next task
-1. When a `workflows`-scoped token becomes available: `git push origin main` (HEAD `06baf8e` already carries `.github/workflows/test.yml`), then re-run `python -m ruff check ethscan tests` and `python -m pytest -q`.
-2. Otherwise: no bounded task available; repo is feature-complete and green. Do not create speculative work.
+1. If/when a `workflows`-scoped token becomes available: restore `.github/workflows/test.yml` from `497bc4b` (or recreate identically), commit, `git push origin main`, then re-verify `ruff` and `pytest`.
+2. Otherwise: repo is feature-complete and green. Do not create speculative work. Focus on any explicitly assigned task if it appears.
