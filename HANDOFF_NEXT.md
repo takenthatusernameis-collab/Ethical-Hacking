@@ -1,31 +1,35 @@
 # Handoff
 Date: Tue Nov 03 2026
-Session: verified baseline green; test.yml push remains BLOCKED by missing `workflows` write scope on GitHub App token. No code changes made this session.
+Session: Completed a bounded code task (oracle: flag out-of-support server versions). Prior handoff task (`test.yml` push) remains BLOCKED by missing `workflows` write scope on the GitHub App token — deterministic, do not retry without a new token.
 
 ## What changed
-- None. Working tree clean; HEAD = origin/main = `c733694` ("docs: record verified-complete handoff for this session"). `.github/workflows/test.yml` remains ABSENT (only `kilo-workflow-audit.yml`, `main.yml` present).
+- **Committed and pushed** `92cdbed` "oracle: flag out-of-support server versions (major < 12)" to `origin/main`.
+  - `ethscan/oracle.py:322` `_assess_version` now parses the TNS Accept version's major number and appends an "Old Oracle server version detected (major N; out of support, may lack security features)" finding when `major < 12` (Oracle 11g and earlier). Mirrors the existing behaviour in `mysql`, `postgresql`, `mongodb`, and the recently-landed `mssql` (`ed83b24`).
+  - `README.md:63` updated to mention old-version flagging.
+  - `tests/test_oracle.py` gained `test_assess_version_old`, `test_assess_version_modern`, `test_assess_version_none`.
+  - Verified: `python -m ruff check ethscan tests` clean; `python -m pytest -q` -> 5478 passed, 50 skipped (was 5475; +3 new tests). Smoke-tested `_assess_version` directly with old/modern/None versions.
+- Working tree clean; HEAD = origin/main = `92cdbed`.
 
 ## What was actually verified (this session)
-- `python -m ruff check ethscan tests` -> exit 0 "All checks passed!".
-- `python -m pytest -q` -> exit 0 "5475 passed, 50 skipped".
-- `git rev-parse HEAD` = `git rev-parse origin/main` = `c733694` (in sync, nothing to push).
-- `git ls-tree HEAD .github/workflows/` -> only `kilo-workflow-audit.yml` and `main.yml`; no `test.yml`.
-- `git show c2e6378:.github/workflows/test.yml` -> exists (32-line cross-platform ubuntu/macos/windows Python 3.12 workflow; `permissions: contents: read`; runs ruff, mypy, pytest).
-- `gh api /repos/takenthatusernameis-collab/Ethical-Hacking/actions/permissions` -> HTTP 403 "Resource not accessible by integration" (no `workflows` write scope). Fresh confirmation; blocker is deterministic.
-- `GH_TOKEN`/`GITHUB_TOKEN` = GitHub App token `github-actions[bot]`; can push non-workflow refs to main (verified in prior session via scratch branch + `ed83b24` landing), but cannot create/update `.github/workflows/test.yml`.
+- Baseline green before changes: `python -m ruff check ethscan tests` -> "All checks passed!"; `python -m pytest -q` -> 5475 passed, 50 skipped.
+- After changes: ruff clean; pytest 5478 passed, 50 skipped (exit 0). `python -m mypy` is NOT installed in this environment (optional `dev` dependency) — not run; ruff covers the lint surface the project configures.
+- `git push origin main` succeeded for a non-workflow change (`92cdbed` landed on remote; `git rev-parse HEAD == origin/main == 92cdbed`).
 
 ## What remains unresolved
-- Push `.github/workflows/test.yml` to `origin/main`. Requires a PAT/GitHub App token with `workflows` write scope for `takenthatusernameis-collab/Ethical-Hacking`.
+- Push `.github/workflows/test.yml` to `origin/main`. Requires a token with `workflows` write scope for `takenthatusernameis-collab/Ethical-Hacking`.
 
 ## Approaches already tried and why they failed
-1. `git push origin main` with `test.yml` committed — rejected: "refusing to allow a GitHub App to create or update workflow .github/workflows/test.yml without workflows permission". Deterministic.
-2. `workflow_dispatch` API POST — 403 "Resource not accessible by integration". Same scope gap.
-3. `gh api .../actions/permissions` — HTTP 403. Confirmed again this session.
+1. Scratch-branch push with `GH_TOKEN` -> succeeded (proves general push works).
+2. `git push origin main` with `test.yml` committed -> rejected (GitHub App lacks `workflows` permission; scope gap). Deterministic; retrying without a new token will fail again.
+3. `workflow_dispatch` API POST -> 403 (same scope gap).
+4. `gh api .../actions/permissions` -> HTTP 403. No PAT with `workflows` scope; no `.git-credentials`.
 
 ## Precise next task
 Obtain a PAT/GitHub App token with `workflows` write scope for `takenthatusernameis-collab/Ethical-Hacking`, then:
-1. Restore `test.yml` (`git show c2e6378:.github/workflows/test.yml > .github/workflows/test.yml`) and commit.
+1. Restore `test.yml` from git history (`git show c2e6378:.github/workflows/test.yml > .github/workflows/test.yml`) and commit.
 2. `git push origin main`.
 3. Trigger (`gh workflow run test.yml -R takenthatusernameis-collab/Ethical-Hacking --ref main`) and confirm ubuntu/macos/windows pass.
 
-If no token: infrastructure blocker. Durable state is `test.yml` content in git history (`c2e6378`) plus local verification (ruff clean, pytest 5475 passed/50 skipped). Do not retry the push without a new token (deterministic rejection).
+If no token: infrastructure blocker. Durable state is `test.yml` content in git history (`c2e6378`, blob `3d7a18f`) plus local verification (ruff clean, pytest 5478 passed/50 skipped). Do not retry the push without a new token (deterministic rejection).
+
+(End of file - total 39 lines)
