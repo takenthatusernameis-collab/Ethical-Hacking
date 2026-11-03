@@ -17,6 +17,7 @@ dev = [
     "ruff>=0.17",
     "dnspython>=2.0",
     "mypy>=1.0",
+    "pytest>=8.0",
 ]
 dns = [
     "dnspython>=2.0",
