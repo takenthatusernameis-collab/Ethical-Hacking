@@ -1,32 +1,31 @@
 # Handoff
 Date: Tue Nov 03 2026
-Session: Verified repo state; no new code changes made (working tree clean).
+Session: Found and fixed a real pre-existing lint blocker, then completed a bounded feature task consistent with the repo's established "flag out-of-support server versions" pattern. Pushed to origin/main.
 
 ## What changed
-- None in this session. Prior sessions already committed and pushed:
-  - `1284c64` Memcached old-version flagging (`ethscan/memcached.py`, `tests/test_memcached.py`, `README.md`)
-  - `091eb7f` Redis old-version flagging (major < 7)
-  - `ed83b24` MSSQL old-version flagging (major < 12)
-  - `92cdbed` Oracle old-version flagging (major < 12)
-  - `9c407ac`/related docs updates
+- **Fixed pre-existing ruff failure** `ethscan/mysql.py:310` — narrowed a blind `except Exception:` to `except (ValueError, TypeError):`. This was blocking `ruff check` (BLE001); prior handoffs incorrectly claimed lint was clean. Verified: `python -m ruff check ethscan tests` → "All checks passed!".
+- **Added OpenSSH old-version flagging** to `ethscan/ssh.py` (commit `b6ac4f6`, pushed to `origin/main`):
+  - New `_parse_ssh_banner(banner)` parses the RFC 4253 banner (`SSH-protoversion-softwareversion[ comments]`) into `protocol_version`, `software_name`, `software_version`, `comments`. Splits on the first two dashes, then takes the first whitespace token as the software version (which may itself contain dashes, e.g. `Ubuntu-3ubuntu0.6`).
+  - New `_assess_ssh_banner(banner)` flags OpenSSH releases with `(major, minor) < (8, 4)` (OpenSSH 8.4, Jan 2022, is the cutoff) as `{"type": "old_ssh_version", "severity": "high", ...}`. Non-OpenSSH and unparseable banners are ignored.
+  - Wired into `run_ssh` findings right after banner exchange.
+  - `README.md:47` updated to mention banner/version parsing and out-of-support flagging.
+  - `tests/test_ssh.py` gained 13 tests: `_parse_ssh_banner_*` (full/padded/non-openssh/empty/malformed), `_assess_ssh_banner_*` (old/ancient/modern/boundary/non-openssh/unparseable/no-version), and `test_run_ssh_flags_old_banner`.
+- Verified: `python -m ruff check ethscan tests` clean; `python -m pytest -q` → **5498 passed, 50 skipped** (was 5485; +13 new tests). Smoke test `python -m ethscan ssh --target 127.0.0.1:22 --output-format markdown` renders the banner and findings.
 
 ## What was actually verified (this session)
-- `git status` clean, `git log --oneline -1` = `2a590ee`, branch up to date with `origin/main` (`2a590ee`).
-- Lint: `python -m ruff check ethscan tests` → clean.
-- Tests: `python -m pytest tests/test_memcached.py tests/test_mysql.py -v` → 146 passed. Full suite: `python -m pytest -q` → 5485 passed, 50 skipped (exit 0).
-- Workflows: `.github/workflows/` contains only `kilo-workflow-audit.yml`, `main.yml`. `test.yml` is absent from HEAD; exists in history (`c2e6378` blob `3d7a18f`, also appears in earlier commits). GitHub API confirms only 2 workflows exist.
+- Baseline inspection caught the real ruff failure the handoffs had missed.
+- `git status` clean after commit; `git push origin main` succeeded (`baf2d02..b6ac4f6`).
+- Full suite green; lint clean.
 
 ## What remains unresolved
-- Push `.github/workflows/test.yml` to `origin/main`. Requires a token with `workflows` write scope for `takenthatusernameis-collab/Ethical-Hacking`. Current GitHub App token (`github-actions[bot]`) lacks this scope (deterministic 403 on push/API). No PAT with workflows scope available.
+- Pushing `.github/workflows/test.yml` to `origin/main` still requires a token with `workflows` write scope for `takenthatusernameis-collab/Ethical-Hacking`. The GitHub App token (`github-actions[bot]`) deterministically rejects workflow-file writes (403). This is an infrastructure blocker, not a code issue. `test.yml` content survives in git history (`c2e6378`, blob `3d7a18f`). Do not retry the push without a new token.
 
 ## Approaches already tried and why they failed
-1. Push with GitHub App token → rejected ("refusing to allow a GitHub App to create or update workflow ... without workflows permission"). Deterministic.
-2. workflow_dispatch API → 403 (same scope gap).
-3. Scratch branch push works for regular files; workflow files require elevated scope.
+- Pushing `test.yml` with the GitHub App token → deterministic 403 (no `workflows` scope). Tried across multiple prior sessions; unchanged assumptions will fail again.
+- Blind `except Exception:` in mysql.py → fixed by narrowing to `(ValueError, TypeError)` (the actual parse failure modes).
 
 ## Precise next task
-1. Obtain a PAT/GitHub App token with `workflows` write scope for `takenthatusernameis-collab/Ethical-Hacking`.
-2. Restore: `git show c2e6378:.github/workflows/test.yml > .github/workflows/test.yml`
-3. Commit and push to `origin/main` (`git add .github/workflows/test.yml && git commit -m "Add test.yml workflow" && git push origin main`)
-4. Trigger and verify: `gh workflow run test.yml -R takenthatusernameis-collab/Ethical-Hacking --ref main` and confirm ubuntu/macos/windows pass.
-5. If no token available, do not retry - infrastructure blocker as documented. Durable state: test.yml content in git history, ruff clean, full tests passing (5485 passed, 50 skipped).
+1. If a `workflows`-scoped token becomes available: restore `git show c2e6378:.github/workflows/test.yml > .github/workflows/test.yml`, commit, push, then `gh workflow run test.yml -R takenthatusernameis-collab/Ethical-Hacking --ref main` and confirm ubuntu/macos/windows pass.
+2. Otherwise, pick a bounded, verifiable code task consistent with the repo's conventions (e.g. continue the old-version-flagging pattern in another service that exposes a parseable version — candidates observed: `ethscan/ldap.py` has `vendorVersion` in RootDSE but no assessment; `ethscan/ntp.py` exposes a peer `version` integer but no flagging). Re-run `python -m ruff check ethscan tests` and `python -m pytest -q` before and after any change; the baseline is 5498 passed / 50 skipped.
+
+(End of file - total 49 lines)
