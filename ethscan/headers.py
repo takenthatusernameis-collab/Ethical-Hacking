@@ -5,7 +5,12 @@ import io
 import json
 from typing import Any
 
-from ethscan.web import _parse_url, check_security_headers, fetch_headers
+from ethscan.web import (
+    _assess_web_server_version,
+    _parse_url,
+    check_security_headers,
+    fetch_headers,
+)
 
 
 def run_headers(target: str, timeout: float = 5.0) -> dict[str, Any]:
@@ -41,14 +46,9 @@ def run_headers(target: str, timeout: float = 5.0) -> dict[str, Any]:
     results["security_headers"] = check_security_headers(headers)
 
     # Assess web server version from Server header
-    try:
-        from ethscan.web import _assess_web_server_version
-
-        findings_web = _assess_web_server_version(headers.get("server"))
-        if findings_web:
-            results["findings"] = list(findings_web)
-    except Exception:
-        pass
+    findings_web = _assess_web_server_version(headers.get("server"))
+    if findings_web:
+        results["findings"] = list(findings_web)
 
     return results
 
