@@ -307,7 +307,7 @@ def _assess_handshake(handshake: dict[str, Any]) -> list[str]:
                 findings.append("Old MySQL version detected (potentially unsupported)")
             elif major == 4:
                 findings.append("Old MySQL version detected (potentially unsupported)")
-        except Exception:
+        except (ValueError, TypeError):
             if any(x in v_lower for x in ("5.0.", "5.1.", "4.")):
                 findings.append("Old MySQL version detected (potentially unsupported)")
 

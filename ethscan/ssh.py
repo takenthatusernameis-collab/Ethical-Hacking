@@ -128,6 +128,84 @@ def _ssh_banner_exchange(sock: socket.socket, timeout: float) -> str | None:
     return None
 
 
+def _parse_ssh_banner(banner: str) -> dict[str, Any]:
+    """Parse an SSH protocol banner into its component fields.
+
+    The banner has the form ``SSH-protoversion-softwareversion-sp[comments]``
+    (RFC 4253), e.g. ``SSH-2.0-OpenSSH_8.9 Ubuntu-3ubuntu0.6``.
+
+    Returns a dict with ``protocol_version``, ``software_version``,
+    ``software_name``, and ``comments``; any field that could not be parsed
+    is ``None``.
+    """
+    result: dict[str, Any] = {
+        "protocol_version": None,
+        "software_version": None,
+        "software_name": None,
+        "comments": None,
+    }
+    if not banner:
+        return result
+    # Split on the first two dashes; the remainder (which may itself contain
+    # dashes, e.g. "OpenSSH_8.9 Ubuntu-3ubuntu0.6") holds the software
+    # version followed by optional comments.
+    parts = banner.split("-", 2)
+    if len(parts) < 3:
+        return result
+    result["protocol_version"] = parts[1] or None
+    remainder = parts[2].strip()
+    if not remainder:
+        return result
+    # The software version is the first whitespace-separated token; anything
+    # after it is a comment (and may itself contain dashes).
+    software, _, comments = remainder.partition(" ")
+    result["comments"] = comments or None
+    if "_" in software:
+        name, _, version = software.partition("_")
+        result["software_name"] = name or None
+        result["software_version"] = version or None
+    else:
+        result["software_name"] = software or None
+    return result
+
+
+def _assess_ssh_banner(banner: str) -> list[dict[str, Any]]:
+    """Assess an SSH banner and return structured security findings.
+
+    Currently flags out-of-support OpenSSH server versions. OpenSSH 8.4
+    (released January 2022) is the cutoff: earlier releases no longer
+    receive security fixes.
+    """
+    findings: list[dict[str, Any]] = []
+    parsed = _parse_ssh_banner(banner)
+    software_name = parsed.get("software_name")
+    version = parsed.get("software_version")
+    if not (software_name and version):
+        return findings
+    if software_name.lower() != "openssh":
+        return findings
+    try:
+        # OpenSSH versions are ``major.minor`` (e.g. ``8.9`` or ``9.3p1``);
+        # strip any non-numeric suffix before comparing.
+        numeric = "".join(ch for ch in version if ch.isdigit() or ch == ".")
+        major, minor = (int(x) for x in numeric.split(".")[:2])
+        if (major, minor) < (8, 4):
+            findings.append(
+                {
+                    "type": "old_ssh_version",
+                    "algorithm": f"OpenSSH_{version}",
+                    "severity": "high",
+                    "description": (
+                        f"Old OpenSSH server version detected ({version}; "
+                        "major < 8.4, out of support and may lack security features)"
+                    ),
+                }
+            )
+    except (ValueError, AttributeError, IndexError):
+        pass
+    return findings
+
+
 def _send_kexinit(sock: socket.socket) -> None:
     """Send a minimal SSH_MSG_KEXINIT packet to trigger server's algorithm list."""
     cookie = b"\x00" * 16
@@ -386,6 +464,10 @@ def run_ssh(
         if not banner:
             result["error"] = "No SSH banner received"
             return result
+
+        # Flag out-of-support SSH server versions (e.g. old OpenSSH).
+        for finding in _assess_ssh_banner(banner):
+            result["findings"].append(finding)
 
         _send_kexinit(sock)
         response = _read_packet(sock)

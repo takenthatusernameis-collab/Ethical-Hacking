@@ -21,11 +21,13 @@ from ethscan.ssh import (
     WEAK_KEX_ALGORITHMS,
     WEAK_MACS,
     _analyze_algorithms,
+    _assess_ssh_banner,
     _extract_port,
     _get_host_key_info_paramiko,
     _get_host_key_info_stdlib,
     _normalize_host,
     _parse_kexinit,
+    _parse_ssh_banner,
     _read_packet,
     _send_kexinit,
     _ssh_banner_exchange,
@@ -1035,3 +1037,111 @@ def test_run_ssh_transport_failure_unnamed_type_in_recv_reported(monkeypatch) ->
     monkeypatch.setattr("socket.create_connection", lambda *a, **k: DummySock())
     result = ssh.run_ssh("127.0.0.1")
     assert result["error"] is not None
+
+
+# ---------------------------------------------------------------------------
+# _parse_ssh_banner / _assess_ssh_banner
+# ---------------------------------------------------------------------------
+
+
+def test_parse_ssh_banner_full() -> None:
+    parsed = _parse_ssh_banner("SSH-2.0-OpenSSH_8.9 Ubuntu-3ubuntu0.6")
+    assert parsed["protocol_version"] == "2.0"
+    assert parsed["software_name"] == "OpenSSH"
+    assert parsed["software_version"] == "8.9"
+    assert parsed["comments"] == "Ubuntu-3ubuntu0.6"
+
+
+def test_parse_ssh_banner_padded_version() -> None:
+    parsed = _parse_ssh_banner("SSH-2.0-OpenSSH_9.3p1")
+    assert parsed["software_name"] == "OpenSSH"
+    assert parsed["software_version"] == "9.3p1"
+
+
+def test_parse_ssh_banner_non_openssh() -> None:
+    parsed = _parse_ssh_banner("SSH-2.0-libssh_0.9.0")
+    assert parsed["software_name"] == "libssh"
+    assert parsed["software_version"] == "0.9.0"
+
+
+def test_parse_ssh_banner_empty() -> None:
+    parsed = _parse_ssh_banner("")
+    assert parsed["software_name"] is None
+    assert parsed["software_version"] is None
+
+
+def test_parse_ssh_banner_malformed() -> None:
+    # A banner with fewer than 4 dash-separated fields cannot be parsed.
+    parsed = _parse_ssh_banner("SSH-2.0")
+    assert parsed["software_name"] is None
+    assert parsed["software_version"] is None
+
+
+def test_assess_ssh_banner_old_version() -> None:
+    findings = _assess_ssh_banner("SSH-2.0-OpenSSH_7.6p1")
+    assert len(findings) == 1
+    assert findings[0]["type"] == "old_ssh_version"
+    assert findings[0]["severity"] == "high"
+    assert "7.6p1" in findings[0]["description"]
+    assert "out of support" in findings[0]["description"]
+
+
+def test_assess_ssh_banner_ancient_version() -> None:
+    findings = _assess_ssh_banner("SSH-1.99-OpenSSH_3.4")
+    assert len(findings) == 1
+    assert findings[0]["severity"] == "high"
+
+
+def test_assess_ssh_banner_modern_version() -> None:
+    findings = _assess_ssh_banner("SSH-2.0-OpenSSH_8.9")
+    assert findings == []
+
+
+def test_assess_ssh_banner_boundary_version() -> None:
+    # OpenSSH 8.4 is the cutoff; 8.4 itself is supported.
+    assert _assess_ssh_banner("SSH-2.0-OpenSSH_8.4") == []
+    # 8.3 is out of support.
+    findings = _assess_ssh_banner("SSH-2.0-OpenSSH_8.3")
+    assert len(findings) == 1
+
+
+def test_assess_ssh_banner_non_openssh_ignored() -> None:
+    # Non-OpenSSH implementations are not version-flagged.
+    assert _assess_ssh_banner("SSH-2.0-libssh_0.5.0") == []
+
+
+def test_assess_ssh_banner_unparseable_version() -> None:
+    assert _assess_ssh_banner("SSH-2.0-OpenSSH_abc") == []
+
+
+def test_assess_ssh_banner_no_version() -> None:
+    assert _assess_ssh_banner("SSH-2.0-") == []
+
+
+def test_run_ssh_flags_old_banner(monkeypatch) -> None:
+    """run_ssh should surface old-version findings in the result dict."""
+
+    class DummySock:
+        def __init__(self):
+            self._banner = b"SSH-2.0-OpenSSH_7.4p1\r\n"
+
+        def settimeout(self, _):
+            pass
+
+        def recv(self, bufsize):
+            if self._banner:
+                data, self._banner = self._banner, b""
+                return data
+            return b""
+
+        def sendall(self, _):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("socket.create_connection", lambda *a, **k: DummySock())
+    result = run_ssh("127.0.0.1")
+    assert result["banner"] == "SSH-2.0-OpenSSH_7.4p1"
+    types = [f["type"] for f in result["findings"]]
+    assert "old_ssh_version" in types
