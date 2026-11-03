@@ -10,6 +10,7 @@ import pytest
 
 from ethscan.ntp import (
     DEFAULT_PORT,
+    _assess_ntp_version,
     _build_monlist_request,
     _build_time_request,
     _format_ref_id,
@@ -201,6 +202,39 @@ def test_parse_time_response_leap_indicator_alarm() -> None:
     assert "alarm" in parsed["leap_indicator"].lower()
 
 
+# ---------------------------------------------------------------------------
+# _assess_ntp_version
+# ---------------------------------------------------------------------------
+
+
+def test_assess_ntp_version_modern() -> None:
+    # NTPv4 is the current standard; no out-of-support finding.
+    findings = _assess_ntp_version({"version": 4})
+    assert "NTP server version: 4" in findings
+    assert not any("out of support" in f for f in findings)
+
+
+def test_assess_ntp_version_old() -> None:
+    # NTPv3 is legacy and out of support.
+    findings = _assess_ntp_version({"version": 3})
+    assert "NTP server version: 3" in findings
+    assert any("Old NTP server version detected" in f for f in findings)
+    assert any("out of support" in f for f in findings)
+
+
+def test_assess_ntp_version_none() -> None:
+    assert _assess_ntp_version({"version": None}) == []
+    assert _assess_ntp_version({}) == []
+    assert _assess_ntp_version(None) == []
+
+
+def test_assess_ntp_version_error_response() -> None:
+    # A time-response error carries no version to assess.
+    assert _assess_ntp_version({"error": "Request timed out"}) == []
+
+
+# ---------------------------------------------------------------------------
+# run_ntp - against injectable fake connector
 # ---------------------------------------------------------------------------
 # _parse_monlist_response
 # ---------------------------------------------------------------------------
@@ -425,6 +459,38 @@ def test_run_ntp_real_timeout() -> None:
     assert result["error"] is not None
     assert "time request failed" in result["error"]
     assert result["is_reflector"] is False
+
+
+def test_run_ntp_flags_old_version() -> None:
+    # NTPv3 time response should produce an out-of-support version finding.
+    li_vn_mode = (0 << 6) | (3 << 3) | 4  # version 3, mode 4 (server)
+    time_data = struct.pack("!BBBbIIIQQQQ", li_vn_mode, 2, 4, -20, 0, 0, 0, 0, 0, 0, 0)
+
+    def connector(host, port, request, timeout):
+        if request[0] & 0x07 == 3:
+            return time_data, None
+        return None, "unexpected request"
+
+    result = run_ntp("ntp.example.com", check_monlist=False, connector=connector)
+    assert result["time_response"]["version"] == 3
+    assert any("Old NTP server version detected" in f for f in result["findings"])
+    assert any("out of support" in f for f in result["findings"])
+
+
+def test_run_ntp_modern_version_no_old_finding() -> None:
+    # NTPv4 time response should not produce an out-of-support finding.
+    li_vn_mode = (0 << 6) | (4 << 3) | 4  # version 4, mode 4 (server)
+    time_data = struct.pack("!BBBbIIIQQQQ", li_vn_mode, 2, 4, -20, 0, 0, 0, 0, 0, 0, 0)
+
+    def connector(host, port, request, timeout):
+        if request[0] & 0x07 == 3:
+            return time_data, None
+        return None, "unexpected request"
+
+    result = run_ntp("ntp.example.com", check_monlist=False, connector=connector)
+    assert result["time_response"]["version"] == 4
+    assert "NTP server version: 4" in result["findings"]
+    assert not any("out of support" in f for f in result["findings"])
 
 
 # ---------------------------------------------------------------------------

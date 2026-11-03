@@ -255,6 +255,32 @@ def _send_recv(
         sock.close()
 
 
+def _assess_ntp_version(time_resp: dict[str, Any] | None) -> list[str]:
+    """Assess NTP time response and return version-related findings.
+
+    NTPv4 (RFC 5905) is the current standard; NTPv3 (RFC 1305) and earlier
+    are legacy releases that are out of support and may lack security
+    features, so they are flagged accordingly.
+    """
+    findings: list[str] = []
+    if not time_resp or "error" in time_resp:
+        return findings
+    version = time_resp.get("version")
+    if version is None:
+        return findings
+    try:
+        major = int(version)
+    except (ValueError, TypeError):
+        return findings
+    findings.append(f"NTP server version: {version}")
+    if major < 4:
+        findings.append(
+            f"Old NTP server version detected (version {version}; "
+            "out of support, may lack security features)"
+        )
+    return findings
+
+
 def run_ntp(
     target: str,
     port: int | None = None,
@@ -287,6 +313,7 @@ def run_ntp(
         "monlist_response": None,
         "is_reflector": False,
         "amplification_factor": None,
+        "findings": [],
         "error": None,
     }
 
@@ -303,6 +330,8 @@ def run_ntp(
         if "error" in time_resp:
             results["error"] = time_resp["error"]
             return results
+
+        results["findings"].extend(_assess_ntp_version(time_resp))
 
         if check_monlist:
             monlist_req = _build_monlist_request()
@@ -403,6 +432,18 @@ def format_ntp_report_markdown(data: dict[str, Any]) -> str:
         lines.append("## Amplification Assessment")
         lines.append("- **Reflector:** NO")
         lines.append("  (Server did not return peer data in monlist response)")
+
+    findings = data.get("findings") or []
+    if findings:
+        lines.append("")
+        lines.append("## Findings")
+        lines.append("")
+        for f in findings:
+            lines.append(f"- {f}")
+        lines.append("")
+    else:
+        lines.append("")
+        lines.append("## Findings\n- No notable findings\n")
 
     if data.get("error"):
         lines.append("")
