@@ -17,3 +17,7 @@ node_modules/
 .coverage
 .coverage.*
 *,cover
+
+# Generated report output (not source; do not track)
+/json
+/markdown
