@@ -476,8 +476,21 @@ def _assess_prelogin(prelogin: dict[str, Any]) -> list[str]:
     version = prelogin.get("version")
     if version:
         findings.append(f"MSSQL server version: {version}")
-        # Optionally parse version to determine if it's old?
-        # We'll skip for now.
+        # The PRELOGIN version is encoded as a 4-byte DWORD and rendered as
+        # ``major.minor.build`` (e.g. ``16.0.0`` for SQL Server 2022). The
+        # major version maps to the SQL Server release: 8.0=2000, 9.0=2005,
+        # 10.0=2008, 10.5=2008 R2, 11.0=2012, 12.0=2014, 13.0=2016,
+        # 14.0=2017, 15.0=2019, 16.0=2022. Releases with major < 12 are
+        # out of support and flagged accordingly.
+        try:
+            major = int(str(version).split(".")[0])
+            if major < 12:
+                findings.append(
+                    f"Old MSSQL server version detected (major {major}; "
+                    "out of support, may lack security features)"
+                )
+        except (ValueError, AttributeError):
+            pass
     encryption = prelogin.get("encryption")
     if encryption:
         findings.append(f"Encryption: {encryption}")

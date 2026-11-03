@@ -167,6 +167,48 @@ def test_assess_prelogin():
     assert any("Error: Connection failed" in f for f in findings2)
 
 
+def test_assess_prelogin_old_version():
+    """Old MSSQL major versions are flagged as out of support."""
+    data = {
+        "version": "10.0.0",
+        "encryption": None,
+        "instance_name": None,
+        "thread_id": None,
+        "error": None,
+    }
+    findings = _assess_prelogin(data)
+    assert any("MSSQL server version: 10.0.0" in f for f in findings)
+    assert any("Old MSSQL server version detected" in f for f in findings)
+
+
+def test_assess_prelogin_modern_version():
+    """Modern MSSQL major versions are not flagged as old."""
+    data = {
+        "version": "16.0.0",
+        "encryption": None,
+        "instance_name": None,
+        "thread_id": None,
+        "error": None,
+    }
+    findings = _assess_prelogin(data)
+    assert any("MSSQL server version: 16.0.0" in f for f in findings)
+    assert not any("Old MSSQL server version detected" in f for f in findings)
+
+
+def test_assess_prelogin_version_none():
+    """A missing version produces no version finding."""
+    data = {
+        "version": None,
+        "encryption": None,
+        "instance_name": None,
+        "thread_id": None,
+        "error": None,
+    }
+    findings = _assess_prelogin(data)
+    assert not any("MSSQL server version" in f for f in findings)
+    assert not any("Old MSSQL" in f for f in findings)
+
+
 def test_run_mssql():
     """Test the run_mssql function with a mock connector."""
     # Mock connector that returns a predefined response
