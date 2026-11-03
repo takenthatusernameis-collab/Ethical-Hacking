@@ -19,6 +19,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
 import socket
 from typing import Any, cast
 
@@ -476,6 +477,43 @@ def _probe_community(
     return entry
 
 
+
+
+_SNMP_VERSION_RE = re.compile(
+    r"\b(Linux|Cisco IOS|Windows|FreeBSD|JunOS|Android)\b[^\d]{0,30}(\d+(?:\.\d+){1,2})",
+    re.IGNORECASE,
+)
+
+_SNMP_MIN_MAJOR = {
+    "linux": 5,
+    "cisco ios": 15,
+    "windows": 10,
+    "freebsd": 12,
+    "junos": 18,
+    "android": 10,
+}
+
+
+def _assess_snmp_version(sys_descr: str | None) -> list[str]:
+    findings: list[str] = []
+    if not sys_descr:
+        return findings
+    match = _SNMP_VERSION_RE.search(sys_descr)
+    if not match:
+        return findings
+    name, version = match.group(1), match.group(2)
+    major = int(version.split(".")[0])
+    findings.append(f"SNMP system version: {version}")
+    threshold = _SNMP_MIN_MAJOR.get(name.lower())
+    if threshold is not None and major < threshold:
+        findings.append(
+            f"Old SNMP system version detected (version {version}; "
+            "out of support, may lack security updates)"
+        )
+    return findings
+
+
+
 def run_snmp(
     target: str,
     port: int | None = None,
@@ -512,6 +550,7 @@ def run_snmp(
         "sysObjectID": None,
         "sysUpTime": None,
         "sysName": None,
+        "findings": [],
         "error": None,
     }
 
@@ -530,6 +569,7 @@ def run_snmp(
             elif entry.get("error") and first_error is None:
                 first_error = entry["error"]
 
+        results["findings"] = _assess_snmp_version(results.get("sysDescr"))
         if first_error is not None and not results["valid_communities"]:
             results["error"] = first_error
     # A hostile server must never crash the command: whatever it sends is
@@ -611,6 +651,13 @@ def format_snmp_report_markdown(data: dict[str, Any]) -> str:
         lines.append("")
         lines.append("## Assessment")
         lines.append("- No valid community strings found.")
+
+    findings = data.get("findings") or []
+    if findings:
+        lines.append("")
+        lines.append("## Findings")
+        for f in findings:
+            lines.append(f"- {_escape_markdown(f)}")
 
     if data.get("error"):
         lines.append("")
