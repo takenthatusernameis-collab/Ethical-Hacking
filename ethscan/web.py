@@ -418,10 +418,10 @@ def format_web_report_markdown(data: dict[str, object]) -> str:
             lines.append("No information disclosure headers detected.")
         lines.append("")
 
-    findings = data.get("findings") or []
-    if isinstance(findings, list) and findings:
+    extra_findings = data.get("findings") or []
+    if isinstance(extra_findings, list) and extra_findings:
         lines.append("## Findings")
-        for f in findings:
+        for f in extra_findings:
             lines.append(f"- {f}")
         lines.append("")
 

@@ -623,6 +623,30 @@ def test_format_web_report_markdown_with_pipe_in_header() -> None:
     assert "| Server |" in output
 
 
+def test_format_web_report_markdown_with_findings() -> None:
+    data = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "findings": ["Out-of-support web server version detected."],
+    }
+    output = format_web_report_markdown(data)
+    assert "## Findings" in output
+    assert "Out-of-support web server version detected." in output
+
+
+def test_format_web_report_markdown_no_findings() -> None:
+    data = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+    }
+    output = format_web_report_markdown(data)
+    assert "## Findings" not in output
+
+
 # ---------------------------------------------------------------------------
 # CSV formatter
 # ---------------------------------------------------------------------------
