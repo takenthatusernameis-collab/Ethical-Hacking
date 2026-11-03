@@ -1,20 +1,27 @@
 # Handoff
 Date: Tue Nov 03 2026
-Session: added `-V` alias for `--version`; verified CLI tests pass.
+Session: no code changes; re-verified baseline; assigned task (landing test.yml) remains blocked by missing `workflows` write scope.
 
 ## What changed
-- Added `-V` alongside `-v, --version` in `ethscan/cli.py` via `@click.version_option(__version__, "-v", "-V", "--version")`. Existing behavior unchanged.
+- None. Working tree clean; HEAD = origin/main = `987c34f`; `.github/workflows/test.yml` remains ABSENT (only `kilo-workflow-audit.yml`, `main.yml` present).
 
 ## What was actually verified (this session)
-- `python -m ethscan -V` outputs `python -m ethscan, version 0.1.0`.
-- `PYTHONPATH=/home/runner/work/Ethical-Hacking/Ethical-Hacking /home/runner/work/_temp/kilo-home/.local/bin/pytest tests/test_cli.py -v` — 1016 passed.
-- `PYTHONPATH=/home/runner/work/Ethical-Hacking/Ethical-Hacking /home/runner/work/_temp/kilo-home/.local/bin/ruff check ethscan tests` clean.
+- `python -m ruff check ethscan tests` -> exit 0 "All checks passed!".
+- `python -m pytest -q` -> exit 0 "5472 passed, 50 skipped".
+- `git rev-parse HEAD` = `git rev-parse origin/main` = `987c34f` (in sync, nothing to push).
+- `GH_TOKEN`/`GITHUB_TOKEN` = GitHub App token (`github-actions[bot]`); `GET /repos/takenthatusernameis-collab/Ethical-Hacking/actions/permissions` -> HTTP 403 (no `workflows` write scope). No PAT with `workflows` scope available.
 
 ## What remains unresolved
-- Push `.github/workflows/test.yml` to `origin/main` requires a token with `workflows` write scope (GitHub App lacks it; documented in prior handoffs). Infrastructure blocker.
+- Push `.github/workflows/test.yml` to `origin/main`. Requires a token with `workflows` write scope for `takenthatusernameis-collab/Ethical-Hacking`.
 
 ## Approaches already tried and why they failed
-- N/A for this change.
+1. `git push origin main` with `test.yml` committed — rejected (GitHub App lacks `workflows` permission). Deterministic; retrying without a new token will fail again.
+2. `workflow_dispatch` API POST — 403 (same scope gap).
 
 ## Precise next task
-Obtain a PAT/GitHub App token with `workflows` write scope for `takenthatusernameis-collab/Ethical-Hacking`, then restore `test.yml` from history (`git show 4686103:.github/workflows/test.yml`), commit, push to `origin/main`, trigger via `workflow_dispatch`, and confirm ubuntu/macos/windows pass. If no token is available, do not retry the push (deterministic rejection) — `test.yml` content remains in git history at `4686103`/`b4d5c13`.
+Obtain a PAT/GitHub App token with `workflows` write scope for `takenthatusernameis-collab/Ethical-Hacking`, then:
+1. Restore `test.yml` (`git show 4686103:.github/workflows/test.yml > .github/workflows/test.yml`) and commit.
+2. `git push origin main`.
+3. Trigger (`gh workflow run test.yml -R takenthatusernameis-collab/Ethical-Hacking --ref main`) and confirm ubuntu/macos/windows pass.
+
+If no token: infrastructure blocker — durable state is `test.yml` content in git history (`4686103`/`b4d5c13`) plus local verification (ruff clean, pytest 5472 passed/50 skipped). Do not retry the push without a new token (deterministic rejection).

@@ -3,12 +3,12 @@ Date: Tue Nov 03 2026
 Session: re-inspected repo state; landing `test.yml` on remote/main remains BLOCKED by credential scope.
 
 ## What changed
-- No repository code changes made in this session. Working tree clean; HEAD = origin/main = `49c409e8` (in sync).
+- No repository code changes made in this session. Working tree clean; HEAD = origin/main = `987c34f` (in sync).
 - `.github/workflows/` at HEAD contains only `kilo-workflow-audit.yml` and `main.yml`; no `test.yml`.
 - `test.yml` content remains PRESERVED in git history at commits `4686103` and `b4d5c13` (identical 32-line cross-platform ubuntu/macos/windows Python 3.12 workflow, `permissions: contents: read`, runs `python -m pytest -q`).
 
 ## What was actually verified (this session)
-- `git rev-parse HEAD` = `git rev-parse origin/main` = `49c409e8`; working tree clean.
+- `git rev-parse HEAD` = `git rev-parse origin/main` = `987c34f`; working tree clean.
 - `git ls-tree HEAD .github/workflows/` -> only `kilo-workflow-audit.yml`, `main.yml`; no `test.yml`.
 - `git show 4686103:.github/workflows/test.yml` == `git show b4d5c13:.github/workflows/test.yml` (identical).
 - Only credential present: `GH_TOKEN` = `GITHUB_TOKEN` = GitHub App token (`github-actions[bot]`). Lacks `workflows` write scope (actions/permissions API returns 403; no PAT with `workflows` scope; no `.git-credentials`).
