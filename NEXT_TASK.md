@@ -1,25 +1,27 @@
 # Handoff
 Date: Tue Nov 03 2026
-Session: Verified repo state; no code changes. Baseline green. No bounded feature task found.
+Session: Fixed a pre-existing mypy error in `ethscan/web.py` and added tests. Baseline green.
 
 ## What changed (this session)
-- No source/workflow/code changes. Working tree clean (only untracked/irrelevant files none). State: HEAD `97b2ee0`, no `.github/workflows/test.yml` present (was deleted in `97b2ee0`).
+- `ethscan/web.py:421` — renamed the local `findings` (shadowing the earlier `cast(list[dict[str, Any]], ...)` typed binding) to `extra_findings`, so `data.get("findings")` no longer collides with the prior `list[dict[str, Any]]` type. This resolves the only mypy error in the repo.
+- `tests/test_web.py` — added `test_format_web_report_markdown_with_findings` and `test_format_web_report_markdown_no_findings` covering the "## Findings" section of the web markdown report.
+- Committed as `d11f6eb` ("fix: resolve mypy assignment error in web markdown formatter"). Working tree clean.
 
 ## What was actually verified (this session)
-- `python -m ruff check ethscan tests` → "All checks passed!" (exit 0)
-- `python -m pytest -q` → 5539 passed / 50 skipped (exit 0)
-- `python -m ethscan --help` works; `import ethscan` → 0.1.0
-- `git status` clean; `git log --oneline -3` shows docs commits around prior workflow attempts
-- Inspected prior attempts: test.yml was added in `06baf8e` from dangling `497bc4b` but push blocked by `workflows` token scope (403); later deleted in `97b2ee0`. Recreating/renaming cannot bypass missing `workflows` scope.
+- `python -m mypy ethscan` → "Success: no issues found in 59 source files" (was 1 error before).
+- `python -m ruff check ethscan tests` → "All checks passed!".
+- `python -m pytest -q` → 5541 passed / 50 skipped (was 5539; +2 new tests).
+- `python -m pytest tests/test_web.py -q` → 65 passed.
+- `python -m ethscan --help`, `ethscan version`, `ethscan config --init` all work.
 
 ## What remains unresolved
-- Landing CI workflow `.github/workflows/test.yml` (based on `497bc4b` content) on `origin/main` blocked: GitHub App token lacks `workflows` permission. No way to push workflow files with current token.
-- No bounded feature/bug task identified as actionable and verifiable in this session.
+- Landing CI workflow `.github/workflows/test.yml` on `origin/main` is still blocked: the GitHub App token lacks the `workflows` permission scope, and push is deterministically rejected with 403. This is a permission problem, not fixable by renaming/rewriting the file. The file content is known (see `git show 498a1ca:.github/workflows/test.yml`).
+- No other bounded feature/bug task identified.
 
 ## Approaches already tried and why they failed
-- Restore+commit test.yml (`06baf8e`) and push → 403 "refusing to allow... create/update workflow ... without `workflows` permission" (deterministic). Repeated attempts fail same way. Deleting/recreating/name changes won't help.
-- Multiple doc handoffs recorded attempts.
+- Restoring/committing/pushing `test.yml` repeatedly → 403 "refusing to allow a GitHub App to create or update workflow ... without `workflows` permission". Deterministic; renaming or recreating does not help.
+- Searching README/CLI for unimplemented features: all 56 documented commands are marked `(implemented)` and all exist in the CLI; no TODO/FIXME/stub markers remain in `ethscan/`.
 
 ## Precise next task
-1. If/when a `workflows`-scoped token becomes available: restore `.github/workflows/test.yml` from `497bc4b` (or recreate identically), commit, `git push origin main`, then re-verify `ruff` and `pytest`.
-2. Otherwise: repo is feature-complete and green. Do not create speculative work. Focus on any explicitly assigned task if it appears.
+1. If/when a `workflows`-scoped token becomes available: restore `.github/workflows/test.yml` from `498a1ca` (or recreate identically), commit, `git push origin main`, then re-verify `ruff`, `mypy`, and `pytest`.
+2. Otherwise: repo is green and feature-complete. Do not create speculative work.
