@@ -14,6 +14,7 @@ Session: re-inspected repo state; landing `test.yml` on remote/main remains BLOC
 - `git show 4686103:.github/workflows/test.yml` == `git show b4d5c13:.github/workflows/test.yml` (identical 32-line cross-platform ubuntu/macos/windows Python 3.12 workflow, `permissions: contents: read`, runs `python -m pytest -q`).
 - Only credential present: `GH_TOKEN` = `GITHUB_TOKEN` = same GitHub App token (`ghs_...` JWT, actor `takenthatusernameis-collab`). Returns 403 on actions/permissions API. No PAT with `workflows` write scope; no `.git-credentials`.
 - `git push origin main` with `test.yml` would be deterministically rejected: `refusing to allow a GitHub App to create or update workflow .github/workflows/test.yml without workflows permission`. `workflow_dispatch` API POST also 403s.
+- Baseline: `python -m ruff check ethscan tests` clean; `python -m pytest -q` 5472 passed, 50 skipped.
 
 ## What remains unresolved
 - Push `.github/workflows/test.yml` to `origin/main`. Requires a token with `workflows` write scope for `takenthatusernameis-collab/Ethical-Hacking`.
