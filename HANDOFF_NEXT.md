@@ -3,18 +3,17 @@ Date: Tue Nov 03 2026
 Session: re-inspected repo state; landing `test.yml` on remote/main remains BLOCKED by credential scope.
 
 ## What changed
-- No repository code changes made in this session. Working tree clean; HEAD = origin/main = `52da6e02` (in sync). Prior handoff referenced `75199d3`, which is an ancestor of HEAD; intermediate commits did not touch workflows.
-- `b4d5c13` "Add test workflow" had added `.github/workflows/test.yml` (32 lines, identical to commit `4686103`), but `75199d3` removed it (32 deletions). `test.yml` is ABSENT from HEAD.
-- `.github/workflows/` at HEAD contains only `kilo-workflow-audit.yml` and `main.yml` (confirmed via `git ls-tree` and GitHub API: exactly 2 workflows, no test.yml).
+- No repository code changes made in this session. Working tree clean; HEAD = origin/main = `49c409e8` (in sync). Prior handoff referenced `52da6e02`/`59d633e`, which are not HEAD; HEAD is `49c409e8`.
+- `.github/workflows/` at HEAD contains only `kilo-workflow-audit.yml` and `main.yml`; no `test.yml`.
 - `test.yml` content remains PRESERVED in git history at commits `4686103` and `b4d5c13` (identical 32-line cross-platform ubuntu/macos/windows Python 3.12 workflow, `permissions: contents: read`, runs `python -m pytest -q`).
 
 ## What was actually verified (this session)
-- `git rev-parse HEAD` = `git rev-parse origin/main` = `52da6e02`; working tree clean.
+- `git rev-parse HEAD` = `git rev-parse origin/main` = `49c409e8`; working tree clean.
 - `git ls-tree HEAD .github/workflows/` -> only `kilo-workflow-audit.yml`, `main.yml`; no `test.yml`.
 - `git show 4686103:.github/workflows/test.yml` == `git show b4d5c13:.github/workflows/test.yml` (identical).
-- Only credential present: `GH_TOKEN` = `GITHUB_TOKEN` = GitHub App token (`github-actions[bot]`). Lacks `workflows` write scope; no PAT with `workflows` scope; no `.git-credentials`.
-- `git push origin main` with `test.yml` would be deterministically rejected (GitHub App lacks `workflows` permission). `workflow_dispatch` API POST 403s.
+- Only credential present: `GH_TOKEN` = `GITHUB_TOKEN` = GitHub App token (`github-actions[bot]`). Lacks `workflows` write scope (`actions/permissions` API returns 403 "Resource not accessible by integration"). No PAT with `workflows` scope; configured git-credentials file contains the same App token.
 - Baseline: `python -m ruff check ethscan tests` clean ("All checks passed!"); `python -m pytest -q` 5472 passed, 50 skipped (exit 0).
+- `git push origin main` with `test.yml` would be deterministically rejected (GitHub App lacks `workflows` permission). `workflow_dispatch` API POST 403s.
 
 ## What remains unresolved
 - Push `.github/workflows/test.yml` to `origin/main`. Requires a token with `workflows` write scope for `takenthatusernameis-collab/Ethical-Hacking`.
@@ -25,8 +24,8 @@ Session: re-inspected repo state; landing `test.yml` on remote/main remains BLOC
 
 ## Precise next task
 Obtain a PAT/GitHub App token with `workflows` write scope for `takenthatusernameis-collab/Ethical-Hacking`, then:
-1. Restore `test.yml` from history (`git show 4686103:.github/workflows/test.yml > .github/workflows/test.yml`) and commit.
+1. Restore `test.yml` (`git show 4686103:.github/workflows/test.yml > .github/workflows/test.yml`) and commit.
 2. `git push origin main`.
 3. Trigger (`gh workflow run test.yml -R takenthatusernameis-collab/Ethical-Hacking --ref main`) and confirm ubuntu/macos/windows pass.
 
-If no token: infrastructure blocker — durable state is test.yml content in git history (`4686103` / `b4d5c13`) plus prior local verification (ruff clean, pytest 5472 passed/50 skipped). Do not force-push or alter workflow permissions via API. Do not retry the push without a new token.
+If no token: infrastructure blocker — durable state is test.yml content in git history (`4686103`/`b4d5c13`) plus local verification (ruff clean, pytest 5472 passed/50 skipped). Do not retry the push without a new token (deterministic rejection).
