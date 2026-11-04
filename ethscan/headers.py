@@ -117,4 +117,12 @@ def format_headers_report_csv(data: dict[str, Any]) -> str:
         writer.writerow([header, "present"])
     for header in sh.get("missing", []) or []:
         writer.writerow([header, "missing"])
+
+    findings = data.get("findings")
+    if isinstance(findings, list) and findings:
+        writer.writerow([])
+        writer.writerow(["finding"])
+        for finding in findings:
+            writer.writerow([finding])
+
     return output.getvalue().rstrip("\r\n")

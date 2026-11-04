@@ -329,3 +329,29 @@ def test_format_headers_report_csv_security_headers_not_dict() -> None:
     assert lines[0] == "field,value"
     assert "present_count,0" in lines
     assert "header,status" in lines
+
+
+def test_format_headers_report_csv_with_findings() -> None:
+    data = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "findings": ["Web server version: 1.3.3", "Old web server version detected (version 1.3.3; out of support, may lack security updates)"],
+    }
+    output = format_headers_report_csv(data)
+    lines = output.splitlines()
+    assert "finding" in lines
+    assert "Web server version: 1.3.3" in lines
+    assert any("Old web server version detected" in line for line in lines)
+
+
+def test_format_headers_report_csv_no_findings() -> None:
+    data = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+    }
+    output = format_headers_report_csv(data)
+    assert "finding" not in output
