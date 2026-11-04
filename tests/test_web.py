@@ -742,6 +742,32 @@ def test_format_web_report_csv_ssl_fields() -> None:
     assert "issuer,Let's Encrypt" in output
 
 
+def test_format_web_report_csv_with_findings() -> None:
+    data = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "findings": ["Web server version: 1.3.3", "Old web server version detected (version 1.3.3; out of support, may lack security updates)"],
+    }
+    output = format_web_report_csv(data)
+    lines = output.splitlines()
+    assert "finding" in lines
+    assert "Web server version: 1.3.3" in lines
+    assert any("Old web server version detected" in line for line in lines)
+
+
+def test_format_web_report_csv_no_findings() -> None:
+    data = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+    }
+    output = format_web_report_csv(data)
+    assert "finding" not in output
+
+
 def test_format_web_report_csv_no_security_headers() -> None:
     data = {
         "target": "https://example.com",

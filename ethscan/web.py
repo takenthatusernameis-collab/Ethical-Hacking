@@ -477,6 +477,13 @@ def format_web_report_csv(data: dict[str, object]) -> str:
         for finding in findings:
             writer.writerow([finding.get("header", ""), finding.get("value", ""), finding.get("description", "")])
 
+    extra_findings = data.get("findings")
+    if isinstance(extra_findings, list) and extra_findings:
+        writer.writerow([])
+        writer.writerow(["finding"])
+        for finding in extra_findings:
+            writer.writerow([finding])
+
     if "ssl" in data:
         ssl_info = cast(dict[str, Any], data["ssl"])
         writer.writerow([])
