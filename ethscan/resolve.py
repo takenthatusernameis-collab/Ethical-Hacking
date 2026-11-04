@@ -222,7 +222,7 @@ def run_resolve(
             except Exception:  # noqa: BLE001 - resolver can raise any type
                 results["PTR"] = []
         elif rtype_upper in all_supported:
-            continue  # should not happen due to above
+            continue  # pragma: no cover - defensive  (all supported types handled above)
         else:
             if DNS_AVAILABLE:
                 try:
