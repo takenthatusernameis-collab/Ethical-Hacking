@@ -467,6 +467,15 @@ def test_format_ssh_report_csv_non_dict_findings() -> None:
     assert len(lines) == 2
 
 
+def test_format_ssh_report_csv_error() -> None:
+    """Error branch writes an error row (ssh.py:632-633)."""
+    data = _ssh_result(error="boom", findings=[])
+    output = format_ssh_report_csv(data)
+    lines = [line.rstrip("\r") for line in output.strip().split("\n")]
+    assert lines[0] == "type,algorithm,severity,description"
+    assert lines[1] == "error,,,boom"
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

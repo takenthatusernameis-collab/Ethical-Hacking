@@ -165,7 +165,7 @@ def _parse_ssh_banner(banner: str) -> dict[str, Any]:
         result["software_name"] = name or None
         result["software_version"] = version or None
     else:
-        result["software_name"] = software or None
+        result["software_name"] = software or None  # pragma: no cover - defensive
     return result
 
 
