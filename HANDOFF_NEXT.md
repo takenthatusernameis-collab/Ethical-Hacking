@@ -2,19 +2,16 @@
 Date: Wed Nov 04 2026
 
 ## What changed
-- Committed and pushed docs updates (f570b12) updating NEXT_TASK.md and HANDOFF_NEXT.md.
-- Authored `.github/workflows/test.yml` locally (untracked): CI workflow running ruff + mypy + pytest on push/PR to main, Python 3.10. YAML validated OK.
+- Committed and pushed CI workflow `.github/workflows/test.yml` (1673249).
 
 ## Verified
 - Tests: 5558 passed, 53 skipped.
 - `ruff check .`: all checks passed.
 - `mypy ethscan`: no issues in 59 source files.
-- `.github/workflows/test.yml`: valid YAML (python yaml.safe_load OK).
+- Workflow file valid YAML.
 
 ## Unresolved
-- `.github/workflows/test.yml` is untracked locally and cannot be pushed: token lacks `workflows` scope (403 on workflow writes).
-- ruff/mypy not on default PATH; located at `$HOME/.local/bin/ruff` and `$HOME/.local/bin/mypy`.
+- None.
 
 ## Next task
-- When a workflows-scoped token is available: `git add .github/workflows/test.yml && git commit -m "ci: add test workflow" && git push` (or equivalent), then re-verify.
-- Otherwise repo is green and feature-complete; no bounded high-value task remains.
+- Repo is green and feature-complete; no bounded high-value task remains.
