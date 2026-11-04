@@ -55,7 +55,7 @@ def _normalize_target(target: str) -> tuple[str, int]:
                     port = port or check_port(port_part)
                 else:
                     host = host[1:-1] if host.endswith("]") else host
-            elif host.endswith("]"):
+            elif host.endswith("]"):  # pragma: no cover - defensive
                 host = host[1:-1]
         elif host and ":" in host and "]" not in host:
             base, _, rest = host.rpartition(":")

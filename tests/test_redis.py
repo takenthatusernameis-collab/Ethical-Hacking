@@ -522,6 +522,14 @@ def test_assess_redis_empty_dict():
     assert findings == []
 
 
+def test_assess_redis_non_numeric_version():
+    """A non-numeric version is tolerated without raising."""
+    info = {"redis_version": "unknown", "os": "Linux"}
+    findings = _assess_redis(info)
+    assert any("Redis server version: unknown" in f for f in findings)
+    assert not any("Old Redis server version detected" in f for f in findings)
+
+
 # ---------------------------------------------------------------------------
 # _markdown_escape
 # ---------------------------------------------------------------------------
