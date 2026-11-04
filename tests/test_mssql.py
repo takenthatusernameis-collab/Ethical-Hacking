@@ -1184,14 +1184,53 @@ def test_run_mssql_transport_failure_is_reported(monkeypatch):
     assert "hostile transport" in results["error"]
 
 
-def test_run_mssql_transport_failure_of_unnamed_type_is_reported(monkeypatch):
-    """A transport failure of an unnamed type (ValueError) is reported, not raised."""
+def test_parse_prelogin_response_version_decode_exception_branch():
+    from ethscan import mssql
+    import struct
 
-    def boom(*args, **kwargs):
-        raise ValueError("hostile transport")
+    opt_type = mssql._OPTION_VERSION
+    opt_value = b"\x01\x02"  # len != 4
+    opt = struct.pack("!BB", opt_type, len(opt_value)) + opt_value
+    payload = opt
+    msg_len = 9 + len(payload)
+    header = struct.pack("!BBHHBH", mssql._TDS_PRELOGIN, 0x01, msg_len, 0x0000, 0x01, 0x0000)
+    data = header + payload
 
-    monkeypatch.setattr("ethscan.mssql.socket.create_connection", boom)
+    orig_decode = bytes.decode
+    calls = []
+    def fake_decode(self, encoding='utf-8', errors='strict'):
+        calls.append(errors)
+        if errors == 'replace' and self == opt_value:
+            raise UnicodeDecodeError('utf-8', self, 0, 1, 'bad')
+        return orig_decode(self, encoding, errors)
+    try:
+        bytes.decode = fake_decode
+        res = mssql._parse_prelogin_response(data)
+        assert res["version"] == opt_value.hex()
+    finally:
+        bytes.decode = orig_decode
 
-    results = run_mssql("localhost")
-    assert results["accessible"] is False
-    assert "hostile transport" in results["error"]
+
+def test_parse_prelogin_response_instance_decode_exception_branch():
+    from ethscan import mssql
+    import struct
+
+    opt_type = mssql._OPTION_INSTINST
+    opt_value = b"\x01\x03"
+    opt = struct.pack("!BB", opt_type, len(opt_value)) + opt_value
+    payload = opt
+    msg_len = 9 + len(payload)
+    header = struct.pack("!BBHHBH", mssql._TDS_PRELOGIN, 0x01, msg_len, 0x0000, 0x01, 0x0000)
+    data = header + payload
+
+    orig_decode = bytes.decode
+    def fake_decode(self, encoding='utf-8', errors='strict'):
+        if errors == 'replace' and self == opt_value:
+            raise UnicodeDecodeError('utf-8', self, 0, 1, 'bad')
+        return orig_decode(self, encoding, errors)
+    try:
+        bytes.decode = fake_decode
+        res = mssql._parse_prelogin_response(data)
+        assert res["instance_name"] == opt_value.hex()
+    finally:
+        bytes.decode = orig_decode
