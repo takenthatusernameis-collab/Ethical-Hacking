@@ -18,4 +18,4 @@ Session: Fixed ftp CSV comma-escaping test; repo now fully green.
 - `.github/workflows/test.yml` cannot be pushed without a token with `workflows` scope. Original CI content unrecoverable from history.
 
 ## Next task
-If a workflows-scoped token becomes available: create `.github/workflows/test.yml` with jobs for ruff check, mypy ethscan tests, pytest -v (Python 3.10), commit and push. Otherwise repo is green and feature-complete - no bounded high-value task identified.
+If a workflows-scoped token becomes available: `.github/workflows/test.yml` is already authored locally (ruff + mypy ethscan + pytest -v on Python 3.10, push/PR triggers); commit and push, then re-verify. Otherwise repo is green and feature-complete - no bounded high-value task identified.
