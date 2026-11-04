@@ -7,6 +7,7 @@ import threading
 from unittest.mock import MagicMock, patch
 
 from ethscan.web import (
+    _assess_web_server_version,
     _parse_url,
     check_information_disclosure,
     check_security_headers,
@@ -198,6 +199,65 @@ def test_check_information_disclosure_case_insensitive() -> None:
     assert len(findings) == 1
     assert findings[0]["header"] == "Server"
     assert findings[0]["description"] == "Reveals server software version."
+
+
+# ---------------------------------------------------------------------------
+# check_ssl_configuration
+# ---------------------------------------------------------------------------
+
+
+def test_assess_web_server_version_old_apache() -> None:
+    findings = _assess_web_server_version("Apache/1.3.42")
+    assert any("Web server version: 1.3.42" in f for f in findings)
+    assert any("out of support" in f for f in findings)
+
+
+def test_assess_web_server_version_modern_apache() -> None:
+    findings = _assess_web_server_version("Apache/2.4.1")
+    assert any("Web server version: 2.4.1" in f for f in findings)
+    assert not any("out of support" in f for f in findings)
+
+
+def test_assess_web_server_version_old_nginx() -> None:
+    findings = _assess_web_server_version("nginx/0.9.0")
+    assert any("out of support" in f for f in findings)
+
+
+def test_assess_web_server_version_modern_nginx() -> None:
+    findings = _assess_web_server_version("nginx/1.2.0")
+    assert not any("out of support" in f for f in findings)
+
+
+def test_assess_web_server_version_old_lighttpd() -> None:
+    findings = _assess_web_server_version("lighttpd/0.9.0")
+    assert any("out of support" in f for f in findings)
+
+
+def test_assess_web_server_version_old_iis() -> None:
+    findings = _assess_web_server_version("IIS/5.0")
+    assert any("out of support" in f for f in findings)
+
+
+def test_assess_web_server_version_old_microsoft_iis() -> None:
+    findings = _assess_web_server_version("Microsoft-IIS/5.0")
+    assert any("out of support" in f for f in findings)
+
+
+def test_assess_web_server_version_modern_iis() -> None:
+    findings = _assess_web_server_version("IIS/10.0")
+    assert not any("out of support" in f for f in findings)
+
+
+def test_assess_web_server_version_unknown_server() -> None:
+    assert _assess_web_server_version("Something/1.0") == []
+
+
+def test_assess_web_server_version_none() -> None:
+    assert _assess_web_server_version(None) == []
+
+
+def test_assess_web_server_version_unparseable() -> None:
+    assert _assess_web_server_version("Apache/abc") == []
 
 
 # ---------------------------------------------------------------------------
