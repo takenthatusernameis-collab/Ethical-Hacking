@@ -4,7 +4,7 @@ Session: Re-verified the CI workflow block deterministically; ran a systematic c
 
 ## Current state
 - Clean working tree (main branch, HEAD e788721)
-- Tests: 5543 passed, 50 skipped
+- Tests: 5555 passed, 50 skipped
 - Lint: ruff clean
 - Typecheck: mypy clean (59 files)
 - Recent fix (prior session): web CSV formatter now includes `findings` section (parity with markdown/JSON)

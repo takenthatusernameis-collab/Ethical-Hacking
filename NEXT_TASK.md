@@ -9,7 +9,7 @@ Session: Re-verified the CI workflow block deterministically; ran a systematic c
 ## What was actually verified (this session)
 - `git push origin main` after restoring `.github/workflows/test.yml` from `2e9a943` → **403 "refusing to allow a GitHub App to create or update workflow `.github/workflows/test.yml` without `workflows` permission"**. Block re-confirmed deterministically.
 - `git reset --hard HEAD~1` → clean tree restored at e788721; `.github/workflows/` contains only `kilo-workflow-audit.yml` and `main.yml`.
-- `python -m pytest -q` → 5543 passed / 50 skipped (102.74s).
+- `python -m pytest -q` → 5555 passed / 50 skipped (100.32s).
 - `python -m ruff check ethscan tests` → "All checks passed!".
 - `python -m mypy ethscan` → "Success: no issues found in 59 source files".
 - Systematic cross-format consistency audit: parsed every module with `format_*_report_{json,markdown,csv}` and compared the data keys each references. 38 modules audited. Two modules (`fuzz.py`, `ssh.py`) flagged as having keys in markdown/JSON but not CSV, but on inspection both **preserve** the `findings` information in CSV — `fuzz.py` derives an `is_finding` column from `all_results` (status_code != 404), and `ssh.py` emits one CSV row per finding dict. Neither is a real omission defect. No new defect found.
