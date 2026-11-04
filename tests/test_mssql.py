@@ -1184,45 +1184,40 @@ def test_run_mssql_transport_failure_is_reported(monkeypatch):
     assert "hostile transport" in results["error"]
 
 
-def test_parse_prelogin_response_version_decode_exception_branch():
-    from ethscan import mssql
-    import struct
-
-    opt_type = mssql._OPTION_VERSION
-    opt_value = b"\x01\x02"  # len != 4
-
-    class BadBytes(bytes):
-        def decode(self, *args, **kwargs):
-            raise UnicodeDecodeError('utf-8', b'', 0, 1, 'bad')
-
-    bad = BadBytes(opt_value)
-    opt = struct.pack("!BB", opt_type, len(bad)) + bad
-    payload = opt
-    msg_len = 9 + len(payload)
-    header = struct.pack("!BBHHBH", mssql._TDS_PRELOGIN, 0x01, msg_len, 0x0000, 0x01, 0x0000)
-    data = header + payload
-
-    res = mssql._parse_prelogin_response(data)
-    assert res["version"] == bad.hex()
+def test_assess_prelogin_version_value_error_branch():
+    """A version that cannot be coerced to an int major is silently skipped."""
+    data = {
+        "version": "not-a-version",
+        "encryption": None,
+        "instance_name": None,
+        "thread_id": None,
+        "error": None,
+    }
+    findings = _assess_prelogin(data)
+    assert any("MSSQL server version: not-a-version" in f for f in findings)
+    assert not any("Old MSSQL" in f for f in findings)
 
 
-def test_parse_prelogin_response_instance_decode_exception_branch():
-    from ethscan import mssql
-    import struct
+def test_assess_prelogin_version_attribute_error_branch():
+    """A non-string version that lacks .split() is silently skipped."""
+    data = {
+        "version": 12345,
+        "encryption": None,
+        "instance_name": None,
+        "thread_id": None,
+        "error": None,
+    }
+    findings = _assess_prelogin(data)
+    assert any("MSSQL server version: 12345" in f for f in findings)
+    assert not any("Old MSSQL" in f for f in findings)
 
-    opt_type = mssql._OPTION_INSTINST
-    opt_value = b"\x01\x03"
 
-    class BadBytes(bytes):
-        def decode(self, *args, **kwargs):
-            raise UnicodeDecodeError('utf-8', b'', 0, 1, 'bad')
+def test_run_mssql_connector_raises_unhandled_exception():
+    """An unexpected exception from the probe path is captured as error."""
 
-    bad = BadBytes(opt_value)
-    opt = struct.pack("!BB", opt_type, len(bad)) + bad
-    payload = opt
-    msg_len = 9 + len(payload)
-    header = struct.pack("!BBHHBH", mssql._TDS_PRELOGIN, 0x01, msg_len, 0x0000, 0x01, 0x0000)
-    data = header + payload
+    def connector(host, port, request, timeout):
+        raise RuntimeError("unexpected probe failure")
 
-    res = mssql._parse_prelogin_response(data)
-    assert res["instance_name"] == bad.hex()
+    result = run_mssql(target="example.com:1433", connector=connector)
+    assert result["accessible"] is False
+    assert "unexpected probe failure" in result["error"]

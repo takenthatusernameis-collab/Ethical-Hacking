@@ -384,13 +384,9 @@ def _parse_prelogin_response(data: bytes) -> dict[str, Any]:
 
     # Parse TDS header
     #   Type (1 byte), Flags (1 byte), Length (2 bytes), Channel ID (2 bytes), Packet Number (1 byte), Window (2 bytes)
-    try:
-        tds_type, _flags, msg_len, _channel_id, _packet_num, _window = struct.unpack(
-            "!BBHHBH", data[:9]
-        )
-    except struct.error:
-        result["error"] = "Failed to parse TDS header"
-        return result
+    tds_type, _flags, msg_len, _channel_id, _packet_num, _window = struct.unpack(
+        "!BBHHBH", data[:9]
+    )
 
     if tds_type != _TDS_PRELOGIN:
         result["error"] = f"Expected PRELOGIN response, got type 0x{tds_type:02x}"
@@ -429,19 +425,7 @@ def _parse_prelogin_response(data: bytes) -> dict[str, Any]:
                 result["version"] = version_str
             else:
                 # If we get something else, just decode as string if possible.
-                resv = None
-                try:
-                    if type(value).__name__ == "BadBytes":
-                        raise UnicodeDecodeError('utf-8', bytes(value), 0, 1, 'bad')
-                    resv = value.decode("utf-8", errors="replace")
-                except Exception:
-                    pass
-                if resv is None:
-                    try:
-                        resv = value.hex()
-                    except Exception:
-                        resv = str(value)
-                result["version"] = resv
+                result["version"] = value.decode("utf-8", errors="replace")
         elif opt_type == _OPTION_ENCRYPTION:
             # Encryption is a single byte: 0x00 off, 0x01 on, 0x02 required, 0x03 not supported.
             if len(value) >= 1:
@@ -461,19 +445,7 @@ def _parse_prelogin_response(data: bytes) -> dict[str, Any]:
         elif opt_type == _OPTION_INSTINST:
             # Instance name is a string (usually UTF-8)
             if value:
-                resi = None
-                try:
-                    if type(value).__name__ == "BadBytes":
-                        raise UnicodeDecodeError('utf-8', bytes(value), 0, 1, 'bad')
-                    resi = value.decode("utf-8", errors="replace")
-                except Exception:
-                    pass
-                if resi is None:
-                    try:
-                        resi = value.hex()
-                    except Exception:
-                        resi = str(value)
-                result["instance_name"] = resi
+                result["instance_name"] = value.decode("utf-8", errors="replace")
             else:
                 result["instance_name"] = ""
         elif opt_type == _OPTION_THREADID:
