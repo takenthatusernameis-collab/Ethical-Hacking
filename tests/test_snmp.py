@@ -831,6 +831,14 @@ def test_format_snmp_report_markdown_error() -> None:
     output = format_snmp_report_markdown(results)
     assert "**Error:** v2c request failed: timeout" in output
 
+def test_format_snmp_report_markdown_findings() -> None:
+    results = _full_results()
+    results["findings"] = ["SNMP system version: 5.4.0", "Old SNMP system version"]
+    output = format_snmp_report_markdown(results)
+    assert "## Findings" in output
+    assert "- SNMP system version: 5.4.0" in output
+    assert "- Old SNMP system version" in output
+
 
 def test_format_snmp_report_csv() -> None:
     output = format_snmp_report_csv(_full_results())
