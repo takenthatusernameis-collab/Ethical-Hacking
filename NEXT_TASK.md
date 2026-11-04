@@ -1,27 +1,27 @@
 # Handoff
-Date: Tue Nov 03 / Wed Nov 04 2026
-Session: Found and fixed a real output-completeness defect in the web CSV formatter. Baseline green.
+Date: Wed Nov 04 2026
+Session: Re-verified the CI workflow block deterministically; ran a systematic cross-format consistency audit; no new bounded task found. Baseline green.
 
 ## What changed (this session)
-- `ethscan/web.py:480-485` — `format_web_report_csv()` previously rendered the `security_headers`, `information_disclosure`, and `ssl` sections but silently dropped the `findings` section, even though `format_web_report_markdown()` (lines 421-426) and `format_web_report_json()` both render it. Added a `findings` CSV block mirroring the markdown section: a `finding` header row followed by one row per finding string. Local renamed to `extra_findings` to avoid shadowing the earlier typed `findings` binding at line 474 (keeps mypy clean).
-- `tests/test_web.py` — added `test_format_web_report_csv_with_findings` and `test_format_web_report_csv_no_findings`, matching the existing CSV test style.
+- Nothing in the codebase. This session was verification-only.
+- Re-attempted the CI workflow push to re-confirm the block is deterministic (see below), then reverted the local commit to preserve the clean baseline.
 
 ## What was actually verified (this session)
-- Reproduced the defect first: `run_web_checks("http://example.com", ["headers"])` populates `results["findings"]` via `_assess_web_server_version()` (web.py:366-372); markdown and JSON rendered it; CSV did not.
-- `python -m pytest tests/test_web.py -q` → 67 passed (was 65; +2 new tests).
-- `python -m pytest -q` → 5543 passed / 50 skipped (was 5541; +2 new tests, no regressions).
+- `git push origin main` after restoring `.github/workflows/test.yml` from `2e9a943` → **403 "refusing to allow a GitHub App to create or update workflow `.github/workflows/test.yml` without `workflows` permission"**. Block re-confirmed deterministically.
+- `git reset --hard HEAD~1` → clean tree restored at e788721; `.github/workflows/` contains only `kilo-workflow-audit.yml` and `main.yml`.
+- `python -m pytest -q` → 5543 passed / 50 skipped (102.74s).
 - `python -m ruff check ethscan tests` → "All checks passed!".
 - `python -m mypy ethscan` → "Success: no issues found in 59 source files".
-- `python -m ethscan web --target http://example.com --checks headers --output-format csv` → exit 0, findings section correctly absent (example.com sends no Server header).
+- Systematic cross-format consistency audit: parsed every module with `format_*_report_{json,markdown,csv}` and compared the data keys each references. 38 modules audited. Two modules (`fuzz.py`, `ssh.py`) flagged as having keys in markdown/JSON but not CSV, but on inspection both **preserve** the `findings` information in CSV — `fuzz.py` derives an `is_finding` column from `all_results` (status_code != 404), and `ssh.py` emits one CSV row per finding dict. Neither is a real omission defect. No new defect found.
 
 ## What remains unresolved
-- Landing CI workflow `.github/workflows/test.yml` on `origin/main` is still blocked. Independently re-verified this session via the REST API: non-workflow file writes succeed (PUT → 201, DELETE → 200), but writing `.github/workflows/test.yml` returns 403 "Resource not accessible by integration". This is a `workflows` permission-scope problem, not fixable by renaming/rewriting the file. The file content is known (`git show 2e9a943:.github/workflows/test.yml`).
+- Landing CI workflow `.github/workflows/test.yml` on `origin/main` is still blocked. Re-verified this session via an actual push attempt: deterministic 403 on the `workflows` permission scope. The file content is known (`git show 2e9a943:.github/workflows/test.yml`).
 - No other bounded feature/bug task identified.
 
 ## Approaches already tried and why they failed
-- Pushing `test.yml` repeatedly → 403 "refusing to allow a GitHub App to create or update workflow ... without `workflows` permission". Deterministic; renaming or recreating does not help.
-- Searching README/CLI for unimplemented features: all 56 documented commands are marked `(implemented)` and all exist in the CLI; no TODO/FIXME/stub markers remain in `ethscan/`.
-- Assuming the repo was fully output-consistent across formats → false. The web module's three formatters were not mutually consistent; CSV omitted `findings`. This was the one genuine defect found.
+- Pushing `test.yml` (re-attempted this session) → 403. Deterministic; renaming or recreating does not help.
+- Systematic cross-format consistency audit across all 38 formatter triplets → no new omission defects; the two flagged modules preserve findings information in CSV via equivalent representations.
+- Assuming the repo was fully output-consistent across formats → false for `web.py` (prior session). Re-checked remaining modules; no equivalent defect found.
 
 ## Precise next task
 1. If/when a `workflows`-scoped token becomes available: restore `.github/workflows/test.yml` from `2e9a943` (or recreate identically), commit, `git push origin main`, then re-verify `ruff`, `mypy`, and `pytest`.
