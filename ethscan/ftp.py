@@ -265,10 +265,33 @@ def format_ftp_report_csv(data: dict[str, Any]) -> str:
 
     Emits a single summary row per target with the header
     ``target,host,port,banner,anonymous_login,anonymous_message,error``.
+    A top-level probe error is surfaced as a dedicated error row (mirroring
+    the Markdown ``- **Error:**`` rendering and the ssh/smtp CSV pattern)
+    instead of being buried as the last field of a summary row.
     """
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["target", "host", "port", "banner", "anonymous_login", "anonymous_message", "error"])
+
+    error = data.get("error")
+    if error:
+        writer.writerow([
+            data.get("target", ""),
+            data.get("host", ""),
+            data.get("port", ""),
+            "",  # banner
+            "",  # anonymous_login
+            "",  # anonymous_message
+            str(error),
+        ])
+        findings = data.get("findings")
+        if isinstance(findings, list) and findings:
+            writer.writerow([])
+            writer.writerow(["finding"])
+            for finding in findings:
+                writer.writerow([finding])
+        return output.getvalue().rstrip("\r\n")
+
     anon = data.get("anonymous_login")
     if anon is True:
         anon_str = "true"
