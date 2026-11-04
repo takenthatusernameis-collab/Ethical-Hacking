@@ -626,6 +626,12 @@ def format_ssh_report_csv(data: dict[str, object]) -> str:
         "severity",
         "description",
     ])
+
+    error = data.get("error")
+    if error:
+        writer.writerow(["error", "", "", str(error)])
+        return output.getvalue().rstrip("\r\n")
+
     findings = data.get("findings") or []
     if not isinstance(findings, list):
         findings = []

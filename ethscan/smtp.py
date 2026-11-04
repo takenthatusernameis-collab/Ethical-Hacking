@@ -457,6 +457,26 @@ def format_smtp_report_csv(data: dict[str, Any]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["target", "host", "port", "user", "found", "code", "description"])
+
+    error = data.get("error")
+    if error:
+        writer.writerow([
+            data.get("target", ""),
+            data.get("host", ""),
+            data.get("port", ""),
+            "",
+            "",
+            "",
+            str(error),
+        ])
+        findings = data.get("findings")
+        if isinstance(findings, list) and findings:
+            writer.writerow([])
+            writer.writerow(["finding"])
+            for finding in findings:
+                writer.writerow([finding])
+        return output.getvalue().rstrip("\r\n")
+
     users = data.get("users") or []
     if not users:
         relay = data.get("open_relay")
