@@ -186,6 +186,53 @@ def test_format_fuzz_report_csv() -> None:
     assert reader[2] == ["https://example.com", "https://example.com", "/login", "404", "", "false"]
 
 
+def test_format_fuzz_report_csv_renders_findings_section() -> None:
+    """CSV renders the findings section that Markdown and JSON both render.
+
+    The Markdown report lists every non-404 result under a "## Findings"
+    heading. The CSV formatter used to omit that section entirely, silently
+    dropping the findings a reader could get from any other format. It now
+    emits a findings block mirroring the Markdown section.
+    """
+    data = {
+        "target": "https://example.com",
+        "base_url": "https://example.com",
+        "paths_tested": 3,
+        "findings": [
+            {"path": "/admin", "status_code": 200, "error": None},
+            {"path": "/config", "status_code": 403, "error": None},
+        ],
+        "all_results": [
+            {"path": "/admin", "status_code": 200, "error": None},
+            {"path": "/config", "status_code": 403, "error": None},
+            {"path": "/login", "status_code": 404, "error": None},
+        ],
+    }
+    output = format_fuzz_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    # The findings section is a blank line, a header row, then one row per
+    # finding, appended after the all_results rows.
+    assert ["finding_path", "finding_status_code"] in reader
+    assert ["/admin", "200"] in reader
+    assert ["/config", "403"] in reader
+    # A 404 result is not a finding.
+    assert ["/login", "200"] not in reader
+    assert ["/login", "403"] not in reader
+
+
+def test_format_fuzz_report_csv_no_findings_section_when_empty() -> None:
+    data = {
+        "target": "https://example.com",
+        "base_url": "https://example.com",
+        "paths_tested": 1,
+        "findings": [],
+        "all_results": [{"path": "/admin", "status_code": 404, "error": None}],
+    }
+    output = format_fuzz_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert ["finding_path", "finding_status_code"] not in reader
+
+
 def test_format_fuzz_report_csv_empty() -> None:
     data = {
         "target": "https://example.com",

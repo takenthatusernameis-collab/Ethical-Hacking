@@ -212,4 +212,20 @@ def format_fuzz_report_csv(data: dict[str, object]) -> str:
             result.get("error") or "",
             "true" if is_finding else "false",
         ])
+
+    # A findings section mirroring the Markdown report: every non-404 result
+    # is listed as a finding. The all_results table above already marks each
+    # row with is_finding, but a reader filtering by the "finding" section
+    # header gets the same list the Markdown and JSON reports show.
+    findings = data.get("findings") or []
+    if isinstance(findings, list) and findings:
+        writer.writerow([])
+        writer.writerow(["finding_path", "finding_status_code"])
+        for finding in findings:
+            if isinstance(finding, dict):
+                writer.writerow([
+                    finding.get("path", ""),
+                    finding.get("status_code", ""),
+                ])
+
     return output.getvalue().rstrip("\r\n")
