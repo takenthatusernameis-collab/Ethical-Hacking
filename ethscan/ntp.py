@@ -470,6 +470,27 @@ def format_ntp_report_csv(data: dict[str, Any]) -> str:
         "record_type", "peer_address", "peer_port", "peer_mode", "peer_version"
     ])
 
+    # Surface a top-level probe error before any summary/peer rows, mirroring
+    # the Markdown report (which renders "- **Error:** ..." when present) and the
+    # error-row pattern used by ssh/smtp CSV formatters. Without this, a failed
+    # NTP probe produced a summary row with empty version/peer_count and no
+    # indication of *why* the probe failed.
+    error = data.get("error")
+    if error:
+        writer.writerow([
+            "error",
+            str(error),
+            "",  # version
+            "",  # port_open
+            "",  # peer_count
+            "",  # record_type
+            "",  # peer_address
+            "",  # peer_port
+            "",  # peer_mode
+            "",  # peer_version
+        ])
+        return output.getvalue().rstrip("\r\n")
+
     time_resp = data.get("time_response") or {}
     mon_resp = data.get("monlist_response") or {}
 

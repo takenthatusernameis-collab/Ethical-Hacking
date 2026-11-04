@@ -715,17 +715,52 @@ def test_format_ntp_report_csv_failed() -> None:
         "target", "port", "version", "port_open", "peer_count",
         "record_type", "peer_address", "peer_port", "peer_mode", "peer_version"
     ]
-    # Summary row (error case)
-    assert reader[1][0] == "dead.example.com"  # target
-    assert reader[1][1] == "123"               # port
-    assert reader[1][2] == ""                  # version (empty due to error)
-    assert reader[1][3] == ""                  # port_open
-    assert reader[1][4] == "0"                 # peer_count
-    assert reader[1][5] == "summary"           # record_type
-    assert reader[1][6] == ""                  # peer_address
-    assert reader[1][7] == ""                  # peer_port
-    assert reader[1][8] == ""                  # peer_mode
-    assert reader[1][9] == ""                  # peer_version
+    # Top-level probe error row (mirrors the Markdown "- **Error:**" rendering
+    # and the ssh/smtp CSV error-row pattern); no summary row is emitted.
+    assert reader[1][0] == "error"
+    assert "timeout" in reader[1][1]
+    assert reader[1][5] == ""  # record_type empty on error row
+    assert len(reader) == 2
+
+
+def test_format_ntp_report_csv_emits_error_row() -> None:
+    """A top-level probe error is surfaced as a dedicated error row.
+
+    The Markdown report renders "- **Error:** ..." for this case, and the
+    ssh/smtp CSV formatters emit an error row. The NTP CSV formatter previously
+    produced a summary row with empty version/peer_count and no indication of
+    why the probe failed; it now emits a single error row mirroring that
+    pattern.
+    """
+    data = {
+        "target": "dead.example.com",
+        "host": "dead.example.com",
+        "port": 123,
+        "time_response": None,
+        "monlist_response": None,
+        "is_reflector": False,
+        "amplification_factor": None,
+        "error": "ntp probe failed: Connection refused",
+    }
+    output = format_ntp_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0] == [
+        "target", "port", "version", "port_open", "peer_count",
+        "record_type", "peer_address", "peer_port", "peer_mode", "peer_version"
+    ]
+    assert reader[1] == [
+        "error",
+        "ntp probe failed: Connection refused",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+    ]
+    assert len(reader) == 2
 
 
 def test_format_ntp_report_csv_comma_escaping() -> None:
@@ -747,14 +782,11 @@ def test_format_ntp_report_csv_comma_escaping() -> None:
     }
     output = format_ntp_report_csv(data)
     reader = list(csv.reader(io.StringIO(output)))
-    # With NO error in time_response but error in monlist_response:
-    # - version should be "4" (from time_response)
-    # - peer_count should be "0" (due to monlist_response error, peer_count=0)
-    assert reader[1][2] == "4"  # version from time_response (no error)
-    assert reader[1][4] == "0"  # peer_count 0 due to monlist_response error
-    assert reader[1][5] == "summary"  # record_type
-    # Note: The specific error handling in CSV format may vary,
-    # but the main thing is that it doesn't crash and produces valid CSV
+    # A top-level error short-circuits to a single error row; the comma-laden
+    # message must survive CSV parsing as one field (csv.writer quotes it).
+    assert reader[1][0] == "error"
+    assert reader[1][1] == "err, one, two"
+    assert len(reader) == 2
 
 
 def test_format_ntp_report_csv_no_peers() -> None:
