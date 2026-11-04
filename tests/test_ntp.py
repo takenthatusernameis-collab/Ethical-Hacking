@@ -233,6 +233,12 @@ def test_assess_ntp_version_error_response() -> None:
     assert _assess_ntp_version({"error": "Request timed out"}) == []
 
 
+def test_assess_ntp_version_unparseable() -> None:
+    # A non-integer version string raises ValueError on int(); the branch
+    # returns the (empty) findings list without crashing.
+    assert _assess_ntp_version({"version": "not-a-version"}) == []
+
+
 # ---------------------------------------------------------------------------
 # run_ntp - against injectable fake connector
 # ---------------------------------------------------------------------------
@@ -631,6 +637,23 @@ def test_format_ntp_report_markdown_connection_failed() -> None:
     assert "Connected" not in output or "ntp.example.com" not in output or True  # failed target  # noqa: SIM222
     assert "NTP Time Response" not in output
     assert "timeout" in output
+
+
+def test_format_ntp_report_markdown_with_findings() -> None:
+    # A non-empty findings list renders the Findings section bullet lines.
+    data = {
+        "target": "ntp.example.com",
+        "port": 123,
+        "time_response": {"version": 4, "stratum": 2, "error": None},
+        "monlist_response": None,
+        "is_reflector": False,
+        "amplification_factor": None,
+        "error": None,
+        "findings": ["NTP server version: 4"],
+    }
+    output = format_ntp_report_markdown(data)
+    assert "## Findings" in output
+    assert "- NTP server version: 4" in output
 
 
 def test_format_ntp_report_csv() -> None:

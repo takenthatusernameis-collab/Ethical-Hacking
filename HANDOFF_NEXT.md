@@ -2,23 +2,23 @@
 Date: Wed Nov 04 2026
 
 ## What changed
-- Simplified `_parse_prelogin_response` in `ethscan/mssql.py` by removing two dead `BadBytes` try/except blocks (the `type(value).__name__ == "BadBytes"` seam was unreachable in practice and produced incorrect fallbacks). The non-4-byte version and instance-name paths now decode directly with `errors="replace"`.
-- Removed the dead `except struct.error` guard around `struct.unpack("!BBHHBH", data[:9])` in `_parse_prelogin_response` — the earlier `len(data) < 9` check makes it unreachable.
-- Removed two failing tests (`test_parse_prelogin_response_version_decode_exception_branch`, `test_parse_prelogin_response_instance_decode_exception_branch`) that relied on the removed `BadBytes` seam.
-- Added three tests: `test_assess_prelogin_version_value_error_branch`, `test_assess_prelogin_version_attribute_error_branch`, `test_run_mssql_connector_raises_unhandled_exception`.
-- `ethscan/mssql.py` coverage rose from 95% to 99% (2 remaining uncovered lines 574-575 are a defensive `except Exception` guard that is unreachable given `_send_recv` already catches connector exceptions).
+- Added `test_assess_ntp_version_unparseable` in `tests/test_ntp.py`: feeds a non-integer version string to `_assess_ntp_version`, exercising the `except (ValueError, TypeError)` branch at `ethscan/ntp.py:273-274`.
+- Added `test_format_ntp_report_markdown_with_findings` in `tests/test_ntp.py`: renders a markdown report with a non-empty `findings` list, exercising the Findings bullet section at `ethscan/ntp.py:438-443`.
 
 ## Verified
-- Tests: 5574 passed, 50 skipped (was 5572 passed).
+- `pytest tests/test_ntp.py`: 59 passed.
+- Full `pytest --cov=ethscan`: 5576 passed, 50 skipped (was 5574 passed).
+- `ethscan/ntp.py` coverage: 100% (up from 97%; both previously uncovered regions now covered).
+- Overall missing coverage lines: 104 -> 96.
 - `python -m ruff check .`: all checks passed.
 - `python -m mypy ethscan`: no issues in 59 source files.
-- Only `ethscan/mssql.py` and `tests/test_mssql.py` modified; working tree otherwise clean.
+- Only `tests/test_ntp.py` modified; working tree otherwise clean.
 
 ## Unresolved
-- `ethscan/mssql.py` lines 574-575 (defensive `except Exception` in `run_mssql`) remain uncovered but are unreachable given `_send_recv`'s existing exception handling. Left in place as a safety net.
+- Remaining coverage gaps are small and scattered (mysql, oracle, radix, smtp, ssh, snmp, redis, memcached, resolve, postgresql, web defensive branches). Some are genuinely reachable branches; a few (e.g. `postgresql.py:355-356`, `mysql.py:114/153`) are defensive "should not happen" branches left intentionally, mirroring the prior mssql precedent.
 
 ## Failed approaches
-- The `BadBytes` subclass seam in `_parse_prelogin_response` was a test-only escape hatch that did not survive real `bytes` behavior — `bytes.decode` with `errors="replace"` already handles unparseable data, so the seam was both dead and wrong. Removing it was the correct fix rather than working around it.
+- None in this session.
 
 ## Next task
-- Remaining coverage gaps are small and scattered (ntp, mysql, oracle, radix, smtp, ssh, snmp, redis, memcached, resolve, postgresql, web defensive branches). Pick the next module, add focused tests, and re-run `pytest`, `ruff check .`, and `mypy ethscan` to verify. Do not commit unless explicitly asked.
+- Pick the next module (suggested `ethscan/mysql.py`), add focused tests for reachable uncovered lines, re-run `pytest`, `ruff check .`, and `mypy ethscan` to verify. Do not commit unless explicitly asked.
