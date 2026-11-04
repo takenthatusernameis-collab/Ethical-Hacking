@@ -1531,3 +1531,33 @@ def test_smtp_connection_exception_closes_socket(monkeypatch) -> None:
     monkeypatch.setattr(smtp, "_connect", fake_connect)
     res = smtp.run_smtp("example.com")
     assert "connection failed" in str(res.get("error"))
+
+
+def test_format_smtp_report_csv_with_findings() -> None:
+    data = {
+        "target": "smtp.example.com",
+        "host": "smtp.example.com",
+        "port": 25,
+        "users": [],
+        "open_relay": False,
+        "error": None,
+        "findings": ["SMTP server version: 2.0.5", "Old SMTP server version detected (version 2.0.5; out of support, may lack security updates)"],
+    }
+    output = format_smtp_report_csv(data)
+    lines = output.splitlines()
+    assert "finding" in lines
+    assert "SMTP server version: 2.0.5" in lines
+    assert any("Old SMTP server version detected" in line for line in lines)
+
+
+def test_format_smtp_report_csv_no_findings() -> None:
+    data = {
+        "target": "smtp.example.com",
+        "host": "smtp.example.com",
+        "port": 25,
+        "users": [],
+        "open_relay": False,
+        "error": None,
+    }
+    output = format_smtp_report_csv(data)
+    assert "finding" not in output

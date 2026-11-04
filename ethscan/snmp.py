@@ -740,4 +740,11 @@ def format_snmp_report_csv(data: dict[str, Any]) -> str:
             "community", community, valid, community_version, community_error,
         ])
 
+    findings = data.get("findings")
+    if isinstance(findings, list) and findings:
+        writer.writerow([])
+        writer.writerow(["finding"])
+        for finding in findings:
+            writer.writerow([finding])
+
     return output.getvalue().rstrip("\r\n")

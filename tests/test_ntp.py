@@ -940,3 +940,35 @@ def test_format_ntp_report_markdown_monlist_error_with_note() -> None:
     output = format_ntp_report_markdown(data)
     assert "monlist request failed" in output
     assert "blocked" in output
+
+
+def test_format_ntp_report_csv_with_findings() -> None:
+    data = {
+        "target": "ntp.example.com",
+        "port": 123,
+        "time_response": {"version": 3, "stratum": 2, "error": None},
+        "monlist_response": {"error": "monlist request failed", "peer_count": 0, "peers": []},
+        "is_reflector": False,
+        "amplification_factor": None,
+        "error": None,
+        "findings": ["NTP server version: 3", "Old NTP version detected (version 3; out of support, may lack security updates)"],
+    }
+    output = format_ntp_report_csv(data)
+    lines = output.splitlines()
+    assert "finding" in lines
+    assert "NTP server version: 3" in lines
+    assert any("Old NTP version detected" in line for line in lines)
+
+
+def test_format_ntp_report_csv_no_findings() -> None:
+    data = {
+        "target": "ntp.example.com",
+        "port": 123,
+        "time_response": {"version": 4, "stratum": 2, "error": None},
+        "monlist_response": {"error": "monlist request failed", "peer_count": 0, "peers": []},
+        "is_reflector": False,
+        "amplification_factor": None,
+        "error": None,
+    }
+    output = format_ntp_report_csv(data)
+    assert "finding" not in output

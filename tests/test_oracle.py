@@ -1278,3 +1278,33 @@ def test_run_oracle_transport_failure_of_unnamed_type_is_reported(monkeypatch):
     results = run_oracle("localhost")
     assert results["accessible"] is False
     assert "hostile transport" in results["error"]
+
+
+def test_format_oracle_report_csv_with_findings() -> None:
+    data = {
+        "target": "oracle.example.com",
+        "host": "oracle.example.com",
+        "port": 1521,
+        "accessible": True,
+        "version": "12.1.0.2.0",
+        "error": None,
+        "findings": ["Oracle TNS server version: 12.1.0.2.0", "Old Oracle server version detected (major 12; out of support, may lack security updates)"],
+    }
+    output = format_oracle_report_csv(data)
+    lines = output.splitlines()
+    assert "finding" in lines
+    assert "Oracle TNS server version: 12.1.0.2.0" in lines
+    assert any("Old Oracle server version detected" in line for line in lines)
+
+
+def test_format_oracle_report_csv_no_findings() -> None:
+    data = {
+        "target": "oracle.example.com",
+        "host": "oracle.example.com",
+        "port": 1521,
+        "accessible": True,
+        "version": "19.0.0.0.0",
+        "error": None,
+    }
+    output = format_oracle_report_csv(data)
+    assert "finding" not in output

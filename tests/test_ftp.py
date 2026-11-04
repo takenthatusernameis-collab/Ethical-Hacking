@@ -762,3 +762,35 @@ def test_run_ftp_anonymous_login_unnamed_exception_reported() -> None:
     assert result["anonymous_login"] is None
     assert result["error"] == "login failed: hostile login transport"
     assert result["anonymous_message"] == "login failed: hostile login transport"
+
+
+def test_format_ftp_report_csv_with_findings() -> None:
+    data = {
+        "target": "ftp.example.com",
+        "host": "ftp.example.com",
+        "port": 21,
+        "banner": "220 ProFTPD 1.3.5 Server",
+        "anonymous_login": False,
+        "anonymous_message": "",
+        "error": None,
+        "findings": ["FTP server version: 1.3.5", "Old FTP server version detected (version 1.3.5; out of support, may lack security updates)"],
+    }
+    output = format_ftp_report_csv(data)
+    lines = output.splitlines()
+    assert "finding" in lines
+    assert "FTP server version: 1.3.5" in lines
+    assert any("Old FTP server version detected" in line for line in lines)
+
+
+def test_format_ftp_report_csv_no_findings() -> None:
+    data = {
+        "target": "ftp.example.com",
+        "host": "ftp.example.com",
+        "port": 21,
+        "banner": "220 ProFTPD 1.3.5 Server",
+        "anonymous_login": False,
+        "anonymous_message": "",
+        "error": None,
+    }
+    output = format_ftp_report_csv(data)
+    assert "finding" not in output

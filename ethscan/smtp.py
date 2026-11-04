@@ -488,4 +488,12 @@ def format_smtp_report_csv(data: dict[str, Any]) -> str:
                 u.get("code") or "",
                 u.get("description", "") or "",
             ])
+
+    findings = data.get("findings")
+    if isinstance(findings, list) and findings:
+        writer.writerow([])
+        writer.writerow(["finding"])
+        for finding in findings:
+            writer.writerow([finding])
+
     return output.getvalue().rstrip("\r\n")

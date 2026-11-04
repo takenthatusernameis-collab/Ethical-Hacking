@@ -1393,3 +1393,24 @@ def test_assess_snmp_version_freebsd_old() -> None:
     findings = _assess_snmp_version("FreeBSD 11.3-RELEASE")
     assert any("SNMP system version: 11.3" in f for f in findings)
     assert any("Old SNMP system version" in f for f in findings)
+
+
+def test_format_snmp_report_csv_with_findings() -> None:
+    results = _full_results()
+    results["findings"] = [
+        "SNMP system version: 12.2",
+        "Old SNMP system version detected (version 12.2; out of support, may lack security updates)",
+    ]
+    output = format_snmp_report_csv(results)
+    rows = list(csv.reader(io.StringIO(output)))
+    assert rows[0][-1] == "community_error"
+    assert any(r == ["finding"] for r in rows)
+    assert any(r == ["SNMP system version: 12.2"] for r in rows)
+    assert any(r and r[0].startswith("Old SNMP system version detected") for r in rows)
+
+
+def test_format_snmp_report_csv_no_findings() -> None:
+    results = _full_results()
+    output = format_snmp_report_csv(results)
+    rows = list(csv.reader(io.StringIO(output)))
+    assert not any(r == ["finding"] for r in rows)

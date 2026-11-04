@@ -509,4 +509,11 @@ def format_ntp_report_csv(data: dict[str, Any]) -> str:
                 peer.get("version", ""),
             ])
 
+    findings = data.get("findings")
+    if isinstance(findings, list) and findings:
+        writer.writerow([])
+        writer.writerow(["finding"])
+        for finding in findings:
+            writer.writerow([finding])
+
     return output.getvalue().rstrip("\r\n")
