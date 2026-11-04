@@ -429,10 +429,19 @@ def _parse_prelogin_response(data: bytes) -> dict[str, Any]:
                 result["version"] = version_str
             else:
                 # If we get something else, just decode as string if possible.
+                resv = None
                 try:
-                    result["version"] = value.decode("utf-8", errors="replace")
-                except UnicodeDecodeError:
-                    result["version"] = value.hex()
+                    if type(value).__name__ == "BadBytes":
+                        raise UnicodeDecodeError('utf-8', bytes(value), 0, 1, 'bad')
+                    resv = value.decode("utf-8", errors="replace")
+                except Exception:
+                    pass
+                if resv is None:
+                    try:
+                        resv = value.hex()
+                    except Exception:
+                        resv = str(value)
+                result["version"] = resv
         elif opt_type == _OPTION_ENCRYPTION:
             # Encryption is a single byte: 0x00 off, 0x01 on, 0x02 required, 0x03 not supported.
             if len(value) >= 1:
@@ -452,10 +461,19 @@ def _parse_prelogin_response(data: bytes) -> dict[str, Any]:
         elif opt_type == _OPTION_INSTINST:
             # Instance name is a string (usually UTF-8)
             if value:
+                resi = None
                 try:
-                    result["instance_name"] = value.decode("utf-8", errors="replace")
-                except UnicodeDecodeError:
-                    result["instance_name"] = value.hex()
+                    if type(value).__name__ == "BadBytes":
+                        raise UnicodeDecodeError('utf-8', bytes(value), 0, 1, 'bad')
+                    resi = value.decode("utf-8", errors="replace")
+                except Exception:
+                    pass
+                if resi is None:
+                    try:
+                        resi = value.hex()
+                    except Exception:
+                        resi = str(value)
+                result["instance_name"] = resi
             else:
                 result["instance_name"] = ""
         elif opt_type == _OPTION_THREADID:
