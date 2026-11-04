@@ -2,16 +2,13 @@
 Date: Wed Nov 04 2026
 
 ## What changed
-- None (verification session).
+- Authored `.github/workflows/test.yml` (ruff + mypy + pytest on push/PR, Python 3.10) locally; commit/push blocked by token lacking `workflows` scope (403). File left untracked.
 
 ## Verified
-- Full suite: 5561 passed, 50 skipped (pytest).
-- ruff: All checks passed.
-- mypy: Success, no issues in 59 source files (ethscan).
-- Git: HEAD `509445a` on `main`, tracking `origin/main` (clean working tree).
+- Repo baseline green per prior handoff; no code changes.
 
 ## Unresolved
-- `.github/workflows/test.yml` cannot be pushed: token lacks `workflows` scope (ghs_... 403). All other checks green.
+- `.github/workflows/test.yml` cannot be pushed: token lacks `workflows` scope. File present locally untracked.
 
 ## Next task
-If a workflows-scoped token becomes available: author/push `.github/workflows/test.yml` (ruff + mypy + pytest on push/PR, Python 3.10) and re-verify. Otherwise repo is green and feature-complete; no bounded high-value task.
+If a workflows-scoped token becomes available: git add/commit/push `.github/workflows/test.yml`, re-verify. Otherwise repo green and feature-complete; no bounded high-value task.
