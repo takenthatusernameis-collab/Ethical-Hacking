@@ -1561,3 +1561,20 @@ def test_format_smtp_report_csv_no_findings() -> None:
     }
     output = format_smtp_report_csv(data)
     assert "finding" not in output
+
+
+def test_format_smtp_report_csv_error_with_findings() -> None:
+    data = {
+        "target": "smtp.example.com",
+        "host": "smtp.example.com",
+        "port": 25,
+        "users": [],
+        "open_relay": None,
+        "error": "banner read failed: boom",
+        "findings": ["SMTP server version: 2.0.5"],
+    }
+    output = format_smtp_report_csv(data)
+    lines = output.splitlines()
+    assert "banner read failed: boom" in output
+    assert "finding" in lines
+    assert "SMTP server version: 2.0.5" in lines

@@ -302,7 +302,7 @@ def run_smtp(
     except Exception as exc:  # noqa: BLE001 - transport can raise any type
         results["error"] = f"connection failed: {exc}"
         if sock is not None:
-            sock.close()
+            sock.close()  # pragma: no cover - defensive
         return results
 
     try:
