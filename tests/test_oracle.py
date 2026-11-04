@@ -160,6 +160,14 @@ def test_assess_version_modern():
     assert not any("Old Oracle server version detected" in f for f in findings)
 
 
+def test_assess_version_non_numeric_version():
+    """A non-numeric version string is swallowed defensively (no crash)."""
+    accept_resp = {"version": "not-a-version", "error": None}
+    findings = _assess_version(accept_resp)
+    assert any("Oracle TNS server version: not-a-version" in f for f in findings)
+    assert not any("Old Oracle" in f for f in findings)
+
+
 def test_assess_version_none():
     """A missing version produces no version finding."""
     accept_resp = {"version": None, "error": None}

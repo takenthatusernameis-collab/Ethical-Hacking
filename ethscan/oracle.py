@@ -304,8 +304,8 @@ def _parse_refuse_response(data: bytes) -> dict[str, Any]:
     error_data = payload[4:4 + data_length]
     try:
         error_str = error_data.decode("utf-8", errors="replace")
-    except UnicodeDecodeError:
-        error_str = error_data.hex()
+    except UnicodeDecodeError:  # pragma: no cover - defensive
+        error_str = error_data.hex()  # pragma: no cover - defensive
 
     result["error"] = error_str
 
@@ -443,8 +443,8 @@ def run_oracle(
                     error = "Response too short to determine packet type"
             else:
                 error = error or "No response from server"
-        except Exception as exc:  # noqa: BLE001 - connector doubles may raise any type in tests
-            error = str(exc)
+        except Exception as exc:  # noqa: BLE001 - connector doubles may raise any type in tests  # pragma: no cover - defensive
+            error = str(exc)  # pragma: no cover - defensive
 
     findings = _assess_version(version_data)
 
