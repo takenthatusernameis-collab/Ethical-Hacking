@@ -608,6 +608,47 @@ def test_format_tls_report_csv() -> None:
     assert reader[3] == ["example.com", "example.com", "443", "cipher", "AES128-GCM-SHA256", "true", "TLSv1.2", ""]
 
 
+def test_format_tls_report_csv_renders_findings_section() -> None:
+    """CSV renders the findings section that Markdown renders.
+
+    The Markdown report lists every note under a "## Findings" heading. The
+    CSV formatter used to omit that section entirely. It now emits a findings
+    block mirroring the Markdown section.
+    """
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "versions": [
+            {"version": "TLSv1", "supported": True, "error": None, "negotiated_cipher": "AES128-SHA", "negotiated_protocol": "TLSv1"},
+        ],
+        "ciphers": [],
+        "notes": [
+            "Obsolete protocol version supported: TLSv1",
+            "Weak cipher suite supported: AES128-SHA",
+        ],
+    }
+    output = format_tls_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert ["finding"] in reader
+    assert ["Obsolete protocol version supported: TLSv1"] in reader
+    assert ["Weak cipher suite supported: AES128-SHA"] in reader
+
+
+def test_format_tls_report_csv_no_findings_section_when_empty() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "versions": [],
+        "ciphers": [],
+        "notes": [],
+    }
+    output = format_tls_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert ["finding"] not in reader
+
+
 def test_format_tls_report_csv_empty() -> None:
     data = {"target": "example.com", "host": "example.com", "port": 443, "versions": [], "ciphers": []}
     output = format_tls_report_csv(data)

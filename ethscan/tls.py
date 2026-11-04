@@ -526,4 +526,12 @@ def format_tls_report_csv(data: dict[str, object]) -> str:
             result.get("negotiated_version") or "",
             result.get("error") or "",
         ])
+
+    notes = data.get("notes")
+    if isinstance(notes, list) and notes:
+        writer.writerow([])
+        writer.writerow(["finding"])
+        for note in notes:
+            writer.writerow([note])
+
     return output.getvalue().rstrip("\r\n")
