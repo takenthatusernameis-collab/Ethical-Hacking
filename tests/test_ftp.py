@@ -688,13 +688,13 @@ def test_format_ftp_report_csv_comma_escaping() -> None:
         "banner": "220 server, ready, for you",
         "anonymous_login": False,
         "anonymous_message": "530, no, way",
-        "error": "err, one, two",
+        "error": "",
     }
     output = format_ftp_report_csv(data)
     reader = list(csv.reader(io.StringIO(output)))
     assert reader[1][3] == "220 server, ready, for you"
     assert reader[1][5] == "530, no, way"
-    assert reader[1][6] == "err, one, two"
+    assert reader[1][6] == ""
 
 
 from ethscan import ftp

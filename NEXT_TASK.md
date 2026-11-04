@@ -2,7 +2,7 @@
 Date: Wed Nov 04 2026
 
 ## State
-- HEAD `1c41318` pushed to origin/main; working tree clean.
+- HEAD `1c41318` pushed to origin/main; working tree has one unstaged change (tests/test_ftp.py fix, not committed).
 - Tests: 5561 passed, 50 skipped; ruff clean; mypy clean (59 files).
 - Attempted adding CI workflow but blocked by token lacking `workflows` scope (403).
 
