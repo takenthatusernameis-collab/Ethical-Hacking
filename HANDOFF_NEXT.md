@@ -2,13 +2,19 @@
 Date: Wed Nov 04 2026
 
 ## What changed
-- Authored `.github/workflows/test.yml` (ruff + mypy + pytest on push/PR, Python 3.10) locally - ready to push if token has `workflows` scope.
+- Authored `.github/workflows/test.yml` locally (uncommitted): CI workflow running ruff + mypy + pytest on push/PR to main, Python 3.10. YAML validated OK.
+- Verified baseline green: `ruff check .` passes; `mypy ethscan` clean (59 source files); `pytest tests` 5558 passed, 53 skipped.
 
 ## Verified
-- Tests: 5558 passed, 53 skipped (as of this session). `ruff check .` passes. `mypy ethscan` passes (no issues in 59 source files).
+- Tests: 5558 passed, 53 skipped.
+- `ruff check .`: all checks passed.
+- `mypy ethscan`: no issues in 59 source files.
+- `.github/workflows/test.yml`: valid YAML (python yaml.safe_load OK).
 
 ## Unresolved
-- `.github/workflows/test.yml` exists locally but cannot be pushed: token lacks `workflows` scope.
+- `.github/workflows/test.yml` is uncommitted and cannot be pushed: token lacks `workflows` scope (403 on workflow writes).
+- ruff/mypy not on default PATH; located at `$HOME/.local/bin/ruff` and `$HOME/.local/bin/mypy`.
 
 ## Next task
-If a workflows-scoped token becomes available: `git add .github/workflows/test.yml && git commit -m "ci: add test workflow" && git push`. Otherwise repo green and feature-complete; no bounded high-value task.
+- When a workflows-scoped token is available: `git add .github/workflows/test.yml && git commit -m "ci: add test workflow" && git push`, then re-verify.
+- Otherwise repo is green and feature-complete; no bounded high-value task remains.
