@@ -680,6 +680,26 @@ def test_format_ftp_report_csv_failed() -> None:
     assert "Connection refused" in reader[1][6]
 
 
+def test_format_ftp_report_csv_failed_with_findings() -> None:
+    data = {
+        "target": "ftp.example.com",
+        "host": "ftp.example.com",
+        "port": 21,
+        "banner": None,
+        "anonymous_login": None,
+        "anonymous_message": None,
+        "error": "connection failed",
+        "findings": ["Old FTP server version detected"],
+    }
+    output = format_ftp_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0] == ["target", "host", "port", "banner", "anonymous_login", "anonymous_message", "error"]
+    assert reader[1][6] == "connection failed"
+    assert reader[2] == []
+    assert reader[3] == ["finding"]
+    assert reader[4][0] == "Old FTP server version detected"
+
+
 def test_format_ftp_report_csv_comma_escaping() -> None:
     data = {
         "target": "ftp.example.com",
@@ -794,3 +814,21 @@ def test_format_ftp_report_csv_no_findings() -> None:
     }
     output = format_ftp_report_csv(data)
     assert "finding" not in output
+
+
+def test_format_ftp_report_csv_anonymous_not_checked() -> None:
+    data = {
+        "target": "ftp.example.com",
+        "host": "ftp.example.com",
+        "port": 21,
+        "banner": "220 ProFTPD 1.3.5 Server",
+        "anonymous_login": None,
+        "anonymous_message": None,
+        "error": None,
+    }
+    output = format_ftp_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0] == ["target", "host", "port", "banner", "anonymous_login", "anonymous_message", "error"]
+    assert reader[1][4] == ""
+    assert reader[1][5] == ""
+    assert reader[1][6] == ""
