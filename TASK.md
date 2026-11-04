@@ -2,8 +2,8 @@
 Date: Wed Nov 04 2026
 
 ## Current state
-- HEAD `1c41318` pushed to origin/main; working tree has one unstaged change (tests/test_ftp.py fix, not committed).
-- Tests: 5561 passed, 50 skipped (was 5560 passed + 1 failed before fix); ruff clean; mypy clean (59 files).
+- HEAD `95412f2` pushed to origin/main (clean working tree).
+- Tests: 5561 passed, 50 skipped; ruff clean; mypy clean (59 files).
 
 ## Blockers
 - `.github/workflows/test.yml` blocked by token lacking `workflows` permission (403).
