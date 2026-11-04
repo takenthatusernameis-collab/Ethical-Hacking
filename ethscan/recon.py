@@ -365,6 +365,8 @@ def format_recon_report_csv(data: dict[str, object]) -> str:
     geo = cast(dict[str, object] | None, data.get("geo"))
     if geo:
         geo_data = cast(dict[str, object], geo.get("geolocation") or {})
+        if geo_data.get("error"):
+            writer.writerow(["geo", "error", str(geo_data["error"])])
         for key in ("query", "country", "regionName", "city", "lat", "lon", "isp", "org", "as", "reverse"):
             if geo_data.get(key) is not None and geo_data.get(key) != "":
                 writer.writerow(["geo", key, str(geo_data.get(key))])

@@ -620,6 +620,37 @@ def test_format_recon_report_csv_whois_geo_trace() -> None:
     assert ["trace", "hop_1", "10.0.0.1"] in reader
 
 
+def test_format_recon_report_csv_geo_error() -> None:
+    """A geo lookup error is surfaced as a dedicated CSV row.
+
+    The Markdown report renders "- **Error:** ..." for a failed geo lookup
+    (test_format_recon_report_markdown_geo_fail), and the urlcheck CSV formatter
+    emits a ["web", "error", ...] row for the same class of sub-object error. The
+    recon CSV formatter previously emitted no error indication for a failed geo
+    lookup; it now emits a dedicated ["geo", "error", ...] row mirroring that
+    pattern while still emitting any available geolocation fields.
+    """
+    data = {
+        "target": "10.0.0.1",
+        "domain": "10.0.0.1",
+        "modules_run": ["geo"],
+        "subdomains": None,
+        "dns": None,
+        "whois": None,
+        "geo": {
+            "geolocation": {
+                "status": "fail",
+                "error": "Private IP range",
+            }
+        },
+        "trace": None,
+        "notes": [],
+    }
+    output = format_recon_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert ["geo", "error", "Private IP range"] in reader
+
+
 def test_run_recon_dns_failure_handling() -> None:
     with patch("ethscan.recon.run_subdomains"), \
          patch("ethscan.recon.run_dns") as mock_dns, \

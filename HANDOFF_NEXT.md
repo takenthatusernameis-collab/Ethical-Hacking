@@ -1,28 +1,27 @@
 # Handoff
 Date: Wed Nov 04 2026
-Session: Closed NTP CSV error gap; repo green.
+Session: Closed recon geo CSV error gap; repo green.
 
 ## What changed (this session)
-- `ethscan/ntp.py`: `format_ntp_report_csv()` now emits a dedicated `error` row when `data['error']` is present, mirroring the Markdown report (which renders "- **Error:** ...") and the ssh/smtp CSV error-row pattern. Previously a failed NTP probe produced a summary row with empty version/peer_count and no indication of why the probe failed.
-- `tests/test_ntp.py`: updated `test_format_ntp_report_csv_failed` and `test_format_ntp_report_csv_comma_escaping` to assert the error row; added `test_format_ntp_report_csv_emits_error_row`.
-- Committed as `822585c`, pushed to `origin/main`.
+- `ethscan/recon.py`: `format_recon_report_csv()` now emits a dedicated `["geo", "error", str(geo_data["error"])]` row when `geo_data.get("error")` is present, mirroring the Markdown report (which renders "- **Error:** ..." at recon.py:279-280) and the ssh/smtp/ntp/urlcheck CSV error-row pattern. Previously a failed geo lookup inside `recon` produced no error indication in CSV output.
+- `tests/test_recon.py`: added `test_format_recon_report_csv_geo_error` asserting the `["geo", "error", "Private IP range"]` row.
+- Changes are uncommitted; HEAD remains `822585c` (main branch, pushed).
 
 ## What was actually verified (this session)
-- `git log --oneline -5` → clean history (HEAD `822585c`, pushed)
-- `python -m pytest -q` → 5560 passed / 50 skipped (was 5559; +1 new test)
+- `python -m pytest tests/test_recon.py -q` → 36 passed
+- `python -m pytest -q` → 5561 passed / 50 skipped (was 5560; +1 new test)
 - `python -m ruff check ethscan tests` → "All checks passed!"
 - `python -m mypy ethscan` → "Success: no issues found in 59 source files"
-- Re-audited all module CSV/markdown formatters for top-level `error` parity; NTP was the only remaining top-level gap.
+- Re-audited the remaining nested sub-object error gaps: urlcheck `web['error']` (urlcheck.py:353-354) and hash per-entry `error` (hash.py:646) were already present; recon `geo_data['error']` is now closed.
 
 ## What remains unresolved
-- Landing CI workflow `.github/workflows/test.yml` on `origin/main` is still blocked by GitHub App token lacking `workflows` permission (403). Note: the handoff's reference to commit `2e9a943` is stale — that commit does not exist in this repo (verified: absent from branches, reflog, and `git fsck --unreachable`). The `test.yml` content is therefore not recoverable from history.
-- Remaining CSV/markdown `error` parity gaps are nested sub-object errors (`geo_data['error']` in `recon`, `web['error']` in `urlcheck`, hash check error), not the top-level module-error pattern addressed this session. Lower priority; not a demonstrated user-facing regression.
+- Landing CI workflow `.github/workflows/test.yml` on `origin/main` is still blocked by GitHub App token lacking `workflows` permission (403). Commit `2e9a943` referenced in prior handoffs does not exist in this repo (verified: absent from branches, reflog, and `git fsck --unreachable`). The `test.yml` content is not recoverable from history.
 
 ## Approaches already tried and why they failed
 - Restoring `test.yml` from `2e9a943` → commit not found in repo; content unrecoverable.
 - Pushing a workflow file → 403 due to insufficient token scope (`workflows` permission). Cannot proceed without token with appropriate scope.
 
 ## Precise next task
-If/when a `workflows`-scoped token becomes available: author a `.github/workflows/test.yml` (ruff + mypy + pytest on every push/PR), commit, `git push origin main`, re-verify. Otherwise the repository is green and feature-complete — no other bounded, high-value implementation task is evident from inspection/tests.
+Commit/push the uncommitted recon geo CSV error fix, then `git push origin main` and re-verify (pytest/ruff/mypy). If a `workflows`-scoped token becomes available: author `.github/workflows/test.yml` (ruff + mypy + pytest on every push/PR), commit, push, re-verify. Otherwise the repository is green and feature-complete — no other bounded, high-value implementation task is evident.
 
-(End of file - total 27 lines)
+(End of file - total 28 lines)
