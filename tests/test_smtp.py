@@ -601,6 +601,21 @@ def test_format_smtp_report_csv_no_users_no_relay() -> None:
     assert reader[1][6] == "closed relay"
 
 
+def test_format_smtp_report_csv_no_users_open_relay_unknown() -> None:
+    data = {
+        "target": "mail.example.com",
+        "host": "mail.example.com",
+        "port": 25,
+        "open_relay": None,
+        "users": [],
+    }
+    output = format_smtp_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert len(reader) == 2
+    assert reader[1][4] == ""
+    assert reader[1][6] == ""
+
+
 def test_format_smtp_report_csv_comma_escaping() -> None:
     data = {
         "target": "mail.example.com",
