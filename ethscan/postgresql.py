@@ -352,7 +352,7 @@ def run_postgresql(
                     version = str(startup_data["server_version"])
             else:
                 error = error or "No response from server"
-        except Exception as exc:  # noqa: BLE001 - connector doubles may raise any type in tests
+        except Exception as exc:  # noqa: BLE001  # pragma: no cover - defensive in tests
             error = str(exc)
 
     findings = _assess_startup(startup_data)

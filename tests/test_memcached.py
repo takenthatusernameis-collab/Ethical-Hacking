@@ -634,3 +634,8 @@ def test_assess_version_modern():
 def test_assess_version_none():
     findings = _assess_version(None)
     assert findings == []
+
+
+def test_assess_version_invalid():
+    findings = _assess_version("unknown")
+    assert findings == ["Memcached server version: unknown"]

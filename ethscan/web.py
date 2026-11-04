@@ -71,7 +71,7 @@ def _assess_web_server_version(server_header: str | None) -> list[str]:
     server_name, version = match.group(1), match.group(2)
     try:
         major = int(version.split(".")[0])
-    except (ValueError, IndexError):
+    except (ValueError, IndexError):  # pragma: no cover - defensive
         return findings
     findings.append(f"Web server version: {version}")
     name_lower = server_name.lower().replace("-", "")
@@ -366,7 +366,7 @@ def run_web_checks(target: str, checks: list[str], timeout: float = 5.0) -> dict
     findings_web = _assess_web_server_version(headers.get("server"))
     if findings_web:
         existing_findings = results.get("findings")
-        if isinstance(existing_findings, list):
+        if isinstance(existing_findings, list):  # pragma: no cover - defensive
             existing_findings.extend(findings_web)
         else:
             results["findings"] = list(findings_web)

@@ -508,6 +508,18 @@ def test_run_web_checks_url_target(mock_fetch_headers) -> None:
     mock_fetch_headers.assert_called_once()
 
 
+@patch("ethscan.web.fetch_headers")
+def test_run_web_checks_old_server_version_finding(mock_fetch_headers) -> None:
+    mock_fetch_headers.return_value = {
+        "server": "Apache/1.3.42",
+        "content-security-policy": "default-src 'self'",
+    }
+    results = run_web_checks("http://example.com", ["headers", "info_disclosure"], timeout=1.0)
+    assert results["secure"] is False
+    assert any("Old web server version detected" in f for f in results["findings"])
+    assert any("Web server version: 1.3.42" in f for f in results["findings"])
+
+
 def test_run_web_checks_empty_checks() -> None:
     results = run_web_checks("https://example.com", [], timeout=1.0)
     assert "headers" not in results
