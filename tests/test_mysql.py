@@ -1138,3 +1138,15 @@ def test_parse_handshake_edge_cases():
     data = b'\x01\x00\x00\x00' + b'\x0a'  # 4 byte header + 1 byte protocol
     res = _parse_handshake(data)
     assert 'protocol_version' in res
+
+
+def test_assess_handshake_old_version_major5_clean():
+    handshake = {"server_version": "5.0"}
+    findings = _assess_handshake(handshake)
+    assert any("Old MySQL version detected" in f for f in findings)
+
+
+def test_assess_handshake_unparseable_version_marker():
+    handshake = {"server_version": "foo-5.0.bar"}
+    findings = _assess_handshake(handshake)
+    assert any("Old MySQL version detected" in f for f in findings)
