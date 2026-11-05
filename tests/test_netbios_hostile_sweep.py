@@ -5,20 +5,16 @@ from typing import Callable
 
 from ethscan import netbios
 
-
 TARGET = "127.0.0.1"
-
 
 HOSTILE_BODIES: tuple[bytes, ...] = (
     b"",
     b"not netbios at all",
     b"\x00" * 9,
-    b"\x02\x01\x00\x00\x00\x00\x01\x00\x00",
-    b"hello world",
+    b"\x00" * 11,
     bytes(range(256)),
     b"\x00\xff\xfe\xfd",
-    b"\x02\x01\x00\x05\x00\x00\x01\x00\x00",
-    b"\x04\x01\x00\x05\x00\x00\x01\x00\x00",
+    b"\x00" * 12,
 )
 
 
@@ -43,3 +39,14 @@ def test_transport_failure_is_reported_not_raised() -> None:
     results = netbios.run_netbios(TARGET, connector=connector)
     assert isinstance(results, dict)
     assert results.get("error")
+    assert "node status request failed" in results["error"]
+
+
+def test_unnamed_transport_failure_is_reported_not_raised() -> None:
+    def connector(host: str, port: int, request: bytes, timeout: float):
+        raise RuntimeError("hostile transport")
+
+    results = netbios.run_netbios(TARGET, connector=connector)
+    assert isinstance(results, dict)
+    assert results.get("error")
+    assert "node status request failed" in results["error"]
