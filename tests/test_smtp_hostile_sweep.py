@@ -1,8 +1,6 @@
 """Permanent sweep test: a hostile SMTP answer is reported, never raised."""
 from __future__ import annotations
 
-from typing import Callable
-
 from ethscan import smtp
 
 
@@ -32,7 +30,7 @@ class _HostileSocket:
 
 def test_hostile_answer_is_reported_not_raised() -> None:
     for body in (b"", b"not smtp", b"\x00\xff", b"220 hostile\r\n"):
-        def connector(addr, timeout):
+        def connector(addr, timeout, body=body):
             return _HostileSocket(body)
 
         results = smtp.run_smtp(TARGET, check_starttls=False, check_relay=False, connector=connector)

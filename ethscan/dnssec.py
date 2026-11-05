@@ -225,12 +225,16 @@ def _query_dnskey_raw(
     nameserver: str,
     domain: str,
     timeout: float = DEFAULT_TIMEOUT,
+    udp_query=None,
+    tcp_query=None,
 ) -> dict[str, object]:
     """Query DNSKEY records using raw UDP/TCP socket."""
+    _udp = udp_query or _query_udp
+    _tcp = tcp_query or _query_tcp
     query = _build_dns_query(domain, DNSKEY_QTYPE, want_dnssec=True)
-    response = _query_udp(nameserver, query, timeout)
+    response = _udp(nameserver, query, timeout)
     if response is None or len(response) > 512:
-        response = _query_tcp(nameserver, query, timeout)
+        response = _tcp(nameserver, query, timeout)
     if response is None:
         return {"success": False, "keys": [], "error": "no response"}
     return _parse_dnskey_response(response, domain)
@@ -240,12 +244,16 @@ def _query_ds_raw(
     nameserver: str,
     domain: str,
     timeout: float = DEFAULT_TIMEOUT,
+    udp_query=None,
+    tcp_query=None,
 ) -> dict[str, object]:
     """Query DS records using raw UDP/TCP socket."""
+    _udp = udp_query or _query_udp
+    _tcp = tcp_query or _query_tcp
     query = _build_dns_query(domain, DS_QTYPE, want_dnssec=True)
-    response = _query_udp(nameserver, query, timeout)
+    response = _udp(nameserver, query, timeout)
     if response is None or len(response) > 512:
-        response = _query_tcp(nameserver, query, timeout)
+        response = _tcp(nameserver, query, timeout)
     if response is None:
         return {"success": False, "records": [], "error": "no response"}
     return _parse_ds_response(response, domain)
@@ -465,6 +473,12 @@ def run_dnssec(
     target: str,
     server: str | None = None,
     timeout: float = DEFAULT_TIMEOUT,
+    *,
+    nameserver_resolver=None,
+    udp_query=None,
+    tcp_query=None,
+    dnskey_dnspython=None,
+    ds_dnspython=None,
 ) -> dict[str, object]:
     """Validate DNSSEC for a target domain.
 
@@ -472,11 +486,21 @@ def run_dnssec(
         target: Bare domain or URL (e.g. example.com or https://example.com).
         server: Custom DNS resolver IP address (requires dnspython).
         timeout: Query timeout in seconds.
+        nameserver_resolver: Optional resolver injection seam for testing.
+        udp_query: Optional UDP query injection seam for testing.
+        tcp_query: Optional TCP query injection seam for testing.
+        dnskey_dnspython: Optional DNSKEY dnspython query injection seam.
+        ds_dnspython: Optional DS dnspython query injection seam.
 
     Returns:
         Structured results with DNSSEC validation status, keys, and chain info.
     """
     domain = _normalize_domain(target)
+    _resolve = nameserver_resolver or _resolve_nameservers
+    _udp = udp_query or _query_udp
+    _tcp = tcp_query or _query_tcp
+    _dk = dnskey_dnspython or _query_dnskey_dnspython
+    _ds = ds_dnspython or _query_ds_dnspython
 
     dnskey_result = {"success": False, "keys": [], "error": None}
     ds_result = {"success": False, "records": [], "error": None}
@@ -485,19 +509,37 @@ def run_dnssec(
 
     try:
         if DNS_AVAILABLE:
-            dnskey_result = _query_dnskey_dnspython(domain, server, timeout)
+            dnskey_result = _dk(domain, server, timeout)
             parent = _get_parent_zone(domain)
             if parent != ".":
-                ds_result = _query_ds_dnspython(parent.rstrip("."), server, timeout)
+                ds_result = _ds(parent.rstrip("."), server, timeout)
         else:
-            nameservers = _resolve_nameservers(domain, timeout)
+            nameservers = _resolve(domain, timeout)
             if nameservers:
-                dnskey_result = _query_dnskey_raw(nameservers[0], domain, timeout)
+                try:
+                    dnskey_result = _query_dnskey_raw(
+                        nameservers[0],
+                        domain,
+                        timeout,
+                        udp_query=_udp,
+                        tcp_query=_tcp,
+                    )
+                except TypeError:
+                    dnskey_result = _query_dnskey_raw(nameservers[0], domain, timeout)
                 parent = _get_parent_zone(domain)
                 if parent != ".":
-                    parent_ns = _resolve_nameservers(parent.rstrip("."), timeout)
+                    parent_ns = _resolve(parent.rstrip("."), timeout)
                     if parent_ns:
-                        ds_result = _query_ds_raw(parent_ns[0], parent.rstrip("."), timeout)
+                        try:
+                            ds_result = _query_ds_raw(
+                                parent_ns[0],
+                                parent.rstrip("."),
+                                timeout,
+                                udp_query=_udp,
+                                tcp_query=_tcp,
+                            )
+                        except TypeError:
+                            ds_result = _query_ds_raw(parent_ns[0], parent.rstrip("."), timeout)
             else:
                 dnskey_result["error"] = "no nameservers found"
                 ds_result["error"] = "no nameservers found"
