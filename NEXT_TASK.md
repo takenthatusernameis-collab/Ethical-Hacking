@@ -1,11 +1,12 @@
 # Next Task
 Continue evidence-driven formatter hostile-shape hardening for modules whose `format_*_report_markdown`/`format_*_report_csv` raise on hostile top-level/non-dict or hostile nested report shapes and lack `tests/test_*hostile_sweep.py` formatter-shape coverage.
 
-`ethscan/scanner.py` is done: `format_scan_report_markdown`/`format_scan_report_csv` now guard hostile top-level non-dict data; `tests/test_scanner_hostile_sweep.py` added. Verified: 55 scanner tests passed; full suite 5832 passed/50 skipped/0 failed; ruff clean; mypy clean.
+Done in recent sessions (verified, present in working tree/history): `service`, `scanner`, `recon`, `resolve`, `s3`. Probes showed `wifi` formatters do not raise on hostile top-level `None` (verify before changing).
 
 Focus (pick one real gap at a time, verify before changing):
-- `ethscan/service.py` formatters raised on hostile top-level `None` in probe (`AttributeError`/`TypeError`); assess coverage/gap and add smallest sweep+guards if needed.
-- Other confirmed raises without hostile-sweep coverage: `recon`, `resolve`, `s3`, `ping`, `osdetect`, `wifi`, `trace`, `subdomains`, `stale`, `radix`, `completion`, `config`, `cidr`, `dnsbrute`. Prioritize modules on common CLI/report paths and those with clear, local fixes. `passwords` formatters take a `results` positional argument (different signature) — verify the exact gap before changing.
+- Probe-identified `None`/hostile-shape raises without hostile-sweep formatter coverage (verify signatures; some may already be guarded): `ping`, `osdetect`, `trace`, `subdomains`, `stale`, `radix`, `completion`, `config`, `cidr`, `dnsbrute`. Prioritize modules on common CLI/report paths and those with clear, local fixes.
+- `passwords` formatters take a `results` positional argument (different signature) — verify the exact gap before changing.
+- `report`/`validate`/others: verify whether they are CLI/report formatters in scope for this sweep pattern; only change for demonstrated formatter-shape gaps.
 
 Constraints:
 - Preserve baseline; smallest reversible change.

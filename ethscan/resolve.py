@@ -252,21 +252,30 @@ def format_resolve_report_json(data: dict[str, object]) -> str:
     return json.dumps(data, indent=2, default=str)
 
 
+def _as_dict(value: object) -> dict[str, object]:
+    return value if isinstance(value, dict) else {}
+
+
 def format_resolve_report_markdown(data: dict[str, object]) -> str:
     """Format resolve results as Markdown."""
-    records_obj = data["records"]
+    data = _as_dict(data)
+    records_obj = data.get("records")
     records = records_obj if isinstance(records_obj, dict) else {}
     lines = ["# ethscan DNS Forward/Reverse Resolution Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Normalized:** {data['normalized']}")
-    lines.append(f"- **Type:** {'IP Address' if data['is_ip'] else 'Domain Name'}")
+    lines.append(f"- **Target:** {data.get('target', '')}")
+    lines.append(f"- **Normalized:** {data.get('normalized', '')}")
+    lines.append(f"- **Type:** {'IP Address' if data.get('is_ip') else 'Domain Name'}")
     record_types_queried = data.get("record_types_queried", [])
     if isinstance(record_types_queried, (list, tuple, set)):
-        lines.append(f"- **Record Types Queried:** {', '.join(str(r) for r in record_types_queried)}")
+        lines.append(
+            f"- **Record Types Queried:** {', '.join(str(r) for r in record_types_queried)}"
+        )
     else:
         lines.append(f"- **Record Types Queried:** {record_types_queried}")
     dnspython_available = data.get("dnspython_available", False)
-    lines.append(f"- **dnspython Available:** {'Yes' if dnspython_available else 'No (stdlib only)'}")
+    lines.append(
+        f"- **dnspython Available:** {'Yes' if dnspython_available else 'No (stdlib only)'}"
+    )
     server = data.get("server")
     if server:
         lines.append(f"- **Custom Resolver:** {server}")
@@ -295,6 +304,8 @@ def format_resolve_report_csv(data: dict[str, object]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["target", "normalized", "record_type", "record_value"])
+    if not isinstance(data, dict):
+        return output.getvalue().rstrip("\r\n")
     records_obj = data.get("records") or {}
     records: dict[str, object] = records_obj if isinstance(records_obj, dict) else {}
     for rtype, values in records.items():

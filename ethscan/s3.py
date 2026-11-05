@@ -451,16 +451,21 @@ def _escape(value: object) -> str:
     return str(value).replace("|", "\\|").replace("\n", " ")
 
 
+def _as_dict(value: object) -> dict[str, object]:
+    return value if isinstance(value, dict) else {}
+
+
 def format_s3_report_markdown(data: dict[str, object]) -> str:
     """Format S3 enumeration results as Markdown."""
+    data = _as_dict(data)
     lines = ["# ethscan S3 Bucket Enumeration Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Domain:** {data['domain']}")
-    lines.append(f"- **Region:** {data['region']}")
-    lines.append(f"- **Timeout:** {data['timeout']}s")
-    lines.append(f"- **Workers:** {data['workers']}")
-    lines.append(f"- **Wordlist Used:** {'Yes' if data['wordlist_used'] else 'No'}")
-    lines.append(f"- **Candidates Tested:** {data['candidates_tested']}")
+    lines.append(f"- **Target:** {data.get('target', '')}")
+    lines.append(f"- **Domain:** {data.get('domain', '')}")
+    lines.append(f"- **Region:** {data.get('region', '')}")
+    lines.append(f"- **Timeout:** {data.get('timeout', '')}s")
+    lines.append(f"- **Workers:** {data.get('workers', '')}")
+    lines.append(f"- **Wordlist Used:** {'Yes' if data.get('wordlist_used') else 'No'}")
+    lines.append(f"- **Candidates Tested:** {data.get('candidates_tested', 0)}")
     regions_checked = data.get('regions_checked') or []
     if not isinstance(regions_checked, list):
         regions_checked = []
@@ -563,6 +568,8 @@ def format_s3_report_csv(data: dict[str, object]) -> str:
         "public",
         "error",
     ])
+    if not isinstance(data, dict):
+        return output.getvalue().rstrip("\r\n")
     results = data.get("results") or []
     if not isinstance(results, list):
         results = []

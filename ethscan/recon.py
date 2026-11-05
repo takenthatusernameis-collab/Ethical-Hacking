@@ -166,17 +166,32 @@ def _markdown_escape(text: object) -> str:
     return str(text).replace("|", "\\|").replace("\n", " ")
 
 
+def _as_dict(value: object) -> dict[str, object]:
+    return value if isinstance(value, dict) else {}
+
+
+def _as_list(value: object) -> list[object]:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, (tuple, set)):
+        return list(value)
+    return []
+
+
 def format_recon_report_markdown(data: dict[str, object]) -> str:
     """Format recon results as Markdown."""
+    data = _as_dict(data)
     lines = ["# ethscan Reconnaissance Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Domain:** {data['domain']}")
-    lines.append(f"- **Modules Run:** {', '.join(cast(list, data['modules_run'])) if data['modules_run'] else 'None'}")
+    lines.append(f"- **Target:** {data.get('target', '')}")
+    lines.append(f"- **Domain:** {data.get('domain', '')}")
+    modules_run = _as_list(data.get("modules_run"))
+    modules_run_str = ", ".join(str(m) for m in modules_run) if modules_run else "None"
+    lines.append(f"- **Modules Run:** {modules_run_str}")
     lines.append("")
 
     # Subdomains section
-    subdomains = cast(dict[str, object] | None, data.get("subdomains"))
-    if subdomains:
+    subdomains = data.get("subdomains")
+    if isinstance(subdomains, dict):
         lines.append("## Subdomain Enumeration")
         lines.append(f"- **Subdomains Tested:** {subdomains.get('subdomains_tested', 0)}")
         lines.append(f"- **Resolved:** {subdomains.get('resolved_count', 0)}")
@@ -185,43 +200,50 @@ def format_recon_report_markdown(data: dict[str, object]) -> str:
             lines.append(f"- **Resolver:** {resolver} (dnspython: {'Yes' if subdomains.get('dnspython_available') else 'No'})")
         lines.append("")
 
-        resolved = cast(list, subdomains.get("resolved", []))
+        resolved = _as_list(subdomains.get("resolved"))
         if resolved:
             lines.append("### Resolved Subdomains")
             lines.append("| Subdomain | Hostname | IP |")
             lines.append("|-----------|----------|----|")
             for entry_raw in resolved:
-                entry = cast(dict[str, object], entry_raw)
+                entry = _as_dict(entry_raw)
                 lines.append(
-                    f"| {_markdown_escape(entry['subdomain'])} | "
-                    f"{_markdown_escape(entry['hostname'])} | "
-                    f"{_markdown_escape(entry['ip'])} |"
+                    f"| {_markdown_escape(entry.get('subdomain', ''))} | "
+                    f"{_markdown_escape(entry.get('hostname', ''))} | "
+                    f"{_markdown_escape(entry.get('ip', ''))} |"
                 )
             lines.append("")
 
     # DNS section
-    dns = cast(dict[str, object] | None, data.get("dns"))
-    if dns:
+    dns = data.get("dns")
+    if isinstance(dns, dict):
         lines.append("## DNS Record Enumeration")
-        lines.append(f"- **Record Types Queried:** {', '.join(cast(list, dns.get('record_types_queried', [])))}")
+        record_types_queried = _as_list(dns.get("record_types_queried"))
+        queried = ", ".join(str(r) for r in record_types_queried)
+        lines.append(f"- **Record Types Queried:** {queried}")
         lines.append(f"- **dnspython Available:** {'Yes' if dns.get('dnspython_available') else 'No'}")
         lines.append("")
 
-        records = cast(dict, dns.get("records", {}))
+        records = _as_dict(dns.get("records"))
         for rtype, values in records.items():
             lines.append(f"### {rtype} Records")
-            if values:
-                for value in values:
-                    lines.append(f"- {value}")
+            if isinstance(values, (list, tuple, set)):
+                if values:
+                    for value in values:
+                        lines.append(f"- {value}")
+                else:
+                    lines.append("*No records found*")
+            elif values:
+                lines.append(f"- {values}")
             else:
                 lines.append("*No records found*")
             lines.append("")
 
     # WHOIS section
-    whois = cast(dict[str, object] | None, data.get("whois"))
-    if whois:
+    whois = data.get("whois")
+    if isinstance(whois, dict):
         lines.append("## WHOIS Lookup")
-        parsed = cast(dict[str, object], whois.get("parsed", {}))
+        parsed = _as_dict(whois.get("parsed"))
         lines.append(f"- **Server:** {whois.get('server', 'N/A')}:{whois.get('port', 'N/A')}")
         lines.append(f"- **Registrar:** {parsed.get('registrar') or 'N/A'}")
         lines.append(f"- **Creation Date:** {parsed.get('creation_date') or 'N/A'}")
@@ -229,14 +251,14 @@ def format_recon_report_markdown(data: dict[str, object]) -> str:
         lines.append(f"- **Registrant Organization:** {parsed.get('registrant_org') or 'N/A'}")
         lines.append("")
 
-        nameservers = cast(list, parsed.get("nameservers", []))
+        nameservers = _as_list(parsed.get("nameservers"))
         if nameservers:
             lines.append("### Nameservers")
             for ns in nameservers:
                 lines.append(f"- {ns}")
             lines.append("")
 
-        status_codes = cast(list, parsed.get("status_codes", []))
+        status_codes = _as_list(parsed.get("status_codes"))
         if status_codes:
             lines.append("### Status Codes")
             for status in status_codes:
@@ -244,11 +266,11 @@ def format_recon_report_markdown(data: dict[str, object]) -> str:
             lines.append("")
 
     # Geolocation section
-    geo = cast(dict[str, object] | None, data.get("geo"))
-    if geo:
+    geo = data.get("geo")
+    if isinstance(geo, dict):
         lines.append("## IP Geolocation")
-        geo_data = cast(dict[str, object] | None, geo.get("geolocation"))
-        if geo_data:
+        geo_data = geo.get("geolocation")
+        if isinstance(geo_data, dict):
             if geo_data.get("status") == "success":
                 fields_map = {
                     "query": "Query IP",
@@ -277,14 +299,14 @@ def format_recon_report_markdown(data: dict[str, object]) -> str:
             else:
                 lines.append(f"- **Status:** {geo_data.get('status', 'fail')}")
                 if geo_data.get("error"):
-                    lines.append(f"- **Error:** {geo_data['error']}")
+                    lines.append(f"- **Error:** {geo_data.get('error')}")
         else:
             lines.append("*No geolocation data available.*")
         lines.append("")
 
     # Traceroute section
-    trace = cast(dict[str, object] | None, data.get("trace"))
-    if trace:
+    trace = data.get("trace")
+    if isinstance(trace, dict):
         lines.append("## TCP Traceroute")
         lines.append(f"- **Port:** {trace.get('port', 'N/A')}")
         lines.append(f"- **Max Hops:** {trace.get('max_hops', 'N/A')}")
@@ -298,13 +320,13 @@ def format_recon_report_markdown(data: dict[str, object]) -> str:
         lines.append(f"- **Destination Reached:** {'Yes' if dest else 'No'}")
         lines.append("")
 
-        hops = cast(list, trace.get("hops", []))
+        hops = _as_list(trace.get("hops"))
         if hops:
             lines.append("### Hop Table")
             lines.append("| Hop | IP | RTT (ms) | Response | Reached |")
             lines.append("|-----|-----|----------|----------|---------|")
             for hop_raw in hops:
-                hop = cast(dict[str, object], hop_raw)
+                hop = _as_dict(hop_raw)
                 hop_num = hop.get("hop", "")
                 ip = str(hop.get("ip") or "*").replace("|", "\\|")
                 rtt = hop.get("rtt_avg_ms")
@@ -315,7 +337,7 @@ def format_recon_report_markdown(data: dict[str, object]) -> str:
             lines.append("")
 
     # Notes
-    notes = cast(list, data.get("notes", []))
+    notes = _as_list(data.get("notes"))
     if notes:
         lines.append("## Notes")
         for note in notes:
@@ -330,57 +352,57 @@ def format_recon_report_csv(data: dict[str, object]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["module", "field", "value"])
+    if not isinstance(data, dict):
+        return output.getvalue().rstrip("\r\n")
 
     writer.writerow(["meta", "target", data.get("target", "")])
     writer.writerow(["meta", "domain", data.get("domain", "")])
-    writer.writerow(
-        ["meta", "modules_run", ",".join(cast(list, data.get("modules_run") or []))]
-    )
+    modules_run = _as_list(data.get("modules_run"))
+    writer.writerow(["meta", "modules_run", ",".join(str(m) for m in modules_run)])
 
-    subdomains = cast(dict[str, object] | None, data.get("subdomains"))
-    if subdomains:
-        for entry_raw in cast(list, subdomains.get("resolved") or []):
-            entry = cast(dict[str, object], entry_raw)
+    subdomains = data.get("subdomains")
+    if isinstance(subdomains, dict):
+        for entry_raw in _as_list(subdomains.get("resolved")):
+            entry = _as_dict(entry_raw)
             writer.writerow(
                 ["subdomains", entry.get("hostname", ""), entry.get("ip") or ""]
             )
 
-    dns = cast(dict[str, object] | None, data.get("dns"))
-    if dns:
-        for rtype, values in (cast(dict, dns.get("records") or {})).items():
-            for value in cast(list, values or []):
+    dns = data.get("dns")
+    if isinstance(dns, dict):
+        records = _as_dict(dns.get("records"))
+        for rtype, values in records.items():
+            for value in _as_list(values):
                 writer.writerow(["dns", str(rtype), str(value)])
 
-    whois = cast(dict[str, object] | None, data.get("whois"))
-    if whois:
-        parsed = cast(dict[str, object], whois.get("parsed") or {})
+    whois = data.get("whois")
+    if isinstance(whois, dict):
+        parsed = _as_dict(whois.get("parsed"))
         for key in ("registrar", "creation_date", "expiration_date", "registrant_org"):
             if parsed.get(key):
                 writer.writerow(["whois", key, str(parsed.get(key))])
-        for ns in cast(list, parsed.get("nameservers") or []):
+        for ns in _as_list(parsed.get("nameservers")):
             writer.writerow(["whois", "nameserver", str(ns)])
-        for status in cast(list, parsed.get("status_codes") or []):
+        for status in _as_list(parsed.get("status_codes")):
             writer.writerow(["whois", "status_code", str(status)])
 
-    geo = cast(dict[str, object] | None, data.get("geo"))
-    if geo:
-        geo_data = cast(dict[str, object], geo.get("geolocation") or {})
+    geo = data.get("geo")
+    if isinstance(geo, dict):
+        geo_data = _as_dict(geo.get("geolocation"))
         if geo_data.get("error"):
             writer.writerow(["geo", "error", str(geo_data["error"])])
         for key in ("query", "country", "regionName", "city", "lat", "lon", "isp", "org", "as", "reverse"):
             if geo_data.get(key) is not None and geo_data.get(key) != "":
                 writer.writerow(["geo", key, str(geo_data.get(key))])
 
-    trace = cast(dict[str, object] | None, data.get("trace"))
-    if trace:
-        for hop_raw in cast(list, trace.get("hops") or []):
-            hop = cast(dict[str, object], hop_raw)
+    trace = data.get("trace")
+    if isinstance(trace, dict):
+        for hop_raw in _as_list(trace.get("hops")):
+            hop = _as_dict(hop_raw)
             hop_num = hop.get("hop", hop.get("ttl", ""))
-            writer.writerow(
-                ["trace", f"hop_{hop_num}", hop.get("ip") or ""]
-            )
+            writer.writerow(["trace", f"hop_{hop_num}", hop.get("ip") or ""])
 
-    for note in cast(list, data.get("notes") or []):
+    for note in _as_list(data.get("notes")):
         writer.writerow(["notes", "", str(note)])
 
     return output.getvalue().rstrip("\r\n")
