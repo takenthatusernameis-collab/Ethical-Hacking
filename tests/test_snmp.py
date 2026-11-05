@@ -1422,3 +1422,15 @@ def test_format_snmp_report_csv_no_findings() -> None:
     output = format_snmp_report_csv(results)
     rows = list(csv.reader(io.StringIO(output)))
     assert not any(r == ["finding"] for r in rows)
+
+
+def test_run_snmp_connector_uncaught_exception_is_caught() -> None:
+    """A connector that raises an uncaught exception type is reported, not propagated."""
+
+    def boom(host, port, request, timeout):
+        raise RuntimeError("hostile connector")
+
+    result = run_snmp("127.0.0.1", timeout=0.1, connector=boom)
+    assert result["error"] == "snmp probe failed: hostile connector"
+    assert result["communities"] == []
+    assert result["valid_communities"] == []
