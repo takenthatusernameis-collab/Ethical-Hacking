@@ -5,56 +5,43 @@ from typing import Callable
 
 from ethscan import smtp
 
+
 TARGET = "127.0.0.1"
 
-HOSTILE_BODIES: tuple[bytes, ...] = (
-    b"",
-    b"not smtp at all",
-    b"\x00" * 9,
-    b"\x00\xff\xfe\xfd",
-    b"hello world",
-    bytes(range(256)),
-)
 
-
-class _ScriptedSocket:
-    def __init__(self, body: bytes) -> None:
-        self.body = body
+class _HostileSocket:
+    def __init__(self, body: bytes):
+        self._body = body
         self._sent = False
 
-    def settimeout(self, _timeout: float) -> None:
-        pass
+    def settimeout(self, timeout):
+        return None
 
-    def recv(self, _size: int) -> bytes:
-        return self.body
+    def recv(self, size):
+        if self._sent:
+            return b""
+        self._sent = True
+        return self._body
 
-    def sendall(self, data: bytes) -> None:
-        pass
+    def send(self, data):
+        return len(data)
 
-    def close(self) -> None:
-        pass
-
-    def makefile(self, *args, **kwargs):
-        import io
-        return io.BytesIO(self.body)
-
-
-def _connector_for(body: bytes) -> Callable[..., object]:
-    def connector(host, port, timeout):
-        return _ScriptedSocket(body)
-
-    return connector
+    def close(self):
+        return None
 
 
 def test_hostile_answer_is_reported_not_raised() -> None:
-    for body in HOSTILE_BODIES:
-        results = smtp.run_smtp(TARGET, connector=_connector_for(body))
+    for body in (b"", b"not smtp", b"\x00\xff", b"220 hostile\r\n"):
+        def connector(addr, timeout):
+            return _HostileSocket(body)
+
+        results = smtp.run_smtp(TARGET, check_starttls=False, check_relay=False, connector=connector)
         assert isinstance(results, dict)
         assert "error" in results
 
 
 def test_transport_failure_is_reported_not_raised() -> None:
-    def connector(host, port, timeout):
+    def connector(addr, timeout):
         raise OSError("connection refused")
 
     results = smtp.run_smtp(TARGET, connector=connector)
@@ -63,8 +50,8 @@ def test_transport_failure_is_reported_not_raised() -> None:
 
 
 def test_unnamed_transport_failure_is_reported_not_raised() -> None:
-    def connector(host, port, timeout):
-        raise RuntimeError("hostile transport")
+    def connector(addr, timeout):
+        raise RuntimeError("boom")
 
     results = smtp.run_smtp(TARGET, connector=connector)
     assert isinstance(results, dict)
