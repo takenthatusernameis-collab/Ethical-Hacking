@@ -595,10 +595,14 @@ def format_subtake_report_csv(data: dict[str, object]) -> str:
             "http_confirmed",
         ]
     )
+    if not isinstance(data, dict):
+        return output.getvalue().rstrip("\r\n")
     all_results_data = data.get("all_results") or []
     if not isinstance(all_results_data, list):
         all_results_data = []
     for entry in all_results_data:
+        if not isinstance(entry, dict):
+            continue
         takeover = entry.get("takeover") or {}
         if not isinstance(takeover, dict):
             takeover = {}
@@ -632,13 +636,16 @@ def _escape(value: str) -> str:
 def format_subtake_report_markdown(data: dict[str, object]) -> str:
     """Format subdomain takeover results as Markdown."""
     lines = ["# ethscan Subdomain Takeover Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Domain:** {data['domain']}")
+    if not isinstance(data, dict):
+        lines.append("*No structured report data.*")
+        return "\n".join(lines)
+    lines.append(f"- **Target:** {data.get('target', '')}")
+    lines.append(f"- **Domain:** {data.get('domain', '')}")
     resolver = data.get("resolver")
     if resolver:
         lines.append(f"- **Resolver:** {resolver} (dnspython: {'Yes' if data.get('dnspython_available') else 'No'})")
-    lines.append(f"- **Subdomains Tested:** {data['subdomains_tested']}")
-    lines.append(f"- **Vulnerable:** {data['vulnerable_count']}")
+    lines.append(f"- **Subdomains Tested:** {data.get('subdomains_tested', 0)}")
+    lines.append(f"- **Vulnerable:** {data.get('vulnerable_count', 0)}")
     lines.append("")
 
     lines.append("## Vulnerable Subdomains (Potential Takeover)")
