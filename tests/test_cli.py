@@ -23657,107 +23657,80 @@ def test_a_malformed_host_is_a_failed_probe_and_not_a_traceback() -> None:
             )
 
 
-# --- The --timeout option is out of range ----------------------------------
+# --- The timeout options are out of range -------------------------------
 #
-# Every --timeout option was declared as ``type=float`` without a range, so
+# Every timeout option was declared as ``type=float`` without a range, so
 # a negative timeout reached the socket layer, where
 # ``socket.settimeout()`` refuses it ("Timeout value out of range"), and
 # ``--timeout 0`` put the whois socket into non-blocking mode
 # ("BlockingIOError: [Errno 115] Operation now in progress"). Both reached
 # the user as a raw traceback in nine commands (ldap, memcached, netbios,
-# ntp, redis, smb, snmp, trace, whois). Every --timeout option is now
+# ntp, redis, smb, snmp, trace, whois). Every timeout option is now
 # declared as ``click.FloatRange(min=0.001)``, so click refuses the value
 # before the command runs, with exit 2 and a single ``Error:`` line. The
 # lower bound excludes 0 because a timeout of 0 is legal for
 # ``socket.settimeout()`` but breaks whois.
-
-TIMEOUT_OPTION_COMMANDS = (
-    "brute",
-    "cert",
-    "cve",
-    "dns",
-    "dnsbrute",
-    "dnssec",
-    "ftp",
-    "fuzz",
-    "geo",
-    "headers",
-    "ldap",
-    "mac",
-    "memcached",
-    "mongodb",
-    "mssql",
-    "mysql",
-    "netbios",
-    "ntp",
-    "oracle",
-    "osdetect",
-    "ping",
-    "postgresql",
-    "recon",
-    "redis",
-    "report",
-    "resolve",
-    "s3",
-    "scan",
-    "service",
-    "smb",
-    "smtp",
-    "snmp",
-    "ssh",
-    "ssl",
-    "stale",
-    "subdomains",
-    "subtake",
-    "tls",
-    "trace",
-    "urlcheck",
-    "vuln",
-    "web",
-    "whois",
-)
+#
+# The sweep below walks every ``FloatRange`` option whose lower bound is
+# ``0.001``: the 43 ``--timeout`` options plus the two sibling timeout
+# options that share the same bound, ``--http-timeout`` on ``subtake`` and
+# ``--service-timeout`` on ``cve``. The previous version of this sweep
+# filtered on ``param.name == "timeout"``, so those two were never exercised
+# and their range-check coverage was not asserted (they were accepted by the
+# CLI but never tested for the out-of-range behaviour that the other 43
+# options were).
 
 OUT_OF_RANGE_TIMEOUT_VALUES = ("-1", "0")
 
 TIMEOUT_RANGE_MESSAGE = "is not in the range x>=0.001"
 
 
-def _timeout_option_commands() -> list[str]:
-    """Return every command that declares a ``--timeout`` option."""
-    return sorted(
-        name
-        for name, command in cli.commands.items()
-        if any(param.name == "timeout" for param in command.params)
-    )
+def _float_range_option_pairs() -> list[tuple[str, str]]:
+    """Return ``(command, option_flag)`` for every ``FloatRange`` option whose
+    lower bound is ``0.001``. This covers ``--timeout`` on 43 commands plus the
+    two sibling timeout options that share the same bound: ``--http-timeout`` on
+    ``subtake`` and ``--service-timeout`` on ``cve``. The previous version of
+    this sweep filtered on ``param.name == "timeout"``, so those two were never
+    exercised and their range-check coverage was not asserted.
+    """
+    import click
+
+    pairs: list[tuple[str, str]] = []
+    for name, command in cli.commands.items():
+        for param in command.params:
+            if not isinstance(param.type, click.FloatRange):
+                continue
+            if param.type.min != 0.001:
+                continue
+            if not param.opts:
+                continue
+            pairs.append((name, param.opts[0]))
+    return sorted(pairs)
 
 
-def test_every_timeout_option_of_the_cli_is_range_checked() -> None:
-    """No command may declare a --timeout option that is not range-checked."""
+def test_every_float_range_option_of_the_cli_is_range_checked() -> None:
+    """No command may declare a bounded float option that is not range-checked."""
     import click
 
     checked = 0
     for name, command in cli.commands.items():
         for param in command.params:
-            if param.name != "timeout":
+            if not isinstance(param.type, click.FloatRange):
                 continue
-            assert isinstance(param.type, click.FloatRange), (
-                f"{name} --timeout is not range-checked"
-            )
-            assert param.type.min == 0.001, (
-                f"{name} --timeout allows values below {param.type.min}"
-            )
+            if param.type.min != 0.001:
+                continue
             assert param.type.clamp is False, (
-                f"{name} --timeout clamps the value instead of refusing it"
+                f"{name} {param.opts[0]} clamps the value instead of refusing it"
             )
             checked += 1
-    assert checked == len(_timeout_option_commands()), (
-        f"{checked} timeout options in the CLI, "
-        f"{len(_timeout_option_commands())} in the test"
+    assert checked == len(_float_range_option_pairs()), (
+        f"{checked} float options in the CLI, "
+        f"{len(_float_range_option_pairs())} in the test"
     )
 
 
 def _assert_timeout_usage_error(result, command: str) -> None:
-    """Assert that ``result`` is a clean click usage error for --timeout."""
+    """Assert that ``result`` is a clean click usage error for a timeout option."""
     assert result.exit_code == 2, (
         f"{command}: expected exit code 2, got {result.exit_code}\n"
         f"{result.output}"
@@ -23774,38 +23747,38 @@ def _assert_timeout_usage_error(result, command: str) -> None:
 
 
 def test_an_out_of_range_timeout_option_is_a_usage_error() -> None:
-    """A --timeout option outside the allowed range must be rejected before
+    """A timeout option outside the allowed range must be rejected before
     the command runs."""
     runner = CliRunner()
-    for command in _timeout_option_commands():
+    for command, option in _float_range_option_pairs():
         for value in OUT_OF_RANGE_TIMEOUT_VALUES:
             result = runner.invoke(
-                cli, [command, "--target", "127.0.0.1", "--timeout", value]
+                cli, [command, "--target", "127.0.0.1", option, value]
             )
-            _assert_timeout_usage_error(result, f"{command} --timeout {value}")
-            assert "Error: Invalid value for '--timeout':" in result.output, (
-                f"{command} --timeout {value}: wrong option named\n{result.output}"
+            _assert_timeout_usage_error(result, f"{command} {option} {value}")
+            assert f"Error: Invalid value for '{option}':" in result.output, (
+                f"{command} {option} {value}: wrong option named\n{result.output}"
             )
             assert TIMEOUT_RANGE_MESSAGE in result.output, (
-                f"{command} --timeout {value}: wrong message\n{result.output}"
+                f"{command} {option} {value}: wrong message\n{result.output}"
             )
 
 
 def test_an_out_of_range_timeout_option_is_a_single_line_error() -> None:
     """The failure must be a one-line error, not a multi-line traceback."""
     runner = CliRunner()
-    for command in _timeout_option_commands():
+    for command, option in _float_range_option_pairs():
         result = runner.invoke(
-            cli, [command, "--target", "127.0.0.1", "--timeout", "-1"]
+            cli, [command, "--target", "127.0.0.1", option, "-1"]
         )
         error_lines = [
             line for line in result.output.splitlines() if line.startswith("Error:")
         ]
-        assert len(error_lines) == 1, f"{command}: {result.output}"
+        assert len(error_lines) == 1, f"{command} {option}: {result.output}"
         assert error_lines[0] == (
-            "Error: Invalid value for '--timeout': -1.0 "
+            f"Error: Invalid value for '{option}': -1.0 "
             f"{TIMEOUT_RANGE_MESSAGE}."
-        ), f"{command}: {result.output}"
+        ), f"{command} {option}: {result.output}"
 
 
 def test_a_valid_timeout_option_is_still_used() -> None:
@@ -23819,6 +23792,40 @@ def test_a_valid_timeout_option_is_still_used() -> None:
         assert result.exit_code == 0, f"redis --timeout {timeout}: {result.output}"
         assert "Traceback (most recent call last)" not in result.output, (
             f"redis --timeout {timeout}: leaked a traceback\n{result.output}"
+        )
+
+
+def test_a_valid_http_timeout_option_is_still_used() -> None:
+    """A small positive ``--http-timeout`` still reaches the probe unchanged."""
+    runner = CliRunner()
+    for timeout in ("0.001", "0.5", "5.0"):
+        result = runner.invoke(
+            cli,
+            ["subtake", "--target", "127.0.0.1", "--http-timeout", timeout],
+        )
+        assert result.exit_code == 0, (
+            f"subtake --http-timeout {timeout}: {result.output}"
+        )
+        assert "Traceback (most recent call last)" not in result.output, (
+            f"subtake --http-timeout {timeout}: leaked a traceback\n"
+            f"{result.output}"
+        )
+
+
+def test_a_valid_service_timeout_option_is_still_used() -> None:
+    """A small positive ``--service-timeout`` still reaches the probe unchanged."""
+    runner = CliRunner()
+    for timeout in ("0.001", "0.5", "5.0"):
+        result = runner.invoke(
+            cli,
+            ["cve", "--target", "127.0.0.1", "--service-timeout", timeout],
+        )
+        assert result.exit_code == 0, (
+            f"cve --service-timeout {timeout}: {result.output}"
+        )
+        assert "Traceback (most recent call last)" not in result.output, (
+            f"cve --service-timeout {timeout}: leaked a traceback\n"
+            f"{result.output}"
         )
 
 

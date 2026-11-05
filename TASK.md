@@ -2,21 +2,24 @@
 Date: Thu Nov 05 2026
 
 ## Current state
-- HEAD (committed baseline before this session's doc/test edits): `c9f228c`. Working tree now has uncommitted local changes from this session.
-- Tests: 5869 passed, 53 skipped, 0 failed.
+- HEAD (committed baseline before this session's doc/test edits): `398c8d0`. Working tree now has uncommitted local changes from this session.
+- Tests: 5871 passed, 53 skipped, 0 failed.
 - `python3 -m ruff check .`: all checks passed. `python3 -m mypy ethscan`: Success, 59 source files.
-- Int-option range sweep (`tests/test_cli.py` `INT_OPTION_RANGES` + `INT_OPTION_UPPER_BAD`) covers all int options declared with `click.IntRange` in `ethscan/cli.py`, including `--workers` (17) and port options (24: `--port`/`--tcp-port`/`--whois-port`/`--trace-port` across commands).
 
 ## This session
-- Found a permanent-test coverage gap: 24 port options are `click.IntRange(0, 65535)` in `ethscan/cli.py` but were not named in `INT_OPTION_RANGES`/`INT_OPTION_UPPER_BAD`, so the int-option range sweep did not assert their range-check coverage. No source change was needed — Click already rejects out-of-range values (verified: `--port 65536`/`-1` exits 2 with a clean single-line usage error, no traceback, no probe start).
-- Added the 24 port entries to `INT_OPTION_RANGES` and `INT_OPTION_UPPER_BAD` in `tests/test_cli.py`. Existing sweep tests (`test_every_int_option_of_the_cli_is_range_checked`, lower/upper bound, single-line, workers no-probe pattern coverage context) now cover them.
-- Verified: targeted `-k "every_int_option or out_of_range_int_option or out_of_range_workers"` → 5 passed; full `python3 -m pytest -q` → 5869 passed, 53 skipped, 0 failed; `python3 -m ruff check .` clean; `python3 -m mypy ethscan` clean.
+- Found a permanent-test coverage gap: the timeout-option sweep in `tests/test_cli.py` filtered on `param.name == "timeout"`, so two sibling timeout options that share the same `click.FloatRange(min=0.001)` bound were never exercised: `subtake --http-timeout` and `cve --service-timeout`. Their range-check coverage was not asserted, even though the 43 `--timeout` options were.
+- Replaced the name-filtered sweep with a bound-driven sweep: `_float_range_option_pairs()` walks every `FloatRange` option whose `min == 0.001` and returns `(command, opt_flag)` pairs. Added `test_every_float_range_option_of_the_cli_is_range_checked()` (asserts every such option is a `FloatRange` with `min == 0.001` and `clamp is False`, and that the count matches the pairs list — a new `IntRange`-style tripwire).
+- Extended `test_an_out_of_range_timeout_option_is_a_usage_error` and `test_an_out_of_range_timeout_option_is_a_single_line_error` to iterate the pairs (so `--http-timeout`/`--service-timeout` now get the lower-bound `-1` and `0` rejection checks with the `x>=0.001` message). Removed the now-unused `TIMEOUT_OPTION_COMMANDS` tuple and `_timeout_option_commands()`.
+- Added `test_a_valid_http_timeout_option_is_still_used()` (subtake) and `test_a_valid_service_timeout_option_is_still_used()` (cve) so the new options still accept in-range values without leaking a traceback.
+- Verified: targeted `-k "float_range or timeout or http_timeout or service_timeout"` → 35 passed; full `python3 -m pytest -q` → 5871 passed, 53 skipped, 0 failed; `python3 -m ruff check .` clean; `python3 -m mypy ethscan` clean.
 
 ## Blockers
 - None.
 
 ## Next task
-- None identified — every `click.IntRange` option of the CLI is now named in `INT_OPTION_RANGES`/`INT_OPTION_UPPER_BAD` and covered by the permanent sweep tests.
-- If a new `IntRange` option is added, add it to `INT_OPTION_RANGES` (and `INT_OPTION_UPPER_BAD` when `max` is bounded) and ensure a probe/no-side-effect tripwire test exists where the option could trigger work before parsing completes (as with `--workers`).
+- None identified — every bounded numeric CLI option (`IntRange` and `FloatRange`) is now named in a permanent sweep and covered by range-check + usage-error + single-line + tripwire tests.
+- If a new bounded numeric option is added, extend `_float_range_option_pairs()` (for `FloatRange(min=0.001)` siblings) or `INT_OPTION_RANGES`/`INT_OPTION_UPPER_BAD` (for `IntRange`) and ensure a probe/no-side-effect tripwire test exists where the option could trigger work before parsing completes.
 - Run: `python3 -m pytest -q`, `python3 -m ruff check .`, `python3 -m mypy ethscan`.
 - Update `TASK.md`/`HANDOFF_NEXT.md`/`NEXT_TASK.md`; do not commit unless asked.
+
+(End of file - total 27 lines)
