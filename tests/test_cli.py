@@ -24586,3 +24586,169 @@ def test_cli_hash_config_list_passwords(tmp_path) -> None:
     result = runner.invoke(cli, ["--config", str(config_file), "hash"])
     assert result.exit_code == 0
     assert '"passwords_hashed": 2' in result.output
+
+
+# --- Choice option validation (all commands) -------------------------------
+#
+# Click enforces ``click.Choice`` at parse time: an invalid value is refused
+# before the command callback runs, with exit 2 and a single ``Error:`` line.
+# A previous ad-hoc test covered only ``completion --shell powershell``; the
+# rest of the bounded choice options (profiles, protocols, algorithms, sort
+# keys, severities, ldap versions, and every output-format choice) had no
+# permanent rejection sweep, so replacing a ``Choice`` with a plain string
+# type or loosening validation would not be caught. The sweep below walks
+# every ``Choice`` option on every command and asserts the clean usage-error
+# contract, using ``__bogus__`` (not a valid value for any declared choice).
+#
+# Commands that require a target or other mandatory arguments receive minimal
+# safe base arguments; the invalid choice is appended last and rejected by
+# Click before the callback executes, so no network/probe side effects occur.
+
+INVALID_CHOICE_VALUE = "__bogus__"
+
+
+def _choice_option_base_args(command: str) -> list[str]:
+    """Minimal args so Click can reach option parsing for ``command``."""
+    bases: dict[str, list[str]] = {
+        "brute": [
+            "--target", "127.0.0.1",
+            "--user-file", "/dev/null",
+            "--pass-file", "/dev/null",
+        ],
+        "cve": ["--target", "127.0.0.1", "--no-cache", "--no-offline-fallback"],
+        "geo": ["--target", "127.0.0.1", "--no-cache", "--no-offline-fallback"],
+        "cert": ["--target", "127.0.0.1", "--no-cache", "--no-offline-fallback"],
+        "mac": ["--target", "aa:bb:cc:dd:ee:ff", "--no-cache", "--no-offline-fallback"],
+        "hash": ["--password", "x"],
+        "audit": ["--file", "/dev/null"],
+        "ldap": ["--target", "127.0.0.1"],
+        "report": ["--target", "127.0.0.1"],
+        "scan": ["--target", "127.0.0.1"],
+        "service": ["--target", "127.0.0.1"],
+        "vuln": ["--target", "127.0.0.1"],
+        "dns": ["--target", "127.0.0.1"],
+        "dnsbrute": ["--target", "127.0.0.1"],
+        "dnssec": ["--target", "127.0.0.1"],
+        "fuzz": ["--target", "http://127.0.0.1"],
+        "headers": ["--target", "http://127.0.0.1"],
+        "web": ["--target", "http://127.0.0.1"],
+        "urlcheck": ["--target", "http://127.0.0.1"],
+        "ssl": ["--target", "127.0.0.1"],
+        "tls": ["--target", "127.0.0.1"],
+        "whois": ["--target", "127.0.0.1"],
+        "ping": ["--target", "127.0.0.1"],
+        "trace": ["--target", "127.0.0.1"],
+        "resolve": ["--target", "127.0.0.1"],
+        "recon": ["--target", "127.0.0.1", "--modules", "whois"],
+        "subdomains": ["--target", "example.com"],
+        "subtake": ["--target", "example.com"],
+        "stale": ["--target", "127.0.0.1"],
+        "ftp": ["--target", "127.0.0.1"],
+        "smtp": ["--target", "127.0.0.1"],
+        "ssh": ["--target", "127.0.0.1"],
+        "smb": ["--target", "127.0.0.1"],
+        "snmp": ["--target", "127.0.0.1"],
+        "redis": ["--target", "127.0.0.1"],
+        "memcached": ["--target", "127.0.0.1"],
+        "mysql": ["--target", "127.0.0.1"],
+        "postgresql": ["--target", "127.0.0.1"],
+        "mongodb": ["--target", "127.0.0.1"],
+        "mssql": ["--target", "127.0.0.1"],
+        "oracle": ["--target", "127.0.0.1"],
+        "ntp": ["--target", "127.0.0.1"],
+        "netbios": ["--target", "127.0.0.1"],
+        "nmap": ["--input-file", "/dev/null"],
+        "s3": ["--target", "example"],
+        "osdetect": ["--target", "127.0.0.1"],
+        "jwt": [],
+        "validate": ["--ports", "80"],
+        "cidr": ["--cidr", "10.0.0.0/24"],
+        "radix": ["--cidrs", "10.0.0.0/24"],
+        "wifi": [],
+        "config": [],
+        "version": [],
+        "completion": ["bash"],
+    }
+    return bases.get(command, ["--target", "127.0.0.1"])
+
+
+def _choice_option_cases() -> list[tuple[str, str, str, tuple[str, ...]]]:
+    """Return ``(command, option_flag, param_name, choices)`` for every Choice option."""
+    import click
+
+    cases: list[tuple[str, str, str, tuple[str, ...]]] = []
+    for name, command in cli.commands.items():
+        for param in command.params:
+            if not isinstance(param.type, click.Choice):
+                continue
+            if not param.opts:
+                continue
+            # Prefer a long option for the assertion message; fall back to any opt.
+            flag = next((o for o in param.opts if o.startswith("--")), param.opts[0])
+            choices = tuple(str(c) for c in param.type.choices)
+            cases.append((name, flag, param.name, choices))
+    return sorted(cases)
+
+
+def test_every_choice_option_of_the_cli_is_enumerated() -> None:
+    """No command may declare a Choice option that is not covered by the sweep."""
+    import click
+
+    checked = 0
+    for _name, command in cli.commands.items():
+        for param in command.params:
+            if isinstance(param.type, click.Choice):
+                checked += 1
+    assert checked == len(_choice_option_cases()), (
+        f"{checked} Choice options in the CLI, {len(_choice_option_cases())} in the sweep"
+    )
+    assert checked == 126, f"expected 126 Choice options, found {checked}"
+
+
+def _assert_choice_usage_error(result, label: str) -> None:
+    """Assert that ``result`` is a clean Click usage error for a Choice option."""
+    assert result.exit_code == 2, (
+        f"{label}: expected exit code 2, got {result.exit_code}\n{result.output}"
+    )
+    assert "Error: Invalid value for" in result.output, (
+        f"{label}: missing usage error message\n{result.output}"
+    )
+    assert "is not one of" in result.output, (
+        f"{label}: missing choice message\n{result.output}"
+    )
+    assert "Traceback (most recent call last)" not in result.output, (
+        f"{label}: leaked a traceback\n{result.output}"
+    )
+    assert isinstance(result.exception, SystemExit), (
+        f"{label}: leaked {result.exception!r} instead of a usage error"
+    )
+
+
+def test_an_invalid_choice_value_is_a_usage_error() -> None:
+    """An invalid Choice value must be rejected before the command runs."""
+    runner = CliRunner()
+    for command, flag, param_name, choices in _choice_option_cases():
+        assert INVALID_CHOICE_VALUE not in choices, (
+            f"{command} {flag}: test sentinel collides with a valid choice"
+        )
+        base = _choice_option_base_args(command)
+        # For positional Choice args (no -- flag), replace the positional slot.
+        if not flag.startswith("-"):
+            # completion takes a positional shell; place bogus as that arg.
+            if command == "completion" and param_name == "shell":
+                args = [INVALID_CHOICE_VALUE]
+            else:
+                args = base + [INVALID_CHOICE_VALUE]
+        else:
+            args = [*base, flag, INVALID_CHOICE_VALUE]
+        result = runner.invoke(cli, [command, *args])
+        label = f"{command} {flag}={INVALID_CHOICE_VALUE}"
+        _assert_choice_usage_error(result, label)
+        assert (
+            f"'{flag}'" in result.output
+            or flag in result.output
+            or f"'{flag.upper()}'" in result.output
+            or f"'{param_name.upper()}'" in result.output
+        ), (
+            f"{label}: wrong option named\n{result.output}"
+        )
