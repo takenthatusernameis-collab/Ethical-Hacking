@@ -297,8 +297,10 @@ def _finding_detail(finding: dict[str, object]) -> str:
 
 def format_nmap_report_markdown(data: dict[str, object]) -> str:
     """Format Nmap parser results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan Nmap Vulnerability Report", ""]
-    lines.append(f"- **Input File:** {data['input_file']}")
+    lines.append(f"- **Input File:** {data.get('input_file')}")
     lines.append(f"- **Hosts Scanned:** {data.get('hosts_scanned', 0)}")
     lines.append(f"- **Total Ports Scanned:** {data.get('total_ports_scanned', 0)}")
     lines.append(f"- **Open Ports:** {data.get('total_open_ports', 0)}")
@@ -309,52 +311,58 @@ def format_nmap_report_markdown(data: dict[str, object]) -> str:
     severity_counts = data.get("severity_counts") or {}
     lines.append("## Severity Summary")
     for name in SEVERITIES:
-        lines.append(f"- **{name.capitalize()}:** {(severity_counts.get(name, 0) if isinstance(severity_counts, dict) else 0)}")
+        count = severity_counts.get(name, 0) if isinstance(severity_counts, dict) else 0
+        lines.append(f"- **{name.capitalize()}:** {count}")
     lines.append("")
 
-    services = data.get("services") or []
+    services_raw = data.get("services") or []
+    services: list[dict[str, object]] = list(services_raw) if isinstance(services_raw, (list, tuple)) else []
     if services:
         lines.append("## Detected Services")
         lines.append("| Host | Hostnames | Port | Protocol | Service | Product | Version |")
         lines.append("|------|-----------|------|----------|---------|---------|---------|")
-        for svc in services:  # type: ignore
-            svc_dict = svc  # type: ignore
-            hostnames = ", ".join(svc_dict.get("hostnames") or [])  # type: ignore
+        for svc in services:
+            if not isinstance(svc, dict):
+                continue
+            hostnames_raw = svc.get("hostnames") or []
+            hostnames = ", ".join(str(n) for n in hostnames_raw) if isinstance(hostnames_raw, (list, tuple)) else ""
             lines.append(
-                f"| {_escape(svc_dict.get('host', ''))} | {_escape(hostnames)} | "
-                f"{svc_dict.get('port', '')} | {_escape(svc_dict.get('protocol', ''))} | "
-                f"{_escape(svc_dict.get('service_name', ''))} | "
-                f"{_escape(svc_dict.get('product', ''))} | "
-                f"{_escape(svc_dict.get('version', ''))} |"
+                f"| {_escape(str(svc.get('host', '') or ''))} | {_escape(hostnames)} | "
+                f"{svc.get('port', '')} | {_escape(str(svc.get('protocol', '') or ''))} | "
+                f"{_escape(str(svc.get('service_name', '') or ''))} | "
+                f"{_escape(str(svc.get('product', '') or ''))} | "
+                f"{_escape(str(svc.get('version', '') or ''))} |"
             )
         lines.append("")
 
-    findings = data.get("findings") or []
+    findings_raw = data.get("findings") or []
+    findings: list[dict[str, object]] = list(findings_raw) if isinstance(findings_raw, (list, tuple)) else []
     lines.append("## Vulnerability Findings")
     if findings:
-        for finding in findings:  # type: ignore
-            finding_dict = finding  # type: ignore
-            lines.append(
-                f"### {finding_dict.get('id')} ({str(finding_dict.get('severity')).upper()})"
-            )
-            lines.append(f"- **Type:** {finding_dict.get('kind')}")
-            detail = _escape(_finding_detail(finding_dict))  # type: ignore
+        for finding in findings:
+            if not isinstance(finding, dict):
+                continue
+            finding_id = finding.get("id")
+            severity = finding.get("severity")
+            lines.append(f"### {finding_id} ({str(severity).upper()})")
+            lines.append(f"- **Type:** {finding.get('kind')}")
+            detail = _escape(_finding_detail(finding))
             if detail:
                 lines.append(f"- **Details:** {detail}")
-            lines.append(f"- **Title:** {_escape(str(finding_dict.get('title')))}")
-            lines.append(
-                f"- **Description:** {_escape(str(finding_dict.get('description')))}"
-            )
+            lines.append(f"- **Title:** {_escape(str(finding.get('title') or ''))}")
+            lines.append(f"- **Description:** {_escape(str(finding.get('description') or ''))}")
             lines.append("")
     else:
         lines.append("*No known vulnerabilities matched.*")
         lines.append("")
 
-    notes = data.get("notes") or []
+    notes_raw = data.get("notes") or []
+    notes: list[object] = list(notes_raw) if isinstance(notes_raw, (list, tuple)) else []
     if notes:
         lines.append("## Notes")
-        for note in notes:  # type: ignore
-            lines.append(f"- {note}")
+        for note in notes:
+            if isinstance(note, (str, int, float, bool)) or note is not None:
+                lines.append(f"- {note}")
         lines.append("")
 
     return "\n".join(lines)
@@ -384,22 +392,28 @@ def format_nmap_report_csv(data: dict[str, object]) -> str:
             "title",
         ]
     )
-    for finding in data.get("findings") or []:  # type: ignore
-        finding_dict = finding  # type: ignore
-        hostnames = finding_dict.get("hostnames") or []  # type: ignore
+    if not isinstance(data, dict):
+        return output.getvalue().rstrip("\r\n")
+    findings_raw = data.get("findings") or []
+    findings: list[object] = list(findings_raw) if isinstance(findings_raw, (list, tuple)) else []
+    for finding in findings:
+        if not isinstance(finding, dict):
+            continue
+        hostnames_raw = finding.get("hostnames") or []
+        hostnames = list(hostnames_raw) if isinstance(hostnames_raw, (list, tuple)) else []
         host = ", ".join(str(name) for name in hostnames)
         if not host:
-            host = str(finding_dict.get("host") or "")
-        addr = str(finding_dict.get("host") or "")
-        port = finding_dict.get("port", "")
-        state = str(finding_dict.get("state", "open") or "open")
-        service = str(finding_dict.get("service_name") or finding_dict.get("service") or "")
-        product = str(finding_dict.get("product") or "")
-        version = str(finding_dict.get("version") or "")
-        cve_id = str(finding_dict.get("id") or "")
-        severity = str(finding_dict.get("severity") or "")
-        score = finding_dict.get("score", "")
-        title = str(finding_dict.get("title") or "")
+            host = str(finding.get("host") or "")
+        addr = str(finding.get("host") or "")
+        port = finding.get("port", "")
+        state = str(finding.get("state", "open") or "open")
+        service = str(finding.get("service_name") or finding.get("service") or "")
+        product = str(finding.get("product") or "")
+        version = str(finding.get("version") or "")
+        cve_id = str(finding.get("id") or "")
+        severity = str(finding.get("severity") or "")
+        score = finding.get("score", "")
+        title = str(finding.get("title") or "")
         writer.writerow(
             [
                 host,

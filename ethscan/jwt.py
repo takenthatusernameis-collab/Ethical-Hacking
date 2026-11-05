@@ -215,6 +215,8 @@ def format_jwt_report_json(data: dict[str, object]) -> str:
 
 def format_jwt_report_markdown(data: dict[str, object]) -> str:
     """Format JWT inspection results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan JWT Inspection Report", ""]
     lines.append(f"- **Valid Structure:** {'Yes' if data.get('valid_structure') else 'No'}")
     lines.append(f"- **Segments:** {data.get('segment_count')}")
@@ -227,9 +229,9 @@ def format_jwt_report_markdown(data: dict[str, object]) -> str:
         lines.append("")
         lines.append("## Findings")
         findings_err = data.get("findings") or []
-        if isinstance(findings_err, list):
+        if isinstance(findings_err, (list, tuple)):
             for finding in findings_err:
-                if isinstance(finding, str):
+                if isinstance(finding, (str, int, float, bool)):
                     lines.append(f"- {finding}")
         lines.append("")
         return "\n".join(lines)
@@ -248,7 +250,7 @@ def format_jwt_report_markdown(data: dict[str, object]) -> str:
         lines.append("")
         lines.append("| Header Field | Value |")
         lines.append("|--------------|-------|")
-        for key, value in sorted(header_others.items()):
+        for key, value in sorted(header_others.items(), key=lambda kv: str(kv[0])):
             lines.append(f"| {_escape(str(key))} | {_escape(_format_value(value))} |")
     lines.append("")
 
@@ -283,15 +285,15 @@ def format_jwt_report_markdown(data: dict[str, object]) -> str:
         lines.append("## Other Claims")
         lines.append("| Claim | Value |")
         lines.append("|-------|-------|")
-        for key, value in sorted(other_claims.items()):
+        for key, value in sorted(other_claims.items(), key=lambda kv: str(kv[0])):
             lines.append(f"| {_escape(str(key))} | {_escape(_format_value(value))} |")
         lines.append("")
 
     lines.append("## Findings")
     findings = data.get("findings") or []
-    if findings and isinstance(findings, list):
+    if isinstance(findings, (list, tuple)) and findings:
         for finding in findings:
-            if isinstance(finding, str):
+            if isinstance(finding, (str, int, float, bool)):
                 lines.append(f"- {finding}")
     else:
         lines.append("- No issues detected")
@@ -306,6 +308,8 @@ def format_jwt_report_csv(data: dict[str, object]) -> str:
     writer = csv.writer(output)
 
     writer.writerow(["field", "value"])
+    if not isinstance(data, dict):
+        return output.getvalue().rstrip("\r\n")
     writer.writerow(["valid_structure", "true" if data.get("valid_structure") else "false"])
     writer.writerow(["segment_count", data.get("segment_count", 0)])
     writer.writerow(["has_signature", "true" if data.get("has_signature") else "false"])
@@ -322,7 +326,7 @@ def format_jwt_report_csv(data: dict[str, object]) -> str:
     if standard_claims:
         writer.writerow([])
         writer.writerow(["standard_claim", "value"])
-        for key, value in sorted(standard_claims.items()):
+        for key, value in sorted(standard_claims.items(), key=lambda kv: str(kv[0])):
             writer.writerow([key, value])
 
     other_claims_raw = data.get("other_claims") or {}
@@ -330,15 +334,15 @@ def format_jwt_report_csv(data: dict[str, object]) -> str:
     if other_claims:
         writer.writerow([])
         writer.writerow(["other_claim", "value"])
-        for key, value in sorted(other_claims.items()):
+        for key, value in sorted(other_claims.items(), key=lambda kv: str(kv[0])):
             writer.writerow([key, value])
 
     findings = data.get("findings") or []
-    if findings and isinstance(findings, list):
+    if isinstance(findings, (list, tuple)) and findings:
         writer.writerow([])
         writer.writerow(["finding"])
         for finding in findings:
-            if isinstance(finding, str):
+            if isinstance(finding, (str, int, float, bool)):
                 writer.writerow([finding])
 
     return output.getvalue().rstrip("\r\n")

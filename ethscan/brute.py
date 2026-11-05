@@ -253,9 +253,13 @@ def format_brute_report_csv(data: dict[str, object]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["username", "password", "success", "error"])
+    if not isinstance(data, dict):
+        return output.getvalue().rstrip("\r\n")
     results_obj = data.get("results", [])
     results: list[dict[str, object]] = list(results_obj) if isinstance(results_obj, (list, tuple)) else []
     for result in results:
+        if not isinstance(result, dict):
+            continue
         username = result.get("username", "")
         password = result.get("password") or ""
         success = bool(result.get("success"))
@@ -278,6 +282,8 @@ def format_brute_report_json(data: dict[str, object]) -> str:
 
 def format_brute_report_markdown(data: dict[str, object]) -> str:
     """Format brute-force results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan Brute Force Report", ""]
     lines.append(f"- **Target:** {data.get('target')}")
     lines.append(f"- **Host:** {data.get('host')}")
@@ -295,6 +301,8 @@ def format_brute_report_markdown(data: dict[str, object]) -> str:
         lines.append("| Username | Password |")
         lines.append("|----------|----------|")
         for entry in successful:
+            if not isinstance(entry, dict):
+                continue
             username = entry.get("username") or ""
             password = entry.get("password") or ""
             lines.append(f"| {username} | {password} |")
@@ -309,6 +317,8 @@ def format_brute_report_markdown(data: dict[str, object]) -> str:
     lines.append("| Username | Password | Success | Error |")
     lines.append("|----------|----------|---------|-------|")
     for result in results:
+        if not isinstance(result, dict):
+            continue
         password = result.get("password") or ""
         success = "Yes" if result.get("success") else "No"
         error = result.get("error") or ""

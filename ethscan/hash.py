@@ -507,6 +507,8 @@ def _escape(value: str) -> str:
 
 def format_hash_report_markdown(data: dict[str, object]) -> str:
     """Format hash results as a Markdown string."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan Password Hash Report", ""]
     algorithm = data.get("algorithm")
     lines.append(f"- **Algorithm:** {algorithm}")
@@ -528,6 +530,8 @@ def format_hash_report_markdown(data: dict[str, object]) -> str:
         lines.append("| Password | Algorithm | Hash |")
         lines.append("|----------|-----------|------|")
         for entry in results:
+            if not isinstance(entry, dict):
+                continue
             pwd = _escape(str(entry.get("password", "")))
             algo = _escape(str(entry.get("algorithm", "")))
             h = entry.get("hash")
@@ -539,11 +543,12 @@ def format_hash_report_markdown(data: dict[str, object]) -> str:
 
     notes_val = data.get("notes")
     if notes_val:
-        note_list = notes_val if isinstance(notes_val, (list, tuple)) else [notes_val]
+        note_list = list(notes_val) if isinstance(notes_val, (list, tuple)) else [notes_val]
         if note_list:
             lines.append("## Notes")
             for note in note_list:
-                lines.append(f"- {note}")
+                if isinstance(note, (str, int, float, bool)) or note is not None:
+                    lines.append(f"- {note}")
             lines.append("")
 
     return "\n".join(lines)
@@ -551,6 +556,8 @@ def format_hash_report_markdown(data: dict[str, object]) -> str:
 
 def format_check_report_markdown(data: dict[str, object]) -> str:
     """Format a password check result as a Markdown string."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan Password Check Report", ""]
     lines.append(f"- **Password:** `{_escape(str(data.get('password', '')))}`")
     lines.append(f"- **Digest:** `{_escape(str(data.get('digest', '')))}`")
@@ -599,6 +606,8 @@ def format_check_report_csv(data: dict[str, object]) -> str:
         "match",
         "error",
     ])
+    if not isinstance(data, dict):
+        return output.getvalue().rstrip("\r\n")
     match = data.get("match")
     writer.writerow([
         data.get("password", ""),
@@ -629,10 +638,14 @@ def format_hash_report_csv(data: dict[str, object]) -> str:
         "match",
         "error",
     ])
+    if not isinstance(data, dict):
+        return output.getvalue().rstrip("\r\n")
     results_obj = data.get("results") or []
     results: list[dict[str, object]] = list(results_obj) if isinstance(results_obj, (list, tuple)) else []
     algorithm = data.get("algorithm", "")
     for entry in results:
+        if not isinstance(entry, dict):
+            continue
         match_val = entry.get("match")
         writer.writerow([
             entry.get("password", ""),
