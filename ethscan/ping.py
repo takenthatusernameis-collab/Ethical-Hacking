@@ -428,26 +428,28 @@ def format_ping_report_json(data: dict[str, object]) -> str:
 
 def format_ping_report_markdown(data: dict[str, object]) -> str:
     """Format ping results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan Ping Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Host:** {data['host']}")
+    lines.append(f"- **Target:** {data.get('target', '')}")
+    lines.append(f"- **Host:** {data.get('host', '')}")
     if data.get("ip"):
-        lines.append(f"- **Resolved IP:** {data['ip']}")
-    lines.append(f"- **Count:** {data['count']}")
-    lines.append(f"- **Timeout:** {data['timeout']}s")
-    lines.append(f"- **TTL:** {data['ttl']}")
-    lines.append(f"- **TCP Fallback Port:** {data['port']}")
+        lines.append(f"- **Resolved IP:** {data.get('ip', '')}")
+    lines.append(f"- **Count:** {data.get('count', '')}")
+    lines.append(f"- **Timeout:** {data.get('timeout', '')}s")
+    lines.append(f"- **TTL:** {data.get('ttl', '')}")
+    lines.append(f"- **TCP Fallback Port:** {data.get('port', '')}")
     raw_avail = data.get("raw_socket_available")
     lines.append(
         f"- **Raw ICMP Socket:** "
         f"{'available' if raw_avail else 'unavailable (TCP fallback mode)'}"
     )
-    lines.append(f"- **Successful:** {data['successful']}/{data['count']}")
-    lines.append(f"- **Failed:** {data['failed']}/{data['count']}")
+    lines.append(f"- **Successful:** {data.get('successful', '')}/{data.get('count', '')}")
+    lines.append(f"- **Failed:** {data.get('failed', '')}/{data.get('count', '')}")
     if data.get("rtt_min_ms") is not None:
-        lines.append(f"- **RTT Min:** {data['rtt_min_ms']} ms")
-        lines.append(f"- **RTT Max:** {data['rtt_max_ms']} ms")
-        lines.append(f"- **RTT Avg:** {data['rtt_avg_ms']} ms")
+        lines.append(f"- **RTT Min:** {data.get('rtt_min_ms', '')} ms")
+        lines.append(f"- **RTT Max:** {data.get('rtt_max_ms', '')} ms")
+        lines.append(f"- **RTT Avg:** {data.get('rtt_avg_ms', '')} ms")
     lines.append("")
 
     probes_list = data.get("probes") or []
@@ -483,17 +485,21 @@ def format_ping_report_markdown(data: dict[str, object]) -> str:
 
 def format_ping_report_csv(data: dict[str, object]) -> str:
     """Format ping results as CSV."""
+    if not isinstance(data, dict):
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "target",
+            "ip",
+            "sequence",
+            "rtt_ms",
+            "ttl",
+            "response_type",
+            "error",
+        ])
+        return output.getvalue().rstrip("\r\n")
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
-        "target",
-        "ip",
-        "sequence",
-        "rtt_ms",
-        "ttl",
-        "response_type",
-        "error",
-    ])
     probes_list = data.get("probes") or []
     if not isinstance(probes_list, list):
         probes_list = []

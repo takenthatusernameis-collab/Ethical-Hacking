@@ -24,7 +24,7 @@ Date: Thu Nov 05 2026
 - None this session.
 
 ## Precise next task
-1. Evidence-driven audit: pick the next highest-value formatter module that raises on hostile top-level/nested report shapes and lacks `tests/test_*hostile_sweep.py` coverage (start with `ethscan/ping.py` or `ethscan/trace.py` if on common paths; verify exact gap and signatures before changing).
+1. Evidence-driven audit: pick next formatter module raising on hostile top-level/nested report shapes lacking hostile-sweep coverage (e.g. `ethscan/trace.py`, `ethscan/osdetect.py`); verify gap/signatures first. `ping` hardened this session.
 2. For each real gap, add the smallest hostile-shape sweep test and production guards only where needed; do not duplicate transport/body/JSON parsing coverage.
 3. Run: targeted new/existing tests, then full `python3 -m pytest -q`, `python3 -m ruff check .`, `python3 -m mypy ethscan`.
 4. Update `TASK.md`/`HANDOFF_NEXT.md`/`NEXT_TASK.md`; do not commit unless asked.
