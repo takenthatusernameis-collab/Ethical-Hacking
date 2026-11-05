@@ -9,20 +9,20 @@ Date: Thu Nov 05 2026
 - Note: HEAD `7f5ec32` already contains `tests/test_cert_hostile_sweep.py` and prior handoff files; only files above/updated handoff state are current uncommitted work.
 
 ## Verified (evidence)
-- `python3 -m pytest tests/test_cve_hostile_sweep.py tests/test_cve.py -q` → `124 passed`.
-- `python3 -m pytest -q` → `5794 passed, 50 skipped, 0 failed` (101.37s).
+- `python3 -m pytest -q` → `5794 passed, 50 skipped, 0 failed` (prior session).
 - `python3 -m ruff check .` → all checks passed.
 - `python3 -m mypy ethscan` → `Success: no issues found in 59 source files`.
+- `ethscan/s3.py` audited: no cache/file/JSON parsing paths; transport/body errors handled via unnamed catch. No production change; no new sweep.
 
 ## Unresolved / notes
-- Working tree has uncommitted changes; **do not commit unless explicitly asked**.
-- `ethscan/cve.py` audited: cache/transport paths already resilient for inspected cases. No production change needed.
-- Remaining candidates with `tests/test_http_hostile_sweep.py` transport/body coverage but possible cache/parser/file gaps: `s3`, `subtake`, `fuzz`, `urlcheck`, `web`, `headers` — audit before adding; avoid duplication.
+- Working tree has uncommitted changes; do not commit unless explicitly asked.
+- `ethscan/s3.py` audited: no real gap beyond http sweep coverage.
+- Remaining candidates with `tests/test_http_hostile_sweep.py` transport/body coverage but possible cache/parser/file gaps: `subtake`, `fuzz`, `urlcheck`, `web`, `headers` — audit before adding; avoid duplication.
 
 ## Approaches that failed / pitfalls
 - None this session.
 
 ## Precise next task
-1. Audit `ethscan/s3.py` for hostile JSON/cache/file/response-shape gaps not already covered by `tests/test_http_hostile_sweep.py`; if a real gap exists, add the smallest `tests/test_s3_hostile_sweep.py`.
-2. Run: targeted new/existing tests (e.g., `python3 -m pytest tests/test_s3*.py -q`), then full `python3 -m pytest -q`, `python3 -m ruff check .`, `python3 -m mypy ethscan`.
+1. Audit `ethscan/subtake.py` for hostile JSON/cache/file/response-shape gaps not already covered by `tests/test_http_hostile_sweep.py`; if a real gap exists, add the smallest `tests/test_subtake_hostile_sweep.py`.
+2. Run: targeted new/existing tests (e.g., `python3 -m pytest tests/test_subtake*.py -q`), then full `python3 -m pytest -q`, `python3 -m ruff check .`, `python3 -m mypy ethscan`.
 3. Update handoff files; do not commit unless asked.
