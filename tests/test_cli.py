@@ -23840,6 +23840,26 @@ INT_OPTION_RANGES = {
     ("hash", "--iterations"): (1, None),
     ("radix", "--max-depth"): (1, None),
     ("netbios", "--suffix"): (0, 255),
+    # The --workers option of every command that runs probes concurrently. It
+    # was declared as ``click.IntRange(1, None)`` but was not named here, so
+    # the sweep that checks the range of every int option did not cover it.
+    ("brute", "--workers"): (1, None),
+    ("cve", "--workers"): (1, None),
+    ("dns", "--workers"): (1, None),
+    ("dnsbrute", "--workers"): (1, None),
+    ("fuzz", "--workers"): (1, None),
+    ("osdetect", "--workers"): (1, None),
+    ("recon", "--workers"): (1, None),
+    ("report", "--workers"): (1, None),
+    ("s3", "--workers"): (1, None),
+    ("scan", "--workers"): (1, None),
+    ("service", "--workers"): (1, None),
+    ("stale", "--workers"): (1, None),
+    ("subdomains", "--workers"): (1, None),
+    ("subtake", "--workers"): (1, None),
+    ("tls", "--workers"): (1, None),
+    ("urlcheck", "--workers"): (1, None),
+    ("vuln", "--workers"): (1, None),
 }
 
 INT_OPTION_UPPER_BAD = {
@@ -23942,6 +23962,32 @@ def test_an_out_of_range_int_option_is_a_single_line_error() -> None:
             line for line in result.output.splitlines() if line.startswith("Error:")
         ]
         assert len(error_lines) == 1, f"{command} {option}: {result.output}"
+
+
+def test_an_out_of_range_workers_option_does_not_start_a_probe(monkeypatch) -> None:
+    """A rejected --workers value must abort before any network access happens.
+
+    The --workers option is range-checked like every other int option, so a
+    value below its minimum is refused as a usage error and the command never
+    reaches the transport that would use it.
+    """
+    import socket
+
+    def tripwire(*args, **kwargs):
+        raise AssertionError("a probe was started for an invalid --workers value")
+
+    monkeypatch.setattr(socket.socket, "connect", tripwire)
+    monkeypatch.setattr(socket.socket, "connect_ex", tripwire)
+    monkeypatch.setattr(socket.socket, "sendto", tripwire)
+    monkeypatch.setattr(socket, "getaddrinfo", tripwire)
+
+    runner = CliRunner()
+    for (command, option), (minimum, _maximum) in INT_OPTION_RANGES.items():
+        if option != "--workers":
+            continue
+        value = str(minimum - 1)
+        result = runner.invoke(cli, [command, option, value])
+        _assert_int_usage_error(result, f"{command} {option} {value}")
 
 
 def test_a_valid_int_option_is_still_accepted() -> None:

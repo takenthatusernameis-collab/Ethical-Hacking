@@ -1,11 +1,9 @@
 # Next Task
-Continue evidence-driven formatter hostile-shape hardening only for modules with demonstrated `format_*_report_markdown`/`format_*_report_csv` raises on hostile top-level/non-dict or hostile nested report shapes that lack `tests/test_*_hostile_sweep.py` coverage.
+Continue evidence-driven permanent-test coverage only for demonstrated gaps that lack a permanent check.
 
-Done in recent sessions (verified, present in working tree/history): `service`, `scanner`, `recon`, `resolve`, `s3`, `osdetect`, `subdomains`, `stale`, `config`, `radix`, `completion`, `cidr`, `dnsbrute`, `passwords`, `validate`, `report`, `trace`, `wifi`, `ping`. Verified already clean (no change needed): `ping`, `trace`, `wifi`. Hostile sweep tests added for `trace`, `wifi`, and this session `ping` (`tests/test_ping_hostile_sweep.py`).
+Done in recent sessions (verified, present in working tree/history): formatter hostile-shape sweep for every module with `format_*_report_markdown`/`format_*_report_csv`; protocol hostile-answer sweep (`tests/test_protocol_hostile_sweep.py`); cache content sweep (`tests/test_cache_content_sweep.py`); CLI unreachable sweeps; offline command sweeps; file-option / file-content / option / config-value sweeps; CLI sweep coverage (`tests/test_cli_sweep_coverage.py`); int-option range sweep (`tests/test_cli.py` `INT_OPTION_RANGES` + `test_every_int_option_of_the_cli_is_range_checked`).
 
-This session also fixed a real hostile-shape gap in `ethscan/wifi.py` `format_wifi_report_csv` (non-list `interfaces`/`access_points`/`notes` raised `TypeError`/`AttributeError`) and added `default=str` to the `trace`/`wifi` JSON formatters so hostile `bytes` top-level values serialize (matching `cidr`/`validate`/`report`).
-
-The formatter hostile-shape sweep now covers every module with `format_*_report_markdown`/`format_*_report_csv`. No remaining modules in scope.
+This session closed the last permanent-test gap found: the 17 `--workers` options of the CLI are `click.IntRange(1, None)` but were not named in `INT_OPTION_RANGES`, so the int-option range sweep did not cover them. Added the 17 entries and `test_an_out_of_range_workers_option_does_not_start_a_probe`. No source change was needed — the options already refuse out-of-range values (verified: `--workers 0` exits 2 with a clean single-line usage error on all 17 commands and never starts a probe).
 
 Constraints:
 - Preserve baseline; smallest reversible change.
@@ -13,6 +11,6 @@ Constraints:
 - Verify: targeted pytest for new/affected tests, then full `python3 -m pytest -q`, `python3 -m ruff check .`, `python3 -m mypy ethscan`.
 - Update `TASK.md`/`HANDOFF_NEXT.md`/`NEXT_TASK.md`; do not commit unless explicitly asked.
 
-Known pre-existing failures (do not confuse with regressions; unrelated to this sweep): none remaining — the 6 `ping` CSV-header failures were fixed earlier by always emitting the CSV header row in `format_ping_report_csv`.
+Known pre-existing failures (do not confuse with regressions; unrelated to this sweep): none remaining.
 
 (End of file - total 16 lines)
