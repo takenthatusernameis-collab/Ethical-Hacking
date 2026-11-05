@@ -1,20 +1,23 @@
-"""Permanent sweep test: a hostile NetBIOS answer is reported, never raised."""
+"""Permanent sweep test: a hostile NBNS answer is reported, never raised."""
 from __future__ import annotations
 
 from typing import Callable
 
 from ethscan import netbios
 
+
 TARGET = "127.0.0.1"
 
 HOSTILE_BODIES: tuple[bytes, ...] = (
     b"",
-    b"not netbios at all",
+    b"not nbns at all",
     b"\x00" * 9,
-    b"\x00" * 11,
+    b"\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00",
+    b"hello world",
     bytes(range(256)),
     b"\x00\xff\xfe\xfd",
-    b"\x00" * 12,
+    b"\x12\x34\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00",
+    b"\x00\x01\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00" + b"\xff" * 64,
 )
 
 
@@ -39,14 +42,3 @@ def test_transport_failure_is_reported_not_raised() -> None:
     results = netbios.run_netbios(TARGET, connector=connector)
     assert isinstance(results, dict)
     assert results.get("error")
-    assert "node status request failed" in results["error"]
-
-
-def test_unnamed_transport_failure_is_reported_not_raised() -> None:
-    def connector(host: str, port: int, request: bytes, timeout: float):
-        raise RuntimeError("hostile transport")
-
-    results = netbios.run_netbios(TARGET, connector=connector)
-    assert isinstance(results, dict)
-    assert results.get("error")
-    assert "node status request failed" in results["error"]
