@@ -291,6 +291,8 @@ def format_trace_report_json(result: dict[str, Any]) -> str:
 
 
 def format_trace_report_markdown(result: dict[str, Any]) -> str:
+    if not isinstance(result, dict):
+        result = {}
     lines: list[str] = []
     lines.append("# TCP Traceroute Report")
     lines.append("")
@@ -308,17 +310,22 @@ def format_trace_report_markdown(result: dict[str, Any]) -> str:
         lines.append(f"**Error:** {result.get('error')}")
     if result.get("notes"):
         notes = result.get("notes") or []
-        for n in notes:
-            lines.append(f"**Note:** {n}")
+        if isinstance(notes, (list, tuple, set)):
+            for n in notes:
+                lines.append(f"**Note:** {n}")
     lines.append("")
 
     hops = result.get("hops", []) or []
+    if not isinstance(hops, (list, tuple, set)):
+        hops = []
     if hops:
         lines.append("## Hop Table")
         lines.append("")
         lines.append("| Hop | IP | Host | Response | RTT (avg) | Reached |")
         lines.append("|---|-----|------|----------|-----------|---------|")
         for h in hops:
+            if not isinstance(h, dict):
+                continue
             hop_no = h.get("hop", h.get("ttl", "?"))
             ip = h.get("ip") or "*"
             host_raw = h.get("host") or ip or "*"
@@ -335,11 +342,15 @@ def format_trace_report_markdown(result: dict[str, Any]) -> str:
 
     # Add recursive trace sections
     recursive_traces = result.get("recursive_traces", [])
+    if not isinstance(recursive_traces, (list, tuple, set)):
+        recursive_traces = []
     if recursive_traces:
         lines.append("")
         lines.append("## Recursive Traces")
         lines.append("")
         for i, trace_res in enumerate(recursive_traces):
+            if not isinstance(trace_res, dict):
+                continue
             lines.append(f"### Recursive Trace {i + 1}: {trace_res.get('target', 'N/A')}")
             lines.append("")
             trace_ip = trace_res.get('dst_ip') or trace_res.get('ip')
@@ -352,19 +363,26 @@ def format_trace_report_markdown(result: dict[str, Any]) -> str:
             if trace_res.get("error"):
                 lines.append(f"**Error:** {trace_res.get('error')}")
             if trace_res.get("notes"):
-                for n in trace_res.get("notes"):
-                    lines.append(f"**Note:** {n}")
+                notes = trace_res.get("notes") or []
+                if isinstance(notes, (list, tuple, set)):
+                    for n in notes:
+                        lines.append(f"**Note:** {n}")
             lines.append("")
             trace_hops = trace_res.get("hops", []) or []
+            if not isinstance(trace_hops, (list, tuple, set)):
+                trace_hops = []
             if trace_hops:
                 lines.append("#### Hop Table")
                 lines.append("")
                 lines.append("| Hop | IP | Host | Response | RTT (avg) | Reached |")
                 lines.append("|---|-----|------|----------|-----------|---------|")
                 for h in trace_hops:
+                    if not isinstance(h, dict):
+                        continue
                     hop_no = h.get("hop", h.get("ttl", "?"))
                     ip = h.get("ip") or "*"
-                    host = h.get("host") or ip or "*"
+                    host_raw = h.get("host") or ip or "*"
+                    host = str(host_raw)
                     resp = h.get("response_type") or ("REACHED" if h.get("reached") else "NO-RESPONSE")
                     rtt = _fmt_rtt(h.get("rtt_avg_ms") or h.get("rtt_ms"))
                     reached = "Yes" if (h.get("reached_destination") or h.get("reached")) else "No"
@@ -381,6 +399,8 @@ def format_trace_report_markdown(result: dict[str, Any]) -> str:
 
 def format_trace_report_csv(result: dict[str, Any]) -> str:
     """Format trace results as CSV."""
+    if not isinstance(result, dict):
+        result = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
@@ -394,7 +414,11 @@ def format_trace_report_csv(result: dict[str, Any]) -> str:
     ])
 
     def _write_hops(target: Any, hops: list[dict[str, Any]]) -> None:
+        if not isinstance(hops, (list, tuple, set)):
+            hops = []
         for hop in hops:
+            if not isinstance(hop, dict):
+                continue
             hop_no = hop.get("hop", hop.get("ttl", ""))
             rtt = hop.get("rtt_avg_ms")
             if rtt is None:
@@ -410,6 +434,11 @@ def format_trace_report_csv(result: dict[str, Any]) -> str:
             ])
 
     _write_hops(result.get("target", ""), result.get("hops") or [])
-    for trace_res in result.get("recursive_traces", []) or []:
+    recursive_traces = result.get("recursive_traces", []) or []
+    if not isinstance(recursive_traces, (list, tuple, set)):
+        recursive_traces = []
+    for trace_res in recursive_traces:
+        if not isinstance(trace_res, dict):
+            continue
         _write_hops(trace_res.get("target", ""), trace_res.get("hops") or [])
     return output.getvalue().rstrip("\r\n")
