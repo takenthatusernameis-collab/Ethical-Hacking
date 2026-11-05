@@ -231,29 +231,36 @@ def format_service_report_json(data: dict[str, object]) -> str:
 
 def format_service_report_markdown(data: dict[str, object]) -> str:
     """Format service detection results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan Service Detection Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Host:** {data['host']}")
-    lines.append(f"- **Ports Scanned:** {data['ports_scanned']}")
-    lines.append(f"- **Services Found:** {data['services_found']}")
+    lines.append(f"- **Target:** {data.get('target', '')}")
+    lines.append(f"- **Host:** {data.get('host', '')}")
+    lines.append(f"- **Ports Scanned:** {data.get('ports_scanned', '')}")
+    lines.append(f"- **Services Found:** {data.get('services_found', '')}")
     lines.append("")
 
     results = data.get("results") or []
-    if results:
-        lines.append("## Detected Services")
-        lines.append("| Port | Service | Banner |")
-        lines.append("|------|---------|--------|")
-        for result in results:  # type: ignore
-            res = result  # type: ignore
-            port = res.get("port")
-            service = res.get("service", "Unknown")
-            banner = res.get("banner", "") or ""
-            if banner:
-                banner_str = str(banner).replace("|", "\\|")
-                if len(banner_str) > 80:
-                    banner_str = banner_str[:77] + "..."
-                banner = banner_str
-            lines.append(f"| {port} | {service} | {banner} |")
+    if isinstance(results, (list, tuple)):
+        if results:
+            lines.append("## Detected Services")
+            lines.append("| Port | Service | Banner |")
+            lines.append("|------|---------|--------|")
+            for result in results:  # type: ignore
+                if not isinstance(result, dict):
+                    continue
+                res = result  # type: ignore
+                port = res.get("port")
+                service = res.get("service", "Unknown")
+                banner = res.get("banner", "") or ""
+                if banner:
+                    banner_str = str(banner).replace("|", "\\|")
+                    if len(banner_str) > 80:
+                        banner_str = banner_str[:77] + "..."
+                    banner = banner_str
+                lines.append(f"| {port} | {service} | {banner} |")
+        else:
+            lines.append("*No services detected.*")
     else:
         lines.append("*No services detected.*")
 
@@ -262,14 +269,22 @@ def format_service_report_markdown(data: dict[str, object]) -> str:
 
 def format_service_report_csv(data: dict[str, object]) -> str:
     """Format service detection results as CSV."""
+    if not isinstance(data, dict):
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["port", "service", "banner"])
+        return output.getvalue().rstrip("\r\n")
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["port", "service", "banner"])
     results = data.get("results") or []
-    for result in results:  # type: ignore
-        res = result  # type: ignore
-        port = res.get("port", "")
-        service = res.get("service", "")
-        banner = str(res.get("banner", "") or "").replace("\n", " ").replace("\r", "")
-        writer.writerow([port, service, banner])
+    if isinstance(results, (list, tuple)):
+        for result in results:  # type: ignore
+            if not isinstance(result, dict):
+                continue
+            res = result  # type: ignore
+            port = res.get("port", "")
+            service = res.get("service", "")
+            banner = str(res.get("banner", "") or "").replace("\n", " ").replace("\r", "")
+            writer.writerow([port, service, banner])
     return output.getvalue().rstrip("\r\n")
