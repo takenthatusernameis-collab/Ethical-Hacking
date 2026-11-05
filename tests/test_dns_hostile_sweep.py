@@ -37,7 +37,9 @@ def test_hostile_socket_garbage_not_raised(monkeypatch) -> None:
 def test_hostile_dnspython_failure_not_raised(monkeypatch) -> None:
     monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [])
 
-    if dns.DNS_AVAILABLE:
+    dns_pkg = getattr(dns, "dns", None)
+    resolver_mod = getattr(dns_pkg, "resolver", None)
+    if dns.DNS_AVAILABLE and resolver_mod is not None:
         class BoomResolver:
             def __init__(self, *a, **k):
                 pass
@@ -45,7 +47,11 @@ def test_hostile_dnspython_failure_not_raised(monkeypatch) -> None:
             def resolve(self, *a, **k):
                 raise RuntimeError("boom")
 
-        monkeypatch.setattr(dns.dns.resolver, "Resolver", BoomResolver)
+        monkeypatch.setattr(resolver_mod, "Resolver", BoomResolver)
+    else:
+        # Ensure the dnspython path is exercised safely even if a prior test
+        # polluted module attributes in an order-dependent way.
+        monkeypatch.setattr(dns, "DNS_AVAILABLE", False)
 
     result = dns.run_dns(TARGET, record_types=["MX", "NS"], server="1.1.1.1", workers=2)
     assert isinstance(result, dict)
