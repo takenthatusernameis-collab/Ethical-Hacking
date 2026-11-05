@@ -1,12 +1,12 @@
 # Next Task
-Audit `ethscan/tls.py` report formatters for hostile report-shape gaps not already covered by `tests/test_tls.py` and transport/HTTP hostile sweeps (evidence-driven). Add the smallest `tests/test_tls_hostile_sweep.py` and production guards only if a real gap exists.
+Audit formatter modules for hostile report-shape gaps (evidence-driven) where `format_*_report_markdown`/`format_*_report_csv` may subscript/`.get` top-level `data` without `isinstance(data, dict)` or iterate nested containers without guards, and where no hostile-shape sweep test exists. Prioritize modules that accept pipeline/CLI report data and have JSON/formatter paths similar to `tls`/`ssl`.
 
 Focus:
-- Formatter top-level/nested hostile shapes (non-dict `data`, hostile `cert`/`chain`/field containers) that can reach CLI/reporting.
-- Avoid duplicating existing `tests/test_tls.py` cases and transport-focused tests.
-- Grep for other formatter modules lacking top-level `isinstance(data, dict)` guards if tls is clean; prioritize by evidence.
+- Grep evidence: `grep -n "def format" ethscan/*.py` vs modules missing `isinstance(data, dict)` in formatters and lacking `tests/test_*hostile_sweep.py` coverage for formatter shapes.
+- Add the smallest `tests/test_<module>_hostile_sweep.py` and production guards only for demonstrated real gaps (hostile top-level/nested shapes raise or produce unsafe behavior).
+- Do not duplicate transport/body/JSON-parse coverage; keep changes minimal.
 
 Constraints:
 - Preserve baseline; smallest reversible change.
 - Verify: targeted pytest for new/affected tests, then full `python3 -m pytest -q`, `python3 -m ruff check .`, `python3 -m mypy ethscan`.
-- Update handoff files; do not commit unless explicitly asked.
+- Update `TASK.md`/`HANDOFF_NEXT.md`/`NEXT_TASK.md`; do not commit unless explicitly asked.

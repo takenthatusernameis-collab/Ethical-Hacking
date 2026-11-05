@@ -408,10 +408,12 @@ def format_tls_report_json(data: dict[str, object]) -> str:
 
 def format_tls_report_markdown(data: dict[str, object]) -> str:
     """Format TLS enumeration results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan TLS Enumeration Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Host:** {data['host']}")
-    lines.append(f"- **Port:** {data['port']}")
+    lines.append(f"- **Target:** {data.get('target', '')}")
+    lines.append(f"- **Host:** {data.get('host', '')}")
+    lines.append(f"- **Port:** {data.get('port', '')}")
     lines.append(f"- **Versions Tested:** {data.get('versions_tested', 0)}")
     lines.append(f"- **Ciphers Tested:** {data.get('ciphers_tested', 0)}")
     supported_versions = data.get("supported_versions") or []
@@ -479,6 +481,8 @@ def format_tls_report_markdown(data: dict[str, object]) -> str:
 
 def format_tls_report_csv(data: dict[str, object]) -> str:
     """Format TLS results as CSV."""
+    if not isinstance(data, dict):
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
