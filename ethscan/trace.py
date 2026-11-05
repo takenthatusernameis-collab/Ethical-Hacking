@@ -287,7 +287,7 @@ def run_trace(
 
 
 def format_trace_report_json(result: dict[str, Any]) -> str:
-    return json.dumps(result, indent=2)
+    return json.dumps(result, indent=2, default=str)
 
 
 def format_trace_report_markdown(result: dict[str, Any]) -> str:

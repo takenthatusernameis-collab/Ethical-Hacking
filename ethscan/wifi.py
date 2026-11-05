@@ -340,7 +340,7 @@ def run_wifi(interface: str | None = None) -> dict[str, Any]:
 
 def format_wifi_report_json(results: dict[str, Any]) -> str:
     """Format Wi-Fi scan results as JSON."""
-    return json.dumps(results, indent=2)
+    return json.dumps(results, indent=2, default=str)
 
 
 def format_wifi_report_markdown(results: dict[str, Any]) -> str:
@@ -419,9 +419,12 @@ def format_wifi_report_csv(results: dict[str, Any]) -> str:
     writer.writerow(["platform_supported", "true" if results.get("platform_supported") else "false"])
 
     # Interfaces
+    interfaces = results.get("interfaces") or []
+    if not isinstance(interfaces, list):
+        interfaces = []
     writer.writerow([])
     writer.writerow(["interface", "status", "link_quality", "signal_level", "noise_level"])
-    for iface in results.get("interfaces", []):
+    for iface in interfaces:
         writer.writerow([
             iface.get("interface", ""),
             iface.get("status", ""),
@@ -431,9 +434,12 @@ def format_wifi_report_csv(results: dict[str, Any]) -> str:
         ])
 
     # Access Points
+    access_points = results.get("access_points") or []
+    if not isinstance(access_points, list):
+        access_points = []
     writer.writerow([])
     writer.writerow(["interface", "bssid", "ssid", "channel", "frequency_ghz", "encryption", "signal_dbm", "quality"])
-    for ap in results.get("access_points", []):
+    for ap in access_points:
         ssid = ap.get("ssid", "") if ap.get("ssid") else "<hidden>"
         freq_val = ap.get("frequency")
         freq = f"{freq_val:.3f}" if isinstance(freq_val, (int, float)) else "N/A"
@@ -453,10 +459,13 @@ def format_wifi_report_csv(results: dict[str, Any]) -> str:
         ])
 
     # Notes
-    if results.get("notes"):
+    notes = results.get("notes") or []
+    if not isinstance(notes, list):
+        notes = []
+    if notes:
         writer.writerow([])
         writer.writerow(["note"])
-        for note in results["notes"]:
+        for note in notes:
             writer.writerow([note])
 
     return output.getvalue().rstrip("\r\n")
