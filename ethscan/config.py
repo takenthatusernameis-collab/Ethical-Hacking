@@ -371,6 +371,8 @@ commands:
 
 def format_config_report_csv(config: dict[str, Any]) -> str:
     """Format config as CSV."""
+    if not isinstance(config, dict):
+        config = {}
     output = io.StringIO()
     writer = csv.writer(output)
 
@@ -388,11 +390,15 @@ def format_config_report_csv(config: dict[str, Any]) -> str:
 
     # Global defaults
     defaults = config.get("defaults") or {}
+    if not isinstance(defaults, dict):
+        defaults = {}
     for key, value in sorted(defaults.items()):
         writer.writerow(["defaults", key, value])
 
     # Per-command overrides
     commands = config.get("commands") or {}
+    if not isinstance(commands, dict):
+        commands = {}
     for cmd, opts in sorted(commands.items()):
         if isinstance(opts, dict):
             for key, value in sorted(opts.items()):

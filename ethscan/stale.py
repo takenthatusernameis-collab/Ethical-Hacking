@@ -230,6 +230,8 @@ def format_stale_report_json(data: dict[str, Any]) -> str:
 
 def format_stale_report_markdown(data: dict[str, Any]) -> str:
     """Format stale detection results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan Stale DNS Record Detection Report", ""]
     lines.append(f"- **Total Checked:** {data.get('total_checked', 0)}")
     lines.append(f"- **Stale Records:** {data.get('stale_count', 0)}")
@@ -280,6 +282,8 @@ def format_stale_report_csv(data: dict[str, Any]) -> str:
     Emits a header row followed by one row per domain with columns:
     domain, A_records, AAAA_records, CNAME, stale, stale_reasons.
     """
+    if not isinstance(data, dict):
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["domain", "A_records", "AAAA_records", "CNAME", "stale", "stale_reasons"])

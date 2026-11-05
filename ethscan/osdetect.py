@@ -43,6 +43,11 @@ def _errno_message(err: int) -> str:
         return str(err)
 
 
+def _as_dict(value: object) -> dict[str, object]:
+    """Return value as a dict, or an empty dict for hostile non-dict input."""
+    return value if isinstance(value, dict) else {}
+
+
 # ---------------------------------------------------------------------------
 # TCP/IP stack behavior probes
 # ---------------------------------------------------------------------------
@@ -482,10 +487,11 @@ def format_osdetect_report_json(data: dict[str, object]) -> str:
 
 def format_osdetect_report_markdown(data: dict[str, object]) -> str:
     """Format OS detection results as Markdown."""
+    data = _as_dict(data)
     lines = ["# ethscan OS Detection Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Host:** {data['host']}")
-    lines.append(f"- **Ports Probed:** {data['ports_probed']}")
+    lines.append(f"- **Target:** {data.get('target', '')}")
+    lines.append(f"- **Host:** {data.get('host', '')}")
+    lines.append(f"- **Ports Probed:** {data.get('ports_probed', 0)}")
     inferred = data.get("inferred_os") or []
     lines.append(
         f"- **Inferred OS:** {', '.join(cast(list[str], inferred)) if inferred else 'Unknown'}"
@@ -498,13 +504,14 @@ def format_osdetect_report_markdown(data: dict[str, object]) -> str:
         lines.append("| Port | Probe | Connected | Response | Flags Observed | Error |")
         lines.append("|------|-------|-----------|----------|----------------|-------|")
         for probe in probes:
-            connected = "Yes" if cast(bool, probe["connected"]) else "No"
+            probe = _as_dict(probe)
+            connected = "Yes" if cast(bool, probe.get("connected")) else "No"
             probe_type = str(probe.get("probe_type") or "").replace("|", "\\|")
             response = str(probe.get("response") or "").replace("|", "\\|")
             flags = str(probe.get("flags_observed") or "").replace("|", "\\|")
             error = _truncate(str(probe.get("error") or ""), 60).replace("|", "\\|")
             lines.append(
-                f"| {probe['port']} | {probe_type} | {connected} | {response} | {flags} | {error} |"
+                f"| {probe.get('port', '')} | {probe_type} | {connected} | {response} | {flags} | {error} |"
             )
     else:
         lines.append("*No probes performed.*")
@@ -522,6 +529,7 @@ def format_osdetect_report_markdown(data: dict[str, object]) -> str:
 
 def format_osdetect_report_csv(data: dict[str, object]) -> str:
     """Format OS detection results as CSV."""
+    data = _as_dict(data)
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
@@ -535,6 +543,7 @@ def format_osdetect_report_csv(data: dict[str, object]) -> str:
         "error",
     ])
     for probe in cast(list[dict[str, object]], data.get("probes") or []):
+        probe = _as_dict(probe)
         writer.writerow([
             data.get("target", ""),
             data.get("host", ""),

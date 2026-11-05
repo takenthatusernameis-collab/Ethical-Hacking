@@ -544,6 +544,8 @@ def _format_records_table(lines: list[str], entries: list[dict[str, object]]) ->
     lines.append("| Subdomain | Hostname | A | AAAA |")
     lines.append("|-----------|----------|---|------|")
     for entry in entries:
+        if not isinstance(entry, dict):
+            continue
         a_raw = entry.get("a") or []
         aaaa_raw = entry.get("aaaa") or []
         a_records = ", ".join(str(x) for x in cast(list[object], a_raw)) if a_raw else "N/A"
@@ -559,6 +561,8 @@ def _format_records_table(lines: list[str], entries: list[dict[str, object]]) ->
 
 def format_dnsbrute_report_markdown(data: dict[str, object]) -> str:
     """Format DNS brute force results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan DNS Brute Force Report", ""]
     lines.append(f"- **Target:** {data.get('target')}")
     lines.append(f"- **Domain:** {data.get('domain')}")
@@ -590,7 +594,9 @@ def format_dnsbrute_report_markdown(data: dict[str, object]) -> str:
     axfr_entries = cast(list[object], data.get("axfr") or [])
     if axfr_entries:
         for entry_raw in axfr_entries:
-            entry = cast(dict[str, object], entry_raw)
+            if not isinstance(entry_raw, dict):
+                continue
+            entry = entry_raw
             lines.append(f"### {entry.get('nameserver')} (zone: {entry.get('zone', data.get('zone'))}, depth: {entry.get('depth', 1)})")
             lines.append(f"- **Success:** {'Yes' if entry.get('success') else 'No'}")
             lines.append(f"- **Records:** {entry.get('records_count')}")
@@ -613,7 +619,9 @@ def format_dnsbrute_report_markdown(data: dict[str, object]) -> str:
     if recursive_axfr:
         lines.append("## Recursive AXFR Attempts")
         for entry_raw in recursive_axfr:
-            entry = cast(dict[str, object], entry_raw)
+            if not isinstance(entry_raw, dict):
+                continue
+            entry = entry_raw
             lines.append(f"### {entry.get('nameserver')} (zone: {entry.get('zone', data.get('zone'))}, depth: {entry.get('depth', 0)})")
             lines.append(f"- **Success:** {'Yes' if entry.get('success') else 'No'}")
             lines.append(f"- **Records:** {entry.get('records_count')}")
@@ -716,6 +724,8 @@ def format_dnsbrute_report_csv(data: dict[str, object]) -> str:
 
     All rows share the same schema; non-applicable fields are left empty.
     """
+    if not isinstance(data, dict):
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(_dnsbrute_csv_header())
@@ -725,11 +735,15 @@ def format_dnsbrute_report_csv(data: dict[str, object]) -> str:
 
     # Subdomain brute-force results
     for entry in cast(list[object], data.get("all_results", []) or []):
-        writer.writerow(_dnsbrute_subdomain_row(target, domain, cast(dict[str, object], entry)))
+        if not isinstance(entry, dict):
+            continue
+        writer.writerow(_dnsbrute_subdomain_row(target, domain, entry))
 
     # Initial AXFR attempts
     for entry in cast(list[object], data.get("axfr", []) or []):
-        entry_dict = cast(dict[str, object], entry)
+        if not isinstance(entry, dict):
+            continue
+        entry_dict = entry
         records_raw = entry_dict.get("records", []) or []
         records = cast(list[object], records_raw)
         if records:
@@ -741,7 +755,9 @@ def format_dnsbrute_report_csv(data: dict[str, object]) -> str:
 
     # Recursive AXFR attempts
     for entry in cast(list[object], data.get("recursive_axfr", []) or []):
-        entry_dict = cast(dict[str, object], entry)
+        if not isinstance(entry, dict):
+            continue
+        entry_dict = entry
         records_raw = entry_dict.get("records", []) or []
         records = cast(list[object], records_raw)
         if records:

@@ -216,12 +216,14 @@ def _escape(value: str) -> str:
 
 def format_cidr_report_markdown(data: dict[str, object]) -> str:
     """Format CIDR results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan CIDR Network Calculator Report", ""]
-    lines.append(f"- **CIDR:** {data['cidr']}")
-    lines.append(f"- **IP Version:** {data['ip_version']}")
+    lines.append(f"- **CIDR:** {data.get('cidr', '')}")
+    lines.append(f"- **IP Version:** {data.get('ip_version', '')}")
     lines.append("")
 
-    network = data["network"]
+    network = data.get("network")
     if not isinstance(network, dict):
         network = {}
     lines.append("## Network Information")
@@ -261,6 +263,8 @@ def format_cidr_report_markdown(data: dict[str, object]) -> str:
         lines.append("| Network | Address Range | Total Addresses |")
         lines.append("|---------|---------------|-----------------|")
         for net_str in diff.get("difference", []) or []:
+            if not isinstance(net_str, str):
+                continue
             try:
                 network = ipaddress.ip_network(net_str, strict=False)
                 start = str(network.network_address)
@@ -275,6 +279,8 @@ def format_cidr_report_markdown(data: dict[str, object]) -> str:
     return "\n".join(lines)
 def format_cidr_report_csv(data: dict[str, object]) -> str:
     """Format CIDR calculation results as CSV."""
+    if not isinstance(data, dict):
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([

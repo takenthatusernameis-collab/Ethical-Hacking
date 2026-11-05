@@ -509,13 +509,15 @@ def _render_node_md(node: dict[str, object], lines: list[str], depth: int = 0) -
 
 def format_radix_report_markdown(data: dict[str, object]) -> str:
     """Format radix results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan Radix Tree Report", ""]
-    lines.append(f"- **Networks Provided:** {data['network_count']}")
-    lines.append(f"- **Merged Networks:** {data['merged_network_count']}")
-    lines.append(f"- **Total Input Addresses:** {data['total_input_addresses']}")
-    lines.append(f"- **Total Merged Addresses:** {data['total_merged_addresses']}")
-    lines.append(f"- **Compression Ratio:** {data['compression_ratio']}")
-    lines.append(f"- **Merge Enabled:** {data['merge_enabled']}")
+    lines.append(f"- **Networks Provided:** {data.get('network_count', 0)}")
+    lines.append(f"- **Merged Networks:** {data.get('merged_network_count', 0)}")
+    lines.append(f"- **Total Input Addresses:** {data.get('total_input_addresses', 0)}")
+    lines.append(f"- **Total Merged Addresses:** {data.get('total_merged_addresses', 0)}")
+    lines.append(f"- **Compression Ratio:** {data.get('compression_ratio', 0.0)}")
+    lines.append(f"- **Merge Enabled:** {data.get('merge_enabled', False)}")
     lines.append("")
 
     lines.append("## Merged Networks")
@@ -525,6 +527,8 @@ def format_radix_report_markdown(data: dict[str, object]) -> str:
     if not isinstance(merged, list):
         merged = []
     for net_str in merged:
+        if not isinstance(net_str, str):
+            continue
         try:
             network = ipaddress.ip_network(net_str, strict=False)
             start = str(network.network_address)
@@ -550,10 +554,10 @@ def format_radix_report_markdown(data: dict[str, object]) -> str:
         contains = None
     if contains is not None:
         lines.append("## Membership Test")
-        lines.append(f"- **IP Tested:** {contains['ip']}")
-        lines.append(f"- **In Network:** {'Yes' if contains['in_network'] else 'No'}")
+        lines.append(f"- **IP Tested:** {contains.get('ip', '')}")
+        lines.append(f"- **In Network:** {'Yes' if contains.get('in_network') else 'No'}")
         if contains.get("matched_network"):
-            lines.append(f"- **Matched Network:** {contains['matched_network']}")
+            lines.append(f"- **Matched Network:** {contains.get('matched_network', '')}")
         lines.append("")
 
     diff = data.get("diff")
@@ -561,10 +565,10 @@ def format_radix_report_markdown(data: dict[str, object]) -> str:
         diff = None
     if diff is not None:
         lines.append("## Set Difference (In First, Not In Second)")
-        lines.append(f"- **Diff CIDRs Provided:** {diff['diff_network_count']}")
-        lines.append(f"- **Diff Merged Networks:** {diff['diff_merged_network_count']}")
-        lines.append(f"- **Difference Networks:** {diff['difference_network_count']}")
-        lines.append(f"- **Total Difference Addresses:** {diff['total_diff_addresses']}")
+        lines.append(f"- **Diff CIDRs Provided:** {diff.get('diff_network_count', 0)}")
+        lines.append(f"- **Diff Merged Networks:** {diff.get('diff_merged_network_count', 0)}")
+        lines.append(f"- **Difference Networks:** {diff.get('difference_network_count', 0)}")
+        lines.append(f"- **Total Difference Addresses:** {diff.get('total_diff_addresses', 0)}")
         lines.append("")
         lines.append("### Difference Networks")
         lines.append("| Network | Address Range | Total Addresses |")
@@ -573,6 +577,8 @@ def format_radix_report_markdown(data: dict[str, object]) -> str:
         if not isinstance(difference, list):
             difference = []
         for net_str in difference:
+            if not isinstance(net_str, str):
+                continue
             try:
                 network = ipaddress.ip_network(net_str, strict=False)
                 start = str(network.network_address)
@@ -588,6 +594,8 @@ def format_radix_report_markdown(data: dict[str, object]) -> str:
 
 def format_radix_report_csv(data: dict[str, object]) -> str:
     """Format radix tree results as CSV."""
+    if not isinstance(data, dict):
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
 
@@ -618,7 +626,14 @@ def format_radix_report_csv(data: dict[str, object]) -> str:
     # For simplicity, if networks didn't merge, each maps to itself
     # If they did merge, we need to find which merged network contains the original
     import ipaddress
-    merged_networks = [ipaddress.ip_network(m) for m in merged]
+    merged_networks = []
+    for m in merged:
+        if not isinstance(m, str):
+            continue
+        try:
+            merged_networks.append(ipaddress.ip_network(m))
+        except ValueError:
+            continue
 
     # For diff, just use the first diff CIDR if available
     diff_cidr = ""
@@ -631,7 +646,12 @@ def format_radix_report_csv(data: dict[str, object]) -> str:
             diff_cidr = diff_cidrs[0]
 
     for original in cidrs:
-        orig_net = ipaddress.ip_network(original, strict=False)
+        if not isinstance(original, str):
+            continue
+        try:
+            orig_net = ipaddress.ip_network(original, strict=False)
+        except ValueError:
+            continue
         matched_merged = original
         for m_net in merged_networks:
             if (

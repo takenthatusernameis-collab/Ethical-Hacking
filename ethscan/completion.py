@@ -103,16 +103,18 @@ def format_completion_report_json(result: dict[str, Any]) -> str:
 
 def format_completion_report_markdown(result: dict[str, Any]) -> str:
     """Render a completion report as Markdown."""
+    if not isinstance(result, dict):
+        result = {}
     lines = [
         "# ethscan Shell Completion",
         "",
-        f"- **Shell:** {result['shell']}",
-        f"- **Program:** {result['prog_name']}",
+        f"- **Shell:** {result.get('shell', '')}",
+        f"- **Program:** {result.get('prog_name', '')}",
         "",
         "## Script",
         "",
         "```",
-        result["script"].rstrip(),
+        f"{result.get('script', '')}".rstrip(),
         "```",
         "",
         "## Installation",
@@ -142,6 +144,8 @@ def format_completion_report_markdown(result: dict[str, Any]) -> str:
 
 def format_completion_report_csv(result: dict[str, Any]) -> str:
     """Format completion report as CSV."""
+    if not isinstance(result, dict):
+        result = {}
     output = io.StringIO()
     writer = csv.writer(output)
 
@@ -151,6 +155,8 @@ def format_completion_report_csv(result: dict[str, Any]) -> str:
     writer.writerow([])
     writer.writerow(["script"])
     script = result.get("script", "")
+    if not isinstance(script, str):
+        script = ""
     for line in script.splitlines():
         writer.writerow([line])
 

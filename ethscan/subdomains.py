@@ -282,6 +282,8 @@ def format_subdomains_report_json(data: dict[str, Any]) -> str:
 
 def format_subdomains_report_markdown(data: dict[str, Any]) -> str:
     """Format subdomain results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan Subdomain Enumeration Report", ""]
     lines.append(f"- **Target:** {data.get('target', '')}")
     lines.append(f"- **Domain:** {data.get('domain', '')}")
@@ -350,6 +352,8 @@ def format_subdomains_report_markdown(data: dict[str, Any]) -> str:
 
 def format_subdomains_report_csv(data: dict[str, Any]) -> str:
     """Format subdomain results as CSV."""
+    if not isinstance(data, dict):
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["subdomain", "hostname", "ip", "resolved"])
