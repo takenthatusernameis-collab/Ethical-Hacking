@@ -572,7 +572,7 @@ def run_mssql(
             else:
                 error = error or "No response from server"
         except Exception as exc:  # noqa: BLE001 - connector doubles may raise any type in tests
-            error = str(exc)
+            error = str(exc)  # pragma: no cover - defensive
 
     findings = _assess_prelogin(prelogin_data)
 

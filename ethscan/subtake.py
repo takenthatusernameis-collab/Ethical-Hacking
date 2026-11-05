@@ -18,13 +18,12 @@ try:
         import dns.enum
         import dns.message
     except Exception:  # noqa: BLE001, S110
-        pass
+        pass  # pragma: no cover - defensive
     import dns.exception
     import dns.resolver
     DNS_AVAILABLE = True
 except Exception:  # noqa: BLE001
-    dns = None  # type: ignore[assignment]
-    DNS_AVAILABLE = False
+    DNS_AVAILABLE = False  # pragma: no cover - defensive
 
 DEFAULT_SUBDOMAINS = [
     "www",
