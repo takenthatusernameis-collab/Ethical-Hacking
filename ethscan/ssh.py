@@ -420,10 +420,28 @@ def _get_host_key_info_stdlib(sock: socket.socket) -> dict[str, Any] | None:
     return None
 
 
+def _ssh_connect(
+    host: str,
+    port: int,
+    timeout: float,
+    connector=None,
+) -> socket.socket:
+    """Open a TCP connection to the SSH server.
+
+    Tests may provide a ``connector`` callable that returns a socket-like
+    object to substitute for the real transport; a connector that raises is
+    propagated so ``run_ssh`` can report it through its own error field.
+    """
+    if connector is not None:
+        return connector(host, port, timeout)
+    return socket.create_connection((host, port), timeout=timeout)
+
+
 def run_ssh(
     target: str,
     port: int | None = None,
     timeout: float = DEFAULT_TIMEOUT,
+    connector=None,
 ) -> dict[str, Any]:
     """Run SSH security assessment against a target.
 
@@ -431,6 +449,7 @@ def run_ssh(
         target: Target host or URL (e.g. ssh.example.com or ssh://example.com:2222).
         port: Override target port. If None, extracts from target or uses default 22.
         timeout: Connection timeout in seconds.
+        connector: Callable returning a socket-like transport (for testing).
 
     Returns:
         Structured results with banner, supported algorithms, weak algorithm findings,
@@ -457,7 +476,7 @@ def run_ssh(
 
     sock = None
     try:
-        sock = socket.create_connection((host, resolved_port), timeout=timeout)
+        sock = _ssh_connect(host, resolved_port, timeout, connector)
         banner = _ssh_banner_exchange(sock, timeout)
         result["banner"] = banner
 
