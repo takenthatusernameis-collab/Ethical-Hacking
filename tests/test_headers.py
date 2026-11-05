@@ -355,3 +355,36 @@ def test_format_headers_report_csv_no_findings() -> None:
     }
     output = format_headers_report_csv(data)
     assert "finding" not in output
+
+def test_run_headers_web_server_findings(monkeypatch):
+    """Line 51: run_headers sets findings when server version assessed."""
+    def mock_fetch_headers(url, timeout=5.0):
+        return {"server": "Apache/1.3.3"}
+
+    monkeypatch.setattr("ethscan.headers.fetch_headers", mock_fetch_headers)
+
+    results = run_headers("https://example.com", timeout=1.0)
+    assert "findings" in results
+    assert any("Web server version" in f for f in results["findings"])
+
+
+def test_format_headers_report_markdown_with_findings():
+    """Lines 90-93: markdown renders findings section."""
+    data = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "headers": {"server": "Apache/1.3.3"},
+        "security_headers": {
+            "present": [],
+            "missing": [],
+            "total": 0,
+            "present_count": 0,
+            "missing_count": 0,
+        },
+        "findings": ["Web server version: 1.3.3"],
+    }
+    output = format_headers_report_markdown(data)
+    assert "## Findings" in output
+    assert "Web server version: 1.3.3" in output
