@@ -23417,7 +23417,8 @@ def _assert_config_usage_error(result, option: str, message_fragment: str) -> No
     assert result.exit_code == 2, (
         f"{option}: expected exit code 2, got {result.exit_code}\n{result.output}"
     )
-    assert f"Error: Invalid value for '--{option}' in the config file" in result.output, (
+    flag = option if option.startswith("--") else f"--{option}"
+    assert f"Error: Invalid value for '{flag}' in the config file" in result.output, (
         f"{option}: missing usage error message\n{result.output}"
     )
     assert message_fragment in result.output, (
