@@ -17,7 +17,7 @@ Date: Thu Nov 05 2026
 - None.
 
 ## Next task
-- None identified — every bounded numeric CLI option (`IntRange` and `FloatRange`) is now named in a permanent sweep and covered by range-check + usage-error + single-line + tripwire tests.
+- None identified — every bounded numeric CLI option (`IntRange` and `FloatRange`) is now named in a permanent sweep and covered by range-check + usage-error + single-line + tripwire tests. Independently re-verified this session: cli.py declares exactly 58 `IntRange` options and 45 `FloatRange(min=0.001)` options, matching `INT_OPTION_RANGES` and `_float_range_option_pairs()`; all have `clamp=False`.
 - If a new bounded numeric option is added, extend `_float_range_option_pairs()` (for `FloatRange(min=0.001)` siblings) or `INT_OPTION_RANGES`/`INT_OPTION_UPPER_BAD` (for `IntRange`) and ensure a probe/no-side-effect tripwire test exists where the option could trigger work before parsing completes.
 - Run: `python3 -m pytest -q`, `python3 -m ruff check .`, `python3 -m mypy ethscan`.
 - Update `TASK.md`/`HANDOFF_NEXT.md`/`NEXT_TASK.md`; do not commit unless asked.
