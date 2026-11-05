@@ -577,31 +577,38 @@ def format_ssh_report_json(data: dict[str, Any]) -> str:
 
 def format_ssh_report_markdown(data: dict[str, Any]) -> str:
     """Format SSH assessment results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan SSH Security Assessment Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Host:** {data['host']}")
-    lines.append(f"- **Port:** {data['port']}")
-    lines.append(f"- **Timeout:** {data['timeout']}s")
-    lines.append(f"- **Paramiko Available:** {'Yes' if data['paramiko_available'] else 'No (stdlib only)'}")
+    lines.append(f"- **Target:** {data.get('target', '')}")
+    lines.append(f"- **Host:** {data.get('host', '')}")
+    lines.append(f"- **Port:** {data.get('port', '')}")
+    lines.append(f"- **Timeout:** {data.get('timeout', '')}s")
+    lines.append(f"- **Paramiko Available:** {'Yes' if data.get('paramiko_available') else 'No (stdlib only)'}")
     lines.append("")
 
-    if data["error"]:
-        lines.append(f"- **Error:** {data['error']}")
+    if data.get("error"):
+        lines.append(f"- **Error:** {data.get('error')}")
         lines.append("")
         return "\n".join(lines)
 
-    if data["banner"]:
-        lines.append(f"- **Server Banner:** `{data['banner']}`")
+    if data.get("banner"):
+        lines.append(f"- **Server Banner:** `{data.get('banner')}`")
         lines.append("")
 
     def render_algo_section(title: str, algo_data: dict[str, list[str]]) -> None:
         lines.append(f"## {title}")
-        if algo_data["supported"]:
+        if not isinstance(algo_data, dict):
+            algo_data = {}
+        supported = algo_data.get("supported") or []
+        weak = set(algo_data.get("weak") or [])
+        strong = set(algo_data.get("strong") or [])
+        if supported:
             lines.append("### Supported Algorithms")
-            for algo in sorted(algo_data["supported"]):
-                if algo in algo_data["weak"]:
+            for algo in sorted(supported):
+                if algo in weak:
                     lines.append(f"- **{algo}** ⚠️ (weak/deprecated)")
-                elif algo in algo_data["strong"]:
+                elif algo in strong:
                     lines.append(f"- **{algo}** ✓ (strong)")
                 else:
                     lines.append(f"- {algo}")
@@ -609,10 +616,10 @@ def format_ssh_report_markdown(data: dict[str, Any]) -> str:
             lines.append("*No algorithms reported*")
         lines.append("")
 
-    render_algo_section("Key Exchange Algorithms", data["kex_algorithms"])
-    render_algo_section("Host Key Algorithms", data["host_key_algorithms"])
-    render_algo_section("Encryption Algorithms", data["encryption_algorithms"])
-    render_algo_section("MAC Algorithms", data["mac_algorithms"])
+    render_algo_section("Key Exchange Algorithms", data.get("kex_algorithms") or {})
+    render_algo_section("Host Key Algorithms", data.get("host_key_algorithms") or {})
+    render_algo_section("Encryption Algorithms", data.get("encryption_algorithms") or {})
+    render_algo_section("MAC Algorithms", data.get("mac_algorithms") or {})
 
     if data["host_key"]:
         hk = data["host_key"]
@@ -637,6 +644,8 @@ def format_ssh_report_markdown(data: dict[str, Any]) -> str:
     return "\n".join(lines)
 def format_ssh_report_csv(data: dict[str, object]) -> str:
     """Format SSH security assessment results as CSV."""
+    if not isinstance(data, dict):
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([

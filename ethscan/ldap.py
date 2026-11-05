@@ -662,6 +662,8 @@ def format_ldap_report_json(results: dict[str, Any]) -> str:
 
 def format_ldap_report_markdown(results: dict[str, Any]) -> str:
     """Format LDAP reconnaissance results as Markdown."""
+    if not isinstance(results, dict):
+        results = {}
     lines = ["# ethscan LDAP Reconnaissance Report", ""]
     lines.append(f"- **Target:** {results.get('target', '')}")
     lines.append(f"- **Host:** {results.get('host', '')}")
@@ -733,6 +735,8 @@ def format_ldap_report_markdown(results: dict[str, Any]) -> str:
 
 def format_ldap_report_csv(results: dict[str, Any]) -> str:
     """Format LDAP reconnaissance results as CSV."""
+    if not isinstance(results, dict):
+        results = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([

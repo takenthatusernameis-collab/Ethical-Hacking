@@ -814,6 +814,8 @@ def format_smb_report_json(results: dict[str, Any]) -> str:
 
 def format_smb_report_markdown(results: dict[str, Any]) -> str:
     """Format SMB reconnaissance results as Markdown."""
+    if not isinstance(results, dict):
+        results = {}
     lines = ["# ethscan SMB Reconnaissance Report", ""]
     lines.append(f"- **Target:** {results.get('target', '')}")
     lines.append(f"- **Host:** {results.get('host', '')}")
@@ -885,6 +887,8 @@ def format_smb_report_markdown(results: dict[str, Any]) -> str:
 
 def format_smb_report_csv(results: dict[str, Any]) -> str:
     """Format SMB reconnaissance results as CSV."""
+    if not isinstance(results, dict):
+        results = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([

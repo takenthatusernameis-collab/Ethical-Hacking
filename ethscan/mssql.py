@@ -600,6 +600,8 @@ def _markdown_escape(text: object) -> str:
 
 def format_mssql_report_markdown(data: dict[str, Any]) -> str:
     """Format MSSQL reconnaissance results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines: list[str] = []
     lines.append("# MSSQL Reconnaissance Report")
     lines.append("")
@@ -648,6 +650,8 @@ def format_mssql_report_markdown(data: dict[str, Any]) -> str:
 
 def format_mssql_report_csv(data: dict[str, Any]) -> str:
     """Format MSSQL reconnaissance results as CSV."""
+    if not isinstance(data, dict):
+            data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([

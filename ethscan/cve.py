@@ -515,6 +515,8 @@ def format_cve_report_json(data: dict[str, object]) -> str:
 
 def format_cve_report_csv(data: dict[str, object]) -> str:
     """Format CVE lookup results as CSV."""
+    if not isinstance(data, dict):
+        data = {}
     import csv
     import io
 
@@ -584,19 +586,21 @@ def _escape(value: str) -> str:
 
 def format_cve_report_markdown(data: dict[str, object]) -> str:
     """Format CVE lookup results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan CVE Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Host:** {data['host']}")
-    lines.append(f"- **Timeout:** {data['timeout']}s")
+    lines.append(f"- **Target:** {data.get('target', '')}")
+    lines.append(f"- **Host:** {data.get('host', '')}")
+    lines.append(f"- **Timeout:** {data.get('timeout', '')}s")
     if data.get("profile"):
         lines.append(f"- **Profile:** {data['profile']}")
     if data.get("service_timeout"):
         lines.append(f"- **Service Timeout:** {data['service_timeout']}s")
     if data.get("workers"):
         lines.append(f"- **Workers:** {data['workers']}")
-    lines.append(f"- **Cache Enabled:** {'Yes' if data['use_cache'] else 'No'}")
+    lines.append(f"- **Cache Enabled:** {'Yes' if data.get('use_cache') else 'No'}")
     lines.append(
-        f"- **Offline Fallback:** {'Yes' if data['offline_fallback'] else 'No'}"
+        f"- **Offline Fallback:** {'Yes' if data.get('offline_fallback') else 'No'}"
     )
     if data.get("api_url"):
         lines.append(f"- **API URL:** {data['api_url']}")

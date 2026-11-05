@@ -227,6 +227,8 @@ def format_ftp_report_json(data: dict[str, Any]) -> str:
 
 def format_ftp_report_markdown(data: dict[str, Any]) -> str:
     """Format FTP reconnaissance results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan FTP Report", ""]
     lines.append(f"- **Target:** {data.get('target', '')}")
     lines.append(f"- **Host:** {data.get('host', '')}")
@@ -269,6 +271,8 @@ def format_ftp_report_csv(data: dict[str, Any]) -> str:
     the Markdown ``- **Error:**`` rendering and the ssh/smtp CSV pattern)
     instead of being buried as the last field of a summary row.
     """
+    if not isinstance(data, dict):
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["target", "host", "port", "banner", "anonymous_login", "anonymous_message", "error"])

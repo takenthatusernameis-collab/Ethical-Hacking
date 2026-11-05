@@ -405,6 +405,8 @@ def format_smtp_report_json(data: dict[str, Any]) -> str:
 
 def format_smtp_report_markdown(data: dict[str, Any]) -> str:
     """Format SMTP reconnaissance results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan SMTP Report", ""]
     lines.append(f"- **Target:** {data.get('target', '')}")
     lines.append(f"- **Host:** {data.get('host', '')}")
@@ -454,6 +456,8 @@ def format_smtp_report_csv(data: dict[str, Any]) -> str:
     Emits one row per VRFY-checked user (``target,host,port,user,found,code,description``)
     when a user list was supplied; otherwise a single summary row.
     """
+    if not isinstance(data, dict):
+            data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["target", "host", "port", "user", "found", "code", "description"])

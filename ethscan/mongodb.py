@@ -322,11 +322,13 @@ def run_mongodb(
 
 def format_mongodb_report_json(data: dict[str, Any]) -> str:
     """Format MongoDB reconnaissance results as JSON."""
-    return json.dumps(data, indent=2, ensure_ascii=False)
+    return json.dumps(data, indent=2, ensure_ascii=False, default=str)
 
 
 def format_mongodb_report_markdown(data: dict[str, Any]) -> str:
     """Format MongoDB reconnaissance results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines: list[str] = []
     lines.append("# MongoDB Reconnaissance Report")
     lines.append("")
@@ -374,6 +376,8 @@ def format_mongodb_report_markdown(data: dict[str, Any]) -> str:
 
 def format_mongodb_report_csv(data: dict[str, Any]) -> str:
     """Format MongoDB reconnaissance results as CSV."""
+    if not isinstance(data, dict):
+            data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([

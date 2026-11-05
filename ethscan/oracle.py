@@ -471,6 +471,8 @@ def _markdown_escape(text: object) -> str:
 
 def format_oracle_report_markdown(data: dict[str, Any]) -> str:
     """Format Oracle reconnaissance results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines: list[str] = []
     lines.append("# Oracle Reconnaissance Report")
     lines.append("")
@@ -505,6 +507,8 @@ def format_oracle_report_markdown(data: dict[str, Any]) -> str:
 
 def format_oracle_report_csv(data: dict[str, Any]) -> str:
     """Format Oracle reconnaissance results as CSV."""
+    if not isinstance(data, dict):
+            data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([

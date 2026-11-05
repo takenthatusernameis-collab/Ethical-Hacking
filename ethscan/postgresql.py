@@ -381,6 +381,8 @@ def _markdown_escape(text: object) -> str:
 
 def format_postgresql_report_markdown(data: dict[str, Any]) -> str:
     """Format PostgreSQL reconnaissance results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines: list[str] = []
     lines.append("# PostgreSQL Reconnaissance Report")
     lines.append("")
@@ -439,6 +441,8 @@ def format_postgresql_report_markdown(data: dict[str, Any]) -> str:
 
 def format_postgresql_report_csv(data: dict[str, Any]) -> str:
     """Format PostgreSQL reconnaissance results as CSV."""
+    if not isinstance(data, dict):
+            data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([

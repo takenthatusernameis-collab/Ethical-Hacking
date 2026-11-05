@@ -615,6 +615,8 @@ def _escape_markdown(value: Any) -> str:
 
 def format_netbios_report_markdown(data: dict[str, Any]) -> str:
     """Format NetBIOS reconnaissance results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan NetBIOS Report", ""]
     lines.append(f"- **Target:** {_escape_markdown(data.get('target', ''))}")
     lines.append(f"- **Host:** {_escape_markdown(data.get('host', ''))}")
@@ -700,6 +702,8 @@ def format_netbios_report_csv(data: dict[str, Any]) -> str:
       ``suffix``, ``suffix_hex``, ``service_type`` and every decoded flag;
       assessment fields empty (they are aggregate signals, not per-name).
     """
+    if not isinstance(data, dict):
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
 

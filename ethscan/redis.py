@@ -388,6 +388,8 @@ def _markdown_escape(text: object) -> str:
 
 def format_redis_report_markdown(data: dict[str, Any]) -> str:
     """Format Redis reconnaissance results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan Redis Reconnaissance Report", ""]
     lines.append(f"- **Target:** {data.get('target', '')}")
     lines.append(f"- **Host:** {data.get('host', '')}")
@@ -439,6 +441,8 @@ def format_redis_report_markdown(data: dict[str, Any]) -> str:
 
 def format_redis_report_csv(data: dict[str, Any]) -> str:
     """Format Redis reconnaissance results as CSV."""
+    if not isinstance(data, dict):
+            data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([

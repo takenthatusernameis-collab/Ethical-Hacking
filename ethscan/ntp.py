@@ -363,6 +363,8 @@ def format_ntp_report_json(data: dict[str, Any]) -> str:
 
 def format_ntp_report_markdown(data: dict[str, Any]) -> str:
     """Format NTP reconnaissance results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan NTP Report", ""]
     lines.append(f"- **Target:** {data.get('target', '')}")
     lines.append(f"- **Host:** {data.get('host', '')}")
@@ -461,6 +463,8 @@ def format_ntp_report_csv(data: dict[str, Any]) -> str:
     - Summary row: record_type=summary (peer_* fields empty)
     - Peer rows: record_type=peer (with peer data)
     """
+    if not isinstance(data, dict):
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
 

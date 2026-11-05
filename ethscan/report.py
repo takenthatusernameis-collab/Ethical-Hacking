@@ -214,7 +214,7 @@ def run_report(
 
 def format_report_json(data: dict[str, Any]) -> str:
     """Render the combined report as JSON."""
-    return json.dumps(data, indent=2)
+    return json.dumps(data, indent=2, default=str)
 
 
 def format_report_markdown(data: dict[str, Any]) -> str:

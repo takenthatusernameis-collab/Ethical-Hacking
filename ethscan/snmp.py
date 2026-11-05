@@ -606,6 +606,8 @@ def _escape_markdown(value: Any) -> str:
 
 def format_snmp_report_markdown(data: dict[str, Any]) -> str:
     """Format SNMP reconnaissance results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan SNMP Report", ""]
     lines.append(f"- **Target:** {_escape_markdown(data.get('target', ''))}")
     lines.append(f"- **Host:** {_escape_markdown(data.get('host', ''))}")
@@ -699,6 +701,8 @@ def format_snmp_report_csv(data: dict[str, Any]) -> str:
 
     Header: ``target,host,port,snmp_version,sys_descr,sys_object_id,sys_up_time_ms,sys_name,error,record_type,community,community_valid,community_version,community_error``.
     """
+    if not isinstance(data, dict):
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([

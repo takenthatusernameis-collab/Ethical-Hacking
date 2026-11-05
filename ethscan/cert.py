@@ -251,6 +251,8 @@ def format_cert_report_json(data: dict[str, Any]) -> str:
 
 def format_cert_report_markdown(data: dict[str, Any]) -> str:
     """Format cert results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan Certificate Transparency Report", ""]
     lines.append(f"- **Target:** {data.get('target', '')}")
     lines.append(f"- **Domain:** {data.get('domain', '')}")
@@ -304,6 +306,8 @@ def format_cert_report_markdown(data: dict[str, Any]) -> str:
 
 def format_cert_report_csv(data: dict[str, Any]) -> str:
     """Format cert results as CSV."""
+    if not isinstance(data, dict):
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["target", "domain", "ip", "subdomain"])

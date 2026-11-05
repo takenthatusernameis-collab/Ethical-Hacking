@@ -212,12 +212,14 @@ def format_dns_report_json(data: dict[str, object]) -> str:
 
 def format_dns_report_markdown(data: dict[str, object]) -> str:
     """Format DNS results as Markdown."""
-    records = data["records"]
+    if not isinstance(data, dict):
+        data = {}
+    records = data.get("records")
     if not isinstance(records, dict):
         records = {}
     lines = ["# ethscan DNS Record Enumeration Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Domain:** {data['domain']}")
+    lines.append(f"- **Target:** {data.get('target', '')}")
+    lines.append(f"- **Domain:** {data.get('domain', '')}")
     record_types_queried = data.get("record_types_queried", [])
     if isinstance(record_types_queried, (list, tuple, set)):
         lines.append(f"- **Record Types Queried:** {', '.join(str(r) for r in record_types_queried)}")
@@ -246,6 +248,8 @@ def format_dns_report_csv(data: dict[str, object]) -> str:
     by one row per resolved record value, using stdlib ``csv.writer`` for
     proper quoting/escaping of values containing commas or double-quotes.
     """
+    if not isinstance(data, dict):
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["target", "domain", "record_type", "record_value"])

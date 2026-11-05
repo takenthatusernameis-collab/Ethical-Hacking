@@ -291,14 +291,16 @@ def _markdown_escape(text: object) -> str:
 
 def format_geo_report_markdown(data: dict[str, object]) -> str:
     """Format geolocation results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan IP Geolocation Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Host:** {data['host']}")
+    lines.append(f"- **Target:** {data.get('target', '')}")
+    lines.append(f"- **Host:** {data.get('host', '')}")
     if data.get("ip"):
         lines.append(f"- **Resolved IP:** {data['ip']}")
-    lines.append(f"- **Timeout:** {data['timeout']}s")
-    lines.append(f"- **Cache Enabled:** {'Yes' if data['use_cache'] else 'No'}")
-    lines.append(f"- **Offline Fallback:** {'Yes' if data['offline_fallback'] else 'No'}")
+    lines.append(f"- **Timeout:** {data.get('timeout', '')}s")
+    lines.append(f"- **Cache Enabled:** {'Yes' if data.get('use_cache') else 'No'}")
+    lines.append(f"- **Offline Fallback:** {'Yes' if data.get('offline_fallback') else 'No'}")
     if data.get("recursive"):
         lines.append(
             f"- **Recursive Hop Geolocation:** Yes (max depth: {data.get('max_depth', 30)})"
@@ -452,6 +454,8 @@ def format_geo_report_csv(data: dict[str, object]) -> str:
     hop rows populate them. Non-recursive runs emit a single data row,
     preserving prior behavior.
     """
+    if not isinstance(data, dict):
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(_geo_csv_header())

@@ -612,6 +612,8 @@ def _markdown_escape(text: object) -> str:
 
 def format_dnssec_report_markdown(data: dict[str, object]) -> str:
     """Format DNSSEC results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan DNSSEC Validation Report", ""]
     lines.append(f"- **Target:** {data.get('target')}")
     lines.append(f"- **Domain:** {data.get('domain')}")
@@ -817,6 +819,8 @@ def format_dnssec_report_csv(data: dict[str, object]) -> str:
     (carrying ``count``, ``success`` and ``error``) so diagnostic information is
     not silently dropped, mirroring the Markdown formatter's status lines.
     """
+    if not isinstance(data, dict):
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(_dnssec_csv_header())

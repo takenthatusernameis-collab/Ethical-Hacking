@@ -305,6 +305,8 @@ def format_mac_report_json(data: dict[str, Any]) -> str:
 
 def format_mac_report_markdown(data: dict[str, Any]) -> str:
     """Format MAC vendor results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan MAC Vendor Lookup Report", ""]
     lines.append(f"- **Target:** {data.get('target', '')}")
     if data.get("mac"):
@@ -346,6 +348,8 @@ def format_mac_report_markdown(data: dict[str, Any]) -> str:
 
 def format_mac_report_csv(data: dict[str, Any]) -> str:
     """Format MAC vendor results as CSV."""
+    if not isinstance(data, dict):
+            data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([

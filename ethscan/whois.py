@@ -278,28 +278,30 @@ def format_whois_report_json(data: dict[str, object]) -> str:
 
 def format_whois_report_markdown(data: dict[str, object]) -> str:
     """Format WHOIS results as Markdown."""
-    parsed = cast("dict[str, object]", data["parsed"])
+    if not isinstance(data, dict):
+        data = {}
+    parsed = cast("dict[str, object]", data.get("parsed", {}) or {})
     lines = ["# ethscan WHOIS Lookup Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Server:** {data['server']}:{data['port']}")
+    lines.append(f"- **Target:** {data.get('target', '')}")
+    lines.append(f"- **Server:** {data.get('server', '')}:{data.get('port', '')}")
     if data.get("error"):
         lines.append(f"- **Error:** {data['error']}")
     lines.append("")
 
     lines.append("## Parsed Fields")
-    lines.append(f"- **Registrar:** {parsed['registrar'] or 'N/A'}")
-    lines.append(f"- **Creation Date:** {parsed['creation_date'] or 'N/A'}")
-    lines.append(f"- **Expiration Date:** {parsed['expiration_date'] or 'N/A'}")
-    lines.append(f"- **Registrant Organization:** {parsed['registrant_org'] or 'N/A'}")
+    lines.append(f"- **Registrar:** {parsed.get('registrar') or 'N/A'}")
+    lines.append(f"- **Creation Date:** {parsed.get('creation_date') or 'N/A'}")
+    lines.append(f"- **Expiration Date:** {parsed.get('expiration_date') or 'N/A'}")
+    lines.append(f"- **Registrant Organization:** {parsed.get('registrant_org') or 'N/A'}")
     lines.append("")
 
-    if parsed["nameservers"]:
+    if parsed.get("nameservers"):
         lines.append("## Nameservers")
         for ns in cast("list[str]", parsed["nameservers"]):
             lines.append(f"- {ns}")
         lines.append("")
 
-    if parsed["status_codes"]:
+    if parsed.get("status_codes"):
         lines.append("## Status Codes")
         for status in cast("list[str]", parsed["status_codes"]):
             lines.append(f"- {status}")
@@ -307,7 +309,7 @@ def format_whois_report_markdown(data: dict[str, object]) -> str:
 
     lines.append("## Raw Response")
     lines.append("```")
-    lines.append(cast("str", data["raw"]).strip())
+    lines.append(cast("str", data.get("raw", "") or "").strip())
     lines.append("```")
 
     recursive_hops = cast("list[dict[str, object]]", data.get("recursive_hops") or [])
@@ -347,9 +349,11 @@ def format_whois_report_markdown(data: dict[str, object]) -> str:
 
 def format_whois_report_csv(data: dict[str, object]) -> str:
     """Format WHOIS results as CSV."""
+    if not isinstance(data, dict):
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
-    parsed = cast("dict[str, object]", data.get("parsed", {}))
+    parsed = cast("dict[str, object]", data.get("parsed", {}) or {})
     writer.writerow(["field", "value"])
     writer.writerow(["target", data.get("target", "")])
     writer.writerow(["server", data.get("server", "")])
