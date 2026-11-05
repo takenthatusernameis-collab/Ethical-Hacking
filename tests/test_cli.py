@@ -23412,6 +23412,60 @@ def test_an_out_of_range_port_in_the_config_file_is_a_usage_error(tmp_path) -> N
     assert PORT_RANGE_MESSAGE in result.output, result.output
 
 
+def _assert_config_usage_error(result, option: str, message_fragment: str) -> None:
+    """Assert that ``result`` is a clean click usage error for a config value."""
+    assert result.exit_code == 2, (
+        f"{option}: expected exit code 2, got {result.exit_code}\n{result.output}"
+    )
+    assert f"Error: Invalid value for '--{option}' in the config file" in result.output, (
+        f"{option}: missing usage error message\n{result.output}"
+    )
+    assert message_fragment in result.output, (
+        f"{option}: wrong range message\n{result.output}"
+    )
+    assert "Traceback (most recent call last)" not in result.output, (
+        f"{option}: leaked a traceback\n{result.output}"
+    )
+    assert isinstance(result.exception, SystemExit), (
+        f"{option}: leaked {result.exception!r} instead of a usage error"
+    )
+
+
+def test_an_out_of_range_numeric_option_in_the_config_file_is_a_usage_error(
+    tmp_path,
+) -> None:
+    """An out-of-range int or float value from the config file is a usage error.
+
+    ``_CheckedDefaultMap`` checks a config value against its option the moment
+    the value is used, so an out-of-range number is refused (exit 2, a single
+    ``Error:`` line naming the option and the config file) instead of reaching
+    the command as a bad value or leaking a traceback. Covers both an int
+    option (``--workers``/``--min-length``, min 1) and float options
+    (``--timeout``/``--service-timeout``, min 0.001), set either per-command or
+    in global defaults.
+    """
+    runner = CliRunner()
+    config = tmp_path / "ethscan.yaml"
+    (tmp_path / "passwords.txt").write_text("password\n")
+    cases = (
+        ("scan", "commands:\n  scan:\n    workers: 0", ["--target", "127.0.0.1"], "--workers", "x>=1"),
+        ("scan", "defaults:\n  timeout: -1", ["--target", "127.0.0.1"], "--timeout", "x>=0.001"),
+        ("whois", "commands:\n  whois:\n    timeout: 0", ["--target", "127.0.0.1"], "--timeout", "x>=0.001"),
+        ("cve", "commands:\n  cve:\n    service_timeout: 0", ["--target", "127.0.0.1"], "--service-timeout", "x>=0.001"),
+        (
+            "audit",
+            "commands:\n  audit:\n    min_length: 0",
+            ["--file", str(tmp_path / "passwords.txt")],
+            "--min-length",
+            "x>=1",
+        ),
+    )
+    for command, config_text, args, option, fragment in cases:
+        config.write_text(config_text)
+        result = runner.invoke(cli, ["--config", str(config), command, *args])
+        _assert_config_usage_error(result, option, fragment)
+
+
 def test_a_valid_port_option_is_still_used_for_the_probe() -> None:
     """A port inside the range still reaches the probe unchanged."""
     runner = CliRunner()
