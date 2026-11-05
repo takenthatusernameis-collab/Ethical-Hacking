@@ -63,16 +63,26 @@ def _parse_cert(cert: dict) -> dict:
         Structured certificate data: subject, issuer, SANs, validity dates,
         signature algorithm, and key size.
     """
+    if not isinstance(cert, dict):
+        cert = {}
+
     subject_dict = {}
-    for item in cert.get("subject", ()):
+    subject_items = cert.get("subject")
+    if not isinstance(subject_items, (tuple, list)):
+        subject_items = ()
+    for item in subject_items:
         if isinstance(item, tuple) and len(item) >= 1 and isinstance(item[0], tuple):
             with contextlib.suppress(Exception):  # pragma: no cover - defensive
                 subject_dict[item[0][0]] = item[0][1]
         elif isinstance(item, tuple) and len(item) == 2:
             with contextlib.suppress(Exception):  # pragma: no cover - defensive
                 subject_dict[item[0]] = item[1]
+
     issuer_dict = {}
-    for item in cert.get("issuer", ()):
+    issuer_items = cert.get("issuer")
+    if not isinstance(issuer_items, (tuple, list)):
+        issuer_items = ()
+    for item in issuer_items:
         if isinstance(item, tuple) and len(item) >= 1 and isinstance(item[0], tuple):
             with contextlib.suppress(Exception):  # pragma: no cover - defensive
                 issuer_dict[item[0][0]] = item[0][1]
@@ -84,7 +94,10 @@ def _parse_cert(cert: dict) -> dict:
     issuer = issuer_dict.get("commonName") or _rdn_to_str(issuer_dict) or None
 
     san_list = []
-    for ext in cert.get("subjectAltName", ()):
+    san_items = cert.get("subjectAltName")
+    if not isinstance(san_items, (tuple, list)):
+        san_items = ()
+    for ext in san_items:
         if isinstance(ext, tuple) and len(ext) == 2 and ext[0] == "DNS":
             san_list.append(ext[1])
 
@@ -93,7 +106,7 @@ def _parse_cert(cert: dict) -> dict:
 
     signature_algorithm = cert.get("signatureAlgorithm")
     if signature_algorithm and isinstance(signature_algorithm, tuple):
-        signature_algorithm = signature_algorithm[0]
+        signature_algorithm = signature_algorithm[0] if signature_algorithm else None
 
     key_size = _estimate_key_size(cert.get("publicKeyInfo"))
 
