@@ -27,3 +27,8 @@ Date: Thu Nov 05 2026
 2. If a real gap exists, add the smallest `tests/test_ssl_hostile_sweep.py` and production guards only where needed.
 3. Run: targeted new/existing tests, then full `python3 -m pytest -q`, `python3 -m ruff check .`, `python3 -m mypy ethscan`.
 4. Update handoff files; do not commit unless asked.
+## Latest session
+- Audited `ethscan/ssl.py` formatters; added top-level + nested `cert`/`sans` guards to markdown/CSV; JSON passes through (json.dumps handles any input).
+- Added `tests/test_ssl_hostile_sweep.py` (top-level + nested hostile shapes).
+- Verified: targeted 58 passed; full suite 5829 passed, 50 skipped; ruff clean; mypy clean (59 files).
+- Next: audit `ethscan/tls.py` formatters (see NEXT_TASK.md).

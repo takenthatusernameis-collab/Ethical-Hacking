@@ -294,17 +294,21 @@ def format_ssl_report_json(data: dict) -> str:
 
 def format_ssl_report_markdown(data: dict) -> str:
     """Format SSL results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan SSL/TLS Certificate Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Host:** {data['host']}")
-    lines.append(f"- **Port:** {data['port']}")
+    lines.append(f"- **Target:** {data.get('target', '')}")
+    lines.append(f"- **Host:** {data.get('host', '')}")
+    lines.append(f"- **Port:** {data.get('port', '')}")
     lines.append("")
 
     if data.get("error"):
-        lines.append(f"- **Error:** {data['error']}")
+        lines.append(f"- **Error:** {data.get('error')}")
         lines.append("")
 
     cert = data.get("cert") or {}
+    if not isinstance(cert, dict):
+        cert = {}
     if cert:
         lines.append("## Certificate")
         lines.append(f"- **Valid:** {'Yes' if data.get('valid') else 'No'}")
@@ -320,9 +324,10 @@ def format_ssl_report_markdown(data: dict) -> str:
             lines.append(f"- **Signature Algorithm:** {cert['signature_algorithm']}")
         if cert.get("key_size"):
             lines.append(f"- **Key Size:** {cert['key_size']} bits")
-        if cert.get("sans"):
+        sans = cert.get("sans")
+        if isinstance(sans, list) and sans:
             lines.append("- **Subject Alternative Names:**")
-            for san in cert["sans"]:
+            for san in sans:
                 lines.append(f"  - {san}")
         lines.append(f"- **Chain Length:** {data.get('chain_length', 0)}")
         lines.append("")
@@ -336,9 +341,13 @@ def format_ssl_report_markdown(data: dict) -> str:
 
 def format_ssl_report_csv(data: dict) -> str:
     """Format SSL results as CSV."""
+    if not isinstance(data, dict):
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     cert = data.get("cert") or {}
+    if not isinstance(cert, dict):
+        cert = {}
     writer.writerow(["field", "value"])
     writer.writerow(["target", data.get("target", "")])
     writer.writerow(["host", data.get("host", "")])
@@ -354,5 +363,8 @@ def format_ssl_report_csv(data: dict) -> str:
     writer.writerow(["not_after", cert.get("not_after") or ""])
     writer.writerow(["signature_algorithm", cert.get("signature_algorithm") or ""])
     writer.writerow(["key_size", cert.get("key_size") or ""])
-    writer.writerow(["sans", ";".join(cert.get("sans") or [])])
+    sans = cert.get("sans")
+    if not isinstance(sans, list):
+        sans = []
+    writer.writerow(["sans", ";".join(str(x) for x in sans)])
     return output.getvalue().rstrip("\r\n")

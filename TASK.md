@@ -12,6 +12,6 @@ Date: Thu Nov 05 2026
 - None.
 
 ## Next task
-- Audit `ethscan/ssl.py` report/CLI-facing formatters for hostile report-shape gaps not already covered by `tests/test_ssl.py` and http/transport sweeps (evidence-driven). If a real gap exists, add the smallest `tests/test_ssl_hostile_sweep.py` and production guards only where needed. Also consider other modules with formatters that accept pipeline data but lack hostile-shape sweep coverage; prioritize by evidence (grep for formatter `.get`/subscripts on `data` without top-level guards). Do not duplicate transport/body coverage.
+- Audit `ethscan/tls.py` report/CLI-facing formatters for hostile report-shape gaps not already covered by `tests/test_ssl.py` and http/transport sweeps (evidence-driven). If a real gap exists, add the smallest `tests/test_ssl_hostile_sweep.py` and production guards only where needed. Also consider other modules with formatters that accept pipeline data but lack hostile-shape sweep coverage; prioritize by evidence (grep for formatter `.get`/subscripts on `data` without top-level guards). Do not duplicate transport/body coverage.
 
 (End of file - total 19 lines)
