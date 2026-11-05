@@ -485,21 +485,19 @@ def format_ping_report_markdown(data: dict[str, object]) -> str:
 
 def format_ping_report_csv(data: dict[str, object]) -> str:
     """Format ping results as CSV."""
-    if not isinstance(data, dict):
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow([
-            "target",
-            "ip",
-            "sequence",
-            "rtt_ms",
-            "ttl",
-            "response_type",
-            "error",
-        ])
-        return output.getvalue().rstrip("\r\n")
     output = io.StringIO()
     writer = csv.writer(output)
+    writer.writerow([
+        "target",
+        "ip",
+        "sequence",
+        "rtt_ms",
+        "ttl",
+        "response_type",
+        "error",
+    ])
+    if not isinstance(data, dict):
+        return output.getvalue().rstrip("\r\n")
     probes_list = data.get("probes") or []
     if not isinstance(probes_list, list):
         probes_list = []

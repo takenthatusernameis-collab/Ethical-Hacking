@@ -11,4 +11,4 @@ Constraints:
 - Verify: targeted pytest for new/affected tests, then full `python3 -m pytest -q`, `python3 -m ruff check .`, `python3 -m mypy ethscan`.
 - Update `TASK.md`/`HANDOFF_NEXT.md`/`NEXT_TASK.md`; do not commit unless explicitly asked.
 
-Known pre-existing failures (do not confuse with regressions; unrelated to this sweep): 6 `ping` CSV-header failures present at clean HEAD.
+Known pre-existing failures (do not confuse with regressions; unrelated to this sweep): none remaining — the 6 `ping` CSV-header failures were fixed this session by always emitting the CSV header row in `format_ping_report_csv`.
