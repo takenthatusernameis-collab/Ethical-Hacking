@@ -128,6 +128,8 @@ def format_urlcheck_report_json(data: dict[str, object]) -> str:
 
 def format_urlcheck_report_markdown(data: dict[str, object]) -> str:
     """Format urlcheck results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan Consolidated Web Assessment Report", ""]
     lines.append(f"- **Target:** {data.get('target', '')}")
     lines.append(f"- **Normalized Target:** {data.get('normalized_target', '')}")
@@ -326,6 +328,8 @@ def format_urlcheck_report_markdown(data: dict[str, object]) -> str:
 
 def format_urlcheck_report_csv(data: dict[str, object]) -> str:
     """Format urlcheck results as CSV."""
+    if not isinstance(data, dict):
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["section", "key", "value"])
@@ -352,23 +356,31 @@ def format_urlcheck_report_csv(data: dict[str, object]) -> str:
         security_headers = {}
     if web.get("error"):
         writer.writerow(["web", "error", web["error"]])
-    for header in security_headers.get("present") or []:
-        if isinstance(header, str):
-            writer.writerow(["web", "header_present", header])
-    for header in security_headers.get("missing") or []:
-        if isinstance(header, str):
-            writer.writerow(["web", "header_missing", header])
-    for finding in web.get("information_disclosure") or []:
-        if isinstance(finding, dict):
-            writer.writerow(["web", "information_disclosure", finding.get("header", "")])
+    present_headers = security_headers.get("present")
+    if isinstance(present_headers, list):
+        for header in present_headers:
+            if isinstance(header, str):
+                writer.writerow(["web", "header_present", header])
+    missing_headers = security_headers.get("missing")
+    if isinstance(missing_headers, list):
+        for header in missing_headers:
+            if isinstance(header, str):
+                writer.writerow(["web", "header_missing", header])
+    info_disc = web.get("information_disclosure")
+    if isinstance(info_disc, list):
+        for finding in info_disc:
+            if isinstance(finding, dict):
+                writer.writerow(["web", "information_disclosure", finding.get("header", "")])
 
     fuzz = data.get("fuzz")
     if isinstance(fuzz, dict):
-        for finding in fuzz.get("findings") or []:
-            if isinstance(finding, dict):
-                writer.writerow(
-                    ["fuzz", "finding", f"{finding.get('path', '')} ({finding.get('status_code')})"]
-                )
+        findings_f = fuzz.get("findings")
+        if isinstance(findings_f, list):
+            for finding in findings_f:
+                if isinstance(finding, dict):
+                    writer.writerow(
+                        ["fuzz", "finding", f"{finding.get('path', '')} ({finding.get('status_code')})"]
+                    )
 
     ssl_data = data.get("ssl")
     if isinstance(ssl_data, dict):

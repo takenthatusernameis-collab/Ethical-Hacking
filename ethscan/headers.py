@@ -60,6 +60,8 @@ def format_headers_report_json(data: dict[str, Any]) -> str:
 
 def format_headers_report_markdown(data: dict[str, Any]) -> str:
     """Format headers report as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan Security Headers Report", ""]
     lines.append(f"- **Target:** {data.get('target', '')}")
     lines.append(f"- **Host:** {data.get('host', '')}")
@@ -75,11 +77,11 @@ def format_headers_report_markdown(data: dict[str, Any]) -> str:
         lines.append(f"- Present: {sh.get('present_count', 0)}/{sh.get('total', 0)}")
         present = sh.get("present") or []
         missing = sh.get("missing") or []
-        if present:
+        if isinstance(present, list) and present:
             lines.append("- Present headers:")
             for header in present:
                 lines.append(f"  - `{header}`")
-        if missing:
+        if isinstance(missing, list) and missing:
             lines.append("- Missing headers:")
             for header in missing:
                 lines.append(f"  - `{header}`")
@@ -97,6 +99,8 @@ def format_headers_report_markdown(data: dict[str, Any]) -> str:
 
 def format_headers_report_csv(data: dict[str, Any]) -> str:
     """Format security headers check results as CSV."""
+    if not isinstance(data, dict):
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     sh = data.get("security_headers") or {}
@@ -113,10 +117,14 @@ def format_headers_report_csv(data: dict[str, Any]) -> str:
     writer.writerow(["total", sh.get("total", 0)])
     writer.writerow([])
     writer.writerow(["header", "status"])
-    for header in sh.get("present", []) or []:
-        writer.writerow([header, "present"])
-    for header in sh.get("missing", []) or []:
-        writer.writerow([header, "missing"])
+    present = sh.get("present")
+    if isinstance(present, list):
+        for header in present:
+            writer.writerow([header, "present"])
+    missing = sh.get("missing")
+    if isinstance(missing, list):
+        for header in missing:
+            writer.writerow([header, "missing"])
 
     findings = data.get("findings")
     if isinstance(findings, list) and findings:

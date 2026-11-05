@@ -381,6 +381,8 @@ def format_web_report_json(data: dict[str, object]) -> str:
 
 def format_web_report_markdown(data: dict[str, object]) -> str:
     """Format web check results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan Web Security Report", ""]
     lines.append(f"- **Target:** {data.get('target', '')}")
     lines.append(f"- **Host:** {data.get('host', '')}")
@@ -428,21 +430,21 @@ def format_web_report_markdown(data: dict[str, object]) -> str:
             lines.append(f"- {f}")
         lines.append("")
 
-    if "ssl" in data:
-        ssl_info = cast(dict[str, Any], data["ssl"])
+    ssl_data = data.get("ssl")
+    if isinstance(ssl_data, dict):
         lines.append("## SSL/TLS")
-        if ssl_info.get("error"):
-            lines.append(f"- **Error:** {ssl_info['error']}")
+        if ssl_data.get("error"):
+            lines.append(f"- **Error:** {ssl_data['error']}")
         else:
-            lines.append(f"- **Valid:** {'Yes' if ssl_info.get('valid') else 'No'}")
-            if ssl_info.get("subject"):
-                lines.append(f"- **Subject:** {ssl_info['subject']}")
-            if ssl_info.get("issuer"):
-                lines.append(f"- **Issuer:** {ssl_info['issuer']}")
-            if ssl_info.get("not_after"):
-                lines.append(f"- **Expires:** {ssl_info['not_after']}")
-            if ssl_info.get("days_remaining") is not None:
-                lines.append(f"- **Days Remaining:** {ssl_info['days_remaining']}")
+            lines.append(f"- **Valid:** {'Yes' if ssl_data.get('valid') else 'No'}")
+            if ssl_data.get("subject"):
+                lines.append(f"- **Subject:** {ssl_data['subject']}")
+            if ssl_data.get("issuer"):
+                lines.append(f"- **Issuer:** {ssl_data['issuer']}")
+            if ssl_data.get("not_after"):
+                lines.append(f"- **Expires:** {ssl_data['not_after']}")
+            if ssl_data.get("days_remaining") is not None:
+                lines.append(f"- **Days Remaining:** {ssl_data['days_remaining']}")
         lines.append("")
 
     if "notes" in data:
@@ -455,6 +457,8 @@ def format_web_report_markdown(data: dict[str, object]) -> str:
 
 def format_web_report_csv(data: dict[str, object]) -> str:
     """Format web check results as CSV."""
+    if not isinstance(data, dict):
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["field", "value"])
@@ -464,20 +468,22 @@ def format_web_report_csv(data: dict[str, object]) -> str:
     writer.writerow(["https", "true" if data.get("secure") else "false"])
     writer.writerow(["error", data.get("error") or ""])
 
-    if "security_headers" in data:
-        sh = cast(dict[str, Any], data["security_headers"])
+    sh = data.get("security_headers")
+    if isinstance(sh, dict):
         writer.writerow([])
         writer.writerow(["security_header", "status"])
-        for header in sh.get("present", []):
+        for header in sh.get("present") or []:
             writer.writerow([header, "present"])
-        for header in sh.get("missing", []):
+        for header in sh.get("missing") or []:
             writer.writerow([header, "missing"])
 
-    if "information_disclosure" in data:
-        findings = cast(list[dict[str, Any]], data["information_disclosure"])
+    findings = data.get("information_disclosure")
+    if isinstance(findings, list):
         writer.writerow([])
         writer.writerow(["disclosure_header", "value", "description"])
         for finding in findings:
+            if not isinstance(finding, dict):
+                continue
             writer.writerow([finding.get("header", ""), finding.get("value", ""), finding.get("description", "")])
 
     extra_findings = data.get("findings")
@@ -487,8 +493,8 @@ def format_web_report_csv(data: dict[str, object]) -> str:
         for finding in extra_findings:
             writer.writerow([finding])
 
-    if "ssl" in data:
-        ssl_info = cast(dict[str, Any], data["ssl"])
+    ssl_info = data.get("ssl")
+    if isinstance(ssl_info, dict):
         writer.writerow([])
         writer.writerow(["ssl_field", "value"])
         writer.writerow(["valid", "true" if ssl_info.get("valid") else "false"])
