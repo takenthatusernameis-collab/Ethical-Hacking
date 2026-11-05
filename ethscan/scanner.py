@@ -241,10 +241,12 @@ def format_scan_report_json(data: dict[str, object]) -> str:
 
 def format_scan_report_markdown(data: dict[str, object]) -> str:
     """Format scan results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan Port Scan Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Host:** {data['host']}")
-    lines.append(f"- **Ports Scanned:** {data['ports_scanned']}")
+    lines.append(f"- **Target:** {data.get('target')}")
+    lines.append(f"- **Host:** {data.get('host')}")
+    lines.append(f"- **Ports Scanned:** {data.get('ports_scanned', 0)}")
     open_ports = data.get('open_ports') or []
     if not isinstance(open_ports, list):
         open_ports = []
@@ -274,6 +276,8 @@ def format_scan_report_csv(data: dict[str, object]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["port", "open"])
+    if not isinstance(data, dict):
+        return output.getvalue().rstrip("\r\n")
     details = data.get("details") or []
     if not isinstance(details, list):
         details = []
