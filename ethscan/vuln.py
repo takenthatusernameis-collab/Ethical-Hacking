@@ -1089,7 +1089,13 @@ def format_vuln_report_csv(data: dict[str, object]) -> str:
             "description",
         ]
     )
-    for finding in cast(list, data.get("findings") or []):
+    if not isinstance(data, dict):
+        return output.getvalue().rstrip("\r\n")
+    findings_raw = data.get("findings") or []
+    findings = list(findings_raw) if isinstance(findings_raw, (list, tuple)) else []
+    for finding in findings:
+        if not isinstance(finding, dict):
+            continue
         writer.writerow(
             [
                 finding.get("id", ""),
@@ -1139,9 +1145,11 @@ def _escape(value: str) -> str:
 def format_vuln_report_markdown(data: dict[str, object]) -> str:
     data = cast(dict[str, Any], data)
     """Format vulnerability check results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines = ["# ethscan Vulnerability Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Host:** {data['host']}")
+    lines.append(f"- **Target:** {data.get('target')}")
+    lines.append(f"- **Host:** {data.get('host')}")
     lines.append(f"- **Services Checked:** {data.get('services_checked', 0)}")
     lines.append(
         f"- **TLS Checked:** {'Yes' if data.get('tls_checked') else 'No'}"
@@ -1166,26 +1174,34 @@ def format_vuln_report_markdown(data: dict[str, object]) -> str:
         lines.append(f"- **Recursive Hosts Scanned:** {len(cast(list, data.get('recursive_hosts_scanned', []) or []))}")
     lines.append("")
 
-    severity_counts = cast(dict, data.get("severity_counts") or {})
+    severity_counts = data.get("severity_counts") or {}
+    if not isinstance(severity_counts, dict):
+        severity_counts = {}
     lines.append("## Severity Summary")
     for name in SEVERITIES:
         lines.append(f"- **{name.capitalize()}:** {severity_counts.get(name, 0)}")
     lines.append("")
 
     findings = cast(list, data.get("findings") or [])
+    if isinstance(findings, (list, tuple)):
+        findings = list(findings)
+    else:
+        findings = []
     lines.append("## Findings")
     if findings:
         for finding in findings:
+            if not isinstance(finding, dict):
+                continue
             lines.append(
-                f"### {finding['id']} ({str(finding['severity']).upper()})"
+                f"### {finding.get('id')} ({str(finding.get('severity')).upper()})"
             )
-            lines.append(f"- **Type:** {finding['kind']}")
+            lines.append(f"- **Type:** {finding.get('kind')}")
             detail = _escape(_finding_detail(finding))
             if detail:
                 lines.append(f"- **Details:** {detail}")
-            lines.append(f"- **Title:** {_escape(str(finding['title']))}")
+            lines.append(f"- **Title:** {_escape(str(finding.get('title')))}")
             lines.append(
-                f"- **Description:** {_escape(str(finding['description']))}"
+                f"- **Description:** {_escape(str(finding.get('description')))}"
             )
             lines.append("")
     else:
@@ -1193,6 +1209,10 @@ def format_vuln_report_markdown(data: dict[str, object]) -> str:
         lines.append("")
 
     notes = cast(list, data.get("notes") or [])
+    if isinstance(notes, (list, tuple)):
+        notes = list(notes)
+    else:
+        notes = []
     if notes:
         lines.append("## Notes")
         for note in notes:
@@ -1200,33 +1220,47 @@ def format_vuln_report_markdown(data: dict[str, object]) -> str:
         lines.append("")
 
     if data.get("recursive"):
-        recursive_hosts = cast(list, data.get("recursive_hosts_scanned") or [])
-        recursive_findings = cast(list, data.get("recursive_findings") or [])
+        recursive_hosts = data.get("recursive_hosts_scanned") or []
+        recursive_findings = data.get("recursive_findings") or []
+        if not isinstance(recursive_hosts, (list, tuple)):
+            recursive_hosts = []
+        if not isinstance(recursive_findings, (list, tuple)):
+            recursive_findings = []
         if recursive_hosts or recursive_findings:
             lines.append("## Recursive Scan Results")
             if recursive_hosts:
                 lines.append("### Hosts Scanned")
                 lines.append("| Host | Depth | Findings |")
                 lines.append("|------|-------|----------|")
-                for rf in cast(list, recursive_findings):
+                for rf in recursive_findings:
+                    if not isinstance(rf, dict):
+                        continue
                     lines.append(
-                        f"| {rf['host']} | {rf['depth']} | {rf['finding_count']} |"
+                        f"| {rf.get('host')} | {rf.get('depth')} | {rf.get('finding_count')} |"
                     )
                 lines.append("")
             if recursive_findings:
                 lines.append("### Recursive Findings")
-                for rf in cast(list, recursive_findings):
-                    lines.append(f"#### Host: {rf['host']} (Depth {rf['depth']})")
-                    lines.append(f"- **Services Checked:** {rf['services_checked']}")
-                    lines.append(f"- **Findings:** {rf['finding_count']}")
+                for rf in recursive_findings:
+                    if not isinstance(rf, dict):
+                        continue
+                    lines.append(f"#### Host: {rf.get('host')} (Depth {rf.get('depth')})")
+                    lines.append(f"- **Services Checked:** {rf.get('services_checked')}")
+                    lines.append(f"- **Findings:** {rf.get('finding_count')}")
                     rf_severity = rf.get("severity_counts") or {}
+                    if not isinstance(rf_severity, dict):
+                        rf_severity = {}
                     for name in SEVERITIES:
                         lines.append(f"- **{name.capitalize()}:** {rf_severity.get(name, 0)}")
                     rf_findings = rf.get("findings") or []
+                    if not isinstance(rf_findings, (list, tuple)):
+                        rf_findings = []
                     if rf_findings:
                         for finding in rf_findings:
+                            if not isinstance(finding, dict):
+                                continue
                             lines.append(
-                                f"  - {finding['id']} ({str(finding['severity']).upper()}): "
+                                f"  - {finding.get('id')} ({str(finding.get('severity')).upper()}): "
                                 f"{_escape(_finding_detail(finding))}"
                             )
                     else:
