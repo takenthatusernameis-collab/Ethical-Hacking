@@ -29,6 +29,41 @@ DIGITS = "0123456789"
 SYMBOL = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
 
 
+def _as_dict(value: object) -> dict[str, object]:
+    """Return value as a dict, or an empty dict for hostile non-dict input."""
+    return value if isinstance(value, dict) else {}
+
+
+def _as_passwords_list(passwords: object) -> list[str]:
+    """Coerce ``passwords`` into a list of strings, or [] for hostile input."""
+    if isinstance(passwords, (list, tuple)):
+        return [str(p) for p in passwords]
+    if isinstance(passwords, str):
+        return [passwords]
+    return []
+
+
+def _as_audit_rows(
+    results: object,
+) -> list[tuple[str, dict[str, object]]]:
+    """Coerce ``results`` into safe ``(password, eval_data)`` pairs.
+
+    Skips entries that are not two-tuples and coerces hostile eval_data to an
+    empty dict so formatters can use ``.get()`` defaults everywhere.
+    """
+    rows: list[tuple[str, dict[str, object]]] = []
+    if not isinstance(results, (list, tuple)):
+        return rows
+    for item in results:
+        if not isinstance(item, (list, tuple)) or len(item) != 2:
+            continue
+        pwd, eval_data = item
+        if not isinstance(pwd, str):
+            pwd = str(pwd)
+        rows.append((pwd, _as_dict(eval_data)))
+    return rows
+
+
 # Algorithms supported for HMAC (peppered hashing).
 # Maps canonical key -> hashlib algorithm name.
 _HASHLIB_ALGORITHMS = {
@@ -313,6 +348,8 @@ def format_audit_report_json(
     pepper: str | None = None,
 ) -> str:
     """Render password audit results as a JSON string."""
+    passwords = _as_passwords_list(passwords)
+    results = _as_audit_rows(results)
     report = {
         "passwords_audited": len(passwords),
         "min_length": min_length,
@@ -323,13 +360,13 @@ def format_audit_report_json(
         "results": [
             {
                 "password": pwd,
-                "length": eval_data["length"],
-                "entropy": eval_data["entropy"],
-                "common": eval_data["common"],
-                "patterns": eval_data["patterns"],
+                "length": eval_data.get("length", 0),
+                "entropy": eval_data.get("entropy", 0.0),
+                "common": eval_data.get("common", False),
+                "patterns": eval_data.get("patterns", False),
                 "too_short": eval_data.get("too_short", False),
-                "score": eval_data["score"],
-                "verdict": eval_data["verdict"],
+                "score": eval_data.get("score", 0.0),
+                "verdict": eval_data.get("verdict", ""),
                 "salt": eval_data.get("salt", False),
                 "pepper": eval_data.get("pepper", False),
             }
@@ -349,6 +386,8 @@ def format_audit_report_markdown(
     pepper: str | None = None,
 ) -> str:
     """Render password audit results as a Markdown string."""
+    passwords = _as_passwords_list(passwords)
+    results = _as_audit_rows(results)
     lines = ["# Password Audit Report", ""]
     lines.append(f"- **Passwords Audited:** {len(passwords)}")
     if min_length is not None:
@@ -369,11 +408,11 @@ def format_audit_report_markdown(
             escaped_pwd = pwd.replace("|", "\\|")
             too_short = "Yes" if eval_data.get("too_short", False) else "No"
             lines.append(
-                f"| {escaped_pwd} | {eval_data['length']} | {eval_data['entropy']} | "
-                f"{'Yes' if eval_data['common'] else 'No'} | "
-                f"{'Yes' if eval_data['patterns'] else 'No'} | "
+                f"| {escaped_pwd} | {eval_data.get('length', 0)} | {eval_data.get('entropy', 0.0)} | "
+                f"{'Yes' if eval_data.get('common', False) else 'No'} | "
+                f"{'Yes' if eval_data.get('patterns', False) else 'No'} | "
                 f"{too_short} | "
-                f"{eval_data['score']} | {eval_data['verdict']} |"
+                f"{eval_data.get('score', 0.0)} | {eval_data.get('verdict', '')} |"
             )
     else:
         lines.append("*No passwords provided for audit.*")
@@ -393,6 +432,8 @@ def format_audit_report_csv(
 
     Columns: password,length,entropy,common,patterns,too_short,score,verdict,salt,pepper
     """
+    passwords = _as_passwords_list(passwords)
+    results = _as_audit_rows(results)
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(
@@ -413,13 +454,13 @@ def format_audit_report_csv(
         writer.writerow(
             [
                 pwd,
-                eval_data["length"],
-                eval_data["entropy"],
-                "true" if eval_data["common"] else "false",
-                "true" if eval_data["patterns"] else "false",
+                eval_data.get("length", 0),
+                eval_data.get("entropy", 0.0),
+                "true" if eval_data.get("common", False) else "false",
+                "true" if eval_data.get("patterns", False) else "false",
                 "true" if eval_data.get("too_short", False) else "false",
-                eval_data["score"],
-                eval_data["verdict"],
+                eval_data.get("score", 0.0),
+                eval_data.get("verdict", ""),
                 "true" if eval_data.get("salt", False) else "false",
                 "true" if eval_data.get("pepper", False) else "false",
             ]

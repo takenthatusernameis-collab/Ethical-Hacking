@@ -219,27 +219,35 @@ def format_report_json(data: dict[str, Any]) -> str:
 
 def format_report_markdown(data: dict[str, Any]) -> str:
     """Render the combined report as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
+    scan = data.get("scan", {}) or {}
+    if not isinstance(scan, dict):
+        scan = {}
+    audit = data.get("audit", {}) or {}
+    if not isinstance(audit, dict):
+        audit = {}
     lines = ["# ethscan Report", ""]
 
-    scan = data["scan"]
     lines.append("## Port Scan")
-    lines.append(f"- **Target:** {scan['target']}")
-    lines.append(f"- **Ports Scanned:** {scan['ports_scanned']}")
+    lines.append(f"- **Target:** {scan.get('target', '')}")
+    lines.append(f"- **Ports Scanned:** {scan.get('ports_scanned', 0)}")
     lines.append(
-        f"- **Open Ports:** {', '.join(map(str, scan['open_ports'])) if scan['open_ports'] else 'None'}"
+        f"- **Open Ports:** {', '.join(map(str, scan.get('open_ports') or [])) if scan.get('open_ports') else 'None'}"
     )
     lines.append(f"- **Open Only:** {'Yes' if scan.get('open_only') else 'No'}")
     lines.append("")
     lines.append("| Port | Status |")
     lines.append("|------|--------|")
-    for detail in scan["details"]:
-        status = "Open" if detail["open"] else "Closed"
-        lines.append(f"| {detail['port']} | {status} |")
+    for detail in scan.get("details", []) or []:
+        if not isinstance(detail, dict):
+            continue
+        status = "Open" if detail.get("open") else "Closed"
+        lines.append(f"| {detail.get('port', '')} | {status} |")
     lines.append("")
 
-    audit = data["audit"]
     lines.append("## Password Audit")
-    lines.append(f"- **Passwords Audited:** {audit['passwords_audited']}")
+    lines.append(f"- **Passwords Audited:** {audit.get('passwords_audited', 0)}")
     if audit.get("min_length") is not None:
         lines.append(f"- **Min Length:** {audit['min_length']}")
     if audit.get("salt"):
@@ -250,16 +258,18 @@ def format_report_markdown(data: dict[str, Any]) -> str:
         direction = "Descending" if audit.get("sort_desc") else "Ascending"
         lines.append(f"- **Sorted By:** {audit['sort_by']} ({direction})")
     lines.append("")
-    if audit["results"]:
+    if audit.get("results"):
         lines.append("| Password | Length | Entropy | Common | Patterns | Too Short | Score | Verdict |")
         lines.append("|----------|--------|---------|--------|----------|-----------|-------|---------|")
-        for result in audit["results"]:
+        for result in audit.get("results", []) or []:
+            if not isinstance(result, dict):
+                continue
             too_short = "Yes" if result.get("too_short", False) else "No"
             lines.append(
-                f"| {result['password']!r} | {result['length']} | {result['entropy']} | "
-                f"{'Yes' if result['common'] else 'No'} | {'Yes' if result['patterns'] else 'No'} | "
+                f"| {result.get('password', '')!r} | {result.get('length', 0)} | {result.get('entropy', 0.0)} | "
+                f"{'Yes' if result.get('common', False) else 'No'} | {'Yes' if result.get('patterns', False) else 'No'} | "
                 f"{too_short} | "
-                f"{result['score']} | {result['verdict']} |"
+                f"{result.get('score', 0.0)} | {result.get('verdict', '')} |"
             )
     else:
         lines.append("*No passwords provided for audit.*")
@@ -276,16 +286,23 @@ def format_report_csv(data: dict[str, Any]) -> str:
     so the output stays a single valid CSV document that any CSV reader can
     filter by section.
     """
+    if not isinstance(data, dict):
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(CSV_COLUMNS)
 
-    for detail in data["scan"]["details"]:
+    scan = data.get("scan", {}) or {}
+    if not isinstance(scan, dict):
+        scan = {}
+    for detail in scan.get("details", []) or []:
+        if not isinstance(detail, dict):
+            continue
         writer.writerow(
             [
                 "scan",
-                detail["port"],
-                "true" if detail["open"] else "false",
+                detail.get("port", ""),
+                "true" if detail.get("open") else "false",
                 "",
                 "",
                 "",
@@ -299,20 +316,25 @@ def format_report_csv(data: dict[str, Any]) -> str:
             ]
         )
 
-    for result in data["audit"]["results"]:
+    audit = data.get("audit", {}) or {}
+    if not isinstance(audit, dict):
+        audit = {}
+    for result in audit.get("results", []) or []:
+        if not isinstance(result, dict):
+            continue
         writer.writerow(
             [
                 "audit",
                 "",
                 "",
-                result["password"],
-                result["length"],
-                result["entropy"],
-                "true" if result["common"] else "false",
-                "true" if result["patterns"] else "false",
+                result.get("password", ""),
+                result.get("length", 0),
+                result.get("entropy", 0.0),
+                "true" if result.get("common", False) else "false",
+                "true" if result.get("patterns", False) else "false",
                 "true" if result.get("too_short", False) else "false",
-                result["score"],
-                result["verdict"],
+                result.get("score", 0.0),
+                result.get("verdict", ""),
                 "true" if result.get("salt", False) else "false",
                 "true" if result.get("pepper", False) else "false",
             ]

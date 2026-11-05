@@ -305,6 +305,8 @@ def _ports_to_ranges(ports: list[int] | list[Any]) -> str:
 
 def format_validate_report_csv(data: dict[str, Any]) -> str:
     """Format validation results as CSV."""
+    if not isinstance(data, dict):
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["type", "spec", "valid", "detail"])
@@ -347,6 +349,8 @@ def format_validate_report_csv(data: dict[str, Any]) -> str:
 
 def format_validate_report_markdown(data: dict[str, Any]) -> str:
     """Format validation results as Markdown."""
+    if not isinstance(data, dict):
+        data = {}
     lines: list[str] = ["# ethscan Validate Report", ""]
 
     summary = data.get("summary", {}) or {}

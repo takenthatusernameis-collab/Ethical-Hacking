@@ -1,12 +1,9 @@
 # Next Task
 Continue evidence-driven formatter hostile-shape hardening only for modules with demonstrated `format_*_report_markdown`/`format_*_report_csv` raises on hostile top-level/non-dict or hostile nested report shapes that lack `tests/test_*hostile_sweep.py` coverage.
 
-Done in recent sessions (verified, present in working tree/history): `service`, `scanner`, `recon`, `resolve`, `s3`, `osdetect`, `subdomains`, `stale`, `config`, `radix`, `completion`, `cidr`, `dnsbrute`. Verified already clean (no change needed): `ping`, `trace`, `wifi`.
+Done in recent sessions (verified, present in working tree/history): `service`, `scanner`, `recon`, `resolve`, `s3`, `osdetect`, `subdomains`, `stale`, `config`, `radix`, `completion`, `cidr`, `dnsbrute`, `passwords`, `validate`, `report`. Verified already clean (no change needed): `ping`, `trace`, `wifi`.
 
-Remaining to verify (one at a time, probe first):
-- `passwords` — formatters take a `results` positional argument (different signature) — verify exact gap before changing.
-- `validate` — has `format_validate_report_csv`/`format_validate_report_markdown` — verify whether CLI/report formatter in scope; probe hostile shapes.
-- `report` — verify whether it is a CLI/report formatter in scope for this sweep pattern.
+The formatter hostile-shape sweep is complete. No remaining modules in scope.
 
 Constraints:
 - Preserve baseline; smallest reversible change.
