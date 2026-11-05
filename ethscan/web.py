@@ -382,38 +382,41 @@ def format_web_report_json(data: dict[str, object]) -> str:
 def format_web_report_markdown(data: dict[str, object]) -> str:
     """Format web check results as Markdown."""
     lines = ["# ethscan Web Security Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Host:** {data['host']}")
-    lines.append(f"- **Port:** {data['port']}")
-    lines.append(f"- **HTTPS:** {'Yes' if data['secure'] else 'No'}")
+    lines.append(f"- **Target:** {data.get('target', '')}")
+    lines.append(f"- **Host:** {data.get('host', '')}")
+    lines.append(f"- **Port:** {data.get('port', '')}")
+    lines.append(f"- **HTTPS:** {'Yes' if data.get('secure') else 'No'}")
     if data.get("error"):
-        lines.append(f"- **Error:** {data['error']}")
+        lines.append(f"- **Error:** {data.get('error')}")
     lines.append("")
 
-    if "security_headers" in data:
-        sh = cast(dict[str, Any], data["security_headers"])
+    sh = data.get("security_headers")
+    if isinstance(sh, dict):
         lines.append("## Security Headers")
-        lines.append(f"- Present: {sh['present_count']}/{sh['total']}")
-        if sh["present"]:
+        lines.append(f"- Present: {sh.get('present_count', 0)}/{sh.get('total', 0)}")
+        present_list = sh.get("present")
+        if isinstance(present_list, (list, tuple)) and present_list:
             lines.append("- Present headers:")
-            for header in sh["present"]:
+            for header in present_list:
                 lines.append(f"  - `{header}`")
-        if sh["missing"]:
+        missing_list = sh.get("missing")
+        if isinstance(missing_list, (list, tuple)) and missing_list:
             lines.append("- Missing headers:")
-            for header in sh["missing"]:
+            for header in missing_list:
                 lines.append(f"  - `{header}`")
         lines.append("")
 
-    if "information_disclosure" in data:
-        findings = cast(list[dict[str, Any]], data["information_disclosure"])
+    findings = data.get("information_disclosure")
+    if isinstance(findings, (list, tuple)):
         lines.append("## Information Disclosure")
         if findings:
             lines.append("| Header | Value | Description |")
             lines.append("|--------|-------|-------------|")
             for finding in findings:
-                lines.append(
-                    f"| {finding['header']} | {finding['value']} | {finding['description']} |"
-                )
+                if isinstance(finding, dict):
+                    lines.append(
+                        f"| {finding.get('header', '')} | {finding.get('value', '')} | {finding.get('description', '')} |"
+                    )
         else:
             lines.append("No information disclosure headers detected.")
         lines.append("")

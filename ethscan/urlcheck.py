@@ -129,11 +129,11 @@ def format_urlcheck_report_json(data: dict[str, object]) -> str:
 def format_urlcheck_report_markdown(data: dict[str, object]) -> str:
     """Format urlcheck results as Markdown."""
     lines = ["# ethscan Consolidated Web Assessment Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Normalized Target:** {data['normalized_target']}")
-    lines.append(f"- **Port:** {data['port']}")
-    lines.append(f"- **Timeout:** {data['timeout']}s")
-    lines.append(f"- **Workers:** {data['workers']}")
+    lines.append(f"- **Target:** {data.get('target', '')}")
+    lines.append(f"- **Normalized Target:** {data.get('normalized_target', '')}")
+    lines.append(f"- **Port:** {data.get('port', '')}")
+    lines.append(f"- **Timeout:** {data.get('timeout', '')}s")
+    lines.append(f"- **Workers:** {data.get('workers', '')}")
     lines.append("")
 
     summary = data.get("summary")
