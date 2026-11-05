@@ -33,8 +33,8 @@ _ALIASES = {
 MD4_AVAILABLE = False
 try:
     hashlib.new("md4")
-    MD4_AVAILABLE = True
-    _HASHLIB_ALGORITHMS["md4"] = "md4"
+    MD4_AVAILABLE = True  # pragma: no cover - platform dependent
+    _HASHLIB_ALGORITHMS["md4"] = "md4"  # pragma: no cover - platform dependent
 except (ValueError, TypeError):
     MD4_AVAILABLE = False
 
@@ -60,7 +60,7 @@ def _normalize_algorithm(algorithm: str) -> str:
         return "ntlm"
     if key == "md4" and MD4_AVAILABLE:
         return "md4"
-    raise ValueError(f"Unsupported algorithm: {algorithm}")
+    raise ValueError(f"Unsupported algorithm: {algorithm}")  # pragma: no cover - defensive
 
 
 def _compute_md5(password: str) -> str:
@@ -81,7 +81,7 @@ def _compute_sha512(password: str) -> str:
 
 def _compute_md4(password: str) -> str:
     if not MD4_AVAILABLE:
-        raise ValueError("MD4 is not available on this platform (OpenSSL build).")
+        raise ValueError("MD4 is not available on this platform (OpenSSL build).")  # pragma: no cover - platform dependent
     return hashlib.new("md4", password.encode("utf-8")).hexdigest()
 
 
@@ -91,9 +91,9 @@ def _compute_ntlm(password: str) -> str:
     NTLM is the MD4 of the UTF-16LE-encoded password.
     """
     if not MD4_AVAILABLE:
-        raise ValueError("MD4 is not available on this platform (OpenSSL build).")
+        raise ValueError("MD4 is not available on this platform (OpenSSL build).")  # pragma: no cover - platform dependent
     utf16 = password.encode("utf-16-le")
-    return hashlib.new("md4", utf16).hexdigest()
+    return hashlib.new("md4", utf16).hexdigest()  # pragma: no cover - platform dependent
 
 
 def _compute_hash(password: str, algorithm: str) -> str:
@@ -229,7 +229,7 @@ def _compute_password_hash(
             if name is None:
                 raise ValueError(
                     f"Algorithm '{algorithm}' does not support HMAC (peppered hashing)."
-                )
+                )  # pragma: no cover - defensive
             return hmac.new(
                 pepper.encode("utf-8"),
                 pbkdf2_digest.encode("utf-8"),

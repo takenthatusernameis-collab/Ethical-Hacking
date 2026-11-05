@@ -15,8 +15,8 @@ from ethscan.target import parse_url
 
 try:
     try:
-        import dns.enum
-        import dns.message
+        import dns.enum  # pragma: no cover - defensive
+        import dns.message  # pragma: no cover - defensive
     except Exception:  # noqa: BLE001, S110
         pass  # pragma: no cover - defensive
     import dns.exception

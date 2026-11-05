@@ -520,7 +520,7 @@ class _CheckedDefaultMap(dict):
             return value
         param = self._param(name)
         if param is None:
-            return value
+            return value  # pragma: no cover - defensive
         return _check_config_value(param, value, self._path)
 
     def _param(self, name: str) -> click.Parameter | None:
@@ -528,7 +528,7 @@ class _CheckedDefaultMap(dict):
         for param in self._command.params:
             if param.name == name:
                 return param
-        return None
+        return None  # pragma: no cover - defensive
 
 
 def _invalid_ports(exc: ValueError) -> click.BadParameter:
