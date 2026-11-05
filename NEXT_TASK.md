@@ -1,10 +1,11 @@
 # Next Task
-Pick one module with coverage gaps (scan with `pytest --cov=ethscan.<mod> --cov-report=term-missing`), close reachable gaps with tests or mark unreachable defensives with `# pragma: no cover - defensive`. Verify with full pytest/ruff/mypy. Do not commit unless explicitly asked.
+Pick one protocol module without a module-specific hostile sweep (e.g. `ethscan/redis.py`),
+add focused tests for hostile transport / hostile input edge cases, re-run full
+`pytest`/`ruff`/`mypy`. Do not commit unless explicitly asked.
 
-Remaining candidate gaps:
-- ethscan/smtp.py: 305, 463-478, 488
-- ethscan/ssh.py: 168, 632-633
-
-Recently closed (this session): snmp.py 586-587 — now 100%.
+Coverage is complete across all 59 modules (verified this session). The remaining
+candidate work is hostile-transport / hostile-input edge-case sweeps for protocol
+modules that currently rely only on the shared `test_protocol_hostile_sweep.py`
+and have no module-specific hostile sweep.
 
 (End of file - total 8 lines)
