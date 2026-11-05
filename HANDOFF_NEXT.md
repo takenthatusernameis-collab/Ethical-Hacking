@@ -2,25 +2,24 @@
 Date: Thu Nov 05 2026
 
 ## What changed (uncommitted, local working tree)
-- `ethscan/ssl.py`: hardened `_parse_cert` to handle hostile/malformed decoded cert dicts safely (non-dict input, `subject`/`issuer`/`subjectAltName` not iterable, `issuer=None`, empty `signatureAlgorithm` tuple, unhashable/odd SAN entries). Prevents `TypeError: 'NoneType' object is not iterable` when `inspect_certificate` receives a hostile decoded cert (e.g., `issuer=None`).
-- `tests/test_ssl_hostile_sweep.py` (new, 17 tests): hostile decoded cert shapes via mocked decode/context/socket; transport failures of unnamed types (`RuntimeError/TypeError/OSError/KeyError`); retry-path hostile failure reported, never raised.
-- `tests/test_tls_hostile_sweep.py` (new, 11 tests): `probe_version`/`probe_cipher` failures of unnamed types reported; `None` negotiated data handled; `run_tls` reports hostile transport per probe and handles mixed hostile/benign probes.
+- `tests/test_cert_hostile_sweep.py` (new, 18 tests): hostile cache file bodies (malformed/non-JSON/non-dict/non-finite timestamps/hostile entry shapes) never raise; stale hostile cache offline fallback preserves usable subdomains; unnamed transport error types from `urlopen` are reported as fetch errors (not raised); failed fetch with no fallback reported; `_extract_subdomains` handles hostile entry types/shapes.
 - Updated `TASK.md`, `NEXT_TASK.md`.
 
 ## Verified (evidence)
-- `python3 -m pytest tests/test_ssl.py tests/test_tls.py tests/test_ssl_hostile_sweep.py tests/test_tls_hostile_sweep.py -q` → `155 passed`.
-- `python3 -m pytest -q` → `5702 passed, 50 skipped, 0 failed` (96.77s).
+- `python3 -m pytest tests/test_cert_hostile_sweep.py tests/test_cert.py -q` → `76 passed`.
+- `python3 -m pytest -q` → `5720 passed, 50 skipped, 0 failed` (104.21s).
 - `python3 -m ruff check .` → all checks passed.
 - `python3 -m mypy ethscan` → `Success: no issues found in 59 source files`.
 
 ## Unresolved / notes
 - Working tree has uncommitted changes; **do not commit unless explicitly asked**.
-- `cert` (CT/crt.sh JSON + cache) and other modules may have parser/transport gaps not covered by a dedicated hostile sweep — audit before adding; avoid duplicating `tests/test_http_hostile_sweep.py`/`test_protocol_hostile_sweep.py` coverage.
+- `ethscan/cert.py` was audited and found resilient for the inspected paths: `_load_cache` uses lenient JSON loading and filters non-dict entries; `_is_cache_valid` rejects missing/non-numeric/non-finite timestamps (TypeError/ValueError caught); `_fetch_cert_data` catches broad transport/parse failures and rejects non-list JSON; `_extract_subdomains` and formatters are defensive. No production change was needed.
+- `geo`, `mac`, `cve`, `s3`, `subtake`, `fuzz`, `urlcheck`, `web`, `headers` have HTTP hostile-sweep transport/body coverage but may have cache/file/parser gaps outside that sweep’s scope — audit before adding; avoid duplication.
 
 ## Approaches that failed / pitfalls
-- None this session. Initial sweep authoring exposed `ethscan/ssl._parse_cert` raising on `issuer=None` (hostile decoded cert) — fixed in production code rather than weakening tests; verify by mocking `_decode_cert` to return hostile shapes.
+- None this session. Initial sweep test monkeypatched `cert.urllib.request.urlopen`, but `cert.py` does not bind `urllib` as a module attribute; patch `urllib.request.urlopen` (where used) instead.
 
 ## Precise next task
-1. Audit `ethscan/cert.py` (CT log fetch/parse, cache load/save, host normalization) for hostile JSON/body/cache shapes not already covered by `tests/test_http_hostile_sweep.py`’s `cert` case; if a gap exists, add `tests/test_cert_hostile_sweep.py` with the smallest set of evidence-based cases.
-2. Run: `python3 -m pytest tests/test_cert*.py -q` (or new file), then full `python3 -m pytest -q`, `python3 -m ruff check .`, `python3 -m mypy ethscan`.
+1. Audit `ethscan/geo.py` and `ethscan/mac.py` (API/cache/file parsing paths) for hostile JSON/cache shapes not already covered by `tests/test_http_hostile_sweep.py`; if a real gap exists, add the smallest `tests/test_geo_hostile_sweep.py` and/or `tests/test_mac_hostile_sweep.py`.
+2. Run: targeted new/existing tests (e.g., `python3 -m pytest tests/test_geo*.py tests/test_mac*.py -q`), then full `python3 -m pytest -q`, `python3 -m ruff check .`, `python3 -m mypy ethscan`.
 3. Update handoff files; do not commit unless asked.
