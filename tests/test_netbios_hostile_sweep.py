@@ -1,4 +1,10 @@
-"""Permanent sweep test: a hostile NetBIOS answer is reported, never raised."""
+"""Permanent sweep test: a hostile NetBIOS answer is reported, never raised.
+
+Covers the public entry point ``run_netbios`` which takes a hostile transport
+answer. Every body a hostile NetBIOS server can send yields a result dict with
+an ``error`` key and never raises; a connector that blows up is reported the
+same way.
+"""
 from __future__ import annotations
 
 from typing import Callable
@@ -7,6 +13,8 @@ from ethscan import netbios
 
 TARGET = "127.0.0.1"
 
+#: Bodies a hostile NetBIOS server can send: empty, non-NetBIOS text, truncated
+#: packets, header fragments, and the full byte range.
 HOSTILE_BODIES: tuple[bytes, ...] = (
     b"",
     b"not netbios at all",
@@ -31,6 +39,15 @@ def test_hostile_answer_is_reported_not_raised() -> None:
         results = netbios.run_netbios(TARGET, connector=_connector_for(body))
         assert isinstance(results, dict)
         assert "error" in results
+
+
+def test_short_hostile_answer_is_reported_with_error() -> None:
+    # Bodies shorter than a full NBNS header / meaningful response must yield a
+    # truthy top-level error, never a traceback.
+    for body in (b"", b"not netbios at all", b"\x00" * 9, b"\x00" * 11, b"\x00\xff\xfe\xfd"):
+        results = netbios.run_netbios(TARGET, connector=_connector_for(body))
+        assert isinstance(results, dict)
+        assert results.get("error")
 
 
 def test_transport_failure_is_reported_not_raised() -> None:
