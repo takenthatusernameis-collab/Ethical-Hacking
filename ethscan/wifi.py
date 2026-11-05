@@ -345,35 +345,47 @@ def format_wifi_report_json(results: dict[str, Any]) -> str:
 
 def format_wifi_report_markdown(results: dict[str, Any]) -> str:
     """Format Wi-Fi scan results as Markdown."""
+    if not isinstance(results, dict):
+        results = {}
     lines = ["# Wi-Fi Reconnaissance Report", ""]
 
     # Platform info
     lines.append("## Platform")
-    lines.append(f"- **OS:** {results['platform']}")
-    lines.append(f"- **Supported:** {'Yes' if results['platform_supported'] else 'No'}")
+    lines.append(f"- **OS:** {results.get('platform')}")
+    lines.append(f"- **Supported:** {'Yes' if results.get('platform_supported') else 'No'}")
     lines.append("")
 
     # Interfaces
     lines.append("## Wireless Interfaces")
-    if results["interfaces"]:
+    interfaces = results.get("interfaces") or []
+    if not isinstance(interfaces, list):
+        interfaces = []
+    if interfaces:
         lines.append("| Interface | Status | Link Quality | Signal (dBm) | Noise (dBm) |")
         lines.append("|-----------|--------|--------------|--------------|-------------|")
-        for iface in results["interfaces"]:
-            lines.append(f"| {iface['interface']} | {iface['status']} | {iface['link_quality']} | {iface['signal_level']} | {iface['noise_level']} |")
+        for iface in interfaces:
+            if not isinstance(iface, dict):
+                continue
+            lines.append(f"| {iface.get('interface')} | {iface.get('status')} | {iface.get('link_quality')} | {iface.get('signal_level')} | {iface.get('noise_level')} |")
     else:
         lines.append("*No wireless interfaces found.*")
     lines.append("")
 
     # Access Points
     lines.append("## Access Points")
-    if results["access_points"]:
+    access_points = results.get("access_points") or []
+    if not isinstance(access_points, list):
+        access_points = []
+    if access_points:
         lines.append("| Interface | BSSID | SSID | Channel | Freq (GHz) | Encryption | Signal (dBm) | Quality |")
         lines.append("|-----------|-------|------|---------|------------|------------|--------------|---------|")
-        for ap in results["access_points"]:
-            ssid = ap["ssid"] if ap.get("ssid") else "<hidden>"
+        for ap in access_points:
+            if not isinstance(ap, dict):
+                continue
+            ssid = ap.get("ssid") if ap.get("ssid") else "<hidden>"
             freq_val = ap.get("frequency")
             freq = f"{freq_val:.3f}" if isinstance(freq_val, (int, float)) else "N/A"
-            channel = str(ap["channel"]) if ap.get("channel") else "N/A"
+            channel = str(ap.get("channel")) if ap.get("channel") else "N/A"
             signal_val = ap.get("signal_dbm")
             signal = str(signal_val) if signal_val is not None else "N/A"
             quality = ap.get("quality") if ap.get("quality") else "N/A"
@@ -383,9 +395,12 @@ def format_wifi_report_markdown(results: dict[str, Any]) -> str:
     lines.append("")
 
     # Notes
-    if results.get("notes"):
+    notes = results.get("notes") or []
+    if not isinstance(notes, list):
+        notes = []
+    if notes:
         lines.append("## Notes")
-        for note in results["notes"]:
+        for note in notes:
             lines.append(f"- {note}")
 
     return "\n".join(lines)
@@ -393,6 +408,8 @@ def format_wifi_report_markdown(results: dict[str, Any]) -> str:
 
 def format_wifi_report_csv(results: dict[str, Any]) -> str:
     """Format Wi-Fi scan results as CSV."""
+    if not isinstance(results, dict):
+        results = {}
     output = io.StringIO()
     writer = csv.writer(output)
 
