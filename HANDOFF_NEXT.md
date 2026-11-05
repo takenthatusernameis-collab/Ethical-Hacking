@@ -3,25 +3,27 @@ Date: Thu Nov 05 2026
 
 ## What changed (uncommitted, local working tree)
 - `tests/test_cli.py`:
-  - Added the 17 `--workers` entries to `INT_OPTION_RANGES` (brute, cve, dns, dnsbrute, fuzz, osdetect, recon, report, s3, scan, service, stale, subdomains, subtake, tls, urlcheck, vuln), so `test_every_int_option_of_the_cli_is_range_checked` covers them.
-  - Added `test_an_out_of_range_workers_option_does_not_start_a_probe` asserting a below-minimum `--workers` value is refused as a usage error before any network access (socket.connect/connect_ex/sendto/getaddrinfo are tripwires).
+  - Added 24 port `IntRange(0, 65535)` options to `INT_OPTION_RANGES`: `whois/ssl/tls/urlcheck/brute/trace --port`, `ping --tcp-port`, `recon --whois-port/--trace-port`, and `--port` on `memcached,mysql,mongodb,postgresql,ssh,smtp,ftp,ntp,snmp,netbios,smb,redis,ldap,mssql,oracle`.
+  - Added matching entries to `INT_OPTION_UPPER_BAD` (`"65536"`).
+  - Existing sweep tests now assert these are range-checked (lower/upper bound, single-line usage error, option named). No source change — Click already enforced the range (verified).
 - Updated `TASK.md`/`HANDOFF_NEXT.md`/`NEXT_TASK.md`.
 
 ## Verified (evidence)
-- Targeted: `python3 -m pytest tests/test_cli.py -k "every_int_option or out_of_range_workers"` → 2 passed.
-- Full: `python3 -m pytest -q` → `5869 passed, 53 skipped, 0 failed` (baseline before this session was `5868 passed, 53 skipped, 0 failed`; +1 new test, no regressions).
+- Targeted: `python3 -m pytest tests/test_cli.py -k "every_int_option or out_of_range_int_option or out_of_range_workers" -q` → `5 passed, 1012 deselected`.
+- Full: `python3 -m pytest -q` → `5869 passed, 53 skipped, 0 failed`.
 - `python3 -m ruff check .` → all checks passed.
 - `python3 -m mypy ethscan` → `Success: no issues found in 59 source files`.
-- Pre-check reproduction: all 17 `--workers` options are `click.IntRange(1, None)`; `--workers 0` on each command exits 2 with `Error: Invalid value for '--workers': 0 is not in the range x>=1.` and never starts a probe (verified with socket tripwires before the change).
+- Pre-check reproduction: `--port 65536`/`-1` on representative commands exits 2 with `Error: Invalid value for ... is not in the range 0<=x<=65535.` and no traceback; socket-tripwire check confirmed no probe on out-of-range `whois --port`.
 
 ## Unresolved / notes
-- Working tree has uncommitted changes across multiple sessions; do not commit unless explicitly asked.
-- The formatter hostile-shape sweep and the protocol hostile-answer sweep are complete; every int option of the CLI is now range-checked and covered by a permanent test.
+- Working tree has uncommitted changes (this session + any prior session state reflected here); do not commit unless explicitly asked.
+- `INT_OPTION_RANGES` count assertion remains strict (`checked == len(INT_OPTION_RANGES)`) — adding a new `IntRange` CLI option without updating the map will fail the sweep test (intentional).
+- Port options that accept `--target` were verified to reject bad `--port` before target handling; commands requiring `--target` still produce the port usage error when invoked as tested.
 
 ## Approaches that failed / pitfalls
-- None this session. The `--workers` options were already correct; the gap was a missing permanent test, not a bug. Adding the entries to `INT_OPTION_RANGES` was the smallest change that closes the gap.
+- None. The gap was missing permanent coverage, not a behavior bug.
 
 ## Precise next task
-- None — every int option of the CLI is range-checked and covered by a permanent test. If a new int option is added later, add it to `INT_OPTION_RANGES` and extend the existing range-check tests.
-
-(End of file - total 27 lines)
+- Inspect for other `click.IntRange`/bounded numeric options not in `INT_OPTION_RANGES` (none found by current scan — `INT_OPTION_RANGES` now covers all `IntRange` options in `ethscan/cli.py`). If no demonstrated gap exists, do not add speculative tests.
+- If a demonstrated gap is found (e.g., a bounded option missing from sweep coverage, or a range-checked option that can trigger side effects before rejection and lacks a tripwire test), fix with the smallest reversible test/coverage change and verify as above.
+- Update `TASK.md`/`HANDOFF_NEXT.md`/`NEXT_TASK.md`; do not commit unless asked.
