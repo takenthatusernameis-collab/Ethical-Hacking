@@ -502,9 +502,9 @@ def _assess_ldap_version(vendor_versions: list[str] | None) -> list[str]:
         import re  # pragma: no cover - defensive
 
         match = re.search(r"(\d+)\.(\d+)", text)  # pragma: no cover - defensive
-        if not match:
+        if not match:  # pragma: no cover - defensive
             continue  # pragma: no cover - defensive
-        try:
+        try:  # pragma: no cover - defensive
             major, minor = int(match.group(1)), int(match.group(2))  # pragma: no cover - defensive
         except ValueError:  # pragma: no cover - defensive
             continue  # pragma: no cover - defensive

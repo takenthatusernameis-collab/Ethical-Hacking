@@ -59,7 +59,7 @@ def _normalize_algorithm(algorithm: str) -> str:
     if key == "ntlm":
         return "ntlm"
     if key == "md4" and MD4_AVAILABLE:
-        return "md4"
+        return "md4"  # pragma: no cover - platform dependent
     raise ValueError(f"Unsupported algorithm: {algorithm}")  # pragma: no cover - defensive
 
 
@@ -82,7 +82,7 @@ def _compute_sha512(password: str) -> str:
 def _compute_md4(password: str) -> str:
     if not MD4_AVAILABLE:
         raise ValueError("MD4 is not available on this platform (OpenSSL build).")  # pragma: no cover - platform dependent
-    return hashlib.new("md4", password.encode("utf-8")).hexdigest()
+    return hashlib.new("md4", password.encode("utf-8")).hexdigest()  # pragma: no cover - platform dependent
 
 
 def _compute_ntlm(password: str) -> str:
@@ -92,7 +92,7 @@ def _compute_ntlm(password: str) -> str:
     """
     if not MD4_AVAILABLE:
         raise ValueError("MD4 is not available on this platform (OpenSSL build).")  # pragma: no cover - platform dependent
-    utf16 = password.encode("utf-16-le")
+    utf16 = password.encode("utf-16-le")  # pragma: no cover - platform dependent
     return hashlib.new("md4", utf16).hexdigest()  # pragma: no cover - platform dependent
 
 
