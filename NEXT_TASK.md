@@ -1,12 +1,15 @@
 # Next Task
-Audit remaining modules that parse untrusted/network/cache input but lack a dedicated hostile sweep file, and add the smallest bounded sweep(s) with evidence.
+Audit `ethscan/cve.py` for hostile cache/API/JSON shape gaps not already covered by `tests/test_http_hostile_sweep.py`, and add the smallest bounded sweep only if a real gap is evidenced.
 
-Evaluate candidates not covered by a dedicated `test_*_hostile_sweep.py`: `geo`, `mac`, `cve`, `s3`, `subtake`, `fuzz`, `urlcheck`, `web`, `headers` (all touched by `tests/test_http_hostile_sweep.py` — check for parser/cache/file gaps beyond transport/body hostility), and `resolve`/`subdomains`/`stale`/`ping`/`osdetect`/`scanner`/`service` (transport/sweep coverage exists in protocol/other sweeps — confirm no cache/parser gaps). `cert` now covered this session.
+Focus (evidence-driven):
+- Cache/file parsing paths (malformed/non-JSON/non-dict/non-finite timestamps, hostile entry shapes) and stale offline fallback behavior.
+- Unnamed transport/parse error types reported as result fields, never raised.
+- Avoid duplicating `tests/test_http_hostile_sweep.py` transport/body cases; add focused tests only for uncovered parser/cache gaps.
 
 Constraints:
 - Preserve baseline; smallest reversible change.
-- Add focused tests only where a real gap is evidenced; do not duplicate existing sweep coverage.
+- Add focused tests only where a real gap is evidenced; do not modify production code unless required to report a hostile input safely.
 - Verify: targeted pytest for new/affected tests, then full `python3 -m pytest -q`, `python3 -m ruff check .`, `python3 -m mypy ethscan`.
-- Do not commit unless explicitly asked.
+- Update handoff files; do not commit unless explicitly asked.
 
-Evidence this session: `ethscan/cert.py` cache/transport paths audited; cache loading and hostile entry extraction already resilient (uses lenient JSON load, dict filtering, stale-cache fallback, broad fetch exception handling, defensive extraction/formatting). Added `tests/test_cert_hostile_sweep.py` (18 tests) covering hostile cache file contents, stale hostile cache fallback, unnamed transport error types, failed fetch reporting, and hostile entry shapes. Full suite: 5720 passed, 50 skipped.
+Evidence this session: `ethscan/geo.py` and `ethscan/mac.py` audited — cache/transport paths already resilient for inspected cases. Added `tests/test_geo_hostile_sweep.py` and `tests/test_mac_hostile_sweep.py` (32 tests total) covering hostile cache bodies, stale hostile/offline fallback, and unnamed transport error reporting. Targeted geo/mac: 154 passed. Full suite: 5752 passed, 50 skipped. Ruff/mypy clean.
