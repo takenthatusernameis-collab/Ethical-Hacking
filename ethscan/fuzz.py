@@ -125,6 +125,10 @@ def run_fuzz(
     """
     base_url = _normalize_base_url(target)
     paths = wordlist if wordlist is not None else DEFAULT_WORDLIST
+    # A wordlist handed in from a cache or pipeline can hold hostile entries
+    # (ints, None, lists): a path that is not a string is a skipped probe, not
+    # a crash of the command.
+    paths = [p for p in paths if isinstance(p, str)]
 
     results: list[dict[str, object]] = []
 
@@ -168,29 +172,41 @@ def format_fuzz_report_json(data: dict[str, object]) -> str:
 def format_fuzz_report_markdown(data: dict[str, object]) -> str:
     """Format fuzz results as Markdown."""
     lines = ["# ethscan HTTP Fuzz Report", ""]
-    lines.append(f"- **Target:** {data['target']}")
-    lines.append(f"- **Base URL:** {data['base_url']}")
-    lines.append(f"- **Paths Tested:** {data['paths_tested']}")
-    lines.append(f"- **Findings (non-404):** {len(cast('list[object]', data['findings']))}")
+    if not isinstance(data, dict):
+        lines.append("*No structured report data.*")
+        return "\n".join(lines)
+    lines.append(f"- **Target:** {data.get('target', '')}")
+    lines.append(f"- **Base URL:** {data.get('base_url', '')}")
+    lines.append(f"- **Paths Tested:** {data.get('paths_tested', 0)}")
+    findings_list = data.get("findings") or []
+    if not isinstance(findings_list, list):
+        findings_list = []
+    lines.append(f"- **Findings (non-404):** {len(findings_list)}")
     lines.append("")
 
-    if data["findings"]:
+    if findings_list:
         lines.append("## Findings")
         lines.append("| Path | Status Code |")
         lines.append("|------|-------------|")
-        for finding in cast("list[dict[str, object]]", data["findings"]):
-            code = finding["status_code"]
-            path = finding["path"]
+        for finding in findings_list:
+            if not isinstance(finding, dict):
+                continue
+            code = finding.get("status_code", "N/A")
+            path = finding.get("path", "")
             lines.append(f"| {path} | {code} |")
         lines.append("")
 
     lines.append("## All Results")
     lines.append("| Path | Status Code | Error |")
     lines.append("|------|-------------|-------|")
-    for result in cast("list[dict[str, object]]", data["all_results"]):
-        code = result["status_code"] if result["status_code"] is not None else "N/A"
-        error = result["error"] or ""
-        lines.append(f"| {result['path']} | {code} | {error} |")
+    all_results_list = data.get("all_results") or []
+    if isinstance(all_results_list, list):
+        for result in all_results_list:
+            if not isinstance(result, dict):
+                continue
+            code = result.get("status_code") if result.get("status_code") is not None else "N/A"
+            error = result.get("error") or ""
+            lines.append(f"| {result.get('path', '')} | {code} | {error} |")
 
     return "\n".join(lines)
 
@@ -200,13 +216,17 @@ def format_fuzz_report_csv(data: dict[str, object]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["target", "base_url", "path", "status_code", "error", "is_finding"])
-    all_results = cast("list[dict[str, object]]", data.get("all_results", []))
-    for result in all_results:
+    all_results_data = data.get("all_results") if isinstance(data, dict) else None
+    if not isinstance(all_results_data, list):
+        all_results_data = []
+    for result in all_results_data:
+        if not isinstance(result, dict):
+            continue
         status_code = result.get("status_code")
         is_finding = status_code is not None and status_code != 404
         writer.writerow([
-            data.get("target", ""),
-            data.get("base_url", ""),
+            data.get("target", "") if isinstance(data, dict) else "",
+            data.get("base_url", "") if isinstance(data, dict) else "",
             result.get("path", ""),
             status_code if status_code is not None else "",
             result.get("error") or "",
@@ -217,7 +237,7 @@ def format_fuzz_report_csv(data: dict[str, object]) -> str:
     # is listed as a finding. The all_results table above already marks each
     # row with is_finding, but a reader filtering by the "finding" section
     # header gets the same list the Markdown and JSON reports show.
-    findings = data.get("findings") or []
+    findings = data.get("findings") or [] if isinstance(data, dict) else []
     if isinstance(findings, list) and findings:
         writer.writerow([])
         writer.writerow(["finding_path", "finding_status_code"])
