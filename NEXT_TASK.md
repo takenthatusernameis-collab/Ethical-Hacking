@@ -7,11 +7,11 @@ Continue evidence-driven permanent-test coverage only for demonstrated gaps.
 - `python3 -m mypy ethscan` → `Success: no issues found in 59 source files`
 
 ## This session
-- Scanned `click.Path`/file-input validation (all 20 `exists` inputs covered by `FILE_OPTIONS`; group `--config` covered; `--out` guarded by `_write_output`; JSON/XML/UTF-8 content covered). No new demonstrated gap; no code change.
+- Scanned CLI validation/error-handling (`Path` inputs/`FILE_OPTIONS`, `--config`/`--init`/`--out`, `cidr/radix` `--cidr/--cidrs/--diff/--contains`, `hash --check`, `completion`, `vuln --severity`, `scan --ports`, JWT/target/result-reporting commands). No new demonstrated gap; no code change.
 
 ## Candidate work (only if demonstrated)
 - Add smallest permanent guard/test only with a reproducible case (option/callback reaches side effects before clean rejection).
-- Do not duplicate existing sweeps (Choice, IntRange/FloatRange, ports, CIDR, host, offline-input, `FILE_OPTIONS`, JSON/XML content, `--out`, `--config`).
+- Do not duplicate existing sweeps or intentional in-output reporting semantics (`--contains` invalid IP → `in_network:false`; `hash --check`/`validate` structured error fields).
 
 ## Constraints
 - Preserve baseline; smallest reversible change.

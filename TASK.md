@@ -7,16 +7,18 @@ Date: Fri Nov 06 2026
 - `python3 -m ruff check .`: all checks passed. `python3 -m mypy ethscan`: Success, 59 source files.
 
 ## This session (scan only, no code change)
-- Evidence-driven scan for demonstrated gaps in CLI option validation (non-Choice/non-Range `click.Path`/file-content cases reaching side effects before rejection).
-- Verified coverage:
-  - All 20 `click.Path(exists=True, readable=True, dir_okay=False)` subcommand file-input options are enumerated in `FILE_OPTIONS` (`tests/test_cli.py:24317`) and covered by `test_a_file_option_with_a_missing_file_is_a_usage_error` / `test_a_file_option_with_a_directory_is_a_usage_error` (introspection cross-check matched exactly).
-  - Group `--config` path validation (nonexistent, directory, unreadable) covered by `test_config_path_must_name_a_readable_file` (`tests/test_cli.py:12769`, 1 passed). `config --config` (subcommand) missing path and `config --init` unusable parent return exit 2 with `BadParameter`/no traceback (verified manually).
-  - `--out` writable paths: 56 `_write_output(out_path, ...)` call sites catch `OSError`/`ValueError` → `click.BadParameter("'--out'")` (parent dir created when missing). `test_an_unusable_output_path_is_a_usage_error` / missing-parent-created / writable-success tests exist; manual check of file-as-parent case returned exit 2, no traceback.
-  - JSON/XML/UTF-8 hostile file-content cases have dedicated usage-error tests (`JSON_FILE_OPTIONS`, XML, credential UTF-8).
-- No new demonstrated gap found (no option observed to reach side effects before clean rejection).
+- Evidence-driven scan for demonstrated gaps where a CLI option/callback reaches side effects before clean rejection.
+- Checked:
+  - `click.Path(exists,readable,dir_okay=False)` inputs remain covered by `FILE_OPTIONS` (count/coverage previously established; no new unmatched file-input option found).
+  - Group `--config`, `config --config/--init` reject unusable paths with usage-style errors (manual + existing tests).
+  - `--out` write failures guarded by `_write_output` (OSError/ValueError → `BadParameter`).
+  - `cidr`/`radix`: `--cidr`/`--cidrs`/`--diff` empty/invalid values rejected (exit 2, `BadParameter`/usage). `--contains` malformed/empty values return structured `in_network: false` (exit 0) — intentional and covered by `tests/test_cli.py:22547`, `tests/test_cidr.py`, `tests/test_radix.py`; not a gap.
+  - `hash --check` invalid/wrong-length/non-hex digests produce structured result/error output (exit 0) per command contract; `completion` invalid shell and `vuln --severity` invalid value rejected (exit 2). `scan --ports 99999` rejected (exit 2).
+  - `whois`/`dns` invalid targets are handled as probe/result data by those commands (no traceback/side-effect-before-rejection gap demonstrated at CLI parsing boundary beyond existing target handling).
+- No new demonstrated gap found; no code change.
 
 ## Verified (evidence)
-- `python3 -m pytest tests/test_cli.py -q --tb=no -k "config_path_must_name_a_readable_file"` → 1 passed.
+- Manual probes (representative): `cidr --cidr not-a-cidr`/empty/`--diff bad` → exit 2; `radix --cidrs/--diff` invalid → exit 2; `cidr/radix --contains bogus/''` → exit 0, `in_network:false`; `completion not-a-shell` → exit 2; `vuln --severity critical,INVALID` → exit 2; `scan --ports 99999` → exit 2; `config --init /etc` → exit 2 (not writable).
 - `python3 -m pytest -q --tb=no` → `5878 passed, 50 skipped, 0 failed`.
 - `python3 -m ruff check .` → `All checks passed!`
 - `python3 -m mypy ethscan` → `Success: no issues found in 59 source files`.
@@ -25,4 +27,4 @@ Date: Fri Nov 06 2026
 - None.
 
 ## Next task
-- Continue evidence-driven scan only for a *demonstrated* gap (an option/callback that reaches side effects before rejection with a reproducible case). Do not duplicate existing IntRange/FloatRange/Choice/ports/CIDR/host/offline-input/file-input (`FILE_OPTIONS`)/JSON-content/`--out`/`--config` sweeps. Add the smallest permanent guard/test only with evidence. Update `TASK.md`/`HANDOFF_NEXT.md`/`NEXT_TASK.md`; do not commit unless asked.
+- Continue evidence-driven scan only for a *demonstrated* gap (an option/callback that reaches side effects before rejection with a reproducible case). Do not duplicate existing IntRange/FloatRange/Choice/ports/CIDR/host/offline-input/file-input (`FILE_OPTIONS`)/JSON/XML content/`--out`/`--config` sweeps or intentional `--contains`/`hash --check`/`validate` in-output reporting semantics. Add the smallest permanent guard/test only with evidence. Update `TASK.md`/`HANDOFF_NEXT.md`/`NEXT_TASK.md`; do not commit unless asked.
