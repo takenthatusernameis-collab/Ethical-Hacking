@@ -2,21 +2,21 @@
 Date: Fri Nov 06 2026
 
 ## Current state
-- HEAD (committed): `b6c024f` (working tree has uncommitted local changes in `tests/test_cli.py` and handoff docs; do not commit unless asked).
+- HEAD: clean working tree, up to date with `origin/main` (no uncommitted changes this session).
 - Tests: `5878 passed, 50 skipped, 0 failed`.
 - `python3 -m ruff check .`: all checks passed. `python3 -m mypy ethscan`: Success, 59 source files.
 
-## Prior session (completed)
-- Gap: `ethscan/cli.py` declares 126 `click.Choice` options but only `test_completion_invalid_shell_errors` asserted invalid-choice rejection.
-- Change: added `test_every_choice_option_of_the_cli_is_enumerated` and `test_an_invalid_choice_value_is_a_usage_error` to `tests/test_cli.py`. Verified: 2 targeted tests + full suite + ruff + mypy all green.
-
-## This session (demonstrated gap + fix)
-- Gap: `--config` is a `click.Path()` option declared on the CLI group (`ethscan/cli.py:402`), validated by `_check_config_path` (`ethscan/cli.py:680`). Every permanent sweep iterates `cli.cli.commands` (subcommands), so the group's `--config` path validation (nonexistent path, directory, unreadable file) had no permanent test. Confirmed empirically: `--config /nonexistent` and `--config <directory>` exit 2 with an `Error: Invalid value for '--config'` usage error and no traceback.
-- Change (small, reversible): added `test_config_path_must_name_a_readable_file` to `tests/test_cli.py`. It walks a nonexistent path, a directory, and an unreadable file and asserts exit 2, the `--config` usage error, the expected message fragment, no traceback, and `SystemExit` (no callback/side effects before rejection).
+## This session (scan only, no code change)
+- Evidence-driven scan for demonstrated gaps in CLI option validation (non-Choice/non-Range `click.Path`/file-content cases reaching side effects before rejection).
+- Verified coverage:
+  - All 20 `click.Path(exists=True, readable=True, dir_okay=False)` subcommand file-input options are enumerated in `FILE_OPTIONS` (`tests/test_cli.py:24317`) and covered by `test_a_file_option_with_a_missing_file_is_a_usage_error` / `test_a_file_option_with_a_directory_is_a_usage_error` (introspection cross-check matched exactly).
+  - Group `--config` path validation (nonexistent, directory, unreadable) covered by `test_config_path_must_name_a_readable_file` (`tests/test_cli.py:12769`, 1 passed). `config --config` (subcommand) missing path and `config --init` unusable parent return exit 2 with `BadParameter`/no traceback (verified manually).
+  - `--out` writable paths: 56 `_write_output(out_path, ...)` call sites catch `OSError`/`ValueError` → `click.BadParameter("'--out'")` (parent dir created when missing). `test_an_unusable_output_path_is_a_usage_error` / missing-parent-created / writable-success tests exist; manual check of file-as-parent case returned exit 2, no traceback.
+  - JSON/XML/UTF-8 hostile file-content cases have dedicated usage-error tests (`JSON_FILE_OPTIONS`, XML, credential UTF-8).
+- No new demonstrated gap found (no option observed to reach side effects before clean rejection).
 
 ## Verified (evidence)
-- `python3 -m pytest tests/test_cli.py -q --tb=short -k "config_path_must_name_a_readable_file"` → 1 passed.
-- `python3 -m pytest tests/test_cli.py -q --tb=short -k "config"` → 44 passed.
+- `python3 -m pytest tests/test_cli.py -q --tb=no -k "config_path_must_name_a_readable_file"` → 1 passed.
 - `python3 -m pytest -q --tb=no` → `5878 passed, 50 skipped, 0 failed`.
 - `python3 -m ruff check .` → `All checks passed!`
 - `python3 -m mypy ethscan` → `Success: no issues found in 59 source files`.
@@ -25,4 +25,4 @@ Date: Fri Nov 06 2026
 - None.
 
 ## Next task
-- Continue evidence-driven scan for any non-Choice/non-Range option that can reach side effects before rejection (the `--config` group gap just closed; `click.Path`/`click.File`/custom callbacks/mutually-exclusive groups otherwise have no new findings). Add smallest permanent guard only with evidence. Do not duplicate existing IntRange/FloatRange/Choice/ports/CIDR/host/offline-input sweeps. Update `TASK.md`/`HANDOFF_NEXT.md`/`NEXT_TASK.md`; do not commit unless asked.
+- Continue evidence-driven scan only for a *demonstrated* gap (an option/callback that reaches side effects before rejection with a reproducible case). Do not duplicate existing IntRange/FloatRange/Choice/ports/CIDR/host/offline-input/file-input (`FILE_OPTIONS`)/JSON-content/`--out`/`--config` sweeps. Add the smallest permanent guard/test only with evidence. Update `TASK.md`/`HANDOFF_NEXT.md`/`NEXT_TASK.md`; do not commit unless asked.
