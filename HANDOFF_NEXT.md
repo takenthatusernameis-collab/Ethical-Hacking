@@ -2,7 +2,7 @@
 Date: Fri Nov 06 2026
 
 ## What changed
-- No code change this session. Re-ran evidence scan for non-Choice/non-Range options that can reach side effects before rejection: all `click.Path`/`click.File` options are validated by Click before command body; no `callback=` validators; no new demonstrated gap.
+- No code change. Inspected command bodies for validation after partial side effects (output writes, network probes). `_write_output` and `config --init` both validate/write inside try/except and report usage errors; no new demonstrated gap.
 
 ## Verified
 - `python3 -m pytest -q --tb=no` → `5878 passed, 50 skipped, 0 failed`.
@@ -13,4 +13,4 @@ Date: Fri Nov 06 2026
 - None new.
 
 ## Next task
-- Inspect command bodies for any validation performed after partial side effects (e.g., opening output files, network probes) before raising usage errors; add smallest permanent guard only with evidence. Do not duplicate existing sweeps. Do not commit unless asked.
+- Continue evidence-driven scan only for demonstrated gaps; do not duplicate existing sweeps. Update docs; do not commit unless asked.
