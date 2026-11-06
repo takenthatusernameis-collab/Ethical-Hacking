@@ -5,7 +5,9 @@ Date: Fri Nov 06 2026
 - No code changes this session. Re-scanned `ethscan/cli.py` for uncovered validation/side-effect-before-rejection gaps (`click.Path`/`click.File`, custom callbacks, mutually-exclusive groups). None found beyond existing permanent sweeps; coverage already includes Choice, IntRange/FloatRange, ports, CIDR, host, offline input, file/input/output paths, JSON/YAML/XML content, mutually-exclusive `--init/--out`.
 
 ## Verified
-- Not rerun this session: ruff/mypy not installed in environment; pytest baseline from prior session 5874 passed, 53 skipped.
+- `python3 -m pytest -q` → `5877 passed, 50 skipped, 0 failed`
+- `python3 -m ruff check .` → `All checks passed!`
+- `python3 -m mypy ethscan` → `Success: no issues found in 59 source files`
 
 ## Unresolved
 - None new.
