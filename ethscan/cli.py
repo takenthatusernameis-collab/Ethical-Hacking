@@ -5011,6 +5011,16 @@ def redis(
 ) -> None:
     """Run Redis reconnaissance (ping, info, config)."""
     probe_list = [p.strip().lower() for p in probes.split(",") if p.strip()] if probes else list(DEFAULT_PROBES)
+    if probe_list:
+        valid_probes = set(DEFAULT_PROBES)
+        unknown = [p for p in probe_list if p not in valid_probes]
+        if unknown:
+            raise click.UsageError(
+                f"Unknown probes: {', '.join(unknown)}. "
+                f"Valid probes: {', '.join(DEFAULT_PROBES)}"
+            )
+    else:
+        probe_list = list(DEFAULT_PROBES)
     results = run_redis(
         target,
         port=port,

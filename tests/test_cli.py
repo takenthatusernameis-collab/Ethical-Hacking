@@ -24825,3 +24825,34 @@ def test_an_invalid_choice_value_is_a_usage_error() -> None:
         ), (
             f"{label}: wrong option named\n{result.output}"
         )
+def test_redis_unknown_probe_rejected(monkeypatch) -> None:
+    """An unknown probe is rejected at the CLI boundary (exit 2, no recon)."""
+    called = {"ran": False}
+
+    def _fake(*args, **kwargs):
+        called["ran"] = True
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_redis", _fake)
+    result = CliRunner().invoke(cli, ["redis", "--target", "127.0.0.1", "--probes", "bogus"])
+    assert result.exit_code == 2
+    assert "Unknown probes: bogus" in result.output
+    assert "Valid probes: ping, info, config" in result.output
+    assert called["ran"] is False
+
+
+def test_redis_mixed_unknown_probe_rejected(monkeypatch) -> None:
+    """Mixed known/unknown probes are rejected before any recon work."""
+    called = {"ran": False}
+
+    def _fake(*args, **kwargs):
+        called["ran"] = True
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_redis", _fake)
+    result = CliRunner().invoke(
+        cli, ["redis", "--target", "127.0.0.1", "--probes", "ping,bogus,info"]
+    )
+    assert result.exit_code == 2
+    assert "Unknown probes: bogus" in result.output
+    assert called["ran"] is False
