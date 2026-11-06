@@ -25142,3 +25142,51 @@ def test_oracle_unknown_probe_rejected(monkeypatch) -> None:
     assert "Unknown probes: bogus" in result.output
     assert "Valid probes: version" in result.output
     assert called["ran"] is False
+
+
+def test_recon_geo_api_url_rejected(monkeypatch) -> None:
+    called = {"ran": False}
+
+    def mock_run_recon(*args, **kwargs):
+        called["ran"] = True
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_recon", mock_run_recon)
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["recon", "--target", "example.com", "--modules", "geo", "--geo-api-url", "not a url"],
+    )
+    assert result.exit_code == 2
+    assert "Invalid value for '--geo-api-url'" in result.output
+    assert not called["ran"]
+
+
+def test_cve_api_url_rejected(monkeypatch) -> None:
+    called = {"ran": False}
+
+    def mock_run_cve(*args, **kwargs):
+        called["ran"] = True
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_cve", mock_run_cve)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cve", "--target", "example.com", "--api-url", "not a url"])
+    assert result.exit_code == 2
+    assert "Invalid value for '--api-url'" in result.output
+    assert not called["ran"]
+
+
+def test_mac_api_url_rejected(monkeypatch) -> None:
+    called = {"ran": False}
+
+    def mock_run_mac(*args, **kwargs):
+        called["ran"] = True
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_mac", mock_run_mac)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["mac", "--target", "00:1A:2B:3C:4D:5E", "--api-url", "not a url"])
+    assert result.exit_code == 2
+    assert "Invalid value for '--api-url'" in result.output
+    assert not called["ran"]

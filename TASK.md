@@ -2,27 +2,33 @@
 Date: Fri Nov 06 2026
 
 ## Current state
-- HEAD: working tree clean except this session's changes (uncommitted). Baseline was green before changes.
-- Tests: `5897 passed, 50 skipped, 0 failed`.
+- Baseline: `5900 passed, 50 skipped, 0 failed` (verified this session after changes).
 - `python3 -m ruff check .`: all checks passed. `python3 -m mypy ethscan`: Success, 59 source files.
 
 ## This session
-- **Demonstrated gap (reproduced):** `cert --api-url "not a url"` was silently accepted (exit 0, proceeded to `run_cert`/`urllib.request.urlopen` network side effects, no CLI rejection), while `geo --api-url "not a url"` already rejected with exit 2 (`Invalid value for '--api-url': ... is not a valid http/https URL.`). The `--api-url` value was passed straight to `run_cert` without validation.
-- **Fix (smallest reversible, CLI-only):** In `ethscan/cli.py`, the `cert` command now validates `api_url` with `_validate_api_url(api_url, "--api-url")` (same helper used by `geo`) before `run_cert` is invoked, raising `click.UsageError` (exit 2). Library modules unchanged.
-- **Tests:** Added `tests/test_cli.py::test_cert_unknown_api_url_rejected` (asserts exit 2, error text, and `run_cert` not called). Existing `test_cert_api_url_option` (`--api-url https://custom.example.com/`) still passes.
+- **Demonstrated gaps (reproduced):** CLI options accepted invalid `http/https` URLs (no exit-2 rejection) and allowed command/library paths to proceed with side effects / bad-URL handling, unlike `geo --api-url` and `cert --api-url`:
+  - `recon --geo-api-url "not a url"` (with `--modules geo`) → exit 0, `run_recon` invoked.
+  - `cve --api-url "not a url"` → exit 0, `run_cve` invoked / invalid URL recorded in output.
+  - `mac --api-url "not a url"` → exit 0, `run_mac` invoked (fetch attempted, surfaced as fetch error).
+- **Fix (smallest reversible, CLI-only):** In `ethscan/cli.py` validate with existing `_validate_api_url` before side effects:
+  - `recon`: `geo_api_url = _validate_api_url(geo_api_url, "--geo-api-url")`
+  - `cve`: `api_url = _validate_api_url(api_url, "--api-url")` (validated before service/ports resolution and `run_cve`)
+  - `mac`: `api_url = _validate_api_url(api_url, "--api-url")` before `run_mac`
+  Libraries unchanged.
+- **Tests:** Added `tests/test_cli.py::test_recon_geo_api_url_rejected`, `::test_cve_api_url_rejected`, `::test_mac_api_url_rejected` (exit 2, correct option name in error, underlying runner not called).
 
 ## Verified (evidence)
-- Repro before fix: `cert --target example.com --api-url "not a url"` → exit 0, network side effects, no CLI rejection. `geo --api-url "not a url"` → exit 2.
-- After fix: `cert --api-url "not a url"` → exit 2, `Invalid value for '--api-url': ...`, `run_cert` not called.
-- `python3 -m pytest tests/test_cli.py -q -k "cert" --tb=short` → `17 passed`.
-- `python3 -m pytest -q --tb=no` → `5897 passed, 50 skipped, 0 failed`.
+- Repro (pre-fix behavior via direct invoke baseline check): each command accepted `"not a url"` (exit 0) and invoked runners / reached side effects. After fix (CLI): all three → exit 2 with `Invalid value for ... is not a valid http/https URL.` and runner not called.
+- `python3 -m pytest tests/test_cli.py -q -k "geo_api_url_rejected or recon_geo_api_url_rejected or cve_api_url_rejected or mac_api_url_rejected or cert_unknown_api_url_rejected or geo_unknown_api_url_rejected"` → `5 passed`.
+- `python3 -m pytest tests/test_cli.py -q -k "cert or cve or mac or recon and geo"` → `70 passed`.
 - `python3 -m ruff check .` → `All checks passed!`
-- `python3 -m mypy ethscan` → `Success: no issues found in 59 source files`.
+- `python3 -m mypy ethscan` → `Success: no issues found in 59 source files`
+- `python3 -m pytest -q --tb=no` → `5900 passed, 50 skipped, 0 failed`
 
 ## Blockers
 - None.
 
 ## Next task
-- Pursue only a *demonstrated* gap: reproduce a CLI option/callback reaching side effects before clean rejection or a silent-accept validation gap in an area **different** from the exhausted CLI edge sweep and fixed `--probes`/`recon --modules`/`recon --dns-types`/`cert --api-url` validation. Materially different scan surface only; stop at first reproduced gap; add smallest permanent guard/test. Keep baseline green; do not commit unless asked. Update `TASK.md`/`HANDOFF_NEXT.md`/`NEXT_TASK.md`.
+- Pursue only a *demonstrated* gap: reproduce a CLI option/callback reaching side effects before clean rejection or a silent-accept validation gap in an area **different** from the exhausted CLI edge sweep and fixed `--probes`/`recon --modules`/`recon --dns-types`/`cert --api-url`/`recon --geo-api-url`/`cve --api-url`/`mac --api-url` validation. Materially different scan surface only; stop at first reproduced gap; add smallest permanent guard/test. Keep baseline green; do not commit unless asked. Update `TASK.md`/`HANDOFF_NEXT.md`/`NEXT_TASK.md`.
 
 (End of file)

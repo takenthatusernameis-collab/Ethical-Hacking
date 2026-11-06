@@ -2968,6 +2968,7 @@ def recon(
     """Run multiple reconnaissance modules against TARGET and produce a consolidated report."""
     dns_server = _validate_dns_resolver(dns_server, "--dns-server")
     resolver = _validate_dns_resolver(resolver, "--resolver")
+    geo_api_url = _validate_api_url(geo_api_url, "--geo-api-url")
     modules_list = (
         [m.strip() for m in modules.split(",") if m.strip()]
         if modules
@@ -3214,6 +3215,7 @@ def cve(
     if services_file:
         _load_json_file(services_file, "'--services-file'")
 
+    api_url = _validate_api_url(api_url, "--api-url")
     port_list = None
     if not services_file:
         if profile:
@@ -3698,6 +3700,7 @@ def mac(
     out_path: str | None,
 ) -> None:
     """Look up MAC address vendor using the OUI database (api.macvendors.com) with caching."""
+    api_url = _validate_api_url(api_url, "--api-url")
     results = run_mac(
         target,
         timeout=timeout,

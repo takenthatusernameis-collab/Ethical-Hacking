@@ -1,17 +1,16 @@
 # Next Task
 Pursue only a *demonstrated* gap: reproduce a CLI option/callback reaching side effects before clean rejection, or a silent-accept validation gap, then add the smallest permanent guard/test.
 
-## Baseline (verified this session)
-- `python3 -m pytest -q --tb=no` → `5897 passed, 50 skipped, 0 failed`
+## Baseline (verified)
+- `python3 -m pytest -q --tb=no` → `5900 passed, 50 skipped, 0 failed`
 - `python3 -m ruff check .` → clean
 - `python3 -m mypy ethscan` → `Success: no issues found in 59 source files`
 
-## This session
-- Fixed demonstrated gap: `cert --api-url` silently accepted an invalid URL (proceeded to `run_cert`/`urlopen` network side effects, no CLI rejection), while `geo --api-url` already rejected with exit 2. `ethscan/cli.py` `cert` command now validates `--api-url` with `_validate_api_url(api_url, "--api-url")` (same helper as `geo`) and rejects with `click.UsageError` (exit 2) before `run_cert`. Libraries unchanged.
-- Added CLI test: `test_cert_unknown_api_url_rejected` (exit 2, error text, `run_cert` not called).
+## This session (fixed, verified)
+- `recon --geo-api-url`, `cve --api-url`, `mac --api-url` now validated with `_validate_api_url` at CLI (exit 2, no runner side effects) — matching `geo --api-url` / `cert --api-url`. Tests: `test_recon_geo_api_url_rejected`, `test_cve_api_url_rejected`, `test_mac_api_url_rejected`.
 
 ## Candidate work (only if demonstrated)
-- Find/reproduce a validation or side-effect-before-reject gap in a **materially different** area (CLI edge sweep, `--probes`, `recon --modules`, `recon --dns-types`, `cert --api-url` now fixed). Stop at first reproduced gap; smallest guard/test only.
+- Find/reproduce a validation or side-effect-before-reject gap in a **materially different** area (CLI edge sweep, `--probes`, `recon --modules`/`--dns-types`, and all API-URL options above now fixed). Stop at first reproduced gap; smallest guard/test only.
 - Do not duplicate existing sweeps or treat intentional in-output reporting/contracts as gaps.
 
 ## Constraints
