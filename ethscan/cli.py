@@ -3083,6 +3083,7 @@ def cert(
     out_path: str | None,
 ) -> None:
     """Search Certificate Transparency logs for certificates issued to TARGET."""
+    api_url = _validate_api_url(api_url, "--api-url")
     results = run_cert(
         target,
         timeout=timeout,

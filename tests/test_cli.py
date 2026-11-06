@@ -11778,6 +11778,21 @@ def test_cert_api_url_option(monkeypatch) -> None:
     assert called_args["api_url"] == "https://custom.example.com/"
 
 
+def test_cert_unknown_api_url_rejected(monkeypatch) -> None:
+    called = {"ran": False}
+
+    def mock_run_cert(*args, **kwargs):
+        called["ran"] = True
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_cert", mock_run_cert)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cert", "--target", "example.com", "--api-url", "not a url"])
+    assert result.exit_code == 2
+    assert "Invalid value for '--api-url'" in result.output
+    assert not called["ran"]
+
+
 def test_cert_timeout_option(monkeypatch) -> None:
     called_args = {}
 
