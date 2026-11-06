@@ -731,10 +731,10 @@ def _validate_dns_resolver(value: str | None, option_name: str) -> str | None:
     try:
         ipaddress.ip_address(value)
         return value
-    except ValueError:
+    except ValueError as exc:
         raise click.UsageError(
             f"Invalid value for '{option_name}': {value!r} is not a valid IP address or https:// resolver URL."
-        )
+        ) from exc
 
 
 def _check_config_path(path: str) -> None:
@@ -1594,12 +1594,12 @@ def headers(target: str, timeout: float, fmt: str, output_fmt: str | None, out_p
 def dns(
     target: str,
     record_types: str,
-    server: str,
+    server: str | None,
     timeout: float,
     workers: int,
-    output_fmt: str,
+    output_fmt: str | None,
     fmt: str,
-    out_path: str,
+    out_path: str | None,
 ) -> None:
     """Enumerate DNS records for TARGET."""
     server = _validate_dns_resolver(server, "--server")

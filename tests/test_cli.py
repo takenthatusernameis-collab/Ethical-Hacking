@@ -5826,6 +5826,26 @@ def test_tls_unknown_version() -> None:
     assert "Valid versions" in result.output
 
 
+def test_tls_unknown_cipher() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "tls",
+            "--target",
+            "example.com",
+            "--ciphers",
+            "BOGUS_CIPHER",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 2
+    assert "Unknown ciphers" in result.output
+    assert "BOGUS_CIPHER" in result.output
+    assert "Valid ciphers" in result.output
+
+
 def test_tls_out_option(tmp_path, monkeypatch) -> None:
     def mock_run_tls(
         target,

@@ -132,6 +132,32 @@ def _resolve_versions(specs: list[VersionSpec]) -> list[ssl.TLSVersion]:
     return resolved
 
 
+def _validate_ciphers(ciphers: list[str]) -> list[str]:
+    """Validate cipher suite names, raising for unknown names.
+
+    Raises:
+        ValueError: If any cipher does not name a known cipher suite.
+    """
+    if not ciphers:
+        return list(ciphers)
+    valid_ciphers = set(COMMON_CIPHERS)
+    unknown: list[str] = []
+    normalized: list[str] = []
+    for cipher in ciphers:
+        cipher_stripped = str(cipher).strip()
+        if not cipher_stripped:
+            continue
+        if cipher_stripped not in valid_ciphers:
+            unknown.append(cipher_stripped)
+        normalized.append(cipher_stripped)
+    if unknown:
+        valid = ", ".join(COMMON_CIPHERS)
+        raise ValueError(
+            f"Unknown ciphers: {', '.join(sorted(set(unknown)))}. Valid ciphers: {valid}"
+        )
+    return normalized
+
+
 def _build_context(
     version: ssl.TLSVersion | None = None,
     cipher: str | None = None,
@@ -310,7 +336,10 @@ def enumerate_tls(
     resolved_versions = (
         list(TLS_VERSIONS) if versions is None else _resolve_versions(versions)
     )
-    cipher_list = list(COMMON_CIPHERS) if ciphers is None else list(ciphers)
+    if ciphers is None:
+        cipher_list = list(COMMON_CIPHERS)
+    else:
+        cipher_list = _validate_ciphers(ciphers)
 
     version_results: list[dict[str, object]] = []
     cipher_results: list[dict[str, object]] = []
