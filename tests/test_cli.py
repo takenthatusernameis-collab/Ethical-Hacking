@@ -24856,3 +24856,92 @@ def test_redis_mixed_unknown_probe_rejected(monkeypatch) -> None:
     assert result.exit_code == 2
     assert "Unknown probes: bogus" in result.output
     assert called["ran"] is False
+
+def test_memcached_unknown_probe_rejected(monkeypatch) -> None:
+    called = {"ran": False}
+
+    def _fake(*args, **kwargs):
+        called["ran"] = True
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_memcached", _fake)
+    result = CliRunner().invoke(cli, ["memcached", "--target", "127.0.0.1", "--probes", "bogus"])
+    assert result.exit_code == 2
+    assert "Unknown probes: bogus" in result.output
+    assert "Valid probes: version, stats" in result.output
+    assert called["ran"] is False
+
+
+def test_mysql_unknown_probe_rejected(monkeypatch) -> None:
+    called = {"ran": False}
+
+    def _fake(*args, **kwargs):
+        called["ran"] = True
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_mysql", _fake)
+    result = CliRunner().invoke(cli, ["mysql", "--target", "127.0.0.1", "--probes", "bogus"])
+    assert result.exit_code == 2
+    assert "Unknown probes: bogus" in result.output
+    assert "Valid probes: handshake" in result.output
+    assert called["ran"] is False
+
+
+def test_mongodb_unknown_probe_rejected(monkeypatch) -> None:
+    called = {"ran": False}
+
+    def _fake(*args, **kwargs):
+        called["ran"] = True
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_mongodb", _fake)
+    result = CliRunner().invoke(cli, ["mongodb", "--target", "127.0.0.1", "--probes", "bogus"])
+    assert result.exit_code == 2
+    assert "Unknown probes: bogus" in result.output
+    assert "Valid probes: buildInfo" in result.output
+    assert called["ran"] is False
+
+
+def test_postgresql_unknown_probe_rejected(monkeypatch) -> None:
+    called = {"ran": False}
+
+    def _fake(*args, **kwargs):
+        called["ran"] = True
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_postgresql", _fake)
+    result = CliRunner().invoke(cli, ["postgresql", "--target", "127.0.0.1", "--probes", "bogus"])
+    assert result.exit_code == 2
+    assert "Unknown probes: bogus" in result.output
+    assert "Valid probes: startup" in result.output
+    assert called["ran"] is False
+
+
+def test_mssql_unknown_probe_rejected(monkeypatch) -> None:
+    called = {"ran": False}
+
+    def _fake(*args, **kwargs):
+        called["ran"] = True
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_mssql", _fake)
+    result = CliRunner().invoke(cli, ["mssql", "--target", "127.0.0.1", "--probes", "bogus"])
+    assert result.exit_code == 2
+    assert "Unknown probes: bogus" in result.output
+    assert "Valid probes: prelogin" in result.output
+    assert called["ran"] is False
+
+
+def test_oracle_unknown_probe_rejected(monkeypatch) -> None:
+    called = {"ran": False}
+
+    def _fake(*args, **kwargs):
+        called["ran"] = True
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_oracle", _fake)
+    result = CliRunner().invoke(cli, ["oracle", "--target", "127.0.0.1", "--probes", "bogus"])
+    assert result.exit_code == 2
+    assert "Unknown probes: bogus" in result.output
+    assert "Valid probes: version" in result.output
+    assert called["ran"] is False

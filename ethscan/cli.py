@@ -125,24 +125,28 @@ from ethscan.mac import (
     run_mac,
 )
 from ethscan.memcached import (
+    DEFAULT_PROBES as DEFAULT_MEMCACHED_PROBES,
     format_memcached_report_csv,
     format_memcached_report_json,
     format_memcached_report_markdown,
     run_memcached,
 )
 from ethscan.mongodb import (
+    DEFAULT_PROBES as DEFAULT_MONGODB_PROBES,
     format_mongodb_report_csv,
     format_mongodb_report_json,
     format_mongodb_report_markdown,
     run_mongodb,
 )
 from ethscan.mssql import (
+    DEFAULT_PROBES as DEFAULT_MSSQL_PROBES,
     format_mssql_report_csv,
     format_mssql_report_json,
     format_mssql_report_markdown,
     run_mssql,
 )
 from ethscan.mysql import (
+    DEFAULT_PROBES as DEFAULT_MYSQL_PROBES,
     format_mysql_report_csv,
     format_mysql_report_json,
     format_mysql_report_markdown,
@@ -168,6 +172,7 @@ from ethscan.ntp import (
     run_ntp,
 )
 from ethscan.oracle import (
+    DEFAULT_PROBES as DEFAULT_ORACLE_PROBES,
     format_oracle_report_csv,
     format_oracle_report_json,
     format_oracle_report_markdown,
@@ -192,6 +197,7 @@ from ethscan.ping import (
     run_ping,
 )
 from ethscan.postgresql import (
+    DEFAULT_PROBES as DEFAULT_POSTGRESQL_PROBES,
     format_postgresql_report_csv,
     format_postgresql_report_json,
     format_postgresql_report_markdown,
@@ -3968,7 +3974,17 @@ def memcached(
     out_path: str | None,
 ) -> None:
     """Run Memcached reconnaissance (version and stats probes)."""
-    probe_list = [p.strip().lower() for p in probes.split(",") if p.strip()] if probes else None
+    probe_list = [p.strip().lower() for p in probes.split(",") if p.strip()] if probes else list(DEFAULT_MEMCACHED_PROBES)
+    if probe_list:
+        valid_probes = {p.lower() for p in DEFAULT_MEMCACHED_PROBES}
+        unknown = [p for p in probe_list if p not in valid_probes]
+        if unknown:
+            raise click.UsageError(
+                f"Unknown probes: {', '.join(unknown)}. "
+                f"Valid probes: {', '.join(DEFAULT_MEMCACHED_PROBES)}"
+            )
+    else:
+        probe_list = list(DEFAULT_MEMCACHED_PROBES)
     results = run_memcached(
         target,
         port=port,
@@ -4033,7 +4049,17 @@ def mysql(
     out_path: str | None,
 ) -> None:
     """Run MySQL reconnaissance (handshake/banner probe)."""
-    probe_list = [p.strip().lower() for p in probes.split(",") if p.strip()] if probes else None
+    probe_list = [p.strip().lower() for p in probes.split(",") if p.strip()] if probes else list(DEFAULT_MYSQL_PROBES)
+    if probe_list:
+        valid_probes = {p.lower() for p in DEFAULT_MYSQL_PROBES}
+        unknown = [p for p in probe_list if p not in valid_probes]
+        if unknown:
+            raise click.UsageError(
+                f"Unknown probes: {', '.join(unknown)}. "
+                f"Valid probes: {', '.join(DEFAULT_MYSQL_PROBES)}"
+            )
+    else:
+        probe_list = list(DEFAULT_MYSQL_PROBES)
     results = run_mysql(
         target,
         port=port,
@@ -4096,7 +4122,17 @@ def mongodb(
     out_path: str | None,
 ) -> None:
     """Run MongoDB reconnaissance (buildInfo/server info probe)."""
-    probe_list = [p.strip().lower() for p in probes.split(",") if p.strip()] if probes else None
+    probe_list = [p.strip().lower() for p in probes.split(",") if p.strip()] if probes else list(DEFAULT_MONGODB_PROBES)
+    if probe_list:
+        valid_probes = {p.lower() for p in DEFAULT_MONGODB_PROBES}
+        unknown = [p for p in probe_list if p not in valid_probes]
+        if unknown:
+            raise click.UsageError(
+                f"Unknown probes: {', '.join(unknown)}. "
+                f"Valid probes: {', '.join(DEFAULT_MONGODB_PROBES)}"
+            )
+    else:
+        probe_list = list(DEFAULT_MONGODB_PROBES)
     results = run_mongodb(
         target,
         port=port,
@@ -4159,7 +4195,17 @@ def postgresql(
     out_path: str | None,
 ) -> None:
     """Run PostgreSQL reconnaissance (wire-protocol startup probe)."""
-    probe_list = [p.strip().lower() for p in probes.split(",") if p.strip()] if probes else None
+    probe_list = [p.strip().lower() for p in probes.split(",") if p.strip()] if probes else list(DEFAULT_POSTGRESQL_PROBES)
+    if probe_list:
+        valid_probes = {p.lower() for p in DEFAULT_POSTGRESQL_PROBES}
+        unknown = [p for p in probe_list if p not in valid_probes]
+        if unknown:
+            raise click.UsageError(
+                f"Unknown probes: {', '.join(unknown)}. "
+                f"Valid probes: {', '.join(DEFAULT_POSTGRESQL_PROBES)}"
+            )
+    else:
+        probe_list = list(DEFAULT_POSTGRESQL_PROBES)
     results = run_postgresql(
         target,
         port=port,
@@ -5148,7 +5194,17 @@ def mssql(
     out_path: str | None,
 ) -> None:
     """Run MSSQL reconnaissance (TDS prelogin probe)."""
-    probe_list = [p.strip().lower() for p in probes.split(",") if p.strip()] if probes else None
+    probe_list = [p.strip().lower() for p in probes.split(",") if p.strip()] if probes else list(DEFAULT_MSSQL_PROBES)
+    if probe_list:
+        valid_probes = {p.lower() for p in DEFAULT_MSSQL_PROBES}
+        unknown = [p for p in probe_list if p not in valid_probes]
+        if unknown:
+            raise click.UsageError(
+                f"Unknown probes: {', '.join(unknown)}. "
+                f"Valid probes: {', '.join(DEFAULT_MSSQL_PROBES)}"
+            )
+    else:
+        probe_list = list(DEFAULT_MSSQL_PROBES)
     results = run_mssql(
         target,
         port=port,
@@ -5211,7 +5267,17 @@ def oracle(
     out_path: str | None,
 ) -> None:
     """Run Oracle reconnaissance (TNS connect probe)."""
-    probe_list = [p.strip().lower() for p in probes.split(",") if p.strip()] if probes else None
+    probe_list = [p.strip().lower() for p in probes.split(",") if p.strip()] if probes else list(DEFAULT_ORACLE_PROBES)
+    if probe_list:
+        valid_probes = {p.lower() for p in DEFAULT_ORACLE_PROBES}
+        unknown = [p for p in probe_list if p not in valid_probes]
+        if unknown:
+            raise click.UsageError(
+                f"Unknown probes: {', '.join(unknown)}. "
+                f"Valid probes: {', '.join(DEFAULT_ORACLE_PROBES)}"
+            )
+    else:
+        probe_list = list(DEFAULT_ORACLE_PROBES)
     results = run_oracle(
         target,
         port=port,
