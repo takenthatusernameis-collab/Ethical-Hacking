@@ -6,6 +6,7 @@ import os
 from typing import Any, cast
 
 import click
+import ipaddress
 from click.core import ParameterSource
 
 from ethscan import __version__
@@ -683,6 +684,27 @@ def _write_output(out_path: str, output: str, message: str | None = None) -> Non
     click.echo(message or f"Report written to {out_path}")
 
 
+def _validate_dns_resolver(value: str | None, option_name: str) -> str | None:
+    """Validate a custom DNS resolver address (IP or DoH https:// URL).
+
+    Returns the stripped value, or None. Raises UsageError for invalid forms.
+    """
+    if value is None:
+        return None
+    value = value.strip()
+    if not value:
+        return None
+    if value.lower().startswith("https://"):
+        return value
+    try:
+        ipaddress.ip_address(value)
+        return value
+    except ValueError:
+        raise click.UsageError(
+            f"Invalid value for '{option_name}': {value!r} is not a valid IP address or https:// resolver URL."
+        )
+
+
 def _check_config_path(path: str) -> None:
     """Refuse an explicit ``--config`` path that cannot name a config file.
 
@@ -1258,6 +1280,7 @@ def subdomains(
     out_path: str,
 ) -> None:
     """Enumerate subdomains for TARGET."""
+    resolver = _validate_dns_resolver(resolver, "--resolver")
     subdomains_list = (
         load_subdomain_wordlist(wordlist_path) if wordlist_path else None
     )
@@ -1344,6 +1367,7 @@ def subtake(
     out_path: str | None,
 ) -> None:
     """Detect subdomain takeover vulnerabilities for TARGET."""
+    resolver = _validate_dns_resolver(resolver, "--resolver")
     subdomains_list = (
         load_subdomain_wordlist(wordlist_path) if wordlist_path else None
     )
@@ -1546,6 +1570,7 @@ def dns(
     out_path: str,
 ) -> None:
     """Enumerate DNS records for TARGET."""
+    server = _validate_dns_resolver(server, "--server")
     types_list = [t.strip().upper() for t in record_types.split(",") if t.strip()]
     valid_types = {"A", "AAAA", "MX", "NS", "TXT", "CNAME", "SOA"}
     unknown = [t for t in types_list if t not in valid_types]
@@ -1621,6 +1646,7 @@ def resolve(
     out_path: str | None,
 ) -> None:
     """Perform forward/reverse DNS resolution for TARGET."""
+    server = _validate_dns_resolver(server, "--server")
     types_list = None
     if record_types:
         types_list = [t.strip().upper() for t in record_types.split(",") if t.strip()]
@@ -1725,6 +1751,7 @@ def dnsbrute(
     out_path: str | None,
 ) -> None:
     """Attempt AXFR zone transfer and brute-force subdomains for TARGET."""
+    resolver = _validate_dns_resolver(resolver, "--resolver")
     nameservers = (
         [ns.strip() for ns in nameservers_option.split(",") if ns.strip()]
         if nameservers_option
@@ -2869,6 +2896,8 @@ def recon(
     out_path: str | None,
 ) -> None:
     """Run multiple reconnaissance modules against TARGET and produce a consolidated report."""
+    dns_server = _validate_dns_resolver(dns_server, "--dns-server")
+    resolver = _validate_dns_resolver(resolver, "--resolver")
     modules_list = (
         [m.strip() for m in modules.split(",") if m.strip()]
         if modules
@@ -3510,6 +3539,7 @@ def dnssec(
     out_path: str | None,
 ) -> None:
     """Validate DNSSEC for TARGET domain."""
+    server = _validate_dns_resolver(server, "--server")
     results = run_dnssec(
         target,
         server=server,
