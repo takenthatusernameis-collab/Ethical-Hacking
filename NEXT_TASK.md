@@ -2,13 +2,13 @@
 Continue evidence-driven permanent-test coverage only for demonstrated gaps that lack a permanent check.
 
 ## Baseline (verified this session)
-- `python3 -m pytest -q` → `5874 passed, 53 skipped, 0 failed`
+- `python3 -m pytest -q` → `5878 passed, 50 skipped, 0 failed`
 - `python3 -m ruff check .` → clean
 - `python3 -m mypy ethscan` → `Success: no issues found in 59 source files`
 - HEAD (committed): `b6c024f`; working tree has uncommitted local changes (`tests/test_cli.py`, handoff docs) — do not commit unless asked.
 
 ## This session
-- Added permanent `click.Choice` validation sweep in `tests/test_cli.py` for all 126 Choice options (enumeration + invalid `__bogus__` usage-error rejection before callbacks). Verified targeted tests and full checks.
+- Added `test_config_path_must_name_a_readable_file` in `tests/test_cli.py` covering the `--config` group option (a `click.Path()` not reached by the subcommand sweeps): nonexistent path, directory, and unreadable file each exit 2 with an `Error: Invalid value for '--config'` usage error, the expected message fragment, no traceback, and `SystemExit`.
 
 ## Candidate work (only if demonstrated)
 - Scan for uncovered validation/side-effect-before-rejection gaps: `click.Path`/`click.File` constraints, custom `callback=` validators, mutually-exclusive/required-option groups, or non-Range/non-Choice options that can do work before rejection. Add smallest permanent guard/test only when a real gap is evidenced.

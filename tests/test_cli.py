@@ -12766,6 +12766,47 @@ def test_config_with_a_file_that_nests_too_deeply(tmp_path) -> None:
     assert "Failed to parse" in parsed["parse_error"]
 
 
+def test_config_path_must_name_a_readable_file(tmp_path) -> None:
+    """An explicit ``--config`` path must name a readable file.
+
+    ``_check_config_path`` refuses a path that does not exist, a directory, and
+    an unreadable file as a click usage error (exit 2) that names ``--config``,
+    instead of silently falling back to the standard config search paths. The
+    option lives on the group, so the subcommand sweeps do not cover it.
+    """
+    runner = CliRunner()
+    missing = tmp_path / "does-not-exist.yaml"
+    directory = tmp_path / "a-directory"
+    directory.mkdir()
+    unreadable = tmp_path / "unreadable.yaml"
+    unreadable.write_text("defaults: {}\n")
+    unreadable.chmod(0o000)
+
+    cases = (
+        (str(missing), "the config file does not exist"),
+        (str(directory), "the config path is not a file"),
+        # Click's Path type rejects an unreadable file before the group
+        # callback runs, so the message is Click's own.
+        (str(unreadable), "is not readable."),
+    )
+    for path, fragment in cases:
+        result = runner.invoke(cli, ["--config", path, "config", "--format", "json"])
+        label = f"--config {path}"
+        assert result.exit_code == 2, (
+            f"{label}: expected exit code 2, got {result.exit_code}\n{result.output}"
+        )
+        assert "Error: Invalid value for '--config':" in result.output, (
+            f"{label}: missing usage error message\n{result.output}"
+        )
+        assert fragment in result.output, f"{label}: wrong message\n{result.output}"
+        assert "Traceback (most recent call last)" not in result.output, (
+            f"{label}: leaked a traceback\n{result.output}"
+        )
+        assert isinstance(result.exception, SystemExit), (
+            f"{label}: leaked {result.exception!r} instead of a usage error"
+        )
+
+
 def test_config_inherits_parent_config(tmp_path) -> None:
     """Test config subcommand inherits parent --config."""
     cfg = tmp_path / "ethscan.yaml"
