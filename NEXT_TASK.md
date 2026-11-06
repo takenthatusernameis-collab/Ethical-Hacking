@@ -7,7 +7,7 @@ Continue evidence-driven permanent-test coverage only for demonstrated gaps.
 - `python3 -m mypy ethscan` → `Success: no issues found in 59 source files`
 
 ## This session
-- Scanned CLI validation/error-handling (`Path` inputs/`FILE_OPTIONS`, `--config`/`--init`/`--out`, `cidr/radix` `--cidr/--cidrs/--diff/--contains`, `hash --check`, `completion`, `vuln --severity`, `scan --ports`, JWT/target/result-reporting commands). No new demonstrated gap; no code change.
+- Repeated the evidence-driven scan of CLI validation/error-handling paths and manually probed offline/CLI-boundary edge cases (`scan --target ''|--ports ''|--timeout 0|--workers 0|--ports 99999|--out /etc`, `hash --iterations 0|-5`, `cidr --cidr ''`, `radix --cidrs ''`, `validate --ports ''|--cidr ''|--cidr not-a-cidr|--ports 99999`, `completion --shell bogus`, `jwt --token ''`, `config --init /unwritable`). No new demonstrated gap; no code change.
 
 ## Candidate work (only if demonstrated)
 - Add smallest permanent guard/test only with a reproducible case (option/callback reaches side effects before clean rejection).
