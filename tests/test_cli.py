@@ -10701,6 +10701,21 @@ def test_geo_api_url_option(monkeypatch) -> None:
     assert called_args["api_url"] == "https://custom.example.com/"
 
 
+def test_geo_unknown_api_url_rejected(monkeypatch) -> None:
+    called = {"ran": False}
+
+    def mock_run_geo(*args, **kwargs):
+        called["ran"] = True
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_geo", mock_run_geo)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["geo", "--target", "8.8.8.8", "--api-url", "not a url"])
+    assert result.exit_code == 2
+    assert "Invalid value for '--api-url'" in result.output
+    assert not called["ran"]
+
+
 def test_geo_timeout_option(monkeypatch) -> None:
     called_args = {}
 
@@ -24439,14 +24454,19 @@ API_URL_COMMANDS = (
 
 
 def test_an_unusable_api_url_is_not_a_traceback() -> None:
-    """An API base URL that urllib refuses is reported inside the output."""
+    """An API base URL that urllib refuses is reported without a traceback.
+
+    ``geo`` now rejects an unusable ``--api-url`` as a usage error (exit 2)
+    before any network work (see ``test_geo_unknown_api_url_rejected``);
+    ``cert`` and ``mac`` still surface the failure inside their own output.
+    In every case the error must not leak as a raw traceback.
+    """
     runner = CliRunner()
     for command, option in API_URL_COMMANDS:
         for value in ("not a url", "http://[::1"):
             result = runner.invoke(
                 cli, [command, "--target", "127.0.0.1", option, value]
             )
-            assert result.exit_code == 0, f"{command}: {result.output}"
             assert "Traceback (most recent call last)" not in result.output, (
                 f"{command} {option} {value!r}: leaked a traceback\n{result.output}"
             )

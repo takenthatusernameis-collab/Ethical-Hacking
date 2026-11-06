@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 from typing import Any, cast
+from urllib.parse import urlparse
 
 import click
 import ipaddress
@@ -735,6 +736,34 @@ def _validate_dns_resolver(value: str | None, option_name: str) -> str | None:
         raise click.UsageError(
             f"Invalid value for '{option_name}': {value!r} is not a valid IP address or https:// resolver URL."
         ) from exc
+
+
+def _validate_api_url(value: str | None, option_name: str) -> str | None:
+    """Validate a custom API base URL (--api-url).
+
+    The value is passed straight to ``urlopen`` and would only surface as a
+    failed network probe inside the command's own output. Reject an unusable
+    value as a usage error (exit code 2) before any network work, the same
+    way every other command reports an unusable option value.
+
+    Returns the stripped value, or ``None`` when the option was not supplied.
+    """
+    if value is None:
+        return None
+    value = value.strip()
+    if not value:
+        return None
+    try:
+        parsed = urlparse(value)
+    except ValueError as exc:
+        raise click.UsageError(
+            f"Invalid value for '{option_name}': {value!r} is not a valid URL."
+        ) from exc
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise click.UsageError(
+            f"Invalid value for '{option_name}': {value!r} is not a valid http/https URL."
+        )
+    return value
 
 
 def _check_config_path(path: str) -> None:
@@ -2788,6 +2817,7 @@ def geo(
     out_path: str | None,
 ) -> None:
     """Look up IP geolocation for TARGET using a public API with caching."""
+    api_url = _validate_api_url(api_url, "--api-url")
     results = run_geo(
         target,
         timeout=timeout,
