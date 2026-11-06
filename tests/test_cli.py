@@ -11003,6 +11003,38 @@ def test_recon_modules_option(tmp_path, monkeypatch) -> None:
     assert called_args["modules"] == ["subdomains", "dns"]
 
 
+def test_recon_modules_unknown_rejected(monkeypatch) -> None:
+    called = {"ran": False}
+
+    def mock_run_recon(*args, **kwargs):
+        called["ran"] = True
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_recon", mock_run_recon)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["recon", "--target", "example.com", "--modules", "bogus"])
+    assert result.exit_code == 2
+    assert "Unknown modules: bogus" in result.output
+    assert "Valid modules: dns, geo, subdomains, trace, whois" in result.output
+    assert not called["ran"]
+
+
+def test_recon_modules_mixed_unknown_rejected(monkeypatch) -> None:
+    called = {"ran": False}
+
+    def mock_run_recon(*args, **kwargs):
+        called["ran"] = True
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_recon", mock_run_recon)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["recon", "--target", "example.com", "--modules", "dns,bogus,whois"])
+    assert result.exit_code == 2
+    assert "Unknown modules: bogus" in result.output
+    assert "dns" not in result.output.split("Unknown modules")[0]
+    assert not called["ran"]
+
+
 def test_recon_subdomains_wordlist_option(tmp_path, monkeypatch) -> None:
     wordlist_file = tmp_path / "subdomains.txt"
     wordlist_file.write_text("www\nmail\napi\n")

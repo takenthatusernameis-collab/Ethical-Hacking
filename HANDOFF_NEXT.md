@@ -2,23 +2,25 @@
 Date: Fri Nov 06 2026
 
 ## What changed
-- No code changes. Baseline left untouched; verified green this session.
+- `ethscan/cli.py` (`recon`): validate `--modules` against allowed modules (`subdomains`, `dns`, `whois`, `geo`, `trace`). Unknown names now raise `click.UsageError` (exit 2) with `Unknown modules: ... Valid modules: ...` before any recon work runs. Whitespace-only/empty items after split remain ignored (existing behavior); no library changes.
+- `tests/test_cli.py`: added `test_recon_modules_unknown_rejected` and `test_recon_modules_mixed_unknown_rejected` asserting exit 2, error text, and `run_recon` not invoked.
+
+## Demonstrated gap (reproduced, now fixed)
+- Before: `python3 -m ethscan recon --target example.com --modules bogus` → exit 0, `modules_run=[]`. `--modules dns,bogus,whois` → exit 0, `modules_run=["dns","whois"]` and DNS executed (unknown silently ignored). Contrast: `dns --types BOGUS` rejects at CLI (exit 2).
 
 ## Verified (evidence)
-- `python3 -m pytest -q --tb=no` → `5878 passed, 50 skipped, 0 failed`.
+- `python3 -m pytest tests/test_recon.py tests/test_recon_hostile_sweep.py -q --tb=no` → `38 passed`.
+- `python3 -m pytest tests/test_cli.py -q -k recon --tb=no` → `23 passed, 1002 deselected`.
+- `python3 -m pytest -q --tb=no` → `5880 passed, 50 skipped, 0 failed`.
 - `python3 -m ruff check .` → `All checks passed!`
 - `python3 -m mypy ethscan` → `Success: no issues found in 59 source files`.
 
-## Findings (evidence)
-- The evidence-driven CLI edge-case scan found no new demonstrated gap (option/callback reaching side effects before rejection). Prior sessions' representative probes all handled cleanly: `scan --target ''` → exit 0 (intentional in-output reporting); `scan --ports ''`/`--timeout 0`/`--workers 0`/`--ports 99999`/`--out /etc` → exit 2; `hash --iterations 0|-5` → exit 2; `cidr --cidr ''` → exit 2; `radix --cidrs ''` → exit 2; `validate --ports ''`/`--cidr ''`/`--cidr not-a-cidr` → exit 0 structured output (intentional contract); `validate --ports 99999` → exit 0 structured; `completion --shell bogus` → exit 2; `jwt --token ''` → exit 0 ("No token provided."); `config --init /unwritable` → exit 2.
-- `click.Path(exists,readable,file)` inputs covered by existing `FILE_OPTIONS`/tests; `--config`/`--init`/`--out` reject unusable paths cleanly. CIDR parsing rejects invalid/empty `--cidr`/`--cidrs`/`--diff`. `hash --check`/`validate` report bad inputs in structured output per contract; `jwt` invalid/empty token handled without traceback.
-
 ## Unresolved
-- None demonstrated.
+- None demonstrated by this change.
 
 ## Approaches already tried / not to repeat blindly
-- Broad re-sweeps of permanently covered areas (Choice, IntRange/FloatRange, ports, CIDR/host/offline-input/file-input `FILE_OPTIONS`, JSON/XML/UTF-8 content, `--out`, `--config`) and treating intentional in-output reporting as usage-error gaps — no evidence of new issues.
-- Manual edge-case probes this session and prior sessions — all handled cleanly; no gap reproduced. The CLI sweep approach is exhausted; do not repeat unchanged.
+- Broad CLI edge-case sweeps (ports/timeout/workers/iterations/CIDR/target/host/offline/file/JSON/XML/`--out`/`--config`, intentional `--contains`/`hash --check`/`validate` reporting) — exhausted across sessions; do not repeat unchanged.
+- Treating intentional in-output reporting / documented contracts as usage-error gaps — not actionable without a demonstrated mismatch.
 
 ## Next task
-- Pursue only a demonstrated gap: reproduce a CLI option/callback reaching side effects before rejection, then add the smallest permanent guard/test. Use a materially different area if scanning again (the CLI edge sweep is exhausted). Keep baseline green; do not commit unless asked.
+- Pursue only a *demonstrated* gap: reproduce a CLI option/callback reaching side effects before clean rejection or a silent-accept validation gap in an area **different** from the exhausted CLI edge sweep and fixed `recon --modules`. Materially different scan surface only; stop at first reproduced gap; add smallest permanent guard/test. Keep baseline green; do not commit unless asked.

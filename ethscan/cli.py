@@ -2868,6 +2868,14 @@ def recon(
         if modules
         else None
     )
+    if modules_list is not None:
+        valid_modules = {"subdomains", "dns", "whois", "geo", "trace"}
+        unknown = [m for m in modules_list if m not in valid_modules]
+        if unknown:
+            raise click.UsageError(
+                f"Unknown modules: {', '.join(unknown)}. "
+                f"Valid modules: {', '.join(sorted(valid_modules))}"
+            )
     subdomains_wordlist = (
         load_subdomain_wordlist(subdomains_wordlist_path)
         if subdomains_wordlist_path
