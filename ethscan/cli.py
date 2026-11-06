@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any, cast
 
 import click
@@ -405,6 +406,8 @@ class _TargetGroup(click.Group):
 @click.pass_context
 def cli(ctx, config_path: str | None) -> None:
     """ethscan: ethical hacking toolkit."""
+    if config_path:
+        _check_config_path(config_path)
     config = load_config(config_path)
     ctx.obj = {"config": config, "config_path": config_path}
     known_commands = sorted(cli.commands.keys())
@@ -672,6 +675,39 @@ def _write_output(out_path: str, output: str, message: str | None = None) -> Non
     except (OSError, ValueError) as exc:
         raise click.BadParameter(str(exc), param_hint="'--out'") from exc
     click.echo(message or f"Report written to {out_path}")
+
+
+def _check_config_path(path: str) -> None:
+    """Refuse an explicit ``--config`` path that cannot name a config file.
+
+    A path the user hands to ``--config`` must name a file. A path that does
+    not exist, that is a directory, or that is unreadable is an unusable value
+    for the option: it is reported as a click usage error (exit code 2) with
+    the ``--config`` hint, instead of being silently ignored while the loader
+    falls back to the standard search paths.
+
+    A path that exists but cannot be parsed is reported later, by
+    ``load_config``, as a ``_parse_error`` warning; this check is only about
+    the path the user named.
+
+    Args:
+        path: The path supplied on the ``--config`` command-line option.
+
+    Raises:
+        click.BadParameter: If the path does not name a usable file.
+    """
+    if not os.path.exists(path):
+        raise click.BadParameter(
+            f"the config file does not exist: {path}", param_hint="'--config'"
+        )
+    if not os.path.isfile(path):
+        raise click.BadParameter(
+            f"the config path is not a file: {path}", param_hint="'--config'"
+        )
+    if not os.access(path, os.R_OK):
+        raise click.BadParameter(
+            f"the config file is not readable: {path}", param_hint="'--config'"
+        )
 
 
 @cli.command()
@@ -3641,7 +3677,8 @@ def config(
         parent_config = ctx.obj.get("config_path")
         if parent_config:
             config_path = parent_config
-
+    if config_path:
+        _check_config_path(config_path)
     loaded = load_config(config_path)
     path = loaded.get("_path")
     parse_error = loaded.get("_parse_error")
