@@ -1914,6 +1914,26 @@ def test_web_unknown_check() -> None:
     assert "Valid checks" in result.output
 
 
+def test_web_empty_checks_rejected(monkeypatch) -> None:
+    """--checks containing only separators reaches a clean rejection before side effects."""
+    called = False
+
+    def _boom(*_a, **_k):
+        nonlocal called
+        called = True
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_web_checks", _boom)
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["web", "--target", "https://example.com", "--checks", ",,", "--timeout", "1.0"],
+    )
+    assert result.exit_code == 2
+    assert "At least one check is required" in result.output
+    assert not called
+
+
 def test_web_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["web", "--help"])
@@ -8125,6 +8145,35 @@ def test_urlcheck_unknown_check() -> None:
     assert result.exit_code == 2
     assert "Unknown checks" in result.output
     assert "Valid checks" in result.output
+
+
+def test_urlcheck_empty_checks_rejected(monkeypatch) -> None:
+    """--checks containing only separators reaches a clean rejection before side effects (no fuzz)."""
+    called = False
+
+    def _boom(*_a, **_k):
+        nonlocal called
+        called = True
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_urlcheck", _boom)
+    monkeypatch.setattr("ethscan.urlcheck.run_fuzz", _boom)
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "urlcheck",
+            "--target",
+            "https://example.com",
+            "--checks",
+            ",,",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 2
+    assert "At least one check is required" in result.output
+    assert not called
 
 
 def test_urlcheck_wordlist_option(tmp_path, monkeypatch) -> None:

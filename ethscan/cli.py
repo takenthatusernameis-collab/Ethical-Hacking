@@ -1188,6 +1188,10 @@ def web(target: str, checks: str, timeout: float, fmt: str, output_fmt: str | No
             f"Unknown checks: {', '.join(unknown)}. "
             f"Valid checks: {', '.join(sorted(valid))}"
         )
+    if not check_list:
+        raise click.UsageError(
+            "At least one check is required (headers, info_disclosure, ssl)."
+        )
 
     results = run_web_checks(target, check_list, timeout=timeout)
 
@@ -2274,6 +2278,10 @@ def urlcheck(
         raise click.UsageError(
             f"Unknown checks: {', '.join(unknown)}. "
             f"Valid checks: {', '.join(sorted(valid))}"
+        )
+    if not check_list:
+        raise click.UsageError(
+            "At least one check is required (headers, info_disclosure, ssl)."
         )
 
     wordlist = load_fuzz_wordlist(wordlist_path) if wordlist_path else None
