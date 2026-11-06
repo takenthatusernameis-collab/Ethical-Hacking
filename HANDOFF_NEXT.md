@@ -2,7 +2,7 @@
 Date: Fri Nov 06 2026
 
 ## What changed
-- No code change. Inspected command bodies for validation after partial side effects (output writes, network probes). `_write_output` and `config --init` both validate/write inside try/except and report usage errors; no new demonstrated gap.
+- No code change. Re-verified baseline; no new demonstrated gap found in command bodies (validation before side effects already covered by existing sweeps).
 
 ## Verified
 - `python3 -m pytest -q --tb=no` → `5878 passed, 50 skipped, 0 failed`.
