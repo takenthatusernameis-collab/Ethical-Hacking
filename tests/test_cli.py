@@ -17244,6 +17244,83 @@ def test_s3_timeout_workers_pass_through(monkeypatch) -> None:
     assert captured["region"] == "us-west-2"
 
 
+def test_s3_unknown_region_rejected(monkeypatch) -> None:
+    """An unknown ``--region`` is rejected before any network work.
+
+    The library silently accepts any region string and builds an endpoint
+    hostname from it (``s3.<region>.amazonaws.com``), so a bogus region
+    reaches the network and only fails with a DNS error inside the report.
+    The CLI validates the region against the known set (or ``all``) and
+    raises a usage error (exit code 2) before calling ``run_s3``.
+    """
+    called = {"called": False}
+
+    def mock_run_s3(*args, **kwargs):
+        called["called"] = True
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_s3", mock_run_s3)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["s3", "--target", "example.com", "--region", "bogus"])
+    assert result.exit_code == 2
+    assert "Invalid value for '--region'" in result.output
+    assert "bogus" in result.output
+    assert called["called"] is False
+
+
+def test_s3_unknown_region_rejected_mixedcase(monkeypatch) -> None:
+    """A region that is not in the known set is rejected regardless of case.
+
+    Validation is case-insensitive against the known region list, so a value
+    that differs only by case from a real region (``US-EAST-1``) is accepted,
+    while a genuinely unknown mixed-case token (``BogusRegion``) is not.
+    """
+    called = {"called": False}
+
+    def mock_run_s3(*args, **kwargs):
+        called["called"] = True
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_s3", mock_run_s3)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["s3", "--target", "example.com", "--region", "BogusRegion"])
+    assert result.exit_code == 2
+    assert "BogusRegion" in result.output
+    assert called["called"] is False
+
+
+def test_s3_known_region_case_insensitive(monkeypatch) -> None:
+    """A known region accepted in any case reaches the library."""
+    captured = {}
+
+    def mock_run_s3(target, wordlist=None, region=None, timeout=5.0, max_workers=20):
+        captured["region"] = region
+        return {
+            "target": target,
+            "domain": "example.com",
+            "region": region or "us-east-1",
+            "timeout": timeout,
+            "workers": max_workers,
+            "wordlist_used": False,
+            "candidates_tested": 1,
+            "regions_checked": [region or "us-east-1"],
+            "results": [],
+            "public_buckets": [],
+            "private_buckets": [],
+            "existing_buckets": [],
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_s3", mock_run_s3)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["s3", "--target", "example.com", "--region", "US-EAST-1"])
+    assert result.exit_code == 0
+    assert captured["region"] == "us-east-1"
+
+
 def test_s3_region_all_option(monkeypatch) -> None:
     captured = {}
 

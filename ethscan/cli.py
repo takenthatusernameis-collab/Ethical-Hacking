@@ -238,6 +238,7 @@ from ethscan.resolve import (
     run_resolve,
 )
 from ethscan.s3 import (
+    S3_REGIONS,
     format_s3_report_csv,
     format_s3_report_json,
     format_s3_report_markdown,
@@ -682,6 +683,37 @@ def _write_output(out_path: str, output: str, message: str | None = None) -> Non
     except (OSError, ValueError) as exc:
         raise click.BadParameter(str(exc), param_hint="'--out'") from exc
     click.echo(message or f"Report written to {out_path}")
+
+
+def _validate_s3_region(value: str | None) -> str | None:
+    """Validate an ``--region`` value for the ``s3`` command.
+
+    The value is either ``all`` (check every known region) or one of the
+    regions the tool knows how to build an endpoint for. A region outside
+    that set is unusable: it produces an endpoint hostname that cannot
+    resolve (``s3.<region>.amazonaws.com``), so probing it only yields DNS
+    failures. Unknown regions are reported as a usage error (exit code 2)
+    before any network work, the same way every other command reports an
+    unusable option value.
+
+    Returns the stripped, lowercased value, or ``None`` when the option was
+    not supplied.
+    """
+    if value is None:
+        return None
+    original = value
+    value = value.strip().lower()
+    if not value:
+        return None
+    if value == "all":
+        return value
+    valid_regions = {r.lower() for r in S3_REGIONS}
+    if value not in valid_regions:
+        raise click.UsageError(
+            f"Invalid value for '--region': {original!r} is not a known AWS region. "
+            f"Valid regions: {', '.join(sorted(S3_REGIONS))}, or 'all'."
+        )
+    return value
 
 
 def _validate_dns_resolver(value: str | None, option_name: str) -> str | None:
@@ -4561,7 +4593,7 @@ def ssh(target: str, port: int | None, timeout: float, fmt: str, output_fmt: str
 def s3(
     target: str,
     wordlist_path: str | None,
-    region: str,
+    region: str | None,
     timeout: float,
     workers: int,
     fmt: str,
@@ -4569,6 +4601,7 @@ def s3(
     out_path: str | None,
 ) -> None:
     """Enumerate AWS S3 buckets for TARGET and detect publicly accessible ones."""
+    region = _validate_s3_region(region)
     wordlist = load_subdomain_wordlist(wordlist_path) if wordlist_path else None
 
     results = run_s3(
