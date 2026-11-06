@@ -11118,6 +11118,22 @@ def test_recon_dns_types_option(monkeypatch) -> None:
     assert called_args["dns_record_types"] == ["A", "MX", "TXT"]
 
 
+def test_recon_unknown_dns_types_rejected(monkeypatch) -> None:
+    called = {"ran": False}
+
+    def mock_run_recon(*args, **kwargs):
+        called["ran"] = True
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_recon", mock_run_recon)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["recon", "--target", "example.com", "--dns-types", "bogus"])
+    assert result.exit_code == 2
+    assert "Unknown record types: BOGUS" in result.output
+    assert "Valid types: A, AAAA, CNAME, MX, NS, SOA, TXT" in result.output
+    assert not called["ran"]
+
+
 def test_recon_dns_server_option(monkeypatch) -> None:
     called_args = {}
 

@@ -2949,6 +2949,13 @@ def recon(
         else None
     )
     dns_types_list = [t.strip().upper() for t in dns_record_types.split(",") if t.strip()]
+    valid_dns_types = {"A", "AAAA", "MX", "NS", "TXT", "CNAME", "SOA"}
+    unknown_dns_types = [t for t in dns_types_list if t not in valid_dns_types]
+    if unknown_dns_types:
+        raise click.UsageError(
+            f"Unknown record types: {', '.join(unknown_dns_types)}. "
+            f"Valid types: {', '.join(sorted(valid_dns_types))}"
+        )
 
     results = run_recon(
         target,
