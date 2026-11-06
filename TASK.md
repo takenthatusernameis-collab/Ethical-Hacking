@@ -6,17 +6,12 @@ Date: Fri Nov 06 2026
 - Tests: `5878 passed, 50 skipped, 0 failed`.
 - `python3 -m ruff check .`: all checks passed. `python3 -m mypy ethscan`: Success, 59 source files.
 
-## This session (evidence-driven scan only, no code change)
-- Repeated the evidence-driven scan for demonstrated gaps where a CLI option/callback reaches side effects before clean rejection.
-- Manually probed offline/CLI-boundary edge cases. All either reject cleanly (exit 2, `BadParameter`/`UsageError`) or return intentional structured exit-0 output per command contract — no traceback/side-effect-before-rejection gap demonstrated:
-  - `scan --target ''` → exit 0 (in-output reporting, intentional); `scan --ports ''`/`--timeout 0`/`--workers 0`/`--ports 99999`/`--out /etc` → exit 2.
-  - `hash --iterations 0|-5` → exit 2; `cidr --cidr ''` → exit 2; `radix --cidrs ''` → exit 2.
-  - `validate --ports ''`/`--cidr ''`/`--cidr not-a-cidr` → exit 0 structured output (intentional contract); `validate --ports 99999` → exit 0 structured.
-  - `completion --shell bogus` → exit 2; `jwt --token ''` → exit 0 ("No token provided."); `config --init /unwritable` → exit 2.
-- No new demonstrated gap found; no code change.
+## This session
+- Verified the baseline is green (pytest, ruff, mypy all pass). No code change.
+- The evidence-driven CLI edge-case scan for a demonstrated gap (option/callback reaching side effects before clean rejection) has been run repeatedly across prior sessions; every probe either rejects cleanly (exit 2) or returns intentional structured exit-0 output per command contract. No new demonstrated gap found; the sweep approach is exhausted and is not repeated unchanged this session (rule 2).
+- No code change.
 
 ## Verified (evidence)
-- Manual probes (representative) above.
 - `python3 -m pytest -q --tb=no` → `5878 passed, 50 skipped, 0 failed`.
 - `python3 -m ruff check .` → `All checks passed!`
 - `python3 -m mypy ethscan` → `Success: no issues found in 59 source files`.
@@ -25,4 +20,4 @@ Date: Fri Nov 06 2026
 - None.
 
 ## Next task
-- Continue evidence-driven scan only for a *demonstrated* gap (an option/callback that reaches side effects before rejection with a reproducible case). Do not duplicate existing IntRange/FloatRange/Choice/ports/CIDR/host/offline-input/file-input (`FILE_OPTIONS`)/JSON/XML content/`--out`/`--config` sweeps or intentional `--contains`/`hash --check`/`validate` in-output reporting semantics. Add the smallest permanent guard/test only with evidence. Update `TASK.md`/`HANDOFF_NEXT.md`/`NEXT_TASK.md`; do not commit unless asked.
+- Pursue only a *demonstrated* gap: reproduce a CLI option/callback reaching side effects before rejection, then add the smallest permanent guard/test. Do not repeat the CLI edge-case sweep unchanged (exhausted); use a materially different area if scanning again. Keep baseline green; do not commit unless asked. Update `TASK.md`/`HANDOFF_NEXT.md`/`NEXT_TASK.md`.

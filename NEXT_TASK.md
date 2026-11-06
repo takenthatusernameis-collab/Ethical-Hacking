@@ -1,5 +1,5 @@
 # Next Task
-Continue evidence-driven permanent-test coverage only for demonstrated gaps.
+Pursue only a *demonstrated* gap: reproduce a CLI option/callback reaching side effects before clean rejection, then add the smallest permanent guard/test.
 
 ## Baseline (verified this session)
 - `python3 -m pytest -q --tb=no` → `5878 passed, 50 skipped, 0 failed`
@@ -7,11 +7,11 @@ Continue evidence-driven permanent-test coverage only for demonstrated gaps.
 - `python3 -m mypy ethscan` → `Success: no issues found in 59 source files`
 
 ## This session
-- Repeated the evidence-driven scan of CLI validation/error-handling paths and manually probed offline/CLI-boundary edge cases (`scan --target ''|--ports ''|--timeout 0|--workers 0|--ports 99999|--out /etc`, `hash --iterations 0|-5`, `cidr --cidr ''`, `radix --cidrs ''`, `validate --ports ''|--cidr ''|--cidr not-a-cidr|--ports 99999`, `completion --shell bogus`, `jwt --token ''`, `config --init /unwritable`). No new demonstrated gap; no code change.
+- Baseline verified green; no code change. The evidence-driven CLI edge-case sweep (ports/timeout/workers/iterations/CIDR/target/host/offline/file/JSON/XML/`--out`/`--config`, intentional `--contains`/`hash --check`/`validate` reporting) found no new demonstrated gap; not repeated unchanged.
 
 ## Candidate work (only if demonstrated)
-- Add smallest permanent guard/test only with a reproducible case (option/callback reaches side effects before clean rejection).
-- Do not duplicate existing sweeps or intentional in-output reporting semantics (`--contains` invalid IP → `in_network:false`; `hash --check`/`validate` structured error fields).
+- Add smallest permanent guard/test only with a reproducible case.
+- Do not duplicate existing sweeps or intentional in-output reporting semantics.
 
 ## Constraints
 - Preserve baseline; smallest reversible change.
