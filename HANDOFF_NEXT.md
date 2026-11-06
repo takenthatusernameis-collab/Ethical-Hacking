@@ -2,7 +2,7 @@
 Date: Fri Nov 06 2026
 
 ## What changed
-- No code change. Re-verified baseline; no new demonstrated gap found in command bodies (validation before side effects already covered by existing sweeps).
+- No code change. Re-verified baseline; scanned non-Choice/non-Range options (`click.Path` readable/writable, unreadable files, directories as outputs) and found no new demonstrated gap; existing sweeps cover rejection cleanly.
 
 ## Verified
 - `python3 -m pytest -q --tb=no` → `5878 passed, 50 skipped, 0 failed`.
