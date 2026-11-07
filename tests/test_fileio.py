@@ -156,3 +156,95 @@ def test_write_json_writes_a_path_object(tmp_path) -> None:
     path = tmp_path / "file.json"
     write_json(tmp_path / "file.json", {"a": 1})
     assert load_json(path) == {"a": 1}
+
+
+def test_write_text_raises_oserror_for_unwritable_parent(tmp_path) -> None:
+    """An unwritable parent directory surfaces as OSError."""
+    parent = tmp_path / "readonly"
+    parent.mkdir()
+    parent.chmod(0o555)
+    try:
+        with pytest.raises(OSError):
+            write_text(parent / "file.txt", "hello\n")
+    finally:
+        parent.chmod(0o755)
+
+
+def test_write_text_raises_oserror_when_target_is_directory(tmp_path) -> None:
+    path = tmp_path / "adir"
+    path.mkdir()
+    with pytest.raises(OSError):
+        write_text(path, "hello\n")
+
+
+def test_write_text_raises_oserror_when_parent_is_a_file(tmp_path) -> None:
+    """A parent path that is a file surfaces as OSError."""
+    bogus_parent = tmp_path / "notadir"
+    bogus_parent.write_text("i am a file")
+    with pytest.raises(OSError):
+        write_text(bogus_parent / "file.txt", "hello\n")
+
+
+def test_write_json_raises_oserror_for_unwritable_parent(tmp_path) -> None:
+    parent = tmp_path / "readonly"
+    parent.mkdir()
+    parent.chmod(0o555)
+    try:
+        with pytest.raises(OSError):
+            write_json(parent / "file.json", {"a": 1})
+    finally:
+        parent.chmod(0o755)
+
+
+def test_write_json_raises_oserror_when_target_is_directory(tmp_path) -> None:
+    path = tmp_path / "adir"
+    path.mkdir()
+    with pytest.raises(OSError):
+        write_json(path, {"a": 1})
+
+
+def test_write_json_raises_oserror_when_parent_is_a_file(tmp_path) -> None:
+    bogus_parent = tmp_path / "notadir"
+    bogus_parent.write_text("i am a file")
+    with pytest.raises(OSError):
+        write_json(bogus_parent / "file.json", {"a": 1})
+
+
+def test_write_text_atomicity_on_failure(tmp_path, monkeypatch) -> None:
+    """A failed mid-write leaves the destination intact and removes the temp file."""
+    path = tmp_path / "file.txt"
+    path.write_text("original\n")
+
+    import ethscan.fileio as fileio
+
+    def boom(handle):
+        handle.write("partial")
+        raise RuntimeError("boom")
+
+    # Patch the inner write via _atomic_write by calling it directly with a
+    # failing writer, mirroring write_text's usage.
+    with pytest.raises(RuntimeError):
+        fileio._atomic_write(path, boom)
+
+    assert path.read_text() == "original\n"
+    # No leftover temp files in the directory.
+    leftovers = [p for p in tmp_path.iterdir() if p.name.startswith("file.txt.")]
+    assert leftovers == []
+
+
+def test_write_json_atomicity_on_failure(tmp_path) -> None:
+    path = tmp_path / "file.json"
+    path.write_text('{"old": true}\n')
+
+    import ethscan.fileio as fileio
+
+    def boom(handle):
+        handle.write("partial")
+        raise RuntimeError("boom")
+
+    with pytest.raises(RuntimeError):
+        fileio._atomic_write(path, boom)
+
+    assert path.read_text() == '{"old": true}\n'
+    leftovers = [p for p in tmp_path.iterdir() if p.name.startswith("file.json.")]
+    assert leftovers == []

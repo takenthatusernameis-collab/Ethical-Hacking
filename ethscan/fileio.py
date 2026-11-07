@@ -194,7 +194,7 @@ def write_text(path: str | Path, content: str, *, encoding: str = "utf-8") -> No
     """
     p = Path(path)
 
-    def _write(handle: typing.IO[str]) -> None:
+    def _write(handle: IO[str]) -> None:
         handle.write(content)
 
     _atomic_write(p, _write, encoding=encoding)
@@ -215,7 +215,7 @@ def write_json(path: str | Path, data: Any, *, indent: int = 2) -> None:
     """
     p = Path(path)
 
-    def _write(handle: typing.IO[str]) -> None:
+    def _write(handle: IO[str]) -> None:
         json.dump(data, handle, indent=indent)
         handle.write("\n")
 
