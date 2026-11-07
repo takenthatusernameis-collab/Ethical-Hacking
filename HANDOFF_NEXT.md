@@ -2,28 +2,24 @@
 Date: Sat Nov 07 2026
 
 ## What changed
-No code change. Completed the file-before-target-validation (side-effect-before-validation) audit assigned to this session across every command in ethscan/cli.py.
+- `ethscan/cli.py` (`completion` command): default output is now the raw completion script (stdout/`--out`), so `ethscan completion bash > ~/.ethscan_complete.bash` produces a sourceable script. A structured report (JSON/Markdown/CSV) is emitted only when explicitly requested via `--output-format` or the deprecated `--format` alias. Explicit-format detection uses Click `ParameterSource` (consistent with existing timeout/workers handling). Help text updated.
+- `tests/test_cli.py`, `tests/test_completion.py`: updated completion expectations to the corrected contract (default raw; structured modes preserved; `--out` raw vs explicit report; custom prog-name). Added coverage for explicit report modes and `--out` behavior. Fixed `_run_completion_cli` annotation to return `Result`.
+- `README.md`: completion feature bullet now documents raw default + redirect example and optional structured output.
 
 ## What was verified
-- Every command that pairs `--target` with a user-supplied file validates the target *before* reading the file:
-  - `stale`: `_validate_enum_target(target)` (cli.py:4589) before `load_domains_from_file(target_file)` (cli.py:4592)
-  - `fuzz` (cli.py:1318/1319), `subdomains` (1407/1410), `subtake` (1495/1498), `dnsbrute` (1881/1888), `s3` (4735/4736), `recon` (3057/3059), `urlcheck` (2351/2352)
-  - `brute` (2445/2447), `report` (1166/1168), `osdetect` (2530/2537), `vuln` (2233/2236), `cve` (3288/3290)
-- No-target candidates confirmed to have no target to validate before their file read: `nmap` (`--input-file` only), `radix` (`--cidr-file` only), `audit`/`hash` (`--file`, no target), `jwt` (stdin, no target).
-- Concrete reproductions (exit code 2, target error reported before any file I/O):
-  - `ethscan stale --file /etc/hostname --target 'http://]bad['` → `Error: Invalid value for '--target': Invalid IPv6 URL`, EXIT=2
-  - `ethscan brute --target 'http://]bad[' --user-file /etc/hostname --pass-file /etc/hostname` → same target error, EXIT=2
-  - `ethscan nmap --input-file /nonexistent.xml` → file-path error, EXIT=2 (no target involved)
-  - `ethscan radix --cidr-file /nonexistent.txt` → file-path error, EXIT=2 (no target involved)
-- `python3 -m pytest tests/test_stale.py tests/test_cli.py -q -k stale` → 66 passed.
-- `python3 -m ruff check ethscan/cli.py` → clean (no code changed).
-- `python3 -m mypy ethscan/cli.py` → Success (no code changed).
+- Repro (evidence): before fix, default `completion bash` output started with `{` (JSON report) and `source` of redirected output failed (`shell::/prog_name::/script:: command not found`). After fix: raw script output, `bash -n` ok, `source` rc 0; `ethscan completion bash > file` yields a valid script; `--prog-name` respected in raw output.
+- Structured modes preserved: `--output-format json|markdown|csv` and `--format` (alias) return reports; `completion` (no args) + `--output-format json` returns a structured report.
+- `python3 -m pytest tests/test_completion.py tests/test_cli.py -q` → **1103 passed** (17 completion-related CLI cases included).
+- `python3 -m pytest tests/test_completion.py -q` → **46 passed**.
+- `python3 -m ruff check ethscan/cli.py ethscan/completion.py tests/test_completion.py tests/test_cli.py` → clean.
+- `python3 -m mypy ethscan/cli.py ethscan/completion.py` → Success.
+- Full suite (`pytest -q`, 5910 passed/50 skipped baseline) **not rerun** this session.
 
 ## Unresolved
-None in this audit thread. No reproducible file-before-target-validation gap remains.
+- Full regression run not executed after this change (targeted + static checks passed). Next agent should run `python -m pytest -q` to confirm.
 
 ## Failed approaches / evidence
-None. Reproductions confirmed existing ordering is correct everywhere; no fix was required.
+- Initial behavior was a real, reproducible gap (JSON wrapper emitted by default; not sourceable). No failed fix attempts; change validated by targeted tests and end-to-end `bash -n`/`source`.
 
 ## Next task
-This audit thread is complete: no gap found, no fix required, do not re-sweep this pattern. The next agent should select a fresh bounded, high-value task that can be implemented and verified in one session (e.g., a different correctness/robustness audit), reproduce any claimed gap before changing code, verify with targeted pytest + ruff + mypy, and update TASK.md/NEXT_TASK.md/HANDOFF_NEXT.md. Do not commit unless asked.
+Run `python -m pytest -q`. If any test fails, reproduce it, apply the smallest evidence-based fix, and verify with targeted tests plus `ruff`/`mypy` on touched files, then rerun the relevant/full scope as appropriate. If green, choose one new bounded, high-value correctness/robustness task (reproduce claimed gaps before changing code; do not re-audit target-before-file validation). Do not commit unless asked. Update TASK.md/NEXT_TASK.md/HANDOFF_NEXT.md.

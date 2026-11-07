@@ -13993,9 +13993,9 @@ def test_completion_lists_in_top_level_help() -> None:
 
 
 def test_completion_bash_json() -> None:
-    """Test completion command produces bash JSON."""
+    """Test completion command produces a structured bash report when requested."""
     runner = CliRunner()
-    result = runner.invoke(cli, ["completion", "--shell", "bash"])
+    result = runner.invoke(cli, ["completion", "--shell", "bash", "--output-format", "json"])
     assert result.exit_code == 0
     parsed = json.loads(result.output)
     assert parsed["shell"] == "bash"
@@ -14004,9 +14004,9 @@ def test_completion_bash_json() -> None:
 
 
 def test_completion_zsh_json() -> None:
-    """Test completion command produces zsh JSON."""
+    """Test completion command produces a structured zsh report when requested."""
     runner = CliRunner()
-    result = runner.invoke(cli, ["completion", "--shell", "zsh"])
+    result = runner.invoke(cli, ["completion", "--shell", "zsh", "--output-format", "json"])
     assert result.exit_code == 0
     parsed = json.loads(result.output)
     assert parsed["shell"] == "zsh"
@@ -14014,9 +14014,9 @@ def test_completion_zsh_json() -> None:
 
 
 def test_completion_fish_json() -> None:
-    """Test completion command produces fish JSON."""
+    """Test completion command produces a structured fish report when requested."""
     runner = CliRunner()
-    result = runner.invoke(cli, ["completion", "--shell", "fish"])
+    result = runner.invoke(cli, ["completion", "--shell", "fish", "--output-format", "json"])
     assert result.exit_code == 0
     parsed = json.loads(result.output)
     assert parsed["shell"] == "fish"
@@ -14024,12 +14024,12 @@ def test_completion_fish_json() -> None:
 
 
 def test_completion_default_shell_is_bash() -> None:
-    """Test completion defaults to bash shell."""
+    """Test completion defaults to the raw bash completion script."""
     runner = CliRunner()
     result = runner.invoke(cli, ["completion"])
     assert result.exit_code == 0
-    parsed = json.loads(result.output)
-    assert parsed["shell"] == "bash"
+    assert "_ethscan_completion()" in result.output
+    assert not result.output.lstrip().startswith("{")
 
 
 def test_completion_markdown() -> None:
@@ -14051,6 +14051,25 @@ def test_completion_custom_prog_name() -> None:
         cli, ["completion", "--shell", "bash", "--prog-name", "mytool"]
     )
     assert result.exit_code == 0
+    assert "_mytool_completion" in result.output
+
+
+def test_completion_custom_prog_name_json() -> None:
+    """Test structured completion report preserves custom prog name."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "completion",
+            "--shell",
+            "bash",
+            "--prog-name",
+            "mytool",
+            "--output-format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
     parsed = json.loads(result.output)
     assert parsed["prog_name"] == "mytool"
     assert "_mytool_completion" in parsed["script"]
@@ -14066,7 +14085,7 @@ def test_completion_invalid_shell_errors() -> None:
 
 
 def test_completion_out_json(tmp_path) -> None:
-    """Test completion command with --out (json)."""
+    """Test completion command with --out writes the raw script by default."""
     out_file = tmp_path / "completion.bash"
     runner = CliRunner()
     result = runner.invoke(
@@ -14075,6 +14094,28 @@ def test_completion_out_json(tmp_path) -> None:
     assert result.exit_code == 0
     assert "Completion script written" in result.output
     assert out_file.exists()
+    content = out_file.read_text()
+    assert "_ethscan_completion()" in content
+    assert not content.lstrip().startswith("{")
+
+
+def test_completion_out_output_format_json(tmp_path) -> None:
+    """Test completion command with --out and an explicit structured format."""
+    out_file = tmp_path / "completion.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "completion",
+            "--shell",
+            "bash",
+            "--output-format",
+            "json",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0
     parsed = json.loads(out_file.read_text())
     assert parsed["shell"] == "bash"
     assert "_ethscan_completion" in parsed["script"]

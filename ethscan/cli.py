@@ -4062,14 +4062,14 @@ def jwt(token: str | None, fmt: str, output_fmt: str | None, out_path: str | Non
     "output_fmt",
     type=click.Choice(["json", "markdown", "csv"]),
     default=None,
-    help="Output format (json, markdown, or csv).",
+    help="Emit a structured report (json, markdown, or csv) instead of the raw completion script.",
 )
 @click.option(
     "--format",
     "fmt",
     type=click.Choice(["json", "markdown", "csv"]),
     default="json",
-    show_default=True,
+    show_default=False,
     help="Output format (json, markdown, or csv) [deprecated; use --output-format].",
 )
 @click.option(
@@ -4078,7 +4078,9 @@ def jwt(token: str | None, fmt: str, output_fmt: str | None, out_path: str | Non
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
+@click.pass_context
 def completion(
+    ctx: click.Context,
     shell: str,
     shell_option: str | None,
     prog_name: str,
@@ -4091,6 +4093,10 @@ def completion(
     Supported shells: bash, zsh, fish. Save the output and source it
     in your shell to enable tab completion of commands, options, and
     option values.
+
+    By default, writes the raw completion script to stdout (suitable for
+    redirecting to a file and sourcing). Use --output-format to emit a
+    structured report instead.
     """
     # The --shell option overrides the positional SHELL argument when both are given.
     effective_shell = shell_option if shell_option is not None else shell
@@ -4103,15 +4109,31 @@ def completion(
         # unusable option value instead of a bare "Error:" line and exit 1.
         raise click.UsageError(str(exc)) from exc
 
-    # --output-format takes precedence over the deprecated --format alias
-    chosen_format = output_fmt if output_fmt is not None else fmt
+    # By default, emit the raw completion script so it can be sourced directly
+    # (e.g. `ethscan completion bash > ~/.ethscan_complete.bash`). A structured
+    # report is produced only when a format is explicitly requested via
+    # --output-format or the deprecated --format alias.
+    fmt_source = ctx.get_parameter_source("fmt")
+    fmt_explicit = fmt_source in (
+        ParameterSource.COMMANDLINE,
+        ParameterSource.ENVIRONMENT,
+        ParameterSource.DEFAULT_MAP,
+    )
+    if output_fmt is not None:
+        chosen_format: str | None = output_fmt
+    elif fmt_explicit:
+        chosen_format = fmt
+    else:
+        chosen_format = None
 
     if chosen_format == "json":
         output = format_completion_report_json(results)
     elif chosen_format == "csv":
         output = format_completion_report_csv(results)
-    else:
+    elif chosen_format == "markdown":
         output = format_completion_report_markdown(results)
+    else:
+        output = results["script"]
 
     if out_path:
         _write_output(out_path, output, "Completion script written")

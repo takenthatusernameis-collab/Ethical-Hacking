@@ -277,47 +277,97 @@ def test_format_completion_report_csv_escaping() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _run_completion_cli(args: list) -> CliRunner:
+def _run_completion_cli(args: list):
     return CliRunner().invoke(cli, ["completion"] + args)
 
 
 def test_completion_cli_positional_bash() -> None:
-    """The documented `ethscan completion bash` form must work (positional shell)."""
+    """The documented `ethscan completion bash` form emits the raw bash script."""
     result = _run_completion_cli(["bash"])
     assert result.exit_code == 0, result.output
-    assert '"shell": "bash"' in result.output
+    assert "_ethscan_completion()" in result.output
+    assert not result.output.lstrip().startswith("{")
 
 
 def test_completion_cli_positional_zsh() -> None:
     result = _run_completion_cli(["zsh"])
     assert result.exit_code == 0, result.output
-    assert '"shell": "zsh"' in result.output
+    assert "#compdef ethscan" in result.output
+    assert not result.output.lstrip().startswith("{")
 
 
 def test_completion_cli_positional_fish() -> None:
     result = _run_completion_cli(["fish"])
     assert result.exit_code == 0, result.output
-    assert '"shell": "fish"' in result.output
+    assert "function _ethscan_completion" in result.output
+    assert not result.output.lstrip().startswith("{")
 
 
 def test_completion_cli_default_shell() -> None:
     result = _run_completion_cli([])
     assert result.exit_code == 0, result.output
-    assert '"shell": "bash"' in result.output
+    assert "_ethscan_completion()" in result.output
+    assert not result.output.lstrip().startswith("{")
 
 
 def test_completion_cli_option_still_works() -> None:
     result = _run_completion_cli(["--shell", "zsh"])
     assert result.exit_code == 0, result.output
-    assert '"shell": "zsh"' in result.output
+    assert "#compdef ethscan" in result.output
 
 
 def test_completion_cli_option_overrides_positional() -> None:
     result = _run_completion_cli(["bash", "--shell", "zsh"])
     assert result.exit_code == 0, result.output
-    assert '"shell": "zsh"' in result.output
+    assert "#compdef ethscan" in result.output
 
 
 def test_completion_cli_invalid_shell_errors() -> None:
     result = _run_completion_cli(["powershell"])
     assert result.exit_code != 0
+def test_completion_cli_output_format_json() -> None:
+    result = _run_completion_cli(["bash", "--output-format", "json"])
+    assert result.exit_code == 0, result.output
+    assert '"shell": "bash"' in result.output
+    assert '"script":' in result.output
+
+
+def test_completion_cli_output_format_markdown() -> None:
+    result = _run_completion_cli(["bash", "--output-format", "markdown"])
+    assert result.exit_code == 0, result.output
+    assert "ethscan Shell Completion" in result.output
+    assert "## Script" in result.output
+
+
+def test_completion_cli_output_format_csv() -> None:
+    result = _run_completion_cli(["bash", "--output-format", "csv"])
+    assert result.exit_code == 0, result.output
+    assert result.output.splitlines()[0] == "field,value"
+    assert "shell,bash" in result.output
+
+
+def test_completion_cli_deprecated_format_still_produces_report() -> None:
+    result = _run_completion_cli(["bash", "--format", "json"])
+    assert result.exit_code == 0, result.output
+    assert '"shell": "bash"' in result.output
+
+
+def test_completion_cli_out_writes_raw_script(tmp_path) -> None:
+    out = tmp_path / "comp.bash"
+    result = _run_completion_cli(["bash", "--out", str(out)])
+    assert result.exit_code == 0, result.output
+    assert "Completion script written" in result.output
+    content = out.read_text(encoding="utf-8")
+    assert "_ethscan_completion()" in content
+    assert not content.lstrip().startswith("{")
+
+
+def test_completion_cli_out_with_output_format_writes_report(tmp_path) -> None:
+    out = tmp_path / "comp.json"
+    result = _run_completion_cli(["bash", "--output-format", "json", "--out", str(out)])
+    assert result.exit_code == 0, result.output
+    import json
+
+    parsed = json.loads(out.read_text(encoding="utf-8"))
+    assert parsed["shell"] == "bash"
+    assert "_ethscan_completion" in parsed["script"]

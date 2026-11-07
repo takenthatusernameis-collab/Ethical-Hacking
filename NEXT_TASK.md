@@ -1,13 +1,12 @@
 # Next Task
-File-before-target-validation audit complete across all commands; no reproducible gap found, no fix required.
+Run the full test suite and confirm no regressions from the completion default-output fix.
 
 ## Baseline (verified this session)
-- All `--target`+`file` commands validate the target before reading the file (see HANDOFF_NEXT.md for line references).
-- No-target candidates (`nmap`, `radix`, `audit`, `hash`, `jwt`) have no target to validate, so no target-before-file gap is possible there.
-- Reproductions: `stale`/`brute` exit 2 with target error before file read; `nmap`/`radix` exit 2 on file path only.
-- `python3 -m pytest tests/test_stale.py tests/test_cli.py -q -k stale` → 66 passed.
-- `python3 -m ruff check ethscan/cli.py` → clean; `python3 -m mypy ethscan/cli.py` → Success.
+- `completion` default now emits the raw shell script (sourceable; `bash -n` ok); structured report only with explicit `--output-format`/`--format`. `--out` writes raw by default or the requested report.
+- Targeted: `python -m pytest tests/test_completion.py tests/test_cli.py -q` → 1103 passed; `tests/test_completion.py` → 46 passed.
+- `ruff check ethscan/cli.py ethscan/completion.py tests/test_completion.py tests/test_cli.py` → clean; `mypy ethscan/cli.py ethscan/completion.py` → Success.
+- Full baseline at session start: 5910 passed, 50 skipped (not rerun after this change).
 
 ## Constraints
-- Do not re-sweep the already-verified target-before-file pattern.
-- Any future claimed gap must be reproduced before changing code; verify with targeted pytest + ruff + mypy; update TASK.md/NEXT_TASK.md/HANDOFF_NEXT.md; do not commit unless asked.
+- Run `python -m pytest -q` (full suite). If any failure appears, reproduce it, make the smallest evidence-based fix, and re-verify with targeted tests + ruff + mypy before/alongside the full run.
+- If full suite is green, pick one bounded, high-value correctness/robustness task verifiable in-session (reproduce before changing code). Do not re-audit the file-before-target-validation pattern (already verified). Do not commit unless asked. Update TASK.md/NEXT_TASK.md/HANDOFF_NEXT.md.
