@@ -20,3 +20,8 @@ Date: Sat Nov 07 2026
 
 ## Next task
 - **Candidate (bounded, verify first):** Audit CLI commands that accept `--out`/file-output paths for any remaining direct file-open/write paths that bypass `_write_output` in a way that turns an unwritable target (e.g., directory path, permission/OS error surfaced inconsistently) into a non-usage-error or leaks a traceback — but only where `_write_output`/`write_text` is *not* already used. Reproduce with a concrete command before changing code; confirm behavior matches the README contract (invalid option values / unusable paths → usage error, exit 2). Do not re-audit file-before-target-validation, the completion default-output contract, or `config --out/--init` behavior (now covered). Do not commit unless asked. Update TASK.md/NEXT_TASK.md/HANDOFF_NEXT.md.
+
+## This session (audit)
+- **Audit (no code change):** Inspected `ethscan/cli.py` for any command output path that writes to a user-supplied file without `_write_output`/`write_text`. All `--out` sites route through `_write_output` (lines ~890+); `--init` routes through `write_text` with `click.BadParameter` (exit 2). No direct `open()`/`write_text` bypass found.
+- **Repro evidence:** `python -m ethscan cidr --cidr 10.0.0.0/24 --out /tmp` → `Error: Invalid value for '--out': [Errno 21] Is a directory: '/tmp'`, exit 2, no traceback. Contract satisfied.
+- Full suite baseline unchanged: 5921 passed, 50 skipped. ruff clean.
