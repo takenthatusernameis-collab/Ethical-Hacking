@@ -2,23 +2,23 @@
 Date: Sat Nov 07 2026
 
 ## Current state
-- Baseline at session start: green (per HANDOFF_NEXT.md: ruff/mypy clean, 5909 passed, 50 skipped). Focused stale checks pass after this change.
-- `python3 -m ruff check ethscan/cli.py tests/test_cli.py`: all checks passed.
-- `python3 -m mypy ethscan/cli.py`: Success, no issues.
+- Baseline at session start: green (ruff/mypy clean; prior full-suite baseline 5909 passed, 50 skipped).
+- Working tree clean; `ethscan` importable; pytest 9.2.0, ruff 0.17.4, mypy 2.4.1 available.
 
 ## This session
-- **Demonstrated gap (reproduced):** `stale` CLI accepts `--target` (repeatable) plus `--file`. With an existing domains file and an unusable `--target` (e.g. `http://]bad[` / `http://[::1`), the CLI read the domains file via `load_domains_from_file()` before the bad target was normalized/rejected inside `run_stale`. The target was ultimately reported as a usage error (exit 2) by the `TargetSpecError` group handler, but file I/O occurred first (side effect) — same pattern previously fixed for fuzz/subdomains/subtake/dnsbrute/s3/recon/brute/osdetect/vuln/cve.
-- **Fix (smallest reversible):** In `ethscan.cli.stale()`, validate each explicit `--target` with `_validate_enum_target()` before reading `--file`. Click still validates `--file` path existence/readability; content is not read when an explicit target is unusable. File-sourced targets remain normalized/handled by `run_stale` as before.
-- **Tests:** Added `test_stale_rejects_bad_target_before_reading_file` in `tests/test_cli.py` (bad explicit target + existing file → target usage error, exit 2; `run_stale` not invoked).
+- **Audit performed:** file-before-target-validation (side-effect-before-validation) gap across every command in ethscan/cli.py.
+- **Finding:** no reproducible gap. Every command pairing `--target` with a user-supplied file validates the target before reading the file (`stale` cli.py:4589/4592, `fuzz` 1318/1319, `subdomains` 1407/1410, `subtake` 1495/1498, `dnsbrute` 1881/1888, `s3` 4735/4736, `recon` 3057/3059, `urlcheck` 2351/2352, `brute` 2445/2447, `report` 1166/1168, `osdetect` 2530/2537, `vuln` 2233/2236, `cve` 3288/3290). No-target candidates (`nmap`, `radix`, `audit`, `hash`, `jwt`) have no target to validate, so no gap is possible there.
+- **No code change required.** Fix only with evidence; none found.
+- **Reproductions:** `stale`/`brute` with a bad `--target` plus an existing file → exit 2 target error before file read; `nmap`/`radix` with a missing file → exit 2 on the file path only (no target involved).
+- **Tests:** `python3 -m pytest tests/test_stale.py tests/test_cli.py -q -k stale` → 66 passed.
 
 ## Verified
-- `python3 -m pytest tests/test_cli.py -q -k "stale_rejects_bad_target_before_reading_file or stale_help or stale_offline"` → 5 passed.
 - `python3 -m pytest tests/test_stale.py tests/test_cli.py -q -k stale` → 66 passed.
-- `python3 -m ruff check ethscan/cli.py tests/test_cli.py` → all checks passed.
+- `python3 -m ruff check ethscan/cli.py` → clean.
 - `python3 -m mypy ethscan/cli.py` → Success.
 
 ## Blockers
 - None demonstrated.
 
 ## Next task
-- Look for other commands that read user-supplied files (side effects) after accepting target-like inputs but before validating those inputs in a way that prevents file reads — only where a concrete, reproducible gap exists (file read/error masking target error, or unnecessary side effect). Start by auditing `report`/`brute` credential-file flows vs target validation ordering with a quick reproduction; `report` already validates target before `_require_utf8`/reading audit file (verified in code), `brute` validates target before reading user/pass files (verified), so avoid repeating solved patterns. If no gap reproduces, record evidence and stop.
+- This audit thread is complete: no gap found, no fix required, do not re-sweep. Next agent should select a fresh bounded, high-value task implementable and verifiable in one session; reproduce any claimed gap before changing code; verify with targeted pytest + ruff + mypy; update TASK.md/NEXT_TASK.md/HANDOFF_NEXT.md; do not commit unless asked.

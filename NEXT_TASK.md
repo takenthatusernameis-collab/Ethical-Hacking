@@ -1,19 +1,13 @@
 # Next Task
-Search for a demonstrated file-before-target-validation (or side-effect-before-validation) gap in a materially different area than the solved enumeration sweeps.
+File-before-target-validation audit complete across all commands; no reproducible gap found, no fix required.
 
 ## Baseline (verified this session)
-- Focused: `66 passed` for stale-related tests (`tests/test_stale.py tests/test_cli.py -k stale`).
-- `python3 -m ruff check ethscan/cli.py tests/test_cli.py` → all checks passed.
-- `python3 -m mypy ethscan/cli.py` → Success.
-- Prior full-suite baseline per HANDOFF_NEXT.md: 5909 passed, 50 skipped (re-run full suite only if broader risk is indicated).
-
-## This session (fixed, verified)
-- `stale` CLI now validates explicit `--target` values with `_validate_enum_target()` before reading `--file` via `load_domains_from_file()`. Prevents file read side effect / content distraction when an explicit target is unusable. 1 new CLI regression test.
-
-## Candidate work
-- Audit commands with user-supplied file inputs for concrete reproducible gaps: file read happens before validation of another required/meaningful input whose failure should be reported first (usage error, exit 2) — but only fix if demonstrated. Quick check candidates: `nmap` has only `--input-file` (no target ordering issue); `radix`/`cidr` validate before compute; `config`/`validate` have specific contracts. Reproduce before changing.
+- All `--target`+`file` commands validate the target before reading the file (see HANDOFF_NEXT.md for line references).
+- No-target candidates (`nmap`, `radix`, `audit`, `hash`, `jwt`) have no target to validate, so no target-before-file gap is possible there.
+- Reproductions: `stale`/`brute` exit 2 with target error before file read; `nmap`/`radix` exit 2 on file path only.
+- `python3 -m pytest tests/test_stale.py tests/test_cli.py -q -k stale` → 66 passed.
+- `python3 -m ruff check ethscan/cli.py` → clean; `python3 -m mypy ethscan/cli.py` → Success.
 
 ## Constraints
-- Preserve baseline; smallest reversible change.
-- Verify: targeted pytest, then relevant broader checks, ruff, mypy. Never claim checks passed without evidence.
-- Update `TASK.md`/`HANDOFF_NEXT.md`/`NEXT_TASK.md`; do not commit unless asked.
+- Do not re-sweep the already-verified target-before-file pattern.
+- Any future claimed gap must be reproduced before changing code; verify with targeted pytest + ruff + mypy; update TASK.md/NEXT_TASK.md/HANDOFF_NEXT.md; do not commit unless asked.
