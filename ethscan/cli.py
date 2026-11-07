@@ -2347,6 +2347,7 @@ def urlcheck(
             "At least one check is required (headers, info_disclosure, ssl)."
         )
 
+    _validate_enum_target(target)
     wordlist = load_fuzz_wordlist(wordlist_path) if wordlist_path else None
 
     results = run_urlcheck(
