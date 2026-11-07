@@ -22613,20 +22613,23 @@ def test_config_init_write_error(tmp_path, monkeypatch) -> None:
     ``write_text`` and both should report an unusable path as a usage error
     with the matching option hint, per the README contract that invalid
     option values are usage errors.
+
+    ``write_text`` publishes via an atomic temp file + ``os.replace``, so the
+    write failure is simulated at the rename (publish) step -- the same point
+    a real disk-full or permission error surfaces -- rather than at
+    ``builtins.open``, which the atomic write path never calls.
     """
     runner = CliRunner()
-    original_open = open
+    init_path = str(tmp_path / 'x.yaml')
+    original_replace = os.replace
 
-    def mock_open(*args, **kwargs):
-        mode = kwargs.get('mode', '')
-        if len(args) > 1:
-            mode = str(args[1])
-        if 'w' in str(mode):
+    def mock_replace(src, dst):
+        if str(dst) == init_path:
             raise OSError('disk full')
-        return original_open(*args, **kwargs)
+        return original_replace(src, dst)
 
-    monkeypatch.setattr('builtins.open', mock_open)
-    result = runner.invoke(cli, ['config', '--init', str(tmp_path / 'x.yaml')])
+    monkeypatch.setattr('os.replace', mock_replace)
+    result = runner.invoke(cli, ['config', '--init', init_path])
     assert result.exit_code == 2
     assert "Invalid value for '--init'" in result.output
     assert "disk full" in result.output
@@ -22637,15 +22640,14 @@ def test_config_out_write_error(tmp_path, monkeypatch) -> None:
     cfg.write_text('defaults:\n  timeout: 5\n')
     out_file = tmp_path / 'out.json'
     runner = CliRunner()
-    original_open = open
-    def mock_open(*args, **kwargs):
-        mode = kwargs.get('mode', '')
-        if len(args) > 1:
-            mode = str(args[1])
-        if 'w' in mode and str(args[0]) == str(out_file):
+    original_replace = os.replace
+
+    def mock_replace(src, dst):
+        if str(dst) == str(out_file):
             raise OSError('disk full')
-        return original_open(*args, **kwargs)
-    monkeypatch.setattr('builtins.open', mock_open)
+        return original_replace(src, dst)
+
+    monkeypatch.setattr('os.replace', mock_replace)
     result = runner.invoke(cli, ['config', '--config', str(cfg), '--format', 'json', '--out', str(out_file)])
     assert result.exit_code == 2
     assert "Invalid value for '--out'" in result.output

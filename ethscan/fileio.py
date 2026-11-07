@@ -122,7 +122,12 @@ def is_utf8(path: str | Path) -> bool:
     return True
 
 
-def _atomic_write(path: Path, write: Callable[[IO[str]], None]) -> None:
+def _atomic_write(
+    path: Path,
+    write: Callable[[IO[str]], None],
+    *,
+    encoding: str = "utf-8",
+) -> None:
     """Write to ``path`` atomically: temp file in the same directory, then rename.
 
     A non-atomic write opens the destination with ``"w"`` (truncating) *before*
@@ -137,6 +142,7 @@ def _atomic_write(path: Path, write: Callable[[IO[str]], None]) -> None:
         path: The path of the file to write.
         write: A callable that receives an open text handle and writes the
             content to it.
+        encoding: File encoding (defaults to utf-8).
 
     Raises:
         OSError: The destination cannot be written (its parent does not exist
@@ -151,7 +157,7 @@ def _atomic_write(path: Path, write: Callable[[IO[str]], None]) -> None:
         prefix=path.name + ".",
         suffix=".tmp",
         delete=False,
-        encoding="utf-8",
+        encoding=encoding,
     )
     try:
         with tmp as handle:
@@ -191,7 +197,7 @@ def write_text(path: str | Path, content: str, *, encoding: str = "utf-8") -> No
     def _write(handle: typing.IO[str]) -> None:
         handle.write(content)
 
-    _atomic_write(p, _write)
+    _atomic_write(p, _write, encoding=encoding)
 
 
 def write_json(path: str | Path, data: Any, *, indent: int = 2) -> None:
