@@ -6220,6 +6220,50 @@ def test_vuln_ssl_file_option(tmp_path) -> None:
     assert "WEAK-RSA-KEY" in result.output
 
 
+def test_vuln_rejects_bad_target_before_reading_services_file(tmp_path) -> None:
+    """An unusable target is rejected before any services file is read.
+
+    The services file is deliberately unreadable JSON: if the file were read
+    first, its error would win over the target error. The target error must
+    win, so the file is never touched for an unusable target.
+    """
+    bad_file = tmp_path / "services.json"
+    bad_file.write_text("{not valid json", encoding="utf-8")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["vuln", "--target", "http://[::1", "--services-file", str(bad_file)],
+    )
+    assert result.exit_code == 2, result.output
+    assert "Error: Invalid value for '--target':" in result.output, result.output
+    assert "services-file" not in result.output, result.output
+    assert "Traceback (most recent call last)" not in result.output, result.output
+
+
+def test_vuln_rejects_bad_target_before_reading_tls_file(tmp_path) -> None:
+    bad_file = tmp_path / "tls.json"
+    bad_file.write_text("{not valid json", encoding="utf-8")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["vuln", "--target", "http://[::1", "--tls-file", str(bad_file)]
+    )
+    assert result.exit_code == 2, result.output
+    assert "Error: Invalid value for '--target':" in result.output, result.output
+    assert "tls-file" not in result.output, result.output
+
+
+def test_vuln_rejects_bad_target_before_reading_ssl_file(tmp_path) -> None:
+    bad_file = tmp_path / "ssl.json"
+    bad_file.write_text("{not valid json", encoding="utf-8")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["vuln", "--target", "http://example.com]", "--ssl-file", str(bad_file)]
+    )
+    assert result.exit_code == 2, result.output
+    assert "Error: Invalid value for '--target':" in result.output, result.output
+    assert "ssl-file" not in result.output, result.output
+
+
 def test_vuln_severity_option(tmp_path) -> None:
     services_file = tmp_path / "service_report.json"
     services_file.write_text(
@@ -8869,6 +8913,21 @@ def test_osdetect_banners_file_option(tmp_path, monkeypatch) -> None:
         ],
     )
     assert called_args["banners"] == {22: "SSH-2.0-OpenSSH_8.9 Linux"}
+
+
+def test_osdetect_rejects_bad_target_before_reading_banners_file(tmp_path) -> None:
+    """An unusable target is rejected before the banners file is read."""
+    bad_file = tmp_path / "banners.json"
+    bad_file.write_text("{not valid json", encoding="utf-8")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["osdetect", "--target", "http://example.com]", "--banners-file", str(bad_file)],
+    )
+    assert result.exit_code == 2, result.output
+    assert "Error: Invalid value for '--target':" in result.output, result.output
+    assert "banners-file" not in result.output, result.output
+    assert "Traceback (most recent call last)" not in result.output, result.output
 
 
 def test_osdetect_banners_file_no_results_key_json(tmp_path) -> None:
@@ -12093,6 +12152,21 @@ def test_cve_services_file_option(tmp_path, monkeypatch) -> None:
     assert result.exit_code == 0
     assert "CVE-2016-6210" in result.output
     assert "OpenSSH" in result.output
+
+
+def test_cve_rejects_bad_target_before_reading_services_file(tmp_path) -> None:
+    """An unusable target is rejected before the services file is read."""
+    bad_file = tmp_path / "services.json"
+    bad_file.write_text("{not valid json", encoding="utf-8")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["cve", "--target", "http://[::1", "--services-file", str(bad_file)],
+    )
+    assert result.exit_code == 2, result.output
+    assert "Error: Invalid value for '--target':" in result.output, result.output
+    assert "services-file" not in result.output, result.output
+    assert "Traceback (most recent call last)" not in result.output, result.output
 
 
 def test_cve_no_cache_option(monkeypatch) -> None:

@@ -2229,6 +2229,7 @@ def vuln(
     out_path: str | None,
 ) -> None:
     """Check TARGET for known service, protocol, and certificate vulnerabilities."""
+    _validate_enum_target(target)
     services = None
     if services_file:
         services = _load_json_file(services_file, "'--services-file'")
@@ -2524,6 +2525,7 @@ def osdetect(
     out_path: str | None,
 ) -> None:
     """Fingerprint the target operating system using TCP/IP stack behavior."""
+    _validate_enum_target(target)
     port_list = None
     if ports:
         port_list = _resolve_ports(ports)
@@ -3277,6 +3279,7 @@ def cve(
     out_path: str | None,
 ) -> None:
     """Query the NVD/CVE API for known vulnerabilities affecting TARGET's services."""
+    _validate_enum_target(target)
     if services_file:
         _load_json_file(services_file, "'--services-file'")
 

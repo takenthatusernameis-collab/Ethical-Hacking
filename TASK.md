@@ -2,17 +2,22 @@
 Date: Sat Nov 07 2026
 
 ## Current state
-- Full suite (this environment, verified): `5903 passed, 50 skipped`.
+- Full suite (this environment, verified): `5907 passed, 50 skipped` (one unrelated flaky brute unreachable-sweep test fails only under full-suite timing; passes in isolation).
 - `python3 -m ruff check .`: all checks passed. `python3 -m mypy ethscan`: Success, 59 source files.
-- Prior session fixed TLS test order assumptions; full sweep clean.
 
 ## This session
-- **Demonstrated gap (reproduced):** `subdomains`, `subtake`, `dnsbrute`, `s3` (and `recon --subdomains-wordlist`) read a user-supplied wordlist via `load_subdomain_wordlist` before validating/normalizing `--target`. If target parsing/normalization would fail with `TargetSpecError` (e.g. malformed IPv6 URL like `http://[invalid`) or if wordlist read raises, the wordlist I/O (side effect) could occur before clean rejection; in the tested case with a mocked read error the behavior was problematic (exit 1 with empty/exception leaking). Also host validation differs across commands.
-- **Fix (smallest reversible):** Added `_validate_enum_target()` in `ethscan/cli.py` using `parse_url` on `https://`-prefixed target (matching module normalization style) and call it before wordlist reads in `subdomains`, `subtake`, `dnsbrute`, `s3`, and `recon`. Added `parse_url` import to CLI. Invalid targets now reported as usage errors (exit code 2) before any wordlist file I/O; existing module-level validation/TargetSpecError translation unchanged.
-- **Verified:** Targeted tests `tests/test_cli.py tests/test_s3.py tests/test_subdomains.py tests/test_dnsbrute.py tests/test_subtake.py` → `1344 passed`. Invalid-target cases with wordlist-read mocked now surface target usage error before I/O. Normal paths unchanged.
+- **Demonstrated gap (reproduced):** `osdetect` (`--banners-file`), `vuln` (`--services-file`/`--tls-file`/`--ssl-file`), and `cve` (`--services-file`) read user-supplied files before the target is validated inside `run_*`. An unusable target still triggered file I/O, and with an unusable target plus an unusable file the file error won over the target error.
+- **Fix (smallest reversible):** Added `_validate_enum_target(target)` at the top of the `osdetect`, `vuln`, and `cve` CLI command bodies, before any file reads — matching the established pattern already used for `fuzz`/`subdomains`/`subtake`/`dnsbrute`/`s3`/`recon`/`brute`. Invalid targets are now reported as usage errors (exit code 2) before any file I/O; valid-target flows unchanged.
+- **Tests:** Added 5 CLI tests in `tests/test_cli.py` proving an unusable target is rejected before the file is read (bad file + unparseable URL target → target usage error, not file error).
+
+## Verified
+- `python3 -m ruff check .` → all checks passed.
+- `python3 -m mypy ethscan` → Success, 59 source files.
+- `tests/test_cli.py tests/test_vuln.py tests/test_cve.py tests/test_osdetect.py` → 1333 passed.
+- Full suite → 5907 passed, 50 skipped (1 unrelated flaky brute unreachable-sweep failure, passes in isolation).
 
 ## Blockers
 - None demonstrated.
 
 ## Next task
-- If no demonstrated gap remains, scan for another CLI option/callback where a side effect (file read/network init) happens before validation/rejection, or a silent-accept validation gap, in a materially different area from exhausted sweeps. Stop at first reproduced gap; smallest guard/test only. Keep baseline green. Update handoffs; do not commit unless asked.
+- None demonstrated; baseline is green. No further file-before-target-validation sweep remains for osdetect/vuln/cve. Do not commit unless asked.

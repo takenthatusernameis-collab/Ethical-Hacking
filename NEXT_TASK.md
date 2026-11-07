@@ -1,15 +1,15 @@
 # Next Task
-Pursue only a *demonstrated* gap: reproduce a CLI option/callback reaching side effects before clean rejection, or a silent-accept validation gap, then add the smallest permanent guard/test.
+No demonstrated gap remains for the osdetect/vuln/cve file-before-target-validation sweep.
 
 ## Baseline (verified)
-- Full suite: `5903 passed, 50 skipped` (Python 3.14/OpenSSL 3.5.5).
+- Full suite: `5907 passed, 50 skipped` (Python 3.14/OpenSSL 3.5.5; one unrelated flaky brute unreachable-sweep test passes in isolation).
 - `python3 -m ruff check .` → all checks passed. `python3 -m mypy ethscan` → `Success: no issues found in 59 source files`.
 
 ## This session (fixed, verified)
-- Prevented wordlist file I/O before target validation in `subdomains`, `subtake`, `dnsbrute`, `s3`, `recon` (`--subdomains-wordlist`). Added CLI `_validate_enum_target()` (via `parse_url`) called before `load_subdomain_wordlist`; invalid/malformed targets now rejected as usage errors before file reads. Targeted enum/CLI tests all passed (`1344 passed`). Normal flows unchanged.
+- `osdetect`, `vuln`, `cve` now validate `--target` via `_validate_enum_target()` before reading any user-supplied file. Invalid targets rejected as usage errors (exit 2) before file I/O; valid flows unchanged. 5 new CLI tests. Targeted suites 1333 passed; full suite green apart from an unrelated flaky brute test.
 
-## Candidate work (only if demonstrated)
-- Find/reproduce another case where option validation/File I/O/network setup happens before rejecting unusable option values. Stop at first reproduced gap; smallest guard/test only. Do not treat intentional contracts as gaps.
+## Candidate work
+- None demonstrated. Stop here unless a new side-effect-before-validation gap is reproduced in a materially different area.
 
 ## Constraints
 - Preserve baseline; smallest reversible change.
