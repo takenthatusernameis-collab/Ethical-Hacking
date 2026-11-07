@@ -217,8 +217,8 @@ def test_run_tls_default_versions_and_ciphers(monkeypatch) -> None:
 
     run_tls("example.com", timeout=1.0, max_workers=2)
 
-    assert called_versions == TLS_VERSIONS
-    assert called_ciphers == COMMON_CIPHERS
+    assert sorted(called_versions, key=TLS_VERSIONS.index) == TLS_VERSIONS
+    assert sorted(called_ciphers, key=COMMON_CIPHERS.index) == COMMON_CIPHERS
 
 
 def test_run_tls_custom_versions_and_ciphers(monkeypatch) -> None:
@@ -255,8 +255,14 @@ def test_run_tls_custom_versions_and_ciphers(monkeypatch) -> None:
         max_workers=2,
     )
 
-    assert called_versions == [ssl.TLSVersion.TLSv1_2, ssl.TLSVersion.TLSv1_3]
-    assert called_ciphers == ["AES128-GCM-SHA256", "AES256-GCM-SHA384"]
+    assert sorted(called_versions, key=TLS_VERSIONS.index) == [
+        ssl.TLSVersion.TLSv1_2,
+        ssl.TLSVersion.TLSv1_3,
+    ]
+    assert sorted(called_ciphers, key=COMMON_CIPHERS.index) == [
+        "AES128-GCM-SHA256",
+        "AES256-GCM-SHA384",
+    ]
     assert result["supported_versions"] == ["TLSv1_2", "TLSv1_3"]
     assert result["supported_ciphers"] == ["AES128-GCM-SHA256", "AES256-GCM-SHA384"]
 
