@@ -510,11 +510,12 @@ def test_paramiko_import_error(monkeypatch) -> None:
         assert brute.PARAMIKO_AVAILABLE is False
     finally:
         # Restore original state
-        sys.modules.pop("ethscan.brute", None)
         if original is not None:
             sys.modules["paramiko"] = original
         else:
             sys.modules.pop("paramiko", None)
+        sys.modules.pop("ethscan.brute", None)
+        import ethscan.brute  # noqa: F401 - restore module cache
 
 
 def test_paramiko_import_success(monkeypatch):
@@ -534,8 +535,9 @@ def test_paramiko_import_success(monkeypatch):
         assert brute.PARAMIKO_AVAILABLE is True
         assert brute.paramiko is fake_paramiko
     finally:
-        sys.modules.pop("ethscan.brute", None)
         if original is not None:
             sys.modules["paramiko"] = original
         else:
             sys.modules.pop("paramiko", None)
+        sys.modules.pop("ethscan.brute", None)
+        import ethscan.brute  # noqa: F401 - restore module cache
