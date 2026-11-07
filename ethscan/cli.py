@@ -1163,6 +1163,7 @@ def report(
     out_path: str,
 ) -> None:
     """Generate a report combining port scan and password audit results."""
+    _validate_enum_target(target)
     if audit_file:
         _require_utf8(audit_file, "'--audit-file'")
     timeout_source = ctx.get_parameter_source("timeout")
