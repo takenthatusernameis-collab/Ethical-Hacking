@@ -1008,13 +1008,18 @@ def test_load_cache_valid_json_but_not_dict(tmp_path, monkeypatch) -> None:
 
 
 def test_save_cache_os_error(tmp_path, monkeypatch) -> None:
+    """A cache write failure is swallowed: _save_cache never propagates OSError.
+
+    The implementation uses the atomic ``fileio.write_json`` helper (temp file
+    + rename), so the write is stubbed at that helper rather than at
+    ``builtins.open`` (which would also affect the temp-file creation).
+    """
     cache_file = tmp_path / "cve_cache.json"
     monkeypatch.setattr("ethscan.cve.CACHE_FILE", cache_file)
-
-    def fake_open(*args, **kwargs):
-        raise OSError("disk full")
-
-    monkeypatch.setattr("builtins.open", fake_open)
+    monkeypatch.setattr(
+        "ethscan.fileio.write_json",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("disk full")),
+    )
     _save_cache({"CVE-X": {"id": "CVE-X"}})
 
 

@@ -88,10 +88,10 @@ def _load_cache() -> dict[str, dict]:
 
 def _save_cache(cache: dict[str, dict]) -> None:
     """Save the geolocation cache to disk."""
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
     try:
-        with open(CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump(cache, f)
+        from ethscan.fileio import write_json
+
+        write_json(CACHE_FILE, cache)
     except OSError:
         pass
 
