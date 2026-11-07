@@ -3050,6 +3050,10 @@ def recon(
                 f"Unknown modules: {', '.join(unknown)}. "
                 f"Valid modules: {', '.join(sorted(valid_modules))}"
             )
+    # Validate the target before reading the user-supplied wordlist, the same
+    # way ``fuzz``/``subdomains``/``subtake``/``dnsbrute``/``s3`` do: an unusable
+    # target must be reported as a usage error before any file I/O, otherwise a
+    # bad wordlist masks the target error and the wordlist is read for nothing.
     _validate_enum_target(target)
     subdomains_wordlist = (
         load_subdomain_wordlist(subdomains_wordlist_path)

@@ -11255,6 +11255,25 @@ def test_recon_subdomains_wordlist_option(tmp_path, monkeypatch) -> None:
     assert called_args["subdomains_wordlist"] == ["www", "mail", "api"]
 
 
+def test_recon_rejects_bad_target_before_reading_subdomains_wordlist(tmp_path) -> None:
+    """An unusable target is rejected before any subdomains wordlist is read.
+
+    The wordlist is deliberately missing: if it were read first, its error
+    would win over the target error. The target error must win, so the file
+    is never touched for an unusable target.
+    """
+    bad_file = tmp_path / "subdomains.txt"
+    bad_file.write_text("{not valid json", encoding="utf-8")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["recon", "--target", "http://[::1", "--subdomains-wordlist", str(bad_file)]
+    )
+    assert result.exit_code == 2, result.output
+    assert "Error: Invalid value for '--target':" in result.output, result.output
+    assert "subdomains-wordlist" not in result.output, result.output
+    assert "Traceback (most recent call last)" not in result.output, result.output
+
+
 def test_recon_dns_types_option(monkeypatch) -> None:
     called_args = {}
 
