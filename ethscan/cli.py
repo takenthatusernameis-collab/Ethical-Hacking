@@ -1314,6 +1314,7 @@ def fuzz(
     out_path: str,
 ) -> None:
     """Run HTTP fuzzing against TARGET using a wordlist of paths."""
+    _validate_enum_target(target)
     wordlist = load_wordlist(wordlist_path) if wordlist_path else None
 
     results = run_fuzz(target, wordlist=wordlist, timeout=timeout, workers=workers)
@@ -2438,6 +2439,7 @@ def brute(
     out_path: str | None,
 ) -> None:
     """Brute-force FTP or SSH login credentials against TARGET."""
+    _validate_enum_target(target)
     if user_file:
         _require_utf8(user_file, "'--user-file'")
     if pass_file:
