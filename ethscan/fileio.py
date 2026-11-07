@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import codecs
 import json
+import os
+import tempfile
 from pathlib import Path
-from typing import Any
+from typing import IO, Any, Callable
 
 
 def read_text(path: str | Path) -> str:
@@ -120,8 +122,64 @@ def is_utf8(path: str | Path) -> bool:
     return True
 
 
+def _atomic_write(path: Path, write: Callable[[IO[str]], None]) -> None:
+    """Write to ``path`` atomically: temp file in the same directory, then rename.
+
+    A non-atomic write opens the destination with ``"w"`` (truncating) *before*
+    it writes, so a failure mid-write -- a disk full, a read-only file system,
+    a parent that is a file -- leaves the user's previous content destroyed
+    instead of intact. Writing to a temporary file in the same directory and
+    renaming it over the destination keeps the old content until the new one
+    is complete: the rename is atomic on POSIX, and the temp file is removed
+    when the write fails.
+
+    Args:
+        path: The path of the file to write.
+        write: A callable that receives an open text handle and writes the
+            content to it.
+
+    Raises:
+        OSError: The destination cannot be written (its parent does not exist
+            and cannot be created, the parent is not a directory, the path is
+            a directory, the file system refuses the write, and so on). The
+            original error is preserved.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = tempfile.NamedTemporaryFile(
+        mode="w",
+        dir=str(path.parent),
+        prefix=path.name + ".",
+        suffix=".tmp",
+        delete=False,
+        encoding="utf-8",
+    )
+    try:
+        with tmp as handle:
+            write(handle)
+        os.replace(tmp.name, path)
+    except BaseException:
+        # A failed write must not leave a partial temp file behind.
+        try:
+            os.unlink(tmp.name)
+        except OSError:
+            pass
+        raise
+
+
 def write_text(path: str | Path, content: str, *, encoding: str = "utf-8") -> None:
-    """Write text to a file.
+    """Write text to a file atomically.
+
+    The parent directory of ``path`` is created when it does not exist, the
+    same way ``config --init`` writes its sample file: a report whose
+    directory was never created is a path the user meant to use, not a usage
+    error. A path that still cannot be written -- a directory, a path whose
+    parent is a file, a name the file system refuses -- raises ``OSError``,
+    which the caller reports as a usage error instead of reaching the user as
+    a raw traceback.
+
+    The write is atomic: the content is written to a temporary file in the
+    same directory and renamed over the destination, so a failure mid-write
+    leaves the previous content intact.
 
     Args:
         path: Path to the file.
@@ -129,14 +187,20 @@ def write_text(path: str | Path, content: str, *, encoding: str = "utf-8") -> No
         encoding: File encoding (defaults to utf-8).
     """
     p = Path(path)
-    if p.parent and str(p.parent) != ".":
-        p.parent.mkdir(parents=True, exist_ok=True)
-    with open(p, "w", encoding=encoding) as handle:
+
+    def _write(handle: typing.IO[str]) -> None:
         handle.write(content)
+
+    _atomic_write(p, _write)
 
 
 def write_json(path: str | Path, data: Any, *, indent: int = 2) -> None:
-    """Write data as JSON to a file.
+    """Write data as JSON to a file atomically.
+
+    The parent directory of ``path`` is created when it does not exist, and the
+    write is atomic: the content is written to a temporary file in the same
+    directory and renamed over the destination, so a failure mid-write leaves
+    the previous content intact.
 
     Args:
         path: Path to the file.
@@ -144,8 +208,9 @@ def write_json(path: str | Path, data: Any, *, indent: int = 2) -> None:
         indent: JSON indentation (defaults to 2).
     """
     p = Path(path)
-    if p.parent and str(p.parent) != ".":
-        p.parent.mkdir(parents=True, exist_ok=True)
-    with open(p, "w", encoding="utf-8") as handle:
+
+    def _write(handle: typing.IO[str]) -> None:
         json.dump(data, handle, indent=indent)
         handle.write("\n")
+
+    _atomic_write(p, _write)
