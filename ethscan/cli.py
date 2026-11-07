@@ -3606,7 +3606,13 @@ def radix(
     option_cidrs: list[str] = []
 
     if cidr_file:
-        file_cidrs = read_lines(cidr_file)
+        try:
+            file_cidrs = read_lines(cidr_file)
+        except OSError as exc:
+            raise click.BadParameter(
+                f"the file cannot be read: {exc.strerror or exc}",
+                param_hint="'--cidr-file'",
+            ) from exc
         cidrs.extend(file_cidrs)
 
     if cidrs_option:
@@ -4534,6 +4540,11 @@ def nmap(
         results = run_nmap(input_file)
     except NmapParseError as exc:
         raise click.BadParameter(str(exc), param_hint="'--input-file'") from exc
+    except OSError as exc:
+        raise click.BadParameter(
+            f"the file cannot be read: {exc.strerror or exc}",
+            param_hint="'--input-file'",
+        ) from exc
 
     # --output-format takes precedence over the deprecated --format alias
     chosen_format = output_fmt if output_fmt is not None else fmt
@@ -4615,7 +4626,13 @@ def stale(
         _validate_enum_target(target)
     all_targets: list[str] = list(targets)
     if target_file:
-        all_targets.extend(load_domains_from_file(target_file))
+        try:
+            all_targets.extend(load_domains_from_file(target_file))
+        except OSError as exc:
+            raise click.BadParameter(
+                f"the file cannot be read: {exc.strerror or exc}",
+                param_hint="'--file'",
+            ) from exc
     if not all_targets:
         # Omitting the one input the command needs is a usage error, not an
         # empty-but-successful report: print the usage banner and exit 2, the

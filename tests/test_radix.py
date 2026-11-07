@@ -1135,3 +1135,30 @@ def test_build_radix_node_early_returns() -> None:
 
     res = radix._build_radix_node([], depth=0, max_depth=5)
     assert res is None
+
+import os
+import tempfile
+from unittest.mock import patch
+
+import ethscan.cli
+from click.testing import CliRunner
+
+from ethscan.cli import cli
+
+
+class TestRadixCliFileErrors:
+    def test_radix_cidr_file_unreadable_runtime_reports_bad_parameter(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("10.0.0.0/8\n")
+            name = f.name
+        try:
+            with patch.object(
+                ethscan.cli, "read_lines", side_effect=OSError("Permission denied")
+            ):
+                runner = CliRunner()
+                r = runner.invoke(cli, ["radix", "--cidr-file", name])
+                assert r.exit_code == 2, r.output
+                assert "the file cannot be read" in r.output
+                assert "--cidr-file" in r.output
+        finally:
+            os.unlink(name)

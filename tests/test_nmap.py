@@ -542,3 +542,26 @@ def test_escape_pipe_characters():
     assert _escape("no pipes") == "no pipes"
     assert _escape("|||") == "\\|\\|\\|"
     assert _escape("") == ""
+
+from unittest.mock import patch
+
+from click.testing import CliRunner
+
+from ethscan.cli import cli
+import os
+
+
+class TestNmapCliFileErrors:
+    def test_nmap_input_file_unreadable_runtime_reports_bad_parameter(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as f:
+            f.write("<nmaprun></nmaprun>")
+            name = f.name
+        try:
+            with patch("ethscan.nmap.read_text", side_effect=OSError("Permission denied")):
+                runner = CliRunner()
+                r = runner.invoke(cli, ["nmap", "--input-file", name])
+                assert r.exit_code == 2
+                assert "the file cannot be read" in r.output
+                assert "--input-file" in r.output
+        finally:
+            os.unlink(name)

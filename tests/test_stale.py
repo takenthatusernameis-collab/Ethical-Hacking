@@ -472,3 +472,31 @@ def test_stale_transport_failure_is_reported_not_raised(monkeypatch) -> None:
     entry = results["results"][0]
     assert entry["A"] == []
     assert entry["stale"] is True
+import os
+import tempfile
+from unittest.mock import patch
+
+import ethscan.cli
+from click.testing import CliRunner
+
+from ethscan.cli import cli
+
+
+class TestStaleCliFileErrors:
+    def test_stale_file_unreadable_runtime_reports_bad_parameter(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("example.com\n")
+            name = f.name
+        try:
+            with patch.object(
+                ethscan.cli,
+                "load_domains_from_file",
+                side_effect=OSError("Permission denied"),
+            ):
+                runner = CliRunner()
+                r = runner.invoke(cli, ["stale", "--target", "x.example", "--file", name])
+                assert r.exit_code == 2, r.output
+                assert "the file cannot be read" in r.output
+                assert "--file" in r.output
+        finally:
+            os.unlink(name)
