@@ -4580,6 +4580,13 @@ def stale(
     out_path: str | None,
 ) -> None:
     """Detect stale DNS records (A/AAAA/CNAME) pointing to deallocated or unresolvable IPs."""
+    # Validate --target values before reading --file (a side effect), the same
+    # way the other enumeration commands do: an unusable target must be reported
+    # as a usage error before any file I/O, otherwise the file is read for
+    # nothing and a file-content issue could distract from the target error.
+    # Click already validated the --file path (existence/readability).
+    for target in targets:
+        _validate_enum_target(target)
     all_targets: list[str] = list(targets)
     if target_file:
         all_targets.extend(load_domains_from_file(target_file))

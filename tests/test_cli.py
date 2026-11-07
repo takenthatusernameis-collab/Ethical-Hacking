@@ -25387,3 +25387,37 @@ def test_mac_api_url_rejected(monkeypatch) -> None:
     assert result.exit_code == 2
     assert "Invalid value for '--api-url'" in result.output
     assert not called["ran"]
+
+
+def test_stale_rejects_bad_target_before_reading_file(tmp_path) -> None:
+    """An unusable --target is rejected before the domains file is read.
+
+    The file is deliberately present but contains bytes that would be read;
+    the target-usage error must win and no stale probe should run. Click
+    validates file existence; this checks value validation happens before
+    load_domains_from_file() reads content for a bad explicit --target.
+    """
+    good_file = tmp_path / "domains.txt"
+    good_file.write_text("good.example\n", encoding="utf-8")
+    called = {"ran": False}
+
+    def mock_run_stale(*args, **kwargs):
+        called["ran"] = True
+        return {"targets": [], "total_checked": 0, "stale_count": 0, "fresh_count": 0,
+                "results": [], "stale_results": [], "fresh_results": []}
+
+    import ethscan.cli as cli_mod
+    original = cli_mod.run_stale
+    cli_mod.run_stale = mock_run_stale
+    try:
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["stale", "--file", str(good_file), "--target", "http://[::1"],
+        )
+    finally:
+        cli_mod.run_stale = original
+    assert result.exit_code == 2, result.output
+    assert "Error: Invalid value for '--target':" in result.output, result.output
+    assert not called["ran"], "stale probe ran despite unusable target"
+    assert "Traceback (most recent call last)" not in result.output, result.output
