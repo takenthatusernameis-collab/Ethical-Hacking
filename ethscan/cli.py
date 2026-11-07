@@ -1856,7 +1856,7 @@ def dnsbrute(
     """Attempt AXFR zone transfer and brute-force subdomains for TARGET."""
     resolver = _validate_dns_resolver(resolver, "--resolver")
     nameservers = (
-        [ns.strip() for ns in nameservers_option.split(",") if ns.strip()]
+        [_validate_whois_server(ns.strip(), "--ns") for ns in nameservers_option.split(",") if ns.strip()]
         if nameservers_option
         else None
     )

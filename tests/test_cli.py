@@ -7728,6 +7728,50 @@ def test_dnsbrute_help_shows_resolver() -> None:
     assert "--resolver" in result.output
 
 
+def test_dnsbrute_ns_rejected_at_cli(monkeypatch) -> None:
+    """Malformed --ns values are rejected at CLI (exit 2) before side effects."""
+    called = {"ran": False}
+
+    def mock_run_dnsbrute(*args, **kwargs):
+        called["ran"] = True
+        return {
+            "target": "example.com",
+            "domain": "example.com",
+            "zone": "example.com",
+            "nameservers": [],
+            "nameserver_source": "option",
+            "dnspython_available": False,
+            "axfr": [],
+            "axfr_success": False,
+            "axfr_total_records": 0,
+            "recursive_axfr": [],
+            "recursive_axfr_total_records": 0,
+            "subdomains_tested": 0,
+            "resolved_count": 0,
+            "resolved": [],
+            "subdomains": [],
+            "resolver": None,
+            "recursive": False,
+            "max_depth": 0,
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_dnsbrute", mock_run_dnsbrute)
+    runner = CliRunner()
+    for ns in ("not a valid ns!!!", "http://evil.com", "ns.example.com,bad host"):
+        result = runner.invoke(
+            cli, ["dnsbrute", "--target", "example.com", "--ns", ns, "--timeout", "1"]
+        )
+        assert result.exit_code == 2, f"{ns!r}: {result.output}"
+        assert "--ns" in result.output, f"{ns!r}: {result.output}"
+        assert "not a valid WHOIS server hostname or IP address" in result.output, (
+            f"{ns!r}: {result.output}"
+        )
+        assert "Traceback (most recent call last)" not in result.output, (
+            f"{ns!r}: {result.output}"
+        )
+    assert not called["ran"]
+
+
 def test_dnsbrute_recursive_option(monkeypatch) -> None:
     called_args = {}
 
