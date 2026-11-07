@@ -766,6 +766,43 @@ def _validate_api_url(value: str | None, option_name: str) -> str | None:
     return value
 
 
+def _validate_whois_server(value: str, option_name: str) -> str:
+    """Validate a WHOIS server hostname or IP address.
+
+    The value is passed to ``socket.create_connection`` and would only surface
+    as a failed network lookup inside the command's own output. Reject an
+    unusable value as a usage error (exit code 2) before any network work.
+
+    Returns the stripped, lowercased hostname (or original IP text).
+    """
+    original = value
+    value = value.strip()
+    if not value:
+        raise click.UsageError(
+            f"Invalid value for '{option_name}': {original!r} is not a valid WHOIS server hostname or IP address."
+        )
+    if "://" in value or any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in value):
+        raise click.UsageError(
+            f"Invalid value for '{option_name}': {original!r} is not a valid WHOIS server hostname or IP address."
+        )
+    try:
+        ipaddress.ip_address(value)
+        return value
+    except ValueError:
+        pass
+    labels = value.rstrip(".").split(".")
+    if not labels or any(not label for label in labels):
+        raise click.UsageError(
+            f"Invalid value for '{option_name}': {original!r} is not a valid WHOIS server hostname or IP address."
+        )
+    for label in labels:
+        if not all(c.isalnum() or c == "-" for c in label) or label.startswith("-") or label.endswith("-"):
+            raise click.UsageError(
+                f"Invalid value for '{option_name}': {original!r} is not a valid WHOIS server hostname or IP address."
+            )
+    return value.rstrip(".").lower()
+
+
 def _check_config_path(path: str) -> None:
     """Refuse an explicit ``--config`` path that cannot name a config file.
 
@@ -1516,6 +1553,7 @@ def whois(
     out_path: str,
 ) -> None:
     """Run a WHOIS lookup for TARGET."""
+    server = _validate_whois_server(server, "--server")
     results = run_whois(
         target,
         server=server,
@@ -2968,6 +3006,7 @@ def recon(
     """Run multiple reconnaissance modules against TARGET and produce a consolidated report."""
     dns_server = _validate_dns_resolver(dns_server, "--dns-server")
     resolver = _validate_dns_resolver(resolver, "--resolver")
+    whois_server = _validate_whois_server(whois_server, "--whois-server")
     geo_api_url = _validate_api_url(geo_api_url, "--geo-api-url")
     modules_list = (
         [m.strip() for m in modules.split(",") if m.strip()]

@@ -11228,6 +11228,27 @@ def test_recon_dns_server_option(monkeypatch) -> None:
     assert called_args["dns_server"] == "1.1.1.1"
 
 
+def test_recon_whois_server_rejected_at_cli(monkeypatch) -> None:
+    """A malformed recon --whois-server is rejected at CLI before network work."""
+    called = {}
+
+    def mock_run_recon(*args, **kwargs):
+        called["called"] = True
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_recon", mock_run_recon)
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["recon", "--target", "example.com", "--modules", "whois",
+         "--whois-server", "not a host", "--timeout", "1"],
+    )
+    assert result.exit_code == 2, result.output
+    assert "--whois-server" in result.output, result.output
+    assert "not a valid WHOIS server hostname or IP address" in result.output, result.output
+    assert "called" not in called
+
+
 def test_recon_whois_server_option(monkeypatch) -> None:
     called_args = {}
 
@@ -24611,19 +24632,58 @@ def test_a_file_option_with_a_directory_is_a_usage_error(tmp_path) -> None:
 # --- A WHOIS server that cannot be reached -----------------------------------
 
 
-def test_an_unreachable_whois_server_is_reported_in_the_output() -> None:
-    """A server that cannot be reached is a failed lookup, not a crash."""
+def test_an_unreachable_whois_server_is_reported_in_the_output(monkeypatch) -> None:
+    """A syntactically valid server that cannot be reached is a failed lookup, not a crash."""
+
+    class _FailingSocket:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def settimeout(self, *args, **kwargs):
+            pass
+
+        def connect(self, *args, **kwargs):
+            raise OSError("unreachable")
+
+        def close(self, *args, **kwargs):
+            pass
+
+    monkeypatch.setattr("ethscan.whois.socket.socket", _FailingSocket)
+
     runner = CliRunner()
-    for server in ("not a host", "host:99999"):
+    result = runner.invoke(
+        cli,
+        ["whois", "--target", "example.com", "--server", "whois.invalid", "--timeout", "1"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Traceback (most recent call last)" not in result.output, result.output
+    assert "Connection failed" in result.output, result.output
+
+
+def test_whois_server_rejected_at_cli(monkeypatch) -> None:
+    """A malformed WHOIS --server is rejected at CLI (exit 2) before network work."""
+    called = {}
+
+    def mock_run_whois(*args, **kwargs):
+        called["called"] = True
+        return {}
+
+    monkeypatch.setattr("ethscan.cli.run_whois", mock_run_whois)
+    runner = CliRunner()
+    for server in ("not a host", "http://evil.com", "host:99999", ""):
         result = runner.invoke(
             cli,
             ["whois", "--target", "example.com", "--server", server, "--timeout", "1"],
         )
-        assert result.exit_code == 0, f"{server}: {result.output}"
-        assert "Traceback (most recent call last)" not in result.output, (
-            f"{server}: leaked a traceback\n{result.output}"
+        assert result.exit_code == 2, f"{server!r}: {result.output}"
+        assert "--server" in result.output, f"{server!r}: {result.output}"
+        assert "not a valid WHOIS server hostname or IP address" in result.output, (
+            f"{server!r}: {result.output}"
         )
-        assert "Connection failed" in result.output, f"{server}: {result.output}"
+        assert "Traceback (most recent call last)" not in result.output, (
+            f"{server!r}: {result.output}"
+        )
+    assert "called" not in called
 
 
 # --- A nameserver whose label is too long ------------------------------------
