@@ -72,12 +72,27 @@ def load_json(path: str | Path) -> Any:
         OSError: The file cannot be read.
     """
     with open(path, "r", encoding="utf-8", errors="replace") as handle:
-        try:
-            return json.load(handle)
-        except RecursionError as exc:
-            raise ValueError(
-                "the file nests too deeply to be parsed as JSON"
-            ) from exc
+        text = handle.read()
+    # Guard against inputs that nest deeper than the parser can safely handle
+    # (Python's json parser may not raise RecursionError on every version).
+    depth = 0
+    max_depth = 0
+    for ch in text:
+        if ch in "[{":
+            depth += 1
+            if depth > max_depth:
+                max_depth = depth
+        elif ch in "]}":
+            if depth > 0:
+                depth -= 1
+    if max_depth > 1000:
+        raise ValueError("the file nests too deeply to be parsed as JSON")
+    try:
+        return json.loads(text)
+    except RecursionError as exc:
+        raise ValueError(
+            "the file nests too deeply to be parsed as JSON"
+        ) from exc
 
 
 def is_utf8(path: str | Path) -> bool:
