@@ -119,7 +119,9 @@ def test_completion_cli_names_the_variable_the_shell_calls() -> None:
     program, so the generated script has to use the same name: a script that
     calls another variable can never be triggered.
     """
-    report = _run_cli(["completion", "bash", "--prog-name", "my-tool"])
+    report = _run_cli(
+        ["completion", "bash", "--prog-name", "my-tool", "--output-format", "json"]
+    )
 
     assert report["prog_name"] == "my-tool"
     assert "_MY_TOOL_COMPLETE" in report["script"]

@@ -1,12 +1,12 @@
 # Next Task
-Run the full test suite and confirm no regressions from the completion default-output fix.
+Full suite is green; no unresolved issues remain.
 
 ## Baseline (verified this session)
-- `completion` default now emits the raw shell script (sourceable; `bash -n` ok); structured report only with explicit `--output-format`/`--format`. `--out` writes raw by default or the requested report.
-- Targeted: `python -m pytest tests/test_completion.py tests/test_cli.py -q` → 1103 passed; `tests/test_completion.py` → 46 passed.
-- `ruff check ethscan/cli.py ethscan/completion.py tests/test_completion.py tests/test_cli.py` → clean; `mypy ethscan/cli.py ethscan/completion.py` → Success.
-- Full baseline at session start: 5910 passed, 50 skipped (not rerun after this change).
+- `completion` default emits the raw shell script (sourceable; `bash -n` ok); structured report only with explicit `--output-format`/`--format`. `--out` writes raw by default or the requested report.
+- `config --out <file>` writes the loaded config report to the file (new regression coverage).
+- Full suite: `python -m pytest -q` → 5920 passed, 50 skipped.
+- Targeted: `tests/test_completion.py tests/test_cli.py tests/test_cli_offline_input_sweep.py` → pass.
+- `ruff check tests/test_cli.py` → clean; `mypy tests/test_cli.py` → no new errors (12 pre-existing on the clean tree).
 
 ## Constraints
-- Run `python -m pytest -q` (full suite). If any failure appears, reproduce it, make the smallest evidence-based fix, and re-verify with targeted tests + ruff + mypy before/alongside the full run.
-- If full suite is green, pick one bounded, high-value correctness/robustness task verifiable in-session (reproduce before changing code). Do not re-audit the file-before-target-validation pattern (already verified). Do not commit unless asked. Update TASK.md/NEXT_TASK.md/HANDOFF_NEXT.md.
+- If starting new work: pick one bounded, high-value correctness/robustness task verifiable in-session. Reproduce any claimed gap before changing code. Do not re-audit the file-before-target-validation pattern or the completion default-output contract. Do not commit unless asked. Update TASK.md/NEXT_TASK.md/HANDOFF_NEXT.md.

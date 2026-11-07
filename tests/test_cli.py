@@ -13054,6 +13054,36 @@ def test_config_with_explicit_file(tmp_path) -> None:
     assert parsed["commands"]["scan"]["ports"] == "common"
 
 
+def test_config_out_writes_report(tmp_path) -> None:
+    """``config --out <file>`` writes the loaded config report to the file."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("defaults:\n  timeout: 5.0\n")
+    out = tmp_path / "config_report.json"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--config", str(cfg), "config", "--out", str(out)])
+    assert result.exit_code == 0, result.output
+    assert f"Report written to {out}" in result.output
+    parsed = json.loads(out.read_text(encoding="utf-8"))
+    assert parsed["config_file"] == str(cfg)
+    assert parsed["defaults"]["timeout"] == 5.0
+
+
+def test_config_out_writes_markdown_report(tmp_path) -> None:
+    """``config --format markdown --out <file>`` writes a markdown report."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("defaults:\n  timeout: 5.0\n")
+    out = tmp_path / "config_report.md"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["--config", str(cfg), "config", "--format", "markdown", "--out", str(out)]
+    )
+    assert result.exit_code == 0, result.output
+    assert f"Report written to {out}" in result.output
+    content = out.read_text(encoding="utf-8")
+    assert "# ethscan Configuration" in content
+    assert "ethscan.yaml" in content
+
+
 def test_config_with_a_file_that_nests_too_deeply(tmp_path) -> None:
     """A config file whose YAML nests too deeply is a parse error, not a crash.
 
