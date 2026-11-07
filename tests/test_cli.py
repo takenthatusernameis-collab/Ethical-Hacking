@@ -22577,6 +22577,35 @@ def test_radix_no_cidrs_error() -> None:
     assert result.exit_code == 2
     assert "at least one CIDR network is required" in result.output
 
+
+def test_config_csv_parse_error_comments_all_warning_lines(tmp_path) -> None:
+    """CSV report with a parse error prefixes every warning line as a comment.
+
+    YAML parse errors contain newlines; the CLI appends warnings as ``#``
+    comment lines so the CSV stays parseable, and each continuation line must
+    also carry the ``#`` prefix.
+    """
+    bad = tmp_path / "bad.yaml"
+    bad.write_text("defaults: [unclosed\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["config", "--config", str(bad), "--output-format", "csv"]
+    )
+    assert result.exit_code == 0
+    assert "parse_error" in result.output
+    # Every emitted warning line (including continuations) must be a comment.
+    warning_lines = [l for l in result.output.splitlines() if l.startswith("# Warning:")]
+    assert len(warning_lines) >= 2, f"expected multi-line warning comments, got: {warning_lines!r}"
+    # No unprefixed continuation: after the CSV data, all remaining non-empty
+    # lines are warnings.
+    tail_started = False
+    for line in result.output.splitlines():
+        if line.startswith("# Warning:"):
+            tail_started = True
+        elif tail_started and line.strip():
+            raise AssertionError(f"unprefixed warning continuation: {line!r}")
+
+
 def test_config_init_write_error(tmp_path, monkeypatch) -> None:
     """An unusable ``--init`` path is a usage error (exit code 2).
 

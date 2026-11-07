@@ -2,21 +2,21 @@
 Date: Sat Nov 07 2026
 
 ## Current state
-- Baseline at session start: green (5910 passed, 50 skipped; ruff/mypy clean on touched source; working tree clean).
+- Baseline at session start: 5920 passed, 50 skipped (per prior handoff); working tree clean.
 - `ethscan` importable; pytest 9.2.0, ruff 0.17.4, mypy 2.4.1.
 
 ## This session
-- **Fixed:** `tests/test_cli_offline_input_sweep.py::test_completion_cli_names_the_variable_the_shell_calls` now requests JSON explicitly (`--output-format json`) because the `completion` default is the raw script (fixed in the prior session).
-- **Added:** `tests/test_cli.py` — `test_config_out_writes_report` and `test_config_out_writes_markdown_report`, CLI-level regression coverage for `config --out <file>` writing the loaded config report (previously untested at CLI level).
+- **Fixed (bounded, verified):** `ethscan config --output-format csv` with a parse/validation warning emitted multi-line YAML parse errors where only the first appended line was prefixed with `# Warning:`; continuation lines were bare text, making the CSV structurally ambiguous. `ethscan/cli.py` now prefixes **every** warning line (`# Warning: ` per line). `format_config_report_csv` already emitted the parse error inside the CSV data row (quoted); the CLI warning tail is now fully commented.
+- **Added:** `tests/test_cli.py::test_config_csv_parse_error_comments_all_warning_lines` — regression coverage asserting all post-data warning lines are `#`-prefixed for a multi-line parse error.
 
 ## Verified
-- `python -m pytest -q` (full suite) → **5920 passed, 50 skipped**.
-- `python -m pytest tests/test_completion.py tests/test_cli.py tests/test_cli_offline_input_sweep.py -q` → pass.
-- `python -m ruff check tests/test_cli.py` → clean; `mypy tests/test_cli.py` → no new errors vs. clean tree.
-- `config --out <file>` reproduces correctly: writes JSON/markdown report to file, exit 0, "Report written to ..." message.
+- Repro (evidence): before fix, `config --config <bad.yaml> --output-format csv` emitted continuation lines without `#` (e.g. `  in "<unicode string>"...`, caret lines). After fix, every warning line starts with `# Warning:` and exit remains `0`.
+- `python -m pytest tests/test_config.py tests/test_cli.py tests/test_completion.py -q` → 1160 passed (including new test).
+- `python -m pytest -q` (full suite) → **5921 passed, 50 skipped**.
+- `python -m ruff check ethscan/cli.py tests/test_cli.py tests/test_config.py` → clean.
 
 ## Blockers
 - None demonstrated.
 
 ## Next task
-Full suite is green and no unresolved issues remain. Pick one new bounded, high-value correctness/robustness task verifiable in-session (reproduce any claimed gap before changing code; do not re-audit file-before-target-validation or the completion default-output contract). Do not commit unless asked. Update TASK.md/NEXT_TASK.md/HANDOFF_NEXT.md.
+- **Candidate (bounded, verify first):** Audit CLI commands that accept `--out`/file-output paths for any remaining direct file-open/write paths that bypass `_write_output` in a way that turns an unwritable target (e.g., directory path, permission/OS error surfaced inconsistently) into a non-usage-error or leaks a traceback — but only where `_write_output`/`write_text` is *not* already used. Reproduce with a concrete command before changing code; confirm behavior matches the README contract (invalid option values / unusable paths → usage error, exit 2). Do not re-audit file-before-target-validation, the completion default-output contract, or `config --out/--init` behavior (now covered). Do not commit unless asked. Update TASK.md/NEXT_TASK.md/HANDOFF_NEXT.md.

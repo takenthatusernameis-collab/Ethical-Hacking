@@ -3909,7 +3909,11 @@ def config(
         output = format_config_report_csv(loaded)
         if warnings:
             # Append warnings as comment lines for CSV to preserve structure
-            warning_lines = ["# Warning: " + w for w in warnings]
+            warning_lines = [
+                "# Warning: " + line
+                for w in warnings
+                for line in str(w).splitlines() or [str(w)]
+            ]
             output = output + "\n" + "\n".join(warning_lines) if output else "\n".join(warning_lines)
     else:
         lines = ["# ethscan Configuration", ""]
