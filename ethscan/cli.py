@@ -313,7 +313,7 @@ from ethscan.subtake import (
     format_subtake_report_markdown,
     run_subtake,
 )
-from ethscan.target import TargetSpecError
+from ethscan.target import TargetSpecError, parse_url
 from ethscan.tls import (
     VersionSpec,
     format_tls_report_csv,
@@ -684,6 +684,26 @@ def _write_output(out_path: str, output: str, message: str | None = None) -> Non
     except (OSError, ValueError) as exc:
         raise click.BadParameter(str(exc), param_hint="'--out'") from exc
     click.echo(message or f"Report written to {out_path}")
+
+
+def _validate_enum_target(target: str) -> None:
+    """Reject an unusable ``--target`` before reading enumeration wordlists.
+
+    ``subdomains``, ``subtake``, ``dnsbrute`` and ``s3`` (and recon's
+    ``--subdomains-wordlist`` path) read a user-supplied wordlist before the
+    library normalizes the target. A target that ``urllib.parse`` refuses, or
+    that carries a disallowed host, must therefore be rejected here: otherwise
+    the wordlist is read (a side effect) and a wordlist read error can mask the
+    target-usage error. Validation uses :func:`parse_url` on the
+    ``https://``-prefixed form the modules use, so malformed targets are
+    reported as a usage error (exit code 2) before any file I/O; host/path
+    checks that are specific to a module remain in that module so existing
+    contracts are preserved.
+    """
+    normalized = target.strip()
+    if "://" not in normalized:
+        normalized = "https://" + normalized
+    parse_url(normalized)
 
 
 def _validate_s3_region(value: str | None) -> str | None:
@@ -1382,6 +1402,7 @@ def subdomains(
     out_path: str,
 ) -> None:
     """Enumerate subdomains for TARGET."""
+    _validate_enum_target(target)
     resolver = _validate_dns_resolver(resolver, "--resolver")
     subdomains_list = (
         load_subdomain_wordlist(wordlist_path) if wordlist_path else None
@@ -1469,6 +1490,7 @@ def subtake(
     out_path: str | None,
 ) -> None:
     """Detect subdomain takeover vulnerabilities for TARGET."""
+    _validate_enum_target(target)
     resolver = _validate_dns_resolver(resolver, "--resolver")
     subdomains_list = (
         load_subdomain_wordlist(wordlist_path) if wordlist_path else None
@@ -1854,6 +1876,7 @@ def dnsbrute(
     out_path: str | None,
 ) -> None:
     """Attempt AXFR zone transfer and brute-force subdomains for TARGET."""
+    _validate_enum_target(target)
     resolver = _validate_dns_resolver(resolver, "--resolver")
     nameservers = (
         [_validate_whois_server(ns.strip(), "--ns") for ns in nameservers_option.split(",") if ns.strip()]
@@ -3021,6 +3044,7 @@ def recon(
                 f"Unknown modules: {', '.join(unknown)}. "
                 f"Valid modules: {', '.join(sorted(valid_modules))}"
             )
+    _validate_enum_target(target)
     subdomains_wordlist = (
         load_subdomain_wordlist(subdomains_wordlist_path)
         if subdomains_wordlist_path
@@ -4690,6 +4714,7 @@ def s3(
 ) -> None:
     """Enumerate AWS S3 buckets for TARGET and detect publicly accessible ones."""
     region = _validate_s3_region(region)
+    _validate_enum_target(target)
     wordlist = load_subdomain_wordlist(wordlist_path) if wordlist_path else None
 
     results = run_s3(
