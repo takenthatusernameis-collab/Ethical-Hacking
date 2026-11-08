@@ -484,7 +484,7 @@ def format_ping_report_markdown(data: Mapping[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_ping_report_csv(data: dict[str, object]) -> str:
+def format_ping_report_csv(data: Mapping[str, object]) -> str:
     """Format ping results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

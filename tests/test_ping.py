@@ -9,7 +9,7 @@ import socket
 import struct
 import threading
 import time
-from typing import cast
+from typing import Any, cast
 
 from ethscan.ping import (
     DEFAULT_COUNT,
@@ -160,6 +160,7 @@ def _make_icmp_reply_packet(identifier: int, sequence: int, src_ip: str = "10.0.
 def test_parse_icmp_reply_valid() -> None:
     packet = _make_icmp_reply_packet(12345, 1, "192.168.1.1", b"test")
     result = _parse_icmp_reply(packet, 12345)
+    assert result is not None
     assert result["type"] == ICMP_ECHO_REPLY
     assert result["code"] == 0
     assert result["identifier"] == 12345
@@ -172,6 +173,7 @@ def test_parse_icmp_reply_valid() -> None:
 def test_parse_icmp_reply_wrong_identifier() -> None:
     packet = _make_icmp_reply_packet(12345, 1, "192.168.1.1")
     result = _parse_icmp_reply(packet, 54321)
+    assert result is not None
     assert result["error"] == "identifier mismatch: expected 54321, got 12345"
 
 
@@ -213,22 +215,26 @@ def test_parse_icmp_reply_wrong_type() -> None:
 
     packet = ip_header + icmp_header
     result = _parse_icmp_reply(packet, 12345)
+    assert result is not None
     assert "not echo reply" in result["error"]
 
 
 def test_parse_icmp_reply_too_short() -> None:
     result = _parse_icmp_reply(b"\x00" * 10, 12345)
+    assert result is not None
     assert result["error"] == "packet too short for IP header"
 
 
 def test_parse_icmp_reply_not_ipv4() -> None:
     result = _parse_icmp_reply(b"\x00" * 20, 12345)
+    assert result is not None
     assert result["error"] == "not IPv4"
 
 
 def test_parse_icmp_reply_ip_header_truncated() -> None:
     # version=4, ihl=0 -> ip_header_len=0 < 20
     result = _parse_icmp_reply(b"\x40" + b"\x00" * 19, 12345)
+    assert result is not None
     assert result["error"] == "IP header truncated"
 
 
@@ -264,6 +270,7 @@ def test_parse_icmp_reply_icmp_header_truncated() -> None:
         socket.inet_aton("10.0.0.2"),
     )
     result = _parse_icmp_reply(ip_header, 12345)
+    assert result is not None
     assert result["error"] == "ICMP header truncated"
 
 
@@ -403,10 +410,10 @@ class _FakeRawSocket(socket.socket):
         self.timeout: float | None = None
         self.closed = False
 
-    def settimeout(self, timeout: float) -> None:
+    def settimeout(self, timeout: float | None) -> None:
         self.timeout = timeout
 
-    def recvfrom(self, bufsize: int):
+    def recvfrom(self, bufsize: int, flags: int = 0) -> tuple[bytes, Any]:
         if self._recv_error is not None:
             raise self._recv_error
         if not self._data:
@@ -459,7 +466,7 @@ def test_probe_icmp_raw_socket_echo_reply(monkeypatch) -> None:
     assert result["ip"] == "192.168.1.1"
     assert result["response_type"] == RESP_ECHO_REPLY
     assert result["error"] is None
-    assert result["rtt_ms"] >= 0
+    assert cast(float, result["rtt_ms"]) >= 0
     assert fake_send.sent is True
     assert fake_send.closed is True
 
@@ -536,7 +543,7 @@ def test_probe_icmp_raw_socket_oserror(monkeypatch) -> None:
         resolved_ip="10.0.0.1",
     )
     assert result["response_type"] == RESP_NO_RESPONSE
-    assert "socket closed" in result["error"]
+    assert "socket closed" in cast(str, result["error"])
     assert fake_send.closed is True
 
 
@@ -843,7 +850,7 @@ def test_run_ping_unresolvable_host() -> None:
     orig_resolve = ping_mod._resolve_host
     ping_mod.probe_icmp = mock_probe
     ping_mod._try_create_raw_socket = lambda: None
-    ping_mod._resolve_host = lambda h: None
+    ping_mod._resolve_host = cast(Any, lambda h: None)
     try:
         result = run_ping("nonexistent.invalid.domain.tld", count=1, timeout=1.0)
         assert result["ip"] is None
@@ -886,9 +893,9 @@ def test_run_ping_unresolvable_host_reports_failure() -> None:
     assert result["ip"] is None
     assert result["successful"] == 0
     assert result["failed"] == 2
-    assert any("Could not resolve" in note for note in result["notes"])
-    for probe in result["probes"]:
-        assert probe["response_type"] == RESP_NO_RESPONSE
+    assert any("Could not resolve" in note for note in cast(list[str], result["notes"]))
+    for probe in cast(list[dict[str, object]], result["probes"]):
+        assert cast(str, probe["response_type"]) == RESP_NO_RESPONSE
         assert isinstance(probe["error"], str) and probe["error"]
 
 
@@ -1111,9 +1118,9 @@ def test_ping_transport_failure_is_reported_not_raised(monkeypatch) -> None:
     results = ethscan.ping.run_ping("127.0.0.1", count=1)
 
     assert isinstance(results, dict)
-    probe = results["probes"][0]
-    assert probe["response_type"] == ethscan.ping.RESP_NO_RESPONSE
-    assert "hostile transport" in (probe.get("error") or "")
+    probe = cast(list[dict[str, object]], results["probes"])[0]
+    assert cast(str, probe["response_type"]) == ethscan.ping.RESP_NO_RESPONSE
+    assert "hostile transport" in (cast(str | None, probe.get("error")) or "")
     assert results["failed"] == 1
 
 
@@ -1141,8 +1148,8 @@ def test_ping_connect_failure_of_an_unknown_type_is_reported(monkeypatch) -> Non
 
     probe = ethscan.ping.probe_icmp("127.0.0.1", timeout=1.0, raw_socket=None)
 
-    assert probe["response_type"] == ethscan.ping.RESP_NO_RESPONSE
-    assert "hostile transport" in (probe.get("error") or "")
+    assert cast(str, probe["response_type"]) == ethscan.ping.RESP_NO_RESPONSE
+    assert "hostile transport" in (cast(str | None, probe.get("error")) or "")
 
 
 def test_ping_resolver_failure_of_an_unknown_type_is_reported(monkeypatch) -> None:
@@ -1157,7 +1164,7 @@ def test_ping_resolver_failure_of_an_unknown_type_is_reported(monkeypatch) -> No
     results = ethscan.ping.run_ping("127.0.0.1", count=1, timeout=1.0)
 
     assert results["ip"] is None
-    assert any("Could not resolve host" in note for note in results["notes"])
+    assert any("Could not resolve host" in note for note in cast(list[str], results["notes"]))
 
 
 def test_ping_socket_creation_failure_of_unnamed_type_is_reported(monkeypatch) -> None:
@@ -1172,9 +1179,9 @@ def test_ping_socket_creation_failure_of_unnamed_type_is_reported(monkeypatch) -
     results = ethscan.ping.run_ping("127.0.0.1", count=1, timeout=1.0)
 
     assert isinstance(results, dict)
-    probe = results["probes"][0]
-    assert probe["response_type"] == ethscan.ping.RESP_NO_RESPONSE
-    assert "hostile transport" in (probe.get("error") or "")
+    probe = cast(list[dict[str, object]], results["probes"])[0]
+    assert cast(str, probe["response_type"]) == ethscan.ping.RESP_NO_RESPONSE
+    assert "hostile transport" in (cast(str | None, probe.get("error")) or "")
     assert results["failed"] == 1
 
 
