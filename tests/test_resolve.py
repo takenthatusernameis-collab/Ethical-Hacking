@@ -3,6 +3,8 @@
 import csv
 import io
 import socket
+import sys
+from typing import Any, cast
 
 import pytest
 
@@ -513,7 +515,7 @@ def test_resolve_cname_records_dnspython_success() -> None:
     orig = resolve.DNS_AVAILABLE
     try:
         resolve.DNS_AVAILABLE = True
-        resolve.dns = FakeDns()
+        resolve.dns = cast(Any, FakeDns())
         result = resolve.resolve_cname_records("example.com", timeout=1.0)
         assert result == ["target.example.com"]
     finally:
@@ -538,7 +540,7 @@ def test_resolve_cname_records_dnspython_exception() -> None:
     orig = resolve.DNS_AVAILABLE
     try:
         resolve.DNS_AVAILABLE = True
-        resolve.dns = FakeDns()
+        resolve.dns = cast(Any, FakeDns())
         result = resolve.resolve_cname_records("example.com")
         assert result == []
     finally:
@@ -549,7 +551,7 @@ def test_resolve_cname_records_dnspython_with_server(monkeypatch) -> None:
     """resolve_cname_records must apply the custom resolver to the CNAME query."""
     from ethscan import resolve
 
-    created: list[object] = []
+    created: list[Any] = []
 
     class DummyAnswer:
         def __str__(self):
@@ -583,7 +585,7 @@ def test_resolve_cname_records_dnspython_without_server_keeps_default(monkeypatc
     """Without a custom server the CNAME lookup must keep the system resolvers."""
     from ethscan import resolve
 
-    created: list[object] = []
+    created: list[Any] = []
 
     class DummyAnswer:
         def __str__(self):
@@ -616,7 +618,7 @@ def test_run_resolve_passes_server_to_cname_lookup(monkeypatch) -> None:
     """run_resolve must forward the custom server to the CNAME resolver."""
     from ethscan import resolve
 
-    created: list[object] = []
+    created: list[Any] = []
 
     class DummyAnswer:
         def __str__(self):
@@ -677,7 +679,7 @@ def test_resolve_ptr_records_dnspython_success() -> None:
     orig = resolve.DNS_AVAILABLE
     try:
         resolve.DNS_AVAILABLE = True
-        resolve.dns = FakeDns()
+        resolve.dns = cast(Any, FakeDns())
         result = resolve.resolve_ptr_records("8.8.8.8", timeout=1.0)
         assert result == ["ptr.example.com"]
     finally:
@@ -714,7 +716,7 @@ def test_resolve_ptr_records_dnspython_with_server() -> None:
     orig = resolve.DNS_AVAILABLE
     try:
         resolve.DNS_AVAILABLE = True
-        resolve.dns = FakeDns()
+        resolve.dns = cast(Any, FakeDns())
         result = resolve.resolve_ptr_records("8.8.8.8", server="1.1.1.1")
         assert result == ["ptr.example.com"]
     finally:
@@ -746,7 +748,7 @@ def test_resolve_ptr_records_dnspython_exception() -> None:
     orig = resolve.DNS_AVAILABLE
     try:
         resolve.DNS_AVAILABLE = True
-        resolve.dns = FakeDns()
+        resolve.dns = cast(Any, FakeDns())
         result = resolve.resolve_ptr_records("8.8.8.8")
         assert result == []
     finally:
@@ -779,7 +781,7 @@ def test_resolve_with_dnspython_success() -> None:
     orig = resolve.DNS_AVAILABLE
     try:
         resolve.DNS_AVAILABLE = True
-        resolve.dns = FakeDns()
+        resolve.dns = cast(Any, FakeDns())
         result = resolve.resolve_with_dnspython("example.com", "MX")
         assert result == ["mx1.example.com", "mx2.example.com"]
     finally:
@@ -809,7 +811,7 @@ def test_resolve_with_dnspython_with_server() -> None:
     orig = resolve.DNS_AVAILABLE
     try:
         resolve.DNS_AVAILABLE = True
-        resolve.dns = FakeDns()
+        resolve.dns = cast(Any, FakeDns())
         result = resolve.resolve_with_dnspython("example.com", "NS", server="1.1.1.1")
         assert result == ["ns1.example.com"]
     finally:
@@ -835,7 +837,7 @@ def test_resolve_with_dnspython_exception() -> None:
     orig = resolve.DNS_AVAILABLE
     try:
         resolve.DNS_AVAILABLE = True
-        resolve.dns = FakeDns()
+        resolve.dns = cast(Any, FakeDns())
         result = resolve.resolve_with_dnspython("example.com", "TXT")
         assert result == []
     finally:
@@ -866,7 +868,7 @@ def test_run_resolve_with_arbitrary_record_type_dnspython() -> None:
     orig = resolve.DNS_AVAILABLE
     try:
         resolve.DNS_AVAILABLE = True
-        resolve.dns = FakeDns()
+        resolve.dns = cast(Any, FakeDns())
         result = resolve.run_resolve("example.com", record_types=["TXT"], server="1.1.1.1")
         assert result["records"]["TXT"] == ["txt.example.com"]
         assert result["dnspython_available"] is True
@@ -1109,7 +1111,7 @@ def test_run_resolve_unknown_type_dnspython_failure_is_swallowed(monkeypatch) ->
     orig = resolve.DNS_AVAILABLE
     try:
         resolve.DNS_AVAILABLE = True
-        resolve.dns = FakeDns()
+        resolve.dns = cast(Any, FakeDns())
         results = resolve.run_resolve("example.com", record_types=["BOGUS"], timeout=1.0)
         assert "BOGUS" not in results["records"]
     finally:
@@ -1119,7 +1121,6 @@ def test_run_resolve_unknown_type_dnspython_failure_is_swallowed(monkeypatch) ->
 def test_resolve_dnspython_import_failure_degrades_gracefully(monkeypatch) -> None:
     """When dnspython cannot be imported, the module falls back to stdlib-only."""
     import importlib
-    import sys
 
     import ethscan.resolve as resolve_mod
 
@@ -1127,7 +1128,7 @@ def test_resolve_dnspython_import_failure_degrades_gracefully(monkeypatch) -> No
         name: sys.modules.get(name) for name in ("dns", "dns.resolver", "dns.exception", "dns.reversename")
     }
     try:
-        sys.modules["dns"] = None
+        sys.modules["dns"] = cast(Any, None)
         for name in ("dns.resolver", "dns.exception", "dns.reversename"):
             sys.modules.pop(name, None)
 

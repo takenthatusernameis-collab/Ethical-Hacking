@@ -5,6 +5,7 @@ import csv
 import io
 import ipaddress
 import socket
+from typing import Mapping, TypedDict
 
 from ethscan.target import parse_url
 
@@ -20,6 +21,18 @@ except Exception:  # noqa: BLE001
 
 DEFAULT_RECORD_TYPES = ["A", "AAAA", "CNAME"]
 DEFAULT_TIMEOUT = 2.0
+
+
+class ResolveResult(TypedDict):
+    """Structured DNS resolution result returned by :func:`run_resolve`."""
+
+    target: str
+    normalized: str
+    is_ip: bool
+    record_types_queried: list[str]
+    records: dict[str, list[str]]
+    dnspython_available: bool
+    server: str | None
 
 
 def _normalize_target(target: str) -> str:
@@ -165,7 +178,7 @@ def run_resolve(
     record_types: list[str] | None = None,
     server: str | None = None,
     timeout: float = DEFAULT_TIMEOUT,
-) -> dict[str, object]:
+) -> ResolveResult:
     """Perform forward/reverse DNS resolution for a target.
 
     Args:
@@ -234,18 +247,18 @@ def run_resolve(
             else:
                 continue  # ignore unknown types when dnspython unavailable
 
-    return {
-        "target": target,
-        "normalized": normalized,
-        "is_ip": is_ip,
-        "record_types_queried": types,
-        "records": results,
-        "dnspython_available": DNS_AVAILABLE,
-        "server": server,
-    }
+    return ResolveResult(
+        target=target,
+        normalized=normalized,
+        is_ip=is_ip,
+        record_types_queried=types,
+        records=results,
+        dnspython_available=DNS_AVAILABLE,
+        server=server,
+    )
 
 
-def format_resolve_report_json(data: dict[str, object]) -> str:
+def format_resolve_report_json(data: Mapping[str, object]) -> str:
     """Format resolve results as JSON."""
     import json
 
@@ -256,7 +269,7 @@ def _as_dict(value: object) -> dict[str, object]:
     return value if isinstance(value, dict) else {}
 
 
-def format_resolve_report_markdown(data: dict[str, object]) -> str:
+def format_resolve_report_markdown(data: Mapping[str, object]) -> str:
     """Format resolve results as Markdown."""
     data = _as_dict(data)
     records_obj = data.get("records")
@@ -299,7 +312,7 @@ def format_resolve_report_markdown(data: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_resolve_report_csv(data: dict[str, object]) -> str:
+def format_resolve_report_csv(data: Mapping[str, object]) -> str:
     """Format resolve results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)
@@ -326,6 +339,6 @@ def format_resolve_report_csv(data: dict[str, object]) -> str:
             ])
     return output.getvalue().rstrip("\r\n")
 
-def resolve(target: str, record_type: str = "A", **kwargs) -> dict[str, object]:
+def resolve(target: str, record_type: str = "A", **kwargs) -> ResolveResult:
     """Compatibility wrapper around run_resolve for a single record type."""
     return run_resolve(target, record_types=[record_type], **kwargs)

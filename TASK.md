@@ -51,3 +51,32 @@ Date: Sun Nov 08 2026 (session 7)
 
 ## Next task
 - Continue typing hygiene in remaining test files with mypy errors. Reproduce with `python -m mypy tests/<file>` first, then fix per file. Remaining files with the most errors (per earlier count): `test_ping.py` (41), `test_resolve.py` (48), `test_radix.py` (68), `test_cidr.py` (74).
+
+# Session (Sun Nov 08 2026, session 9)
+## This session
+- Continued typing hygiene on `tests/test_resolve.py` (48 errors). Baseline at start: `pytest -q` → 5936 passed, 50 skipped, 0 failed (later observed 6 pre-existing `test_ping.py` failures caused by Python 3.14 making `socket.timeout` read-only — unrelated to typing, see Blockers).
+- Root cause: `run_resolve` returned `dict[str, object]`, so `result["records"]`/`result["target"]`/etc. were inferred as `object`, breaking indexing, `in`, `.get()`, and `.nameservers` access across ~30 sites. `dict` is also invariant, so `dict[str, Collection[str]]` literals could not be passed to formatters typed `dict[str, object]`.
+- Fixed `ethscan/resolve.py`:
+  - Added `ResolveResult(TypedDict)` with precise fields (`target: str`, `normalized: str`, `is_ip: bool`, `record_types_queried: list[str]`, `records: dict[str, list[str]]`, `dnspython_available: bool`, `server: str | None`) and changed `run_resolve`/`resolve` return types to it. Constructed via the constructor (no behavior change — field values identical).
+  - Widened `format_resolve_report_json/markdown/csv` signatures from `dict[str, object]` to `Mapping[str, object]` (formatters only read from `data`; mypy-recommended covariant type). Added `Mapping` import.
+  - Restored the `dns = None  # type: ignore[assignment]` fallback (mypy-clean; `Any`-style annotation triggered `no-redef`).
+- Fixed `tests/test_resolve.py` (no behavior change):
+  - Added `from typing import Any, cast` and a top-level `import sys` (removed a redundant inner `import sys` that ruff flagged as a redefinition).
+  - Changed the 3 `created: list[object] = []` locals to `created: list[Any] = []` (the fakes expose `.nameservers`, which `object` lacks).
+  - Replaced the 10 `resolve.dns = FakeDns()` assignments with `resolve.dns = cast(Any, FakeDns())` (module attribute typed by the import; fakes are duck-typed).
+  - Replaced `sys.modules["dns"] = None` with `sys.modules["dns"] = cast(Any, None)` (mypy rejects assigning `None` to a `Module`-typed dict slot).
+
+## Verification
+- `python -m mypy tests/test_resolve.py` → Success: no issues found.
+- `python -m mypy ethscan/resolve.py` → Success: no issues found.
+- `python -m mypy ethscan/ tests/test_resolve.py` → Success: no issues found in 60 source files (whole project clean).
+- `python -m ruff check tests/test_resolve.py ethscan/resolve.py` → All checks passed.
+- `python -m pytest tests/test_resolve.py -q` → 76 passed.
+- `python -m pytest tests/test_cli.py -q -k resolve` → 101 passed (CLI resolve path still works with new return type).
+- `python -m pytest -q --ignore=tests/test_ping.py` → 5878 passed, 50 skipped, 0 failed.
+
+## Blockers
+- Pre-existing environment failures in `tests/test_ping.py` (6 tests): `_FakeRawSocket.__init__` sets `self.timeout: float | None = None`, but Python 3.14 made `socket.timeout` a read-only descriptor on `_socket.socket` subclasses. Unrelated to typing hygiene; not introduced by this change. The 6 failing tests are: `test_probe_icmp_raw_socket_echo_reply`, `test_probe_icmp_raw_socket_timeout`, `test_probe_icmp_raw_socket_oserror`, `test_probe_icmp_raw_socket_wrong_id`, `test_probe_icmp_raw_send_socket_creation_fails_falls_back`, `test_probe_icmp_raw_sendto_oserror`.
+
+## Next task
+- Continue typing hygiene in remaining test files with mypy errors: `test_ping.py` (36), `test_radix.py` (68), `test_cidr.py` (74). Note: `test_ping.py` also carries the Python 3.14 `socket.timeout` blocker above — fix the typing errors there only where they are independent of that failure.
