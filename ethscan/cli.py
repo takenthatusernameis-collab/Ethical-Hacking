@@ -70,7 +70,7 @@ from ethscan.dnssec import (
 )
 import ethscan.fileio
 import ethscan.stale
-from ethscan.fileio import is_utf8, load_json, read_lines
+from ethscan.fileio import is_utf8, load_json
 from ethscan.ftp import (
     format_ftp_report_csv,
     format_ftp_report_json,
@@ -1012,7 +1012,7 @@ def audit(
     """Audit passwords for strength and common weaknesses."""
     if file:
         _require_utf8(file, "'--file'")
-        passwords = read_lines(file, skip_comments=False)
+        passwords = ethscan.fileio.read_lines(file, skip_comments=False)
     else:
         passwords = [line.strip() for line in _read_stdin_text().split("\n") if line.strip()]
 
