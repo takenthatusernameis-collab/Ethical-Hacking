@@ -492,9 +492,12 @@ def format_osdetect_report_markdown(data: dict[str, object]) -> str:
     lines.append(f"- **Target:** {data.get('target', '')}")
     lines.append(f"- **Host:** {data.get('host', '')}")
     lines.append(f"- **Ports Probed:** {data.get('ports_probed', 0)}")
-    inferred = data.get("inferred_os") or []
+    inferred = data.get("inferred_os")
+    if not isinstance(inferred, (list, tuple)):
+        inferred = []
+    inferred_names = [str(x) for x in inferred if x is not None]
     lines.append(
-        f"- **Inferred OS:** {', '.join(cast(list[str], inferred)) if inferred else 'Unknown'}"
+        f"- **Inferred OS:** {', '.join(inferred_names) if inferred_names else 'Unknown'}"
     )
     lines.append("")
 
@@ -542,7 +545,10 @@ def format_osdetect_report_csv(data: dict[str, object]) -> str:
         "flags_observed",
         "error",
     ])
-    for probe in cast(list[dict[str, object]], data.get("probes") or []):
+    probes = data.get("probes")
+    if not isinstance(probes, (list, tuple)):
+        probes = []
+    for probe in probes:
         probe = _as_dict(probe)
         writer.writerow([
             data.get("target", ""),
@@ -554,7 +560,12 @@ def format_osdetect_report_csv(data: dict[str, object]) -> str:
             probe.get("flags_observed") or "",
             probe.get("error") or "",
         ])
-    for os_name in cast(list[str], data.get("inferred_os") or []):
+    inferred = data.get("inferred_os")
+    if not isinstance(inferred, (list, tuple)):
+        inferred = []
+    for os_name in inferred:
+        if os_name is None:
+            continue
         writer.writerow([
             data.get("target", ""),
             data.get("host", ""),
@@ -562,7 +573,7 @@ def format_osdetect_report_csv(data: dict[str, object]) -> str:
             "inferred_os",
             "",
             "",
-            os_name,
+            str(os_name),
             "",
         ])
     return output.getvalue().rstrip("\r\n")

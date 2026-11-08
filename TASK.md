@@ -1,24 +1,14 @@
 # Task
 Date: Sun Nov 08 2026
 
-## Current state
-- Baseline (verified this session, dnspython 2.9.2 installed): `python -m pytest -q` → 5932 passed, 50 skipped, 0 failed. 5982 tests collected. `ethscan` 0.1.0; pytest 9.2.0, ruff 0.17.4, mypy 2.4.1.
-- All 58 CLI commands registered/help OK; ruff clean; mypy 59 source files OK.
-- No TODO/FIXME/XXX/HACK in `*.py`.
-
 ## This session
-- Inspected repo state (no prior open assignment; git clean before changes).
-- Verified baseline green: `python -m pytest -q` → 5932 passed, 50 skipped (all skips intentional: dnspython-excluded modules, commands without file/string options). `python -m ruff check .` → pass. `python -m mypy ethscan/` → pass. All 58 CLI `--help` invocations return 0.
-- Confirmed PBKDF2 behavior end-to-end: `hash --password ... --salt ... --iterations N` generates a PBKDF2-HMAC digest; `hash --check` verifies it (MATCH); peppered PBKDF2 (`--salt --pepper --iterations`) generates and verifies correctly; `--iterations` without `--salt` is rejected (exit 2).
-- Identified a genuine bounded gap: `run_check` with pepper + iterations (peppered PBKDF2 check) was untested at the `run_check` level (only the compute layer `test_compute_password_hash_iterations_with_pepper` and generation `test_run_hash_iterations_with_pepper` existed).
-- Implemented bounded test addition (evidence-based): added `test_run_check_iterations_with_pepper_match` and `test_run_check_iterations_with_pepper_mismatch` to `tests/test_hash.py`, plus a `_peppered_pbkdf2_digest` helper.
-- Re-verified after change: `tests/test_hash.py` → 128 passed (was 126); full suite → 5932 passed, 50 skipped; ruff → pass; mypy → pass.
+- Inspected repo state: clean git tree, no prior open assignment (HANDOFF/NEXT/TASK indicated baseline green). Verified baseline: `pytest -q` 5934 passed/50 skipped; ruff clean; mypy 59 files OK.
+- Selected bounded, high-value task (evidence-based): `ethscan/osdetect.py` formatters were vulnerable to hostile shapes not covered by existing sweep — reproducible `TypeError` in markdown when `inferred_os` contains non-str items (e.g. `[1]`) and incorrect CSV char-splitting when `inferred_os` is a plain string (`"linux"`).
+- Implemented smallest reversible fix: guarded `inferred_os`/`probes` handling in `format_osdetect_report_markdown` and `format_osdetect_report_csv` (treat as list/tuple, coerce elements safely, no char-split). Extended `tests/test_osdetect_hostile_sweep.py` with targeted hostile cases and assertions.
+- Verified: `tests/test_osdetect.py tests/test_osdetect_hostile_sweep.py` 84 passed; full suite 5934 passed/50 skipped; ruff clean; mypy clean.
 
 ## Blockers
-- None demonstrated.
+- None.
 
 ## Next task
 - None pending; baseline green.
-- If order-dependent flakiness reappears (radix/stale CLI file-error tests), reproduce with dnspython installed and identify which earlier test rebinds `ethscan.fileio`/`ethscan.stale` or reloads modules so `patch.object` targets diverge from `cli.py` call-time lookups.
-
-(End of file)

@@ -37,8 +37,10 @@ def test_osdetect_formatters_hostile_nested_shapes_never_raise() -> None:
             "inferred_os": None,
         },
         {"target": "x", "host": "x", "ports_probed": 1, "inferred_os": "linux"},
+        {"target": "x", "host": "x", "ports_probed": 1, "inferred_os": [1, None, "Linux"]},
         {"target": "x", "host": "x", "ports_probed": 1, "notes": "x"},
         {"target": "x", "host": "x", "ports_probed": 1, "notes": [None, 5, {}]},
+        {"target": "x", "host": "x", "ports_probed": 1, "probe_findings": "x"},
     ]
     for data in cases:
         json.loads(osdetect.format_osdetect_report_json(data))
@@ -47,3 +49,8 @@ def test_osdetect_formatters_hostile_nested_shapes_never_raise() -> None:
         assert isinstance(md, str)
         assert isinstance(csv_text, str)
         assert "ethscan OS Detection Report" in md
+        # inferred_os as a string must not be char-split in CSV
+        if data.get("inferred_os") == "linux":
+            assert "inferred_os,,,l," not in csv_text
+        if isinstance(data.get("inferred_os"), list) and 1 in data["inferred_os"]:
+            assert "Linux" in md or "1" in md
