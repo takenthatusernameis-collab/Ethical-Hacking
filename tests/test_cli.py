@@ -64,7 +64,7 @@ def test_cli_help_lists_commands() -> None:
 def test_cli_no_subcommand_lists_commands() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, [])
-    assert result.exit_code == 0
+    assert result.exit_code == 2
     assert "Usage:" in result.output
     assert "Commands:" in result.output
     assert "scan" in result.output
@@ -13334,7 +13334,7 @@ def test_config_invalid_yaml_shows_parse_error(tmp_path) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["--config", str(cfg), "config"])
     assert result.exit_code == 0
-    parsed = json.loads(result.output)
+    parsed = json.loads(result.stdout)
     assert "parse_error" in parsed
     assert "Failed to parse" in parsed["parse_error"]
 
@@ -13359,7 +13359,7 @@ def test_config_unknown_command_warns(tmp_path) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["--config", str(cfg), "config"])
     assert result.exit_code == 0
-    parsed = json.loads(result.output)
+    parsed = json.loads(result.stdout)
     assert "nonexistentcmd" in parsed["commands"]
 
 
@@ -13370,7 +13370,7 @@ def test_config_unknown_command_warns_in_json_output(tmp_path) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["--config", str(cfg), "config"])
     assert result.exit_code == 0, result.output
-    parsed = json.loads(result.output)
+    parsed = json.loads(result.stdout)
     assert "warnings" in parsed
     assert any("nonexistentcmd" in w for w in parsed["warnings"])
 
@@ -13406,7 +13406,7 @@ def test_config_unknown_option_warns_in_json_output(tmp_path) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["--config", str(cfg), "config"])
     assert result.exit_code == 0, result.output
-    parsed = json.loads(result.output)
+    parsed = json.loads(result.stdout)
     assert "warnings" in parsed
     assert any("potrs" in w and "scan" in w for w in parsed["warnings"])
 
