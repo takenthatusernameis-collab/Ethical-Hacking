@@ -1,23 +1,26 @@
 # Handoff
-Date: Sun Nov 08 2026 (session 7)
+Date: Sun Nov 08 2026 (session 8)
 
 ## What changed
-- Fixed 6 mypy errors in `tests/test_netbios.py` (typing hygiene only, no behavior change, no `ethscan/` source changes):
-  - 2 × `var-annotated`: annotated `captured: dict[str, object] = {}` in `test_send_recv_connector_receives_arguments` (line 473) and `test_run_netbios_url_target` (line 685).
-  - 4 × `operator`: added `assert err is not None` after `assert data is None` in the four transport-failure tests (lines 496, 509, 522, 545), narrowing `str | None` to `str` before the `in` check.
+- `ethscan/recon.py`: widened `format_recon_report_json`, `format_recon_report_markdown`, `format_recon_report_csv` signatures from `dict[str, object]` to `Mapping[str, object]` (safe read-only widening, mypy-recommended); added `Mapping` to typing import.
+- `tests/test_recon.py` (typing hygiene only, no behavior change, 20 mypy errors fixed):
+  - Annotated `data: dict[str, object] = {...}` at lines 292, 529, 547.
+  - Cast `result["modules_run"]` → `cast(list[str], ...)` and `result["notes"]` → `cast(list[str], ...)` at 16 access sites; added `from typing import cast`.
 
 ## Root cause
-- `_send_recv` returns `tuple[bytes | None, str | None]`. In the failure-path tests, `err` is inferred as `str | None`, so `"hostile transport" in err` is rejected by mypy (`Unsupported right operand type for in ("str | None")`). The assertion `data is None` already implies a non-None error string in those paths (the only `None`-err return is the success path, which sets `data` to bytes), so adding `assert err is not None` is semantically neutral.
-- Empty dict literals `captured = {}` need an explicit annotation because the dict is populated via `.update(...)`/indexing, giving mypy no inference target.
+- `dict` is invariant, so `dict[str, <specific>]` literals are not assignable to formatter params typed `dict[str, object]`. `Mapping[str, object]` is covariant and the formatters only read from `data`.
+- `run_recon` returns `dict[str, object]`, so `result["modules_run"]`/`result["notes"]` are inferred as `object`, failing `set()`, `in`, `len()`, and iteration checks.
+- Empty/mixed dict locals `data = {...}` need explicit annotations for mypy.
 
 ## What was verified
-- `python -m mypy tests/test_netbios.py` → Success: no issues found.
-- `python -m ruff check tests/test_netbios.py` → All checks passed.
-- `python -m pytest tests/test_netbios.py -q` → 84 passed.
-- `python -m pytest -q` → 5936 passed, 50 skipped, 0 failed (baseline unchanged from session 6).
+- `python -m mypy tests/test_recon.py` → Success: no issues found.
+- `python -m mypy ethscan/recon.py` → Success: no issues found.
+- `python -m ruff check tests/test_recon.py ethscan/recon.py` → All checks passed.
+- `python -m pytest tests/test_recon.py -q` → 36 passed.
+- `python -m pytest -q` → 5936 passed, 50 skipped, 0 failed (baseline unchanged from session 7).
 
 ## Unresolved
 - None.
 
 ## Next task
-- None pending. If future work is needed, pick a single high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.
+- Continue typing hygiene in remaining test files with mypy errors. Reproduce with `python -m mypy tests/<file>` first, then fix per file. Remaining files with the most errors: `test_ping.py` (41), `test_resolve.py` (48), `test_radix.py` (68), `test_cidr.py` (74).

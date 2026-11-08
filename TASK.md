@@ -23,3 +23,31 @@ Date: Sun Nov 08 2026 (session 7)
 
 ## Next task
 - None pending. If future work is needed, pick a single high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.
+
+# Session (Sun Nov 08 2026, session 8)
+## This session
+- Continued typing hygiene on remaining test files with mypy errors, starting with `tests/test_recon.py` (37 errors).
+- Baseline green at start: `pytest -q` → 5936 passed, 50 skipped, 0 failed.
+- `python -m mypy tests/test_recon.py` reproduced 20 errors:
+  - 17 × `arg-type`: `data` dict literals passed to `format_recon_report_{json,markdown,csv}` (expect `dict[str, object]`) — `dict` is invariant.
+  - 3 × `var-annotated`: `data = {...}` locals at lines 292, 529, 547 lacked an annotation.
+  - Line 64 `call-overload`: `set(result["modules_run"])` where `result` is `dict[str, object]`.
+  - Lines 242-245, 665-667, 681-683, 697-699, 713-715 `operator`/`arg-type`/`attr-defined`: `result["modules_run"]` and `result["notes"]` inferred as `object`.
+- Fixed `ethscan/recon.py`: widened `format_recon_report_json/markdown/csv` signatures from `dict[str, object]` to `Mapping[str, object]` (formatters only read from `data`; mypy-recommended covariant type). Added `Mapping` import.
+- Fixed `tests/test_recon.py`:
+  - Annotated `data: dict[str, object] = {...}` at lines 292, 529, 547.
+  - Cast `result["modules_run"]` → `cast(list[str], ...)` and `result["notes"]` → `cast(list[str], ...)` at the 16 access sites (added `from typing import cast`).
+- No behavior change.
+
+## Verification
+- `python -m mypy tests/test_recon.py` → Success: no issues found.
+- `python -m mypy ethscan/recon.py` → Success: no issues found.
+- `python -m ruff check tests/test_recon.py ethscan/recon.py` → All checks passed.
+- `python -m pytest tests/test_recon.py -q` → 36 passed.
+- `python -m pytest -q` → 5936 passed, 50 skipped, 0 failed (baseline unchanged).
+
+## Blockers
+- None.
+
+## Next task
+- Continue typing hygiene in remaining test files with mypy errors. Reproduce with `python -m mypy tests/<file>` first, then fix per file. Remaining files with the most errors (per earlier count): `test_ping.py` (41), `test_resolve.py` (48), `test_radix.py` (68), `test_cidr.py` (74).

@@ -3,6 +3,8 @@
 import csv
 import io
 import json
+from typing import cast
+
 from unittest.mock import patch
 
 from ethscan.recon import (
@@ -61,7 +63,7 @@ def test_run_recon_default_modules() -> None:
 
         assert result["target"] == "example.com"
         assert result["domain"] == "example.com"
-        assert set(result["modules_run"]) == set(DEFAULT_RECON_MODULES)
+        assert set(cast(list[str], result["modules_run"])) == set(DEFAULT_RECON_MODULES)
         assert result["subdomains"] is not None
         assert result["dns"] is not None
         assert result["whois"] is not None
@@ -239,10 +241,13 @@ def test_run_recon_module_failure_handling() -> None:
         result = run_recon("example.com", modules=["subdomains", "dns"])
 
         # Both modules should be in modules_run even if one fails
-        assert "subdomains" in result["modules_run"]
-        assert "dns" in result["modules_run"]
-        assert len(result["notes"]) >= 1
-        assert any("subdomains module failed" in note for note in result["notes"])
+        assert "subdomains" in cast(list[str], result["modules_run"])
+        assert "dns" in cast(list[str], result["modules_run"])
+        assert len(cast(list[str], result["notes"])) >= 1
+        assert any(
+            "subdomains module failed" in note
+            for note in cast(list[str], result["notes"])
+        )
 
 
 def test_run_recon_offline_target() -> None:
@@ -289,7 +294,7 @@ def test_format_recon_report_json() -> None:
 
 
 def test_format_recon_report_json_empty() -> None:
-    data = {
+    data: dict[str, object] = {
         "target": "example.com",
         "domain": "example.com",
         "modules_run": [],
@@ -526,7 +531,7 @@ def test_format_recon_report_markdown_trace() -> None:
 
 
 def test_format_recon_report_markdown_notes() -> None:
-    data = {
+    data: dict[str, object] = {
         "target": "example.com",
         "domain": "example.com",
         "modules_run": ["subdomains"],
@@ -544,7 +549,7 @@ def test_format_recon_report_markdown_notes() -> None:
 
 
 def test_format_recon_report_markdown_empty_modules() -> None:
-    data = {
+    data: dict[str, object] = {
         "target": "example.com",
         "domain": "example.com",
         "modules_run": [],
@@ -662,9 +667,12 @@ def test_run_recon_dns_failure_handling() -> None:
 
         result = run_recon("example.com", modules=["dns"])
 
-        assert "dns" in result["modules_run"]
-        assert len(result["notes"]) >= 1
-        assert any("dns module failed" in note for note in result["notes"])
+        assert "dns" in cast(list[str], result["modules_run"])
+        assert len(cast(list[str], result["notes"])) >= 1
+        assert any(
+            "dns module failed" in note
+            for note in cast(list[str], result["notes"])
+        )
 
 
 def test_run_recon_whois_failure_handling() -> None:
@@ -678,9 +686,12 @@ def test_run_recon_whois_failure_handling() -> None:
 
         result = run_recon("example.com", modules=["whois"])
 
-        assert "whois" in result["modules_run"]
-        assert len(result["notes"]) >= 1
-        assert any("whois module failed" in note for note in result["notes"])
+        assert "whois" in cast(list[str], result["modules_run"])
+        assert len(cast(list[str], result["notes"])) >= 1
+        assert any(
+            "whois module failed" in note
+            for note in cast(list[str], result["notes"])
+        )
 
 
 def test_run_recon_geo_failure_handling() -> None:
@@ -694,9 +705,12 @@ def test_run_recon_geo_failure_handling() -> None:
 
         result = run_recon("example.com", modules=["geo"])
 
-        assert "geo" in result["modules_run"]
-        assert len(result["notes"]) >= 1
-        assert any("geo module failed" in note for note in result["notes"])
+        assert "geo" in cast(list[str], result["modules_run"])
+        assert len(cast(list[str], result["notes"])) >= 1
+        assert any(
+            "geo module failed" in note
+            for note in cast(list[str], result["notes"])
+        )
 
 
 def test_run_recon_trace_failure_handling() -> None:
@@ -710,9 +724,12 @@ def test_run_recon_trace_failure_handling() -> None:
 
         result = run_recon("example.com", modules=["trace"])
 
-        assert "trace" in result["modules_run"]
-        assert len(result["notes"]) >= 1
-        assert any("trace module failed" in note for note in result["notes"])
+        assert "trace" in cast(list[str], result["modules_run"])
+        assert len(cast(list[str], result["notes"])) >= 1
+        assert any(
+            "trace module failed" in note
+            for note in cast(list[str], result["notes"])
+        )
 
 
 def test_format_recon_report_markdown_geo_success_with_flags() -> None:

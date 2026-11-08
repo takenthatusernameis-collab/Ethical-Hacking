@@ -8,7 +8,7 @@ from __future__ import annotations
 import csv
 import io
 import json
-from typing import cast
+from typing import Mapping, cast
 
 from ethscan.dns import run_dns
 from ethscan.geo import run_geo
@@ -156,7 +156,7 @@ def run_recon(
     return results
 
 
-def format_recon_report_json(data: dict[str, object]) -> str:
+def format_recon_report_json(data: Mapping[str, object]) -> str:
     """Format recon results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
@@ -178,7 +178,7 @@ def _as_list(value: object) -> list[object]:
     return []
 
 
-def format_recon_report_markdown(data: dict[str, object]) -> str:
+def format_recon_report_markdown(data: Mapping[str, object]) -> str:
     """Format recon results as Markdown."""
     data = _as_dict(data)
     lines = ["# ethscan Reconnaissance Report", ""]
@@ -347,7 +347,7 @@ def format_recon_report_markdown(data: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_recon_report_csv(data: dict[str, object]) -> str:
+def format_recon_report_csv(data: Mapping[str, object]) -> str:
     """Format recon results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)
