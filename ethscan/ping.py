@@ -12,6 +12,7 @@ import json
 import socket
 import struct
 import time
+from typing import Mapping
 
 from ethscan.target import parse_url
 
@@ -421,12 +422,12 @@ def run_ping(
     }
 
 
-def format_ping_report_json(data: dict[str, object]) -> str:
+def format_ping_report_json(data: Mapping[str, object]) -> str:
     """Format ping results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_ping_report_markdown(data: dict[str, object]) -> str:
+def format_ping_report_markdown(data: Mapping[str, object]) -> str:
     """Format ping results as Markdown."""
     if not isinstance(data, dict):
         data = {}

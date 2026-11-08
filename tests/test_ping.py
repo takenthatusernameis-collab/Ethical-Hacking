@@ -9,6 +9,7 @@ import socket
 import struct
 import threading
 import time
+from typing import cast
 
 from ethscan.ping import (
     DEFAULT_COUNT,
@@ -393,13 +394,13 @@ def test_probe_icmp_loopback_closed_no_raw_socket() -> None:
 # ---------------------------------------------------------------------------
 
 
-class _FakeRawSocket:
+class _FakeRawSocket(socket.socket):
     """Minimal fake raw socket that returns pre-set data from recvfrom."""
 
     def __init__(self, data: bytes = b"", recv_error: Exception | None = None) -> None:
         self._data = data
         self._recv_error = recv_error
-        self.timeout = None
+        self.timeout: float | None = None
         self.closed = False
 
     def settimeout(self, timeout: float) -> None:
@@ -581,7 +582,7 @@ def test_probe_icmp_raw_socket_wrong_id(monkeypatch) -> None:
 def test_probe_icmp_raw_send_socket_creation_fails_falls_back(monkeypatch) -> None:
     # raw_socket is provided but creating the send raw socket fails ->
     # raw_socket is reset to None and the TCP fallback path is used.
-    fake_raw = object()
+    fake_raw = _FakeRawSocket()
     original_socket = socket.socket
 
     def mock_socket(family, type_, proto=0):
@@ -614,7 +615,7 @@ def test_probe_icmp_raw_send_socket_creation_fails_falls_back(monkeypatch) -> No
 
 def test_probe_icmp_raw_sendto_oserror(monkeypatch) -> None:
     # send_sock is created but sendto raises OSError -> RESP_NO_RESPONSE.
-    fake_raw = object()
+    fake_raw = _FakeRawSocket()
 
     class _FakeSendSocket:
         def __init__(self):
