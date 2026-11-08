@@ -12,7 +12,7 @@ import json
 import socket
 import struct
 import time
-from typing import Mapping
+from typing import Mapping, TypedDict, cast
 
 from ethscan.target import parse_url
 
@@ -31,6 +31,44 @@ RESP_CONNECTED = "CONNECTED"
 RESP_RST = "RST"
 RESP_NO_RESPONSE = "NO-RESPONSE"
 RESP_TIMEOUT = "TIMEOUT"
+
+
+class _IcmpReply(TypedDict):
+    type: int
+    code: int
+    identifier: int
+    sequence: int
+    payload: bytes
+    src_ip: str
+    protocol: int
+    error: str | None
+
+
+class _ProbeResult(TypedDict):
+    ip: str | None
+    rtt_ms: float | None
+    ttl: int
+    sequence: int
+    response_type: str
+    error: str | None
+
+
+class _PingResult(TypedDict):
+    target: str
+    host: str
+    ip: str | None
+    count: int
+    timeout: float
+    ttl: int
+    port: int
+    raw_socket_available: bool
+    probes: list[_ProbeResult]
+    successful: int
+    failed: int
+    rtt_min_ms: float | None
+    rtt_max_ms: float | None
+    rtt_avg_ms: float | None
+    notes: list[str]
 
 
 def _normalize_host(target: str) -> str:
@@ -62,29 +100,29 @@ def _build_icmp_echo_request(identifier: int, sequence: int, payload: bytes = b"
     return header + payload
 
 
-def _parse_icmp_reply(data: bytes, expected_id: int) -> dict[str, object] | None:
+def _parse_icmp_reply(data: bytes, expected_id: int) -> _IcmpReply | None:
     """Parse an ICMP Echo Reply packet.
 
     Returns a dict with keys: type, code, identifier, sequence, payload, error.
     Returns None if the packet is not a valid Echo Reply for our identifier.
     """
     if len(data) < 20:
-        return {"error": "packet too short for IP header"}
+        return cast(_IcmpReply, {"error": "packet too short for IP header"})
 
     ip_version = (data[0] >> 4) & 0x0F
     if ip_version != 4:
-        return {"error": "not IPv4"}
+        return cast(_IcmpReply, {"error": "not IPv4"})
 
     ihl = data[0] & 0x0F
     ip_header_len = ihl * 4
     if ip_header_len < 20 or len(data) < ip_header_len:
-        return {"error": "IP header truncated"}
+        return cast(_IcmpReply, {"error": "IP header truncated"})
 
     protocol = data[9]
     src_ip = socket.inet_ntoa(data[12:16])
 
     if len(data) < ip_header_len + 8:
-        return {"error": "ICMP header truncated"}
+        return cast(_IcmpReply, {"error": "ICMP header truncated"})
 
     icmp_offset = ip_header_len
     icmp_type = data[icmp_offset]
@@ -94,10 +132,10 @@ def _parse_icmp_reply(data: bytes, expected_id: int) -> dict[str, object] | None
     icmp_sequence = struct.unpack("!H", data[icmp_offset + 6:icmp_offset + 8])[0]
 
     if icmp_type != ICMP_ECHO_REPLY or icmp_code != 0:
-        return {"error": f"not echo reply: type={icmp_type}, code={icmp_code}"}
+        return cast(_IcmpReply, {"error": f"not echo reply: type={icmp_type}, code={icmp_code}"})
 
     if icmp_identifier != expected_id:
-        return {"error": f"identifier mismatch: expected {expected_id}, got {icmp_identifier}"}
+        return cast(_IcmpReply, {"error": f"identifier mismatch: expected {expected_id}, got {icmp_identifier}"})
 
     payload = data[icmp_offset + 8:]
 
@@ -147,7 +185,7 @@ def probe_icmp(
     payload: bytes = b"",
     resolved_ip: str | None = None,
     port: int = DEFAULT_PORT,
-) -> dict[str, object]:
+) -> _ProbeResult:
     """Send an ICMP Echo Request and wait for a reply.
 
     When a raw ICMP socket is provided (privileged/root), the function
@@ -318,7 +356,7 @@ def run_ping(
     ttl: int = DEFAULT_TTL,
     port: int = DEFAULT_PORT,
     raw_socket: socket.socket | None = None,
-) -> dict[str, object]:
+) -> _PingResult:
     """Run ICMP ping (or TCP fallback) against *target*.
 
     Args:
@@ -349,7 +387,7 @@ def run_ping(
 
     identifier = 0xFFFF & int(time.time() * 1000)
 
-    probes: list[dict[str, object]] = []
+    probes: list[_ProbeResult] = []
     notes: list[str] = []
 
     if ip is None:

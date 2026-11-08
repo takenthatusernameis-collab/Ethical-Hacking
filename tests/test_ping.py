@@ -216,6 +216,7 @@ def test_parse_icmp_reply_wrong_type() -> None:
     packet = ip_header + icmp_header
     result = _parse_icmp_reply(packet, 12345)
     assert result is not None
+    assert result["error"] is not None
     assert "not echo reply" in result["error"]
 
 
@@ -332,7 +333,7 @@ def test_probe_icmp_offline_no_raw_socket() -> None:
     )
     assert result["sequence"] == 1
     assert result["ttl"] == 64
-    assert result["reached_destination"] is False if "reached_destination" in result else True
+    assert cast(dict[str, object], result)["reached_destination"] is False if "reached_destination" in result else True
     assert result["response_type"] in (RESP_NO_RESPONSE, RESP_TIMEOUT)
 
 

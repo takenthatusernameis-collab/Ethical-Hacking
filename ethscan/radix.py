@@ -10,7 +10,10 @@ from __future__ import annotations
 import csv
 import io
 import ipaddress
-from typing import cast
+from typing import TYPE_CHECKING, Mapping, Sequence, TypedDict, cast
+
+if TYPE_CHECKING:
+    from typing import NotRequired  # type: ignore[attr-defined]  # typing.NotRequired exists on Python 3.11+
 
 from ethscan.cidr import normalize_cidr
 
@@ -54,6 +57,37 @@ def parse_cidrs(values: list[str]) -> list[ipaddress._BaseNetwork]:
     return networks
 
 
+class _ContainsResult(TypedDict):
+    ip: str
+    in_network: bool
+    matched_network: str | None
+
+
+class _DiffResult(TypedDict):
+    diff_cidrs: list[str]
+    diff_network_count: int
+    diff_merged_network_count: int
+    diff_merged: list[str]
+    difference: list[str]
+    difference_network_count: int
+    total_diff_addresses: int
+
+
+class RadixResult(TypedDict):
+    cidrs: list[str]
+    network_count: int
+    merged_network_count: int
+    merged: list[str]
+    total_input_addresses: int
+    total_merged_addresses: int
+    compression_ratio: float
+    merge_enabled: bool
+    max_depth: int
+    radix_tree: dict[str, object] | None
+    contains: NotRequired[_ContainsResult]
+    diff: NotRequired[_DiffResult]
+
+
 # Backwards-compatible alias for the previous private name.
 _parse_networks = parse_cidrs
 
@@ -66,7 +100,7 @@ def _nth_bit(addr, bit_index: int, is_v4: bool) -> int:
     return (int(addr) >> (max_bits - 1 - bit_index)) & 1
 
 
-def _common_prefix_length(networks: list[ipaddress._BaseNetwork]) -> int:
+def _common_prefix_length(networks: Sequence[ipaddress._BaseNetwork]) -> int:
     """Return the longest common prefix length shared by all networks."""
     if not networks:
         return 0
@@ -92,7 +126,7 @@ def _contains_ip(network: ipaddress._BaseNetwork, ip: str) -> bool:
     return addr in network
 
 
-def _contains_in_merged(merged: list[ipaddress._BaseNetwork], ip: str) -> tuple[bool, str | None]:
+def _contains_in_merged(merged: Sequence[ipaddress._BaseNetwork], ip: str) -> tuple[bool, str | None]:
     """Check whether an IP address belongs to any of the merged networks.
 
     Returns a tuple of (in_network, matched_network_str_or_None).
@@ -122,8 +156,8 @@ def _collapse_v6_networks(
 
 
 def _subtract_networks(
-    minuend: list[ipaddress._BaseNetwork],
-    subtrahend: list[ipaddress._BaseNetwork],
+    minuend: Sequence[ipaddress._BaseNetwork],
+    subtrahend: Sequence[ipaddress._BaseNetwork],
 ) -> list[ipaddress._BaseNetwork]:
     """Subtract subtrahend networks from minuend networks.
 
@@ -161,7 +195,7 @@ def _subtract_networks(
     return sorted(result, key=lambda n: n.network_address)
 
 
-def _merge_networks(networks: list[ipaddress._BaseNetwork]) -> list[ipaddress._BaseNetwork]:
+def _merge_networks(networks: Sequence[ipaddress._BaseNetwork]) -> list[ipaddress._BaseNetwork]:
     """Merge overlapping and adjacent (supernettable) networks.
 
     Networks that overlap or can be combined into a single supernet are
@@ -253,7 +287,7 @@ def _common_prefix_of_pair(start, end, is_v4: bool) -> int:
 
 
 def _build_radix_node(
-    networks: list[ipaddress._BaseNetwork],
+    networks: Sequence[ipaddress._BaseNetwork],
     depth: int = 0,
     max_depth: int = 64,
 ) -> dict[str, object] | None:
@@ -399,7 +433,7 @@ def run_radix(
     max_depth: int = 64,
     contains: str | None = None,
     diff: list[str] | None = None,
-) -> dict[str, object]:
+) -> RadixResult:
     """Build a radix tree visualization over a set of CIDR networks.
 
     Args:
@@ -471,10 +505,10 @@ def run_radix(
             "total_diff_addresses": total_diff_addresses,
         }
 
-    return result
+    return cast(RadixResult, result)
 
 
-def format_radix_report_json(data: dict[str, object]) -> str:
+def format_radix_report_json(data: Mapping[str, object]) -> str:
     """Format radix results as JSON."""
     import json
     return json.dumps(data, indent=2, default=str)
@@ -507,7 +541,7 @@ def _render_node_md(node: dict[str, object], lines: list[str], depth: int = 0) -
             _render_node_md(child_node, lines, depth + 2)
 
 
-def format_radix_report_markdown(data: dict[str, object]) -> str:
+def format_radix_report_markdown(data: Mapping[str, object]) -> str:
     """Format radix results as Markdown."""
     if not isinstance(data, dict):
         data = {}
@@ -592,7 +626,7 @@ def format_radix_report_markdown(data: dict[str, object]) -> str:
 
     return "\n".join(lines)
 
-def format_radix_report_csv(data: dict[str, object]) -> str:
+def format_radix_report_csv(data: Mapping[str, object]) -> str:
     """Format radix tree results as CSV."""
     if not isinstance(data, dict):
         data = {}

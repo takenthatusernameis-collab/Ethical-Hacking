@@ -11,6 +11,10 @@ from __future__ import annotations
 import csv
 import io
 import ipaddress
+from typing import TYPE_CHECKING, Mapping, Sequence, TypedDict, cast
+
+if TYPE_CHECKING:
+    from typing import NotRequired  # type: ignore[attr-defined]  # typing.NotRequired exists on Python 3.11+
 
 
 class CidrSpecError(ValueError):
@@ -21,6 +25,26 @@ class CidrSpecError(ValueError):
     CIDR specification from unrelated value errors and turn it into a usage
     error.
     """
+
+
+class _CidrContainsResult(TypedDict):
+    ip: str
+    in_network: bool
+
+
+class _CidrDiffResult(TypedDict):
+    diff_cidr: str
+    difference: list[str]
+    difference_network_count: int
+    total_diff_addresses: int
+
+
+class CidrResult(TypedDict):
+    cidr: str
+    ip_version: str
+    network: dict[str, object]
+    contains: NotRequired[_CidrContainsResult]
+    diff: NotRequired[_CidrDiffResult]
 
 
 def normalize_cidr(value: str) -> str:
@@ -114,8 +138,8 @@ def _contains_ip(network: ipaddress._BaseNetwork, ip: str) -> bool:
 
 
 def _subtract_networks(
-    minuend: list[ipaddress._BaseNetwork],
-    subtrahend: list[ipaddress._BaseNetwork],
+    minuend: Sequence[ipaddress._BaseNetwork],
+    subtrahend: Sequence[ipaddress._BaseNetwork],
 ) -> list[ipaddress._BaseNetwork]:
     """Subtract subtrahend networks from minuend networks.
 
@@ -157,7 +181,7 @@ def run_cidr(
     cidr: str,
     contains: str | None = None,
     diff: str | None = None,
-) -> dict[str, object]:
+) -> CidrResult:
     """Compute network calculations for a CIDR.
 
     Args:
@@ -199,10 +223,10 @@ def run_cidr(
             "total_diff_addresses": total_diff_addresses,
         }
 
-    return result
+    return cast(CidrResult, result)
 
 
-def format_cidr_report_json(data: dict[str, object]) -> str:
+def format_cidr_report_json(data: Mapping[str, object]) -> str:
     """Format CIDR results as JSON."""
     import json
 
@@ -214,7 +238,7 @@ def _escape(value: str) -> str:
     return value.replace("|", "\\|")
 
 
-def format_cidr_report_markdown(data: dict[str, object]) -> str:
+def format_cidr_report_markdown(data: Mapping[str, object]) -> str:
     """Format CIDR results as Markdown."""
     if not isinstance(data, dict):
         data = {}
@@ -277,7 +301,7 @@ def format_cidr_report_markdown(data: dict[str, object]) -> str:
         lines.append("")
 
     return "\n".join(lines)
-def format_cidr_report_csv(data: dict[str, object]) -> str:
+def format_cidr_report_csv(data: Mapping[str, object]) -> str:
     """Format CIDR calculation results as CSV."""
     if not isinstance(data, dict):
         data = {}

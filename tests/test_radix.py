@@ -3,6 +3,7 @@
 import ipaddress
 import json
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -286,8 +287,8 @@ def test_run_radix_radix_tree_structure() -> None:
     data = run_radix(["192.168.1.0/24", "192.168.2.0/23"])
     root = data["radix_tree"]
     assert root is not None
-    assert root["total_addresses"] >= 768
-    assert len(root["children"]) >= 1
+    assert cast(int, root["total_addresses"]) >= 768
+    assert len(cast(list[object], root["children"])) >= 1
 
 
 def test_run_radix_radix_tree_leaf() -> None:
