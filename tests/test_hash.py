@@ -950,6 +950,46 @@ def test_run_check_iterations_requires_salt() -> None:
     assert "PBKDF2" in result["error"]
 
 
+def _peppered_pbkdf2_digest(password: str, salt: str, pepper: str, iterations: int, algorithm: str = "sha256") -> str:
+    import hashlib
+    import hmac
+
+    pbkdf2 = hashlib.pbkdf2_hmac(algorithm, password.encode("utf-8"), salt.encode("utf-8"), iterations).hex()
+    return hmac.new(pepper.encode("utf-8"), pbkdf2.encode("utf-8"), algorithm).hexdigest()
+
+
+def test_run_check_iterations_with_pepper_match() -> None:
+    digest = _peppered_pbkdf2_digest("password", "saltvalue", "peppervalue", 1000)
+    result = run_check(
+        "password",
+        digest,
+        algorithm="sha256",
+        salt="saltvalue",
+        pepper="peppervalue",
+        iterations=1000,
+    )
+    assert result["match"] is True
+    assert result["iterations"] == 1000
+    assert result["salt_value"] == "saltvalue"
+    assert result["pepper"] is True
+
+
+def test_run_check_iterations_with_pepper_mismatch() -> None:
+    digest = _peppered_pbkdf2_digest("password", "saltvalue", "peppervalue", 1000)
+    result = run_check(
+        "wrongpass",
+        digest,
+        algorithm="sha256",
+        salt="saltvalue",
+        pepper="peppervalue",
+        iterations=1000,
+    )
+    assert result["match"] is False
+    assert result["iterations"] == 1000
+    assert result["salt_value"] == "saltvalue"
+    assert result["pepper"] is True
+
+
 def test_format_hash_report_json_includes_iterations() -> None:
     data = run_hash(["password"], "sha256", salt="saltvalue", iterations=1000)
     parsed = json.loads(format_hash_report_json(data))
