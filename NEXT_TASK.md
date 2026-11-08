@@ -1,19 +1,15 @@
 # Next Task
 
 ## Status: CLOSED (Sun Nov 08 2026)
-The handoff task (investigate order-dependent CLI file-error test failures under full-suite ordering) is closed:
-- `ethscan/cli.py` already uses stable module-attribute lookups (`ethscan.fileio.read_lines`, `ethscan.stale.load_domains_from_file`) matching the tests' patch targets.
-- The environment gap is resolved: `dnspython` 2.9.2 is installed (`import dns` works).
-- Full suite passes twice with dnspython: 5932 passed, 50 skipped, 0 failed; twice without: 5929 passed, 53 skipped, 0 failed. `ruff check .` clean; `mypy ethscan/` clean.
-- Flakiness does not reproduce in either environment.
+No actionable prior assignment; baseline re-verified green this session.
 
 ## Candidate
-None pending. Baseline is green.
+None pending. If a future session needs bounded work, pick a single high-value, verifiable improvement (e.g., a small CLI/doc inconsistency found by evidence, or a focused regression test for an observed gap) — only when reproduced/justified.
 
 ## Constraints
-- Do not re-audit `--out`/`--init` routing (already covered).
-- Do not weaken safety controls or turn this into an infrastructure project.
-- Do not make speculative changes without a reproducible failure.
-- If flakiness reappears: reproduce here (dnspython installed) and find the earlier test that rebinds `ethscan.fileio`/`ethscan.stale` or reloads modules so a `patch.object` target stops being the object `cli.py` reads at call time.
+- Do not re-audit `--out`/`--init` routing or revisit closed flakiness without a reproduction.
+- Do not weaken safety controls or turn maintenance into an infrastructure project.
+- Do not make speculative changes; preserve the working baseline.
+- If order-dependent flakiness reappears: reproduce with dnspython installed and identify which earlier test rebinds `ethscan.fileio`/`ethscan.stale` or reloads modules so `patch.object` targets diverge from `cli.py` call-time lookups.
 
-(End of file - total 22 lines)
+(End of file - total 15 lines)

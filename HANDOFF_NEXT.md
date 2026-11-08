@@ -1,26 +1,24 @@
 # Handoff
-Date: Sun Nov 08 2026
+Date: Sun Nov 08 2026 (session refresh)
 
 ## What changed
-- Installed `dnspython` 2.9.2 in this environment (was missing previously; required by requirements.txt and by several DNS/reload-heavy test modules).
-- No product-code change: `ethscan/cli.py` already reads via `ethscan.fileio.read_lines` (cli.py:3611) and `ethscan.stale.load_domains_from_file` (cli.py:4631), i.e. module-attribute lookups resolved at call time. These are exactly the attributes the tests patch (`patch.object(ethscan.fileio, "read_lines")` / `patch.object(ethscan.stale, "load_domains_from_file")`), so the lookup target is already stable.
+- No product-code changes. Updated TASK.md/NEXT_TASK.md/HANDOFF_NEXT.md to reflect this session’s verification.
 
 ## What was verified
-- `import dns` → dnspython 2.9.2 available.
-- Full `python -m pytest -q` run #1 with dnspython: 5932 passed, 50 skipped, 0 failed.
-- Full `python -m pytest -q` run #2 with dnspython: 5932 passed, 50 skipped, 0 failed. The reported 2 failures do NOT reproduce, with or without dnspython.
-- `python -m ruff check .` → All checks passed.
-- `python -m mypy ethscan/` → Success: no issues found in 59 source files.
-- `pytest tests/test_radix.py tests/test_stale.py tests/test_fileio.py` → 211 passed.
+- Repo inspection: no open actionable assignment (NEXT_TASK closed); `git status` clean aside from handoff-file edits; no TODO/FIXME/XXX/HACK in `*.py`; 5982 tests collected; `ethscan` 0.1.0.
+- `python -m pytest -q` → **5932 passed, 50 skipped, 0 failed** (85.82s). dnspython 2.9.2 present.
+- `python -m ruff check .` → **All checks passed**.
+- `python -m mypy ethscan/` → **Success: no issues found in 59 source files**.
+- Sanity imports: `ethscan.cli, fileio, stale, radix` OK.
 
 ## Unresolved
-- None. Baseline is green in both environments (with and without dnspython). The earlier hypothesis that dnspython explains the order-dependent failures is not supported: the failures do not reproduce even with dnspython installed.
+- None demonstrated.
 
 ## Approaches that failed
-- None: no reproducible defect exists in this checkout, so no speculative change was made (per the rule against speculative changes).
+- None (no reproducible defect; no speculative change attempted).
 
 ## Next task
-- None pending; baseline is green.
-- If the flakiness reappears, reproduce in this environment (dnspython now installed) and identify which earlier test rebinds `ethscan.fileio`/`ethscan.stale` on the package or reloads modules such that a `patch.object` target stops being the object `cli.py` reads at call time.
+- **None pending; baseline green.**
+- If order-dependent flakiness reappears (radix/stale CLI file-error tests), reproduce with dnspython installed and find which earlier test rebinds `ethscan.fileio`/`ethscan.stale` or reloads modules so `patch.object` targets diverge from `cli.py` call-time lookups. Keep changes minimal and evidence-based.
 
-(End of file - total 31 lines)
+(End of file - total 26 lines)
