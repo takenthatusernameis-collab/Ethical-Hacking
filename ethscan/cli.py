@@ -536,6 +536,20 @@ class _CheckedDefaultMap(dict):
             return value  # pragma: no cover - defensive
         return _check_config_value(param, value, self._path)
 
+    def __getitem__(self, name: str) -> Any:
+        """Return a config value, checked against the option.
+
+        Click reads the default map through ``__getitem__`` (its
+        ``lookup_default`` and ``_default_map_has`` both index into it), so the
+        check has to live here as well. Without it a hostile config value is
+        handed to the option's converter unchecked, the same way a value that
+        was never put in the map is not checked: only the values that are
+        actually used are refused.
+        """
+        if name not in self:
+            raise KeyError(name)
+        return self.get(name)
+
     def _param(self, name: str) -> click.Parameter | None:
         """Return the option a config value belongs to, if there is one."""
         for param in self._command.params:
