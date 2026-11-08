@@ -1,22 +1,23 @@
 # Task
-Date: Sun Nov 08 2026
+Date: Sun Nov 08 2026 (session 2)
 
 ## This session
-- Inspected repo state: working tree clean, no prior open assignment beyond the osdetect fix already committed (74e77eb). Re-ran the baseline checks the prior session claimed were green and found they are NOT green in this environment: `pytest -q` reports **7 failed, 5929 passed, 50 skipped** (was 5927 passed before this session's change).
-- Root-caused the 7 failures: all are environment version drift, not code bugs under the pinned toolchain.
-  - `tests/test_cli.py::test_cli_no_subcommand_lists_commands` — Click 8.5.1 raises `NoArgsIsHelpError` (a `UsageError`) for a no-arg group invocation, which `main()` reports with exit code 2 and writes help to stderr; the test asserts exit 0.
-  - 4 `test_cli.py::test_config_*` — Click 8.2+ removed `CliRunner(mix_stderr=...)`; stderr is now merged into `output` and `result.stderr` still carries it, so tests asserting the warning is parseable JSON in `output` get the warning prepended. The prior commit 74e77eb changed `CliRunner(mix_stderr=False)` → `CliRunner()` to match, which is correct for 8.5 but the tests still assume separated streams.
-  - `tests/test_completion.py::test_completion_class_for_unknown_raises` — Click 8.5.1 registers `powershell` in `shell_completion._available_shells`, so `_completion_class_for("powershell")` no longer raises `ValueError`.
-  - `tests/test_tls.py::test_build_context_default_version_unchanged` — OpenSSL 3.5.5 sets `SSLContext(PROTOCOL_TLS_CLIENT).minimum_version` to `TLSv1_2`, not `MINIMUM_SUPPORTED`.
-- Selected bounded, high-value task (evidence-based): a hostile-shape sweep across all 320 report formatters reproduced a real gap — `ethscan/ssh.py:624,633` `format_ssh_report_markdown` indexed `data["host_key"]` and `data["findings"]` directly, raising `KeyError`/`TypeError` on hostile shapes (None, [], "x", non-dict host_key, non-list findings).
-- Implemented smallest reversible fix: `host_key` is now fetched with `.get` and only rendered when it is a non-empty dict; `findings` is coerced to a list/tuple and non-dict entries are skipped; finding fields are string-coerced. No behavior change for the well-formed path.
-- Added `tests/test_ssh_hostile_sweep_formatter.py` with top-level hostile shapes and nested hostile shapes (non-dict host_key, non-list findings, missing keys), with assertions.
-- Verified: `tests/test_ssh.py tests/test_ssh_hostile_sweep.py tests/test_ssh_hostile_sweep_formatter.py` → 92 passed; full suite 5929 passed / 50 skipped / 7 failed (the 7 are the pre-existing environment drift above, unchanged by this session); `ruff check` clean on changed files; `mypy ethscan/ssh.py` clean.
+- Inspected repo state: working tree clean on `main`, prior session's hostile-shape formatter fix already committed (729583f) along with Click/OpenSSL test adaptations (74e77eb, 841cc72) and a tls test tweak (5058e05).
+- Re-ran the full suite: **14 failed, 5922 passed, 50 skipped** — not the 7 the prior session reported.
+- Root-caused all 14: the prior session's TASK.md described a Click 8.5.1 / OpenSSL 3.5.5 environment, but this environment ships **Click 8.1.8** and **pyOpenSSL 25.3.0**. The prior session's test adaptations were correct for 8.5.1/3.5.5 and are wrong here:
+  - `CliRunner(mix_stderr=False)` is required for `result.stderr` to be captured; `CliRunner()` raises `ValueError: stderr not separately captured` on access (8 failures).
+  - No-subcommand invocation exits **0**, not 2 (1 failure).
+  - `_completion_class_for("powershell")` raises `ValueError` (powershell unsupported) (1 failure).
+  - `SSLContext(PROTOCOL_TLS_CLIENT).minimum_version == MINIMUM_SUPPORTED`, not `TLSv1_2` (4 failures).
+- Reproduced each failure pre-fix and confirmed the reverted assertion matches observed behavior.
+- Selected bounded, high-value task: revert the three test files to the original baseline (`b70b495`), matching the pinned toolchain. No source change needed.
+- Verified: `pytest -q` → **5936 passed, 50 skipped, 0 failed**; `ruff check` clean on changed files; `mypy ethscan/ssh.py ethscan/cli.py` clean; prior session's ssh hostile-sweep tests still pass (92 passed).
+- Committed as `0ee8340`.
 
 ## Blockers
-- 7 pre-existing test failures from Click 8.5.1 / OpenSSL 3.5.5 version drift (documented above). Not caused by this session's change; out of scope for the formatter-robustness task. A future session should decide whether to pin versions (pyproject) or adapt the tests to the new library behavior — but not conflate that with the hostile-shape work.
+- None. The version-drift failures are resolved by matching tests to the pinned toolchain. `pyproject.toml` already pins `click>=8.1`; dev extras include `pytest>=8.0`, `ruff>=0.17`, `mypy>=1.0`. No version pinning change is warranted.
 
 ## Next task
-- None pending beyond the version-drift decision above. If future work is needed, pick a single high-value, verifiable improvement and reproduce it first (e.g., audit other formatters with `data["..."]` direct-index patterns for the same hostile-shape gap only when reproduced) — do not speculate or weaken safety controls.
+- None pending. If future work is needed, pick a single high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.
 
-(End of file - total 35 lines)
+(End of file - total 24 lines)
