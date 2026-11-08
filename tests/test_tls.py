@@ -1126,7 +1126,8 @@ def test_enumerate_tls_note_versions_without_ciphers(monkeypatch) -> None:
 
 def test_build_context_default_version_unchanged(monkeypatch) -> None:
     ctx = _build_context()
-    assert ctx.minimum_version == ssl.TLSVersion.TLSv1_2
+    default_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    assert ctx.minimum_version == default_ctx.minimum_version
     assert ctx.maximum_version == ssl.TLSVersion.MAXIMUM_SUPPORTED
 
 
