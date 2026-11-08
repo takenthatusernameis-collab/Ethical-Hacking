@@ -621,20 +621,26 @@ def format_ssh_report_markdown(data: dict[str, Any]) -> str:
     render_algo_section("Encryption Algorithms", data.get("encryption_algorithms") or {})
     render_algo_section("MAC Algorithms", data.get("mac_algorithms") or {})
 
-    if data["host_key"]:
-        hk = data["host_key"]
+    host_key = data.get("host_key")
+    if isinstance(host_key, dict) and host_key:
         lines.append("## Host Key")
-        lines.append(f"- **Type:** {hk['key_type']}")
-        lines.append(f"- **Fingerprint (SHA256):** {hk['fingerprint']}")
-        if hk.get("key_bits"):
-            lines.append(f"- **Key Size:** {hk['key_bits']} bits")
+        lines.append(f"- **Type:** {host_key.get('key_type', '')}")
+        lines.append(f"- **Fingerprint (SHA256):** {host_key.get('fingerprint', '')}")
+        if host_key.get("key_bits"):
+            lines.append(f"- **Key Size:** {host_key.get('key_bits')} bits")
         lines.append("")
 
-    if data["findings"]:
+    findings_obj = data.get("findings")
+    findings = list(findings_obj) if isinstance(findings_obj, (list, tuple)) else []
+    if findings:
         lines.append("## Security Findings")
-        for finding in data["findings"]:
-            severity_icon = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(finding["severity"], "⚪")
-            lines.append(f"- {severity_icon} **[{finding['severity'].upper()}]** {finding['description']}")
+        for finding in findings:
+            if not isinstance(finding, dict):
+                continue
+            severity = str(finding.get("severity", "") or "")
+            description = str(finding.get("description", "") or "")
+            severity_icon = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(severity, "⚪")
+            lines.append(f"- {severity_icon} **[{severity.upper()}]** {description}")
         lines.append("")
     else:
         lines.append("## Security Findings")
