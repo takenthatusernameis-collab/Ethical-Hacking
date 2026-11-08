@@ -477,6 +477,7 @@ import tempfile
 from unittest.mock import patch
 
 import ethscan.cli
+import ethscan.stale
 from click.testing import CliRunner
 
 from ethscan.cli import cli
@@ -489,7 +490,7 @@ class TestStaleCliFileErrors:
             name = f.name
         try:
             with patch.object(
-                ethscan.cli,
+                ethscan.stale,
                 "load_domains_from_file",
                 side_effect=OSError("Permission denied"),
             ):

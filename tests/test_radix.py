@@ -1141,6 +1141,7 @@ import tempfile
 from unittest.mock import patch
 
 import ethscan.cli
+import ethscan.fileio
 from click.testing import CliRunner
 
 from ethscan.cli import cli
@@ -1153,7 +1154,7 @@ class TestRadixCliFileErrors:
             name = f.name
         try:
             with patch.object(
-                ethscan.cli, "read_lines", side_effect=OSError("Permission denied")
+                ethscan.fileio, "read_lines", side_effect=OSError("Permission denied")
             ):
                 runner = CliRunner()
                 r = runner.invoke(cli, ["radix", "--cidr-file", name])

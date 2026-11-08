@@ -68,6 +68,8 @@ from ethscan.dnssec import (
     format_dnssec_report_markdown,
     run_dnssec,
 )
+import ethscan.fileio
+import ethscan.stale
 from ethscan.fileio import is_utf8, load_json, read_lines
 from ethscan.ftp import (
     format_ftp_report_csv,
@@ -297,7 +299,6 @@ from ethscan.stale import (
     format_stale_report_csv,
     format_stale_report_json,
     format_stale_report_markdown,
-    load_domains_from_file,
     run_stale,
 )
 from ethscan.subdomains import (
@@ -3607,7 +3608,7 @@ def radix(
 
     if cidr_file:
         try:
-            file_cidrs = read_lines(cidr_file)
+            file_cidrs = ethscan.fileio.read_lines(cidr_file)
         except OSError as exc:
             raise click.BadParameter(
                 f"the file cannot be read: {exc.strerror or exc}",
@@ -4627,7 +4628,7 @@ def stale(
     all_targets: list[str] = list(targets)
     if target_file:
         try:
-            all_targets.extend(load_domains_from_file(target_file))
+            all_targets.extend(ethscan.stale.load_domains_from_file(target_file))
         except OSError as exc:
             raise click.BadParameter(
                 f"the file cannot be read: {exc.strerror or exc}",
