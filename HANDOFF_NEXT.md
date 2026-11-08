@@ -1,24 +1,15 @@
 # Handoff
-Date: Sat Nov 07 2026
+Date: Sun Nov 08 2026
 
 ## What changed
-- Added 8 regression tests to `tests/test_fileio.py` for `write_text`/`write_json` error handling (no product-code change):
-  - (a) unwritable parent directory → `OSError`
-  - (b) target path that is an existing directory → `OSError`
-  - (c) parent path that is a file → `OSError`
-  - (d) atomicity on failure: destination content stays intact, temp file removed
-- Tests mirror the `_write_output` → `click.BadParameter` usage-error contract (exit 2) by asserting `OSError`.
+- Removed temporary debug/probe artifacts: `tests/test_debug_probe.py`, `repro.py`, `repro2.py`.
 
 ## What was verified
-- `python -m pytest tests/test_fileio.py -q` → 30 passed (was 22).
-- `python -m pytest -q` (full suite) → 5929 passed, 50 skipped (baseline 5921 + 8 new).
-- `python -m ruff check ethscan/fileio.py tests/test_fileio.py` → clean.
+- `ruff check .` clean.
+- Full suite: 5927 passed, 53 skipped, 2 failed (order-dependent): `tests/test_radix.py::...unreadable_runtime...` and `tests/test_stale.py::...unreadable_runtime...`. Both pass individually and in small subsets.
 
 ## Unresolved
-- None.
+- Two CLI file-error tests fail only under full-suite ordering, likely module rebind/import caching. Needs investigation of patch target stability.
 
-## Failed approaches / evidence
-- None; the prior audit already established that error handling is consistent, so this was test-only work.
-
-## Next task (precise)
-- None. Handoff task complete. Do not commit unless asked.
+## Next task
+- Investigate why `patch.object(ethscan.cli, "read_lines"/"load_domains_from_file")` does not apply in full-suite order; make patch robust or adjust command to use a stable lookup. Reproduce with `pytest -q` (full).
