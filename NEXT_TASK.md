@@ -1,10 +1,10 @@
 # Next Task
 
 ## Status: CLOSED (Sun Nov 08 2026)
-No actionable prior assignment; baseline re-verified green this session.
+No actionable prior assignment. README `hash --iterations`/PBKDF2 doc gap fixed (evidence-based); baseline re-verified green.
 
 ## Candidate
-None pending. If a future session needs bounded work, pick a single high-value, verifiable improvement (e.g., a small CLI/doc inconsistency found by evidence, or a focused regression test for an observed gap) — only when reproduced/justified.
+None pending. If future work is needed, pick a single high-value, verifiable improvement only when reproduced/justified (do not speculate).
 
 ## Constraints
 - Do not re-audit `--out`/`--init` routing or revisit closed flakiness without a reproduction.
