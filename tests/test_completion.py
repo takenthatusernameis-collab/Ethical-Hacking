@@ -245,7 +245,7 @@ def test_format_completion_report_csv_basic() -> None:
 
 
 def test_format_completion_report_csv_empty() -> None:
-    result = {"shell": "bash", "prog_name": "ethscan", "script": ""}
+    result: dict[str, str] = {"shell": "bash", "prog_name": "ethscan", "script": ""}
     output = format_completion_report_csv(result)
     lines = output.splitlines()
     assert lines[0] == "field,value"
@@ -254,7 +254,7 @@ def test_format_completion_report_csv_empty() -> None:
 
 
 def test_format_completion_report_csv_missing_fields() -> None:
-    result = {}
+    result: dict[str, str] = {}
     output = format_completion_report_csv(result)
     lines = output.splitlines()
     assert lines[0] == "field,value"
@@ -263,7 +263,7 @@ def test_format_completion_report_csv_missing_fields() -> None:
 
 
 def test_format_completion_report_csv_escaping() -> None:
-    result = {
+    result: dict[str, str] = {
         "shell": "bash",
         "prog_name": "ethscan",
         "script": "line,with,commas\nsecond,line",
