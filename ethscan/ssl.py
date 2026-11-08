@@ -287,12 +287,12 @@ def run_ssl(
     return data
 
 
-def format_ssl_report_json(data: dict) -> str:
+def format_ssl_report_json(data: dict[str, object]) -> str:
     """Format SSL results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_ssl_report_markdown(data: dict) -> str:
+def format_ssl_report_markdown(data: dict[str, object]) -> str:
     """Format SSL results as Markdown."""
     if not isinstance(data, dict):
         data = {}
@@ -339,7 +339,7 @@ def format_ssl_report_markdown(data: dict) -> str:
     return "\n".join(lines)
 
 
-def format_ssl_report_csv(data: dict) -> str:
+def format_ssl_report_csv(data: dict[str, object]) -> str:
     """Format SSL results as CSV."""
     if not isinstance(data, dict):
         data = {}

@@ -26,7 +26,7 @@ def test_ssl_formatters_never_raise_on_hostile_top_level() -> None:
 
 
 def test_ssl_formatters_hostile_nested_shapes_never_raise() -> None:
-    cases = [
+    cases: list[dict[str, object]] = [
         {"target": 123, "host": None, "port": "x"},
         {"cert": "x"},
         {"cert": {"subject": 123, "issuer": [], "sans": "x", "key_size": "x"}},
