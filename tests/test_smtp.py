@@ -6,6 +6,7 @@ import json
 import socket
 import socketserver
 import threading
+from typing import Any, cast
 
 import pytest
 
@@ -662,7 +663,7 @@ def test_read_response_timeout_with_no_lines_raises() -> None:
 
     s = TimeoutSock()
     try:
-        _read_response(s, 0.1)
+        _read_response(cast(socket.socket, s), 0.1)
     except _socket.timeout:
         pass
     else:
@@ -679,7 +680,7 @@ def test_read_response_recv_returns_empty_breaks() -> None:
             return b""
 
     s = EmptySock()
-    lines = _read_response(s, 1.0)
+    lines = _read_response(cast(socket.socket, s), 1.0)
     assert lines == []
 
 
@@ -704,7 +705,7 @@ def test_read_response_max_lines_limit_breaks() -> None:
     # Send 5 continuation lines, ask for max_lines=3 - should break at limit
     lines_data = [b"250-continue\r\n", b"250-continue\r\n", b"250-continue\r\n", b"250-continue\r\n", b"250-continue\r\n"]
     s = MultiLineSock(lines_data)
-    lines = _read_response(s, 1.0, max_lines=3)
+    lines = _read_response(cast(socket.socket, s), 1.0, max_lines=3)
     assert len(lines) == 3
 
 
@@ -724,7 +725,7 @@ def test_read_response_timeout_guard_breaks() -> None:
 
     s = SlowSock()
     # With very small timeout and small max_lines factor to trigger guard
-    lines = _read_response(s, 0.001, max_lines=10)
+    lines = _read_response(cast(socket.socket, s), 0.001, max_lines=10)
     assert len(lines) > 0  # guard triggers and breaks
 
 
@@ -746,7 +747,7 @@ def test_read_response_timeout_after_partial_lines_breaks() -> None:
             raise _socket.timeout()
 
     s = PartialSock()
-    lines = _read_response(s, 1.0)
+    lines = _read_response(cast(socket.socket, s), 1.0)
     assert lines == ["250-continue"]
 
 
@@ -766,7 +767,7 @@ def test_read_response_recv_non_oserror_exception_breaks() -> None:
             raise ValueError("hostile recv error")
 
     s = HostileSock()
-    lines = _read_response(s, 1.0)
+    lines = _read_response(cast(socket.socket, s), 1.0)
     assert lines == ["250-continue"]
     assert s._calls == 2
 
@@ -782,7 +783,7 @@ def test_send_command_closed_while_sending_raises() -> None:
 
     s = ClosedSock()
     try:
-        _send_command(s, "QUIT", 1.0)
+        _send_command(cast(socket.socket, s), "QUIT", 1.0)
     except OSError as e:
         assert "connection closed" in str(e)
     else:
@@ -807,7 +808,7 @@ def test_run_smtp_banner_read_timeout_raises_and_returns() -> None:
     try:
         def fake_read(sock, timeout):
             raise _socket.timeout("timeout")
-        smtp_mod._read_response = fake_read
+        smtp_mod._read_response = cast(Any, fake_read)
         res = run_smtp("127.0.0.1:2525", timeout=0.1, connector=bad_connector)
         assert res["error"] == "banner read failed: timeout"
         assert res["connected"] is True
@@ -853,8 +854,8 @@ def test_run_smtp_ehlo_failure_sets_error_and_ehlo_false() -> None:
             if cmd.startswith("EHLO"):
                 raise _socket.timeout("ehlo timeout")
             return []
-        smtp_mod._read_response = read_banner
-        smtp_mod._send_command = send_cmd
+        smtp_mod._read_response = cast(Any, read_banner)
+        smtp_mod._send_command = cast(Any, send_cmd)
         res = run_smtp("127.0.0.1:2525", timeout=0.1, connector=lambda a, t: FakeSock())
         assert res["ehlo_success"] is False
         assert "ehlo failed" in res["error"]
@@ -880,8 +881,8 @@ def test_run_smtp_vrfy_skips_empty_user() -> None:
         def send_cmd(sock, cmd, timeout):
             calls.append(cmd)
             return ["250 ok"]
-        smtp_mod._read_response = read_banner
-        smtp_mod._send_command = send_cmd
+        smtp_mod._read_response = cast(Any, read_banner)
+        smtp_mod._send_command = cast(Any, send_cmd)
         run_smtp("127.0.0.1:2525", timeout=0.1, users=["", "test"], connector=lambda a, t: FakeSock())
         # VRFY test should be called once for non-empty
         vrfy_calls = [c for c in calls if c.startswith("VRFY")]
@@ -914,8 +915,8 @@ def test_run_smtp_vrfy_exception_stores_error() -> None:
             if cmd.startswith("VRFY"):
                 raise _socket.timeout("vrfy timeout")
             return []
-        smtp_mod._read_response = read_banner
-        smtp_mod._send_command = send_cmd
+        smtp_mod._read_response = cast(Any, read_banner)
+        smtp_mod._send_command = cast(Any, send_cmd)
         res = run_smtp("127.0.0.1:2525", timeout=0.1, users=["alice"], connector=lambda a, t: FakeSock())
         assert res["users"][0]["error"] == "vrfy timeout"
     finally:
@@ -946,8 +947,8 @@ def test_run_smtp_relay_mail_from_exception_sets_open_relay_none_and_error() -> 
             if cmd.startswith("MAIL FROM"):
                 raise _socket.timeout("mail timeout")
             return []
-        smtp_mod._read_response = read_banner
-        smtp_mod._send_command = send_cmd
+        smtp_mod._read_response = cast(Any, read_banner)
+        smtp_mod._send_command = cast(Any, send_cmd)
         res = run_smtp("127.0.0.1:2525", timeout=0.1, check_relay=True, connector=lambda a, t: FakeSock())
         assert res["open_relay"] is None
         assert "relay check failed" in res["error"]
@@ -981,8 +982,8 @@ def test_run_smtp_relay_rcpt_exception_sets_open_relay_none_and_preserves_error(
             if cmd.startswith("RCPT TO"):
                 raise _socket.timeout("rcpt timeout")
             return []
-        smtp_mod._read_response = read_banner
-        smtp_mod._send_command = send_cmd
+        smtp_mod._read_response = cast(Any, read_banner)
+        smtp_mod._send_command = cast(Any, send_cmd)
         res = run_smtp("127.0.0.1:2525", timeout=0.1, check_relay=True, connector=lambda a, t: FakeSock())
         assert res["open_relay"] is None
         assert res["error"] == "relay check failed: rcpt timeout"
@@ -1014,8 +1015,8 @@ def test_run_smtp_quit_exception_ignored() -> None:
             if cmd.startswith("QUIT"):
                 raise _socket.timeout("quit timeout")
             return []
-        smtp_mod._read_response = read_banner
-        smtp_mod._send_command = send_cmd
+        smtp_mod._read_response = cast(Any, read_banner)
+        smtp_mod._send_command = cast(Any, send_cmd)
         res = run_smtp("127.0.0.1:2525", timeout=0.1, connector=lambda a, t: FakeSock())
         assert res["connected"] is True
     finally:
@@ -1061,8 +1062,8 @@ def test_run_smtp_ehlo_produces_caps_and_no_ok_first_line_skip() -> None:
                 # first line is greeting (idx 0) - should be skipped; last line has OK
                 return ["250-mail.example.com", "250-STARTTLS", "250-SIZE 12345", "250 OK"]
             return []
-        smtp_mod._read_response = read_banner
-        smtp_mod._send_command = send_cmd
+        smtp_mod._read_response = cast(Any, read_banner)
+        smtp_mod._send_command = cast(Any, send_cmd)
         res = run_smtp("127.0.0.1:2525", timeout=0.1, check_starttls=True, connector=lambda a, t: FakeSock())
         assert "STARTTLS" in res["capabilities"]
         assert "SIZE" in res["capabilities"] or "SIZE" in " ".join(res["capabilities"])  # check
@@ -1080,7 +1081,7 @@ def test_run_smtp_connection_fails_after_sock_created_hits_close() -> None:
 
     orig_connect = smtp_mod._connect
     try:
-        smtp_mod._connect = lambda h,p,t,connector=None: (_ for _ in ()).throw(_socket.timeout('conn'))
+        smtp_mod._connect = cast(Any, lambda h, p, t, connector=None: (_ for _ in ()).throw(_socket.timeout('conn')))
         res = smtp_mod.run_smtp("127.0.0.1:2525", timeout=0.1)
         assert "connection failed" in res["error"]
     finally:
@@ -1110,7 +1111,7 @@ def test_read_response_timeout_guard_triggers() -> None:
             return 1000  # way over
         call = 0
         smtp_mod.time.monotonic = fake_monotonic2
-        lines = smtp_mod._read_response(SlowSock(), timeout=0.1, max_lines=5)
+        lines = smtp_mod._read_response(cast(socket.socket, SlowSock()), timeout=0.1, max_lines=5)
         assert len(lines) >= 1
     finally:
         smtp_mod.time.monotonic = orig
@@ -1159,8 +1160,8 @@ def test_ehlo_caps_with_short_lines_and_ok_at_idx0_skipped() -> None:
             if cmd.startswith("EHLO"):
                 return ["250 OK", "220", "25", "250-"]  # idx 0 is OK (skipped), short lines skipped
             return []
-        smtp_mod._read_response = read_banner
-        smtp_mod._send_command = send_cmd
+        smtp_mod._read_response = cast(Any, read_banner)
+        smtp_mod._send_command = cast(Any, send_cmd)
         res = smtp_mod.run_smtp("127.0.0.1:2525", timeout=0.1, connector=lambda a, t: FakeSock())
         assert res["ehlo_success"] is True
         assert res["capabilities"] == []
@@ -1224,8 +1225,8 @@ def test_ehlo_line_length_exactly_four_continues() -> None:
             if cmd.startswith("EHLO"):
                 return ["250-mail.example.com", "250-", "250 OK"]  # "250-" is 4 chars
             return []
-        smtp_mod._read_response = read_banner
-        smtp_mod._send_command = send_cmd
+        smtp_mod._read_response = cast(Any, read_banner)
+        smtp_mod._send_command = cast(Any, send_cmd)
         res = smtp_mod.run_smtp("127.0.0.1:2525", timeout=0.1, connector=lambda a, t: FakeSock())
         assert res["ehlo_success"] is True
         assert res["capabilities"] == []
@@ -1250,7 +1251,7 @@ def test_outer_except_closes_sock_on_failure_after_connect_succeeds() -> None:
     orig_connect = smtp_mod._connect
     orig_send = smtp_mod._send_command
     try:
-        smtp_mod._connect = lambda h,p,t,connector=None: sock
+        smtp_mod._connect = cast(Any, lambda h, p, t, connector=None: sock)
         # Make banner read succeed but then something fails in outer try after connected set?
         # After banner read succeeds (line 215), we go to next lines in outer try scope - wait look:
         # after inner try ends (banner read), we continue in outer try. Next is "try: # EHLO..." at line 225 in outer try.

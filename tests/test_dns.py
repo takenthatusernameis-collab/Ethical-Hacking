@@ -4,6 +4,7 @@ import socket
 import threading
 
 import pytest
+from typing import Any, cast
 
 from ethscan.dns import (
     DEFAULT_DNS_TYPES,
@@ -42,7 +43,7 @@ def test_normalize_domain_ipv6_url() -> None:
 
 
 def test_format_dns_report_json() -> None:
-    data = {
+    data: dict[str, Any] = {
         "target": "example.com",
         "domain": "example.com",
         "record_types_queried": ["A", "AAAA"],
@@ -59,7 +60,7 @@ def test_format_dns_report_json() -> None:
 
 
 def test_format_dns_report_markdown() -> None:
-    data = {
+    data: dict[str, Any] = {
         "target": "example.com",
         "domain": "example.com",
         "record_types_queried": ["A", "AAAA"],
@@ -79,7 +80,7 @@ def test_format_dns_report_markdown() -> None:
 
 
 def test_format_dns_report_markdown_empty_records() -> None:
-    data = {
+    data: dict[str, Any] = {
         "target": "example.com",
         "domain": "example.com",
         "record_types_queried": ["A", "MX"],
@@ -104,7 +105,7 @@ def test_run_dns_offline_basic(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.dns.resolve_aaaa_records", mock_resolve_aaaa)
     monkeypatch.setattr("ethscan.dns.DNS_AVAILABLE", False)
 
-    results = run_dns("example.com", record_types=["A", "AAAA"], timeout=1.0)
+    results = cast(dict[str, Any], run_dns("example.com", record_types=["A", "AAAA"], timeout=1.0))
     assert results["target"] == "example.com"
     assert results["domain"] == "example.com"
     assert results["records"]["A"] == ["93.184.216.34"]
@@ -118,7 +119,7 @@ def test_run_dns_unknown_types_ignored(monkeypatch) -> None:
 
     monkeypatch.setattr("ethscan.dns.resolve_a_records", mock_resolve_a)
 
-    results = run_dns("example.com", record_types=["A", "INVALID"], timeout=1.0)
+    results = cast(dict[str, Any], run_dns("example.com", record_types=["A", "INVALID"], timeout=1.0))
     assert "A" in results["records"]
     assert "INVALID" not in results["records"]
 
@@ -155,7 +156,7 @@ def test_resolve_a_records_restores_default_socket_timeout(monkeypatch) -> None:
 
 
 def test_format_dns_report_csv_basic() -> None:
-    data = {
+    data: dict[str, Any] = {
         "target": "example.com",
         "domain": "example.com",
         "record_types_queried": ["A", "AAAA"],
@@ -173,7 +174,7 @@ def test_format_dns_report_csv_basic() -> None:
 
 
 def test_format_dns_report_csv_empty() -> None:
-    data = {
+    data: dict[str, Any] = {
         "target": "example.com",
         "domain": "example.com",
         "record_types_queried": ["A", "AAAA"],
@@ -188,15 +189,13 @@ def test_format_dns_report_csv_empty() -> None:
 
 
 def test_format_dns_report_csv_missing_fields() -> None:
-    data = {
-        "records": {},
-    }
+    data: dict[str, Any] = {"records": {}}
     output = format_dns_report_csv(data)
     assert output == "target,domain,record_type,record_value"
 
 
 def test_format_dns_report_csv_pipe_escaping() -> None:
-    data = {
+    data: dict[str, Any] = {
         "target": "example.com",
         "domain": "example.com",
         "record_types_queried": ["CNAME"],
@@ -214,7 +213,7 @@ def test_format_dns_report_csv_pipe_escaping() -> None:
 
 
 def test_format_dns_report_csv_multiple_types() -> None:
-    data = {
+    data: dict[str, Any] = {
         "target": "example.com",
         "domain": "example.com",
         "record_types_queried": ["A", "MX", "NS"],
@@ -257,12 +256,12 @@ def test_run_dns_workers_sequential(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.dns.resolve_with_dnspython", mock_resolve_with_dnspython)
 
     # Test with multiple record types
-    results = run_dns(
+    results = cast(dict[str, Any], run_dns(
         "example.com",
         record_types=["A", "AAAA", "MX"],
         timeout=1.0,
         workers=1,
-    )
+    ))
 
     # Check that the functions were called in the order of the input list
     expected_order = [("A", 1.0), ("AAAA", 1.0), ("MX", 1.0)]
@@ -302,12 +301,12 @@ def test_run_dns_workers_parallel(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.dns.resolve_with_dnspython", mock_resolve_with_dnspython)
 
     # Test with multiple record types and workers=2
-    results = run_dns(
+    results = cast(dict[str, Any], run_dns(
         "example.com",
         record_types=["A", "AAAA", "MX"],
         timeout=1.0,
         workers=2,
-    )
+    ))
 
     # All three functions should have been called
     assert len(call_order) == 3
@@ -468,7 +467,7 @@ def test_run_dns_custom_server_success(monkeypatch) -> None:
     _install_fake_dns(monkeypatch, fake_resolve)
 
     import ethscan.dns as dns_mod
-    results = dns_mod.run_dns("example.com", record_types=["MX"], server="1.1.1.1", timeout=1.0)
+    results = cast(dict[str, Any], dns_mod.run_dns("example.com", record_types=["MX"], server="1.1.1.1", timeout=1.0))
     assert seen["nameservers"] == ["1.1.1.1"]
     assert seen["timeout"] == 1.0
     assert results["records"]["MX"] == ["mocked.example.com"]
@@ -486,7 +485,7 @@ def test_run_dns_custom_server_dns_exception(monkeypatch) -> None:
     _install_fake_dns(monkeypatch, fake_resolve, dns_exception=MyDNSException)
 
     import ethscan.dns as dns_mod
-    results = dns_mod.run_dns("example.com", record_types=["MX"], server="1.1.1.1", timeout=1.0)
+    results = cast(dict[str, Any], dns_mod.run_dns("example.com", record_types=["MX"], server="1.1.1.1", timeout=1.0))
     assert results["records"]["MX"] == []
 
 
@@ -498,7 +497,7 @@ def test_run_dns_custom_server_oserror(monkeypatch) -> None:
     _install_fake_dns(monkeypatch, fake_resolve)
 
     import ethscan.dns as dns_mod
-    results = dns_mod.run_dns("example.com", record_types=["MX"], server="1.1.1.1", timeout=1.0)
+    results = cast(dict[str, Any], dns_mod.run_dns("example.com", record_types=["MX"], server="1.1.1.1", timeout=1.0))
     assert results["records"]["MX"] == []
 
 
@@ -510,7 +509,7 @@ def test_run_dns_custom_server_valueerror(monkeypatch) -> None:
     _install_fake_dns(monkeypatch, fake_resolve)
 
     import ethscan.dns as dns_mod
-    results = dns_mod.run_dns("example.com", record_types=["MX"], server="1.1.1.1", timeout=1.0)
+    results = cast(dict[str, Any], dns_mod.run_dns("example.com", record_types=["MX"], server="1.1.1.1", timeout=1.0))
     assert results["records"]["MX"] == []
 
 
@@ -519,7 +518,7 @@ def test_run_dns_dnspython_unavailable_returns_empty(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.dns.DNS_AVAILABLE", False)
 
     import ethscan.dns as dns_mod
-    results = dns_mod.run_dns("example.com", record_types=["MX"], timeout=1.0)
+    results = cast(dict[str, Any], dns_mod.run_dns("example.com", record_types=["MX"], timeout=1.0))
     assert results["records"]["MX"] == []
     assert results["dnspython_available"] is False
 
@@ -536,7 +535,7 @@ def test_run_dns_dnspython_path_without_server(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.dns.DNS_AVAILABLE", True)
 
     import ethscan.dns as dns_mod
-    results = dns_mod.run_dns("example.com", record_types=["MX", "NS"], timeout=1.0)
+    results = cast(dict[str, Any], dns_mod.run_dns("example.com", record_types=["MX", "NS"], timeout=1.0))
     assert calls == [("example.com", "MX", 1.0), ("example.com", "NS", 1.0)]
     assert results["records"]["MX"] == ["r:MX"]
     assert results["records"]["NS"] == ["r:NS"]
@@ -559,7 +558,7 @@ def test_dns_availability_flag_true(monkeypatch) -> None:
     class DNSException(Exception):
         pass
 
-    dns_exception.DNSException = DNSException
+    dns_exception.DNSException = DNSException  # type: ignore[attr-defined]
 
     class Resolver:
         def __init__(self):
@@ -568,11 +567,11 @@ def test_dns_availability_flag_true(monkeypatch) -> None:
         def resolve(self, domain, rdtype):
             return []
 
-    dns_resolver.Resolver = Resolver
-    dns_pkg.resolver = dns_resolver
-    dns_pkg.exception = dns_exception
-    dns_pkg.enum = dns_enum
-    dns_pkg.message = dns_message
+    dns_resolver.Resolver = Resolver  # type: ignore[attr-defined]
+    dns_pkg.resolver = dns_resolver  # type: ignore[attr-defined]
+    dns_pkg.exception = dns_exception  # type: ignore[attr-defined]
+    dns_pkg.enum = dns_enum  # type: ignore[attr-defined]
+    dns_pkg.message = dns_message  # type: ignore[attr-defined]
 
     monkeypatch.setitem(sys.modules, "dns", dns_pkg)
     monkeypatch.setitem(sys.modules, "dns.resolver", dns_resolver)
@@ -622,7 +621,7 @@ def test_run_dns_mx_swallows_unlisted_exceptions(monkeypatch, exc):
     _install_fake_dns(monkeypatch, _make_raise_resolve(exc))
     import ethscan.dns as dns_mod
 
-    results = dns_mod.run_dns("example.com", record_types=["MX"], timeout=0.1)
+    results = cast(dict[str, Any], dns_mod.run_dns("example.com", record_types=["MX"], timeout=0.1))
     assert results["records"]["MX"] == []
 
 
@@ -632,9 +631,9 @@ def test_run_dns_custom_server_swallows_unlisted_exceptions(monkeypatch, exc):
     _install_fake_dns(monkeypatch, _make_raise_resolve(exc))
     import ethscan.dns as dns_mod
 
-    results = dns_mod.run_dns(
+    results = cast(dict[str, Any], dns_mod.run_dns(
         "example.com", record_types=["MX"], server="1.1.1.1", timeout=0.1
-    )
+    ))
     assert results["records"]["MX"] == []
 
 
@@ -662,7 +661,7 @@ def test_dns_transport_failure_is_reported_not_raised(monkeypatch) -> None:
 
     monkeypatch.setattr("ethscan.dns.socket.getaddrinfo", boom)
 
-    results = ethscan.dns.run_dns("example.com")
+    results = cast(dict[str, Any], ethscan.dns.run_dns("example.com"))
 
     assert isinstance(results, dict)
     assert results["records"]["A"] == []
@@ -670,7 +669,7 @@ def test_dns_transport_failure_is_reported_not_raised(monkeypatch) -> None:
 def test_run_dns_server_without_dnspython_returns_empty(monkeypatch) -> None:
     import ethscan.dns as dns_mod
     monkeypatch.setattr(dns_mod, "DNS_AVAILABLE", False)
-    data = dns_mod.run_dns("example.com", record_types=["MX"], server="8.8.8.8")
+    data = cast(dict[str, Any], dns_mod.run_dns("example.com", record_types=["MX"], server="8.8.8.8"))
     assert data["records"]["MX"] == []
 
 
@@ -682,12 +681,12 @@ def test_run_dns_resolver_unexpected_exception_is_swallowed(monkeypatch) -> None
 
     monkeypatch.setattr("ethscan.dns.resolve_a_records", raising_resolve_a)
 
-    results = run_dns("example.com", record_types=["A"], timeout=1.0, workers=1)
+    results = cast(dict[str, Any], run_dns("example.com", record_types=["A"], timeout=1.0, workers=1))
     assert results["records"]["A"] == []
 
 
 def test_format_dns_report_markdown_records_not_dict() -> None:
-    data = {
+    data: dict[str, Any] = {
         "target": "example.com",
         "domain": "example.com",
         "record_types_queried": "A",
@@ -700,7 +699,7 @@ def test_format_dns_report_markdown_records_not_dict() -> None:
 
 
 def test_format_dns_report_csv_non_list_values() -> None:
-    data = {
+    data: dict[str, Any] = {
         "target": "example.com",
         "domain": "example.com",
         "records": {"TXT": "single-value"},
@@ -730,7 +729,7 @@ class _RaisingExecutor:
 
 def test_run_dns_parallel_future_result_raises(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.dns.ThreadPoolExecutor", _RaisingExecutor)
-    results = run_dns("example.com", record_types=["A", "MX"], timeout=1.0, workers=2)
+    results = cast(dict[str, Any], run_dns("example.com", record_types=["A", "MX"], timeout=1.0, workers=2))
     assert results["records"]["A"] == []
     assert results["records"]["MX"] == []
 
@@ -742,6 +741,6 @@ class _ExplodingExecutor:
 
 def test_run_dns_parallel_executor_raises(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.dns.ThreadPoolExecutor", _ExplodingExecutor)
-    results = run_dns("example.com", record_types=["A", "MX"], timeout=1.0, workers=2)
+    results = cast(dict[str, Any], run_dns("example.com", record_types=["A", "MX"], timeout=1.0, workers=2))
     assert results["records"]["A"] == []
     assert results["records"]["MX"] == []
