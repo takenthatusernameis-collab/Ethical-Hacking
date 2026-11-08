@@ -1,19 +1,20 @@
 # Handoff
-Date: Sun Nov 08 2026 (session 5)
+Date: Sun Nov 08 2026 (session 7)
 
 ## What changed
-- Fixed 5 mypy errors in `tests/test_config.py` (typing hygiene only, no behavior change, no `ethscan/` source changes):
-  - Annotated `known_options: dict[str, set[str]]` and filtered `None` from `click.Parameter.name` values so the dict matches `validate_config`'s `dict[str, set[str]] | None` parameter (4 × `arg-type` errors resolved).
-  - Annotated `config: dict[str, Any] = {}` and added `from typing import Any` (1 × `var-annotated` error resolved).
+- Fixed 6 mypy errors in `tests/test_netbios.py` (typing hygiene only, no behavior change, no `ethscan/` source changes):
+  - 2 × `var-annotated`: annotated `captured: dict[str, object] = {}` in `test_send_recv_connector_receives_arguments` (line 473) and `test_run_netbios_url_target` (line 685).
+  - 4 × `operator`: added `assert err is not None` after `assert data is None` in the four transport-failure tests (lines 496, 509, 522, 545), narrowing `str | None` to `str` before the `in` check.
 
 ## Root cause
-- `click.Parameter.name` is typed `str | None`, so the comprehension `{param.name for param in command.params}` infers `set[str | None]`, incompatible with `validate_config`'s `dict[str, set[str]] | None`. `None` is not a valid option name, so filtering it out is semantically neutral.
+- `_send_recv` returns `tuple[bytes | None, str | None]`. In the failure-path tests, `err` is inferred as `str | None`, so `"hostile transport" in err` is rejected by mypy (`Unsupported right operand type for in ("str | None")`). The assertion `data is None` already implies a non-None error string in those paths (the only `None`-err return is the success path, which sets `data` to bytes), so adding `assert err is not None` is semantically neutral.
+- Empty dict literals `captured = {}` need an explicit annotation because the dict is populated via `.update(...)`/indexing, giving mypy no inference target.
 
 ## What was verified
-- `python -m mypy tests/test_config.py` → Success: no issues found.
-- `python -m ruff check tests/test_config.py` → All checks passed.
-- `python -m pytest tests/test_config.py -q` → 53 passed.
-- `python -m pytest -q` → 5936 passed, 50 skipped, 0 failed (baseline unchanged from session 4).
+- `python -m mypy tests/test_netbios.py` → Success: no issues found.
+- `python -m ruff check tests/test_netbios.py` → All checks passed.
+- `python -m pytest tests/test_netbios.py -q` → 84 passed.
+- `python -m pytest -q` → 5936 passed, 50 skipped, 0 failed (baseline unchanged from session 6).
 
 ## Unresolved
 - None.

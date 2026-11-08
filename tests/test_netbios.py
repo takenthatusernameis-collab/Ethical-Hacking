@@ -470,7 +470,7 @@ def test_send_recv_with_connector_returns_error() -> None:
 
 
 def test_send_recv_connector_receives_arguments() -> None:
-    captured = {}
+    captured: dict[str, object] = {}
 
     def connector(host, port, request, timeout):
         captured.update(host=host, port=port, request=request, timeout=timeout)
@@ -493,6 +493,7 @@ def test_send_recv_connector_failure_is_reported() -> None:
 
     data, err = _send_recv("h", DEFAULT_PORT, b"req", 1.0, connector=connector)
     assert data is None
+    assert err is not None
     assert "hostile transport" in err
 
 
@@ -506,6 +507,7 @@ def test_send_recv_socket_creation_failure_is_reported(monkeypatch) -> None:
 
     data, err = _send_recv("h", DEFAULT_PORT, b"req", 1.0)
     assert data is None
+    assert err is not None
     assert "hostile transport" in err
 
 
@@ -519,6 +521,7 @@ def test_send_recv_socket_creation_failure_of_unnamed_type_is_reported(monkeypat
 
     data, err = _send_recv("h", DEFAULT_PORT, b"req", 1.0)
     assert data is None
+    assert err is not None
     assert "hostile transport" in err
 
 
@@ -542,6 +545,7 @@ def test_send_recv_socket_failure_is_reported(monkeypatch) -> None:
 
     data, err = _send_recv("h", DEFAULT_PORT, b"req", 1.0)
     assert data is None
+    assert err is not None
     assert "hostile transport" in err
 
 
@@ -682,7 +686,7 @@ def test_run_netbios_port_override() -> None:
 
 
 def test_run_netbios_url_target() -> None:
-    captured = {}
+    captured: dict[str, object] = {}
 
     def connector(host, port, request, timeout):
         captured.update(host=host, port=port)
