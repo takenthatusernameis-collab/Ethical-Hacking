@@ -1,5 +1,7 @@
 """Tests for the ethscan configuration module."""
 
+from typing import Any
+
 import yaml
 from click.testing import CliRunner
 
@@ -300,8 +302,8 @@ def test_validate_config_format_key_in_defaults_is_known() -> None:
 
 def test_validate_config_with_real_cli_commands() -> None:
     """The real CLI commands are used to validate configured options."""
-    known_options = {
-        name: {param.name for param in command.params}
+    known_options: dict[str, set[str]] = {
+        name: {param.name for param in command.params if param.name is not None}
         for name, command in cli.cli.commands.items()
     }
     assert "scan" in known_options
@@ -378,7 +380,7 @@ def test_format_config_report_csv_basic() -> None:
 
 
 def test_format_config_report_csv_empty() -> None:
-    config = {}
+    config: dict[str, Any] = {}
     output = format_config_report_csv(config)
     lines = output.splitlines()
     assert lines[0] == "section,option,value"
