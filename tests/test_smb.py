@@ -5,6 +5,7 @@ import io
 import json
 import socket
 import struct
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -276,7 +277,7 @@ def test_send_recv_with_connector_returns_error() -> None:
 
 
 def test_send_recv_connector_receives_arguments() -> None:
-    captured = {}
+    captured: dict[str, Any] = {}
 
     def connector(host, port, request, timeout):
         captured.update(host=host, port=port, request=request, timeout=timeout)
@@ -368,6 +369,7 @@ def test_send_recv_real_socket_oserror() -> None:
     with patch("ethscan.smb.socket.socket", FakeSocket):
         data, err = _send_recv("10.0.0.1", 445, b"ping", 1.0)
     assert data is None
+    assert err is not None
     assert "Connection refused" in err
 
 

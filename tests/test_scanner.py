@@ -1,5 +1,7 @@
 """Tests for the ethscan scanner module."""
 
+from typing import Any
+
 import pytest
 
 from ethscan.scanner import (
@@ -408,12 +410,12 @@ def test_format_scan_report_markdown_detail_not_dict() -> None:
 
 
 def test_format_scan_report_csv_details_not_list() -> None:
-    data = {"details": "nope"}
+    data: dict[str, Any] = {"details": "nope"}
     out = format_scan_report_csv(data)
     assert out == "port,open"
 
 
 def test_format_scan_report_csv_detail_not_dict() -> None:
-    data = {"details": ["x"]}
+    data: dict[str, Any] = {"details": ["x"]}
     out = format_scan_report_csv(data)
     assert out == "port,open"

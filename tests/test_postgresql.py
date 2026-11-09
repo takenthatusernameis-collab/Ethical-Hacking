@@ -4,6 +4,7 @@ import contextlib
 import json
 import socket
 import threading
+from typing import Any
 
 from ethscan.postgresql import (
     _AUTH_TYPE_NAMES,
@@ -574,7 +575,7 @@ def _free_port() -> int:
     return port
 
 
-def _start_tcp_server(response: bytes) -> int:
+def _start_tcp_server(response: bytes):
     """Start a local TCP server that reads the request, sends *response*, closes."""
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -620,7 +621,7 @@ def _start_tcp_server_no_response() -> int:
     return port
 
 
-def _start_tcp_server_never_sends() -> int:
+def _start_tcp_server_never_sends():
     """Start a local TCP server that accepts but never sends or closes.
 
     Returns the port and a holder dict that keeps the accepted connection
@@ -631,7 +632,7 @@ def _start_tcp_server_never_sends() -> int:
     server.bind(("127.0.0.1", 0))
     server.listen(1)
     port = server.getsockname()[1]
-    held: dict = {}
+    held: dict[str, Any] = {}
 
     def serve() -> None:
         try:
@@ -650,7 +651,7 @@ def _start_tcp_server_never_sends() -> int:
 # --- _send_recv real socket path (no connector) ------------------------------
 
 
-def test_send_recv_success_real_socket():
+def test_send_recv_success_real_socket() -> None:
     port = _start_tcp_server(_pg_greeting("16.2", 0, 5555))
     data, err = _send_recv("127.0.0.1", port, _build_startup_request(), 2.0)
     assert err is None
@@ -721,7 +722,7 @@ def test_parse_startup_response_msg_type_empty_slice() -> None:
     # But we can test by passing data where the internal logic would see empty msg_type
     # Alternative: pass a custom buffer - simpler to just exercise the code path
     # Try with a very odd case
-    result = _parse_startup_response(data)
+    result = _parse_startup_response(bytes(data))
     assert isinstance(result, dict)
 
 def test_run_postgresql_transport_failure_is_reported(monkeypatch):

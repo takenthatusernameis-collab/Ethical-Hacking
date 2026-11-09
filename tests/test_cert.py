@@ -5,6 +5,7 @@ import io
 import json
 import time
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from ethscan.cert import (
@@ -357,13 +358,13 @@ def test_extract_subdomains_multiline_name_value() -> None:
 
 
 def test_extract_subdomains_empty() -> None:
-    cert_data = {"entries": []}
+    cert_data: dict[str, Any] = {"entries": []}
     result = _extract_subdomains(cert_data)
     assert result == []
 
 
 def test_extract_subdomains_no_entries() -> None:
-    cert_data = {}
+    cert_data: dict[str, Any] = {}
     result = _extract_subdomains(cert_data)
     assert result == []
 
@@ -721,7 +722,7 @@ def test_format_cert_report_csv() -> None:
 
 
 def test_format_cert_report_csv_empty() -> None:
-    data = {
+    data: dict[str, Any] = {
         "target": "example.com",
         "domain": "example.com",
         "ip": None,

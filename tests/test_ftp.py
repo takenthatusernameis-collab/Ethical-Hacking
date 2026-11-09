@@ -10,6 +10,7 @@ import socket
 import socketserver
 import struct
 import threading
+from typing import Any
 
 import pytest
 
@@ -37,12 +38,12 @@ class _FakeFTP:
     ``close`` is a no-op.
     """
 
-    config: dict | None = None
+    config: dict[str, Any] | None = None
 
     def __init__(self) -> None:
-        self.host = None
-        self.port = None
-        self.config = {}
+        self.host: str | None = None
+        self.port: int | None = None
+        self.config: dict[str, Any] = {}
         self.connected = False
         self.closed = False
 
@@ -62,15 +63,18 @@ class _FakeFTP:
             raise ftplib.Error("not connected")
         if isinstance(self.config, dict) and self.config.get("no_welcome"):
             raise ftplib.Error("503 Bad sequence of commands")
-        return self.config.get("banner", "220 fake.ftp.example FTP server ready") if isinstance(self.config, dict) else "220 fake.ftp.example FTP server ready"
+        cfg = self.config if isinstance(self.config, dict) else {}
+        return cfg.get("banner", "220 fake.ftp.example FTP server ready") if cfg.get("banner") is not None else "220 fake.ftp.example FTP server ready"
 
     def login(self, user: str = "anonymous", passwd: str = "", account: str = "") -> str:
-        if isinstance(self.config, dict) and self.config.get("anonymous_allowed", True):
-            return "230 " + self.config.get("login_msg", "Login successful")
-        raise ftplib.Error(self.config.get("login_err", "530 Login incorrect"))
+        cfg = self.config if isinstance(self.config, dict) else {}
+        if cfg.get("anonymous_allowed", True):
+            return "230 " + str(cfg.get("login_msg", "Login successful"))
+        raise ftplib.Error(str(cfg.get("login_err", "530 Login incorrect")))
 
     def close(self) -> None:
-        if isinstance(self.config, dict) and self.config.get("close_raises"):
+        cfg = self.config if isinstance(self.config, dict) else {}
+        if cfg.get("close_raises"):
             raise ftplib.Error("close failed")
         self.closed = True
 
