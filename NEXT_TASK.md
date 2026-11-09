@@ -15,10 +15,11 @@ Continue per-file typing hygiene on remaining test files with mypy errors.
 1. `python -m mypy tests/<file>` → 0 issues for touched files.
 2. `python -m ruff check tests/<file>` → clean (resolve conflicts case-by-case; document if mypy/ruff tension is unavoidable).
 3. Targeted `python -m pytest <touched-test-files> -q` → pass.
-4. `python -m pytest -q --ignore=tests/test_ping.py` → baseline unchanged (5878 passed, 50 skipped at handoff; re-verify).
+4. `python -m pytest -q --ignore=tests/test_ping.py` → baseline unchanged (5878 passed, 50 skipped at session 22; re-verify).
 
 ## Suggested starting points (reproduce counts first)
-Low-error non-hostile files: `test_ldap.py` (clean), `test_service.py` (clean), `test_passwords.py` (DONE), `test_fuzz.py` (DONE), `test_snmp.py` (DONE), `test_ssh.py` (9), `test_subtake.py` (10), `test_geo.py` (DONE), `test_brute.py` (DONE), `test_cli.py` (12). Then larger: `test_tls.py`, `test_subdomains.py`, `test_dnssec.py`, `test_s3.py`, `test_jwt.py`, `test_osdetect.py`, `test_web.py`, `test_cve.py`. Hostile-sweep files generally follow the `cast(Any, ...)` pattern.
+- Already clean (0 mypy errors, verified session 22): `test_cli.py`, `test_ssh.py`, `test_tls.py`, `test_subdomains.py`, `test_dnssec.py` (was 18 → fixed session 22), `test_ldap.py`, `test_service.py`, `test_passwords.py`, `test_fuzz.py`, `test_snmp.py`, `test_geo.py`, `test_brute.py`, `test_main.py`, `test_web_hostile_sweep.py`.
+- Remaining with errors (reproduced session 22): `test_s3.py` (19), `test_jwt.py` (21), `test_osdetect.py` (23), `test_web.py` (27), `test_cve.py` (32). Then larger/hostile-sweep files per repo-wide counts, reproduce per file first.
 
 ## Handoff
 Update `HANDOFF_NEXT.md` and this file with: files fixed, exact verification evidence, remaining counts (reproduced), and any new constraints/failures.

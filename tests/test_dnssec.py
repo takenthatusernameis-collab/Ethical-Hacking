@@ -5,6 +5,8 @@ import io
 import json
 import socket
 import struct
+from typing import Any, cast
+
 from unittest.mock import ANY, MagicMock, call, patch
 
 import pytest
@@ -193,12 +195,14 @@ def test_run_dnssec_offline_basic(monkeypatch) -> None:
     assert results["target"] == "example.com"
     assert results["domain"] == "example.com"
     assert results["validated"] is True
-    assert results["dnskey"]["success"] is True
-    assert len(results["dnskey"]["keys"]) == 1
-    assert results["ds"]["success"] is True
-    assert len(results["ds"]["records"]) == 1
+    dnskey = cast("dict[str, object]", results["dnskey"])
+    assert dnskey["success"] is True
+    assert len(cast("list[object]", dnskey["keys"])) == 1
+    ds = cast("dict[str, object]", results["ds"])
+    assert ds["success"] is True
+    assert len(cast("list[object]", ds["records"])) == 1
     assert results["dnspython_available"] is False
-    assert len(results["notes"]) > 0
+    assert len(cast("list[object]", results["notes"])) > 0
 
 
 def test_run_dnssec_no_dnspython_no_server(monkeypatch) -> None:
@@ -212,8 +216,9 @@ def test_run_dnssec_no_dnspython_no_server(monkeypatch) -> None:
     assert results["target"] == "example.com"
     assert results["domain"] == "example.com"
     assert results["validated"] is False
-    assert not results["dnskey"]["success"]
-    assert "no nameservers found" in results["dnskey"]["error"]
+    dnskey = cast("dict[str, object]", results["dnskey"])
+    assert not dnskey["success"]
+    assert "no nameservers found" in cast("str", dnskey["error"])
     assert results["dnspython_available"] is False
 
 
@@ -232,10 +237,12 @@ def test_run_dnssec_with_dnspython_mocked(monkeypatch) -> None:
     assert results["target"] == "example.com"
     assert results["domain"] == "example.com"
     assert results["validated"] is True
-    assert results["dnskey"]["success"] is True
-    assert len(results["dnskey"]["keys"]) == 1
-    assert results["ds"]["success"] is True
-    assert len(results["ds"]["records"]) == 1
+    dnskey = cast("dict[str, object]", results["dnskey"])
+    assert dnskey["success"] is True
+    assert len(cast("list[object]", dnskey["keys"])) == 1
+    ds = cast("dict[str, object]", results["ds"])
+    assert ds["success"] is True
+    assert len(cast("list[object]", ds["records"])) == 1
 
 
 def test_run_dnssec_url_target(monkeypatch) -> None:
@@ -598,7 +605,7 @@ def test_parse_dnskey_response_full() -> None:
     res = _parse_dnskey_response(data, "example.com")
     assert res["success"] is True
     assert res["error"] is None
-    key = res["keys"][0]
+    key = cast("list[dict[str, object]]", res["keys"])[0]
     assert key["name"] == "example.com"
     assert key["flags"] == 257
     assert key["protocol"] == 3
@@ -1536,12 +1543,12 @@ def test_dnssec_inner_dns_import_failure(monkeypatch) -> None:
 
     import types
     fake_dns = types.ModuleType("dns")
-    fake_dns.dnssec = types.ModuleType("dns.dnssec")
-    fake_dns.exception = Exception
-    fake_dns.flags = types.ModuleType("dns.flags")
-    fake_dns.message = None  # fail inner import
-    fake_dns.query = types.ModuleType("dns.query")
-    fake_dns.resolver = types.SimpleNamespace()
+    cast(Any, fake_dns).dnssec = types.ModuleType("dns.dnssec")
+    cast(Any, fake_dns).exception = Exception
+    cast(Any, fake_dns).flags = types.ModuleType("dns.flags")
+    cast(Any, fake_dns).message = None  # fail inner import
+    cast(Any, fake_dns).query = types.ModuleType("dns.query")
+    cast(Any, fake_dns).resolver = types.SimpleNamespace()
     monkeypatch.setitem(sys.modules, "dns", fake_dns)
     monkeypatch.setitem(sys.modules, "dns.enum", types.ModuleType("dns.enum"))
     monkeypatch.setitem(sys.modules, "dns.message", None)
