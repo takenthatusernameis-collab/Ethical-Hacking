@@ -61,3 +61,29 @@ Continue per-file typing hygiene on remaining test files with mypy errors. Repro
 
 
 (End of file - total 34 lines)
+## Session (Mon Nov 09 2026, session 26)
+## This session
+- Verified `tests/test_web.py` is already mypy-clean (0 errors) and all tests pass (79 passed). Baseline at start: `pytest -q --ignore=tests/test_ping.py` → 5878 passed, 50 skipped, 0 failed.
+- Continued per-file typing hygiene on `tests/test_cve.py` (29 mypy errors → 0). No source (`ethscan/cve.py`) changes; test-side only, no behavior change.
+- Fixed `tests/test_cve.py`:
+  - Added `from typing import Any, cast` (and kept `from pathlib import Path`) imports.
+  - Cast `result["notes"]`/`results["notes"]`/`res["notes"]` to `list[str]`/`list[object]` at `in`/iteration sites; cast `results["error"]` to `str` before substring check.
+  - Cast `result["cve_count"]`/`res["services_checked"]` to `int` where compared with `>= 1`/`== 0`/`== 1`.
+  - Cast `result["cve_entries"]` to `list[dict[str, Any]]` for iteration/indexing and `nvd` filtering.
+  - Fixed hostile/coverage tests that used `tmp_path: object` (caused false mypy `/` operator errors on `d = tmp_path / "svc"`) to `tmp_path: Path, monkeypatch: Any`.
+  - Replaced `called = []` + `lambda ... called.append(True) or None` (returned `Any`/truthy issues in type context) with a typed `called: list[bool] = []` and an explicit `_capture(...)->None` helper.
+
+## Verification
+- `python -m mypy tests/test_web.py` → Success: no issues found in 1 source file (already clean).
+- `python -m pytest tests/test_web.py -q` → 79 passed.
+- `python -m mypy tests/test_cve.py` → Success: no issues found in 1 source file.
+- `python -m mypy ethscan/cve.py tests/test_cve.py` → Success: no issues found in 2 source files.
+- `python -m ruff check tests/test_cve.py ethscan/cve.py` → All checks passed!
+- `python -m pytest tests/test_cve.py -q` → 82 passed.
+- `python -m pytest -q --ignore=tests/test_ping.py` → 5878 passed, 50 skipped, 0 failed (baseline unchanged).
+
+## Blockers
+- `tests/test_ping.py` pre-existing Python 3.14 `socket.timeout` read-only descriptor blocker (6 runtime failures, 2 typing errors) — left untouched per instructions.
+
+## Next task
+Continue per-file typing hygiene on remaining test files with mypy errors. Reproduce each target with `python -m mypy tests/<file>` first, fix per file using the established pattern (test-side casts/annotations; widen source types only when minimal/safe/root-cause). Skip `tests/test_ping.py`. Remaining candidates after sessions 22-26: `test_web.py` now clean; `test_cve.py` now clean. Reproduce repo-wide remaining counts (larger/hostile-sweep files) before picking the next file. Update `HANDOFF_NEXT.md` and `NEXT_TASK.md` with exact evidence.

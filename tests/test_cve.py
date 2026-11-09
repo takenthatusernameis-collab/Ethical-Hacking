@@ -6,6 +6,7 @@ import subprocess
 import sys
 import threading
 import urllib.error
+from pathlib import Path
 from typing import Any, cast
 
 from ethscan.cve import (
@@ -231,7 +232,7 @@ def test_run_cve_offline_target(monkeypatch) -> None:
     assert result["host"] == "nonexistent.invalid.domain.tld"
     assert result["services_checked"] == 0
     assert result["cve_count"] == 0
-    assert any("No CVEs matched" in n for n in result["notes"])
+    assert any("No CVEs matched" in n for n in cast(list[str], result["notes"]))
 
 
 def test_run_cve_with_services_file(tmp_path, monkeypatch) -> None:
@@ -256,8 +257,10 @@ def test_run_cve_with_services_file(tmp_path, monkeypatch) -> None:
         "example.com", services_file=str(services_file), timeout=0.5, use_cache=False
     )
     assert result["services_checked"] == 1
-    assert result["cve_count"] >= 1
-    assert any(e["source"] == "builtin" for e in result["cve_entries"])
+    assert cast(int, result["cve_count"]) >= 1
+    assert any(
+        e["source"] == "builtin" for e in cast(list[dict[str, Any]], result["cve_entries"])
+    )
 
 
 def test_run_cve_with_services_file_offline_fallback(tmp_path, monkeypatch) -> None:
@@ -338,7 +341,7 @@ def test_run_cve_severity_filter(tmp_path, monkeypatch) -> None:
         severity="medium",
     )
     assert result["severity_filter"] == "medium"
-    for entry in result["cve_entries"]:
+    for entry in cast(list[dict[str, Any]], result["cve_entries"]):
         finding = entry.get("finding") or {}
         cve = entry.get("cve") or {}
         level = finding.get("severity") or cve.get("severity")
@@ -718,7 +721,7 @@ def test_run_cve_min_severity_none_keeps_all(tmp_path, monkeypatch) -> None:
         use_cache=False,
     )
     assert result["min_severity_filter"] is None
-    assert result["cve_count"] >= 1
+    assert cast(int, result["cve_count"]) >= 1
 
 
 def test_run_cve_min_severity_low_keeps_all(tmp_path, monkeypatch) -> None:
@@ -747,7 +750,7 @@ def test_run_cve_min_severity_low_keeps_all(tmp_path, monkeypatch) -> None:
         min_severity="low",
     )
     assert result["min_severity_filter"] == "low"
-    assert result["cve_count"] >= 1
+    assert cast(int, result["cve_count"]) >= 1
 
 
 def test_run_cve_min_severity_critical_drops_all(tmp_path, monkeypatch) -> None:
@@ -1107,7 +1110,7 @@ def test_run_cve_records_failed_nvd_lookup(tmp_path, monkeypatch) -> None:
 
     assert results["services_checked"] == 1
     assert results["cve_count"] == 2
-    assert any("NVD lookup failed" in note for note in results["notes"])
+    assert any("NVD lookup failed" in note for note in cast(list[str], results["notes"]))
 
 
 def test_run_cve_reports_failed_nvd_lookup_as_error(tmp_path, monkeypatch) -> None:
@@ -1132,7 +1135,7 @@ def test_run_cve_reports_failed_nvd_lookup_as_error(tmp_path, monkeypatch) -> No
     assert results["services_checked"] == 1
     assert results["cve_count"] == 2
     assert results["error"] is not None
-    assert "NVD lookup failed" in results["error"]
+    assert "NVD lookup failed" in cast(str, results["error"])
 
 
 def test_fetch_cve_data_success(monkeypatch) -> None:
@@ -1217,7 +1220,7 @@ def test_run_cve_services_file_read_error(tmp_path, monkeypatch) -> None:
     result = run_cve(
         "example.com", services_file=str(services_file), timeout=0.5, use_cache=False
     )
-    assert any("Failed to read services file" in n for n in result["notes"])
+    assert any("Failed to read services file" in n for n in cast(list[str], result["notes"]))
 
 
 def test_run_cve_services_file_not_utf8(tmp_path, monkeypatch) -> None:
@@ -1285,7 +1288,7 @@ def test_run_cve_nvd_summary_appended(tmp_path, monkeypatch) -> None:
     result = run_cve(
         "example.com", services_file=str(services_file), timeout=0.5, use_cache=False
     )
-    nvd = [e for e in result["cve_entries"] if e.get("source") == "nvd"]
+    nvd = [e for e in cast(list[dict[str, Any]], result["cve_entries"]) if e.get("source") == "nvd"]
     assert len(nvd) == 1
     assert nvd[0]["cve_id"] == "CVE-2016-6210"
     assert nvd[0]["cve"]["severity"] == "MEDIUM"
@@ -1424,7 +1427,9 @@ def test_format_cve_report_markdown_skips_non_dict_entries() -> None:
     assert "## CVE Findings" in output
 
 
-def test_cve_scan_services_file_dict_with_non_dict_results(tmp_path: object, monkeypatch) -> None:
+def test_cve_scan_services_file_dict_with_non_dict_results(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
     from ethscan import cve
 
     # Force live detection path? No, services_file provided
@@ -1434,11 +1439,13 @@ def test_cve_scan_services_file_dict_with_non_dict_results(tmp_path: object, mon
     sf = d / "s.json"
     sf.write_text(json.dumps({"target": "example.com", "results": "not-a-list"}))
     res = cve.run_cve("example.com", services_file=str(sf))
-    assert "Service data holds no 'results' list" in res["notes"]
-    assert res["services_checked"] == 0
+    assert "Service data holds no 'results' list" in cast(list[str], res["notes"])
+    assert cast(int, res["services_checked"]) == 0
 
 
-def test_cve_scan_services_file_results_bad_entries(tmp_path: object, monkeypatch) -> None:
+def test_cve_scan_services_file_results_bad_entries(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
     from ethscan import cve
 
     d = tmp_path / "svc"
@@ -1448,12 +1455,14 @@ def test_cve_scan_services_file_results_bad_entries(tmp_path: object, monkeypatc
     # Avoid network/NVD
     monkeypatch.setattr(cve, "_lookup_cve_id", lambda p, v: None)
     res = cve.run_cve("example.com", services_file=str(sf))
-    assert "Service data holds entries that are not objects" in res["notes"]
+    assert "Service data holds entries that are not objects" in cast(list[str], res["notes"])
     # Should only process dict entries
-    assert res["services_checked"] >= 1
+    assert cast(int, res["services_checked"]) >= 1
 
 
-def test_cve_scan_services_file_services_list_bad_entries(tmp_path: object, monkeypatch) -> None:
+def test_cve_scan_services_file_services_list_bad_entries(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
     from ethscan import cve
 
     d = tmp_path / "svc"
@@ -1462,11 +1471,13 @@ def test_cve_scan_services_file_services_list_bad_entries(tmp_path: object, monk
     # results missing, services exists but not list
     sf.write_text(json.dumps({"target": "example.com", "services": "bad"}))
     res = cve.run_cve("example.com", services_file=str(sf))
-    assert "Service data holds no 'results' list" in res["notes"]
-    assert res["services_checked"] == 0
+    assert "Service data holds no 'results' list" in cast(list[str], res["notes"])
+    assert cast(int, res["services_checked"]) == 0
 
 
-def test_cve_scan_services_file_services_list_entries_bad(tmp_path: object, monkeypatch) -> None:
+def test_cve_scan_services_file_services_list_entries_bad(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
     from ethscan import cve
 
     d = tmp_path / "svc"
@@ -1475,8 +1486,8 @@ def test_cve_scan_services_file_services_list_entries_bad(tmp_path: object, monk
     sf.write_text(json.dumps({"target": "example.com", "services": [None, {"banner": "nginx/1.18"}]}))
     monkeypatch.setattr(cve, "_lookup_cve_id", lambda p, v: None)
     res = cve.run_cve("example.com", services_file=str(sf))
-    assert "Service data holds entries that are not objects" in res["notes"]
-    assert res["services_checked"] >= 1
+    assert "Service data holds entries that are not objects" in cast(list[str], res["notes"])
+    assert cast(int, res["services_checked"]) >= 1
 
 
 def test_cve_scan_items_dict_with_inner_services(monkeypatch) -> None:
@@ -1511,7 +1522,7 @@ def test_cve_scan_items_dict_with_inner_services_alt(monkeypatch) -> None:
     monkeypatch.setattr(svc_mod, "run_service", fake_run_service)
     monkeypatch.setattr(cve, "_lookup_cve_id", lambda p, v: None)
     res = cve.run_cve("example.com")
-    assert res["services_checked"] >= 1
+    assert cast(int, res["services_checked"]) >= 1
 
 
 
@@ -1526,11 +1537,11 @@ def test_cve_scan_service_notes_list_appended(monkeypatch) -> None:
     monkeypatch.setattr(cve, "_lookup_cve_id", lambda p, v: None)
     res = cve.run_cve("example.com")
     # Should append string notes from service notes
-    assert any("service: n1" in str(n) for n in res["notes"])
-    assert any("service: n2" in str(n) for n in res["notes"])
+    assert any("service: n1" in str(n) for n in cast(list[object], res["notes"]))
+    assert any("service: n2" in str(n) for n in cast(list[object], res["notes"]))
     # Non-string in list should be skipped (only iterates) - our code does `for sn in notes_raw: if isinstance(notes_raw, list): for sn in notes_raw: notes.append(f"service: {sn}")` so it appends regardless of type
     # Looking at actual code: line 324-326 does append f"service: {sn}" for every item in list
-    assert any("service: 123" in str(n) for n in res["notes"])
+    assert any("service: 123" in str(n) for n in cast(list[object], res["notes"]))
 
 
 def test_cve_scan_import_fallback_to_ethscan_service(monkeypatch) -> None:
@@ -1583,7 +1594,9 @@ def test_cve_scan_import_fallback_to_ethscan_service(monkeypatch) -> None:
         monkeypatch.setattr(builtins, "__import__", real_import)
 
 
-def test_cve_scan_skips_non_dict_entry_and_banner_not_str(monkeypatch, tmp_path: object) -> None:
+def test_cve_scan_skips_non_dict_entry_and_banner_not_str(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
     from ethscan import cve
 
     d = tmp_path / "svc"
@@ -1593,10 +1606,10 @@ def test_cve_scan_skips_non_dict_entry_and_banner_not_str(monkeypatch, tmp_path:
     monkeypatch.setattr(cve, "_lookup_cve_id", lambda p, v: None)
     res = cve.run_cve("example.com", services_file=str(sf))
     # banner not str -> becomes empty string, parse_banner called
-    assert res["services_checked"] == 1
+    assert cast(int, res["services_checked"]) == 1
 
 
-def test_cve_scan_parse_banner_raises_caught(monkeypatch, tmp_path: object) -> None:
+def test_cve_scan_parse_banner_raises_caught(monkeypatch: Any, tmp_path: Path) -> None:
     from ethscan import cve
 
     d = tmp_path / "svc"
@@ -1608,15 +1621,21 @@ def test_cve_scan_parse_banner_raises_caught(monkeypatch, tmp_path: object) -> N
         raise TypeError("bad")
 
     monkeypatch.setattr(cve, "parse_banner", bad_parse)
-    called = []
-    monkeypatch.setattr(cve, "_lookup_cve_id", lambda p, v: called.append(True) or None)
+    called: list[bool] = []
+
+    def _capture(*_args: Any, **_kwargs: Any) -> None:
+        called.append(True)
+
+    monkeypatch.setattr(cve, "_lookup_cve_id", _capture)
     res = cve.run_cve("example.com", services_file=str(sf))
-    assert res["services_checked"] == 1
+    assert cast(int, res["services_checked"]) == 1
     assert res["cve_entries"] == []
     assert called  # Should be called with (None, None)
 
 
-def test_cve_scan_nvd_lookup_exception_caught(monkeypatch, tmp_path: object) -> None:
+def test_cve_scan_nvd_lookup_exception_caught(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
     from ethscan import cve
 
     d = tmp_path / "svc"
@@ -1628,7 +1647,7 @@ def test_cve_scan_nvd_lookup_exception_caught(monkeypatch, tmp_path: object) -> 
     monkeypatch.setattr(cve, "_get_cached_or_fetch", lambda *a, **kw: (_ for _ in ()).throw(OSError("boom")))
     res = cve.run_cve("example.com", services_file=str(sf))
     # Exception caught, should not crash
-    assert res["services_checked"] == 1
+    assert cast(int, res["services_checked"]) == 1
 
 
 def test_cve_scan_service_detection_raises_caught(monkeypatch) -> None:
@@ -1641,8 +1660,8 @@ def test_cve_scan_service_detection_raises_caught(monkeypatch) -> None:
     monkeypatch.setattr(svc_mod, "run_service", fake_run_service)
     monkeypatch.setattr(cve, "_lookup_cve_id", lambda p, v: None)
     res = cve.run_cve("example.com")
-    assert any("Service detection failed: boom" in str(n) for n in res["notes"])
-    assert res["services_checked"] == 0
+    assert any("Service detection failed: boom" in str(n) for n in cast(list[object], res["notes"]))
+    assert cast(int, res["services_checked"]) == 0
 
 
 def test_cve_scan_skips_non_dict_entry_in_service_list(monkeypatch) -> None:
@@ -1655,4 +1674,4 @@ def test_cve_scan_skips_non_dict_entry_in_service_list(monkeypatch) -> None:
     monkeypatch.setattr(svc_mod, "run_service", fake_run_service)
     monkeypatch.setattr(cve, "_lookup_cve_id", lambda p, v: None)
     res = cve.run_cve("example.com")
-    assert res["services_checked"] == 1
+    assert cast(int, res["services_checked"]) == 1
