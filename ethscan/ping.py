@@ -12,7 +12,7 @@ import json
 import socket
 import struct
 import time
-from typing import Mapping, TypedDict, cast
+from typing import Any, Mapping, TypedDict, cast
 
 from ethscan.target import parse_url
 
@@ -151,7 +151,7 @@ def _parse_icmp_reply(data: bytes, expected_id: int) -> _IcmpReply | None:
     }
 
 
-def _try_create_raw_socket() -> socket.socket | None:
+def _try_create_raw_socket() -> Any:
     """Attempt to create a raw ICMP socket for sending/receiving echo requests.
 
     Returns the socket if available, or ``None`` if raw sockets are not
@@ -179,7 +179,7 @@ def probe_icmp(
     host: str,
     timeout: float = DEFAULT_TIMEOUT,
     ttl: int = DEFAULT_TTL,
-    raw_socket: socket.socket | None = None,
+    raw_socket: Any = None,
     identifier: int = 0,
     sequence: int = 0,
     payload: bytes = b"",
@@ -355,7 +355,7 @@ def run_ping(
     timeout: float = DEFAULT_TIMEOUT,
     ttl: int = DEFAULT_TTL,
     port: int = DEFAULT_PORT,
-    raw_socket: socket.socket | None = None,
+    raw_socket: Any = None,
 ) -> _PingResult:
     """Run ICMP ping (or TCP fallback) against *target*.
 

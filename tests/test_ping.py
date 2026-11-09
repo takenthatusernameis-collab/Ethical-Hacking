@@ -402,7 +402,7 @@ def test_probe_icmp_loopback_closed_no_raw_socket() -> None:
 # ---------------------------------------------------------------------------
 
 
-class _FakeRawSocket(socket.socket):
+class _FakeRawSocket:
     """Minimal fake raw socket that returns pre-set data from recvfrom."""
 
     def __init__(self, data: bytes = b"", recv_error: Exception | None = None) -> None:
@@ -583,7 +583,9 @@ def test_probe_icmp_raw_socket_wrong_id(monkeypatch) -> None:
         resolved_ip="10.0.0.1",
     )
     assert result["response_type"] == RESP_NO_RESPONSE
-    assert "identifier mismatch" in result["error"]
+    err = result["error"]
+    assert err is not None
+    assert "identifier mismatch" in err
     assert fake_send.closed is True
 
 
@@ -660,7 +662,9 @@ def test_probe_icmp_raw_sendto_oserror(monkeypatch) -> None:
         resolved_ip="10.0.0.1",
     )
     assert result["response_type"] == RESP_NO_RESPONSE
-    assert "send failed" in result["error"]
+    err = result["error"]
+    assert err is not None
+    assert "send failed" in err
     assert fake_send.closed is True
 
 

@@ -180,7 +180,7 @@ def test_brute_cli_reports_a_failed_ssh_login(monkeypatch, tmp_path: Path) -> No
         def close(self) -> None:
             pass
 
-    fake_paramiko = types.ModuleType("paramiko")
+    fake_paramiko: Any = types.ModuleType("paramiko")
     fake_paramiko.SSHClient = _FailingSSHClient
     fake_paramiko.AutoAddPolicy = lambda: None
 
@@ -211,7 +211,7 @@ def test_brute_cli_reports_an_unbuildable_ssh_client(monkeypatch, tmp_path: Path
         def close(self) -> None:
             pass
 
-    fake_paramiko = types.ModuleType("paramiko")
+    fake_paramiko: Any = types.ModuleType("paramiko")
     fake_paramiko.SSHClient = _UnbuildableSSHClient
     fake_paramiko.AutoAddPolicy = lambda: None
 
