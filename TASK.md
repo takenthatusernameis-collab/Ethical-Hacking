@@ -125,3 +125,27 @@ Date: Sun Nov 08 2026 (session 7)
 - `tests/test_ping.py` pre-existing Python 3.14 `socket.timeout` read-only descriptor blocker (6 runtime failures, 2 typing errors) — left untouched per instructions.
 ## Next task
 - Continue per-file typing hygiene on remaining test files with mypy errors. Reproduce each target with `python -m mypy tests/<file>` first, fix per file using the established pattern. Skip `tests/test_ping.py`.
+
+# Session (Mon Nov 09 2026, session 17)
+## This session
+- Continued typing hygiene on `tests/test_web_hostile_sweep.py` (7 errors -> 0). Baseline at start: `pytest -q` → 5875 passed, 53 skipped, 0 failed.
+- Root cause: hostile-shape sweep passes `object`-typed values (from `HOSTILE_TOP_LEVEL` tuple and `cases` list) to formatters typed `dict[str, object]` — `arg-type` errors; the bare `HOSTILE_TOP_LEVEL` and `cases` literals also lacked annotations (`var-annotated`).
+- Fixed `tests/test_web_hostile_sweep.py` (no behavior change — formatters already defensively handle hostile shapes via `isinstance` checks):
+  - Added `from typing import Any, cast`.
+  - `HOSTILE_TOP_LEVEL: tuple[object, ...] = (...)` (line 20).
+  - In `test_web_formatters_never_raise_on_hostile_top_level`: introduced `bad_any: Any = bad` and passed `cast(Any, bad_any)` to the three formatters (lines 25-28).
+  - `cases: list[dict[str, object]] = [...]` (line 36).
+- No source (`ethscan/`) changes; purely test typing hygiene, fully reversible.
+
+## Verification
+- `python -m mypy tests/test_web_hostile_sweep.py` → Success: no issues found.
+- `python -m ruff check tests/test_web_hostile_sweep.py` → All checks passed.
+- `python -m pytest tests/test_web_hostile_sweep.py -q` → 2 passed.
+- `python -m pytest -q --ignore=tests/test_ping.py` → 5875 passed, 53 skipped, 0 failed (baseline unchanged).
+
+## Blockers
+- `tests/test_ping.py` pre-existing Python 3.14 `socket.timeout` read-only descriptor blocker (6 runtime failures, 2 typing errors) — left untouched per instructions.
+- Repo-wide `python -m mypy ethscan/ tests/` still reports pre-existing errors across many other test files. Do not fix speculatively; reproduce per file first.
+
+## Next task
+- Continue per-file typing hygiene on remaining test files with mypy errors. Reproduce each target with `python -m mypy tests/<file>` first, fix per file using the established pattern. Skip `tests/test_ping.py`.
