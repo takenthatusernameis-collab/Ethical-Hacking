@@ -5,6 +5,7 @@ import http.client
 import json
 import socket
 import urllib.error
+from typing import Any, cast
 
 from ethscan.s3 import (
     DEFAULT_BUCKET_NAMES,
@@ -297,7 +298,7 @@ def test_check_bucket_public_transport_failure(monkeypatch) -> None:
     result = check_bucket_public("mybucket", "us-east-1", 1.0)
     assert result["exists"] is False
     assert result["public"] is False
-    assert "hostile transport" in result["error"]
+    assert "hostile transport" in cast(str, result["error"])
 
 
 def test_check_bucket_public_url_and_region_fields(monkeypatch) -> None:
@@ -381,7 +382,7 @@ def test_run_s3_default_region(monkeypatch) -> None:
     assert results["region"] == "us-east-1"
     assert results["regions_checked"] == ["us-east-1"]
     assert probed_regions == {"us-east-1"}
-    assert results["candidates_tested"] > 0
+    assert cast(int, results["candidates_tested"]) > 0
     assert results["public_buckets"] == []
     assert results["existing_buckets"] == []
     assert results["private_buckets"] == []
@@ -397,10 +398,12 @@ def test_run_s3_detects_public_bucket(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.s3.check_bucket_public", mock_check)
 
     results = run_s3("example.com", timeout=1.0, max_workers=5)
-    assert len(results["public_buckets"]) == 1
-    assert results["public_buckets"][0]["bucket"] == "example-com"
-    assert results["public_buckets"][0]["public"] is True
-    assert len(results["existing_buckets"]) == 1
+    public_buckets = cast(list[dict[str, Any]], results["public_buckets"])
+    existing_buckets = cast(list[dict[str, Any]], results["existing_buckets"])
+    assert len(public_buckets) == 1
+    assert public_buckets[0]["bucket"] == "example-com"
+    assert public_buckets[0]["public"] is True
+    assert len(existing_buckets) == 1
 
 
 def test_run_s3_detects_private_bucket(monkeypatch) -> None:
@@ -412,10 +415,12 @@ def test_run_s3_detects_private_bucket(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.s3.check_bucket_public", mock_check)
 
     results = run_s3("example.com", timeout=1.0, max_workers=5)
-    assert len(results["private_buckets"]) == 1
-    assert results["private_buckets"][0]["bucket"] == "example-com"
-    assert results["private_buckets"][0]["public"] is False
-    assert len(results["public_buckets"]) == 0
+    private_buckets = cast(list[dict[str, Any]], results["private_buckets"])
+    public_buckets = cast(list[dict[str, Any]], results["public_buckets"])
+    assert len(private_buckets) == 1
+    assert private_buckets[0]["bucket"] == "example-com"
+    assert private_buckets[0]["public"] is False
+    assert len(public_buckets) == 0
 
 
 def test_run_s3_with_wordlist(monkeypatch) -> None:
@@ -448,9 +453,10 @@ def test_run_s3_region_all(monkeypatch) -> None:
     results = run_s3("example.com", region="all", timeout=1.0, max_workers=10)
     assert results["region"] == "all"
     assert results["regions_checked"] == S3_REGIONS
-    candidates = results["candidates_tested"]
+    candidates = cast(int, results["candidates_tested"])
     assert len(probed) == candidates * len(S3_REGIONS)
-    assert "Checked" in results["notes"][0]
+    notes = cast(list[Any], results["notes"])
+    assert "Checked" in cast(str, notes[0])
 
 
 def test_run_s3_empty_target() -> None:
@@ -458,7 +464,8 @@ def test_run_s3_empty_target() -> None:
     assert results["candidates_tested"] == 0
     assert results["results"] == []
     assert results["public_buckets"] == []
-    assert len(results["notes"]) >= 1
+    notes = cast(list[Any], results["notes"])
+    assert len(notes) >= 1
 
 
 def test_run_s3_results_sorted(monkeypatch) -> None:
@@ -468,7 +475,7 @@ def test_run_s3_results_sorted(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.s3.check_bucket_public", mock_check)
 
     results = run_s3("example.com", timeout=1.0, max_workers=2)
-    buckets = [r["bucket"] for r in results["results"]]
+    buckets = [cast(dict[str, Any], r)["bucket"] for r in cast(list[Any], results["results"])]
     assert buckets == sorted(buckets)
 
 
@@ -511,18 +518,18 @@ def test_run_s3_ipv6_target_reports_invalid_bucket_names(monkeypatch) -> None:
 
     results = run_s3("[::1]:443", timeout=1.0, max_workers=5)
     assert results["domain"] == "::1"
-    assert results["candidates_tested"] > 0
+    assert cast(int, results["candidates_tested"]) > 0
     assert results["results"]
     assert results["public_buckets"] == []
     assert results["private_buckets"] == []
     assert results["existing_buckets"] == []
-    for entry in results["results"]:
-        assert entry["error"].startswith("Invalid bucket name")
+    for entry in cast(list[dict[str, Any]], results["results"]):
+        assert cast(str, entry["error"]).startswith("Invalid bucket name")
         assert entry["exists"] is False
         assert entry["public"] is False
     assert any(
-        "None of the" in note and "valid S3 bucket name" in note
-        for note in results["notes"]
+        "None of the" in cast(str, note) and "valid S3 bucket name" in cast(str, note)
+        for note in cast(list[Any], results["notes"])
     )
 
 
@@ -536,7 +543,7 @@ def test_run_s3_probe_exception_is_reported(monkeypatch) -> None:
 
     results = run_s3("example.com", timeout=1.0, max_workers=5)
     assert results["results"]
-    for entry in results["results"]:
+    for entry in cast(list[dict[str, Any]], results["results"]):
         assert entry["error"] == "RuntimeError: probe exploded"
         assert entry["exists"] is False
         assert entry["public"] is False
@@ -554,7 +561,7 @@ def test_run_s3_invalid_url_is_reported(monkeypatch) -> None:
 
     results = run_s3("example.com", region="a b", timeout=1.0, max_workers=5)
     assert results["results"]
-    for entry in results["results"]:
+    for entry in cast(list[dict[str, Any]], results["results"]):
         assert entry["error"] == "URL can't contain control characters."
         assert entry["exists"] is False
         assert entry["public"] is False
