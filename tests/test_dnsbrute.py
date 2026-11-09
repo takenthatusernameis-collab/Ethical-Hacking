@@ -5,6 +5,7 @@ import io
 import socket
 import struct
 import threading
+from typing import Any
 
 import pytest
 
@@ -264,6 +265,7 @@ def test_query_axfr_raw_refused() -> None:
 
     assert result["success"] is False
     assert result["records_count"] == 0
+    assert result["error"] is not None
     assert "REFUSED" in result["error"]
 
 
@@ -274,6 +276,7 @@ def test_query_axfr_raw_empty_response() -> None:
     result = query_axfr_raw("127.0.0.1", "example.com", timeout=2.0, port=server.port)
 
     assert result["success"] is False
+    assert result["error"] is not None
     assert "empty response" in result["error"]
 
 
@@ -305,6 +308,7 @@ def test_query_axfr_raw_transport_failure_is_reported(monkeypatch) -> None:
 
     assert result["success"] is False
     assert result["records_count"] == 0
+    assert result["error"] is not None
     assert "hostile transport" in result["error"]
 
 
@@ -321,6 +325,7 @@ def test_query_axfr_raw_transport_failure_unnamed_type_on_connect_reported(monke
 
     assert result["success"] is False
     assert result["records_count"] == 0
+    assert result["error"] is not None
     assert "hostile" in result["error"]
 
 
@@ -1994,7 +1999,7 @@ def test_dnsbrute_inner_dns_import_failure(monkeypatch) -> None:
     # Create a fake dns module where dns.enum fails
     import types
 
-    fake_dns = types.ModuleType("dns")
+    fake_dns: Any = types.ModuleType("dns")
     fake_dns.exception = Exception
     fake_dns.resolver = types.SimpleNamespace()
     # Make dns.enum import fail
@@ -2028,7 +2033,7 @@ def test_dnsbrute_inner_dns_import_failure_exact(monkeypatch) -> None:
             monkeypatch.delitem(sys.modules, k, raising=False)
 
     import types
-    fake_dns = types.ModuleType("dns")
+    fake_dns: Any = types.ModuleType("dns")
     fake_dns.exception = Exception
     fake_dns.resolver = types.SimpleNamespace()
     monkeypatch.setitem(sys.modules, "dns", fake_dns)
