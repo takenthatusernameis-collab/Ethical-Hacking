@@ -284,7 +284,7 @@ def test_format_ssl_report_csv_basic() -> None:
 
 
 def test_format_ssl_report_csv_empty() -> None:
-    data = {"target": "example.com", "cert": None, "error": "connection refused"}
+    data: dict[str, object] = {"target": "example.com", "cert": None, "error": "connection refused"}
     output = format_ssl_report_csv(data)
     lines = output.splitlines()
     assert lines[0] == "field,value"
@@ -293,14 +293,14 @@ def test_format_ssl_report_csv_empty() -> None:
 
 
 def test_format_ssl_report_csv_missing_fields() -> None:
-    data = {}
+    data: dict[str, object] = {}
     output = format_ssl_report_csv(data)
     lines = output.splitlines()
     assert lines[0] == "field,value"
 
 
 def test_format_ssl_report_csv_escaping() -> None:
-    data = {
+    data: dict[str, object] = {
         "target": "example.com",
         "cert": {"subject": "CN=hello, world", "issuer": "Inc, LLC"},
     }
