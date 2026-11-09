@@ -10,7 +10,8 @@ import re
 import socket
 import struct
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import cast
+from collections.abc import Mapping
+from typing import TypedDict, cast
 
 from ethscan.target import parse_url
 
@@ -367,7 +368,7 @@ def _match_os_from_ttl(ttl: int) -> list[str]:
     return matches
 
 
-def _match_os_from_behavior(behavior: dict[str, object]) -> list[str]:
+def _match_os_from_behavior(behavior: Mapping[str, object]) -> list[str]:
     """Infer OS family from TCP/IP stack behavior observations."""
     matches: list[str] = []
     response = str(behavior.get("response") or "")
@@ -381,13 +382,26 @@ def _match_os_from_behavior(behavior: dict[str, object]) -> list[str]:
     return matches
 
 
+class OsdetectResult(TypedDict):
+    target: str
+    host: str
+    timeout: float
+    ports_probed: int
+    probes: list[dict[str, object]]
+    inferred_os: list[str]
+    os_matches: list[str]
+    inferred_os_count: int
+    banners_provided: bool
+    notes: list[str]
+
+
 def run_osdetect(
     target: str,
     ports: list[int] | None = None,
     timeout: float = DEFAULT_TIMEOUT,
     max_workers: int = DEFAULT_WORKERS,
     banners: dict[int, str] | None = None,
-) -> dict[str, object]:
+) -> OsdetectResult:
     """Run OS fingerprinting against a target using TCP/IP stack behavior.
 
     Args:
@@ -480,12 +494,12 @@ def run_osdetect(
     }
 
 
-def format_osdetect_report_json(data: dict[str, object]) -> str:
+def format_osdetect_report_json(data: Mapping[str, object]) -> str:
     """Format OS detection results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_osdetect_report_markdown(data: dict[str, object]) -> str:
+def format_osdetect_report_markdown(data: Mapping[str, object]) -> str:
     """Format OS detection results as Markdown."""
     data = _as_dict(data)
     lines = ["# ethscan OS Detection Report", ""]
@@ -530,7 +544,7 @@ def format_osdetect_report_markdown(data: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_osdetect_report_csv(data: dict[str, object]) -> str:
+def format_osdetect_report_csv(data: Mapping[str, object]) -> str:
     """Format OS detection results as CSV."""
     data = _as_dict(data)
     output = io.StringIO()

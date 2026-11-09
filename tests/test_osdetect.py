@@ -6,6 +6,8 @@ import io
 import json
 import threading
 
+from typing import cast
+
 from ethscan.osdetect import (
     _checksum,
     _match_os_from_banner,
@@ -464,6 +466,7 @@ def test_connect_tcp_refused() -> None:
     with patch("socket.create_connection", side_effect=ConnectionRefusedError):
         ok, err, flag = osdetect._connect_tcp("example.com", 80, 5.0)
         assert ok is False
+        assert err is not None
         assert "RST" in err
         assert flag == 1
 
@@ -500,6 +503,7 @@ def test_connect_tcp_oserror_truncate() -> None:
     with patch("socket.create_connection", side_effect=OSError("x" * 300)):
         ok, err, _ = osdetect._connect_tcp("example.com", 80, 5.0)
         assert ok is False
+        assert err is not None
         assert err.endswith("...")
 
 
@@ -622,7 +626,7 @@ def test_probe_rst_oserror_truncate() -> None:
     mock_sock = MagicMock()
     mock_sock.connect_ex.side_effect = OSError("y" * 300)
     with patch("socket.socket", return_value=mock_sock):
-        assert osdetect.probe_rst("h", 80, 1.0)["error"].endswith("...")
+        assert cast(str, osdetect.probe_rst("h", 80, 1.0)["error"]).endswith("...")
 
 
 def test_probe_rst_close_err() -> None:
@@ -694,7 +698,7 @@ def test_probe_fin_oserror_truncate() -> None:
     mock_sock = MagicMock()
     mock_sock.connect_ex.side_effect = OSError("z" * 300)
     with patch("socket.socket", return_value=mock_sock):
-        assert osdetect.probe_fin("h", 80, 1.0)["error"].endswith("...")
+        assert cast(str, osdetect.probe_fin("h", 80, 1.0)["error"]).endswith("...")
 
 
 def test_probe_fin_close_err() -> None:
@@ -766,7 +770,7 @@ def test_probe_ack_oserror_truncate() -> None:
     mock_sock = MagicMock()
     mock_sock.connect_ex.side_effect = OSError("w" * 300)
     with patch("socket.socket", return_value=mock_sock):
-        assert osdetect.probe_ack("h", 80, 1.0)["error"].endswith("...")
+        assert cast(str, osdetect.probe_ack("h", 80, 1.0)["error"]).endswith("...")
 
 
 def test_probe_ack_close_err() -> None:
@@ -840,7 +844,7 @@ def test_osdetect_transport_failure_is_reported_not_raised(monkeypatch) -> None:
     assert isinstance(results, dict)
     probe = results["probes"][0]
     assert probe["response"] == "NO-RESPONSE"
-    assert "hostile transport" in (probe.get("error") or "")
+    assert "hostile transport" in cast(str, probe.get("error") or "")
 
 
 def test_run_osdetect_invalid_max_workers_reports_probes() -> None:

@@ -30,4 +30,34 @@ Date: Mon Nov 09 2026 (session 24)
 Continue per-file typing hygiene on remaining test files with mypy errors. Reproduce each target with `python -m mypy tests/<file>` first, fix per file using the established pattern (test-side casts; widen source types only when minimal/safe/root-cause). Skip `tests/test_ping.py`. Remaining candidates (reproduced session 23): `test_osdetect.py` (23), `test_web.py` (27), `test_cve.py` (32). After those, reproduce larger/hostile-sweep files per repo-wide counts. Update this file and `NEXT_TASK.md` with exact evidence.
 
 
+## Session (Mon Nov 09 2026, session 25)
+## This session
+- Continued per-file typing hygiene on `tests/test_osdetect.py` (23 errors → 0). Baseline at start: `pytest -q --ignore=tests/test_ping.py` → 5878 passed, 50 skipped, 0 failed.
+- Root cause: `run_osdetect` returned `dict[str, object]`, so `result["probes"]`/`result["inferred_os"]`/`result["notes"]`/etc. were inferred as `object` across ~16 access sites; `dict` invariance broke calls to `_match_os_from_behavior` (3 sites) and `format_osdetect_report_csv` (2 sites) with `dict[str, str]`/`dict[str, Sequence[...]]` args; `_connect_tcp` returns `err: str | None` (2 `in`/`.endswith` sites); probe results index to `object` (3 `.endswith` sites).
+- Fixed `ethscan/osdetect.py` (source changes — no behavior change):
+  - Added `from collections.abc import Mapping`; `from typing import TypedDict, cast`.
+  - Added `OsdetectResult(TypedDict)` (`target`, `host`, `timeout`, `ports_probed`, `probes`, `inferred_os`, `os_matches`, `inferred_os_count`, `banners_provided`, `notes`); changed `run_osdetect` return type to it.
+  - Widened `_match_os_from_behavior` and `format_osdetect_report_json/markdown/csv` from `dict[str, object]` to `Mapping[str, object]` (read-only; mypy-recommended covariant type).
+- Fixed `tests/test_osdetect.py` (test-side, no behavior change):
+  - Added `from typing import cast`.
+  - `assert err is not None` before `"RST" in err` (`test_connect_tcp_refused`) and before `err.endswith("...")` (`test_connect_tcp_oserror_truncate`).
+  - `cast(str, ...)` around `probe_rst/probe_fin/probe_ack(...)["error"]` before `.endswith("...")` (3 sites).
+  - `cast(str, probe.get("error") or "")` before `in` check in `test_osdetect_transport_failure_is_reported_not_raised`.
+  - Restored `test_connect_tcp_oserror_truncate` body after a mistaken edit (same assertions plus narrowing; no behavior change).
+
+## Verification
+- `python -m mypy tests/test_osdetect.py` → Success: no issues found in 1 source file.
+- `python -m mypy ethscan/osdetect.py` → Success: no issues found in 1 source file.
+- `python -m mypy ethscan/ tests/test_osdetect.py` → Success: no issues found in 60 source files.
+- `python -m ruff check ethscan/osdetect.py tests/test_osdetect.py` → All checks passed!
+- `python -m pytest tests/test_osdetect.py -q` → 82 passed.
+- `python -m pytest -q --ignore=tests/test_ping.py` → 5878 passed, 50 skipped, 0 failed (baseline unchanged).
+
+## Blockers
+- `tests/test_ping.py` pre-existing Python 3.14 `socket.timeout` read-only descriptor blocker (6 runtime failures, 2 typing errors) — left untouched per instructions.
+
+## Next task
+Continue per-file typing hygiene on remaining test files with mypy errors. Reproduce each target with `python -m mypy tests/<file>` first, fix per file using the established pattern. Skip `tests/test_ping.py`. Remaining candidates (reproduced session 23): `test_web.py` (27), `test_cve.py` (32). Then larger/hostile-sweep files per repo-wide counts. Update this file and `NEXT_TASK.md` with exact evidence.
+
+
 (End of file - total 34 lines)
