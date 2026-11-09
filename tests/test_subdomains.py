@@ -1,7 +1,9 @@
 """Tests for the ethscan subdomains module."""
 
-
 import socket
+import sys
+import types
+from typing import Any, cast
 
 import pytest
 
@@ -439,13 +441,13 @@ def test_format_subdomains_report_csv_basic() -> None:
 
 
 def test_format_subdomains_report_csv_empty() -> None:
-    data = {"all_results": []}
+    data: dict[str, Any] = {"all_results": []}
     output = format_subdomains_report_csv(data)
     assert output == "subdomain,hostname,ip,resolved"
 
 
 def test_format_subdomains_report_csv_missing_fields() -> None:
-    data = {
+    data: dict[str, Any] = {
         "all_results": [
             {"subdomain": "www"},
             {"hostname": "api.example.com"},
@@ -476,7 +478,6 @@ def test_format_subdomains_report_csv_escaping() -> None:
 
 def test_dns_availability_flag_true(monkeypatch) -> None:
     """DNS_AVAILABLE is True when the dns package imports cleanly (lines 12-13)."""
-    import sys
     import types
     from importlib import reload
 
@@ -488,7 +489,7 @@ def test_dns_availability_flag_true(monkeypatch) -> None:
     class DNSException(Exception):
         pass
 
-    dns_exception.DNSException = DNSException
+    dns_exception.DNSException = DNSException  # type: ignore[attr-defined]
 
     class Resolver:
         def __init__(self):
@@ -499,9 +500,9 @@ def test_dns_availability_flag_true(monkeypatch) -> None:
         def resolve(self, hostname, rdtype):
             return []
 
-    dns_resolver.Resolver = Resolver
-    dns_pkg.resolver = dns_resolver
-    dns_pkg.exception = dns_exception
+    dns_resolver.Resolver = Resolver  # type: ignore[attr-defined]
+    dns_pkg.resolver = dns_resolver  # type: ignore[attr-defined]
+    dns_pkg.exception = dns_exception  # type: ignore[attr-defined]
 
     monkeypatch.setitem(sys.modules, "dns", dns_pkg)
     monkeypatch.setitem(sys.modules, "dns.resolver", dns_resolver)
@@ -521,7 +522,6 @@ def test_dns_availability_flag_true(monkeypatch) -> None:
 
 def test_dns_availability_flag_false(monkeypatch) -> None:
     """DNS_AVAILABLE is False when dns is not importable (the except branch)."""
-    import sys
     from importlib import reload
 
     import ethscan.subdomains as sub
@@ -537,7 +537,6 @@ def test_dns_availability_flag_false(monkeypatch) -> None:
 
 def test_resolve_subdomain_with_resolver_success(monkeypatch) -> None:
     """resolve_subdomain uses the dnspython resolver path on success (lines 100-106)."""
-    import types
 
     import ethscan.subdomains as sub
 
@@ -563,10 +562,10 @@ def test_resolve_subdomain_with_resolver_success(monkeypatch) -> None:
     class DNSException(Exception):
         pass
 
-    fake_exc.DNSException = DNSException
-    fake_dns.resolver = types.ModuleType("dns.resolver")
-    fake_dns.resolver.Resolver = FakeResolver
-    fake_dns.exception = fake_exc
+    fake_exc.DNSException = DNSException  # type: ignore[attr-defined]
+    fake_dns.resolver = types.ModuleType("dns.resolver")  # type: ignore[attr-defined]
+    fake_dns.resolver.Resolver = FakeResolver  # type: ignore[attr-defined]
+    fake_dns.exception = fake_exc  # type: ignore[attr-defined]
 
     monkeypatch.setattr(sub, "dns", fake_dns)
     monkeypatch.setattr(sub, "DNS_AVAILABLE", True)
@@ -580,7 +579,6 @@ def test_resolve_subdomain_with_resolver_success(monkeypatch) -> None:
 
 def test_resolve_subdomain_with_resolver_dns_exception(monkeypatch) -> None:
     """resolve_subdomain swallows dns.exception.DNSException (line 107-108)."""
-    import types
 
     import ethscan.subdomains as sub
 
@@ -591,7 +589,7 @@ def test_resolve_subdomain_with_resolver_dns_exception(monkeypatch) -> None:
             self.nameservers = []
 
         def resolve(self, hostname, rdtype):
-            raise sub.dns.exception.DNSException("boom")
+            raise cast(Any, sub.dns).exception.DNSException("boom")
 
     fake_dns = types.ModuleType("dns")
     fake_exc = types.ModuleType("dns.exception")
@@ -599,10 +597,10 @@ def test_resolve_subdomain_with_resolver_dns_exception(monkeypatch) -> None:
     class DNSException(Exception):
         pass
 
-    fake_exc.DNSException = DNSException
-    fake_dns.resolver = types.ModuleType("dns.resolver")
-    fake_dns.resolver.Resolver = FakeResolver
-    fake_dns.exception = fake_exc
+    fake_exc.DNSException = DNSException  # type: ignore[attr-defined]
+    fake_dns.resolver = types.ModuleType("dns.resolver")  # type: ignore[attr-defined]
+    fake_dns.resolver.Resolver = FakeResolver  # type: ignore[attr-defined]
+    fake_dns.exception = fake_exc  # type: ignore[attr-defined]
 
     monkeypatch.setattr(sub, "dns", fake_dns)
     monkeypatch.setattr(sub, "DNS_AVAILABLE", True)
@@ -616,7 +614,6 @@ def test_resolve_subdomain_with_resolver_dns_exception(monkeypatch) -> None:
 
 def test_resolve_subdomain_with_resolver_oserror(monkeypatch) -> None:
     """resolve_subdomain swallows OSError from the dnspython path (line 107-108)."""
-    import types
 
     import ethscan.subdomains as sub
 
@@ -630,14 +627,14 @@ def test_resolve_subdomain_with_resolver_oserror(monkeypatch) -> None:
             raise OSError("network down")
 
     fake_dns = types.ModuleType("dns")
-    fake_dns.resolver = types.ModuleType("dns.resolver")
-    fake_dns.resolver.Resolver = FakeResolver
-    fake_dns.exception = types.ModuleType("dns.exception")
+    fake_dns.resolver = types.ModuleType("dns.resolver")  # type: ignore[attr-defined]
+    fake_dns.resolver.Resolver = FakeResolver  # type: ignore[attr-defined]
+    fake_dns.exception = types.ModuleType("dns.exception")  # type: ignore[attr-defined]
 
     class _DNSException(Exception):
         pass
 
-    fake_dns.exception.DNSException = _DNSException
+    fake_dns.exception.DNSException = _DNSException  # type: ignore[attr-defined]
 
     monkeypatch.setattr(sub, "dns", fake_dns)
     monkeypatch.setattr(sub, "DNS_AVAILABLE", True)
@@ -651,7 +648,6 @@ def test_resolve_subdomain_with_resolver_oserror(monkeypatch) -> None:
 
 def test_resolve_subdomain_with_resolver_valueerror(monkeypatch) -> None:
     """resolve_subdomain swallows ValueError from the dnspython path (line 107-108)."""
-    import types
 
     import ethscan.subdomains as sub
 
@@ -665,14 +661,14 @@ def test_resolve_subdomain_with_resolver_valueerror(monkeypatch) -> None:
             raise ValueError("bad input")
 
     fake_dns = types.ModuleType("dns")
-    fake_dns.resolver = types.ModuleType("dns.resolver")
-    fake_dns.resolver.Resolver = FakeResolver
-    fake_dns.exception = types.ModuleType("dns.exception")
+    fake_dns.resolver = types.ModuleType("dns.resolver")  # type: ignore[attr-defined]
+    fake_dns.resolver.Resolver = FakeResolver  # type: ignore[attr-defined]
+    fake_dns.exception = types.ModuleType("dns.exception")  # type: ignore[attr-defined]
 
     class _DNSException2(Exception):
         pass
 
-    fake_dns.exception.DNSException = _DNSException2
+    fake_dns.exception.DNSException = _DNSException2  # type: ignore[attr-defined]
 
     monkeypatch.setattr(sub, "dns", fake_dns)
     monkeypatch.setattr(sub, "DNS_AVAILABLE", True)
@@ -693,7 +689,6 @@ def test_resolve_subdomain_with_resolver_empty_answer_set(monkeypatch) -> None:
     records (or that the toolkit's resolver treats as such) must be reported
     the way any other failed lookup is reported.
     """
-    import types
 
     import ethscan.subdomains as sub
 
@@ -707,14 +702,14 @@ def test_resolve_subdomain_with_resolver_empty_answer_set(monkeypatch) -> None:
             return []
 
     fake_dns = types.ModuleType("dns")
-    fake_dns.resolver = types.ModuleType("dns.resolver")
-    fake_dns.resolver.Resolver = FakeResolver
-    fake_dns.exception = types.ModuleType("dns.exception")
+    fake_dns.resolver = types.ModuleType("dns.resolver")  # type: ignore[attr-defined]
+    fake_dns.resolver.Resolver = FakeResolver  # type: ignore[attr-defined]
+    fake_dns.exception = types.ModuleType("dns.exception")  # type: ignore[attr-defined]
 
     class _DNSException(Exception):
         pass
 
-    fake_dns.exception.DNSException = _DNSException
+    fake_dns.exception.DNSException = _DNSException  # type: ignore[attr-defined]
 
     monkeypatch.setattr(sub, "dns", fake_dns)
     monkeypatch.setattr(sub, "DNS_AVAILABLE", True)
@@ -749,19 +744,18 @@ def _make_raising_resolver(exc):
 @pytest.mark.parametrize("exc", ESCAPE_TYPES)
 def test_resolve_subdomain_swallows_unlisted_exceptions(monkeypatch, exc):
     """resolve_subdomain returns (subdomain, None) instead of raising unlisted exceptions (line 106)."""
-    import types
 
     import ethscan.subdomains as sub
 
     fake_dns = types.ModuleType("dns")
-    fake_dns.resolver = types.ModuleType("dns.resolver")
+    fake_dns.resolver = types.ModuleType("dns.resolver")  # type: ignore[attr-defined]
     fake_dns.resolver.Resolver = _make_raising_resolver(exc)
-    fake_dns.exception = types.ModuleType("dns.exception")
+    fake_dns.exception = types.ModuleType("dns.exception")  # type: ignore[attr-defined]
 
     class _DNSException(Exception):
         pass
 
-    fake_dns.exception.DNSException = _DNSException
+    fake_dns.exception.DNSException = _DNSException  # type: ignore[attr-defined]
 
     monkeypatch.setattr(sub, "dns", fake_dns)
     monkeypatch.setattr(sub, "DNS_AVAILABLE", True)

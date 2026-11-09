@@ -3,6 +3,7 @@
 import csv
 import io
 import ssl
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -83,7 +84,8 @@ def test_test_version_invalid_spec() -> None:
     result = probe_version("127.0.0.1", 9999, "BOGUS", timeout=0.5)
     assert result["version"] == "BOGUS"
     assert result["supported"] is False
-    assert "unknown TLS version" in result["error"]
+    error = cast("str", result["error"])
+    assert "unknown TLS version" in error
 
 
 def test_test_cipher_connection_refused() -> None:
@@ -148,15 +150,19 @@ def test_run_tls_offline(monkeypatch) -> None:
     assert result["ciphers_tested"] == len(COMMON_CIPHERS)
     assert result["supported_versions"] == ["TLSv1_2", "TLSv1_3"]
     assert result["supported_version_count"] == 2
-    assert result["supported_cipher_count"] > 0
-    assert all(c.startswith("ECDHE") for c in result["supported_ciphers"])
+    supported_cipher_count = cast("int", result["supported_cipher_count"])
+    assert supported_cipher_count > 0
+    supported_ciphers = cast("list[str]", result["supported_ciphers"])
+    assert all(c.startswith("ECDHE") for c in supported_ciphers)
 
-    versions = {v["version"]: v for v in result["versions"]}
+    versions_list = cast("list[dict[str, object]]", result["versions"])
+    versions = {str(v["version"]): v for v in versions_list}
     assert versions["TLSv1"]["supported"] is False
     assert versions["TLSv1_2"]["supported"] is True
     assert versions["TLSv1_2"]["negotiated_cipher"] == "AES128-GCM-SHA256"
 
-    ciphers = {c["cipher"]: c for c in result["ciphers"]}
+    ciphers_list = cast("list[dict[str, object]]", result["ciphers"])
+    ciphers = {str(c["cipher"]): c for c in ciphers_list}
     assert ciphers["ECDHE-RSA-AES128-GCM-SHA256"]["supported"] is True
     assert ciphers["AES128-SHA"]["supported"] is False
 
@@ -317,7 +323,8 @@ def test_run_tls_notes_flag_obsolete_versions(monkeypatch) -> None:
     result = run_tls("example.com", versions=["TLSv1"], ciphers=["AES128-SHA"], timeout=1.0)
 
     assert result["supported_versions"] == ["TLSv1"]
-    assert any("Obsolete protocol version supported: TLSv1" in note for note in result["notes"])
+    notes = cast("list[str]", result["notes"])
+    assert any("Obsolete protocol version supported: TLSv1" in note for note in notes)
 
 
 def test_run_tls_offline_connection_refused() -> None:
@@ -330,10 +337,10 @@ def test_run_tls_offline_connection_refused() -> None:
     assert result["supported_ciphers"] == []
     assert result["supported_version_count"] == 0
     assert result["supported_cipher_count"] == 0
-    for entry in result["versions"]:
+    for entry in cast("list[dict[str, object]]", result["versions"]):
         assert entry["supported"] is False
         assert entry["error"] is not None
-    for entry in result["ciphers"]:
+    for entry in cast("list[dict[str, object]]", result["ciphers"]):
         assert entry["supported"] is False
         assert entry["error"] is not None
 
@@ -348,10 +355,10 @@ def test_run_tls_transport_failure_reported(monkeypatch) -> None:
 
     result = run_tls("example.com", max_workers=2)
 
-    for entry in result["versions"]:
+    for entry in cast("list[dict[str, object]]", result["versions"]):
         assert entry["supported"] is False
         assert entry["error"] is not None
-    for entry in result["ciphers"]:
+    for entry in cast("list[dict[str, object]]", result["ciphers"]):
         assert entry["supported"] is False
         assert entry["error"] is not None
 
@@ -582,12 +589,14 @@ def test_enumerate_tls_result_ordering(monkeypatch) -> None:
         max_workers=2,
     )
 
-    assert [v["version"] for v in result["versions"]] == [
+    versions = cast("list[dict[str, object]]", result["versions"])
+    ciphers = cast("list[dict[str, object]]", result["ciphers"])
+    assert [v["version"] for v in versions] == [
         "TLSv1_1",
         "TLSv1_2",
         "TLSv1_3",
     ]
-    assert [c["cipher"] for c in result["ciphers"]] == [
+    assert [c["cipher"] for c in ciphers] == [
         "AES128-GCM-SHA256",
         "AES256-GCM-SHA384",
     ]
@@ -860,7 +869,7 @@ def test_version_name_from_string() -> None:
 
 
 def test_resolve_versions_all_valid() -> None:
-    specs = ["TLSv1", "tls1.2", "TLSv1_3"]
+    specs: list[ssl.TLSVersion | str] = ["TLSv1", "tls1.2", "TLSv1_3"]
     assert _resolve_versions(specs) == [
         ssl.TLSVersion.TLSv1,
         ssl.TLSVersion.TLSv1_2,
@@ -987,7 +996,8 @@ def test_probe_version_ssl_error(monkeypatch) -> None:
     assert result["version"] == "TLSv1_2"
     assert result["supported"] is False
     assert result["error"] is not None
-    assert "SSLV3_ALERT_HANDSHAKE_FAILURE" in result["error"]
+    error = cast("str", result["error"])
+    assert "SSLV3_ALERT_HANDSHAKE_FAILURE" in error
 
 
 def test_probe_version_oserror(monkeypatch) -> None:
@@ -1026,7 +1036,8 @@ def test_probe_cipher_ssl_error(monkeypatch) -> None:
     assert result["cipher"] == "AES128-SHA"
     assert result["supported"] is False
     assert result["error"] is not None
-    assert "bad decrypt" in result["error"]
+    error = cast("str", result["error"])
+    assert "bad decrypt" in error
 
 
 # ---------------------------------------------------------------------------
@@ -1121,7 +1132,8 @@ def test_enumerate_tls_note_versions_without_ciphers(monkeypatch) -> None:
     )
     assert result["supported_versions"] == ["TLSv1_2"]
     assert result["supported_ciphers"] == []
-    assert any("no tested cipher succeeded" in note for note in result["notes"])
+    notes = cast("list[str]", result["notes"])
+    assert any("no tested cipher succeeded" in note for note in notes)
 
 
 def test_build_context_default_version_unchanged(monkeypatch) -> None:
