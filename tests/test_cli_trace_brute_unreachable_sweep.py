@@ -181,8 +181,8 @@ def test_brute_cli_reports_a_failed_ssh_login(monkeypatch, tmp_path: Path) -> No
             pass
 
     fake_paramiko = types.ModuleType("paramiko")
-    fake_paramiko.SSHClient = _FailingSSHClient
-    fake_paramiko.AutoAddPolicy = lambda: None
+    setattr(fake_paramiko, "SSHClient", _FailingSSHClient)
+    setattr(fake_paramiko, "AutoAddPolicy", lambda: None)
 
     monkeypatch.setattr("ethscan.brute.paramiko", fake_paramiko, raising=False)
     monkeypatch.setattr("ethscan.brute.PARAMIKO_AVAILABLE", True)
@@ -212,8 +212,8 @@ def test_brute_cli_reports_an_unbuildable_ssh_client(monkeypatch, tmp_path: Path
             pass
 
     fake_paramiko = types.ModuleType("paramiko")
-    fake_paramiko.SSHClient = _UnbuildableSSHClient
-    fake_paramiko.AutoAddPolicy = lambda: None
+    setattr(fake_paramiko, "SSHClient", _UnbuildableSSHClient)
+    setattr(fake_paramiko, "AutoAddPolicy", lambda: None)
 
     monkeypatch.setattr("ethscan.brute.paramiko", fake_paramiko, raising=False)
     monkeypatch.setattr("ethscan.brute.PARAMIKO_AVAILABLE", True)

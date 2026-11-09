@@ -202,6 +202,7 @@ def test_a_hostile_cache_file_never_leaks_a_traceback_on_the_command_line(
             ):
                 signal.setitimer(signal.ITIMER_REAL, PER_INVOCATION_TIMEOUT)
                 try:
+                    assert user.cli_args is not None
                     result = runner.invoke(cli.cli, list(user.cli_args))
                 except _Timeout:
                     pytest.fail(

@@ -93,7 +93,7 @@ def _option_hint(param: Any, ctx: click.Context) -> str:
     return param.get_error_hint(ctx)
 
 
-def _required_args(cmd: Any, tmp_path: Any, skip: str) -> list[str]:
+def _required_args(cmd: Any, tmp_path: Any, skip: str | None) -> list[str]:
     """Return the arguments that satisfy the required options of a command.
 
     The option under test is left out: the config file has to fill it, or
