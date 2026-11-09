@@ -42,6 +42,18 @@ def test_normalize_host_url() -> None:
     assert _normalize_host("ssh://user@ssh.example.com:2222/") == "ssh.example.com"
 
 
+def test_normalize_host_rejects_empty_target() -> None:
+    from ethscan.target import TargetSpecError
+
+    for bad in ("", "   ", "https://"):
+        try:
+            _normalize_host(bad)
+        except TargetSpecError as exc:
+            assert "Could not parse host from target" in str(exc)
+        else:
+            raise AssertionError(f"Expected TargetSpecError for {bad!r}")
+
+
 def test_load_wordlist(tmp_path) -> None:
     wordlist = tmp_path / "users.txt"
     wordlist.write_text("# comment\nadmin\n\nroot\n")

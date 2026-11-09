@@ -8940,6 +8940,16 @@ def test_osdetect_invalid_target_is_usage_error() -> None:
         assert "Could not parse host from target" in result.output
 
 
+def test_brute_invalid_target_is_usage_error() -> None:
+    """An empty or whitespace brute target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://"):
+        result = runner.invoke(cli, ["brute", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
 def test_vuln_invalid_target_is_usage_error() -> None:
     """An empty or whitespace vuln target is rejected as a usage error."""
     runner = CliRunner()
