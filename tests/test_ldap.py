@@ -1009,7 +1009,7 @@ def test_parse_ldap_message_missing_message_id() -> None:
 
     # messageID tag is OCTET_STRING, not INTEGER
     content = _ber_tlv(TAG_OCTET_STRING, b"bad") + _ber_tlv(TAG_INTEGER, b"\x01")
-    result = {"entries": []}
+    result: dict[str, list] = {"entries": []}
     with pytest.raises(ValueError, match="missing messageID"):
         _parse_ldap_message(content, result)
 
@@ -1024,9 +1024,9 @@ def test_build_banner_accessible_basic() -> None:
 
 def test_build_banner_with_version_and_vendor() -> None:
     res = _build_banner({"accessible": True, "ldap_version": 2})
-    assert "LDAPv2" in res
+    assert res is not None and "LDAPv2" in res
     res = _build_banner({"accessible": True, "root_dse": {"vendor": ["VendorX"]}})
-    assert "vendor=VendorX" in res
+    assert res is not None and "vendor=VendorX" in res
 
 
 def test_format_ldap_report_markdown_with_referral() -> None:
@@ -1093,9 +1093,9 @@ def test_send_recv_close_exception() -> None:
 
     orig = ldap_mod.socket.socket
     try:
-        ldap_mod.socket.socket = lambda *a, **k: BadSock()
+        setattr(ldap_mod.socket, "socket", lambda *a, **k: BadSock())  # noqa: B010
         data, err = _send_recv("h", 1, b"r", 1.0)
         assert data == b"abc"
         assert err is None
     finally:
-        ldap_mod.socket.socket = orig
+        setattr(ldap_mod.socket, "socket", orig)  # noqa: B010

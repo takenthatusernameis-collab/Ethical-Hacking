@@ -1,5 +1,5 @@
 """Tests for the ethscan service module."""
-
+from typing import cast
 
 from ethscan.service import (
     COMMON_SERVICE_PORTS,
@@ -36,7 +36,7 @@ def test_service_signatures() -> None:
     assert "ftp" in SERVICE_SIGNATURES
     assert "ssh" in SERVICE_SIGNATURES
     assert "http" in SERVICE_SIGNATURES
-    assert len(SERVICE_SIGNATURES["ftp"]) > 0
+    assert len(cast("list", SERVICE_SIGNATURES["ftp"])) > 0
 
 
 def test_grab_banner_connection_refused() -> None:
@@ -65,23 +65,24 @@ def test_run_service_offline(monkeypatch) -> None:
 
     monkeypatch.setattr("ethscan.service.grab_banner", mock_grab_banner)
 
-    result = run_service("example.com", ports=[21, 22, 80, 9999], timeout=1.0)
+    result: dict[str, object] = run_service("example.com", ports=[21, 22, 80, 9999], timeout=1.0)
 
     assert result["target"] == "example.com"
     assert result["host"] == "example.com"
     assert result["ports_scanned"] == 4
     assert result["services_found"] == 3
-    assert len(result["results"]) == 3
+    results = cast("list[dict[str, object]]", result["results"])
+    assert len(results) == 3
 
-    services = {r["port"]: r.get("service") for r in result["results"]}
+    services = {r["port"]: r.get("service") for r in results}
     assert services[21] == "ProFTPD"
     assert services[22] == "OpenSSH"
     assert services[80] == "nginx"
 
-    banners = {r["port"]: r.get("banner") for r in result["results"]}
-    assert "ProFTPD" in banners[21]
-    assert "OpenSSH" in banners[22]
-    assert "nginx" in banners[80]
+    banners = {r["port"]: cast("str | None", r.get("banner")) for r in results}
+    assert "ProFTPD" in (banners[21] or "")
+    assert "OpenSSH" in (banners[22] or "")
+    assert "nginx" in (banners[80] or "")
 
 
 def test_run_service_target_normalization(monkeypatch) -> None:
@@ -90,7 +91,7 @@ def test_run_service_target_normalization(monkeypatch) -> None:
 
     monkeypatch.setattr("ethscan.service.grab_banner", mock_grab_banner)
 
-    result = run_service("https://example.com/path", ports=[80], timeout=1.0)
+    result: dict[str, object] = run_service("https://example.com/path", ports=[80], timeout=1.0)
 
     assert result["host"] == "example.com"
 
@@ -117,7 +118,7 @@ def test_run_service_transport_failure_reported(monkeypatch) -> None:
 
     monkeypatch.setattr("ethscan.service.socket.create_connection", boom)
 
-    result = run_service("127.0.0.1", timeout=0.5)
+    result: dict[str, object] = run_service("127.0.0.1", timeout=0.5)
 
     assert result["services_found"] == 0
     assert result["results"] == []
@@ -147,7 +148,7 @@ def test_run_service_transport_failure_unnamed_type_in_recv_reported(monkeypatch
 
     monkeypatch.setattr("ethscan.service.socket.create_connection", lambda *a, **k: FakeSock())
 
-    result = run_service("127.0.0.1", ports=[80], timeout=0.5)
+    result: dict[str, object] = run_service("127.0.0.1", ports=[80], timeout=0.5)
 
     assert result["services_found"] == 0
     assert result["results"] == []
@@ -161,7 +162,7 @@ def test_run_service_transport_failure_unnamed_type_on_connect_reported(monkeypa
 
     monkeypatch.setattr("ethscan.service.socket.create_connection", boom)
 
-    result = run_service("127.0.0.1", timeout=0.5)
+    result: dict[str, object] = run_service("127.0.0.1", timeout=0.5)
 
     assert result["services_found"] == 0
     assert result["results"] == []
@@ -229,7 +230,7 @@ def test_banner_truncation_in_markdown(monkeypatch) -> None:
 
     monkeypatch.setattr("ethscan.service.grab_banner", mock_grab_banner)
 
-    result = run_service("example.com", ports=[80], timeout=1.0)
+    result: dict[str, object] = run_service("example.com", ports=[80], timeout=1.0)
     output = format_service_report_markdown(result)
 
     assert "..." in output
@@ -600,7 +601,8 @@ def test_run_service_sort_key_fallback_for_non_int_port(monkeypatch) -> None:
 
     monkeypatch.setattr("ethscan.service.grab_banner", mock_grab_banner)
 
-    result = run_service("example.com", ports=[80], timeout=1.0)
+    result: dict[str, object] = run_service("example.com", ports=[80], timeout=1.0)
 
     assert result["services_found"] == 1
-    assert result["results"][0]["port"] == "not-a-port"
+    results = cast("list[dict[str, object]]", result["results"])
+    assert results[0]["port"] == "not-a-port"
