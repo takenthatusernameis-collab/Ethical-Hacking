@@ -12,7 +12,8 @@ import hmac
 import io
 import json
 import re
-from typing import Any, cast
+from typing import Any, Mapping, cast
+from typing_extensions import TypedDict
 
 from ethscan.service import run_service
 from ethscan.target import parse_url
@@ -22,6 +23,32 @@ DEFAULT_WORKERS = 50
 DEFAULT_RECURSIVE_DEPTH = 2
 
 SEVERITIES = ("critical", "high", "medium", "low")
+
+
+class VulnResult(TypedDict):
+    """Structured return type for run_vuln."""
+
+    target: str
+    host: str
+    timeout: float
+    ports: list[int] | None
+    services_checked: int
+    tls_checked: bool
+    certificate_checked: bool
+    severity_filter: str | None
+    min_severity_filter: str | None
+    findings: list[dict[str, object]]
+    finding_count: int
+    severity_counts: dict[str, int]
+    notes: list[str]
+    recursive: bool
+    max_depth: int
+    recursive_hosts_scanned: list[str]
+    recursive_findings: list[dict[str, object]]
+    salt: bool
+    pepper: bool
+    algorithm: str
+
 
 BANNER_SIGNATURES = [
     (
@@ -742,7 +769,7 @@ def match_cipher_vulns(
     return findings
 
 
-def match_certificate_vulns(cert_data: dict | None) -> list[dict[str, object]]:
+def match_certificate_vulns(cert_data: object | None) -> list[dict[str, object]]:
     """Check parsed certificate data against the certificate weakness database.
 
     The certificate data comes from the ``ssl`` command, so it is read as
@@ -778,7 +805,7 @@ def match_certificate_vulns(cert_data: dict | None) -> list[dict[str, object]]:
     return findings
 
 
-def match_tls_vulns(tls_data: dict) -> list[dict[str, object]]:
+def match_tls_vulns(tls_data: object) -> list[dict[str, object]]:
     """Check ``tls`` command output for protocol and cipher weaknesses.
 
     The document comes from the ``tls`` command, so it is read as foreign
@@ -801,7 +828,7 @@ def match_tls_vulns(tls_data: dict) -> list[dict[str, object]]:
     return findings
 
 
-def match_ssl_vulns(ssl_data: dict) -> list[dict[str, object]]:
+def match_ssl_vulns(ssl_data: object) -> list[dict[str, object]]:
     """Check ``ssl`` command output for certificate weaknesses.
 
     The document comes from the ``ssl`` command, so it is read as foreign
@@ -825,9 +852,9 @@ def run_vuln(
     ports: list[int] | None = None,
     timeout: float = DEFAULT_TIMEOUT,
     max_workers: int = DEFAULT_WORKERS,
-    services: dict | None = None,
-    tls: dict | None = None,
-    certificate: dict | None = None,
+    services: object | None = None,
+    tls: object | None = None,
+    certificate: object | None = None,
     severity: str | None = None,
     min_severity: str | None = None,
     recursive: bool = False,
@@ -835,7 +862,7 @@ def run_vuln(
     salt: str | None = None,
     pepper: str | None = None,
     algorithm: str = "sha256",
-) -> dict[str, object]:
+) -> VulnResult:
     """Check a target for known service, protocol, and certificate vulnerabilities.
 
     Args:
@@ -1038,7 +1065,7 @@ def run_vuln(
         level = str(finding["severity"])
         severity_counts[level] = severity_counts.get(level, 0) + 1
 
-    return {
+    result: dict[str, object] = {
         "target": target,
         "host": host,
         "timeout": timeout,
@@ -1060,15 +1087,16 @@ def run_vuln(
         "pepper": bool(pepper),
         "algorithm": algorithm,
     }
+    return cast(VulnResult, result)
 
 
-def format_vuln_report_json(data: dict[str, object]) -> str:
+def format_vuln_report_json(data: Mapping[str, object]) -> str:
     data = cast(dict[str, Any], data)
     """Format vulnerability check results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_vuln_report_csv(data: dict[str, object]) -> str:
+def format_vuln_report_csv(data: Mapping[str, object]) -> str:
     data = cast(dict[str, Any], data)
     """Format vulnerability check results as CSV.
 
@@ -1111,7 +1139,7 @@ def format_vuln_report_csv(data: dict[str, object]) -> str:
     return output.getvalue().rstrip("\r\n")
 
 
-def _finding_detail(finding: dict[str, object]) -> str:
+def _finding_detail(finding: Mapping[str, object]) -> str:
     """Render the per-finding details line for Markdown output."""
     kind = str(finding.get("kind", ""))
     if kind == "service":
@@ -1142,7 +1170,7 @@ def _escape(value: str) -> str:
     return value.replace("|", "\\|")
 
 
-def format_vuln_report_markdown(data: dict[str, object]) -> str:
+def format_vuln_report_markdown(data: Mapping[str, object]) -> str:
     data = cast(dict[str, Any], data)
     """Format vulnerability check results as Markdown."""
     if not isinstance(data, dict):
