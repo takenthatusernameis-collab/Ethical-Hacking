@@ -9,7 +9,7 @@ import socket
 import struct
 from typing import Any
 
-from ethscan.target import parse_url, url_port
+from ethscan.target import TargetSpecError, parse_url, url_port
 
 try:
     import paramiko
@@ -103,7 +103,10 @@ def _normalize_host(target: str) -> str:
     if "://" not in normalized:
         normalized = "ssh://" + normalized
     parsed = parse_url(normalized)
-    return (parsed.hostname or parsed.netloc or "").lower()
+    host = (parsed.hostname or parsed.netloc or "").lower()
+    if not host:
+        raise TargetSpecError(f"Could not parse host from target {target!r}")
+    return host
 
 
 def _extract_port(target: str, default: int = DEFAULT_PORT) -> int:

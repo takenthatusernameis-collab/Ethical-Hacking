@@ -58,6 +58,18 @@ def test_normalize_host_with_port() -> None:
     assert _normalize_host("example.com:2222") == "example.com"
 
 
+def test_normalize_host_rejects_empty_target() -> None:
+    from ethscan.target import TargetSpecError
+
+    for bad in ("", "   ", "https://"):
+        try:
+            _normalize_host(bad)
+        except TargetSpecError as exc:
+            assert "Could not parse host from target" in str(exc)
+        else:
+            raise AssertionError(f"Expected TargetSpecError for {bad!r}")
+
+
 def test_extract_port_default() -> None:
     assert _extract_port("example.com") == 22
     assert _extract_port("ssh://example.com") == 22
