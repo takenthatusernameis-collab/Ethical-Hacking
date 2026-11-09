@@ -5,7 +5,8 @@ import csv
 import io
 import re
 import socket
-from typing import cast
+from collections.abc import Mapping
+from typing import Any, cast
 
 from ethscan.target import parse_url
 
@@ -59,7 +60,7 @@ def query_whois(
         sock.close()
 
 
-def parse_whois(raw: str) -> dict[str, object]:
+def parse_whois(raw: str) -> dict[str, Any]:
     """Parse key fields from a raw WHOIS response.
 
     Args:
@@ -69,7 +70,7 @@ def parse_whois(raw: str) -> dict[str, object]:
         Dictionary with parsed fields: registrar, creation_date, expiration_date,
         nameservers, registrant_org, status_codes, raw.
     """
-    result: dict[str, object] = {
+    result: dict[str, Any] = {
         "registrar": None,
         "creation_date": None,
         "expiration_date": None,
@@ -162,7 +163,7 @@ def run_whois(
     timeout: float = DEFAULT_TIMEOUT,
     recursive: bool = False,
     max_depth: int = DEFAULT_RECURSIVE_DEPTH,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Perform a WHOIS lookup and return parsed results.
 
     Args:
@@ -199,7 +200,7 @@ def run_whois(
         }
     parsed = parse_whois(raw)
 
-    result: dict[str, object] = {
+    result: dict[str, Any] = {
         "target": target,
         "server": server,
         "port": port,
@@ -213,7 +214,7 @@ def run_whois(
     if not recursive:
         return result
 
-    hops: list[dict[str, object]] = []
+    hops: list[dict[str, Any]] = []
     seen_raw: list[str] = [raw]
     current_server = server
     current_port = port
@@ -244,7 +245,7 @@ def run_whois(
             break
 
         hop_parsed = parse_whois(hop_raw)
-        hop_entry: dict[str, object] = {
+        hop_entry: dict[str, Any] = {
             "depth": depth,
             "server": referral,
             "port": current_port,
@@ -269,14 +270,14 @@ def run_whois(
     return result
 
 
-def format_whois_report_json(data: dict[str, object]) -> str:
+def format_whois_report_json(data: Mapping[str, object]) -> str:
     """Format WHOIS results as JSON."""
     import json
 
     return json.dumps(data, indent=2, default=str)
 
 
-def format_whois_report_markdown(data: dict[str, object]) -> str:
+def format_whois_report_markdown(data: Mapping[str, object]) -> str:
     """Format WHOIS results as Markdown."""
     if not isinstance(data, dict):
         data = {}
@@ -347,7 +348,7 @@ def format_whois_report_markdown(data: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_whois_report_csv(data: dict[str, object]) -> str:
+def format_whois_report_csv(data: Mapping[str, object]) -> str:
     """Format WHOIS results as CSV."""
     if not isinstance(data, dict):
         data = {}

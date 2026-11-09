@@ -10,6 +10,8 @@ from __future__ import annotations
 import csv
 import io
 import json
+from collections.abc import Mapping
+from typing import Any
 
 from ethscan.fuzz import (
     run_fuzz,
@@ -34,7 +36,7 @@ def run_urlcheck(
     port: int = 443,
     timeout: float = 5.0,
     workers: int = 10,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Run consolidated web assessment against target.
 
     Args:
@@ -50,7 +52,7 @@ def run_urlcheck(
         Structured results with sections for web, fuzz, ssl, and summary.
     """
     normalized_target = _normalize_url(target)
-    results: dict[str, object] = {
+    results: dict[str, Any] = {
         "target": target,
         "normalized_target": normalized_target,
         "checks_requested": checks,
@@ -121,12 +123,12 @@ def run_urlcheck(
     return results
 
 
-def format_urlcheck_report_json(data: dict[str, object]) -> str:
+def format_urlcheck_report_json(data: Mapping[str, object]) -> str:
     """Format urlcheck results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_urlcheck_report_markdown(data: dict[str, object]) -> str:
+def format_urlcheck_report_markdown(data: Mapping[str, object]) -> str:
     """Format urlcheck results as Markdown."""
     if not isinstance(data, dict):
         data = {}
@@ -326,7 +328,7 @@ def format_urlcheck_report_markdown(data: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_urlcheck_report_csv(data: dict[str, object]) -> str:
+def format_urlcheck_report_csv(data: Mapping[str, object]) -> str:
     """Format urlcheck results as CSV."""
     if not isinstance(data, dict):
         data = {}

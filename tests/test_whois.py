@@ -4,6 +4,8 @@ import socket
 
 import pytest
 
+from typing import Any
+
 from ethscan.whois import (
     DEFAULT_TIMEOUT,
     DEFAULT_WHOIS_SERVER,
@@ -833,7 +835,7 @@ def test_format_whois_report_csv_basic() -> None:
 
 
 def test_format_whois_report_csv_empty() -> None:
-    data = {"target": "example.com"}
+    data: dict[str, Any] = {"target": "example.com"}
     output = format_whois_report_csv(data)
     lines = output.splitlines()
     assert lines[0] == "field,value"
@@ -842,7 +844,7 @@ def test_format_whois_report_csv_empty() -> None:
 
 
 def test_format_whois_report_csv_missing_fields() -> None:
-    data = {}
+    data: dict[str, Any] = {}
     output = format_whois_report_csv(data)
     lines = output.splitlines()
     assert lines[0] == "field,value"
