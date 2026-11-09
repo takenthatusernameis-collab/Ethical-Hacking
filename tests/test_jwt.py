@@ -3,7 +3,7 @@
 import base64
 import json
 import time
-from typing import Any, cast
+from typing import cast
 
 from ethscan.jwt import (
     KNOWN_ALGORITHMS,
@@ -149,8 +149,9 @@ def test_run_jwt_hs256_full_claims() -> None:
     assert data["algorithm_type"] == "symmetric"
     assert data["token_type"] == "JWT"
     assert data["has_signature"] is True
-    assert data["standard_claims"]["iss"] == "example.com"
-    assert data["standard_claims"]["sub"] == "user1"
+    standard_claims = cast(dict[str, object], data["standard_claims"])
+    assert standard_claims["iss"] == "example.com"
+    assert standard_claims["sub"] == "user1"
     assert data["exp_status"] == "valid"
     assert data["iat_status"] == "valid"
     assert data["finding_count"] == 0
@@ -163,7 +164,7 @@ def test_run_jwt_none_algorithm() -> None:
     assert data["algorithm"] == "none"
     assert data["algorithm_type"] == "none"
     assert data["has_signature"] is False
-    findings = data["findings"]
+    findings = cast(list[str], data["findings"])
     assert any("alg=none" in f for f in findings)
     assert any("no signature segment" in f for f in findings)
 
@@ -175,13 +176,15 @@ def test_run_jwt_expired() -> None:
     )
     data = run_jwt(token, now=NOW)
     assert data["exp_status"] == "expired"
-    assert any("expired" in f.lower() for f in data["findings"])
+    findings = cast(list[str], data["findings"])
+    assert any("expired" in f.lower() for f in findings)
 
 
 def test_run_jwt_missing_exp() -> None:
     token = _make_token({"alg": "HS256"}, {"sub": "user1"})
     data = run_jwt(token, now=NOW)
-    assert any("expiration" in f.lower() for f in data["findings"])
+    findings = cast(list[str], data["findings"])
+    assert any("expiration" in f.lower() for f in findings)
 
 
 def test_run_jwt_not_yet_valid() -> None:
@@ -191,7 +194,8 @@ def test_run_jwt_not_yet_valid() -> None:
     )
     data = run_jwt(token, now=NOW)
     assert data["nbf_status"] == "not-yet-valid"
-    assert any("not yet valid" in f.lower() for f in data["findings"])
+    findings = cast(list[str], data["findings"])
+    assert any("not yet valid" in f.lower() for f in findings)
 
 
 def test_run_jwt_iat_in_future() -> None:
@@ -201,7 +205,8 @@ def test_run_jwt_iat_in_future() -> None:
     )
     data = run_jwt(token, now=NOW)
     assert data["iat_status"] == "not-yet-valid"
-    assert any("issued-at" in f.lower() for f in data["findings"])
+    findings = cast(list[str], data["findings"])
+    assert any("issued-at" in f.lower() for f in findings)
 
 
 def test_run_jwt_long_lived() -> None:
@@ -210,21 +215,24 @@ def test_run_jwt_long_lived() -> None:
         {"iat": NOW, "exp": NOW + LONG_LIVED_THRESHOLD_SECONDS + 60},
     )
     data = run_jwt(token, now=NOW)
-    assert any("long-lived" in f.lower() for f in data["findings"])
+    findings = cast(list[str], data["findings"])
+    assert any("long-lived" in f.lower() for f in findings)
 
 
 def test_run_jwt_unknown_algorithm() -> None:
     token = _make_token({"alg": "XYZ999"}, {"sub": "user1"})
     data = run_jwt(token, now=NOW)
     assert data["algorithm_type"] == "unknown"
-    assert any("unknown algorithm" in f.lower() for f in data["findings"])
+    findings = cast(list[str], data["findings"])
+    assert any("unknown algorithm" in f.lower() for f in findings)
 
 
 def test_run_jwt_missing_alg() -> None:
     token = _make_token({"typ": "JWT"}, {"sub": "user1"})
     data = run_jwt(token, now=NOW)
     assert data["algorithm"] is None
-    assert any("no alg claim" in f.lower() for f in data["findings"])
+    findings = cast(list[str], data["findings"])
+    assert any("no alg claim" in f.lower() for f in findings)
 
 
 def test_run_jwt_invalid_structure() -> None:
@@ -240,8 +248,9 @@ def test_run_jwt_undecodable_segments() -> None:
     assert data["valid_structure"] is True
     assert data["header"] is None
     assert data["claims"] is None
-    assert any("header" in f.lower() for f in data["findings"])
-    assert any("payload" in f.lower() for f in data["findings"])
+    findings = cast(list[str], data["findings"])
+    assert any("header" in f.lower() for f in findings)
+    assert any("payload" in f.lower() for f in findings)
 
 
 def test_run_jwt_other_claims() -> None:
@@ -250,9 +259,11 @@ def test_run_jwt_other_claims() -> None:
         {"sub": "user1", "exp": NOW + 60, "custom_role": "admin", "scope": ["read", "write"]},
     )
     data = run_jwt(token, now=NOW)
-    assert data["other_claims"]["custom_role"] == "admin"
-    assert data["other_claims"]["scope"] == ["read", "write"]
-    assert "custom_role" not in data["standard_claims"]
+    other_claims = cast(dict[str, object], data["other_claims"])
+    standard_claims = cast(dict[str, object], data["standard_claims"])
+    assert other_claims["custom_role"] == "admin"
+    assert other_claims["scope"] == ["read", "write"]
+    assert "custom_role" not in standard_claims
 
 
 def test_run_jwt_kid_header() -> None:
@@ -261,7 +272,8 @@ def test_run_jwt_kid_header() -> None:
         {"sub": "user1", "exp": NOW + 60},
     )
     data = run_jwt(token, now=NOW)
-    assert data["header"]["kid"] == "key-2023"
+    header = cast(dict[str, object], data["header"])
+    assert header["kid"] == "key-2023"
     assert data["algorithm_type"] == "asymmetric"
 
 
@@ -393,7 +405,7 @@ def test_format_jwt_report_csv_empty() -> None:
 
 
 def test_format_jwt_report_csv_missing_fields() -> None:
-    data = {}
+    data: dict[str, object] = {}
     output = format_jwt_report_csv(data)
     lines = output.splitlines()
     assert lines[0] == "field,value"
@@ -431,7 +443,7 @@ def test_b64url_decode_bad_segment() -> None:
 
 
 def test_csv_error_and_other_claims() -> None:
-    data = {
+    data: dict[str, object] = {
         "valid_structure": False,
         "segment_count": 2,
         "has_signature": False,

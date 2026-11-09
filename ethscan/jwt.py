@@ -10,6 +10,7 @@ import csv
 import io
 import json
 import time
+from collections.abc import Mapping
 from typing import cast
 
 KNOWN_ALGORITHMS = {
@@ -208,12 +209,12 @@ def run_jwt(token: str, now: float | None = None) -> dict[str, object]:
     return result
 
 
-def format_jwt_report_json(data: dict[str, object]) -> str:
+def format_jwt_report_json(data: Mapping[str, object]) -> str:
     """Format JWT inspection results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_jwt_report_markdown(data: dict[str, object]) -> str:
+def format_jwt_report_markdown(data: Mapping[str, object]) -> str:
     """Format JWT inspection results as Markdown."""
     if not isinstance(data, dict):
         data = {}
@@ -302,7 +303,7 @@ def format_jwt_report_markdown(data: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_jwt_report_csv(data: dict[str, object]) -> str:
+def format_jwt_report_csv(data: Mapping[str, object]) -> str:
     """Format JWT inspection results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)
