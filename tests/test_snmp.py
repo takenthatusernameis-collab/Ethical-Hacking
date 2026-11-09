@@ -459,7 +459,7 @@ def test_send_recv_with_connector_returns_error() -> None:
 
 
 def test_send_recv_connector_receives_arguments() -> None:
-    captured = {}
+    captured: dict[str, object] = {}
 
     def connector(host, port, request, timeout):
         captured.update(host=host, port=port, request=request, timeout=timeout)
@@ -672,7 +672,7 @@ def test_run_snmp_port_override() -> None:
 
 
 def test_run_snmp_url_target() -> None:
-    captured = {}
+    captured: dict[str, object] = {}
 
     def connector(host, port, request, timeout):
         captured.update(host=host, port=port)
@@ -1175,13 +1175,13 @@ def test_send_recv_timeout_and_oserror() -> None:
         def close(self): pass
 
     orig = socket.socket
-    socket.socket = lambda *a, **k: BadSock()
+    socket.socket = lambda *a, **k: BadSock()  # type: ignore[misc,assignment]
     try:
         resp, err = snmp._send_recv("h", 161, b"r", 1.0)
         assert resp is None
         assert err == "timeout"
     finally:
-        socket.socket = orig
+        socket.socket = orig  # type: ignore[misc,assignment]
 
     # oserror
     class BadSock2:
@@ -1190,19 +1190,19 @@ def test_send_recv_timeout_and_oserror() -> None:
         def recvfrom(self, n): return b"", ("", 0)
         def close(self): pass
 
-    socket.socket = lambda *a, **k: BadSock2()
+    socket.socket = lambda *a, **k: BadSock2()  # type: ignore[misc,assignment]
     try:
         resp, err = snmp._send_recv("h", 161, b"r", 1.0)
         assert resp is None
         assert err == "boom"
     finally:
-        socket.socket = orig
+        socket.socket = orig  # type: ignore[misc,assignment]
 
 
 def test_assign_varbind_timeticks() -> None:
     from ethscan import snmp
 
-    entry = {}
+    entry: dict[str, object] = {}
     vb = {"oid": "1.3.6.1.2.1.1.3.0", "value": 5, "value_type": "timeticks"}  # sysUpTime
     snmp._assign_varbind(entry, vb)
     assert entry["sysUpTime"] == 50

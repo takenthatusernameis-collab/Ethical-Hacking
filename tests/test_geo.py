@@ -355,9 +355,10 @@ def test_run_geo_success(monkeypatch) -> None:
     assert result["target"] == "8.8.8.8"
     assert result["host"] == "8.8.8.8"
     assert result["ip"] == "8.8.8.8"
-    assert result["geolocation"]["status"] == "success"
-    assert result["geolocation"]["country"] == "United States"
-    assert result["geolocation"]["cached"] is False
+    geo = cast(dict[str, object], result["geolocation"])
+    assert geo["status"] == "success"
+    assert geo["country"] == "United States"
+    assert geo["cached"] is False
 
 
 def test_run_geo_url_target(monkeypatch) -> None:
@@ -396,8 +397,10 @@ def test_run_geo_cached_result(monkeypatch, tmp_path) -> None:
 
     result = run_geo("8.8.8.8", timeout=1.0, use_cache=True)
 
-    assert result["geolocation"]["cached"] is True
-    assert any("cache" in note.lower() for note in result["notes"])
+    geo = cast(dict[str, object], result["geolocation"])
+    assert geo["cached"] is True
+    notes = cast(list[str], result["notes"])
+    assert any("cache" in note.lower() for note in notes)
 
 
 def test_run_geo_custom_api_url(monkeypatch) -> None:
@@ -524,7 +527,7 @@ def test_format_geo_report_markdown_fail() -> None:
 
 
 def test_format_geo_report_markdown_no_geolocation() -> None:
-    data = {
+    data: dict[str, object] = {
         "target": "nonexistent.invalid.domain.tld",
         "host": "nonexistent.invalid.domain.tld",
         "ip": None,
@@ -650,7 +653,7 @@ def test_format_geo_report_csv_basic() -> None:
 
 
 def test_format_geo_report_csv_empty() -> None:
-    data = {
+    data: dict[str, object] = {
         "target": "nonexistent.invalid.domain.tld",
         "host": "nonexistent.invalid.domain.tld",
         "ip": None,
@@ -903,7 +906,7 @@ def test_format_geo_report_csv_hop_transport_missing_fields() -> None:
 
 
 def test_format_geo_report_csv_no_hops_is_single_row() -> None:
-    data = {
+    data: dict[str, object] = {
         "target": "8.8.8.8",
         "host": "8.8.8.8",
         "ip": "8.8.8.8",
@@ -932,8 +935,10 @@ def test_run_geo_offline_fallback_note():
     ):
         result = run_geo("8.8.8.8", timeout=1.0, use_cache=True, offline_fallback=True)
 
-    assert result["geolocation"]["offline_fallback"] is True
-    assert any("offline fallback" in note.lower() for note in result["notes"])
+    geo = cast(dict[str, object], result["geolocation"])
+    assert geo["offline_fallback"] is True
+    notes = cast(list[str], result["notes"])
+    assert any("offline fallback" in note.lower() for note in notes)
 
 
 def test_run_geo_recursive_success():
@@ -1005,7 +1010,8 @@ def test_resolver_failure_of_an_unknown_type_is_reported(monkeypatch) -> None:
     result = run_geo("example.com", use_cache=False, offline_fallback=False)
 
     assert result["ip"] is None
-    assert any("Could not resolve host" in note for note in result["notes"])
+    notes = cast(list[str], result["notes"])
+    assert any("Could not resolve host" in note for note in notes)
 
 
 def test_resolver_failure_of_unnamed_type_is_reported(monkeypatch) -> None:
@@ -1025,4 +1031,5 @@ def test_resolver_failure_of_unnamed_type_is_reported(monkeypatch) -> None:
     result = run_geo("example.com", use_cache=False, offline_fallback=False)
 
     assert result["ip"] is None
-    assert any("Could not resolve host" in note for note in result["notes"])
+    notes = cast(list[str], result["notes"])
+    assert any("Could not resolve host" in note for note in notes)
