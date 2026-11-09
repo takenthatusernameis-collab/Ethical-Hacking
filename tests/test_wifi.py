@@ -3,6 +3,7 @@
 import json
 import subprocess
 import sys
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from ethscan.wifi import (
@@ -700,7 +701,7 @@ def test_format_wifi_report_csv_empty() -> None:
 
 
 def test_format_wifi_report_csv_missing_fields() -> None:
-    data = {}
+    data: dict[str, Any] = {}
     output = format_wifi_report_csv(data)
     lines = output.splitlines()
     assert lines[0] == "field,value"
