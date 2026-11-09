@@ -6,6 +6,7 @@ import subprocess
 import sys
 import threading
 import urllib.error
+from typing import Any, cast
 
 from ethscan.cve import (
     _extract_cve_summary,

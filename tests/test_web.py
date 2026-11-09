@@ -4,6 +4,7 @@ import contextlib
 import json
 import socketserver
 import threading
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 from ethscan.web import (
@@ -124,8 +125,8 @@ def test_check_security_headers_all_missing() -> None:
     result = check_security_headers({})
     assert result["present_count"] == 0
     assert result["missing_count"] == result["total"]
-    assert len(result["present"]) == 0
-    assert len(result["missing"]) == result["total"]
+    assert len(cast(list[object], result["present"])) == 0
+    assert len(cast(list[object], result["missing"])) == result["total"]
 
 
 def test_check_security_headers_all_present() -> None:
@@ -144,18 +145,18 @@ def test_check_security_headers_partial_present() -> None:
     }
     result = check_security_headers(headers)
     assert result["present_count"] == 2
-    assert result["missing_count"] == result["total"] - 2
-    assert "Content-Security-Policy" in result["present"]
-    assert "X-Frame-Options" in result["present"]
-    assert "X-Content-Type-Options" in result["missing"]
+    assert result["missing_count"] == cast(int, result["total"]) - 2
+    assert "Content-Security-Policy" in cast(list[str], result["present"])
+    assert "X-Frame-Options" in cast(list[str], result["present"])
+    assert "X-Content-Type-Options" in cast(list[str], result["missing"])
 
 
 def test_check_security_headers_case_insensitive() -> None:
     headers = {"content-security-policy": "default-src 'self'"}
     result = check_security_headers(headers)
-    assert "Content-Security-Policy" in result["present"]
+    assert "Content-Security-Policy" in cast(list[str], result["present"])
     assert result["present_count"] == 1
-    assert result["missing_count"] == result["total"] - 1
+    assert result["missing_count"] == cast(int, result["total"]) - 1
 
 
 # ---------------------------------------------------------------------------
@@ -292,7 +293,7 @@ def test_check_ssl_configuration_success(mock_ssl_context, mock_socket) -> None:
     assert result["subject"] == "example.com"
     assert result["issuer"] == "Let's Encrypt"
     assert result["not_after"] == "Jan  1 00:00:00 2027 GMT"
-    assert result["days_remaining"] > 0
+    assert cast(int, result["days_remaining"]) > 0
     assert result["chain_length"] == 0
     assert result["error"] is None
 
@@ -341,7 +342,7 @@ def test_check_ssl_configuration_expired_cert(mock_ssl_context, mock_socket) -> 
 
     result = check_ssl_configuration("example.com", timeout=5.0)
     assert result["valid"] is False
-    assert result["days_remaining"] < 0
+    assert cast(int, result["days_remaining"]) < 0
     assert result["not_after"] == "Jan  1 00:00:00 2020 GMT"
     assert result["error"] is None
 
@@ -382,7 +383,7 @@ def test_fetch_headers_http_error(mock_urlopen) -> None:
         url="https://example.com",
         code=404,
         msg="Not Found",
-        hdrs=mock_headers,
+        hdrs=cast(Any, mock_headers),
         fp=None,
     )
     mock_urlopen.side_effect = error
@@ -422,7 +423,8 @@ def test_fetch_headers_reports_a_transport_failure(mock_urlopen) -> None:
     headers = fetch_headers("https://example.com")
 
     assert headers == {}
-    assert "hostile transport" in (headers.error or "")
+    error = headers.error
+    assert error is not None and "hostile transport" in error
 
 
 @patch("ethscan.web.urllib.request.urlopen")
@@ -431,9 +433,9 @@ def test_run_web_checks_reports_a_transport_failure(mock_urlopen) -> None:
 
     results = run_web_checks("https://example.com", ["headers", "info_disclosure"], timeout=1.0)
 
-    assert "hostile transport" in (results.get("error") or "")
+    assert "hostile transport" in cast(str, results.get("error") or "")
     assert results["headers"] == {}
-    assert results["security_headers"]["missing_count"] > 0
+    assert cast(int, cast(dict[str, object], results["security_headers"])["missing_count"]) > 0
 
 
 def test_run_web_checks_malformed_status_line() -> None:
@@ -445,7 +447,7 @@ def test_run_web_checks_malformed_status_line() -> None:
         server.shutdown()
         server.server_close()
     assert results["headers"] == {}
-    assert results["security_headers"]["total"] > 0
+    assert cast(int, cast(dict[str, object], results["security_headers"])["total"]) > 0
 
 
 # ---------------------------------------------------------------------------
@@ -457,7 +459,7 @@ def test_run_web_checks_offline_target() -> None:
     results = run_web_checks(
         "http://nonexistent.invalid.domain.tld", ["headers", "info_disclosure"], timeout=2.0
     )
-    assert results["target"].startswith("http://")
+    assert cast(str, results["target"]).startswith("http://")
     assert results["secure"] is False
     assert "headers" in results
     assert "security_headers" in results
@@ -475,8 +477,8 @@ def test_run_web_checks_https(mock_fetch_headers) -> None:
     assert results["port"] == 443
     assert results["host"] == "example.com"
     assert results["target"] == "https://example.com"
-    assert results["security_headers"]["present_count"] == 2
-    assert len(results["information_disclosure"]) == 0
+    assert cast(dict[str, object], results["security_headers"])["present_count"] == 2
+    assert len(cast(list[object], results["information_disclosure"])) == 0
 
 
 @patch("ethscan.web.check_ssl_configuration")
@@ -492,9 +494,10 @@ def test_run_web_checks_ssl_check(mock_check_ssl) -> None:
     }
     results = run_web_checks("https://example.com", ["ssl"], timeout=1.0)
     assert "ssl" in results
-    assert results["ssl"]["valid"] is True
-    assert results["ssl"]["subject"] == "example.com"
-    assert results["ssl"]["issuer"] == "Let's Encrypt"
+    assert cast(dict[str, object], results["ssl"])["valid"] is True
+    ssl_res = cast(dict[str, object], results["ssl"])
+    assert ssl_res["subject"] == "example.com"
+    assert ssl_res["issuer"] == "Let's Encrypt"
 
 
 @patch("ethscan.web.fetch_headers")
@@ -516,8 +519,9 @@ def test_run_web_checks_old_server_version_finding(mock_fetch_headers) -> None:
     }
     results = run_web_checks("http://example.com", ["headers", "info_disclosure"], timeout=1.0)
     assert results["secure"] is False
-    assert any("Old web server version detected" in f for f in results["findings"])
-    assert any("Web server version: 1.3.42" in f for f in results["findings"])
+    findings = cast(list[str], results["findings"])
+    assert any("Old web server version detected" in f for f in findings)
+    assert any("Web server version: 1.3.42" in f for f in findings)
 
 
 def test_run_web_checks_empty_checks() -> None:
@@ -582,7 +586,7 @@ def test_format_web_report_json_full() -> None:
 
 
 def test_format_web_report_json_empty() -> None:
-    data = {}
+    data: dict[str, object] = {}
     output = format_web_report_json(data)
     parsed = json.loads(output)
     assert parsed == {}
@@ -878,10 +882,10 @@ def test_fetch_headers_http_error_with_bad_headers() -> None:
     class BadErr(urllib.error.HTTPError):
         def __init__(self) -> None:
             with contextlib.suppress(Exception):
-                super().__init__('http://x', 500, 'err', None, None)
+                super().__init__('http://x', 500, 'err', cast(Any, None), None)
 
-        @property
-        def headers(self):  # type: ignore[override]
+        @property  # type: ignore[override, misc]
+        def headers(self) -> Any:  # type: ignore[override, misc]
             raise _BadHeaderError('bad')
 
     with patch('urllib.request.urlopen', side_effect=BadErr()):
@@ -1287,8 +1291,9 @@ def test_run_web_checks_ssl_on_http() -> None:
     """Test ssl check on a non-HTTPS target returns error branch."""
     results = run_web_checks('http://example.com', ['ssl'], timeout=1.0)
     assert 'ssl' in results
-    assert results['ssl']['valid'] is False
-    assert results['ssl']['error'] == 'Target is not HTTPS'
+    ssl_res = cast(dict[str, object], results['ssl'])
+    assert ssl_res['valid'] is False
+    assert ssl_res['error'] == 'Target is not HTTPS'
 
 
 def test_format_web_report_markdown_with_notes() -> None:

@@ -81,7 +81,7 @@ def _save_cache(cache: dict[str, dict]) -> None:
         pass
 
 
-def _is_cache_valid(entry: dict, ttl: int = CACHE_TTL) -> bool:
+def _is_cache_valid(entry: object, ttl: int = CACHE_TTL) -> bool:
     """Check if a cache entry is still valid.
 
     An entry that is not a mapping, or whose timestamp is not a finite
@@ -168,8 +168,10 @@ def _get_cached_or_fetch(
     return data
 
 
-def _extract_cve_summary(cve_data: dict[str, object]) -> dict[str, object]:
+def _extract_cve_summary(cve_data: object) -> dict[str, object]:
     """Extract a normalized CVE summary from raw NVD API response."""
+    if not isinstance(cve_data, dict):
+        return {}
     vulns_raw = cve_data.get("vulnerabilities")
     vulns = vulns_raw if isinstance(vulns_raw, list) else []
     if not vulns:
