@@ -8930,6 +8930,16 @@ def test_osdetect_rejects_bad_target_before_reading_banners_file(tmp_path) -> No
     assert "Traceback (most recent call last)" not in result.output, result.output
 
 
+def test_osdetect_invalid_target_is_usage_error() -> None:
+    """An empty or whitespace osdetect target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://"):
+        result = runner.invoke(cli, ["osdetect", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
 def test_osdetect_banners_file_no_results_key_json(tmp_path) -> None:
     """A banners file without a 'results' key runs the normal probe path.
 

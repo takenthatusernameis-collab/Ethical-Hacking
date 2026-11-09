@@ -24,6 +24,7 @@ from ethscan.osdetect import (
     probe_syn,
     run_osdetect,
 )
+from ethscan.target import TargetSpecError
 
 # ---------------------------------------------------------------------------
 # Domain normalization
@@ -48,6 +49,16 @@ def test_normalize_host_strips_whitespace() -> None:
 
 def test_normalize_host_with_port() -> None:
     assert _normalize_host("http://example.com:8080") == "example.com"
+
+
+def test_normalize_host_rejects_empty_target() -> None:
+    for bad in ("", "   ", "https://"):
+        try:
+            _normalize_host(bad)
+        except TargetSpecError as exc:
+            assert "Could not parse host from target" in str(exc)
+        else:
+            raise AssertionError(f"Expected TargetSpecError for {bad!r}")
 
 
 # ---------------------------------------------------------------------------
