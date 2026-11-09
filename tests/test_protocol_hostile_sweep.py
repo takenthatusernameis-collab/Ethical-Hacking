@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import ftplib
 import struct
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -342,7 +342,7 @@ def test_dnsbrute_probe_failure_is_reported_not_raised(monkeypatch) -> None:
     """A failing zone-transfer transport is reported in the attempt, not raised."""
 
     # Patch attempt_axfr directly to simulate transport failure regardless of socket state
-    def fake_attempt_axfr(nameserver: str, zone: str, timeout: float = 2.0, port: int = 53) -> dict[str, object]:
+    def fake_attempt_axfr(nameserver: str, zone: str, timeout: float = 2.0, port: int = 53) -> dnsbrute._AxfrResult:
         return dnsbrute._axfr_result(nameserver, False, [], "hostile transport")
 
     # Patch both the module and ensure it's used
@@ -468,8 +468,8 @@ def test_dnssec_probe_failure_is_reported_not_raised(monkeypatch) -> None:
 
     result = dnssec.run_dnssec("example.com")
 
-    assert "probe failed" in (result["dnskey"].get("error") or "")
-    assert "probe failed" in (result["ds"].get("error") or "")
+    assert "probe failed" in (cast(str, cast(dict[str, object], result["dnskey"]).get("error")) or "")
+    assert "probe failed" in (cast(str, cast(dict[str, object], result["ds"]).get("error")) or "")
 
 
 def test_ssl_probe_failure_is_reported_not_raised(monkeypatch) -> None:
@@ -504,10 +504,10 @@ def test_tls_probe_failure_is_reported_not_raised(monkeypatch, exc_type) -> None
     result = tls.run_tls("example.com")
 
     assert isinstance(result, dict)
-    for entry in result["versions"]:
+    for entry in cast(list[dict[str, object]], result["versions"]):
         assert entry["supported"] is False
         assert entry["error"] is not None
-    for entry in result["ciphers"]:
+    for entry in cast(list[dict[str, object]], result["ciphers"]):
         assert entry["supported"] is False
         assert entry["error"] is not None
 
@@ -596,9 +596,10 @@ def test_osdetect_connect_tcp_failure_is_reported_not_raised(monkeypatch) -> Non
     results = osdetect.run_osdetect("127.0.0.1", ports=[80])
 
     assert isinstance(results, dict)
-    probe = results["probes"][0]
+    probes = cast(list[dict[str, object]], results["probes"])
+    probe = probes[0]
     assert probe["response"] == "NO-RESPONSE"
-    assert "hostile transport" in (probe.get("error") or "")
+    assert "hostile transport" in (cast(str, probe.get("error")) or "")
 
 
 def test_resolve_transport_failure_is_reported_not_raised(monkeypatch) -> None:
@@ -640,7 +641,7 @@ def test_dns_transport_failure_is_reported_not_raised(monkeypatch) -> None:
     results = dns.run_dns("example.com")
 
     assert isinstance(results, dict)
-    assert results["records"]["A"] == []
+    assert cast(dict[str, object], results["records"])["A"] == []
 
 
 def test_dns_a_records_failure_is_reported_not_raised(monkeypatch) -> None:
@@ -654,7 +655,7 @@ def test_dns_a_records_failure_is_reported_not_raised(monkeypatch) -> None:
     results = dns.run_dns("example.com")
 
     assert isinstance(results, dict)
-    assert results["records"]["A"] == []
+    assert cast(dict[str, object], results["records"])["A"] == []
 
 
 def test_stale_transport_failure_is_reported_not_raised(monkeypatch) -> None:

@@ -1,33 +1,34 @@
 # Handoff
-Date: Mon Nov 09 2026 (session 17)
+Date: Mon Nov 09 2026 (session 18)
 
 ## What changed
-Continued typing hygiene on `tests/test_web_hostile_sweep.py` (7 errors -> 0), following the established pattern (test-side casts for hostile top-level values; annotations for `cases` locals). Runtime behavior unchanged — the formatters already handle hostile shapes defensively via `isinstance` checks.
+Continued typing hygiene on `tests/test_protocol_hostile_sweep.py` (8 errors -> 0), following the established pattern (test-side casts/annotations; runtime behavior unchanged).
 
-- `tests/test_web_hostile_sweep.py`:
+- `tests/test_protocol_hostile_sweep.py`:
   - Added `from typing import Any, cast`.
-  - `HOSTILE_TOP_LEVEL: tuple[object, ...] = (...)` (line 20) — annotated the bare tuple to satisfy `var-annotated`.
-  - In `test_web_formatters_never_raise_on_hostile_top_level`: introduced `bad_any: Any = bad` and passed `cast(Any, bad_any)` to the three formatters (lines 25-28) — narrows the `object`-typed loop variable to `Any` before passing to `dict[str, object]` params.
-  - `cases: list[dict[str, object]] = [...]` (line 36) — annotated the bare list literal.
+  - `fake_attempt_axfr` return annotation widened from `dict[str, object]` to `dnsbrute._AxfrResult` (matches the real `attempt_axfr` return type it monkeypatches).
+  - `test_dnssec_probe_failure_is_reported_not_raised`: `cast(str, cast(dict[str, object], result["dnskey"]).get("error"))` and same for `result["ds"]` (`.get()` returns `object` on `dict[str, object]`).
+  - `test_tls_probe_failure_is_reported_not_raised`: `cast(list[dict[str, object]], result["versions"])` / `result["ciphers"]` before iterating.
+  - `test_osdetect_connect_tcp_failure_is_reported_not_raised`: `probes = cast(list[dict[str, object]], results["probes"])` then `probe = probes[0]`; `cast(str, probe.get("error"))`.
+  - `test_dns_transport_failure_is_reported_not_raised` and `test_dns_a_records_failure_is_reported_not_raised`: `cast(dict[str, object], results["records"])["A"]` (`dns.run_dns` returns `dict[str, object]`).
+  - Reverted an over-broad `replaceAll` that had also cast the two `resolve.run_resolve` cases (they return `ResolveResult` and were never errors).
 
 ## What was verified
-- `python -m mypy tests/test_web_hostile_sweep.py` → Success: no issues found.
-- `python -m ruff check tests/test_web_hostile_sweep.py` → All checks passed.
-- `python -m pytest tests/test_web_hostile_sweep.py -q` → 2 passed.
-- `python -m pytest -q --ignore=tests/test_ping.py` → **5875 passed, 53 skipped, 0 failed** (baseline unchanged).
+- `python3 -m mypy tests/test_protocol_hostile_sweep.py` → Success: no issues found.
+- `python3 -m ruff check tests/test_protocol_hostile_sweep.py` → All checks passed.
+- `python3 -m pytest tests/test_protocol_hostile_sweep.py -q` → 269 passed.
+- `python3 -m pytest -q --ignore=tests/test_ping.py` → 5878 passed, 50 skipped, 0 failed (no regressions).
 
 ## Unresolved
 - `tests/test_ping.py` runtime failures and remaining typing errors — pre-existing Python 3.14 `socket.timeout` read-only descriptor blocker; left untouched.
-- Repo-wide `python -m mypy ethscan/ tests/` still reports pre-existing errors across many other test files. Do not fix speculatively; reproduce per file first.
+- Repo-wide `python3 -m mypy ethscan/ tests/` still reports pre-existing errors across many other test files. Do not fix speculatively; reproduce per file first.
 
 ## Approaches that have already failed / to avoid
-- Do not retry identical operations with unchanged assumptions (reliability rule). Do not weaken safety controls, skip verification, or add speculative changes.
+- Do not retry identical operations with unchanged assumptions. Do not weaken safety controls, skip verification, or add speculative changes.
 - Do not fix `test_ping.py` without addressing the Python 3.14 `socket.timeout` descriptor constraint.
 - Do not assume prior handoff error counts are current; reproduce per file.
 
 ## Next task
-Continue per-file typing hygiene on remaining test files with mypy errors (discover via `python -m mypy tests/<file>`; repo-wide `mypy ethscan/ tests/` still has pre-existing errors). Fix per file using the established pattern: widen source formatter/report signatures to `Mapping[str, object]` and use precise/`Any` result shapes where source returns dynamic dicts; use targeted test-side casts/annotations for `dict[str, object]` indexing. Skip `tests/test_ping.py`. Keep changes minimal/reversible, preserve safety controls, and verify with per-file mypy + ruff + targeted pytest + `pytest -q --ignore=tests/test_ping.py`.
+Continue per-file typing hygiene on remaining test files with mypy errors (discover via `python3 -m mypy tests/<file>`). Fix per file using the established pattern: widen source formatter/report signatures to `Mapping[str, object]` and use precise/`Any` result shapes where source returns dynamic dicts; use targeted test-side casts/annotations for `dict[str, object]` indexing. Skip `tests/test_ping.py`. Keep changes minimal/reversible, preserve safety controls, verify with per-file mypy + ruff + targeted pytest + `pytest -q --ignore=tests/test_ping.py`.
 
-Many remaining hostile-sweep files share the identical 7-error shape (hostile top-level `object` passed to formatters typed `dict[str, object]`/`Mapping[str, object]`/`dict[str, Any]`) — fix with the same `cast(Any, ...)` pattern used this session. Non-sweep files with larger error counts: `test_cve.py` (32), `test_osdetect.py` (33), `test_web.py` (27), `test_jwt.py` (25), `test_tls.py` (18), `test_dnssec.py` (18), `test_subdomains.py` (17), `test_geo.py` (17), `test_cli.py` (12), `test_brute.py` (11).
-
-(End of file - total 29 lines)
+Remaining files with mypy errors (per current scan): `test_cve.py` (32), `test_web.py` (27), `test_osdetect.py` (23), `test_jwt.py` (21), `test_s3.py` (19), `test_dnssec.py` (18), `test_subdomains.py` (17), `test_tls.py` (16), `test_cli.py` (12), `test_geo.py` (11), `test_brute.py` (11), `test_subtake.py` (10), `test_ssh.py` (9), `test_snmp.py` (9), `test_fuzz.py` (9), `test_ldap.py` (6), `test_service.py` (5), `test_passwords.py` (5), `test_cli_trace_brute_unreachable_sweep.py` (4), `test_config_value_sweep.py` (1), `test_cache_content_sweep.py` (1). Hostile-sweep variants follow the same `cast(Any, ...)` pattern as `test_web_hostile_sweep.py`.

@@ -1,15 +1,17 @@
 # Next Task
 
 ## Status: CLOSED (this session)
-Typing hygiene completed for `tests/test_web_hostile_sweep.py` (7 errors -> 0), following the established pattern (test-side casts for hostile top-level values; annotations for `cases` locals). Runtime behavior unchanged — the formatters already handle hostile shapes defensively via `isinstance` checks.
+Typing hygiene completed for `tests/test_protocol_hostile_sweep.py` (8 errors -> 0), following the established pattern (test-side casts/annotations; runtime behavior unchanged).
 
-- `tests/test_web_hostile_sweep.py`:
+- `tests/test_protocol_hostile_sweep.py`:
   - Added `from typing import Any, cast`.
-  - `HOSTILE_TOP_LEVEL: tuple[object, ...] = (...)` (line 20) — annotated the bare tuple to satisfy `var-annotated`.
-  - In `test_web_formatters_never_raise_on_hostile_top_level`: introduced `bad_any: Any = bad` and passed `cast(Any, bad_any)` to the three formatters (lines 25-28) — narrows the `object`-typed loop variable to `Any` before passing to `dict[str, object]` params.
-  - `cases: list[dict[str, object]] = [...]` (line 36) — annotated the bare list literal.
+  - `fake_attempt_axfr` return annotation widened from `dict[str, object]` to `dnsbrute._AxfrResult`.
+  - `test_dnssec_probe_failure_is_reported_not_raised`: `cast(str, cast(dict[str, object], result["dnskey"]).get("error"))` and same for `result["ds"]`.
+  - `test_tls_probe_failure_is_reported_not_raised`: `cast(list[dict[str, object]], result["versions"])` / `result["ciphers"]` before iterating.
+  - `test_osdetect_connect_tcp_failure_is_reported_not_raised`: `probes = cast(list[dict[str, object]], results["probes"])` then `probe = probes[0]`; `cast(str, probe.get("error"))`.
+  - `test_dns_transport_failure_is_reported_not_raised` / `test_dns_a_records_failure_is_reported_not_raised`: `cast(dict[str, object], results["records"])["A"]`.
 
-Verified: `mypy tests/test_web_hostile_sweep.py` clean; `ruff check tests/test_web_hostile_sweep.py` clean; `pytest tests/test_web_hostile_sweep.py -q` → 2 passed; `pytest -q --ignore=tests/test_ping.py` → 5875 passed, 53 skipped, 0 failed (baseline unchanged).
+Verified: `mypy tests/test_protocol_hostile_sweep.py` clean; `ruff check` clean; `pytest tests/test_protocol_hostile_sweep.py -q` → 269 passed; `pytest -q --ignore=tests/test_ping.py` → 5878 passed, 50 skipped, 0 failed (baseline unchanged).
 
 ## Constraints
 - Preserve working baseline; smallest reversible changes.
