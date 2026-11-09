@@ -14,7 +14,7 @@ from __future__ import annotations
 import csv
 import io
 import json
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -150,12 +150,14 @@ def test_run_fuzz_hostile_wordlist_never_raises(wordlist: list[Any]) -> None:
     # Non-string entries are skipped probes; paths_tested counts tested paths.
     expected = sum(1 for p in wordlist if isinstance(p, str))
     assert results["paths_tested"] == expected
-    assert len(results["all_results"]) == expected
+    all_results = cast(list[dict[str, object]], results["all_results"])
+    assert len(all_results) == expected
 
 
 def test_run_fuzz_hostile_wordlist_skips_non_string_paths() -> None:
     results = run_fuzz(
-        "http://127.0.0.1:9/", wordlist=["/admin", 123, None, "/login"], timeout=1.0
+        "http://127.0.0.1:9/", wordlist=cast("list[str] | None", ["/admin", 123, None, "/login"]), timeout=1.0
     )
-    paths = [r["path"] for r in results["all_results"]]
+    all_results = cast(list[dict[str, object]], results["all_results"])
+    paths = [r["path"] for r in all_results]
     assert paths == ["/admin", "/login"]

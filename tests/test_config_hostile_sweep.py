@@ -2,21 +2,24 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 from ethscan import config
 
-HOSTILE_TOP_LEVEL = (None, [], "x", 123, 1.5, True, b"bytes")
+HOSTILE_TOP_LEVEL: tuple[object, ...] = (None, [], "x", 123, 1.5, True, b"bytes")
 
 
 def test_config_csv_never_raises_on_hostile_top_level() -> None:
     for bad in HOSTILE_TOP_LEVEL:
-        csv_text = config.format_config_report_csv(bad)
+        bad_any: Any = bad
+        csv_text = config.format_config_report_csv(cast(Any, bad_any))
         assert isinstance(csv_text, str)
         lines = csv_text.splitlines()
         assert lines and lines[0] == "section,option,value"
 
 
 def test_config_csv_hostile_nested_shapes_never_raise() -> None:
-    cases = [
+    cases: list[dict[str, object]] = [
         {"defaults": "x"},
         {"defaults": [None, "x"]},
         {"defaults": {"timeout": 5}, "commands": "x"},

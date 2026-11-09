@@ -98,7 +98,7 @@ def test_fetch_returns_none_reported_not_raised(monkeypatch: pytest.MonkeyPatch,
 
 
 def test_extract_subdomains_hostile_entry_shapes() -> None:
-    data = {
+    data: dict[str, object] = {
         "entries": [
             None,
             123,

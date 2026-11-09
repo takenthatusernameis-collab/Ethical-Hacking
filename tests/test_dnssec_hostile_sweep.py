@@ -6,6 +6,8 @@ a connector that blows up is reported the same way.
 """
 from __future__ import annotations
 
+from typing import cast
+
 from ethscan import dnssec
 
 TARGET = "example.com"
@@ -60,7 +62,8 @@ def test_transport_failure_is_reported_not_raised(monkeypatch) -> None:
         udp_query=udp_query,
     )
     assert isinstance(results, dict)
-    assert "error" in (results.get("dnskey") or {})
+    dnskey = cast(dict[str, object] | None, results.get("dnskey"))
+    assert "error" in (dnskey or {})
 
 
 def test_unnamed_transport_failure_is_reported_not_raised(monkeypatch) -> None:
@@ -75,7 +78,8 @@ def test_unnamed_transport_failure_is_reported_not_raised(monkeypatch) -> None:
         udp_query=udp_query,
     )
     assert isinstance(results, dict)
-    assert "error" in (results.get("dnskey") or {})
+    dnskey = cast(dict[str, object] | None, results.get("dnskey"))
+    assert "error" in (dnskey or {})
 
 
 def test_resolver_failure_is_reported_not_raised(monkeypatch) -> None:
@@ -86,4 +90,5 @@ def test_resolver_failure_is_reported_not_raised(monkeypatch) -> None:
 
     results = dnssec.run_dnssec(TARGET, nameserver_resolver=resolver)
     assert isinstance(results, dict)
-    assert "error" in (results.get("dnskey") or {})
+    dnskey = cast(dict[str, object] | None, results.get("dnskey"))
+    assert "error" in (dnskey or {})
