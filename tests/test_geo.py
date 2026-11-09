@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 from ethscan.geo import (
@@ -319,7 +320,7 @@ def test_run_geo_offline_target() -> None:
     assert result["host"] == "nonexistent.invalid.domain.tld"
     assert result["ip"] is None
     assert result["geolocation"] is None
-    assert any("Could not resolve" in note for note in result["notes"])
+    assert any("Could not resolve" in note for note in cast("list[str]", result["notes"]))
 
 
 def test_run_geo_success(monkeypatch) -> None:

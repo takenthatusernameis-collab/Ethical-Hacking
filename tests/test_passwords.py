@@ -3,6 +3,7 @@
 import csv
 import io
 import json
+from typing import cast
 
 import pytest
 
@@ -48,7 +49,7 @@ def test_has_repeated_patterns_false() -> None:
 def test_evaluate_password_strong() -> None:
     result = evaluate_password("correct-Horse-battery-staple-9x!")
     assert result["verdict"] == "strong"
-    assert result["score"] >= 80
+    assert cast("float", result["score"]) >= 80
     assert result["common"] is False
 
 
@@ -228,7 +229,7 @@ def test_format_audit_report_csv_escapes_special_characters() -> None:
 def test_audit_passwords_sort_by_score_desc() -> None:
     passwords = ["password", "correct-Horse-battery-staple-9x!", "123456"]
     results = audit_passwords(passwords, sort_by="score", sort_desc=True)
-    scores = [eval_data["score"] for _, eval_data in results]
+    scores = [cast("float", eval_data["score"]) for _, eval_data in results]
     assert scores == sorted(scores, reverse=True)
     # Strongest password should be first.
     assert results[0][0] == "correct-Horse-battery-staple-9x!"
@@ -237,7 +238,7 @@ def test_audit_passwords_sort_by_score_desc() -> None:
 def test_audit_passwords_sort_by_score_asc() -> None:
     passwords = ["password", "correct-Horse-battery-staple-9x!", "123456"]
     results = audit_passwords(passwords, sort_by="score", sort_desc=False)
-    scores = [eval_data["score"] for _, eval_data in results]
+    scores = [cast("float", eval_data["score"]) for _, eval_data in results]
     assert scores == sorted(scores)
     # Strongest password should be last in ascending order.
     assert results[-1][0] == "correct-Horse-battery-staple-9x!"
@@ -246,14 +247,14 @@ def test_audit_passwords_sort_by_score_asc() -> None:
 def test_audit_passwords_sort_by_length_desc() -> None:
     passwords = ["abc", "correct-Horse-battery-staple-9x!", "ab"]
     results = audit_passwords(passwords, sort_by="length", sort_desc=True)
-    lengths = [eval_data["length"] for _, eval_data in results]
+    lengths = [cast("int", eval_data["length"]) for _, eval_data in results]
     assert lengths == sorted(lengths, reverse=True)
 
 
 def test_audit_passwords_sort_by_verdict_desc() -> None:
     passwords = ["password", "correct-Horse-battery-staple-9x!"]
     results = audit_passwords(passwords, sort_by="verdict", sort_desc=True)
-    verdicts = [eval_data["verdict"].lower() for _, eval_data in results]
+    verdicts = [cast("str", eval_data["verdict"]).lower() for _, eval_data in results]
     assert verdicts == sorted(verdicts, reverse=True)
 
 

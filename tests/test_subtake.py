@@ -3,6 +3,7 @@
 import socket
 import socketserver
 import threading
+from typing import cast
 
 import pytest
 
@@ -155,8 +156,8 @@ def test_run_subtake_offline_target() -> None:
     assert results["vulnerable_count"] == 0
     assert "vulnerable" in results
     assert "all_results" in results
-    assert len(results["all_results"]) == 2
-    for entry in results["all_results"]:
+    assert len(cast("list[dict[str, object]]", results["all_results"])) == 2
+    for entry in cast("list[dict[str, object]]", results["all_results"]):
         assert entry["vulnerable"] is False
         assert entry["takeover"] is None
 
@@ -187,7 +188,9 @@ def test_run_subtake_url_target() -> None:
         "https://example.com/path", subdomains=["www"], timeout=1.0
     )
     assert results["domain"] == "example.com"
-    assert results["all_results"][0]["hostname"] == "www.example.com"
+    all_results = cast("list[dict[str, object]]", results["all_results"])
+    entry = cast("dict[str, object]", all_results[0])
+    assert cast("str", entry["hostname"]) == "www.example.com"
 
 
 def test_run_subtake_vulnerable_s3(monkeypatch) -> None:
@@ -216,14 +219,14 @@ def test_run_subtake_vulnerable_s3(monkeypatch) -> None:
         timeout=1.0,
     )
     assert results["vulnerable_count"] == 1
-    vuln = results["vulnerable"][0]
+    vuln = cast("list[dict[str, object]]", results["vulnerable"])[0]
     assert vuln["hostname"] == "www.example.com"
     assert vuln["vulnerable"] is True
-    takeover = vuln["takeover"]
+    takeover = cast("dict[str, object]", vuln["takeover"])
     assert takeover["service"] == "AWS S3"
     assert takeover["cname"] == "mybucket.s3.amazonaws.com"
     assert takeover["http_confirmed"] is True
-    assert "NoSuchBucket" in takeover["evidence"]
+    assert "NoSuchBucket" in cast("str", takeover["evidence"])
 
 
 def test_run_subtake_vulnerable_github_pages(monkeypatch) -> None:
@@ -252,9 +255,9 @@ def test_run_subtake_vulnerable_github_pages(monkeypatch) -> None:
         timeout=1.0,
     )
     assert results["vulnerable_count"] == 1
-    vuln = results["vulnerable"][0]
+    vuln = cast("list[dict[str, object]]", results["vulnerable"])[0]
     assert vuln["hostname"] == "blog.example.com"
-    takeover = vuln["takeover"]
+    takeover = cast("dict[str, object]", vuln["takeover"])
     assert takeover["service"] == "GitHub Pages"
     assert takeover["http_confirmed"] is True
 
@@ -285,9 +288,9 @@ def test_run_subtake_vulnerable_heroku(monkeypatch) -> None:
         timeout=1.0,
     )
     assert results["vulnerable_count"] == 1
-    vuln = results["vulnerable"][0]
+    vuln = cast("list[dict[str, object]]", results["vulnerable"])[0]
     assert vuln["hostname"] == "app.example.com"
-    takeover = vuln["takeover"]
+    takeover = cast("dict[str, object]", vuln["takeover"])
     assert takeover["service"] == "Heroku"
     assert takeover["http_confirmed"] is True
 
@@ -318,10 +321,10 @@ def test_run_subtake_no_http_confirmation(monkeypatch) -> None:
         timeout=1.0,
     )
     assert results["vulnerable_count"] == 1
-    vuln = results["vulnerable"][0]
-    takeover = vuln["takeover"]
+    vuln = cast("list[dict[str, object]]", results["vulnerable"])[0]
+    takeover = cast("dict[str, object]", vuln["takeover"])
     assert takeover["http_confirmed"] is False
-    assert "CNAME points to vulnerable service" in takeover["evidence"]
+    assert "CNAME points to vulnerable service" in cast("str", takeover["evidence"])
 
 
 def test_run_subtake_no_http_fingerprint(monkeypatch) -> None:
@@ -352,10 +355,10 @@ def test_run_subtake_no_http_fingerprint(monkeypatch) -> None:
         timeout=1.0,
     )
     assert results["vulnerable_count"] == 1
-    vuln = results["vulnerable"][0]
-    takeover = vuln["takeover"]
+    vuln = cast("list[dict[str, object]]", results["vulnerable"])[0]
+    takeover = cast("dict[str, object]", vuln["takeover"])
     assert takeover["http_confirmed"] is False
-    assert "CNAME points to vulnerable service" in takeover["evidence"]
+    assert "CNAME points to vulnerable service" in cast("str", takeover["evidence"])
 
 
 def test_format_subtake_report_json() -> None:
@@ -1020,9 +1023,10 @@ def test_run_subtake_reports_a_failed_probe(monkeypatch) -> None:
     results = run_subtake("example.com", subdomains=["www"], timeout=1.0)
 
     assert results["vulnerable_count"] == 0
-    entry = results["all_results"][0]
+    all_results = cast("list[dict[str, object]]", results["all_results"])
+    entry = cast("dict[str, object]", all_results[0])
     assert entry["subdomain"] == "www"
-    assert "hostile transport" in entry["error"]
+    assert "hostile transport" in cast("str", entry["error"])
 
 
 def test_run_subtake_unknown_cname_takeover_branch(monkeypatch) -> None:
@@ -1045,11 +1049,13 @@ def test_run_subtake_unknown_cname_takeover_branch(monkeypatch) -> None:
 
     results = run_subtake("example.com", subdomains=["www"], timeout=1.0)
     assert results["vulnerable_count"] == 0
-    entry = results["all_results"][0]
+    all_results = cast("list[dict[str, object]]", results["all_results"])
+    entry = cast("dict[str, object]", all_results[0])
     assert entry["cname"] == "random.unmatched.example.com"
-    assert entry["takeover"]["service"] == "Unknown"
-    assert entry["takeover"]["fingerprint"] == ""
-    assert "http_confirmed" not in entry["takeover"]
+    takeover = cast("dict[str, object]", entry["takeover"])
+    assert takeover["service"] == "Unknown"
+    assert takeover["fingerprint"] == ""
+    assert "http_confirmed" not in takeover
 
 
 def _install_fake_dns(monkeypatch):

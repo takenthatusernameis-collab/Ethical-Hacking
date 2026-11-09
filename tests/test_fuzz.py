@@ -5,6 +5,8 @@ import io
 import threading
 from unittest.mock import patch
 
+from typing import cast
+
 from ethscan.fuzz import (
     DEFAULT_WORDLIST,
     _join_url,
@@ -96,7 +98,7 @@ def test_fuzz_path_reports_a_transport_failure(monkeypatch) -> None:
     result = fuzz_path("http://127.0.0.1", "/admin", timeout=1.0)
 
     assert result["status_code"] is None
-    assert "hostile transport" in result["error"]
+    assert "hostile transport" in cast("str", result["error"])
     assert result["path"] == "/admin"
 
 
@@ -109,12 +111,12 @@ def test_default_wordlist_not_empty() -> None:
 def test_run_fuzz_offline_target() -> None:
     # Should not raise; returns structured results even on failure.
     results = run_fuzz("http://nonexistent.invalid.domain.tld", wordlist=["/admin", "/login"], timeout=1.0)
-    assert results["target"].startswith("http://")
+    assert cast("str", results["target"]).startswith("http://")
     assert results["base_url"] == "http://nonexistent.invalid.domain.tld"
     assert results["paths_tested"] == 2
     assert "findings" in results
     assert "all_results" in results
-    assert len(results["all_results"]) == 2
+    assert len(cast("list[dict[str, object]]", results["all_results"])) == 2
 
 
 def test_format_fuzz_report_json() -> None:
@@ -269,9 +271,9 @@ def test_run_fuzz_workers_single() -> None:
     """Test run_fuzz with default single worker."""
     results = run_fuzz("http://nonexistent.invalid.domain.tld", wordlist=["/admin", "/login", "/test"], timeout=1.0, workers=1)
     assert results["paths_tested"] == 3
-    assert len(results["all_results"]) == 3
+    assert len(cast("list[dict[str, object]]", results["all_results"])) == 3
     # Results should be in original order
-    paths = [r["path"] for r in results["all_results"]]
+    paths = [cast("str", r["path"]) for r in cast("list[dict[str, object]]", results["all_results"])]
     assert paths == ["/admin", "/login", "/test"]
 
 
@@ -279,9 +281,9 @@ def test_run_fuzz_workers_multiple() -> None:
     """Test run_fuzz with multiple workers."""
     results = run_fuzz("http://nonexistent.invalid.domain.tld", wordlist=["/admin", "/login", "/test"], timeout=1.0, workers=3)
     assert results["paths_tested"] == 3
-    assert len(results["all_results"]) == 3
+    assert len(cast("list[dict[str, object]]", results["all_results"])) == 3
     # Results should be in original order despite concurrent execution
-    paths = [r["path"] for r in results["all_results"]]
+    paths = [cast("str", r["path"]) for r in cast("list[dict[str, object]]", results["all_results"])]
     assert paths == ["/admin", "/login", "/test"]
 
 
@@ -291,8 +293,8 @@ def test_run_fuzz_workers_maintains_order() -> None:
     paths = [f"/path{i}" for i in range(20)]
     results = run_fuzz("http://nonexistent.invalid.domain.tld", wordlist=paths, timeout=1.0, workers=10)
     assert results["paths_tested"] == 20
-    assert len(results["all_results"]) == 20
-    result_paths = [r["path"] for r in results["all_results"]]
+    assert len(cast("list[dict[str, object]]", results["all_results"])) == 20
+    result_paths = [cast("str", r["path"]) for r in cast("list[dict[str, object]]", results["all_results"])]
     assert result_paths == paths  # Order preserved
 
 
