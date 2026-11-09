@@ -10278,6 +10278,16 @@ def test_ping_tcp_port_option(monkeypatch) -> None:
     assert called["port"] == 443
 
 
+def test_ping_invalid_target_is_usage_error() -> None:
+    """An empty or whitespace target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://"):
+        result = runner.invoke(cli, ["ping", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
 def test_ping_out_option_json(tmp_path, monkeypatch) -> None:
     def mock_run_ping(
         target,
