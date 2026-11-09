@@ -11,6 +11,9 @@ import hashlib
 import hmac
 import io
 
+from collections.abc import Mapping
+from typing import TypedDict
+
 from ethscan.fileio import read_lines
 
 # Algorithms supported natively by hashlib on this platform.
@@ -283,6 +286,45 @@ def load_passwords_from_file(path: str) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Typed result shapes for run_hash / run_check.
+# ---------------------------------------------------------------------------
+
+class HashEntry(TypedDict):
+    password: str
+    algorithm: str
+    salt: bool
+    pepper: bool
+    iterations: int | None
+    salt_value: str | None
+    hash: str | None
+    error: str | None
+
+
+class HashResult(TypedDict):
+    algorithm: str
+    salt: bool
+    pepper: bool
+    iterations: int | None
+    salt_value: str | None
+    passwords_hashed: int
+    results: list[HashEntry]
+    notes: list[str]
+
+
+class CheckResult(TypedDict):
+    password: str
+    digest: str
+    algorithm: str | None
+    salt: bool
+    pepper: bool
+    iterations: int | None
+    salt_value: str | None
+    computed: str | None
+    match: bool | None
+    error: str | None
+
+
+# ---------------------------------------------------------------------------
 # Password check (compare plaintext against a known digest)
 # ---------------------------------------------------------------------------
 
@@ -330,7 +372,7 @@ def run_check(
     salt: str | None = None,
     pepper: str | None = None,
     iterations: int | None = None,
-) -> dict[str, object]:
+) -> CheckResult:
     """Compare a plaintext password against a known hash digest.
 
     Args:
@@ -398,7 +440,7 @@ def run_hash(
     salt: str | None = None,
     pepper: str | None = None,
     iterations: int | None = None,
-) -> dict[str, object]:
+) -> HashResult:
     """Generate hashes for a list of passwords.
 
     Args:
@@ -430,7 +472,7 @@ def run_hash(
 
     password_list = _normalize_passwords(passwords)
 
-    results: list[dict[str, object]] = []
+    results: list[HashEntry] = []
     for pwd in password_list:
         try:
             digest = _compute_password_hash(
@@ -486,14 +528,14 @@ def run_hash(
     }
 
 
-def format_hash_report_json(data: dict[str, object]) -> str:
+def format_hash_report_json(data: Mapping[str, object]) -> str:
     """Format hash results as a JSON string."""
     import json
 
     return json.dumps(data, indent=2, default=str)
 
 
-def format_check_report_json(data: dict[str, object]) -> str:
+def format_check_report_json(data: Mapping[str, object]) -> str:
     """Format a password check result as a JSON string."""
     import json
 
@@ -505,7 +547,7 @@ def _escape(value: str) -> str:
     return value.replace("|", "\\|")
 
 
-def format_hash_report_markdown(data: dict[str, object]) -> str:
+def format_hash_report_markdown(data: Mapping[str, object]) -> str:
     """Format hash results as a Markdown string."""
     if not isinstance(data, dict):
         data = {}
@@ -554,7 +596,7 @@ def format_hash_report_markdown(data: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_check_report_markdown(data: dict[str, object]) -> str:
+def format_check_report_markdown(data: Mapping[str, object]) -> str:
     """Format a password check result as a Markdown string."""
     if not isinstance(data, dict):
         data = {}
@@ -591,7 +633,7 @@ def format_check_report_markdown(data: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_check_report_csv(data: dict[str, object]) -> str:
+def format_check_report_csv(data: Mapping[str, object]) -> str:
     """Format a password check result as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)
@@ -623,7 +665,7 @@ def format_check_report_csv(data: dict[str, object]) -> str:
     return output.getvalue().rstrip("\r\n")
 
 
-def format_hash_report_csv(data: dict[str, object]) -> str:
+def format_hash_report_csv(data: Mapping[str, object]) -> str:
     """Format hash results as CSV."""
     output = io.StringIO()
     writer = csv.writer(output)

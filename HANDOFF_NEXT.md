@@ -1,29 +1,28 @@
 # Handoff
-Date: Sun Nov 08 2026 (session 11)
+Date: Sun Nov 08 2026 (session 12)
 
 ## What changed
-Continued typing hygiene on `tests/test_ssl.py` (3 errors -> 0), following the established pattern (covariant `Mapping` signatures; runtime behavior unchanged):
+Continued per-file typing hygiene on `tests/test_hash.py` (46 errors -> 0), following the established pattern (precise `TypedDict` result shapes + covariant `Mapping` formatter signatures; runtime behavior unchanged):
 
-- `ethscan/ssl.py`:
-  - Added `from collections.abc import Mapping` import.
-  - Widened `format_ssl_report_json`, `format_ssl_report_markdown`, `format_ssl_report_csv` signatures from `dict[str, object]` to `Mapping[str, object]` (formatters only read from `data`; mypy-recommended covariant type).
-- `tests/test_ssl.py`:
-  - Added `dict[str, object]` type annotations to `data` locals in `test_format_ssl_report_csv_empty`, `test_format_ssl_report_csv_missing_fields`, `test_format_ssl_report_csv_escaping` (lines 287, 296, 304).
+- `ethscan/hash.py`:
+  - Added `from collections.abc import Mapping` and `from typing import TypedDict` imports.
+  - Added `HashEntry`, `HashResult`, `CheckResult` TypedDicts describing the exact result shapes.
+  - Changed `run_hash(...) -> HashResult` and `run_check(...) -> CheckResult` (were `dict[str, object]`).
+  - Changed `results: list[dict[str, object]]` -> `list[HashEntry]`.
+  - Widened all 6 formatter signatures (`format_hash_report_json/markdown/csv`, `format_check_report_json/markdown/csv`) from `dict[str, object]` to `Mapping[str, object]` (formatters only read from `data`; covariant type so `HashResult`/`CheckResult` and plain dicts are accepted).
+- `tests/test_hash.py`: no edits required (indexing into `TypedDict` results now resolves to precise types; `assert x is not None` narrowing handles the `str | None` `in` checks).
 
 ## What was verified
-- `python -m mypy ethscan/` → Success: no issues found in 59 source files.
-- `python -m mypy ethscan/ssl.py tests/test_ssl.py` → Success: no issues found.
-- `python -m py_compile` on both changed files → OK.
-- Runtime smoke tests of `format_ssl_report_json/markdown/csv` with various inputs (full cert data, empty dict, error-only dict) → behavior unchanged (field formatting, CSV escaping, empty/error branches all exercised).
+- `python -m mypy ethscan/hash.py tests/test_hash.py` → Success: no issues found.
+- `python -m mypy ethscan/` → Success: no issues found in 59 source files (cli.py, which passes results to the formatters, is clean).
+- `python -m py_compile ethscan/hash.py` → OK.
+- Runtime smoke tests of `run_hash`/`run_check`/all six formatters (MD5/SHA, salt/pepper/PBKDF2, JSON/Markdown/CSV output) → behavior unchanged.
 
 ## Unresolved
-- `tests/test_ping.py:586` and `:663` (`Unsupported right operand type for in ("str | None")`) — inside `test_probe_icmp_raw_socket_oserror` and `test_probe_icmp_raw_sendto_oserror`, two of the 6 pre-existing tests blocked by the Python 3.14 `socket.timeout` read-only descriptor failure (see HANDOFF_NEXT.md session 9). Left untouched per instructions: fix only typing errors independent of that failure.
-- Pre-existing `tests/test_ping.py` runtime failures (6 tests) — unrelated to typing, not caused by this work.
-- `pytest` and `ruff` are NOT installed in this environment (only mypy), so the test suite could not be executed here; it passed in prior sessions (5878 passed, 50 skipped, 0 failed excluding test_ping.py). The next agent with pytest available should re-run `pytest -q --ignore=tests/test_ping.py` to confirm the baseline is unchanged.
-
-## Note on repo-wide mypy
-`mypy ethscan/ tests/` reports 710 errors across many other test files (e.g. test_smtp.py, test_dnsbrute.py, test_whois.py); those predate this work and were never part of the per-file typing-hygiene drive. Do not fix them speculatively; reproduce per file first if the next agent takes them on.
+- `pytest` and `ruff` are NOT installed in this environment (only mypy 2.4.1, Python 3.14.4), so the pytest baseline (5878 passed, 50 skipped, 0 failed excluding test_ping.py from prior sessions) could not be re-run here; verify with pytest when available.
+- Pre-existing `tests/test_ping.py` runtime failures (6 tests, Python 3.14 `socket.timeout` read-only descriptor) and its remaining typing errors — unrelated to this work, left untouched.
+- `tests/test_hash_hostile_sweep.py` carries pre-existing arg-type errors (passing non-mapping literals to formatters); not introduced by this change, left untouched per the "do not fix speculatively" rule.
+- Repo-wide `mypy ethscan/ tests/` still reports ~710 pre-existing errors across many other test files.
 
 ## Next task
-- None pending from the current typing-hygiene drive.
-- If continuing: pick one remaining test file with mypy errors, reproduce with `python -m mypy tests/<file>` first, then fix per file using the established pattern (do not speculate or weaken safety controls). Suggested candidates by error count: `test_dnsbrute.py` (47), `test_hash.py` (46), `test_urlcheck.py` (39), `test_whois.py` (37).
+- Continue per-file typing hygiene in remaining test files with mypy errors. Reproduce with `python -m mypy tests/<file>` first, then fix per file using the established pattern (TypedDict/Mapping in source where indexing into `dict[str, object]` results is the issue; test-only annotations/casts otherwise). Suggested candidates: `test_ping.py`, `test_radix.py`, `test_cidr.py`, `test_dnsbrute.py`, `test_urlcheck.py`, `test_whois.py`. Do not speculate or weaken safety controls.
