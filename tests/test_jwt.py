@@ -3,6 +3,7 @@
 import base64
 import json
 import time
+from typing import Any, cast
 
 from ethscan.jwt import (
     KNOWN_ALGORITHMS,
