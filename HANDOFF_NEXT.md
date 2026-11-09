@@ -1,33 +1,27 @@
 # Handoff
-Date: Mon Nov 09 2026 (session 20)
+Date: Mon Nov 09 2026 (session 21)
 
-## What changed
-Continued per-file typing hygiene on four test files (test-side only; runtime behavior unchanged).
+## Session (Mon Nov 09 2026, session 21)
+## This session
+- Continued per-file typing hygiene on `tests/test_brute.py` (11 mypy errors → 0). Baseline at start: `pytest -q --ignore=tests/test_ping.py` → 5878 passed, 50 skipped, 0 failed.
+- Root cause: `run_brute`/`_attempt_ftp`/`_attempt_ssh` return `dict[str, object]`, so `result["error"]` (`in` checks), `result["successful"]` (indexing), and `result["results"]` (`len`) were inferred as `object`. Also `types.ModuleType` stub `fake_paramiko` had no `SSHClient`/`AutoAddPolicy` attributes (`[attr-defined]`).
+- Fixed `tests/test_brute.py` (no behavior change — test-side casts only):
+  - Added `from typing import Any, cast`.
+  - `result["error"]` → `cast("str", result["error"])` before 4 `in` checks.
+  - `fake_paramiko.SSHClient` / `fake_paramiko.AutoAddPolicy` → `cast(Any, fake_paramiko).<attr> = ...` (4 occurrences).
+  - `result["successful"]` → `cast("list[dict[str, object]], ...)` and `result["results"]` → `cast("list[dict[str, object]], ...)` before indexing/`len()`.
+- No source (`ethscan/`) changes; fully reversible.
 
-- `tests/test_passwords.py` (5 mypy errors → 0): narrowed `dict[str, object]` indexing with `cast("float"/"int"/"str", eval_data[...])` on score/length/verdict lookups in sort tests and `test_evaluate_password_strong`.
-- `tests/test_fuzz.py` (9 mypy errors → 0): added `from typing import cast`; narrowed `result["error"]` → `cast("str", ...)`, `results["target"]` → `cast("str", ...)`, and `results["all_results"]` → `cast("list[dict[str, object]], ...)` before `len()` and iteration. Used `replaceAll=True` for the `results["all_results"]` `len()` pattern (4 occurrences).
-- `tests/test_snmp.py` (9 mypy errors → 0): added type annotations for `captured` dicts (lines 462, 675); added `type: ignore[misc,assignment]` for `socket.socket` monkey-patching (lines 1178, 1184, 1193, 1199); added type annotation for `entry` dict (line 1205).
-- `tests/test_geo.py` (10 mypy errors → 0): added `cast(dict[str, object], result["geolocation"])` and `cast(list[str], result["notes"])` for run_geo result indexing; added `dict[str, object]` type annotations for formatter test data literals (3 occurrences).
-
-## What was verified
-- `python -m mypy tests/test_passwords.py tests/test_fuzz.py tests/test_snmp.py tests/test_geo.py` → Success (0 issues).
-- `python -m ruff check tests/test_passwords.py tests/test_fuzz.py tests/test_snmp.py tests/test_geo.py` → All checks passed!
-- `python -m pytest tests/test_passwords.py tests/test_fuzz.py tests/test_snmp.py tests/test_geo.py -q` → 124+89+52 = 265 passed.
+## Verification
+- `python -m mypy tests/test_brute.py` → Success: no issues found.
+- `python -m ruff check tests/test_brute.py` → All checks passed!
+- `python -m pytest tests/test_brute.py -q` → 24 passed.
 - `python -m pytest -q --ignore=tests/test_ping.py` → 5878 passed, 50 skipped, 0 failed (baseline unchanged).
 
-## Unresolved
-- `tests/test_ping.py` runtime failures — pre-existing Python 3.14 `socket.timeout` read-only descriptor blocker; left untouched.
-- Repo-wide typing debt remains across many test files. Reproduce per file with `python -m mypy tests/<file>` before editing.
-
-## Approaches that have already failed / to avoid
-- Do not retry identical operations with unchanged assumptions.
-- Do not weaken safety controls or skip verification.
-- Do not "fix" `test_cli_trace_brute_unreachable_sweep.py` `setattr` to direct assignment without addressing mypy `[attr-defined]` (ruff B010 ↔ mypy tension).
-- Do not fix `test_ping.py` without addressing the Python 3.14 `socket.timeout` descriptor constraint.
+## Blockers
+- `tests/test_ping.py` pre-existing Python 3.14 `socket.timeout` read-only descriptor blocker (6 runtime failures, 2 typing errors) — left untouched per instructions.
 
 ## Next task
-Continue per-file typing hygiene on remaining test files with mypy errors. Reproduce each target with `python -m mypy tests/<file>` before editing. Prefer small, test-side `cast(...)`/annotations; widen source signatures only where indexing dynamic `dict[str, object]`/result shapes is the root cause and the change is minimal/safe. Skip `tests/test_ping.py`. Verify per file: `mypy <file>` clean, `ruff check <file>` clean (resolve conflicts case-by-case), targeted pytest for that file, then `pytest -q --ignore=tests/test_ping.py` for baseline.
-
-Candidate files (reproduce counts first): `test_cli.py` (12), `test_ssh.py` (9), `test_brute.py` (27), `test_tls.py` (16), `test_subdomains.py` (17), `test_dnssec.py` (18), `test_s3.py` (19), `test_jwt.py` (21), `test_osdetect.py` (23), `test_web.py` (27), `test_cve.py` (32), plus hostile-sweep variants as listed in prior handoffs (many follow `cast(Any, ...)` pattern). Start with lowest-error non-hostile files for quick wins.
+Continue per-file typing hygiene on remaining test files with mypy errors. Reproduce each target with `python -m mypy tests/<file>` first, fix per file using the established pattern. Skip `tests/test_ping.py`. Remaining candidates (latest full-suite counts): `test_cli.py` (12), `test_ssh.py` (9), `test_tls.py` (16), `test_subdomains.py` (17), `test_dnssec.py` (18), `test_s3.py` (19), `test_jwt.py` (21), `test_osdetect.py` (23), `test_web.py` (27), `test_cve.py` (32).
 
 (End of file - total 33 lines)

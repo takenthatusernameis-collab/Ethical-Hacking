@@ -1,6 +1,7 @@
 """Tests for the ethscan brute module."""
 
 import types
+from typing import Any, cast
 
 import pytest
 
@@ -89,7 +90,7 @@ def test_attempt_ftp_failure(monkeypatch) -> None:
 
     result = _attempt_ftp("localhost", 21, "admin", "wrong", 1.0)
     assert result["success"] is False
-    assert "530 Login incorrect" in result["error"]
+    assert "530 Login incorrect" in cast("str", result["error"])
 
 
 def test_attempt_ftp_connect_failure(monkeypatch) -> None:
@@ -107,7 +108,7 @@ def test_attempt_ftp_connect_failure(monkeypatch) -> None:
 
     result = _attempt_ftp("localhost", 21, "admin", "secret", 1.0)
     assert result["success"] is False
-    assert "connection refused" in result["error"]
+    assert "connection refused" in cast("str", result["error"])
 
 
 def test_attempt_ssh_without_paramiko(monkeypatch) -> None:
@@ -115,7 +116,7 @@ def test_attempt_ssh_without_paramiko(monkeypatch) -> None:
 
     result = _attempt_ssh("localhost", 22, "root", "secret", 1.0)
     assert result["success"] is False
-    assert "paramiko is required" in result["error"]
+    assert "paramiko is required" in cast("str", result["error"])
 
 
 def test_attempt_ssh_with_paramiko(monkeypatch) -> None:
@@ -134,8 +135,8 @@ def test_attempt_ssh_with_paramiko(monkeypatch) -> None:
             self.closed = True
 
     fake_paramiko = types.ModuleType("paramiko")
-    fake_paramiko.SSHClient = _FakeSSHClient
-    fake_paramiko.AutoAddPolicy = lambda: None
+    cast(Any, fake_paramiko).SSHClient = _FakeSSHClient
+    cast(Any, fake_paramiko).AutoAddPolicy = lambda: None
 
     monkeypatch.setattr("ethscan.brute.paramiko", fake_paramiko, raising=False)
     monkeypatch.setattr("ethscan.brute.PARAMIKO_AVAILABLE", True)
@@ -157,15 +158,15 @@ def test_attempt_ssh_with_paramiko_failure(monkeypatch) -> None:
             pass
 
     fake_paramiko = types.ModuleType("paramiko")
-    fake_paramiko.SSHClient = _FakeSSHClient
-    fake_paramiko.AutoAddPolicy = lambda: None
+    cast(Any, fake_paramiko).SSHClient = _FakeSSHClient
+    cast(Any, fake_paramiko).AutoAddPolicy = lambda: None
 
     monkeypatch.setattr("ethscan.brute.paramiko", fake_paramiko, raising=False)
     monkeypatch.setattr("ethscan.brute.PARAMIKO_AVAILABLE", True)
 
     result = _attempt_ssh("localhost", 22, "root", "wrong", 1.0)
     assert result["success"] is False
-    assert "Authentication failed" in result["error"]
+    assert "Authentication failed" in cast("str", result["error"])
 
 
 def test_run_brute_offline(monkeypatch) -> None:
@@ -196,9 +197,10 @@ def test_run_brute_offline(monkeypatch) -> None:
     assert result["passwords_tested"] == 2
     assert result["attempts"] == 2
     assert result["successful_count"] == 1
-    assert result["successful"][0]["username"] == "admin"
-    assert result["successful"][0]["password"] == "password"
-    assert len(result["results"]) == 2
+    successful = cast("list[dict[str, object]]", result["successful"])
+    assert successful[0]["username"] == "admin"
+    assert successful[0]["password"] == "password"
+    assert len(cast("list[dict[str, object]]", result["results"])) == 2
 
 
 def test_run_brute_ssh_default_port(monkeypatch) -> None:
