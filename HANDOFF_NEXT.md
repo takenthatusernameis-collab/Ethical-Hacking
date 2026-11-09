@@ -85,5 +85,27 @@ Continue per-file typing hygiene on remaining test files with mypy errors. Repro
 ## Blockers
 - `tests/test_ping.py` pre-existing Python 3.14 `socket.timeout` read-only descriptor blocker (6 runtime failures, 2 typing errors) — left untouched per instructions.
 
+## Session (Mon Nov 09 2026, session 27)
+## This session
+- Reproduced baseline (no prior agent assignment; bounded cleanup selected): `mypy tests/` → 2 errors in `tests/test_ping.py` only (Python 3.14 socket.timeout blocker, lines 586/663). `mypy ethscan/` → 0 issues. `pytest -q --ignore=tests/test_ping.py` → 5878 passed, 50 skipped, 0 failed. `ruff check ethscan/ tests/` → 5 fixable issues.
+- Fixed 5 ruff issues (no behavior change):
+  - `tests/test_cli.py`: removed unused `from typing import cast` import in `test_cli_resolve_server_configures_cname_lookup`.
+  - `tests/test_cli_trace_brute_unreachable_sweep.py`: replaced 4 `setattr(fake_paramiko, "CONST", ...)` with direct assignment (B010) in the two SSH brute tests that build a fake `paramiko` module.
+- Source typing hygiene (no behavior change): `ethscan/jwt.py` replaced 2 `# type: ignore[assignment]` on `standard_claims_result`/`other_claims_result` with `cast(dict[str, object], ...)` (safe: `run_jwt` initializes those keys as dicts).
+
+## Verification
+- `python -m ruff check ethscan/ tests/` → All checks passed!
+- `python -m mypy ethscan/` → Success: no issues found in 59 source files.
+- `python -m mypy ethscan/jwt.py tests/test_jwt.py` → Success: no issues found in 2 source files.
+- `python -m pytest tests/test_jwt.py -q` → 41 passed.
+- `python -m pytest tests/test_cli.py -q -k resolve` → 25 passed, 1035 deselected.
+- `python -m pytest tests/test_cli_trace_brute_unreachable_sweep.py -q` → 4 passed.
+- `python -m pytest -q --ignore=tests/test_ping.py` → 5878 passed, 50 skipped, 0 failed (baseline unchanged).
+- `python -m mypy tests/ 2>&1 | tail -4` → `Found 2 errors in 1 file (checked 128 source files)`; only `tests/test_ping.py` (blocked).
+
+## Blockers
+- `tests/test_ping.py` pre-existing Python 3.14 `socket.timeout` read-only descriptor blocker: 6 runtime failures + 2 mypy errors (lines 586, 663) inside those blocked tests — left untouched per instructions.
+
 ## Next task
-Continue per-file typing hygiene on remaining test files with mypy errors. Reproduce each target with `python -m mypy tests/<file>` first, fix per file using the established pattern (test-side casts/annotations; widen source types only when minimal/safe/root-cause). Skip `tests/test_ping.py`. Remaining candidates after sessions 22-26: `test_web.py` now clean; `test_cve.py` now clean. Reproduce repo-wide remaining counts (larger/hostile-sweep files) before picking the next file. Update `HANDOFF_NEXT.md` and `NEXT_TASK.md` with exact evidence.
+No mypy errors remain in tests outside `tests/test_ping.py` (blocked). Ruff and `mypy ethscan/` are clean. Select one bounded, high-value, verifiable improvement: inspect for a small, reproducible bug or missing test edge case in `ethscan/` (e.g., a command with thin error-path coverage or an output formatting inconsistency). Reproduce before changing; keep diffs minimal/reversible; run targeted tests + `pytest -q --ignore=tests/test_ping.py`. Update `HANDOFF_NEXT.md` and `NEXT_TASK.md` with exact evidence.
+

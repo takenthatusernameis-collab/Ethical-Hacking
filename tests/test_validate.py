@@ -536,14 +536,32 @@ def test_ports_to_ranges_non_consecutive_break() -> None:
     assert _ports_to_ranges([1, 2, 10]) == "1-2, 10"
 
 
+def test_validate_port_only_commas() -> None:
+    """A port spec containing only separators/whitespace has no ports and is invalid."""
+    result = _validate_port_spec(",")
+    assert result["valid"] is False
+    assert result["ports"] == []
+    assert result["count"] == 0
+    assert result["error"] == "No ports in specification"
+
+
+def test_validate_port_only_commas_whitespace() -> None:
+    result = _validate_port_spec(" , , ")
+    assert result["valid"] is False
+    assert result["ports"] == []
+    assert result["count"] == 0
+    assert result["error"] is not None
+
+
 def test_format_validate_report_csv_valid_with_empty_ports() -> None:
     data = run_validate(ports=",")
     output = format_validate_report_csv(data)
     lines = output.splitlines()
     assert lines[0] == "type,spec,valid,detail"
-    # For comma-only spec, after processing parts gives empty ports list; valid becomes True? Let us check
-    # Based on earlier: _validate_port_spec(',') gives valid True, ports [], count 0
     assert len(lines) == 2
+    # comma-only spec is now invalid (no ports)
+    assert "false" in lines[1]
+    assert "No ports in specification" in lines[1]
 
 
 def test_format_validate_report_markdown_long_expanded() -> None:

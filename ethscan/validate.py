@@ -42,6 +42,14 @@ def _validate_port_spec(spec: str) -> dict[str, Any]:
         }
 
     parts = [p.strip() for p in spec.split(",") if p.strip()]
+    if not parts:
+        return {
+            "spec": spec,
+            "valid": False,
+            "ports": [],
+            "count": 0,
+            "error": "No ports in specification",
+        }
     parsed_ports: list[int] = []
     for part in parts:
         if "-" in part:
