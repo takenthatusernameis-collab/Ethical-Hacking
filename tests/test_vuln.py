@@ -56,6 +56,18 @@ def test_normalize_host_url() -> None:
     assert _normalize_host("http://sub.example.com:8080/foo") == "sub.example.com"
 
 
+def test_normalize_host_rejects_empty_target() -> None:
+    from ethscan.target import TargetSpecError
+
+    for bad in ("", "   ", "https://"):
+        try:
+            _normalize_host(bad)
+        except TargetSpecError as exc:
+            assert "Could not parse host from target" in str(exc)
+        else:
+            raise AssertionError(f"Expected TargetSpecError for {bad!r}")
+
+
 def test_parse_banner_openssh() -> None:
     assert parse_banner("SSH-2.0-OpenSSH_7.2p2 Ubuntu-1ubuntu2.14") == (
         "OpenSSH",
