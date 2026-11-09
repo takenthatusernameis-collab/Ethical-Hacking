@@ -695,7 +695,7 @@ def test_get_host_key_info_paramiko_success(monkeypatch) -> None:
     fake_host_key.get_bits.return_value = 256
     fake_transport = MagicMock()
     fake_transport.get_remote_server_key.return_value = fake_host_key
-    fake_paramiko.Transport = lambda sock: fake_transport
+    fake_paramiko.Transport = lambda sock: fake_transport  # type: ignore[attr-defined]
 
     fake_sock = MagicMock()
     monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *_a, **_k: fake_sock)
@@ -715,7 +715,7 @@ def test_get_host_key_info_paramiko_exception(monkeypatch) -> None:
     fake_paramiko = types.ModuleType("paramiko")
     fake_transport = MagicMock()
     fake_transport.start_client.side_effect = Exception("handshake failed")
-    fake_paramiko.Transport = lambda sock: fake_transport
+    fake_paramiko.Transport = lambda sock: fake_transport  # type: ignore[attr-defined]
 
     fake_sock = MagicMock()
     monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *_a, **_k: fake_sock)
@@ -727,7 +727,7 @@ def test_get_host_key_info_paramiko_exception(monkeypatch) -> None:
 
 def test_get_host_key_info_paramiko_oserror(monkeypatch) -> None:
     fake_paramiko = types.ModuleType("paramiko")
-    fake_paramiko.Transport = MagicMock()
+    fake_paramiko.Transport = MagicMock()  # type: ignore[attr-defined]
 
     def raise_oserror(*_args, **_kwargs):
         raise OSError("connection refused")
@@ -960,10 +960,10 @@ def test_get_host_key_info_paramiko_ssh_exception(monkeypatch) -> None:
         pass
 
     fake_paramiko = types.ModuleType("paramiko")
-    fake_paramiko.SSHException = SSHException
+    fake_paramiko.SSHException = SSHException  # type: ignore[attr-defined]
     fake_transport = MagicMock()
     fake_transport.start_client.side_effect = SSHException("handshake failed")
-    fake_paramiko.Transport = lambda sock: fake_transport
+    fake_paramiko.Transport = lambda sock: fake_transport  # type: ignore[attr-defined]
 
     fake_sock = MagicMock()
     monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *a, **k: fake_sock)
@@ -984,11 +984,11 @@ def test_get_host_key_info_paramiko_authentication_exception(monkeypatch) -> Non
         pass
 
     fake_paramiko = types.ModuleType("paramiko")
-    fake_paramiko.SSHException = SSHException
-    fake_paramiko.AuthenticationException = AuthenticationException
+    fake_paramiko.SSHException = SSHException  # type: ignore[attr-defined]
+    fake_paramiko.AuthenticationException = AuthenticationException  # type: ignore[attr-defined]
     fake_transport = MagicMock()
     fake_transport.start_client.side_effect = AuthenticationException("rejected")
-    fake_paramiko.Transport = lambda sock: fake_transport
+    fake_paramiko.Transport = lambda sock: fake_transport  # type: ignore[attr-defined]
 
     fake_sock = MagicMock()
     monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *a, **k: fake_sock)
@@ -1005,7 +1005,7 @@ def test_get_host_key_info_paramiko_eof_error(monkeypatch) -> None:
     fake_paramiko = types.ModuleType("paramiko")
     fake_transport = MagicMock()
     fake_transport.start_client.side_effect = EOFError("closed")
-    fake_paramiko.Transport = lambda sock: fake_transport
+    fake_paramiko.Transport = lambda sock: fake_transport  # type: ignore[attr-defined]
 
     fake_sock = MagicMock()
     monkeypatch.setattr("ethscan.ssh.socket.create_connection", lambda *a, **k: fake_sock)

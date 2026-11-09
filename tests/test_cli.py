@@ -5043,7 +5043,7 @@ def test_port_aware_commands_document_common_and_all_keywords() -> None:
         if name == "validate":
             continue
         ports_param = next(param for param in command.params if param.name == "ports")
-        help_text = (ports_param.help or "").lower()
+        help_text = (getattr(ports_param, "help", "") or "").lower()
         assert "'common'" in help_text, f"{name} --ports help omits the 'common' keyword"
         assert "'all'" in help_text, f"{name} --ports help omits the 'all' keyword"
 
@@ -7106,7 +7106,7 @@ def test_vuln_help_shows_salt_pepper() -> None:
 
 
 def test_vuln_salt_option(monkeypatch) -> None:
-    called_args = {}
+    called_args: dict[str, str | None] = {}
     _install_vuln_salt_mock(monkeypatch, called_args)
 
     runner = CliRunner()
@@ -7132,7 +7132,7 @@ def test_vuln_salt_option(monkeypatch) -> None:
 
 
 def test_vuln_pepper_option(monkeypatch) -> None:
-    called_args = {}
+    called_args: dict[str, str | None] = {}
     _install_vuln_salt_mock(monkeypatch, called_args)
 
     runner = CliRunner()
@@ -7158,7 +7158,7 @@ def test_vuln_pepper_option(monkeypatch) -> None:
 
 
 def test_vuln_algorithm_option(monkeypatch) -> None:
-    called_args = {}
+    called_args: dict[str, str | None] = {}
     _install_vuln_salt_mock(monkeypatch, called_args)
 
     runner = CliRunner()
@@ -7184,7 +7184,7 @@ def test_vuln_algorithm_option(monkeypatch) -> None:
 
 
 def test_vuln_salt_pepper_combined(monkeypatch) -> None:
-    called_args = {}
+    called_args: dict[str, str | None] = {}
     _install_vuln_salt_mock(monkeypatch, called_args)
 
     runner = CliRunner()
@@ -7216,7 +7216,7 @@ def test_vuln_salt_pepper_combined(monkeypatch) -> None:
 
 
 def test_vuln_salt_pepper_disabled_by_default(monkeypatch) -> None:
-    called_args = {}
+    called_args: dict[str, str | None] = {}
     _install_vuln_salt_mock(monkeypatch, called_args)
 
     runner = CliRunner()
@@ -15466,14 +15466,21 @@ def test_resolve_custom_types(monkeypatch) -> None:
 def test_resolve_server_option_reaches_cname_resolver(monkeypatch) -> None:
     """End-to-end: `resolve --server` must configure the CNAME lookup resolver."""
     from ethscan import resolve as resolve_mod
+    from typing import cast
 
-    created: list[object] = []
+    class DummyResolver:
+        def __init__(self):
+            self.timeout = None
+            self.lifetime = None
+            self.nameservers = None
+
+    created: list[DummyResolver] = []
 
     class DummyAnswer:
         def __str__(self):
             return "target.example.com"
 
-    class DummyResolver:
+    class _DummyResolver:
         def __init__(self):
             self.timeout = None
             self.lifetime = None
@@ -15486,7 +15493,7 @@ def test_resolve_server_option_reaches_cname_resolver(monkeypatch) -> None:
 
     class FakeDns:
         exception = type("exception", (), {"DNSException": Exception})
-        resolver = type("resolver", (), {"Resolver": DummyResolver})
+        resolver = type("resolver", (), {"Resolver": _DummyResolver})
 
     monkeypatch.setattr(resolve_mod, "DNS_AVAILABLE", True)
     monkeypatch.setattr(resolve_mod, "dns", FakeDns(), raising=False)
@@ -19611,7 +19618,7 @@ def test_cert_output_format_csv(monkeypatch) -> None:
 
 
 def test_cert_output_format_csv_out(tmp_path, monkeypatch) -> None:
-    mock_results = {
+    mock_results: dict[str, str | list[str] | None] = {
         "target": "example.com",
         "domain": "example.com",
         "ip": None,
@@ -19628,7 +19635,7 @@ def test_cert_output_format_csv_out(tmp_path, monkeypatch) -> None:
 
 
 def test_cert_format_csv_alias(monkeypatch) -> None:
-    mock_results = {
+    mock_results: dict[str, str | list[str] | None] = {
         "target": "example.com",
         "domain": "example.com",
         "ip": None,
@@ -22866,7 +22873,7 @@ def test_library_modules_stay_free_of_click() -> None:
     ]
     for name in names:
         tree = ast.parse((package / name).read_text(encoding="utf-8"))
-        imported = set()
+        imported: set[str] = set()
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 imported.update(alias.name.split(".")[0] for alias in node.names)
@@ -23848,7 +23855,7 @@ def test_every_port_option_of_the_cli_is_range_checked() -> None:
     checked = 0
     for name, command in cli.commands.items():
         for param in command.params:
-            if "port" not in param.name or param.name == "ports":
+            if param.name is None or "port" not in param.name or param.name == "ports":
                 continue
             assert isinstance(param.type, click.IntRange), (
                 f"{name} --{param.name} is not range-checked"
@@ -25255,7 +25262,9 @@ def _choice_option_cases() -> list[tuple[str, str, str, tuple[str, ...]]]:
             # Prefer a long option for the assertion message; fall back to any opt.
             flag = next((o for o in param.opts if o.startswith("--")), param.opts[0])
             choices = tuple(str(c) for c in param.type.choices)
-            cases.append((name, flag, param.name, choices))
+            param_name = param.name
+            assert param_name is not None, "Choice option must have a name"
+            cases.append((name, flag, param_name, choices))
     return sorted(cases)
 
 
