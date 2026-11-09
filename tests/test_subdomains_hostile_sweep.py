@@ -2,25 +2,28 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import json
 
 from ethscan import subdomains
 
-HOSTILE_TOP_LEVEL = (None, [], "x", 123, 1.5, True, b"bytes")
+HOSTILE_TOP_LEVEL: tuple[object, ...] = (None, [], "x", 123, 1.5, True, b"bytes")
 
 
 def test_subdomains_formatters_never_raise_on_hostile_top_level() -> None:
     for bad in HOSTILE_TOP_LEVEL:
-        json.loads(subdomains.format_subdomains_report_json(bad))
-        md = subdomains.format_subdomains_report_markdown(bad)
-        csv_text = subdomains.format_subdomains_report_csv(bad)
+        bad_any: Any = bad
+        json.loads(subdomains.format_subdomains_report_json(cast(Any, bad_any)))
+        md = subdomains.format_subdomains_report_markdown(cast(Any, bad_any))
+        csv_text = subdomains.format_subdomains_report_csv(cast(Any, bad_any))
         assert isinstance(md, str)
         assert isinstance(csv_text, str)
         assert "ethscan Subdomain Enumeration Report" in md
 
 
 def test_subdomains_formatters_hostile_nested_shapes_never_raise() -> None:
-    cases = [
+    cases: list[dict[str, object]] = [
         {"target": "x", "domain": "x", "resolved": None},
         {"target": "x", "domain": "x", "resolved": "notalist"},
         {

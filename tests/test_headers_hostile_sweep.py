@@ -8,6 +8,8 @@ malformed top-level containers and hostile nested fields must never raise.
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import json
 
 from ethscan.headers import (
@@ -16,14 +18,15 @@ from ethscan.headers import (
     format_headers_report_markdown,
 )
 
-HOSTILE_TOP_LEVEL = (None, [], "x", 123, 1.5, True, b"bytes")
+HOSTILE_TOP_LEVEL: tuple[object, ...] = (None, [], "x", 123, 1.5, True, b"bytes")
 
 
 def test_headers_formatters_never_raise_on_hostile_top_level() -> None:
     for bad in HOSTILE_TOP_LEVEL:
-        json.loads(format_headers_report_json(bad))
-        md = format_headers_report_markdown(bad)
-        csv_text = format_headers_report_csv(bad)
+        bad_any: Any = bad
+        json.loads(format_headers_report_json(cast(Any, bad_any)))
+        md = format_headers_report_markdown(cast(Any, bad_any))
+        csv_text = format_headers_report_csv(cast(Any, bad_any))
         assert isinstance(md, str)
         assert isinstance(csv_text, str)
         assert "ethscan Security Headers Report" in md
@@ -31,7 +34,7 @@ def test_headers_formatters_never_raise_on_hostile_top_level() -> None:
 
 
 def test_headers_formatters_hostile_nested_shapes_never_raise() -> None:
-    cases = [
+    cases: list[dict[str, object]] = [
         {"security_headers": None},
         {"security_headers": "x"},
         {"security_headers": 123},
