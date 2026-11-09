@@ -173,8 +173,8 @@ def run_jwt(token: str, now: float | None = None) -> dict[str, object]:
             findings.append(f"Unknown algorithm: {alg}")
 
     if payload is not None:
-        standard_claims_result: dict[str, object] = result["standard_claims"]  # type: ignore[assignment]
-        other_claims_result: dict[str, object] = result["other_claims"]  # type: ignore[assignment]
+        standard_claims_result = cast(dict[str, object], result["standard_claims"])
+        other_claims_result = cast(dict[str, object], result["other_claims"])
         for key in STANDARD_CLAIMS:
             if key in payload:
                 standard_claims_result[key] = payload[key]

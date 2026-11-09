@@ -15466,7 +15466,6 @@ def test_resolve_custom_types(monkeypatch) -> None:
 def test_resolve_server_option_reaches_cname_resolver(monkeypatch) -> None:
     """End-to-end: `resolve --server` must configure the CNAME lookup resolver."""
     from ethscan import resolve as resolve_mod
-    from typing import cast
 
     class DummyResolver:
         def __init__(self):
