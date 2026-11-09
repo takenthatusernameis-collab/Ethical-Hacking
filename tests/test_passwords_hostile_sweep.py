@@ -5,10 +5,11 @@ from __future__ import annotations
 import csv
 import io
 import json
+from typing import Any, cast
 
 from ethscan import passwords
 
-HOSTILE_TOP_LEVEL = (None, [], "x", 123, 1.5, True, b"bytes")
+HOSTILE_TOP_LEVEL: tuple[object, ...] = (None, [], "x", 123, 1.5, True, b"bytes")
 
 GOOD_RESULT = (
     "pwd",
@@ -28,21 +29,22 @@ GOOD_RESULT = (
 
 def test_passwords_formatters_never_raise_on_hostile_top_level() -> None:
     for bad in HOSTILE_TOP_LEVEL:
+        bad_any: Any = bad
         for fn in (
             passwords.format_audit_report_json,
             passwords.format_audit_report_markdown,
             passwords.format_audit_report_csv,
         ):
-            out = fn(bad, [])
+            out = fn(cast(Any, bad_any), [])
             assert isinstance(out, str)
-            out = fn([], bad)
+            out = fn([], cast(Any, bad_any))
             assert isinstance(out, str)
     md = passwords.format_audit_report_markdown([], [])
     assert "# Password Audit Report" in md
 
 
 def test_passwords_formatters_hostile_nested_results_never_raise() -> None:
-    cases = [
+    cases: list[dict[str, object]] = [
         {"results": None},
         {"results": "notalist"},
         {"results": [(1, "notdict")]},
@@ -56,8 +58,8 @@ def test_passwords_formatters_hostile_nested_results_never_raise() -> None:
         {"passwords": 123, "results": [GOOD_RESULT]},
     ]
     for data in cases:
-        passwords_arg = data.get("passwords", [])
-        results_arg = data.get("results", [])
+        passwords_arg = cast(Any, data.get("passwords", []))
+        results_arg = cast(Any, data.get("results", []))
         json.loads(passwords.format_audit_report_json(passwords_arg, results_arg))
         md = passwords.format_audit_report_markdown(passwords_arg, results_arg)
         csv_text = passwords.format_audit_report_csv(passwords_arg, results_arg)

@@ -3,24 +3,26 @@
 from __future__ import annotations
 
 import json
+from typing import Any, cast
 
 from ethscan import stale
 
-HOSTILE_TOP_LEVEL = (None, [], "x", 123, 1.5, True, b"bytes")
+HOSTILE_TOP_LEVEL: tuple[object, ...] = (None, [], "x", 123, 1.5, True, b"bytes")
 
 
 def test_stale_formatters_never_raise_on_hostile_top_level() -> None:
     for bad in HOSTILE_TOP_LEVEL:
-        json.loads(stale.format_stale_report_json(bad))
-        md = stale.format_stale_report_markdown(bad)
-        csv_text = stale.format_stale_report_csv(bad)
+        bad_any: Any = bad
+        json.loads(stale.format_stale_report_json(cast(Any, bad_any)))
+        md = stale.format_stale_report_markdown(cast(Any, bad_any))
+        csv_text = stale.format_stale_report_csv(cast(Any, bad_any))
         assert isinstance(md, str)
         assert isinstance(csv_text, str)
         assert "ethscan Stale DNS Record Detection Report" in md
 
 
 def test_stale_formatters_hostile_nested_shapes_never_raise() -> None:
-    cases = [
+    cases: list[dict[str, object]] = [
         {"stale_results": None},
         {"stale_results": "notalist"},
         {"stale_results": [None, 5, "str", [], {}, {"domain": "x"}]},
