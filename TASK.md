@@ -106,3 +106,22 @@ Date: Sun Nov 08 2026 (session 7)
 ## Next task
 - None pending from the current typing-hygiene drive.
 - If continuing: pick one remaining test file with mypy errors, reproduce with `python -m mypy tests/<file>` first, then fix per file using the established pattern (do not speculate or weaken safety controls). Suggested candidates by error count: `test_dnsbrute.py` (47), `test_hash.py` (46), `test_urlcheck.py` (39), `test_whois.py` (37).
+
+# Session (Mon Nov 09 2026, session 16)
+## This session
+- Continued typing hygiene on `tests/test_main.py` (3 errors -> 0). Baseline at start: `pytest -q` → 5936 passed, 50 skipped, 0 failed.
+- Root cause: two tests assigned a plain `counting_cli` function to `cli_mod.cli` (typed as `_TargetGroup`, a `click.Group` subclass) — `assignment` errors at lines 96 and 126; one test read `.value` on a raw `ast.expr` comparator — `attr-defined` error at line 155.
+- Fixed `tests/test_main.py` (no behavior change):
+  - Added `from typing import Any, cast`.
+  - `cli_mod.cli = cast(Any, counting_cli)` at lines 96 and 126 (established test-side mocking cast pattern, matching prior `resolve.dns = cast(Any, FakeDns())` fixes).
+  - `cast(ast.Constant, comparator).value` at line 155 (narrow `ast.expr` to `ast.Constant` before reading `.value`).
+## Verification
+- `python -m mypy tests/test_main.py` → Success: no issues found.
+- `python -m ruff check tests/test_main.py` → All checks passed.
+- `python -m pytest tests/test_main.py -q` → 14 passed.
+- `python -m mypy ethscan/ tests/test_main.py` → Success: no issues found in 60 source files.
+- `python -m pytest -q --ignore=tests/test_ping.py` → 5875 passed, 53 skipped, 0 failed (baseline unchanged).
+## Blockers
+- `tests/test_ping.py` pre-existing Python 3.14 `socket.timeout` read-only descriptor blocker (6 runtime failures, 2 typing errors) — left untouched per instructions.
+## Next task
+- Continue per-file typing hygiene on remaining test files with mypy errors. Reproduce each target with `python -m mypy tests/<file>` first, fix per file using the established pattern. Skip `tests/test_ping.py`.

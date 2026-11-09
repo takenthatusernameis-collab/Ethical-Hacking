@@ -1,17 +1,19 @@
 # Handoff
-Date: Mon Nov 09 2026 (session 15)
+Date: Mon Nov 09 2026 (session 16)
 
 ## What changed
-Continued per-file typing hygiene on `tests/test_wifi.py` (1 error -> 0), following the established pattern (test-side annotation; runtime behavior unchanged):
+Continued per-file typing hygiene on `tests/test_main.py` (3 errors -> 0), following the established pattern (test-side casts; runtime behavior unchanged):
 
-- `tests/test_wifi.py`:
-  - Added `from typing import Any` import.
-  - Annotated `data: dict[str, Any] = {}` in `test_format_wifi_report_csv_missing_fields` (line 703) to satisfy the formatter's `dict[str, Any]` parameter (`var-annotated` error). Semantically neutral; aligns with established test-side narrowing pattern.
+- `tests/test_main.py`:
+  - Added `from typing import Any, cast` import.
+  - `cli_mod.cli = cast(Any, counting_cli)` at lines 96 and 126 (assigning a plain function to `cli`, typed as `_TargetGroup`, a `click.Group` subclass — `assignment` errors).
+  - `cast(ast.Constant, comparator).value` at line 155 (reading `.value` on a raw `ast.expr` comparator — `attr-defined` error).
 
 ## What was verified
-- `python -m mypy tests/test_wifi.py` → Success (0 issues).
-- `python -m ruff check tests/test_wifi.py` → All checks passed.
-- `python -m pytest tests/test_wifi.py -q` → 48 passed.
+- `python -m mypy tests/test_main.py` → Success (0 issues).
+- `python -m ruff check tests/test_main.py` → All checks passed.
+- `python -m pytest tests/test_main.py -q` → 14 passed.
+- `python -m mypy ethscan/ tests/test_main.py` → Success (60 source files clean).
 - `python -m pytest -q --ignore=tests/test_ping.py` → **5875 passed, 53 skipped, 0 failed** (baseline unchanged).
 
 ## Unresolved
@@ -24,4 +26,4 @@ Continued per-file typing hygiene on `tests/test_wifi.py` (1 error -> 0), follow
 - Do not assume prior handoff error counts are current; reproduce per file.
 
 ## Next task
-Continue per-file typing hygiene on remaining test files with mypy errors (discover via `python -m mypy tests/<file>`; repo-wide `mypy ethscan/ tests/` still has pre-existing errors). Fix per file using the established pattern: widen source formatter/report signatures to `Mapping[str, object]` and use precise/`Any` result shapes where source returns dynamic dicts; use targeted test-side casts/annotations for `dict[str, object]` indexing. Skip `tests/test_ping.py`. Keep changes minimal/reversible, preserve safety controls, and verify with per-file mypy + ruff + targeted pytest + `pytest -q --ignore=tests/test_ping.py`. Suggested next targets by error count: `test_wifi.py` (now clean), `test_smb.py` (2), `test_scanner.py` (2), `test_postgresql.py` (2), `test_ftp.py` (3), `test_cert.py` (3), `test_main.py` (3).
+Continue per-file typing hygiene on remaining test files with mypy errors (discover via `python -m mypy tests/<file>`; repo-wide `mypy ethscan/ tests/` still has pre-existing errors). Fix per file using the established pattern: widen source formatter/report signatures to `Mapping[str, object]` and use precise/`Any` result shapes where source returns dynamic dicts; use targeted test-side casts/annotations for `dict[str, object]` indexing. Skip `tests/test_ping.py`. Keep changes minimal/reversible, preserve safety controls, and verify with per-file mypy + ruff + targeted pytest + `pytest -q --ignore=tests/test_ping.py`.

@@ -9,6 +9,8 @@ import runpy
 import subprocess
 import sys
 
+from typing import Any, cast
+
 import pytest
 from click.testing import CliRunner
 
@@ -93,7 +95,7 @@ def test_python_m_ethscan_main_help_runs() -> None:
             called["n"] += 1
             raise SystemExit(0)
 
-        cli_mod.cli = counting_cli
+        cli_mod.cli = cast(Any, counting_cli)
         try:
             with contextlib.suppress(SystemExit):
                 runpy.run_module("ethscan.main", run_name="__main__")
@@ -123,7 +125,7 @@ def test_python_m_ethscan_dunder_main_help_runs() -> None:
         sys.modules.pop("ethscan.__main__", None)
 
         orig_cli = cli_mod.cli
-        cli_mod.cli = counting_cli
+        cli_mod.cli = cast(Any, counting_cli)
         try:
             with contextlib.suppress(SystemExit):
                 runpy.run_module("ethscan.__main__", run_name="__main__")
@@ -152,7 +154,7 @@ def test_main_guard_is_the_last_statement_of_the_module(module_name: str) -> Non
     assert isinstance(test, ast.Compare)
     assert isinstance(test.left, ast.Name) and test.left.id == "__name__"
     assert [type(op) for op in test.ops] == [ast.Eq]
-    assert [comparator.value for comparator in test.comparators] == ["__main__"]
+    assert [cast(ast.Constant, comparator).value for comparator in test.comparators] == ["__main__"]
 
 
 def test_cli_module_as_main_runs_the_brute_command(monkeypatch, tmp_path, capsys) -> None:
