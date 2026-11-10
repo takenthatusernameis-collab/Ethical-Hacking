@@ -9,6 +9,8 @@ import urllib.error
 from pathlib import Path
 from typing import Any, cast
 
+import pytest
+
 from ethscan.cve import (
     _extract_cve_summary,
     _fetch_cve_data,
@@ -26,6 +28,7 @@ from ethscan.cve import (
     format_cve_report_markdown,
     run_cve,
 )
+from ethscan.target import TargetSpecError
 
 
 def test_normalize_host_bare() -> None:
@@ -39,6 +42,12 @@ def test_normalize_host_url() -> None:
 
 def test_normalize_host_uppercase() -> None:
     assert _normalize_host("EXAMPLE.COM") == "example.com"
+
+
+def test_normalize_host_rejects_empty_target() -> None:
+    for bad in ("", "   ", "https://"):
+        with pytest.raises(TargetSpecError, match="Could not parse host from target"):
+            _normalize_host(bad)
 
 
 def test_resolve_host_offline() -> None:

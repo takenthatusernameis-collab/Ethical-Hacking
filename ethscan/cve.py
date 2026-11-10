@@ -17,7 +17,7 @@ import urllib.request
 from pathlib import Path
 
 from ethscan.fileio import load_json
-from ethscan.target import parse_url
+from ethscan.target import TargetSpecError, parse_url
 
 DEFAULT_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 DEFAULT_TIMEOUT = 10.0
@@ -40,7 +40,10 @@ def _normalize_host(target: str) -> str:
     if "://" not in normalized:
         normalized = "https://" + normalized
     parsed = parse_url(normalized)
-    return (parsed.hostname or parsed.netloc or "").lower()
+    host = (parsed.hostname or parsed.netloc or "").lower()
+    if not host:
+        raise TargetSpecError(f"Could not parse host from target {target!r}")
+    return host
 
 
 def _resolve_host(host: str) -> str | None:

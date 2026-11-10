@@ -12238,6 +12238,16 @@ def test_cve_rejects_bad_target_before_reading_services_file(tmp_path) -> None:
     assert "Traceback (most recent call last)" not in result.output, result.output
 
 
+def test_cve_invalid_target_is_usage_error() -> None:
+    """An empty or whitespace CVE target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://"):
+        result = runner.invoke(cli, ["cve", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
 def test_cve_no_cache_option(monkeypatch) -> None:
     called_args = {}
 
