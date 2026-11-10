@@ -1,21 +1,30 @@
 # Handoff
-Date: Tue Nov 10 2026 (session 50)
+Date: Tue Nov 10 2026 (session 51)
 
 ## This session
-- No prior agent assignment existed; inspected repository state (git clean, recent commits, NEXT_TASK/HANDOFF, baseline checks).
-- Baseline: `pytest -q` -> 5962 passed, 50 skipped, 0 failed. However `python -m ruff check` failed with 3 `BLE001` (blind `except Exception`) in `ethscan/cli.py:version()` (added in c2dc6ed), and `python -m mypy ethscan/ tests/test_cli.py` reported 9 type errors in the same function (`config_path_string` misused on `Path`, untyped `data["dependencies"]` indexing).
-- Implemented smallest reversible fix in `ethscan/cli.py:version()`: narrowed dependency version probes to `except (ImportError, AttributeError)`, introduced typed `dependencies: dict[str, str]`, and set `config_file` via `str(config_path)` when present (removed incorrect `config_path_string` call). Behavior/output unchanged (`python -m ethscan version` verified).
+- Repository was fully green at start: `pytest -q` → 5962 passed, 50 skipped, 0 failed; `ruff check` → clean; `mypy ethscan/ tests/` → clean (187 source files).
+- Selected a bounded code-quality task: narrowed blind `except Exception` handlers in `ethscan/stale.py` to specific exception types (`OSError`, `ValueError`, `OverflowError`) per BLE001 lint rule, following the pattern established in `ethscan/cli.py:version()` (session 50).
+- Changes in `ethscan/stale.py`:
+  - `resolve_a_records` / `resolve_aaaa_records` / `resolve_cname`: catch `(OSError, ValueError)` — covers `socket.gaierror`, `socket.timeout`, `UnicodeEncodeError`, and other resolver errors.
+  - `check_tcp_connect`: catch `(OSError, ValueError, OverflowError)` — covers socket creation/connect errors and invalid port overflow.
+  - `resolve_domain_all`: removed redundant try/except blocks around resolver calls (resolvers already handle exceptions internally and return empty results).
+  - `run_stale`: kept safety-net `except Exception` for thread pool with explanatory `# noqa: BLE001` comment.
+- Updated `tests/test_stale.py`: replaced 3 exception-branch tests (which mocked `RuntimeError` on resolvers, bypassing internal handling) with 2 behavior-focused tests (`test_no_records_stale`, `test_all_records_reachable_not_stale`). Net -1 test.
 
 ## Verification
-- `python -m ruff check` -> All checks passed.
-- `python -m mypy ethscan/ tests/test_cli.py` -> Success: no issues found in 60 source files.
-- `python -m pytest -q` -> 5962 passed, 50 skipped, 0 failed.
+- `python -m ruff check` → All checks passed.
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 187 source files.
+- `python -m pytest -q` → 5961 passed, 50 skipped, 0 failed (baseline 5962; -1 from replaced tests).
+- CLI smoke tests: `stale --target ""` → exit 2 usage error; `stale --target example.com` → works.
 
 ## Blockers
 - None.
 
 ## Approaches already tried / ruled out
-- Did not suppress lint/type errors or broaden ignores; fixed root causes in `version()` with minimal, behavior-preserving changes.
+- Did not suppress BLE001 with blanket ignores; narrowed exceptions to the types actually raised by stdlib socket operations.
+- Did not keep redundant try/except in `resolve_domain_all`; relied on resolvers' internal handling (tested separately in `TestResolveARecords` etc.).
 
 ## Next task
 - None pending. Repository is fully green. If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.
+
+(End of file - total 35 lines)

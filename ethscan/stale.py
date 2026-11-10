@@ -55,7 +55,7 @@ def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str
             return sorted(set(ips))
         finally:
             socket.setdefaulttimeout(previous)
-    except Exception:  # noqa: BLE001 - resolver can raise any type
+    except (OSError, ValueError):
         return []
 
 
@@ -70,7 +70,7 @@ def resolve_aaaa_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[
             return sorted(set(ips))
         finally:
             socket.setdefaulttimeout(previous)
-    except Exception:  # noqa: BLE001 - resolver can raise any type
+    except (OSError, ValueError):
         return []
 
 
@@ -87,7 +87,7 @@ def resolve_cname(domain: str, timeout: float = DEFAULT_TIMEOUT) -> str | None:
                     return canonname.rstrip(".")
         finally:
             socket.setdefaulttimeout(previous)
-    except Exception:  # noqa: BLE001, S110 - resolver can raise any type
+    except (OSError, ValueError):
         pass
     return None
 
@@ -104,7 +104,7 @@ def check_tcp_connect(ip: str, port: int = 80, timeout: float = DEFAULT_TIMEOUT)
         else:
             sock.connect((ip, port))
         return True
-    except Exception:  # noqa: BLE001 - transport can raise any type
+    except (OSError, ValueError, OverflowError):
         return False
     finally:
         if sock is not None:
@@ -128,28 +128,14 @@ def resolve_domain_all(domain: str, timeout: float) -> dict[str, Any]:
         "stale_reasons": [],
     }
 
-    try:
-        a_records = resolve_a_records(domain, timeout)
-        result["A"] = a_records
-    except Exception:  # noqa: BLE001 - resolver can raise any type
-        a_records = []
-        result["A"] = []
-        result["stale"] = True
-        result["stale_reasons"].append("DNS resolution failed")
+    a_records = resolve_a_records(domain, timeout)
+    result["A"] = a_records
 
-    try:
-        aaaa_records = resolve_aaaa_records(domain, timeout)
-        result["AAAA"] = aaaa_records
-    except Exception:  # noqa: BLE001 - resolver can raise any type
-        aaaa_records = []
-        result["AAAA"] = []
+    aaaa_records = resolve_aaaa_records(domain, timeout)
+    result["AAAA"] = aaaa_records
 
-    try:
-        cname = resolve_cname(domain, timeout)
-        result["CNAME"] = cname
-    except Exception:  # noqa: BLE001 - resolver can raise any type
-        cname = None
-        result["CNAME"] = None
+    cname = resolve_cname(domain, timeout)
+    result["CNAME"] = cname
 
     if not a_records and not aaaa_records and not cname:
         result["stale"] = True
@@ -197,7 +183,7 @@ def run_stale(
         for future in as_completed(future_to_domain):
             try:
                 results.append(future.result())
-            except Exception as exc:  # noqa: BLE001 - resolver can raise any type
+            except Exception as exc:  # noqa: BLE001 - safety net for thread pool; resolve_domain_all handles all expected errors internally
                 domain = future_to_domain.get(future, "")
                 results.append(
                     {

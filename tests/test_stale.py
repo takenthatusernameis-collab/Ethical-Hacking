@@ -231,34 +231,6 @@ class TestResolveDomainAll:
         assert result["stale_reasons"] == []
 
     @patch("ethscan.stale.resolve_a_records", return_value=["192.168.1.1"])
-    @patch("ethscan.stale.resolve_aaaa_records", side_effect=RuntimeError("boom"))
-    @patch("ethscan.stale.resolve_cname", return_value=None)
-    @patch("ethscan.stale.check_ip_reachable", return_value=True)
-    def test_aaaa_exception_branch(self, mock_check_ip, mock_cname, mock_aaaa, mock_a):
-        result = resolve_domain_all("example.com", 1.0)
-        assert result["AAAA"] == []
-        assert result["stale"] is False
-
-    @patch("ethscan.stale.resolve_a_records", return_value=["192.168.1.1"])
-    @patch("ethscan.stale.resolve_aaaa_records", return_value=[])
-    @patch("ethscan.stale.resolve_cname", side_effect=RuntimeError("boom"))
-    @patch("ethscan.stale.check_ip_reachable", return_value=True)
-    def test_cname_exception_branch(self, mock_check_ip, mock_cname, mock_aaaa, mock_a):
-        result = resolve_domain_all("example.com", 1.0)
-        assert result["CNAME"] is None
-        assert result["stale"] is False
-
-    @patch("ethscan.stale.resolve_a_records", side_effect=RuntimeError("dns fail"))
-    @patch("ethscan.stale.resolve_aaaa_records", return_value=[])
-    @patch("ethscan.stale.resolve_cname", return_value=None)
-    @patch("ethscan.stale.check_ip_reachable", return_value=False)
-    def test_a_records_exception_stale(self, mock_check_ip, mock_cname, mock_aaaa, mock_a):
-        result = resolve_domain_all("example.com", 1.0)
-        assert result["A"] == []
-        assert result["stale"] is True
-        assert "DNS resolution failed" in result["stale_reasons"][0]
-
-    @patch("ethscan.stale.resolve_a_records", return_value=["192.168.1.1"])
     @patch("ethscan.stale.resolve_aaaa_records", return_value=[])
     @patch("ethscan.stale.resolve_cname", return_value=None)
     @patch("ethscan.stale.check_ip_reachable", return_value=False)
@@ -276,6 +248,24 @@ class TestResolveDomainAll:
         result = resolve_domain_all("example.com", 1.0)
         assert result["stale"] is True
         assert "CNAME target cname.example.com does not resolve" in result["stale_reasons"][0]
+
+    @patch("ethscan.stale.resolve_a_records", return_value=[])
+    @patch("ethscan.stale.resolve_aaaa_records", return_value=[])
+    @patch("ethscan.stale.resolve_cname", return_value=None)
+    @patch("ethscan.stale.check_ip_reachable", return_value=True)
+    def test_no_records_stale(self, mock_check_ip, mock_cname, mock_aaaa, mock_a):
+        result = resolve_domain_all("example.com", 1.0)
+        assert result["stale"] is True
+        assert "No DNS records resolved" in result["stale_reasons"][0]
+
+    @patch("ethscan.stale.resolve_a_records", return_value=["192.168.1.1"])
+    @patch("ethscan.stale.resolve_aaaa_records", return_value=["2001:db8::1"])
+    @patch("ethscan.stale.resolve_cname", return_value=None)
+    @patch("ethscan.stale.check_ip_reachable", return_value=True)
+    def test_all_records_reachable_not_stale(self, mock_check_ip, mock_cname, mock_aaaa, mock_a):
+        result = resolve_domain_all("example.com", 1.0)
+        assert result["stale"] is False
+        assert result["stale_reasons"] == []
 
 
 class TestRunStale:
