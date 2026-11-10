@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from ethscan.target import TargetSpecError
 from ethscan.tls import (
     COMMON_CIPHERS,
     DEFAULT_PORT,
@@ -52,6 +53,12 @@ def test_normalize_host_bare() -> None:
 def test_normalize_host_url() -> None:
     assert _normalize_host("https://example.com/path") == "example.com"
     assert _normalize_host("http://sub.example.com:8080/foo") == "sub.example.com"
+
+
+def test_normalize_host_rejects_empty_target() -> None:
+    for bad in ("", "   ", "https://"):
+        with pytest.raises(TargetSpecError, match="Could not parse host from target"):
+            _normalize_host(bad)
 
 
 def test_resolve_version_members() -> None:
