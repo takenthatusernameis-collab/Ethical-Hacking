@@ -57,7 +57,6 @@ TARGET_MODULES = (
 # The modules that treat an unparsable target as a failed probe and report
 # it inside their own output instead of failing the whole run.
 PROBE_FAILURE_MODULES = (
-    "mongodb",
     "oracle",
     "postgresql",
     "mssql",

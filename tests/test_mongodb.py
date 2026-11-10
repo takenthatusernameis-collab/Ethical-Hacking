@@ -1,8 +1,10 @@
 """Tests for the ethscan mongodb module."""
 
+import pytest
 import socket
 from unittest.mock import patch
 
+from ethscan.target import TargetSpecError
 from ethscan.mongodb import (
     DEFAULT_PORT,
     _assess_buildinfo,
@@ -32,15 +34,20 @@ def test_normalize_target_ipv6():
 
 
 def test_normalize_target_invalid():
-    import pytest
-    with pytest.raises(ValueError):
+    with pytest.raises(TargetSpecError, match="Could not parse host from target"):
         _normalize_target("")
-    with pytest.raises(ValueError):
+    with pytest.raises(TargetSpecError, match="Could not parse host from target"):
         _normalize_target("   ")
-    with pytest.raises(ValueError):
+    with pytest.raises(TargetSpecError, match="Could not parse host from target"):
         _normalize_target(":27017")
-    with pytest.raises(ValueError):
+    with pytest.raises(TargetSpecError, match="Could not parse host from target"):
         _normalize_target("mongodb://")
+
+
+def test_normalize_target_rejects_empty_target():
+    for target in ("", "   ", "https://"):
+        with pytest.raises(TargetSpecError, match="Could not parse host from target"):
+            _normalize_target(target)
 
 
 def test_normalize_target_url_schemes():
@@ -205,11 +212,10 @@ def test_assess_buildinfo_empty():
     assert _assess_buildinfo({}) == []
 
 
-def test_run_mongodb_value_error():
-    result = run_mongodb("")
-    assert result["accessible"] is False
-    assert result["host"] is None
-    assert "Could not parse host" in result["error"]
+def test_run_mongodb_invalid_target():
+    for target in ("", "   ", "https://"):
+        with pytest.raises(TargetSpecError, match="Could not parse host from target"):
+            run_mongodb(target)
 
 
 def test_run_mongodb_empty_probes():

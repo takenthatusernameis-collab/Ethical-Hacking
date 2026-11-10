@@ -255,6 +255,8 @@ def run_mongodb(
     try:
         host, parsed_port = _normalize_target(target)
     except ValueError as exc:
+        if isinstance(exc, TargetSpecError):
+            raise
         return {
             'target': target,
             'host': None,

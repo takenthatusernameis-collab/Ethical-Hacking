@@ -21770,6 +21770,17 @@ def test_mysql_invalid_target_is_usage_error() -> None:
         assert "Could not parse host from target" in result.output, result.output
 
 
+def test_mongodb_invalid_target_is_usage_error() -> None:
+    """An empty, whitespace, or hostless-URL MongoDB target is rejected as a usage error."""
+    runner = CliRunner()
+
+    for bad in ("", "   ", "https://"):
+        result = runner.invoke(cli, ["mongodb", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output, result.output
+        assert "Could not parse host from target" in result.output, result.output
+
+
 def _mongodb_mock_results(target):
     return {
         "target": target,
@@ -23222,12 +23233,12 @@ TARGET_USAGE_ERROR_COMMANDS = (
     "netbios",
     "smb",
     "smtp",
+    "mongodb",
 )
 
 # These commands treat an unparsable target as a failed probe and report it
 # inside their own output (exit code 0). Their contract is left alone.
 TARGET_PROBE_FAILURE_COMMANDS = (
-    "mongodb",
     "oracle",
     "postgresql",
     "mssql",
@@ -23535,10 +23546,10 @@ BARE_PORT_COMMANDS = (
     "netbios",
     "smb",
     "smtp",
+    "mongodb",
 )
 
 BARE_PORT_PROBE_FAILURE_COMMANDS = (
-    "mongodb",
     "oracle",
     "postgresql",
     "mssql",
