@@ -5594,8 +5594,46 @@ def version(
 ) -> None:
     """Show ethscan version information."""
     from ethscan import __version__
+    import platform
+    import sys
+    from pathlib import Path
 
-    data = {"version": __version__}
+    try:
+        import click as click_module
+        click_version = click_module.__version__
+    except Exception:
+        click_version = "unknown"
+
+    try:
+        import yaml
+        yaml_version = yaml.__version__
+    except Exception:
+        yaml_version = "unknown"
+
+    try:
+        import dns
+        dns_version = dns.__version__
+    except Exception:
+        dns_version = "not installed"
+
+    from ethscan.config import find_config_file, config_path_string
+
+    config_path = find_config_file(None)
+    cache_path = Path.home() / ".cache" / "ethscan"
+
+    data = {
+        "version": __version__,
+        "python": sys.version.split()[0],
+        "platform": platform.platform(),
+        "architecture": platform.machine(),
+        "dependencies": {
+            "click": click_version,
+            "pyyaml": yaml_version,
+            "dnspython": dns_version,
+        },
+        "config_file": config_path_string(config_path) if config_path else "not found",
+        "cache_directory": str(cache_path),
+    }
     chosen_format = output_fmt if output_fmt is not None else fmt
 
     if chosen_format == "json":
@@ -5603,9 +5641,33 @@ def version(
 
         output = json.dumps(data, indent=2) + "\n"
     elif chosen_format == "csv":
-        output = "version\n" + f"{data['version']}\n"
+        import csv
+        import io
+
+        output_io = io.StringIO()
+        writer = csv.writer(output_io)
+        writer.writerow(["key", "value"])
+        writer.writerow(["version", data["version"]])
+        writer.writerow(["python", data["python"]])
+        writer.writerow(["platform", data["platform"]])
+        writer.writerow(["architecture", data["architecture"]])
+        for dep, ver in data["dependencies"].items():
+            writer.writerow([f"dep.{dep}", ver])
+        writer.writerow(["config_file", data["config_file"]])
+        writer.writerow(["cache_directory", data["cache_directory"]])
+        output = output_io.getvalue()
     else:
-        output = f"ethscan {data['version']}\n"
+        lines = [
+            f"ethscan {data['version']}",
+            f"Python: {data['python']} ({data['platform']}, {data['architecture']})",
+            "Dependencies:",
+            f"  click: {data['dependencies']['click']}",
+            f"  pyyaml: {data['dependencies']['pyyaml']}",
+            f"  dnspython: {data['dependencies']['dnspython']}",
+            f"Config file: {data['config_file']}",
+            f"Cache directory: {data['cache_directory']}",
+        ]
+        output = "\n".join(lines) + "\n"
 
     if out_path:
         _write_output(out_path, output)

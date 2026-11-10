@@ -40,15 +40,20 @@ def test_cli_version_csv() -> None:
     result = runner.invoke(cli, ["version", "--output-format", "csv"])
     assert result.exit_code == 0
     lines = result.output.splitlines()
-    assert lines[0] == "version"
-    assert lines[1] == "0.1.0"
+    assert lines[0] == "key,value"
+    # CSV now includes version, python, platform, architecture, dependencies, config_file, cache_directory
+    assert any(line.startswith("version,") and line.endswith(",0.1.0") for line in lines)
 
 
 def test_cli_version_markdown() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["version", "--format", "markdown"])
     assert result.exit_code == 0
-    assert result.output.rstrip() == "ethscan 0.1.0"
+    assert result.output.startswith("ethscan 0.1.0\n")
+    assert "Python:" in result.output
+    assert "Dependencies:" in result.output
+    assert "Config file:" in result.output
+    assert "Cache directory:" in result.output
 
 
 def test_cli_help_lists_commands() -> None:
