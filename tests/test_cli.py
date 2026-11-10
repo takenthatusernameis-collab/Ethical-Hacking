@@ -21759,6 +21759,17 @@ def test_mysql_probes_pass_through(monkeypatch) -> None:
     assert captured["probes"] == ["handshake"]
 
 
+def test_mysql_invalid_target_is_usage_error() -> None:
+    """An empty or whitespace MySQL target is rejected as a usage error."""
+    runner = CliRunner()
+
+    for bad in ("", "   ", "https://"):
+        result = runner.invoke(cli, ["mysql", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output, result.output
+        assert "Could not parse host from target" in result.output, result.output
+
+
 def _mongodb_mock_results(target):
     return {
         "target": target,
@@ -23203,6 +23214,7 @@ def test_invalid_cidr_does_not_run_the_calculation(monkeypatch) -> None:
 TARGET_USAGE_ERROR_COMMANDS = (
     "redis",
     "memcached",
+    "mysql",
     "ntp",
     "snmp",
     "ftp",
@@ -23215,7 +23227,6 @@ TARGET_USAGE_ERROR_COMMANDS = (
 # These commands treat an unparsable target as a failed probe and report it
 # inside their own output (exit code 0). Their contract is left alone.
 TARGET_PROBE_FAILURE_COMMANDS = (
-    "mysql",
     "mongodb",
     "oracle",
     "postgresql",
@@ -23287,7 +23298,7 @@ def test_invalid_target_names_the_offending_value() -> None:
 
 
 def test_probe_failure_commands_still_report_the_error_in_their_output() -> None:
-    """The five commands that report a failed probe keep their contract."""
+    """The commands that report a failed probe keep their contract."""
     runner = CliRunner()
     for command in TARGET_PROBE_FAILURE_COMMANDS:
         result = runner.invoke(cli, [command, "--target", ""])
@@ -23516,6 +23527,7 @@ def test_a_valid_port_is_still_reported_in_the_output() -> None:
 BARE_PORT_COMMANDS = (
     "redis",
     "memcached",
+    "mysql",
     "ntp",
     "snmp",
     "ftp",
@@ -23526,7 +23538,6 @@ BARE_PORT_COMMANDS = (
 )
 
 BARE_PORT_PROBE_FAILURE_COMMANDS = (
-    "mysql",
     "mongodb",
     "oracle",
     "postgresql",
@@ -23603,7 +23614,7 @@ def test_a_bare_target_with_an_out_of_range_port_does_not_start_a_probe(
 
 
 def test_probe_failure_commands_report_an_out_of_range_port() -> None:
-    """The five commands that report a failed probe keep their contract."""
+    """The commands that report a failed probe keep their contract."""
     runner = CliRunner()
     for command in BARE_PORT_PROBE_FAILURE_COMMANDS:
         result = runner.invoke(cli, [command, "--target", "host:99999"])

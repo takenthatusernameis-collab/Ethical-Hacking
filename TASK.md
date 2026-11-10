@@ -193,3 +193,26 @@ Date: Sun Nov 08 2026 (session 7)
 
 ## Next task
 - All modules that accept a target now reject empty/whitespace/invalid hosts with `TargetSpecError` (CLI exit 2). No remaining empty-host gap. If future work is needed, pick a single high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.
+
+# Session (Tue Nov 10 2026, session 39)
+## This session
+- Completed the assigned `mysql` empty-target normalization (per the prior agent's NEXT_TASK.md / HANDOFF_NEXT.md).
+- Baseline green at start: `pytest -q` → 5959 passed, 50 skipped, 0 failed.
+- Reproduced: `python -m ethscan mysql --target ""|"   "|"https://"` exited 0 with JSON `{"host": null, ..., "error": "Could not parse host from target ..."}` instead of a CLI usage error.
+- Fixed `ethscan/mysql.py:run_mysql`: the `except ValueError` around `_normalize_target(target)` now re-raises `TargetSpecError` instead of swallowing it into an in-band result dict. `_normalize_target` already raised `TargetSpecError` for an empty host; `run_mysql` was swallowing it. `TargetSpecError` propagates through the CLI `mysql` command to `_TargetGroup.invoke` (ethscan/cli.py:401) → `Error: Invalid value for '--target': Could not parse host from target ...` (exit 2).
+- `tests/test_mysql.py`: added `TargetSpecError` import + module-level `import pytest`; `test_normalize_target_invalid` now asserts `pytest.raises(TargetSpecError, match=...)`; `test_run_mysql_invalid_target` now asserts `run_mysql("")` raises `TargetSpecError`; removed `test_run_mysql_normalize_fail` (now a duplicate); added `test_normalize_target_rejects_empty_target` (`""`, `"   "`, `"https://"`).
+- `tests/test_cli.py`: moved `mysql` out of `TARGET_PROBE_FAILURE_COMMANDS`/`BARE_PORT_PROBE_FAILURE_COMMANDS` into `TARGET_USAGE_ERROR_COMMANDS`/`BARE_PORT_COMMANDS`; updated two docstrings ("five" → generic); added `test_mysql_invalid_target_is_usage_error` (`""`, `"   "`, `"https://"` → exit 2 + usage-error message).
+- `tests/test_target.py`: removed `mysql` from `PROBE_FAILURE_MODULES` (`TARGET_MODULES` tests still cover mysql and pass unchanged).
+
+## Verification
+- Repro after fix: `mysql --target ""|"   "|"https://"` → exit 2, `Error: Invalid value for '--target': Could not parse host from target ...`; `mysql --target example.com` → exit 0 (probe runs; valid-target behavior unchanged).
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 187 source files.
+- `python -m ruff check ethscan/ tests/` → All checks passed.
+- `python -m pytest tests/test_mysql.py tests/test_mysql_hostile_sweep.py tests/test_cli.py -q -k mysql` → 100 passed.
+- `python -m pytest -q` (full suite) → 5959 passed, 50 skipped, 0 failed (baseline unchanged).
+
+## Blockers
+- None.
+
+## Next task
+- Audit `mongodb` (one module) for empty-host handling: `python -m ethscan mongodb --target ""` currently exits 0 with an in-band `error` instead of a CLI usage error (exit 2). Reproduce, then fix one module at a time with unit + CLI invalid-target tests and full verification. Update `tests/test_target.py` (`PROBE_FAILURE_MODULES`) and `tests/test_cli.py` probe-failure tuples to drop `mongodb`, and add it to the usage-error tuples. Do not batch mssql/oracle/postgresql in the same session unless the mongodb fix is trivial and fully verified.

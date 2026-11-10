@@ -1,9 +1,11 @@
 """Tests for the ethscan mysql module."""
 
 import json
+import pytest
 import socket
 from unittest.mock import MagicMock, patch
 
+from ethscan.target import TargetSpecError
 from ethscan.mysql import (
     DEFAULT_PORT,
     _assess_handshake,
@@ -32,9 +34,7 @@ def test_normalize_target_ipv6():
 
 
 def test_normalize_target_invalid():
-    import pytest
-
-    with pytest.raises(ValueError):
+    with pytest.raises(TargetSpecError, match="Could not parse host from target"):
         _normalize_target("")
 
 
@@ -54,6 +54,12 @@ def test_normalize_target_edge_cases():
     import pytest
     with pytest.raises(ValueError):
         _normalize_target("   ")
+
+
+def test_normalize_target_rejects_empty_target():
+    for raw in ("", "   ", "https://"):
+        with pytest.raises(TargetSpecError, match="Could not parse host from target"):
+            _normalize_target(raw)
 
 
 def test_parse_handshake_empty():
@@ -335,10 +341,8 @@ def test_run_mysql_case_insensitive_probes():
 
 
 def test_run_mysql_invalid_target():
-    results = run_mysql("")
-    assert results["accessible"] is False
-    assert results["error"] is not None
-    assert "Could not parse host" in results["error"]
+    with pytest.raises(TargetSpecError, match="Could not parse host from target"):
+        run_mysql("")
 
 
 def test_run_mysql_response_too_short():
@@ -1004,12 +1008,6 @@ def test_run_mysql_empty_probes():
     assert res["accessible"] is False
     assert res["error"] is None
     assert res["host"] == "localhost"
-
-
-def test_run_mysql_normalize_fail():
-    res = run_mysql("")
-    assert res["accessible"] is False
-    assert "parse" in res["error"].lower()
 
 
 def test_run_mysql_port_override():
