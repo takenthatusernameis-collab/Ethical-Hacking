@@ -79,7 +79,12 @@ def test_normalize_target_strips_whitespace() -> None:
 
 
 def test_normalize_target_empty() -> None:
-    assert _normalize_target("") == ""
+    import pytest
+
+    from ethscan.target import TargetSpecError
+
+    with pytest.raises(TargetSpecError, match="Could not parse host from target"):
+        _normalize_target("")
 
 
 def test_normalize_target_ipv6_url() -> None:
@@ -145,7 +150,12 @@ def test_build_candidates_wordlist_strips_empty() -> None:
 
 
 def test_build_candidates_empty_target() -> None:
-    assert _build_bucket_candidates("", None) == []
+    import pytest
+
+    from ethscan.target import TargetSpecError
+
+    with pytest.raises(TargetSpecError, match="Could not parse host from target"):
+        _build_bucket_candidates("", None)
 
 
 def test_build_candidates_default_names_present() -> None:
@@ -460,12 +470,12 @@ def test_run_s3_region_all(monkeypatch) -> None:
 
 
 def test_run_s3_empty_target() -> None:
-    results = run_s3("", timeout=1.0, max_workers=5)
-    assert results["candidates_tested"] == 0
-    assert results["results"] == []
-    assert results["public_buckets"] == []
-    notes = cast(list[Any], results["notes"])
-    assert len(notes) >= 1
+    import pytest
+
+    from ethscan.target import TargetSpecError
+
+    with pytest.raises(TargetSpecError, match="Could not parse host from target"):
+        run_s3("", timeout=1.0, max_workers=5)
 
 
 def test_run_s3_results_sorted(monkeypatch) -> None:
@@ -1184,3 +1194,13 @@ def test_format_s3_report_csv_results_non_dict_entry() -> None:
     lines = output.strip().split("\n")
     assert lines[0] == "target,domain,bucket,region,url,status_code,dns_resolved,exists,public,error"
     assert len(lines) == 1
+
+
+def test_normalize_target_rejects_empty_target() -> None:
+    import pytest
+
+    from ethscan.target import TargetSpecError
+
+    for bad in ("", "   ", "https://"):
+        with pytest.raises(TargetSpecError, match="Could not parse host from target"):
+            _normalize_target(bad)

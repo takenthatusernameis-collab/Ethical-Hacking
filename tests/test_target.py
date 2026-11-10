@@ -382,7 +382,8 @@ def test_the_url_modules_still_accept_the_valid_target_forms() -> None:
     assert web._parse_url("http://example.com:8080") == ("example.com", 8080, False)
     assert web._parse_url("https://example.com:8443") == ("example.com", 8443, True)
     assert web._parse_url("https://[::1]:443") == ("::1", 443, True)
-    assert web._parse_url("") == ("localhost", 443, True)
+    with pytest.raises(TargetSpecError, match="Could not parse host from target"):
+        web._parse_url("")
     assert fuzz._normalize_base_url("example.com") == "https://example.com"
     assert fuzz._normalize_base_url("http://example.com") == "http://example.com"
     assert fuzz._normalize_base_url("https://example.com:8443") == (

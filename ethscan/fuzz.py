@@ -12,7 +12,7 @@ from typing import cast
 from urllib.parse import SplitResult
 
 from ethscan.fileio import read_lines
-from ethscan.target import check_target_host, parse_url, strip_userinfo, url_port
+from ethscan.target import TargetSpecError, check_target_host, parse_url, strip_userinfo, url_port
 
 DEFAULT_WORDLIST = [
     "/admin",
@@ -64,6 +64,9 @@ def _normalize_base_url(target: str) -> str:
     check_target_host(normalized)
     parsed = parse_url(normalized)
     url_port(cast("SplitResult", parsed))
+    host = parsed.hostname or parsed.netloc or ""
+    if not host:
+        raise TargetSpecError(f"Could not parse host from target {target!r}")
     return f"{parsed.scheme}://{strip_userinfo(parsed.netloc)}"
 
 

@@ -19,7 +19,7 @@ import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from ethscan.target import check_target_host, parse_url
+from ethscan.target import TargetSpecError, check_target_host, parse_url
 
 DEFAULT_TIMEOUT = 5.0
 DEFAULT_MAX_WORKERS = 20
@@ -148,7 +148,10 @@ def _normalize_target(target: str) -> str:
         normalized = "https://" + normalized
     check_target_host(normalized)
     parsed = parse_url(normalized)
-    return (parsed.hostname or parsed.netloc or "").lower()
+    host = (parsed.hostname or parsed.netloc or "").lower()
+    if not host:
+        raise TargetSpecError(f"Could not parse host from target {target!r}")
+    return host
 
 
 def _build_s3_url(bucket_name: str, region: str) -> str:

@@ -1321,3 +1321,13 @@ def test_format_web_report_markdown_with_error() -> None:
     }
     output = format_web_report_markdown(data)
     assert '**Error:** Connection refused' in output
+
+
+def test_parse_url_rejects_empty_target() -> None:
+    import pytest
+
+    from ethscan.target import TargetSpecError
+
+    for bad in ("", "   ", "https://"):
+        with pytest.raises(TargetSpecError, match="Could not parse host from target"):
+            _parse_url(bad)

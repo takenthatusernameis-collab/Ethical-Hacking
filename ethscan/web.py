@@ -15,6 +15,7 @@ from typing import Any, cast
 from urllib.parse import SplitResult
 
 from ethscan.target import (
+    TargetSpecError,
     check_target_host,
     check_target_path,
     parse_url,
@@ -137,7 +138,9 @@ def _parse_url(target: str) -> tuple[str, int, bool]:
     check_target_host(normalized)
     check_target_path(normalized)
     parsed = parse_url(normalized)
-    host = parsed.hostname or "localhost"
+    host = parsed.hostname or parsed.netloc or ""
+    if not host:
+        raise TargetSpecError(f"Could not parse host from target {target!r}")
     scheme = parsed.scheme.lower()
     if scheme == "https":
         is_secure = True
