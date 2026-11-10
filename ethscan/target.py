@@ -361,7 +361,7 @@ def normalize_host(target: str, default_scheme: str = "https://") -> str:
     if "://" not in normalized:
         normalized = default_scheme + normalized
     parsed = parse_url(normalized)
-    host = (parsed.hostname or parsed.netloc or "").lower()
+    host = (parsed.hostname or "").lower()
     if not host:
         raise TargetSpecError(f"Could not parse host from target {target!r}")
     return host

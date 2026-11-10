@@ -314,7 +314,7 @@ from ethscan.subtake import (
     format_subtake_report_markdown,
     run_subtake,
 )
-from ethscan.target import TargetSpecError, parse_url
+from ethscan.target import TargetSpecError, normalize_host, parse_url
 from ethscan.tls import (
     VersionSpec,
     format_tls_report_csv,
@@ -908,6 +908,7 @@ def _check_config_path(path: str) -> None:
 @click.pass_context
 def scan(ctx: click.Context, target: str, ports: str, profile: str | None, timeout: float, workers: int, output_fmt: str | None, fmt: str, out_path: str | None) -> None:
     """Run a port scan against TARGET."""
+    host = normalize_host(target)
     if profile:
         defaults = get_profile_defaults(profile)
         port_list = _resolve_ports(ports, profile=profile)
@@ -922,14 +923,14 @@ def scan(ctx: click.Context, target: str, ports: str, profile: str | None, timeo
     else:
         port_list = _resolve_ports(ports)
 
-    results = scan_ports(target, port_list, timeout=timeout, max_workers=workers)
+    results = scan_ports(host, port_list, timeout=timeout, max_workers=workers)
 
     open_ports = [port for port, is_open in results if is_open]
 
     # Prepare structured output for formatters
     scan_data = {
         "target": target,
-        "host": target,
+        "host": host,
         "timeout": timeout,
         "ports_scanned": len(port_list),
         "open_ports": open_ports,

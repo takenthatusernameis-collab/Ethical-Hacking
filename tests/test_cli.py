@@ -5985,6 +5985,17 @@ def test_web_invalid_target_is_usage_error() -> None:
         assert "Could not parse host from target" in result.output
 
 
+def test_scan_invalid_target_is_usage_error() -> None:
+    """An empty or whitespace scan target is rejected as a usage error."""
+    runner = CliRunner()
+
+    for bad in ("", "   ", "https://"):
+        result = runner.invoke(cli, ["scan", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
 def test_vuln_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["vuln", "--help"])
@@ -23253,6 +23264,7 @@ TARGET_USAGE_ERROR_COMMANDS = (
     "smtp",
     "mongodb",
     "mssql",
+    "scan",
 )
 
 # These commands treat an unparsable target as a failed probe and report it
