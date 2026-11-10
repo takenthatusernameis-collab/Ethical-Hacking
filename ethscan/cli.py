@@ -721,7 +721,15 @@ def _validate_enum_target(target: str) -> None:
     try:
         normalize_host(normalized)
     except TargetSpecError as exc:
-        raise TargetSpecError(f"Could not parse host from target {target!r}") from exc
+        # ``normalize_host`` already reports a specific, useful message for a
+        # URL that ``urllib.parse`` refuses (e.g. ``"Invalid IPv6 URL"``).
+        # Keep that message instead of masking it behind the generic empty-host
+        # one. Only rewrite the empty-host message so it quotes the target the
+        # user actually supplied (``normalize_host`` quotes the
+        # ``https://``-prefixed form it normalized internally).
+        if str(exc).startswith("Could not parse host from target"):
+            raise TargetSpecError(f"Could not parse host from target {target!r}") from exc
+        raise
 
 
 def _validate_s3_region(value: str | None) -> str | None:
