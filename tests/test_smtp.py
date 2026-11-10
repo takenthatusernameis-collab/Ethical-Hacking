@@ -99,15 +99,15 @@ class _FakeSMTPHandler(socketserver.BaseRequestHandler):
 
 class _FakeSMTPServer(socketserver.TCPServer):
     allow_reuse_address = True
+    smtp_config: dict[str, Any]
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        self.smtp_config: dict = {}
-
+        self.smtp_config = {}
 
 
 @pytest.fixture()
-def fake_smtp():
+def fake_smtp() -> Any:
     """Start a fake SMTP server; yield (host, port, server) and shut it down."""
     server = _FakeSMTPServer(("127.0.0.1", 0), _FakeSMTPHandler)
     server.smtp_config = {}

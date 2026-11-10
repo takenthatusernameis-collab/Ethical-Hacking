@@ -621,7 +621,7 @@ def _start_tcp_server_no_response() -> int:
     return port
 
 
-def _start_tcp_server_never_sends():
+def _start_tcp_server_never_sends() -> tuple[int, dict[str, Any]]:
     """Start a local TCP server that accepts but never sends or closes.
 
     Returns the port and a holder dict that keeps the accepted connection

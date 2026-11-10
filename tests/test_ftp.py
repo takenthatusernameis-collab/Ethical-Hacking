@@ -145,14 +145,15 @@ class _FakeFTPHandler(socketserver.BaseRequestHandler):
 
 class _FakeFTPServer(socketserver.TCPServer):
     allow_reuse_address = True
+    ftp_config: dict[str, Any]
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        self.ftp_config: dict = {}
+        self.ftp_config = {}
 
 
 @pytest.fixture()
-def fake_ftp():
+def fake_ftp() -> Any:
     """Start a fake FTP server; yield (host, port, server) and shut it down."""
     server = _FakeFTPServer(("127.0.0.1", 0), _FakeFTPHandler)
     server.ftp_config = {}
