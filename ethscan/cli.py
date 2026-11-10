@@ -1180,6 +1180,7 @@ def report(
 ) -> None:
     """Generate a report combining port scan and password audit results."""
     _validate_enum_target(target)
+    host = normalize_host(target)
     if audit_file:
         _require_utf8(audit_file, "'--audit-file'")
     timeout_source = ctx.get_parameter_source("timeout")
@@ -1188,7 +1189,7 @@ def report(
     workers_explicit = workers_source in (ParameterSource.COMMANDLINE, ParameterSource.ENVIRONMENT, ParameterSource.DEFAULT_MAP)
     try:
         report_data = run_report(
-            target,
+            host,
             ports,
             timeout=timeout,
             workers=workers,
