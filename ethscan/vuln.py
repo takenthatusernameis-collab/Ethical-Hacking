@@ -16,7 +16,7 @@ from typing import Any, Mapping, cast
 from typing_extensions import TypedDict
 
 from ethscan.service import run_service
-from ethscan.target import TargetSpecError, parse_url, normalize_host
+from ethscan.target import normalize_host
 
 DEFAULT_TIMEOUT = 3.0
 DEFAULT_WORKERS = 50

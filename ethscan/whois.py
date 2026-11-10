@@ -8,7 +8,7 @@ import socket
 from collections.abc import Mapping
 from typing import Any, cast
 
-from ethscan.target import TargetSpecError, parse_url, normalize_host
+from ethscan.target import normalize_host
 
 DEFAULT_WHOIS_SERVER = "whois.iana.org"
 DEFAULT_TIMEOUT = 5.0

@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from ethscan.fileio import load_json
-from ethscan.target import TargetSpecError, parse_url, normalize_host
+from ethscan.target import normalize_host
 
 DEFAULT_API_URL = "https://crt.sh/"
 DEFAULT_TIMEOUT = 10.0

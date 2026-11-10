@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import cast
 
 from ethscan.fileio import load_json
-from ethscan.target import TargetSpecError, parse_url, normalize_host
+from ethscan.target import normalize_host
 
 DEFAULT_API_URL = "http://ip-api.com/json/"
 DEFAULT_TIMEOUT = 5.0

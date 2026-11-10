@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections.abc import Mapping
 from typing import TypedDict, cast
 
-from ethscan.target import TargetSpecError, parse_url, normalize_host
+from ethscan.target import normalize_host
 
 DEFAULT_TIMEOUT = 5.0
 DEFAULT_WORKERS = 10

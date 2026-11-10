@@ -7,7 +7,7 @@ import ipaddress
 import socket
 from typing import Mapping, TypedDict
 
-from ethscan.target import TargetSpecError, parse_url, normalize_host
+from ethscan.target import normalize_host
 
 try:
     import dns.exception

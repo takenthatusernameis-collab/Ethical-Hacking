@@ -17,7 +17,7 @@ import urllib.request
 from pathlib import Path
 
 from ethscan.fileio import load_json
-from ethscan.target import TargetSpecError, parse_url, normalize_host
+from ethscan.target import normalize_host
 
 DEFAULT_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 DEFAULT_TIMEOUT = 10.0

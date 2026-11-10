@@ -9,7 +9,7 @@ import socket
 import ssl
 from collections.abc import Mapping
 
-from ethscan.target import TargetSpecError, parse_url, normalize_host
+from ethscan.target import normalize_host
 
 DEFAULT_PORT = 443
 DEFAULT_TIMEOUT = 5.0

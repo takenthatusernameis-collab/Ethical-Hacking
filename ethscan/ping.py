@@ -14,7 +14,7 @@ import struct
 import time
 from typing import Any, Mapping, TypedDict, cast
 
-from ethscan.target import TargetSpecError, parse_url, normalize_host
+from ethscan.target import normalize_host
 
 DEFAULT_COUNT = 4
 DEFAULT_TIMEOUT = 2.0

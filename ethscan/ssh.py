@@ -9,7 +9,7 @@ import socket
 import struct
 from typing import Any
 
-from ethscan.target import TargetSpecError, parse_url, url_port, normalize_host
+from ethscan.target import parse_url, url_port, normalize_host
 
 try:
     import paramiko

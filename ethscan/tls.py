@@ -10,7 +10,7 @@ import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Union
 
-from ethscan.target import TargetSpecError, parse_url, normalize_host
+from ethscan.target import normalize_host
 
 DEFAULT_PORT = 443
 DEFAULT_TIMEOUT = 5.0

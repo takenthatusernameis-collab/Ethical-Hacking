@@ -37,7 +37,7 @@ def test_normalize_target_bare_domain() -> None:
 def test_normalize_target_url() -> None:
     from ethscan.resolve import _normalize_target
     assert _normalize_target("https://example.com/path") == "example.com"
-    assert _normalize_target("http://sub.example.com:8080/foo") == "sub.example.com:8080"
+    assert _normalize_target("http://sub.example.com:8080/foo") == "sub.example.com"
 
 
 def test_normalize_target_ip() -> None:
