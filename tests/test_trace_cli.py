@@ -13,7 +13,7 @@ UNUSABLE_TARGETS = (
     "/",
 )
 
-TARGET_ERROR_MESSAGE = "Invalid target"
+TARGET_ERROR_MESSAGE = "Could not parse host from target"
 
 
 def _assert_target_usage_error(result, command: str) -> None:
@@ -179,7 +179,7 @@ def test_trace_usage_error_is_a_single_line():
     ]
     assert len(error_lines) == 1, result.output
     assert error_lines[0] == (
-        "Error: Invalid value for '--target': Invalid target"
+        "Error: Invalid value for '--target': Could not parse host from target ''"
     )
 
 

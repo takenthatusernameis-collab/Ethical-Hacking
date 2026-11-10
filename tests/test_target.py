@@ -672,7 +672,7 @@ def test_the_url_modules_still_accept_the_valid_path_forms() -> None:
 
 # --- A target without a usable host in the traceroute -----------------------
 
-TRACE_ERROR_MESSAGE = "Invalid target"
+TRACE_ERROR_MESSAGE = "Could not parse host from target"
 
 
 def test_trace_rejects_a_target_without_a_host() -> None:
@@ -682,7 +682,7 @@ def test_trace_rejects_a_target_without_a_host() -> None:
     for target in ("", "   ", "http://", "https://", "/"):
         with pytest.raises(TargetSpecError) as excinfo:
             trace.run_trace(target)
-        assert str(excinfo.value) == TRACE_ERROR_MESSAGE
+        assert TRACE_ERROR_MESSAGE in str(excinfo.value)
 
 
 def test_trace_error_is_still_a_value_error() -> None:

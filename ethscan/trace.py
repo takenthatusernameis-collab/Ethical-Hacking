@@ -91,8 +91,6 @@ def _trace_single(
             an unusable target as a failed probe keep working unchanged.
     """
     host = _normalize_host(target)
-    if not host:
-        raise TargetSpecError("Invalid target")
 
     try:
         dst_ip = socket.gethostbyname(host)

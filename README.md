@@ -209,7 +209,7 @@ $ python -m ethscan trace --target ""
 Usage: python -m ethscan trace [OPTIONS]
 Try 'python -m ethscan trace --help' for help.
 
-Error: Invalid value for '--target': Invalid target
+Error: Invalid value for '--target': Could not parse host from target ''
 ```
 
 The `recon` and `geo` commands run the traceroute as one of their modules,
