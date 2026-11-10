@@ -5601,37 +5601,38 @@ def version(
     try:
         import click as click_module
         click_version = click_module.__version__
-    except Exception:
+    except (ImportError, AttributeError):
         click_version = "unknown"
 
     try:
         import yaml
         yaml_version = yaml.__version__
-    except Exception:
+    except (ImportError, AttributeError):
         yaml_version = "unknown"
 
     try:
         import dns
         dns_version = dns.__version__
-    except Exception:
+    except (ImportError, AttributeError):
         dns_version = "not installed"
 
-    from ethscan.config import find_config_file, config_path_string
+    from ethscan.config import find_config_file
 
     config_path = find_config_file(None)
     cache_path = Path.home() / ".cache" / "ethscan"
 
+    dependencies: dict[str, str] = {
+        "click": click_version,
+        "pyyaml": yaml_version,
+        "dnspython": dns_version,
+    }
     data = {
         "version": __version__,
         "python": sys.version.split()[0],
         "platform": platform.platform(),
         "architecture": platform.machine(),
-        "dependencies": {
-            "click": click_version,
-            "pyyaml": yaml_version,
-            "dnspython": dns_version,
-        },
-        "config_file": config_path_string(config_path) if config_path else "not found",
+        "dependencies": dependencies,
+        "config_file": str(config_path) if config_path else "not found",
         "cache_directory": str(cache_path),
     }
     chosen_format = output_fmt if output_fmt is not None else fmt
@@ -5651,7 +5652,7 @@ def version(
         writer.writerow(["python", data["python"]])
         writer.writerow(["platform", data["platform"]])
         writer.writerow(["architecture", data["architecture"]])
-        for dep, ver in data["dependencies"].items():
+        for dep, ver in dependencies.items():
             writer.writerow([f"dep.{dep}", ver])
         writer.writerow(["config_file", data["config_file"]])
         writer.writerow(["cache_directory", data["cache_directory"]])
@@ -5661,9 +5662,9 @@ def version(
             f"ethscan {data['version']}",
             f"Python: {data['python']} ({data['platform']}, {data['architecture']})",
             "Dependencies:",
-            f"  click: {data['dependencies']['click']}",
-            f"  pyyaml: {data['dependencies']['pyyaml']}",
-            f"  dnspython: {data['dependencies']['dnspython']}",
+            f"  click: {dependencies['click']}",
+            f"  pyyaml: {dependencies['pyyaml']}",
+            f"  dnspython: {dependencies['dnspython']}",
             f"Config file: {data['config_file']}",
             f"Cache directory: {data['cache_directory']}",
         ]
