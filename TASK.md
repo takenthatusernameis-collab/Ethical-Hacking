@@ -274,3 +274,20 @@ Date: Sun Nov 08 2026 (session 7)
 - None.
 ## Next task
 - None pending. Repository is fully green. If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.
+
+# Session (Tue Nov 10 2026, session 61)
+## This session
+- No prior agent assignment existed; inspected repository state, CLI `--help`, and README command list. Baseline fully green at start: `pytest -q` → 5965 passed, 50 skipped, 0 failed; `mypy ethscan/ tests/` → clean (187 source files); `ruff check ethscan/ tests/` → all checks passed.
+- Verified empty-target CLI behavior empirically: `tls`, `ssl`, `web`, `fuzz`, `s3`, `trace --target ""` all exit 2 with `Error: Invalid value for '--target': Could not parse host from target ...`. `mysql`/`mongodb`/`mssql` exit 2 (session 39/43); `oracle`/`postgresql` keep the in-band exit-0 contract.
+- Found README drift: the "protocol commands" empty-target rejection list (README.md lines 149-151) named only `redis`, `memcached`, `ntp`, `snmp`, `ftp`, `ldap`, `netbios`, `smb`, `smtp`, `service`, `dnssec`, omitting `ssl`, `tls`, `web`, `fuzz` which also reject unusable targets as usage errors. `trace` and `s3` are covered in their own paragraphs; `mysql`/`mongodb`/`mssql` and `oracle`/`postgresql` are covered elsewhere.
+- Fixed `README.md` (1 spot): added `ssl`, `tls`, `web`, `fuzz` to the protocol-commands empty-target rejection list. README-only change; no source or test changes.
+## Verification
+- `git diff --stat` → README.md only (1 insertion, 1 deletion).
+- `python -m pytest -q` → 5965 passed, 50 skipped, 0 failed (baseline unchanged).
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 187 source files.
+- `python -m ruff check ethscan/ tests/` → All checks passed.
+- Empirical re-check: `tls`/`ssl`/`web`/`fuzz`/`s3`/`trace --target ""` → exit 2 usage error; README now matches code.
+## Blockers
+- None.
+## Next task
+- None pending. Repository is fully green. `oracle` and `postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error). If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.
