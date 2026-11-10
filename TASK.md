@@ -103,9 +103,20 @@ Date: Sun Nov 08 2026 (session 7)
 ## Note on repo-wide mypy
 `mypy ethscan/ tests/` reports 710 errors across many other test files (e.g. test_smtp.py, test_dnsbrute.py, test_whois.py); those predate this work and were never part of the per-file typing-hygiene drive. Do not fix them speculatively; reproduce per file first if the next agent takes them on.
 
+# Session (Tue Nov 10 2026, session 41)
+## This session
+- Verified repository state against the HANDOFF_NEXT.md backlog. All bounded tasks are complete:
+  - Typing hygiene drive finished: `python -m mypy ethscan/ tests/` → Success, no issues in 187 source files. The four stale candidates (`test_dnsbrute.py` 47, `test_hash.py` 46, `test_urlcheck.py` 39, `test_whois.py` 37) were reproduced individually and are all 0 errors.
+  - Empty-target normalization complete: every module except `oracle` and `postgresql` raises `TargetSpecError` (CLI exit 2) for empty/whitespace/invalid targets; `oracle`/`postgresql` are intentionally left in-band (exit 0) per their documented contract — not changed.
+- No source or test changes made; verification-only session.
+## Verification
+- `python -m pytest -q` → 5957 passed, 50 skipped, 0 failed.
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 187 source files.
+- `python -m ruff check ethscan/ tests/` → All checks passed.
+## Blockers
+- None.
 ## Next task
-- None pending from the current typing-hygiene drive.
-- If continuing: pick one remaining test file with mypy errors, reproduce with `python -m mypy tests/<file>` first, then fix per file using the established pattern (do not speculate or weaken safety controls). Suggested candidates by error count: `test_dnsbrute.py` (47), `test_hash.py` (46), `test_urlcheck.py` (39), `test_whois.py` (37).
+- None pending. Repository is fully green. If future work is needed, pick a single high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls. `oracle` and `postgresql` empty-target handling is explicitly out of scope unless a task asks to change it.
 
 # Session (Mon Nov 09 2026, session 16)
 ## This session
