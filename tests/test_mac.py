@@ -60,6 +60,15 @@ def test_normalize_target_ipv6_url() -> None:
     assert _normalize_target("http://[fd00::1]:8443/path") == "fd00::1"
 
 
+def test_normalize_target_rejects_empty_target() -> None:
+    with pytest.raises(Exception, match="Could not parse host from target"):
+        _normalize_target("")
+    with pytest.raises(Exception, match="Could not parse host from target"):
+        _normalize_target("   ")
+    with pytest.raises(Exception, match="Could not parse host from target"):
+        _normalize_target("https://")
+
+
 # ---------------------------------------------------------------------------
 # Host resolution
 # ---------------------------------------------------------------------------

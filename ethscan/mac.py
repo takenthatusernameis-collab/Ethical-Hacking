@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from ethscan.fileio import load_json
-from ethscan.target import parse_url
+from ethscan.target import TargetSpecError, parse_url
 
 DEFAULT_API_URL = "https://api.macvendors.com/"
 DEFAULT_TIMEOUT = 5.0
@@ -39,6 +39,8 @@ def _normalize_target(target: str) -> str:
         normalized = (parsed.hostname or parsed.netloc or "").lower()
     # Strip any surrounding whitespace again after URL parsing
     normalized = normalized.strip()
+    if not normalized:
+        raise TargetSpecError(f"Could not parse host from target {target!r}")
     return normalized
 
 

@@ -13677,6 +13677,13 @@ def test_mac_hostname_unresolvable_json(monkeypatch) -> None:
     assert "mac" in result.output
 
 
+def test_mac_invalid_target_is_usage_error() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["mac", "--target", ""])
+    assert result.exit_code == 2
+    assert "Could not parse host from target" in result.output
+
+
 def test_mac_out_option_json(tmp_path, monkeypatch) -> None:
     def mock_run_mac(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
         return {
