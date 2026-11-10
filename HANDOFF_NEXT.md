@@ -1,24 +1,22 @@
 # Handoff
-Date: Tue Nov 10 2026 (session 42)
+Date: Tue Nov 10 2026 (session 43)
 
 ## This session
-- Inspected the repository and verified the baseline: `pytest -q` → 5957 passed, 50 skipped, 0 failed; `mypy ethscan/ tests/` → clean (187 source files); `ruff check ethscan/ tests/` → **2 errors found** (contrary to the prior handoff's claim that ruff passed).
-- Both ruff errors were a blind `except Exception: pass` on `exc.close()` at `ethscan/s3.py:312`, triggering `S110` (try-except-pass) and `BLE001` (do not catch blind exception).
-- Fixed `ethscan/s3.py:312`: changed `except Exception:` → `except Exception:  # noqa: BLE001, S110 - closing an HTTPError response must not abort the probe`, following the established codebase convention used 50+ times (e.g. ssh.py:129, resolve.py:247, subtake.py:20) for "this must not abort the probe" swallow-catch sites. Purely a noqa comment addition; no runtime behavior change.
-- `ethscan/s3.py` already had `except Exception as exc:  # noqa: BLE001 - urlopen can raise any failure` at line 323 for the outer catch, consistent with this fix.
+- No prior agent assignment; inspected the repository and selected a bounded doc-accuracy task. Baseline was fully green at start: `pytest -q` → 5959 passed, 50 skipped, 0 failed; `mypy ethscan/ tests/` → clean (187 source files); `ruff check ethscan/ tests/` → all checks passed.
+- Verified empty-target CLI behavior empirically: `mysql`/`mongodb`/`mssql --target ""` → exit 2 `Error: Invalid value for '--target': Could not parse host from target ''`; `oracle`/`postgresql --target ""` → exit 0 with in-band `{"host": null, ..., "error": ...}`. Code matches: `ethscan/mssql.py:528` and `ethscan/mongodb.py:258` re-raise `TargetSpecError`; `ethscan/oracle.py:371` and `ethscan/postgresql.py:309` swallow it into an in-band error dict. Tests match: `tests/test_target.py:59-61` `PROBE_FAILURE_MODULES = ("oracle", "postgresql")`; `tests/test_cli.py` has `test_mysql_invalid_target_is_usage_error` / `test_mongodb_invalid_target_is_usage_error`.
+- Found README drift: README documented all five (`mysql`, `mongodb`, `oracle`, `postgresql`, `mssql`) as exit-0/in-band, but `mysql`/`mongodb`/`mssql` now exit 2. Only `oracle`/`postgresql` keep the in-band contract.
+- Fixed `README.md` (2 spots): `mysql`, `mongodb` and `mssql` reject an unusable target as a usage error (exit 2); `oracle` and `postgresql` keep the "the probe failed" contract (exit 0). README-only change; no source or test changes.
 
 ## Verification
-- `python -m ruff check ethscan/ tests/` → All checks passed (2 errors resolved).
-- `python -m mypy ethscan/s3.py` → Success: no issues found.
-- `python -m mypy ethscan/ tests/` → Success: no issues found in 187 source files.
-- `python -m pytest tests/test_s3.py tests/test_cli.py -q -k s3` → 89 passed.
-- `python -m pytest -q` (full suite) → 5957 passed, 50 skipped, 0 failed (baseline unchanged).
+- `git diff --stat` → README.md only (7 insertions, 6 deletions).
+- README now consistent with `ethscan/mssql.py`, `ethscan/mongodb.py`, `ethscan/oracle.py`, `ethscan/postgresql.py`, `tests/test_target.py`, `tests/test_cli.py`.
+- Baseline unchanged (no source/test changes): pytest/mypy/ruff previously all green.
 
 ## Blockers
 - None.
 
 ## Approaches already tried / ruled out
-- Narrowing the `except Exception` type was considered but rejected: `exc.close()` can surface heterogeneous transport/stream failures and the codebase convention for "swallow close/transport failures so one probe cannot abort the command" is the targeted `# noqa: BLE001, S110` comment, which preserves behavior exactly.
+- N/A (doc-only change; no alternatives considered).
 
 ## Next task
-- Repository is fully green (pytest/mypy/ruff). No pending backlog tasks. `oracle` and `postgresql` empty-target handling remains intentionally out of scope (in-band error, exit 0 per documented contract). If future work is needed, pick a single high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.
+- None pending. Repository is fully green. `oracle` and `postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error). If future work is needed, pick a single high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.

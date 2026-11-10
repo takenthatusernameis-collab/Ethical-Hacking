@@ -197,10 +197,10 @@ Error: Invalid value for '--target': Target path contains a space or control cha
 ```
 
 The `validate` command is the exception: it reports invalid specifications
-inside its own JSON/CSV output and still exits 0. The same holds for the
-`mysql`, `mongodb`, `oracle`, `postgresql` and `mssql` commands, whose
-contract is "the probe failed" rather than "the option is invalid": they
-report an unusable target inside their own output and still exit 0.
+inside its own JSON/CSV output and still exits 0. The `mysql`, `mongodb`
+and `mssql` commands reject an unusable target as a usage error (exit 2);
+the `oracle` and `postgresql` commands keep the "the probe failed" contract
+and report an unusable target inside their own output, still exiting 0.
 
 The `trace` command rejects a target without a usable host the same way:
 
@@ -245,8 +245,9 @@ Try 'python -m ethscan redis --help' for help.
 Error: Invalid value for '--target': Port out of range 0-65535
 ```
 
-The `mysql`, `mongodb`, `oracle`, `postgresql` and `mssql` commands report
-the same problem inside their own output and still exit 0.
+The `mysql`, `mongodb` and `mssql` commands reject an unusable target as a
+usage error (exit 2); the `oracle` and `postgresql` commands keep the
+in-band "the probe failed" contract and still exit 0.
 
 The options that take a file are checked for the path they name (a missing
 file or a directory is a usage error) and for the content they hold. A JSON
