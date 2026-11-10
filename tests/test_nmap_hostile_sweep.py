@@ -6,6 +6,7 @@ import json
 from typing import Any, cast
 
 from ethscan.nmap import (
+    NmapResult,
     format_nmap_report_csv,
     format_nmap_report_json,
     format_nmap_report_markdown,
@@ -17,9 +18,9 @@ HOSTILE_TOP_LEVEL: tuple[object, ...] = (None, [], "x", 123, 1.5, True, b"bytes"
 def test_nmap_formatters_never_raise_on_hostile_top_level() -> None:
     for bad in HOSTILE_TOP_LEVEL:
         bad_any: Any = bad
-        json.loads(format_nmap_report_json(cast(Any, bad_any)))
-        md = format_nmap_report_markdown(cast(Any, bad_any))
-        csv_text = format_nmap_report_csv(cast(Any, bad_any))
+        json.loads(format_nmap_report_json(cast(NmapResult, bad_any)))
+        md = format_nmap_report_markdown(cast(NmapResult, bad_any))
+        csv_text = format_nmap_report_csv(cast(NmapResult, bad_any))
         assert isinstance(md, str)
         assert isinstance(csv_text, str)
         assert "ethscan Nmap Vulnerability Report" in md
@@ -34,9 +35,9 @@ def test_nmap_formatters_hostile_nested_shapes_never_raise() -> None:
         {"severity_counts": {123: "x"}, "notes": [None, {"k": "v"}]},
     ]
     for data in cases:
-        json.loads(format_nmap_report_json(data))
-        md = format_nmap_report_markdown(data)
-        csv_text = format_nmap_report_csv(data)
+        json.loads(format_nmap_report_json(cast(NmapResult, data)))
+        md = format_nmap_report_markdown(cast(NmapResult, data))
+        csv_text = format_nmap_report_csv(cast(NmapResult, data))
         assert isinstance(md, str)
         assert isinstance(csv_text, str)
         assert "ethscan Nmap Vulnerability Report" in md

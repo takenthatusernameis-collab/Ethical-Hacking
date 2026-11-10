@@ -9,6 +9,7 @@ import csv
 import io
 import json
 import xml.etree.ElementTree as ET
+from typing import TypedDict, cast
 
 from ethscan.fileio import read_text
 from ethscan.vuln import (
@@ -22,6 +23,81 @@ class NmapParseError(ValueError):
     """Raised when the Nmap XML file cannot be parsed."""
 
 
+class NmapPort(TypedDict):
+    """Parsed port information from Nmap XML."""
+
+    port: int
+    protocol: str
+    state: str
+    reason: str
+    service_name: str
+    product: str
+    version: str
+    extrainfo: str
+    ostype: str
+    method: str
+    conf: str
+    banner: str
+
+
+class NmapHost(TypedDict):
+    """Parsed host information from Nmap XML."""
+
+    address: str
+    address_type: str
+    hostnames: list[str]
+    status: str
+    ports: list[NmapPort]
+
+
+class NmapServiceEntry(TypedDict):
+    """Service entry in run_nmap results."""
+
+    host: str
+    hostnames: list[str]
+    port: int
+    protocol: str
+    service_name: str | None
+    product: str | None
+    version: str | None
+    extrainfo: str | None
+    ostype: str | None
+    banner: str | None
+
+
+class NmapFinding(TypedDict, total=False):
+    """Vulnerability finding in run_nmap results."""
+
+    id: str
+    kind: str
+    title: str
+    severity: str
+    description: str
+    product: str | None
+    version: str | None
+    port: int | None
+    host: str | None
+    hostnames: list[str] | None
+    state: str | None
+    service_name: str | None
+    score: int | float | None
+
+
+class NmapResult(TypedDict):
+    """Complete result from run_nmap."""
+
+    input_file: str
+    hosts_scanned: int
+    total_ports_scanned: int
+    total_open_ports: int
+    services_detected: int
+    finding_count: int
+    severity_counts: dict[str, int]
+    services: list[NmapServiceEntry]
+    findings: list[NmapFinding]
+    notes: list[str]
+
+
 def _extract_text(element: ET.Element | None, default: str = "") -> str:
     """Safely extract text from an XML element."""
     if element is not None and element.text:
@@ -29,7 +105,7 @@ def _extract_text(element: ET.Element | None, default: str = "") -> str:
     return default
 
 
-def _parse_port(port_elem: ET.Element) -> dict[str, object] | None:
+def _parse_port(port_elem: ET.Element) -> NmapPort | None:
     """Parse a single port element from Nmap XML.
 
     Returns:
@@ -80,23 +156,23 @@ def _parse_port(port_elem: ET.Element) -> dict[str, object] | None:
 
     banner = " ".join(banner_parts).strip()
 
-    return {
-        "port": port_id,
-        "protocol": protocol,
-        "state": state,
-        "reason": reason,
-        "service_name": service_name,
-        "product": product,
-        "version": version,
-        "extrainfo": extrainfo,
-        "ostype": ostype,
-        "method": method,
-        "conf": conf,
-        "banner": banner,
-    }
+    return NmapPort(
+        port=port_id,
+        protocol=protocol,
+        state=state,
+        reason=reason,
+        service_name=service_name,
+        product=product,
+        version=version,
+        extrainfo=extrainfo,
+        ostype=ostype,
+        method=method,
+        conf=conf,
+        banner=banner,
+    )
 
 
-def _parse_host(host_elem: ET.Element) -> dict[str, object]:
+def _parse_host(host_elem: ET.Element) -> NmapHost:
     """Parse a single host element from Nmap XML."""
     address_elem = host_elem.find("address")
     addr = address_elem.get("addr", "") if address_elem is not None else ""
@@ -113,7 +189,7 @@ def _parse_host(host_elem: ET.Element) -> dict[str, object]:
     status_elem = host_elem.find("status")
     status = status_elem.get("state", "unknown") if status_elem is not None else "unknown"
 
-    ports: list[dict[str, object]] = []
+    ports: list[NmapPort] = []
     ports_elem = host_elem.find("ports")
     if ports_elem is not None:
         for port_elem in ports_elem.findall("port"):
@@ -121,16 +197,16 @@ def _parse_host(host_elem: ET.Element) -> dict[str, object]:
             if port is not None:
                 ports.append(port)
 
-    return {
-        "address": addr,
-        "address_type": addr_type,
-        "hostnames": hostnames,
-        "status": status,
-        "ports": ports,
-    }
+    return NmapHost(
+        address=addr,
+        address_type=addr_type,
+        hostnames=hostnames,
+        status=status,
+        ports=ports,
+    )
 
 
-def parse_nmap_xml(xml_content: str) -> list[dict[str, object]]:
+def parse_nmap_xml(xml_content: str) -> list[NmapHost]:
     """Parse Nmap XML content and return a list of host results.
 
     Args:
@@ -147,7 +223,7 @@ def parse_nmap_xml(xml_content: str) -> list[dict[str, object]]:
     except ET.ParseError as exc:
         raise NmapParseError(f"invalid Nmap XML: {exc}") from exc
 
-    hosts: list[dict[str, object]] = []
+    hosts: list[NmapHost] = []
     for host_elem in root.findall("host"):
         hosts.append(_parse_host(host_elem))
 
@@ -156,7 +232,7 @@ def parse_nmap_xml(xml_content: str) -> list[dict[str, object]]:
 
 def run_nmap(
     input_file: str,
-) -> dict[str, object]:
+) -> NmapResult:
     """Parse an Nmap XML file and cross-reference findings with the vulnerability database.
 
     Args:
@@ -172,65 +248,69 @@ def run_nmap(
 
     hosts = parse_nmap_xml(xml_content)
 
-    all_findings: list[dict[str, object]] = []
-    all_services: list[dict[str, object]] = []
+    all_findings: list[NmapFinding] = []
+    all_services: list[NmapServiceEntry] = []
     total_ports_scanned = 0
     total_open_ports = 0
 
-    for host in hosts:  # type: ignore
-        host_dict = host  # type: ignore
-        host_addr = host_dict["address"]
-        hostnames = host_dict.get("hostnames", []) or []
-        ports = host_dict.get("ports", []) or []
+    for host in hosts:
+        host_addr = host["address"]
+        hostnames = host.get("hostnames", []) or []
+        ports = host.get("ports", []) or []
 
-        for port_info in ports:  # type: ignore
-            port_dict = port_info  # type: ignore
+        for port_info in ports:
             total_ports_scanned += 1
-            if port_dict["state"] != "open":
+            if port_info["state"] != "open":
                 continue
 
             total_open_ports += 1
 
-            service_entry = {
+            service_entry: NmapServiceEntry = {
                 "host": host_addr,
                 "hostnames": hostnames,
-                "port": port_dict["port"],
-                "protocol": port_dict["protocol"],
-                "service_name": port_dict.get("service_name"),
-                "product": port_dict.get("product"),
-                "version": port_dict.get("version"),
-                "extrainfo": port_dict.get("extrainfo"),
-                "ostype": port_dict.get("ostype"),
-                "banner": port_dict.get("banner"),
+                "port": port_info["port"],
+                "protocol": port_info["protocol"],
+                "service_name": port_info.get("service_name"),
+                "product": port_info.get("product"),
+                "version": port_info.get("version"),
+                "extrainfo": port_info.get("extrainfo"),
+                "ostype": port_info.get("ostype"),
+                "banner": port_info.get("banner"),
             }
             all_services.append(service_entry)
 
             # Try to match against vulnerability database using product/version
-            product = port_dict.get("product")
-            version = port_dict.get("version")
-            port_num = port_dict.get("port")
+            product = port_info.get("product")
+            version = port_info.get("version")
+            port_num = port_info.get("port")
 
             # First try: use product and version directly
-            findings = match_service_vulns(product or "", version or "", port=port_num)  # type: ignore
+            findings: list[NmapFinding] = cast(
+                list[NmapFinding],
+                match_service_vulns(product or "", version or "", port=port_num),
+            )
 
             # Second try: if no findings, try parsing the banner for product/version
-            if not findings and port_dict.get("banner"):
-                parsed_product, parsed_version = parse_banner(port_dict.get("banner") or "")
-                findings = match_service_vulns(parsed_product, parsed_version, port=port_num)  # type: ignore
+            if not findings and port_info.get("banner"):
+                parsed_product, parsed_version = parse_banner(port_info.get("banner") or "")
+                findings = cast(
+                    list[NmapFinding],
+                    match_service_vulns(parsed_product, parsed_version, port=port_num),
+                )
 
             # Add host context to findings
-            for finding in findings:  # type: ignore
-                finding["host"] = host_addr  # type: ignore
-                finding["service_name"] = port_dict.get("service_name")  # type: ignore
-                finding["state"] = port_dict.get("state")  # type: ignore
+            for finding in findings:
+                finding["host"] = host_addr
+                finding["service_name"] = port_info.get("service_name")
+                finding["state"] = port_info.get("state")
                 if hostnames:
-                    finding["hostnames"] = hostnames  # type: ignore
+                    finding["hostnames"] = hostnames
 
-            all_findings.extend(findings)  # type: ignore
+            all_findings.extend(findings)
 
     # Count by severity
     severity_counts: dict[str, int] = {name: 0 for name in SEVERITIES}
-    for finding in all_findings:  # type: ignore
+    for finding in all_findings:
         level = str((finding or {}).get("severity", "")).lower()
         if level in severity_counts:
             severity_counts[level] += 1
@@ -242,22 +322,24 @@ def run_nmap(
     if not all_findings:
         notes.append("No known vulnerabilities matched")
 
-    return {
-        "input_file": input_file,
-        "hosts_scanned": len(hosts),  # type: ignore
-        "total_ports_scanned": total_ports_scanned,
-        "total_open_ports": total_open_ports,
-        "services_detected": len(all_services),
-        "finding_count": len(all_findings),
-        "severity_counts": severity_counts,
-        "services": all_services,
-        "findings": all_findings,
-        "notes": notes,
-    }
+    return NmapResult(
+        input_file=input_file,
+        hosts_scanned=len(hosts),
+        total_ports_scanned=total_ports_scanned,
+        total_open_ports=total_open_ports,
+        services_detected=len(all_services),
+        finding_count=len(all_findings),
+        severity_counts=severity_counts,
+        services=all_services,
+        findings=all_findings,
+        notes=notes,
+    )
 
 
-def format_nmap_report_json(data: dict[str, object]) -> str:
+def format_nmap_report_json(data: NmapResult) -> str:
     """Format Nmap parser results as JSON."""
+    if not isinstance(data, dict):
+        return "{}"
     return json.dumps(data, indent=2, default=str)
 
 
@@ -266,7 +348,7 @@ def _escape(value: str) -> str:
     return value.replace("|", "\\|")
 
 
-def _finding_detail(finding: dict[str, object]) -> str:
+def _finding_detail(finding: NmapFinding) -> str:
     """Render the per-finding details line for Markdown output."""
     kind = str(finding.get("kind", ""))
     if kind == "service":
@@ -295,7 +377,7 @@ def _finding_detail(finding: dict[str, object]) -> str:
     return ""
 
 
-def format_nmap_report_markdown(data: dict[str, object]) -> str:
+def format_nmap_report_markdown(data: NmapResult) -> str:
     """Format Nmap parser results as Markdown."""
     if not isinstance(data, dict):
         data = {}
@@ -316,7 +398,7 @@ def format_nmap_report_markdown(data: dict[str, object]) -> str:
     lines.append("")
 
     services_raw = data.get("services") or []
-    services: list[dict[str, object]] = list(services_raw) if isinstance(services_raw, (list, tuple)) else []
+    services: list[NmapServiceEntry] = list(services_raw) if isinstance(services_raw, (list, tuple)) else []
     if services:
         lines.append("## Detected Services")
         lines.append("| Host | Hostnames | Port | Protocol | Service | Product | Version |")
@@ -336,7 +418,7 @@ def format_nmap_report_markdown(data: dict[str, object]) -> str:
         lines.append("")
 
     findings_raw = data.get("findings") or []
-    findings: list[dict[str, object]] = list(findings_raw) if isinstance(findings_raw, (list, tuple)) else []
+    findings: list[NmapFinding] = list(findings_raw) if isinstance(findings_raw, (list, tuple)) else []
     lines.append("## Vulnerability Findings")
     if findings:
         for finding in findings:
@@ -368,7 +450,7 @@ def format_nmap_report_markdown(data: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_nmap_report_csv(data: dict[str, object]) -> str:
+def format_nmap_report_csv(data: NmapResult) -> str:
     """Format Nmap parser results as CSV.
 
     Produces a header row followed by one row per matched CVE finding with
@@ -395,7 +477,7 @@ def format_nmap_report_csv(data: dict[str, object]) -> str:
     if not isinstance(data, dict):
         return output.getvalue().rstrip("\r\n")
     findings_raw = data.get("findings") or []
-    findings: list[object] = list(findings_raw) if isinstance(findings_raw, (list, tuple)) else []
+    findings: list[NmapFinding] = list(findings_raw) if isinstance(findings_raw, (list, tuple)) else []
     for finding in findings:
         if not isinstance(finding, dict):
             continue
