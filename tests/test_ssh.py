@@ -881,6 +881,7 @@ def test_run_ssh_paramiko_weak_host_key(monkeypatch) -> None:
 
     result = run_ssh("example.com", port=22, timeout=1.0)
     assert result["paramiko_available"] is True
+    assert result["host_key"] is not None
     assert result["host_key"]["key_type"] == "ssh-rsa"
     assert any(
         f["type"] == "weak_host_key" and f["algorithm"] == "ssh-rsa"
@@ -907,6 +908,7 @@ def test_run_ssh_paramiko_strong_host_key(monkeypatch) -> None:
     )
 
     result = run_ssh("example.com", port=22, timeout=1.0)
+    assert result["host_key"] is not None
     assert result["host_key"]["key_type"] == "ssh-ed25519"
     # Strong host key type must not add a weak_host_key finding.
     assert not any(f["type"] == "weak_host_key" for f in result["findings"])

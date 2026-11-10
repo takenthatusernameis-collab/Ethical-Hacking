@@ -34,7 +34,7 @@ def test_ssh_formatters_never_raise_on_hostile_top_level() -> None:
 
 
 def test_ssh_formatters_hostile_nested_shapes_never_raise() -> None:
-    cases = [
+    cases: list[dict[str, object]] = [
         {"target": "x", "host": "x", "port": 1, "timeout": 1.0, "error": "boom"},
         {"target": "x", "host": "x", "port": 1, "error": ""},
         {"target": "x", "host": "x", "port": 1, "host_key": "x", "findings": "x"},

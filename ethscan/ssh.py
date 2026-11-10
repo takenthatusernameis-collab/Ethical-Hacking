@@ -7,7 +7,8 @@ import io
 import json
 import socket
 import struct
-from typing import Any, TypedDict
+from collections.abc import Mapping
+from typing import Any, TypedDict, cast
 
 from ethscan.target import parse_url, url_port, normalize_host
 
@@ -525,7 +526,7 @@ def run_ssh(
 
         # Flag out-of-support SSH server versions (e.g. old OpenSSH).
         for finding in _assess_ssh_banner(banner):
-            result["findings"].append(finding)
+            result["findings"].append(cast(SshFinding, finding))
 
         _send_kexinit(sock)
         response = _read_packet(sock)
@@ -578,7 +579,7 @@ def run_ssh(
         if PARAMIKO_AVAILABLE:
             host_key_info = _get_host_key_info_paramiko(host, resolved_port, timeout)
             if host_key_info:
-                result["host_key"] = host_key_info
+                result["host_key"] = cast(SshHostKey, host_key_info)
                 if host_key_info["key_type"] in WEAK_HOST_KEY_TYPES:
                     result["findings"].append(
                         {
@@ -609,16 +610,16 @@ def run_ssh(
     return result
 
 
-def format_ssh_report_json(data: SshResult) -> str:
+def format_ssh_report_json(data: Mapping[str, object]) -> str:
     """Format SSH assessment results as JSON."""
-    if not isinstance(data, dict):
+    if not isinstance(data, Mapping):
         return "{}"
     return json.dumps(data, indent=2, default=str)
 
 
-def format_ssh_report_markdown(data: SshResult) -> str:
+def format_ssh_report_markdown(data: Mapping[str, object]) -> str:
     """Format SSH assessment results as Markdown."""
-    if not isinstance(data, dict):
+    if not isinstance(data, Mapping):
         data = {}
     lines = ["# ethscan SSH Security Assessment Report", ""]
     lines.append(f"- **Target:** {data.get('target', '')}")
@@ -637,7 +638,7 @@ def format_ssh_report_markdown(data: SshResult) -> str:
         lines.append(f"- **Server Banner:** `{data.get('banner')}`")
         lines.append("")
 
-    def render_algo_section(title: str, algo_data: dict[str, list[str]]) -> None:
+    def render_algo_section(title: str, algo_data: Mapping[str, list[str]]) -> None:
         lines.append(f"## {title}")
         if not isinstance(algo_data, dict):
             algo_data = {}
@@ -657,10 +658,10 @@ def format_ssh_report_markdown(data: SshResult) -> str:
             lines.append("*No algorithms reported*")
         lines.append("")
 
-    render_algo_section("Key Exchange Algorithms", data.get("kex_algorithms") or {})
-    render_algo_section("Host Key Algorithms", data.get("host_key_algorithms") or {})
-    render_algo_section("Encryption Algorithms", data.get("encryption_algorithms") or {})
-    render_algo_section("MAC Algorithms", data.get("mac_algorithms") or {})
+    render_algo_section("Key Exchange Algorithms", cast(Mapping[str, list[str]], data.get("kex_algorithms") or {}))
+    render_algo_section("Host Key Algorithms", cast(Mapping[str, list[str]], data.get("host_key_algorithms") or {}))
+    render_algo_section("Encryption Algorithms", cast(Mapping[str, list[str]], data.get("encryption_algorithms") or {}))
+    render_algo_section("MAC Algorithms", cast(Mapping[str, list[str]], data.get("mac_algorithms") or {}))
 
     host_key = data.get("host_key")
     if isinstance(host_key, dict) and host_key:
@@ -689,9 +690,9 @@ def format_ssh_report_markdown(data: SshResult) -> str:
         lines.append("")
 
     return "\n".join(lines)
-def format_ssh_report_csv(data: SshResult) -> str:
+def format_ssh_report_csv(data: Mapping[str, object]) -> str:
     """Format SSH security assessment results as CSV."""
-    if not isinstance(data, dict):
+    if not isinstance(data, Mapping):
         data = {}
     output = io.StringIO()
     writer = csv.writer(output)
