@@ -307,6 +307,10 @@ def check_bucket_public(
             result["exists"] = False
             result["public"] = False
             result["error"] = "Invalid bucket name or request"
+        try:
+            exc.close()
+        except Exception:
+            pass
     except (urllib.error.URLError, socket.timeout, OSError) as exc:
         result["error"] = str(exc) or exc.__class__.__name__
     except http.client.HTTPException as exc:

@@ -235,7 +235,9 @@ def test_check_bucket_public_403(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.s3._resolve_s3_endpoint", _mock_dns("1.2.3.4"))
 
     def _raise(req, timeout=None):
-        raise urllib.error.HTTPError("https://x", 403, "Forbidden", {}, None)
+        err = urllib.error.HTTPError("https://x", 403, "Forbidden", {}, None)
+        err.close()
+        raise err
 
     monkeypatch.setattr("ethscan.s3.urllib.request.urlopen", _raise)
     result = check_bucket_public("mybucket", "us-east-1", 1.0)
@@ -248,7 +250,9 @@ def test_check_bucket_public_404(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.s3._resolve_s3_endpoint", _mock_dns("1.2.3.4"))
 
     def _raise(req, timeout=None):
-        raise urllib.error.HTTPError("https://x", 404, "Not Found", {}, None)
+        err = urllib.error.HTTPError("https://x", 404, "Not Found", {}, None)
+        err.close()
+        raise err
 
     monkeypatch.setattr("ethscan.s3.urllib.request.urlopen", _raise)
     result = check_bucket_public("mybucket", "us-east-1", 1.0)
@@ -261,7 +265,9 @@ def test_check_bucket_public_400(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.s3._resolve_s3_endpoint", _mock_dns("1.2.3.4"))
 
     def _raise(req, timeout=None):
-        raise urllib.error.HTTPError("https://x", 400, "Bad Request", {}, None)
+        err = urllib.error.HTTPError("https://x", 400, "Bad Request", {}, None)
+        err.close()
+        raise err
 
     monkeypatch.setattr("ethscan.s3.urllib.request.urlopen", _raise)
     result = check_bucket_public("mybucket", "us-east-1", 1.0)
