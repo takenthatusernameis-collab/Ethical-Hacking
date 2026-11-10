@@ -718,7 +718,10 @@ def _validate_enum_target(target: str) -> None:
     normalized = target.strip()
     if "://" not in normalized:
         normalized = "https://" + normalized
-    normalize_host(normalized)
+    try:
+        normalize_host(normalized)
+    except TargetSpecError as exc:
+        raise TargetSpecError(f"Could not parse host from target {target!r}") from exc
 
 
 def _validate_s3_region(value: str | None) -> str | None:
