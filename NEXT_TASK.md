@@ -1,29 +1,25 @@
 # Next Task
 
-## Status: OPEN
+## Status: CLOSED
 
-Baseline is fully green: `mypy ethscan/` 0 issues (59 files), `ruff check ethscan/ tests/` clean, full `python -m pytest -q` → 5951 passed, 50 skipped, 0 failed.
+Baseline is fully green: `mypy ethscan/` 0 issues (59 files), `mypy tests/` 0 issues (128 files), `ruff check ethscan/ tests/` clean, full `python -m pytest -q` → 5953 passed, 50 skipped, 0 failed.
 
 ## Scope
-Fix the empty-host bug in the remaining `_normalize_host` modules, one at a time, following the established pattern (`ping`/`osdetect`/`vuln`/`ssh`/`brute`/`cve`/`tls`):
-- Add `TargetSpecError` import from `ethscan.target`.
-- Add `if not host: raise TargetSpecError(f"Could not parse host from target {target!r}")` after computing `host` in `_normalize_host`.
-- Add a CLI test `test_<module>_invalid_target_is_usage_error` in `tests/test_cli.py` (exit code 2 + "Could not parse host from target") and a unit test `test_normalize_host_rejects_empty_target` in the module's test file.
+COMPLETED — Fixed the empty-host bug in the final remaining `_normalize_host` module (`ssl`), following the established pattern (ping/osdetect/vuln/ssh/brute/cve/tls/ssl). All eight modules now reject empty/whitespace/invalid targets with `TargetSpecError` (CLI exit 2).
 
-Modules remaining: `ssl`.
+## What was done this session
+- `ethscan/ssl.py`: imported `TargetSpecError`; added `host = ...` + `if not host: raise TargetSpecError(f"Could not parse host from target {target!r}")` in `_normalize_host`.
+- `tests/test_ssl.py`: added `test_normalize_host_rejects_empty_target` (empty/whitespace/`https://`).
+- `tests/test_cli.py`: added `test_ssl_invalid_target_is_usage_error` (exit code 2 + "Could not parse host from target").
 
-Do not:
-- Introduce parallel execution, redesign orchestration, or weaken permissions/safety controls.
-- Make speculative refactors or "cleanup" without a demonstrated problem.
-- Touch unrelated files.
-
-## Verification (required)
-1. Reproduce the issue/gap with a concrete command before changing (e.g. `python -m ethscan ssl --target ""` exits 0 instead of 2).
-2. `python -m mypy ethscan/` → 0 issues.
-3. `python -m mypy tests/` → 0 errors.
-4. `python -m ruff check ethscan/ tests/` → clean.
-5. Targeted `python -m pytest <touched-test-files> -q` → pass.
-6. `python -m pytest -q` → baseline passes (report exact counts).
+## Verification
+1. Reproduced before fix: `python -m ethscan ssl --target ""` → exit 0, `"host": ""`.
+2. After fix: `--target ""`, `"   "`, `"https://"` all → exit 2, `Error: Invalid value for '--target': Could not parse host from target ...`.
+3. `python -m mypy ethscan/` → 0 issues in 59 files.
+4. `python -m mypy tests/` → 0 issues in 128 files.
+5. `python -m ruff check ethscan/ tests/` → All checks passed.
+6. Targeted `python -m pytest tests/test_ssl.py tests/test_cli.py -q -k "ssl or normalize_host or invalid_target"` → 80 passed, 1045 deselected.
+7. Full `python -m pytest -q` → 5953 passed, 50 skipped, 0 failed (baseline 5951; +2 new tests).
 
 ## Handoff
 Update `HANDOFF_NEXT.md` and this file with: what changed, reproduction/evidence, exact verification counts, what remains unresolved (if any), and one precise next task.

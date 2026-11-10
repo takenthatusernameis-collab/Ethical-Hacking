@@ -5941,6 +5941,17 @@ def test_tls_invalid_target_is_usage_error() -> None:
         assert "Could not parse host from target" in result.output
 
 
+def test_ssl_invalid_target_is_usage_error() -> None:
+    """An empty or whitespace SSL target is rejected as a usage error."""
+    runner = CliRunner()
+
+    for bad in ("", "   ", "https://"):
+        result = runner.invoke(cli, ["ssl", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
 def test_vuln_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["vuln", "--help"])

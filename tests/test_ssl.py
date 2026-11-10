@@ -323,6 +323,16 @@ def test_normalize_host_whitespace() -> None:
     assert _normalize_host("  example.com  ") == "example.com"
 
 
+def test_normalize_host_rejects_empty_target() -> None:
+    import pytest
+
+    from ethscan.target import TargetSpecError
+
+    for bad in ("", "   ", "https://"):
+        with pytest.raises(TargetSpecError, match="Could not parse host from target"):
+            _normalize_host(bad)
+
+
 def test_rdn_to_str_empty() -> None:
     assert _rdn_to_str({}) == ""
 
