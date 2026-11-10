@@ -7,7 +7,7 @@ import io
 import json
 import socket
 import struct
-from typing import Any
+from typing import Any, TypedDict
 
 from ethscan.target import parse_url, url_port, normalize_host
 
@@ -16,6 +16,49 @@ try:
     PARAMIKO_AVAILABLE = True
 except ImportError:
     PARAMIKO_AVAILABLE = False
+
+
+class SshAlgorithms(TypedDict):
+    """Algorithm analysis result for a category."""
+
+    supported: list[str]
+    weak: list[str]
+    strong: list[str]
+
+
+class SshHostKey(TypedDict, total=False):
+    """Host key information."""
+
+    fingerprint: str
+    key_type: str
+    key_bits: int | None
+
+
+class SshFinding(TypedDict):
+    """Security finding in SSH assessment."""
+
+    type: str
+    algorithm: str
+    severity: str
+    description: str
+
+
+class SshResult(TypedDict):
+    """Complete result from run_ssh."""
+
+    target: str
+    host: str
+    port: int
+    timeout: float
+    banner: str | None
+    paramiko_available: bool
+    kex_algorithms: SshAlgorithms
+    host_key_algorithms: SshAlgorithms
+    encryption_algorithms: SshAlgorithms
+    mac_algorithms: SshAlgorithms
+    host_key: SshHostKey | None
+    findings: list[SshFinding]
+    error: str | None
 
 DEFAULT_PORT = 22
 DEFAULT_TIMEOUT = 10.0
@@ -438,7 +481,7 @@ def run_ssh(
     port: int | None = None,
     timeout: float = DEFAULT_TIMEOUT,
     connector=None,
-) -> dict[str, Any]:
+) -> SshResult:
     """Run SSH security assessment against a target.
 
     Args:
@@ -454,7 +497,7 @@ def run_ssh(
     host = _normalize_host(target)
     resolved_port = port if port is not None else _extract_port(target)
 
-    result: dict[str, Any] = {
+    result: SshResult = {
         "target": target,
         "host": host,
         "port": resolved_port,
@@ -566,12 +609,14 @@ def run_ssh(
     return result
 
 
-def format_ssh_report_json(data: dict[str, Any]) -> str:
+def format_ssh_report_json(data: SshResult) -> str:
     """Format SSH assessment results as JSON."""
+    if not isinstance(data, dict):
+        return "{}"
     return json.dumps(data, indent=2, default=str)
 
 
-def format_ssh_report_markdown(data: dict[str, Any]) -> str:
+def format_ssh_report_markdown(data: SshResult) -> str:
     """Format SSH assessment results as Markdown."""
     if not isinstance(data, dict):
         data = {}
@@ -644,7 +689,7 @@ def format_ssh_report_markdown(data: dict[str, Any]) -> str:
         lines.append("")
 
     return "\n".join(lines)
-def format_ssh_report_csv(data: dict[str, object]) -> str:
+def format_ssh_report_csv(data: SshResult) -> str:
     """Format SSH security assessment results as CSV."""
     if not isinstance(data, dict):
         data = {}
