@@ -4,7 +4,7 @@
 - None pending. Repository is fully green.
 
 ## Evidence
-- Baseline (this session): started green on tests (5961 passed, 50 skipped), ruff clean, mypy clean (187 source files).
+- Baseline (this session): `pytest -q` → 5965 passed, 50 skipped, 0 failed; `mypy ethscan/ tests/` → Success (187 source files); `ruff check ethscan/ tests/` → All checks passed. Working tree clean (`git status`).
 - Fixed `ethscan/stale.py`: narrowed blind `except Exception` handlers (BLE001) to specific exception types:
   - Resolver functions (`resolve_a_records`, `resolve_aaaa_records`, `resolve_cname`): `except (OSError, ValueError)` — covers `socket.gaierror`, `socket.timeout`, `UnicodeEncodeError`.
   - `check_tcp_connect`: `except (OSError, ValueError, OverflowError)` — covers socket errors and port overflow.
