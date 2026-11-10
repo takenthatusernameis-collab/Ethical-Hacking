@@ -215,10 +215,20 @@ Error: Invalid value for '--target': Could not parse host from target ''
 The `recon` and `geo` commands run the traceroute as one of their modules,
 so they report the same problem in their own output and still exit 0.
 
-The `s3` command reports an unusable target inside its own output, because
-its contract is "the probe failed". A candidate that cannot be an S3 bucket
-name is reported as a failed probe instead of being requested, and a probe
-that fails never aborts the report of the other candidates:
+The `s3` command rejects a target without a usable host as a usage error
+(exit 2), the same way as the other target-taking commands:
+
+```console
+$ python -m ethscan s3 --target ""
+Usage: python -m ethscan s3 [OPTIONS]
+Try 'python -m ethscan s3 --help' for help.
+
+Error: Invalid value for '--target': Could not parse host from target ''
+```
+
+A valid host whose name cannot be an S3 bucket is still reported as a failed
+probe inside its own output (the probe fails, not the target parsing); other
+candidates are unaffected:
 
 ```console
 $ python -m ethscan s3 --target "[::1]:443"

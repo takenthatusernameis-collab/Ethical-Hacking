@@ -9,7 +9,7 @@ None pending. Repository is fully green:
 ## Scope
 The typing-hygiene drive and the empty-target normalization drive are both complete.
 - `oracle` and `postgresql` are intentionally left unchanged (in-band error, exit 0) per their documented contract — do not change unless a task explicitly asks.
-- Last session aligned `README.md` with the actual contract: `mysql`, `mongodb` and `mssql` now reject an unusable target as a usage error (exit 2); `oracle` and `postgresql` keep the in-band "probe failed" contract (exit 0).
+- Last session aligned `README.md` with the actual contract: `s3` now documented as rejecting a target without a usable host as a usage error (exit 2), matching `mysql`, `mongodb`, `mssql`; `oracle` and `postgresql` keep the in-band "probe failed" contract (exit 0).
 
 ## Candidates
 None from the existing backlog. If future work is needed, pick a single high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.
