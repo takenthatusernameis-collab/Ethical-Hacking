@@ -24947,6 +24947,50 @@ def test_a_valid_url_target_is_still_accepted() -> None:
     assert "Invalid IPv6 URL" not in result.output, result.output
 
 
+ENUM_TARGET_COMMANDS = (
+    "brute",
+    "cve",
+    "dnsbrute",
+    "fuzz",
+    "osdetect",
+    "report",
+    "s3",
+    "stale",
+    "subdomains",
+    "subtake",
+    "urlcheck",
+    "vuln",
+    "recon",
+)
+
+
+def test_enum_target_command_rejects_empty_and_unparseable_targets() -> None:
+    """Every wordlist-reading command distinguishes an empty target from an
+    unparseable URL: empty targets report ``Could not parse host from target``
+    and unparseable URLs keep ``Invalid IPv6 URL`` (exit code 2 in both cases).
+    """
+    runner = CliRunner()
+    for command in ENUM_TARGET_COMMANDS:
+        result = runner.invoke(cli, [command, "--target", ""])
+        error_lines = [
+            line for line in result.output.splitlines() if line.startswith("Error:")
+        ]
+        assert result.exit_code == 2, f"{command}: {result.output}"
+        assert len(error_lines) == 1, f"{command}: {result.output}"
+        assert error_lines[0] == (
+            "Error: Invalid value for '--target': Could not parse host from target ''"
+        ), f"{command}: {result.output}"
+        result = runner.invoke(cli, [command, "--target", "http://[::1"])
+        error_lines = [
+            line for line in result.output.splitlines() if line.startswith("Error:")
+        ]
+        assert result.exit_code == 2, f"{command}: {result.output}"
+        assert len(error_lines) == 1, f"{command}: {result.output}"
+        assert error_lines[0] == (
+            "Error: Invalid value for '--target': Invalid IPv6 URL"
+        ), f"{command}: {result.output}"
+
+
 # --- An API base URL that urllib refuses ------------------------------------
 #
 # ``urllib.request.Request`` raises a bare ``ValueError`` for a URL whose
