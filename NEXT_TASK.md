@@ -1,21 +1,18 @@
 # Next Task
 
 ## Task
-Normalize empty/invalid target handling for `mongodb` (one module) to match the established CLI usage-error pattern.
+None pending. The empty-target normalization drive is complete: every module that accepts a target now rejects empty/whitespace/invalid hosts with `TargetSpecError` (CLI exit 2), except `oracle` and `postgresql`, which are in `PROBE_FAILURE_MODULES` by design (they treat an unusable target as a failed probe and report it in-band, exit 0 — their contract is left alone).
 
 ## Scope
-- Reproduce: `python -m ethscan mongodb --target ""`, `"   "`, `"https://"` currently exit 0 and emit JSON with `host: null` and `error: "Could not parse host from target ..."` rather than `click.UsageError` (exit 2).
-- Inspect `ethscan/mongodb.py` `_normalize_target`/`run_mongodb` and CLI wiring. If empty-host is detected but swallowed into result data, change to raise `TargetSpecError` so CLI reports `Error: Invalid value for '--target': ...` with exit 2 (consistent with ping/osdetect/vuln/ssh/brute/cve/tls/ssl/s3/fuzz/web/cert/mysql).
-- Add/adjust unit tests (empty/whitespace/URL-without-host rejection) and CLI invalid-target test(s) for `mongodb`. Update only tests that asserted the old buggy in-band behavior, with evidence.
-- Keep valid-target behavior unchanged.
+If future work is needed, pick a single high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.
+
+## Candidates
+- Remaining test files with mypy errors (reproduce per file first): `test_dnsbrute.py` (47), `test_hash.py` (46), `test_urlcheck.py` (39), `test_whois.py` (37).
+- `tests/test_ping.py` carries a pre-existing Python 3.14 `socket.timeout` read-only descriptor blocker (6 runtime failures, 2 typing errors) — fix only typing errors independent of that failure.
 
 ## Verification
-1. Before/after repro for `mongodb --target ""|"   "|"https://"`.
-2. `python -m mypy ethscan/ tests/`
-3. `python -m ruff check ethscan/ tests/`
-4. Targeted pytest for mongodb + CLI mongodb cases, then full `python -m pytest -q`.
+- `python -m pytest -q` → 5957 passed, 50 skipped, 0 failed.
+- `python -m mypy ethscan/ tests/` → clean on changed files.
+- `python -m ruff check ethscan/ tests/` → All checks passed.
 
-## Constraints
-- Smallest reversible change; do not batch mssql/oracle/postgresql in same session unless mongodb fix is trivial and fully verified.
-- Do not weaken validation/safety; preserve existing output schema for valid targets.
-- Record exact counts and any tests changed due to prior buggy expectations in handoff.
+(End of file - total 21 lines)

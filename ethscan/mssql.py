@@ -525,6 +525,8 @@ def run_mssql(
     try:
         host, parsed_port = _normalize_target(target)
     except ValueError as exc:
+        if isinstance(exc, TargetSpecError):
+            raise
         return {
             "target": target,
             "host": None,

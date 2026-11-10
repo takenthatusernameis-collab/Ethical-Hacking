@@ -59,7 +59,6 @@ TARGET_MODULES = (
 PROBE_FAILURE_MODULES = (
     "oracle",
     "postgresql",
-    "mssql",
 )
 
 UNUSABLE_TARGETS = ("", "   ", "://no-host", "redis://", ":6379")

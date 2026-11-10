@@ -22204,6 +22204,17 @@ def test_mssql_probes_pass_through(monkeypatch) -> None:
     assert captured["probes"] == ["prelogin"]
 
 
+def test_mssql_invalid_target_is_usage_error() -> None:
+    """An empty, whitespace, or hostless-URL MSSQL target is rejected as a usage error."""
+    runner = CliRunner()
+
+    for bad in ("", "   ", "https://"):
+        result = runner.invoke(cli, ["mssql", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output, result.output
+        assert "Could not parse host from target" in result.output, result.output
+
+
 def test_oracle_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["oracle", "--help"])
@@ -23234,6 +23245,7 @@ TARGET_USAGE_ERROR_COMMANDS = (
     "smb",
     "smtp",
     "mongodb",
+    "mssql",
 )
 
 # These commands treat an unparsable target as a failed probe and report it
@@ -23241,7 +23253,6 @@ TARGET_USAGE_ERROR_COMMANDS = (
 TARGET_PROBE_FAILURE_COMMANDS = (
     "oracle",
     "postgresql",
-    "mssql",
 )
 
 UNUSABLE_TARGETS = (
@@ -23547,12 +23558,12 @@ BARE_PORT_COMMANDS = (
     "smb",
     "smtp",
     "mongodb",
+    "mssql",
 )
 
 BARE_PORT_PROBE_FAILURE_COMMANDS = (
     "oracle",
     "postgresql",
-    "mssql",
 )
 
 OUT_OF_RANGE_PORT_TARGETS = (

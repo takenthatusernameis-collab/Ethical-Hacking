@@ -7,6 +7,9 @@ import socket
 import struct
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+from ethscan.target import TargetSpecError
 from ethscan.mssql import (
     _OPTION_ENCRYPTION,
     _OPTION_INSTINST,
@@ -76,11 +79,14 @@ def test_normalize_target():
     # IPv6 URL (note: urlparse handles brackets)
     assert _normalize_target("mssql://[::1]:1434") == ("::1", 1434)
     # Invalid
-    try:
+    with pytest.raises(TargetSpecError, match="Could not parse host from target"):
         _normalize_target("")
-        raise AssertionError("Expected ValueError")
-    except ValueError:
-        pass
+
+
+def test_normalize_target_rejects_empty_target():
+    for target in ("", "   ", "https://"):
+        with pytest.raises(TargetSpecError, match="Could not parse host from target"):
+            _normalize_target(target)
 
 
 def test_build_prelogin_request():
@@ -830,11 +836,9 @@ def test_run_mssql_empty_probes():
 
 
 def test_run_mssql_invalid_target():
-    result = run_mssql(target="", connector=_make_connector())
-    assert result["accessible"] is False
-    assert result["host"] is None
-    assert result["prelogin"] == {}
-    assert "Could not parse host" in result["error"]
+    for target in ("", "   ", "https://"):
+        with pytest.raises(TargetSpecError, match="Could not parse host from target"):
+            run_mssql(target=target, connector=_make_connector())
 
 
 def test_run_mssql_no_response():
