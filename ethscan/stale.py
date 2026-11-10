@@ -103,9 +103,10 @@ def check_tcp_connect(ip: str, port: int = 80, timeout: float = DEFAULT_TIMEOUT)
             sock.connect((ip, port, 0, 0))
         else:
             sock.connect((ip, port))
-        return True
     except (OSError, ValueError, OverflowError):
         return False
+    else:
+        return True
     finally:
         if sock is not None:
             with contextlib.suppress(Exception):

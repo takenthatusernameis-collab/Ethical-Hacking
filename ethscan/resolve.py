@@ -51,9 +51,10 @@ def _is_ip_address(value: str) -> bool:
     """Check if a string is a valid IP address (IPv4 or IPv6)."""
     try:
         ipaddress.ip_address(value)
-        return True
     except ValueError:
         return False
+    else:
+        return True
 
 
 def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str]:

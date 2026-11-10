@@ -45,8 +45,9 @@ def _estimate_key_size(public_key_info) -> int | None:
             size = public_key_info.get("size")
             if size:
                 return int(size) * 8
-        return None
     except (TypeError, ValueError):
+        return None
+    else:
         return None
 
 

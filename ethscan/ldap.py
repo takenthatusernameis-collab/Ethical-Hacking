@@ -472,11 +472,12 @@ def _send_recv(
             sock = context.wrap_socket(sock, server_hostname=host)
         sock.sendall(request)
         data = sock.recv(65536)
-        return data, None
     except socket.timeout:
         return None, "timeout"
     except OSError as exc:
         return None, str(exc)
+    else:
+        return data, None
     finally:
         with contextlib.suppress(Exception):
             sock.close()

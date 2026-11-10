@@ -168,9 +168,10 @@ def _parse_resp(data: bytes) -> tuple[Any | None, int]:
                     return None, 0
                 items.append(item)
                 pos += c
-            return items, pos
         except ValueError:
             return None, 0
+        else:
+            return items, pos
     return None, 0
 
 
@@ -191,11 +192,12 @@ def _send_recv(
         sock.connect((host, port))
         sock.sendall(request)
         data = sock.recv(65536)
-        return data, None
     except socket.timeout:
         return None, "timeout"
     except OSError as exc:
         return None, str(exc)
+    else:
+        return data, None
     finally:
         with contextlib.suppress(Exception):
             sock.close()

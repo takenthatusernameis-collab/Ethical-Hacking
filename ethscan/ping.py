@@ -155,9 +155,10 @@ def _try_create_raw_socket() -> Any:
     """
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
-        return sock
     except Exception:  # noqa: BLE001 - transport can raise any type
         return None
+    else:
+        return sock
 
 
 def _resolve_host(host: str) -> str | None:

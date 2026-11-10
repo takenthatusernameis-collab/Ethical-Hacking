@@ -276,9 +276,10 @@ def _parse_dns_name(data: bytes, offset: int) -> tuple[str, int]:
     if raw:
         try:
             name, _ = _decode_name_chars(raw)
-            return name, next_offset
         except ValueError:
             return raw.decode("latin-1", "replace"), next_offset
+        else:
+            return name, next_offset
     return "", next_offset
 
 
@@ -475,11 +476,12 @@ def _send_recv(
         sock.settimeout(timeout)
         sock.sendto(request, (host, port))
         data, _ = sock.recvfrom(65536)
-        return data, None
     except socket.timeout:
         return None, "timeout"
     except Exception as exc:  # noqa: BLE001 - transport can raise any type
         return None, str(exc)
+    else:
+        return data, None
     finally:
         if sock is not None:
             sock.close()

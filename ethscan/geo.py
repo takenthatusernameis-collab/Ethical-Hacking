@@ -121,10 +121,12 @@ def _fetch_geo_data(ip: str, timeout: float = DEFAULT_TIMEOUT) -> dict | None:
                 return None
         if data.get("status") == "success":
             data["timestamp"] = time.time()
-            return data
-        return None
+        else:
+            return None
     except Exception:  # noqa: BLE001 - urlopen/JSON can raise any failure; swallow to None
         return None
+    else:
+        return data
 
 
 def _get_cached_or_fetch(

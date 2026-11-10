@@ -337,12 +337,13 @@ def resolve_a_records(hostname: str, timeout: float = 2.0, resolver: str | None 
             dns_resolver.nameservers = [resolver]
             answers = dns_resolver.resolve(hostname, "A")
             ips = sorted({str(rdata) for rdata in answers})
-            return ips
         # A transport failure of an unnamed type must not escape the command:
         # the resolver can raise any type, and a hostile answer is a failed
         # lookup, not a crash.
         except Exception:  # noqa: BLE001, S110 - resolver can raise any type
             pass
+        else:
+            return ips
 
     try:
         previous = socket.getdefaulttimeout()
@@ -373,12 +374,13 @@ def resolve_aaaa_records(hostname: str, timeout: float = 2.0, resolver: str | No
             dns_resolver.nameservers = [resolver]
             answers = dns_resolver.resolve(hostname, "AAAA")
             ips = sorted({str(rdata) for rdata in answers})
-            return ips
         # A transport failure of an unnamed type must not escape the command:
         # the resolver can raise any type, and a hostile answer is a failed
         # lookup, not a crash.
         except Exception:  # noqa: BLE001, S110 - resolver can raise any type
             pass
+        else:
+            return ips
 
     try:
         previous = socket.getdefaulttimeout()

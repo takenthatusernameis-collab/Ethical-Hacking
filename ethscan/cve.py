@@ -113,7 +113,6 @@ def _fetch_cve_data(
                 return None
         if not isinstance(data, dict):
             return None
-        return data
     except http.client.HTTPException:
         # ``http.client.BadStatusLine`` (an API that answers with a malformed
         # status line) derives from ``HTTPException`` and not from ``OSError``
@@ -124,6 +123,8 @@ def _fetch_cve_data(
         return None
     except Exception:  # noqa: BLE001 - urlopen can raise any failure; swallow to None
         return None
+    else:
+        return data
 
 
 def _get_cached_or_fetch(

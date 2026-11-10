@@ -125,7 +125,6 @@ def _connect_tcp(host: str, port: int, timeout: float) -> tuple[bool, str | None
     sock = None
     try:
         sock = socket.create_connection((host, port), timeout=timeout)
-        return True, None, None
     except ConnectionRefusedError:
         return False, "connection refused (RST)", 1
     except socket.timeout:
@@ -134,6 +133,8 @@ def _connect_tcp(host: str, port: int, timeout: float) -> tuple[bool, str | None
     # which is a ValueError, when the resolver encodes it.
     except Exception as exc:  # noqa: BLE001 - transport can raise any type
         return False, _truncate(str(exc)), None
+    else:
+        return True, None, None
     finally:
         with contextlib.suppress(Exception):
             if sock is not None:

@@ -66,11 +66,12 @@ def _probe_once(dst_ip: str, port: int, ttl: int, timeout: float) -> dict[str, A
         sock.connect((dst_ip, port))
         end = time.time()
         rtt_ms = (end - start) * 1000.0
-        return {"hop_ip": dst_ip, "rtt_ms": rtt_ms, "reached": True, "error": None}
     except socket.timeout:
         return {"hop_ip": None, "rtt_ms": None, "reached": False, "error": None}
     except OSError:
         return {"hop_ip": None, "rtt_ms": None, "reached": False, "error": None}
+    else:
+        return {"hop_ip": dst_ip, "rtt_ms": rtt_ms, "reached": True, "error": None}
     finally:
         with contextlib.suppress(Exception):
             sock.close()

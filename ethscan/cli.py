@@ -777,11 +777,12 @@ def _validate_dns_resolver(value: str | None, option_name: str) -> str | None:
         return value
     try:
         ipaddress.ip_address(value)
-        return value
     except ValueError as exc:
         raise click.UsageError(
             f"Invalid value for '{option_name}': {value!r} is not a valid IP address or https:// resolver URL."
         ) from exc
+    else:
+        return value
 
 
 def _validate_api_url(value: str | None, option_name: str) -> str | None:
@@ -833,9 +834,10 @@ def _validate_whois_server(value: str, option_name: str) -> str:
         )
     try:
         ipaddress.ip_address(value)
-        return value
     except ValueError:
         pass
+    else:
+        return value
     labels = value.rstrip(".").split(".")
     if not labels or any(not label for label in labels):
         raise click.UsageError(
