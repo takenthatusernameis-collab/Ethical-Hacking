@@ -9,7 +9,7 @@ import socket
 import ssl
 from collections.abc import Mapping
 
-from ethscan.target import TargetSpecError, parse_url
+from ethscan.target import TargetSpecError, parse_url, normalize_host
 
 DEFAULT_PORT = 443
 DEFAULT_TIMEOUT = 5.0
@@ -24,14 +24,7 @@ def _normalize_host(target: str) -> str:
     Returns:
         Lowercased hostname without scheme, path, or port.
     """
-    normalized = target.strip()
-    if "://" not in normalized:
-        normalized = "https://" + normalized
-    parsed = parse_url(normalized)
-    host = (parsed.hostname or parsed.netloc or "").lower()
-    if not host:
-        raise TargetSpecError(f"Could not parse host from target {target!r}")
-    return host
+    return normalize_host(target)
 
 
 def _rdn_to_str(rdn: dict) -> str:

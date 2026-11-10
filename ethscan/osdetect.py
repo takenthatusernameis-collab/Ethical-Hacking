@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections.abc import Mapping
 from typing import TypedDict, cast
 
-from ethscan.target import TargetSpecError, parse_url
+from ethscan.target import TargetSpecError, parse_url, normalize_host
 
 DEFAULT_TIMEOUT = 5.0
 DEFAULT_WORKERS = 10
@@ -22,14 +22,7 @@ SYN_MAX_LENGTH = 200
 
 def _normalize_host(target: str) -> str:
     """Extract a bare hostname from a target that may be a URL or host."""
-    normalized = target.strip()
-    if "://" not in normalized:
-        normalized = "https://" + normalized
-    parsed = parse_url(normalized)
-    host = (parsed.hostname or parsed.netloc or "").lower()
-    if not host:
-        raise TargetSpecError(f"Could not parse host from target {target!r}")
-    return host
+    return normalize_host(target)
 
 
 def _truncate(message: str, limit: int = SYN_MAX_LENGTH) -> str:

@@ -16,7 +16,7 @@ from typing import Any, Mapping, cast
 from typing_extensions import TypedDict
 
 from ethscan.service import run_service
-from ethscan.target import TargetSpecError, parse_url
+from ethscan.target import TargetSpecError, parse_url, normalize_host
 
 DEFAULT_TIMEOUT = 3.0
 DEFAULT_WORKERS = 50
@@ -496,14 +496,7 @@ def _normalize_host(target: str) -> str:
     Returns:
         Lowercased hostname without scheme, path, or port.
     """
-    normalized = target.strip()
-    if "://" not in normalized:
-        normalized = "https://" + normalized
-    parsed = parse_url(normalized)
-    host = (parsed.hostname or parsed.netloc or "").lower()
-    if not host:
-        raise TargetSpecError(f"Could not parse host from target {target!r}")
-    return host
+    return normalize_host(target)
 
 
 def _extract_hosts_from_banner(banner: str) -> list[str]:

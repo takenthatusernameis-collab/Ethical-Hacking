@@ -8,7 +8,7 @@ import socket
 from collections.abc import Mapping
 from typing import Any, cast
 
-from ethscan.target import TargetSpecError, parse_url
+from ethscan.target import TargetSpecError, parse_url, normalize_host
 
 DEFAULT_WHOIS_SERVER = "whois.iana.org"
 DEFAULT_TIMEOUT = 5.0
@@ -17,14 +17,7 @@ DEFAULT_RECURSIVE_DEPTH = 2
 
 def _normalize_target(target: str) -> str:
     """Extract a bare hostname or IP from a target that may be a URL."""
-    normalized = target.strip()
-    if "://" not in normalized:
-        normalized = "http://" + normalized
-    parsed = parse_url(normalized)
-    host = (parsed.hostname or parsed.netloc or "").lower()
-    if not host:
-        raise TargetSpecError(f"Could not parse host from target {target!r}")
-    return host
+    return normalize_host(target, default_scheme="http://")
 
 
 def query_whois(

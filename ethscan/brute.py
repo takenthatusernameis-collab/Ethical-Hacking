@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from ftplib import FTP
 
 from ethscan.fileio import read_lines
-from ethscan.target import TargetSpecError, parse_url
+from ethscan.target import TargetSpecError, parse_url, normalize_host
 
 try:
     import paramiko
@@ -68,14 +68,7 @@ def _normalize_host(target: str) -> str:
     Returns:
         Lowercased hostname without scheme, path, or credentials.
     """
-    normalized = target.strip()
-    if "://" not in normalized:
-        normalized = "https://" + normalized
-    parsed = parse_url(normalized)
-    host = (parsed.hostname or parsed.netloc or "").lower()
-    if not host:
-        raise TargetSpecError(f"Could not parse host from target {target!r}")
-    return host
+    return normalize_host(target)
 
 
 def _default_port(protocol: str) -> int:

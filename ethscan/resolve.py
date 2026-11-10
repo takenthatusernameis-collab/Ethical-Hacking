@@ -7,7 +7,7 @@ import ipaddress
 import socket
 from typing import Mapping, TypedDict
 
-from ethscan.target import TargetSpecError, parse_url
+from ethscan.target import TargetSpecError, parse_url, normalize_host
 
 try:
     import dns.exception
@@ -44,20 +44,7 @@ def _normalize_target(target: str) -> str:
     Returns:
         Lowercased domain/IP without scheme or path.
     """
-    normalized = target.strip()
-    if "://" not in normalized:
-        normalized = "https://" + normalized
-    parsed = parse_url(normalized)
-    netloc = parsed.netloc.lower()
-    # parse_url preserves IPv6 brackets in netloc (e.g. "[::1]" or "[::1]:8080").
-    # Strip them so IPv6 literals are consistently represented bare and are
-    # correctly recognized as IP addresses by _is_ip_address(). Bare IPv6 inputs
-    # without brackets (e.g. "2001:db8::1") are passed through unchanged.
-    if netloc.startswith("[") and "]" in netloc:
-        netloc = netloc[1 : netloc.index("]")]
-    if not netloc:
-        raise TargetSpecError(f"Could not parse host from target {target!r}")
-    return netloc
+    return normalize_host(target)
 
 
 def _is_ip_address(value: str) -> bool:

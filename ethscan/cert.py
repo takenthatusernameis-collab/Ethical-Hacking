@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from ethscan.fileio import load_json
-from ethscan.target import TargetSpecError, parse_url
+from ethscan.target import TargetSpecError, parse_url, normalize_host
 
 DEFAULT_API_URL = "https://crt.sh/"
 DEFAULT_TIMEOUT = 10.0
@@ -29,14 +29,7 @@ CACHE_TTL = 3600  # 1 hour
 
 def _normalize_target(target: str) -> str:
     """Extract a bare domain from a target that may be a URL."""
-    normalized = target.strip()
-    if "://" not in normalized:
-        normalized = "https://" + normalized
-    parsed = parse_url(normalized)
-    host = (parsed.hostname or parsed.netloc or "").lower()
-    if not host:
-        raise TargetSpecError(f"Could not parse host from target {target!r}")
-    return host
+    return normalize_host(target)
 
 
 def _resolve_host(host: str) -> str | None:

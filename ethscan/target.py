@@ -340,3 +340,28 @@ def check_target_host(target: str) -> None:
         raise TargetSpecError("Target host contains a space or control character")
     if _DISALLOWED_HOST_RE.search(unquote(authority)):
         raise TargetSpecError("Target host contains a space or control character")
+
+
+def normalize_host(target: str, default_scheme: str = "https://") -> str:
+    """Extract a bare hostname from a target that may be a URL or host.
+
+    Args:
+        target: Bare host (e.g. ``example.com``) or URL
+            (e.g. ``https://example.com/path``).
+        default_scheme: Scheme to prepend when ``target`` has no scheme.
+            Defaults to ``"https://"``.
+
+    Returns:
+        Lowercased hostname without scheme, path, or port.
+
+    Raises:
+        TargetSpecError: If the target does not contain a usable host.
+    """
+    normalized = target.strip()
+    if "://" not in normalized:
+        normalized = default_scheme + normalized
+    parsed = parse_url(normalized)
+    host = (parsed.hostname or parsed.netloc or "").lower()
+    if not host:
+        raise TargetSpecError(f"Could not parse host from target {target!r}")
+    return host

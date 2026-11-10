@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import cast
 
 from ethscan.fileio import load_json
-from ethscan.target import TargetSpecError, parse_url
+from ethscan.target import TargetSpecError, parse_url, normalize_host
 
 DEFAULT_API_URL = "http://ip-api.com/json/"
 DEFAULT_TIMEOUT = 5.0
@@ -47,14 +47,7 @@ FIELDS = [
 
 def _normalize_target(target: str) -> str:
     """Extract a bare hostname or IP from a target that may be a URL."""
-    normalized = target.strip()
-    if "://" not in normalized:
-        normalized = "http://" + normalized
-    parsed = parse_url(normalized)
-    host = (parsed.hostname or parsed.netloc or "").lower()
-    if not host:
-        raise TargetSpecError(f"Could not parse host from target {target!r}")
-    return host
+    return normalize_host(target, default_scheme="http://")
 
 
 def _resolve_host(host: str) -> str | None:

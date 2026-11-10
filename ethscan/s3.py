@@ -19,7 +19,7 @@ import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from ethscan.target import TargetSpecError, check_target_host, parse_url
+from ethscan.target import TargetSpecError, check_target_host, parse_url, normalize_host
 
 DEFAULT_TIMEOUT = 5.0
 DEFAULT_MAX_WORKERS = 20
