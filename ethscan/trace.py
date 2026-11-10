@@ -42,6 +42,8 @@ def _normalize_host(target: str) -> str:
         parts = t.rsplit(":", 1)
         if parts[0] and parts[1].isdigit():
             t = parts[0]
+    if not t:
+        raise TargetSpecError(f"Could not parse host from target {target!r}")
     return t
 
 

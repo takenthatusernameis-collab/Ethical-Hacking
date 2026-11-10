@@ -7,7 +7,7 @@ import ipaddress
 import socket
 from typing import Mapping, TypedDict
 
-from ethscan.target import parse_url
+from ethscan.target import TargetSpecError, parse_url
 
 try:
     import dns.exception
@@ -55,6 +55,8 @@ def _normalize_target(target: str) -> str:
     # without brackets (e.g. "2001:db8::1") are passed through unchanged.
     if netloc.startswith("[") and "]" in netloc:
         netloc = netloc[1 : netloc.index("]")]
+    if not netloc:
+        raise TargetSpecError(f"Could not parse host from target {target!r}")
     return netloc
 
 

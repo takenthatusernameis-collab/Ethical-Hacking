@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import cast
 
 from ethscan.fileio import load_json
-from ethscan.target import parse_url
+from ethscan.target import TargetSpecError, parse_url
 
 DEFAULT_API_URL = "http://ip-api.com/json/"
 DEFAULT_TIMEOUT = 5.0
@@ -52,6 +52,8 @@ def _normalize_target(target: str) -> str:
         normalized = "http://" + normalized
     parsed = parse_url(normalized)
     host = (parsed.hostname or parsed.netloc or "").lower()
+    if not host:
+        raise TargetSpecError(f"Could not parse host from target {target!r}")
     return host
 
 

@@ -8,7 +8,7 @@ import socket
 from collections.abc import Mapping
 from typing import Any, cast
 
-from ethscan.target import parse_url
+from ethscan.target import TargetSpecError, parse_url
 
 DEFAULT_WHOIS_SERVER = "whois.iana.org"
 DEFAULT_TIMEOUT = 5.0
@@ -22,6 +22,8 @@ def _normalize_target(target: str) -> str:
         normalized = "http://" + normalized
     parsed = parse_url(normalized)
     host = (parsed.hostname or parsed.netloc or "").lower()
+    if not host:
+        raise TargetSpecError(f"Could not parse host from target {target!r}")
     return host
 
 
@@ -184,6 +186,7 @@ def run_whois(
         A WHOIS server that cannot be reached is reported as a failed lookup
         (``error`` is set, ``raw`` is empty) instead of a traceback.
     """
+    _normalize_target(target)
     try:
         raw = query_whois(target, server=server, port=port, timeout=timeout)
     except Exception as exc:  # noqa: BLE001 - transport can raise any type

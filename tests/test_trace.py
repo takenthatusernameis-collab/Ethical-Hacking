@@ -247,13 +247,12 @@ def test_format_trace_report_csv_empty():
 
 
 def test_normalize_host_edge_cases():
-    assert trace._normalize_host("") == ""
-    assert trace._normalize_host("   ") == ""
-    assert trace._normalize_host("http://") == ""
-    assert trace._normalize_host("https://") == ""
     assert trace._normalize_host("http://example.com/path?query=1") == "example.com"
     assert trace._normalize_host("https://example.com:8080/path") == "example.com"
     assert trace._normalize_host("example.com:8080") == "example.com"
+    for bad in ("", "   ", "http://", "https://"):
+        with pytest.raises(TargetSpecError):
+            trace._normalize_host(bad)
 
 
 def test_probe_once_timeout():
@@ -566,7 +565,7 @@ def test_run_trace_rejects_a_target_without_a_host():
     for target in UNUSABLE_TRACE_TARGETS:
         with pytest.raises(TargetSpecError) as excinfo:
             trace.run_trace(target)
-        assert str(excinfo.value) == "Invalid target"
+        assert "Could not parse host from target" in str(excinfo.value)
 
 
 def test_run_trace_error_is_still_a_value_error():
