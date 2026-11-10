@@ -13597,6 +13597,64 @@ def test_config_explicit_overrides_config(tmp_path) -> None:
     json.loads(result.output)
 
 
+def test_config_validate_clean_config_exits_zero(tmp_path) -> None:
+    """`config --validate` exits 0 for a valid config."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("defaults:\n  timeout: 5.0\ncommands:\n  scan:\n    ports: common\n")
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(cli, ["--config", str(cfg), "config", "--validate"])
+    assert result.exit_code == 0, result.output
+
+
+def test_config_validate_unknown_option_exits_one(tmp_path) -> None:
+    """`config --validate` exits 1 when config has an unknown option."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("commands:\n  scan:\n    bogus: 1\n")
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(cli, ["--config", str(cfg), "config", "--validate"])
+    assert result.exit_code == 1, result.output
+    assert "Validation warning: Unknown option 'bogus' for command 'scan'" in result.stderr
+
+
+def test_config_validate_unknown_default_exits_one(tmp_path) -> None:
+    """`config --validate` exits 1 when global defaults have an unknown option."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("defaults:\n  timeot: 5.0\n")
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(cli, ["--config", str(cfg), "config", "--validate"])
+    assert result.exit_code == 1, result.output
+    assert "Validation warning: Unknown option 'timeot' in global defaults" in result.stderr
+
+
+def test_config_validate_unknown_command_exits_one(tmp_path) -> None:
+    """`config --validate` exits 1 when config references an unknown command."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("commands:\n  nonexistentcmd:\n    timeout: 5.0\n")
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(cli, ["--config", str(cfg), "config", "--validate"])
+    assert result.exit_code == 1, result.output
+    assert "Validation warning: Unknown command 'nonexistentcmd' in config" in result.stderr
+
+
+def test_config_validate_parse_error_exits_one(tmp_path) -> None:
+    """`config --validate` exits 1 when config file has a parse error."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("{{{\n")
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(cli, ["--config", str(cfg), "config", "--validate"])
+    assert result.exit_code == 1, result.output
+    assert "Validation warning: Failed to parse" in result.stderr
+
+
+def test_config_validate_no_file_exits_zero(tmp_path, monkeypatch) -> None:
+    """`config --validate` exits 0 when no config file is found (uses defaults)."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(cli, ["config", "--validate"])
+    assert result.exit_code == 0, result.output
+
+
 # ---------------------------------------------------------------------------
 # mac command CLI tests
 # ---------------------------------------------------------------------------

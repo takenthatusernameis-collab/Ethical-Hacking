@@ -3868,6 +3868,12 @@ def mac(
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
+@click.option(
+    "--validate",
+    "validate_mode",
+    is_flag=True,
+    help="Exit with code 1 if the config has any validation warnings.",
+)
 @click.pass_context
 def config(
     ctx,
@@ -3876,6 +3882,7 @@ def config(
     fmt: str,
     output_fmt: str | None,
     out_path: str | None,
+    validate_mode: bool,
 ) -> None:
     """Inspect or initialize the ethscan configuration file."""
     from ethscan.config import dump_default_config
@@ -3926,6 +3933,12 @@ def config(
     warnings = validate_config(
         loaded, known_commands=known_commands, known_options=known_options
     )
+
+    # --validate: exit with code 1 if there are any validation warnings
+    if validate_mode and warnings:
+        for w in warnings:
+            click.echo(f"Validation warning: {w}", err=True)
+        ctx.exit(1)
 
     # --output-format takes precedence over the deprecated --format alias
     chosen_format = output_fmt if output_fmt is not None else fmt
