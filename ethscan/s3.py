@@ -309,7 +309,7 @@ def check_bucket_public(
             result["error"] = "Invalid bucket name or request"
         try:
             exc.close()
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 - closing an HTTPError response must not abort the probe
             pass
     except (urllib.error.URLError, socket.timeout, OSError) as exc:
         result["error"] = str(exc) or exc.__class__.__name__

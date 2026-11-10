@@ -1,33 +1,24 @@
 # Handoff
-Date: Tue Nov 10 2026 (session 40)
+Date: Tue Nov 10 2026 (session 42)
 
 ## This session
-- The prior agent's `mongodb` empty-target normalization was already complete (commit 27a35e0): `python -m ethscan mongodb --target ""|"   "|"https://"` all exit 2 with `Error: Invalid value for '--target': Could not parse host from target ...`. Verified directly; did not redo.
-- Selected and completed the next bounded module: `mssql`.
-- Reproduced before fix: `python -m ethscan mssql --target ""|"   "|"https://"` all exited 0 with JSON `{"host": null, ..., "error": "Could not parse host from target ..."}` instead of a CLI usage error.
-- Fixed `ethscan/mssql.py:run_mssql` (`ethscan/mssql.py:525`): the `except ValueError` around `_normalize_target(target)` now re-raises `TargetSpecError` instead of swallowing it into an in-band result dict. `_normalize_target` already raised `TargetSpecError` for an empty host; `run_mssql` was the only piece swallowing it. `TargetSpecError` propagates through the CLI `mssql` command to `_TargetGroup.invoke` (ethscan/cli.py:401) → `Error: Invalid value for '--target': Could not parse host from target ...` (exit 2).
-- `tests/test_mssql.py`:
-  - Added module-level `import pytest` and `from ethscan.target import TargetSpecError`.
-  - `test_normalize_target` now asserts `pytest.raises(TargetSpecError, match="Could not parse host from target")` for `""` (was: bare `try/except ValueError`).
-  - Added `test_normalize_target_rejects_empty_target` for `""`, `"   "`, `"https://"`.
-  - `test_run_mssql_invalid_target` now asserts `run_mssql("")` raises `TargetSpecError` for `""`, `"   "`, `"https://"` (was: asserted an in-band result dict).
-- `tests/test_cli.py`:
-  - Added `test_mssql_invalid_target_is_usage_error` (`""`, `"   "`, `"https://"` → exit 2 + usage-error message).
-  - Moved `mssql` out of `TARGET_PROBE_FAILURE_COMMANDS` and `BARE_PORT_PROBE_FAILURE_COMMANDS` into `TARGET_USAGE_ERROR_COMMANDS` and `BARE_PORT_COMMANDS`.
-- `tests/test_target.py`: removed `mssql` from `PROBE_FAILURE_MODULES` (`TARGET_MODULES` tests still cover mssql and pass unchanged).
+- Inspected the repository and verified the baseline: `pytest -q` → 5957 passed, 50 skipped, 0 failed; `mypy ethscan/ tests/` → clean (187 source files); `ruff check ethscan/ tests/` → **2 errors found** (contrary to the prior handoff's claim that ruff passed).
+- Both ruff errors were a blind `except Exception: pass` on `exc.close()` at `ethscan/s3.py:312`, triggering `S110` (try-except-pass) and `BLE001` (do not catch blind exception).
+- Fixed `ethscan/s3.py:312`: changed `except Exception:` → `except Exception:  # noqa: BLE001, S110 - closing an HTTPError response must not abort the probe`, following the established codebase convention used 50+ times (e.g. ssh.py:129, resolve.py:247, subtake.py:20) for "this must not abort the probe" swallow-catch sites. Purely a noqa comment addition; no runtime behavior change.
+- `ethscan/s3.py` already had `except Exception as exc:  # noqa: BLE001 - urlopen can raise any failure` at line 323 for the outer catch, consistent with this fix.
 
 ## Verification
-- Repro after fix: `mssql --target ""|"   "|"https://"` → exit 2, `Error: Invalid value for '--target': Could not parse host from target ...`; `mssql --target example.com` → exit 0 (probe runs; valid-target behavior unchanged).
-- `python -m mypy ethscan/mssql.py tests/test_mssql.py tests/test_cli.py tests/test_target.py` → Success: no issues found in 4 source files.
-- `python -m ruff check ethscan/mssql.py tests/test_mssql.py tests/test_cli.py tests/test_target.py` → All checks passed.
-- `python -m pytest tests/test_mssql.py tests/test_mssql_hostile_sweep.py tests/test_cli.py -q -k "mssql or mongo"` → 109 passed.
-- `python -m pytest -q` (full suite) → 5957 passed, 50 skipped, 0 failed (baseline was 5958; net -1 because `test_run_mssql_invalid_target` was rewritten from an in-band-result assertion into a `pytest.raises` and `test_normalize_target`'s bare `try/except` was replaced by `pytest.raises`, so the old assertions are gone and 2 new parametrized checks were added).
+- `python -m ruff check ethscan/ tests/` → All checks passed (2 errors resolved).
+- `python -m mypy ethscan/s3.py` → Success: no issues found.
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 187 source files.
+- `python -m pytest tests/test_s3.py tests/test_cli.py -q -k s3` → 89 passed.
+- `python -m pytest -q` (full suite) → 5957 passed, 50 skipped, 0 failed (baseline unchanged).
 
 ## Blockers
 - None.
 
 ## Approaches already tried / ruled out
-- None failed; single small, evidence-based fix following the established `TargetSpecError` pattern (same as ping/osdetect/vuln/ssh/brute/cve/tls/ssl/s3/fuzz/web/cert/mysql/mongodb).
+- Narrowing the `except Exception` type was considered but rejected: `exc.close()` can surface heterogeneous transport/stream failures and the codebase convention for "swallow close/transport failures so one probe cannot abort the command" is the targeted `# noqa: BLE001, S110` comment, which preserves behavior exactly.
 
 ## Next task
-- Remaining modules with the same `except ValueError` swallowing pattern are `oracle` and `postgresql` (they are in `PROBE_FAILURE_MODULES`/`TARGET_PROBE_FAILURE_COMMANDS`/`BARE_PORT_PROBE_FAILURE_COMMANDS` and report empty targets in-band by design — their contract is to treat an unusable target as a failed probe, exit 0). Do not change them unless a task explicitly asks to. If a new bounded task is needed, pick one remaining test file with mypy errors and reproduce per file first (candidates: `test_dnsbrute.py` (47), `test_hash.py` (46), `test_urlcheck.py` (39), `test_whois.py` (37)).
+- Repository is fully green (pytest/mypy/ruff). No pending backlog tasks. `oracle` and `postgresql` empty-target handling remains intentionally out of scope (in-band error, exit 0 per documented contract). If future work is needed, pick a single high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.
