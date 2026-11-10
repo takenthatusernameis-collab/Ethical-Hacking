@@ -64,6 +64,19 @@ def test_normalize_domain_url() -> None:
     assert _normalize_domain("http://sub.example.com:8080/foo") == "sub.example.com:8080"
 
 
+def test_normalize_domain_rejects_empty_target() -> None:
+    """An empty, whitespace, or scheme-only domain raises TargetSpecError."""
+    from ethscan.target import TargetSpecError
+
+    from ethscan.dnssec import _normalize_domain
+
+    for bad in ("", "   ", "https://"):
+        with pytest.raises(
+            TargetSpecError, match="Could not parse host from target"
+        ):
+            _normalize_domain(bad)
+
+
 def test_get_parent_zone() -> None:
     from ethscan.dnssec import _get_parent_zone
     assert _get_parent_zone("example.com") == "com."

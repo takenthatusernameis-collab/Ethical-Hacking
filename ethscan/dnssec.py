@@ -6,7 +6,7 @@ import io
 import socket
 import struct
 
-from ethscan.target import parse_url
+from ethscan.target import parse_url, TargetSpecError
 
 try:
     try:
@@ -74,7 +74,10 @@ def _normalize_domain(target: str) -> str:
     if "://" not in normalized:
         normalized = "https://" + normalized
     parsed = parse_url(normalized)
-    return parsed.netloc.lower()
+    domain = parsed.netloc.lower()
+    if not domain:
+        raise TargetSpecError(f"Could not parse host from target {target!r}")
+    return domain
 
 
 def _get_parent_zone(domain: str) -> str:

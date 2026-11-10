@@ -1,4 +1,5 @@
 """Tests for the ethscan service module."""
+import pytest
 from typing import cast
 
 from ethscan.service import (
@@ -606,3 +607,14 @@ def test_run_service_sort_key_fallback_for_non_int_port(monkeypatch) -> None:
     assert result["services_found"] == 1
     results = cast("list[dict[str, object]]", result["results"])
     assert results[0]["port"] == "not-a-port"
+
+
+def test_run_service_rejects_empty_target() -> None:
+    """An empty, whitespace, or scheme-only target raises TargetSpecError."""
+    from ethscan.target import TargetSpecError
+
+    for bad in ("", "   ", "https://"):
+        with pytest.raises(
+            TargetSpecError, match="Could not parse host from target"
+        ):
+            run_service(bad, ports=[80], timeout=1.0)

@@ -8,7 +8,7 @@ import re
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from ethscan.target import parse_url
+from ethscan.target import normalize_host
 
 DEFAULT_PORTS = [
     21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445,
@@ -181,10 +181,7 @@ def run_service(
     Returns:
         Structured results with target, host, and service detection results.
     """
-    host = target.strip()
-    if "://" in host:
-        parsed = parse_url(host)
-        host = parsed.hostname or host
+    host = normalize_host(target)
 
     port_list = ports if ports is not None else DEFAULT_PORTS
 

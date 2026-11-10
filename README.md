@@ -148,7 +148,7 @@ Error: Invalid value for '--cidrs': Cannot mix IPv4 and IPv6 networks in a singl
 
 A `--target` that does not contain a usable host is rejected the same way by
 the protocol commands (`redis`, `memcached`, `ntp`, `snmp`, `ftp`, `ldap`,
-`netbios`, `smb`, `smtp`):
+`netbios`, `smb`, `smtp`, `service`, `dnssec`):
 
 ```console
 $ python -m ethscan redis --target ""

@@ -5957,6 +5957,28 @@ def test_ssl_invalid_target_is_usage_error() -> None:
         assert "Could not parse host from target" in result.output
 
 
+def test_service_invalid_target_is_usage_error() -> None:
+    """An empty or whitespace service target is rejected as a usage error."""
+    runner = CliRunner()
+
+    for bad in ("", "   ", "https://"):
+        result = runner.invoke(cli, ["service", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
+def test_dnssec_invalid_target_is_usage_error() -> None:
+    """An empty or whitespace dnssec target is rejected as a usage error."""
+    runner = CliRunner()
+
+    for bad in ("", "   ", "https://"):
+        result = runner.invoke(cli, ["dnssec", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
 def test_s3_invalid_target_is_usage_error() -> None:
     """An empty or whitespace S3 target is rejected as a usage error."""
     runner = CliRunner()
