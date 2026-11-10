@@ -314,7 +314,7 @@ from ethscan.subtake import (
     format_subtake_report_markdown,
     run_subtake,
 )
-from ethscan.target import TargetSpecError, normalize_host, parse_url
+from ethscan.target import TargetSpecError, normalize_host
 from ethscan.tls import (
     VersionSpec,
     format_tls_report_csv,
@@ -707,18 +707,18 @@ def _validate_enum_target(target: str) -> None:
     ``subdomains``, ``subtake``, ``dnsbrute`` and ``s3`` (and recon's
     ``--subdomains-wordlist`` path) read a user-supplied wordlist before the
     library normalizes the target. A target that ``urllib.parse`` refuses, or
-    that carries a disallowed host, must therefore be rejected here: otherwise
-    the wordlist is read (a side effect) and a wordlist read error can mask the
-    target-usage error. Validation uses :func:`parse_url` on the
-    ``https://``-prefixed form the modules use, so malformed targets are
-    reported as a usage error (exit code 2) before any file I/O; host/path
-    checks that are specific to a module remain in that module so existing
-    contracts are preserved.
+    that carries a disallowed host or no host, must therefore be rejected here:
+    otherwise the wordlist is read (a side effect) and a wordlist read error can
+    mask the target-usage error. Validation normalizes the target on the
+    ``https://``-prefixed form the modules use, so malformed or empty targets are
+    reported as a usage error (exit code 2) before any file I/O; host/path checks
+    that are specific to a module remain in that module so existing contracts are
+    preserved.
     """
     normalized = target.strip()
     if "://" not in normalized:
         normalized = "https://" + normalized
-    parse_url(normalized)
+    normalize_host(normalized)
 
 
 def _validate_s3_region(value: str | None) -> str | None:
