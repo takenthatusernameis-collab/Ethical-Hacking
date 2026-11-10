@@ -6,6 +6,10 @@ import json
 import time
 from pathlib import Path
 from typing import Any
+
+import pytest
+
+from ethscan.target import TargetSpecError
 from unittest.mock import MagicMock, patch
 
 from ethscan.cert import (
@@ -55,6 +59,13 @@ def test_normalize_target_strips_whitespace() -> None:
 
 def test_normalize_target_with_port() -> None:
     assert _normalize_target("http://example.com:8080") == "example.com"
+
+
+def test_normalize_target_rejects_empty_target() -> None:
+    for raw in ("", "   ", "https://"):
+        with pytest.raises(TargetSpecError, match="Could not parse host from target"):
+            _normalize_target(raw)
+
 
 
 def test_normalize_target_ip_address() -> None:

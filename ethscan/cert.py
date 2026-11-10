@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from ethscan.fileio import load_json
-from ethscan.target import parse_url
+from ethscan.target import TargetSpecError, parse_url
 
 DEFAULT_API_URL = "https://crt.sh/"
 DEFAULT_TIMEOUT = 10.0
@@ -34,6 +34,8 @@ def _normalize_target(target: str) -> str:
         normalized = "https://" + normalized
     parsed = parse_url(normalized)
     host = (parsed.hostname or parsed.netloc or "").lower()
+    if not host:
+        raise TargetSpecError(f"Could not parse host from target {target!r}")
     return host
 
 

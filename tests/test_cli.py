@@ -25645,3 +25645,11 @@ def test_stale_rejects_bad_target_before_reading_file(tmp_path) -> None:
     assert "Error: Invalid value for '--target':" in result.output, result.output
     assert not called["ran"], "stale probe ran despite unusable target"
     assert "Traceback (most recent call last)" not in result.output, result.output
+
+
+def test_cert_invalid_target_is_usage_error() -> None:
+    runner = CliRunner()
+    for bad_target in ("", "   ", "https://"):
+        result = runner.invoke(cli, ["cert", "--target", bad_target])
+        assert result.exit_code == 2
+        assert "Could not parse host from target" in result.output
