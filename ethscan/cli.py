@@ -5687,7 +5687,7 @@ def version(
         output = output_io.getvalue()
     else:
         lines = [
-            f"# ethscan Version Report",
+            "# ethscan Version Report",
             "",
             f"- **Version:** {data['version']}",
             f"- **Python:** {data['python']} ({data['platform']}, {data['architecture']})",
