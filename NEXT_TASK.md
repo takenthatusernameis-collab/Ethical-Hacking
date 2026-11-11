@@ -1,13 +1,13 @@
 # Next Task
 
 ## Task
-- Verify the session 77 README-only documentation fix in an environment with dev dependencies: run `python -m pytest -q`, `python -m ruff check ethscan/ tests/`, and `python -m mypy ethscan/ tests/`.
+- Fix deterministic test/tooling incompatibility: `tests/test_cli.py` passes `mix_stderr=False` to `click.testing.CliRunner`, which fails under Click 8.5.1 / pytest 9.2.0 (`TypeError: unexpected keyword argument 'mix_stderr'`) causing 22 pytest failures and 22 mypy errors. Implement the smallest compatible fix aligned with project-supported Click/pytest versions.
 
 ## Evidence
-- Session 77 removed a stale editorial sentence from the `cve` feature bullet in `README.md` (no source code changes). `python3 -m compileall ethscan tests -q` clean; `ethscan cve --help` shows no `--salt`/`--pepper`/`--algorithm`.
-- `pytest`/`ruff`/`mypy` were not installed in session 77’s environment, so full regression checks were not rerun. Session 76 baseline: 5988 passed, 50 skipped, 0 failed; ruff clean; mypy clean on 187 source files.
+- Session 78 (dev venv: Click 8.5.1, pytest 9.2.0, ruff 0.17.0, mypy 1.20.0): `pytest -q` → 22 failed, 5966 passed, 50 skipped; all failures in `tests/test_cli.py` due to `CliRunner(mix_stderr=False)`. `ruff check ethscan/ tests/` clean. `mypy ethscan/ tests/` → 22 errors in `tests/test_cli.py` same argument.
+- Session 77 README-only change did not touch code/tests; failures are environmental/version-compatibility, not doc regression.
 
 ## Next task after that
-- If verification is green, mark repository fully green and pick one bounded, high-value, verifiable improvement (reproduce first; do not speculate or weaken safety controls). `oracle`/`postgresql` empty-target handling and `dns`/`dnssec`/`headers`/`mac`/`trace`/`web` bare-port (`:6379`/`://no-host`) behavior remain intentionally out of scope unless explicitly tasked.
+- Once compatibility is fixed and verification is green, mark repository fully green and pick one bounded, high-value, verifiable improvement (reproduce first; do not speculate or weaken safety controls). `oracle`/`postgresql` empty-target handling and `dns`/`dnssec`/`headers`/`mac`/`trace`/`web` bare-port (`:6379`/`://no-host`) behavior remain intentionally out of scope unless explicitly tasked.
 
 (End of file)
