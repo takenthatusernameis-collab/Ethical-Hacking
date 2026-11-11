@@ -248,3 +248,43 @@ def test_write_json_atomicity_on_failure(tmp_path) -> None:
     assert path.read_text() == '{"old": true}\n'
     leftovers = [p for p in tmp_path.iterdir() if p.name.startswith("file.json.")]
     assert leftovers == []
+
+
+def test_load_json_converts_a_parser_recursion_error_to_value_error(tmp_path, monkeypatch) -> None:
+    """A RecursionError from the JSON parser is reported as an unusable value,
+    like broken JSON, instead of leaking a traceback."""
+    import ethscan.fileio as fileio
+
+    path = tmp_path / "file.json"
+    path.write_text("{}")
+
+    def raising_loads(text):
+        raise RecursionError("maximum recursion depth exceeded")
+
+    monkeypatch.setattr(fileio.json, "loads", raising_loads)
+
+    with pytest.raises(ValueError, match="nests too deeply"):
+        load_json(str(path))
+
+
+def test_atomic_write_cleanup_swallows_unlink_error(tmp_path, monkeypatch) -> None:
+    """A failed write re-raises the original error even when removing the temp
+    file itself fails with OSError."""
+    path = tmp_path / "file.txt"
+    path.write_text("original\n")
+
+    import ethscan.fileio as fileio
+
+    def boom(handle):
+        handle.write("partial")
+        raise RuntimeError("boom")
+
+    def unlink_raises(name, *args, **kwargs):
+        raise OSError("unlink failed")
+
+    monkeypatch.setattr(fileio.os, "unlink", unlink_raises)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        fileio._atomic_write(path, boom)
+
+    assert path.read_text() == "original\n"
