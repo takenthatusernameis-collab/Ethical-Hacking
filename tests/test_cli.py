@@ -4755,7 +4755,7 @@ def test_config_hash_passwords_non_scalar_item_rejected(tmp_path) -> None:
     """
     config_file = tmp_path / "ethscan.yaml"
     config_file.write_text("commands:\n  hash:\n    passwords:\n      - password\n      - {foo: bar}\n")
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     result = runner.invoke(
         cli,
         [
@@ -4784,7 +4784,7 @@ def test_config_scan_workers_non_scalar_rejected(tmp_path) -> None:
     """
     config_file = tmp_path / "ethscan.yaml"
     config_file.write_text("commands:\n  scan:\n    workers: [1, 2]\n")
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     result = runner.invoke(
         cli,
         ["--config", str(config_file), "scan", "--target", "127.0.0.1"],
@@ -13568,7 +13568,7 @@ def test_config_init_sample_runs_end_to_end(tmp_path) -> None:
     unknown-option warnings and the command must run successfully.
     """
     out = tmp_path / "ethscan.yaml"
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     result = runner.invoke(cli, ["config", "--init", str(out)])
     assert result.exit_code == 0
     assert out.exists()
@@ -13585,7 +13585,7 @@ def test_config_option_unknown_bogus_warning(tmp_path) -> None:
     """Unknown option in config for a command emits a warning on stderr."""
     config_file = tmp_path / "ethscan.yaml"
     config_file.write_text("commands:\n  cidr:\n    bogus: 1\n")
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     result = runner.invoke(cli, ["--config", str(config_file), "cidr", "--help"])
     assert result.exit_code == 0
     assert "Unknown option 'bogus' for command 'cidr'" in result.stderr
@@ -13597,7 +13597,7 @@ def test_config_unknown_default_option_warning(tmp_path) -> None:
     ignored."""
     config_file = tmp_path / "ethscan.yaml"
     config_file.write_text("defaults:\n  timeot: 5.0\n")
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     result = runner.invoke(cli, ["--config", str(config_file), "scan", "--help"])
     assert result.exit_code == 0
     assert "Unknown option 'timeot' in global defaults" in result.stderr
@@ -13607,7 +13607,7 @@ def test_config_known_default_option_no_warning(tmp_path) -> None:
     """A default option accepted by at least one command emits no warning."""
     config_file = tmp_path / "ethscan.yaml"
     config_file.write_text("defaults:\n  timeout: 5.0\n")
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     result = runner.invoke(cli, ["--config", str(config_file), "scan", "--help"])
     assert result.exit_code == 0
     assert "Unknown option" not in result.stderr
@@ -13617,7 +13617,7 @@ def test_config_option_format_key_no_warning(tmp_path) -> None:
     """Documented format key in config does not emit an unknown-option warning."""
     config_file = tmp_path / "ethscan.yaml"
     config_file.write_text("commands:\n  cidr:\n    format: json\n")
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     result = runner.invoke(cli, ["--config", str(config_file), "cidr", "--help"])
     assert result.exit_code == 0
     assert "Unknown option" not in result.stderr
@@ -13626,7 +13626,7 @@ def test_config_option_wrong_type_errors(tmp_path) -> None:
     """A config value of the wrong type is reported as a usage error."""
     config_file = tmp_path / "ethscan.yaml"
     config_file.write_text("commands:\n  scan:\n    workers: 5.5\n")
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     result = runner.invoke(cli, ["--config", str(config_file), "scan", "--target", "127.0.0.1"])
     assert result.exit_code == 2
     assert "Invalid value for '--workers'" in result.stderr or "Invalid value for '--workers'" in result.output
@@ -13696,7 +13696,7 @@ def test_config_invalid_yaml_shows_parse_error(tmp_path) -> None:
     """Test config command surfaces parse errors."""
     cfg = tmp_path / "bad.yaml"
     cfg.write_text("{{{\n")
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     result = runner.invoke(cli, ["--config", str(cfg), "config"])
     assert result.exit_code == 0
     parsed = json.loads(result.output)
@@ -13708,7 +13708,7 @@ def test_config_invalid_yaml_markdown(tmp_path) -> None:
     """Test config command surfaces parse errors in markdown."""
     cfg = tmp_path / "bad.yaml"
     cfg.write_text("{{{\n")
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     result = runner.invoke(
         cli, ["--config", str(cfg), "config", "--format", "markdown"]
     )
@@ -13721,7 +13721,7 @@ def test_config_unknown_command_warns(tmp_path) -> None:
     """Test config command warns about unknown commands."""
     cfg = tmp_path / "ethscan.yaml"
     cfg.write_text("commands:\n  nonexistentcmd:\n    foo: bar\n")
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     result = runner.invoke(cli, ["--config", str(cfg), "config"])
     assert result.exit_code == 0
     parsed = json.loads(result.output)
@@ -13732,7 +13732,7 @@ def test_config_unknown_command_warns_in_json_output(tmp_path) -> None:
     """An unknown command in the config surfaces a warning in JSON output."""
     cfg = tmp_path / "ethscan.yaml"
     cfg.write_text("commands:\n  nonexistentcmd:\n    foo: bar\n")
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     result = runner.invoke(cli, ["--config", str(cfg), "config"])
     assert result.exit_code == 0, result.output
     parsed = json.loads(result.output)
@@ -13744,7 +13744,7 @@ def test_config_unknown_command_warns_in_markdown_output(tmp_path) -> None:
     """An unknown command in the config surfaces a warning in markdown output."""
     cfg = tmp_path / "ethscan.yaml"
     cfg.write_text("commands:\n  nonexistentcmd:\n    foo: bar\n")
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     result = runner.invoke(
         cli, ["--config", str(cfg), "config", "--format", "markdown"]
     )
@@ -13757,7 +13757,7 @@ def test_config_unknown_command_warns_in_csv_output(tmp_path) -> None:
     """An unknown command in the config surfaces a warning in CSV output."""
     cfg = tmp_path / "ethscan.yaml"
     cfg.write_text("commands:\n  nonexistentcmd:\n    foo: bar\n")
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     result = runner.invoke(cli, ["--config", str(cfg), "config", "--format", "csv"])
     assert result.exit_code == 0, result.output
     assert "# Warning:" in result.output
@@ -13768,7 +13768,7 @@ def test_config_unknown_option_warns_in_json_output(tmp_path) -> None:
     """An unknown option for a command surfaces a warning in JSON output."""
     cfg = tmp_path / "ethscan.yaml"
     cfg.write_text("commands:\n  scan:\n    potrs: common\n")
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     result = runner.invoke(cli, ["--config", str(cfg), "config"])
     assert result.exit_code == 0, result.output
     parsed = json.loads(result.output)
@@ -13803,7 +13803,7 @@ def test_config_validate_clean_config_exits_zero(tmp_path) -> None:
     """`config --validate` exits 0 for a valid config."""
     cfg = tmp_path / "ethscan.yaml"
     cfg.write_text("defaults:\n  timeout: 5.0\ncommands:\n  scan:\n    ports: common\n")
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     result = runner.invoke(cli, ["--config", str(cfg), "config", "--validate"])
     assert result.exit_code == 0, result.output
 
@@ -13812,7 +13812,7 @@ def test_config_validate_unknown_option_exits_one(tmp_path) -> None:
     """`config --validate` exits 1 when config has an unknown option."""
     cfg = tmp_path / "ethscan.yaml"
     cfg.write_text("commands:\n  scan:\n    bogus: 1\n")
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     result = runner.invoke(cli, ["--config", str(cfg), "config", "--validate"])
     assert result.exit_code == 1, result.output
     assert "Validation warning: Unknown option 'bogus' for command 'scan'" in result.stderr
@@ -13822,7 +13822,7 @@ def test_config_validate_unknown_default_exits_one(tmp_path) -> None:
     """`config --validate` exits 1 when global defaults have an unknown option."""
     cfg = tmp_path / "ethscan.yaml"
     cfg.write_text("defaults:\n  timeot: 5.0\n")
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     result = runner.invoke(cli, ["--config", str(cfg), "config", "--validate"])
     assert result.exit_code == 1, result.output
     assert "Validation warning: Unknown option 'timeot' in global defaults" in result.stderr
@@ -13832,7 +13832,7 @@ def test_config_validate_unknown_command_exits_one(tmp_path) -> None:
     """`config --validate` exits 1 when config references an unknown command."""
     cfg = tmp_path / "ethscan.yaml"
     cfg.write_text("commands:\n  nonexistentcmd:\n    timeout: 5.0\n")
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     result = runner.invoke(cli, ["--config", str(cfg), "config", "--validate"])
     assert result.exit_code == 1, result.output
     assert "Validation warning: Unknown command 'nonexistentcmd' in config" in result.stderr
@@ -13842,7 +13842,7 @@ def test_config_validate_parse_error_exits_one(tmp_path) -> None:
     """`config --validate` exits 1 when config file has a parse error."""
     cfg = tmp_path / "ethscan.yaml"
     cfg.write_text("{{{\n")
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     result = runner.invoke(cli, ["--config", str(cfg), "config", "--validate"])
     assert result.exit_code == 1, result.output
     assert "Validation warning: Failed to parse" in result.stderr
@@ -13852,7 +13852,7 @@ def test_config_validate_no_file_exits_zero(tmp_path, monkeypatch) -> None:
     """`config --validate` exits 0 when no config file is found (uses defaults)."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     result = runner.invoke(cli, ["config", "--validate"])
     assert result.exit_code == 0, result.output
 
@@ -23144,7 +23144,7 @@ def test_completion_run_raises_value_error(monkeypatch) -> None:
     def mock_run(*args, **kwargs):
         raise ValueError("bad shell")
     monkeypatch.setattr("ethscan.cli.run_completion", mock_run)
-    runner = CliRunner()
+    runner = CliRunner(mix_stderr=False)
     result = runner.invoke(cli, ["completion", "--shell", "bash"])
     assert result.exit_code == 2
     assert "bad shell" in (result.stderr or result.output)

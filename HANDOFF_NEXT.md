@@ -1,28 +1,30 @@
 # Handoff
-Date: Wed Nov 11 2026 (session 74)
+Date: Wed Nov 11 2026 (session 75)
 
 ## This session
-- No prior agent assignment existed; HANDOFF_NEXT.md/NEXT_TASK.md from session 73 stated "None pending. Repository is feature-complete and handoff is current".
-- Selected a bounded, high-value improvement: fixed the pre-existing ruff lint issue (F541) in `ethscan/cli.py:5690` — an f-string without placeholders in the version command's Markdown output.
-- Fixed `ethscan/cli.py`: changed `f"# ethscan Version Report"` to `"# ethscan Version Report"` (removing extraneous `f` prefix).
+- No prior agent assignment existed; HANDOFF_NEXT.md/NEXT_TASK.md from session 74 stated "None pending. Repository is feature-complete and handoff is current".
+- Inspected the repository and found a real, reproducible regression: 17 failing tests in `tests/test_cli.py` (all `ValueError: stderr not separately captured` or `json.decoder.JSONDecodeError`).
+- Root cause: commit `2ae236c` (session 72) reverted 22 `CliRunner(mix_stderr=False)` instances back to `CliRunner()`. Under click 8.1.8 (installed here), `CliRunner()` defaults to `mix_stderr=True`, which merges stderr into stdout and leaves `result.stderr_bytes` as `None`; accessing `result.stderr` then raises `ValueError("stderr not separately captured")`. The merged stream also prepends `Warning:` lines to JSON/markdown output, breaking `json.loads(result.output)`.
+- The 22 reverted functions are exactly the ones that read `result.stderr` (all 14 `result.stderr` usages in the file fall within them). Restored `mix_stderr=False` on those 22 `runner = CliRunner()` lines (4758, 4787, 13571, 13588, 13600, 13610, 13620, 13629, 13699, 13711, 13724, 13735, 13747, 13760, 13771, 13806, 13815, 13825, 13835, 13845, 13855, 23147). No source (`ethscan/`) changes; purely test-harness restoration, fully reversible.
 
 ## Changes made this session
-- `ethscan/cli.py`: Fixed f-string without placeholders in version command Markdown formatter.
+- `tests/test_cli.py`: Restored `CliRunner(mix_stderr=False)` on 22 runner instances (22 insertions, 22 deletions).
 
 ## Verification
-- `python -m ruff check ethscan/ tests/` → All checks passed (previously 1 error)
-- `python -m mypy ethscan/` → Success: no issues found in 59 source files
-- `python -m ethscan version` → Works correctly (JSON and Markdown output verified)
-- `python -m pytest tests/test_scanner.py` → 53 passed
-- `python -m pytest tests/test_cli.py -k "scan"` → 34 passed, 1 failed (pre-existing click 8.5.1 stderr issue, not a regression)
+- `python -m pytest tests/test_cli.py -q` → 1104 passed (was 1104 with 17 failed before fix).
+- `python -m pytest -q` (full suite) → 5988 passed, 50 skipped, 0 failed (baseline was 5971 passed + 17 failed = 5988; all 17 recovered, no regressions).
+- `python -m ruff check ethscan/ tests/` → All checks passed.
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 187 source files.
+- Reproduced before fix: `test_config_invalid_yaml_shows_parse_error` → `json.decoder.JSONDecodeError`; `test_config_validate_unknown_option_exits_one` → `ValueError: stderr not separately captured`. After fix: both pass.
 
 ## Blockers
-- 18 pytest failures and 23 mypy (tests) errors remain due to local dev dependency drift (pytest 9/click 8.5.1) vs. repo-pinned CI environment. Not code regressions; do not weaken tests, types, or safety controls to silence them.
+- None. All 17 failures were caused by the test-harness regression above, not by environmental dependency drift.
 
 ## Approaches already tried / ruled out
-- Modifying tests or weakening configs to match newer click/pytest APIs: ruled out (environmental drift; CI pins are source of truth).
+- Modifying `ethscan/cli.py` to emit warnings on stdout instead of stderr: ruled out (would change the documented stderr contract and require source + test changes; the harness fix is minimal and correct).
+- Changing the installed click version: not attempted (out of scope; the fix works on the installed click 8.1.8).
 
 ## Next task
-- None pending. Repository is feature-complete with all lint/type checks clean. If future work is needed, pick one bounded, high-value, verifiable improvement in the pinned/CI-compatible environment context: reproduce first, keep changes minimal and reversible, preserve the invalid-target safety contract, and do not weaken safety controls.
+- None pending. Repository is fully green: 5988 passed, 50 skipped, 0 failed; mypy clean on 187 source files; ruff clean. If future work is needed, pick a single bounded, high-value, verifiable improvement, reproduce it first, keep changes minimal and reversible, preserve the invalid-target safety contract, and do not weaken safety controls.
 
-(End of file - total 42 lines)
+(End of file - total 46 lines)
