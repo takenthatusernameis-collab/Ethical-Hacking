@@ -23564,6 +23564,29 @@ TARGET_USAGE_ERROR_COMMANDS = (
     "mssql",
     "scan",
     "report",
+    # Commands that reject an unusable --target as a click usage error but were
+    # not yet covered by this list. Verified empirically against every value in
+    # UNUSABLE_TARGETS ("", "   ", "://no-host", "redis://", ":6379").
+    "brute",
+    "cert",
+    "cve",
+    "dnsbrute",
+    "fuzz",
+    "geo",
+    "osdetect",
+    "ping",
+    "resolve",
+    "s3",
+    "service",
+    "ssh",
+    "ssl",
+    "stale",
+    "subdomains",
+    "subtake",
+    "tls",
+    "urlcheck",
+    "vuln",
+    "whois",
 )
 
 # These commands treat an unparsable target as a failed probe and report it
