@@ -116,6 +116,20 @@ def test_markdown_hostile_findings_entries_never_raise() -> None:
     assert "/admin" in out
 
 
+@pytest.mark.parametrize("findings", [123, "not-a-dict", True, {}, 0.0, None])
+def test_markdown_non_list_findings_never_raises(findings: Any) -> None:
+    data = {
+        "target": "t",
+        "base_url": "b",
+        "paths_tested": 1,
+        "findings": findings,
+        "all_results": [],
+    }
+    out = format_fuzz_report_markdown(data)
+    assert "## Findings" not in out
+    assert "**Findings (non-404):** 0" in out
+
+
 def test_csv_non_iterable_all_results_never_raises() -> None:
     data = {
         "target": "t",

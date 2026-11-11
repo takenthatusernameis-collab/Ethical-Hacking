@@ -24,6 +24,7 @@ from ethscan.tls import (
     _resolve_version,
     _resolve_versions,
     _truncate,
+    _validate_ciphers,
     _version_name,
     _version_sort_key,
     enumerate_tls,
@@ -76,6 +77,25 @@ def test_resolve_version_aliases() -> None:
 def test_resolve_version_invalid() -> None:
     with pytest.raises(ValueError):
         _resolve_version("TLSv9")
+
+
+def test_validate_ciphers_skips_empty_strings() -> None:
+    assert _validate_ciphers([""]) == []
+    assert _validate_ciphers(["", "  ", "\t"]) == []
+    assert _validate_ciphers(["", "AES128-SHA"]) == ["AES128-SHA"]
+    assert _validate_ciphers(["AES128-SHA", ""]) == ["AES128-SHA"]
+    assert _validate_ciphers(["  AES128-SHA  "]) == ["AES128-SHA"]
+
+
+def test_validate_ciphers_unknown_raises() -> None:
+    with pytest.raises(ValueError, match="Unknown ciphers"):
+        _validate_ciphers(["BOGUS"])
+    with pytest.raises(ValueError, match="Unknown ciphers"):
+        _validate_ciphers(["AES128-SHA", "BOGUS"])
+
+
+def test_validate_ciphers_empty_list() -> None:
+    assert _validate_ciphers([]) == []
 
 
 def test_test_version_connection_refused() -> None:
