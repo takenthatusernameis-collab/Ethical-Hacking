@@ -30,6 +30,34 @@ def test_vuln_formatters_hostile_nested_shapes_never_raise() -> None:
         cast(Mapping[str, object], {"notes": [None, {"k": "v"}]}),
         cast(Mapping[str, object], {"recursive": True, "recursive_hosts_scanned": "x", "recursive_findings": "x"}),
         cast(Mapping[str, object], {"severity_filter": [], "min_severity_filter": {}}),
+        cast(
+            Mapping[str, object],
+            {
+                "recursive": True,
+                "recursive_hosts_scanned": ["host-a"],
+                "recursive_findings": [
+                    "not-a-dict",
+                    123,
+                    None,
+                    {
+                        "host": "host-b",
+                        "depth": 1,
+                        "finding_count": 0,
+                        "services_checked": 1,
+                        "severity_counts": "bad",
+                        "findings": "bad",
+                    },
+                    {
+                        "host": "host-c",
+                        "depth": 2,
+                        "finding_count": 1,
+                        "services_checked": 1,
+                        "severity_counts": {},
+                        "findings": ["not-a-finding", {"id": "X", "severity": "high"}],
+                    },
+                ],
+            },
+        ),
     ]
     for data in cases:
         json.loads(format_vuln_report_json(data))
