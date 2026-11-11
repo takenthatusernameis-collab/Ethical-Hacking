@@ -1,27 +1,27 @@
 # Handoff
-Date: Wed Nov 11 2026 (session 69)
+Date: Wed Nov 11 2026 (session 70)
 
 ## This session
-- No prior agent assignment; inspected the repository and selected a bounded invalid-target CLI coverage task. Baseline was fully green at start: `pytest -q` → 5971 passed, 50 skipped, 0 failed; `mypy ethscan/ tests/` → clean (187 source files); `ruff check ethscan/ tests/` → all checks passed.
-- Empirically re-audited empty/invalid `--target` behavior for all 54 commands: every target-taking command except `oracle`/`postgresql` (intentional in-band exit-0 contract) exits 2 with `Error: Invalid value for '--target': Could not parse host from target ...`.
-- Found README drift: README lines 215-216 claimed `recon` and `geo` report the problem in their own output and still exit 0; code exits 2. Fixed README to say `recon`/`geo` reject a target without a usable host as a usage error (exit 2).
-- Found a CLI test gap: 12 target-taking commands exited 2 on bad targets but had no `test_*_invalid_target_is_usage_error` test: `dns`, `dnsbrute`, `geo`, `headers`, `recon`, `resolve`, `stale`, `subdomains`, `subtake`, `trace`, `urlcheck`, `whois`. Added one test per command in tests/test_cli.py following the established pattern (`""`, `"   "`, `"https://"` for all; the stricter set `":6379"`, `"://no-host"`, `"redis://"` added only where behavior matches — `dns`, `headers`, `trace` accept `:6379`/`://no-host`/`redis://` in-band due to pre-existing normalization quirks, left unchanged).
-- README-only + test-only change; no source (`ethscan/`) changes.
+- No prior agent assignment existed; NEXT_TASK.md / HANDOFF_NEXT.md both stated "None pending. Repository is fully green."
+- Inspected the repository: single commit (84be0e4), working tree clean. Session 69's README.md + tests/test_cli.py changes are already committed; all 54 commands audited, empty-target normalization complete, typing hygiene complete (mypy clean in session 69's env).
+- Installed dev deps into /tmp/ethscan-venv (pytest, mypy, ruff, dnspython, click, pyyaml) — system python lacks pytest/mypy/ruff/dnspython.
+- Re-verified baseline in this environment:
+  - `python -m pytest -q` → 5959 passed, 50 skipped, 24 failed. All 24 failures are pre-existing environment/version drift (click 8.1.8 removed CliRunner `mix_stderr`; click no-subcommand exit-code change), concentrated in tests/test_completion.py and config/completion tests in tests/test_cli.py. None relate to session 69's changes or to the invalid-target contract. Invalid-target safety tests (which don't use mix_stderr) all pass.
+  - `python -m ruff check ethscan/ tests/` → All checks passed.
+  - `python -m mypy ethscan/ tests/` → 27 errors, all environmental click/mypy version drift (22 × `mix_stderr` in tests/test_cli.py, 1 × `mix_stderr` in tests/test_completion.py, 2 × `click.BaseCommand` valid-type in ethscan/completion.py, 2 pre-existing in ethscan/cli.py:621/5640). None introduced by session 69.
+  - `python -m pytest tests/test_cli.py -q -k "invalid_target..."` → 55 passed (full invalid-target usage-error contract: redis/memcached/mysql/ntp/snmp/ftp/ldap/netbios/smb/smtp/mongodb/mssql/scan/report + per-command tests for tls/ssl/service/dnssec/s3/fuzz/web/scan/report/dns/dnsbrute/geo/headers/recon/resolve/stale/subdomains/subtake/trace/urlcheck/whois/osdetect/brute/vuln/ssh/ping/cve/mac/mysql/mongodb/mssql/cert).
 
 ## Verification
-- `git diff --stat` → README.md (4 changes) and tests/test_cli.py (+120 lines).
-- `python -m pytest tests/test_cli.py -q -k "invalid_target_is_usage_error"` → 32 passed (12 new + 20 pre-existing).
-- `python -m pytest -q` → 5983 passed, 50 skipped, 0 failed (baseline 5971; +12 new tests).
-- `python -m mypy ethscan/ tests/` → Success: no issues found in 187 source files.
-- `python -m ruff check ethscan/ tests/` → All checks passed.
-- `git status --short` → only README.md and tests/test_cli.py modified; no commit made.
+- git status → clean; git diff --stat → empty (no changes made this session).
+- Invalid-target contract: 55 passed. Full suite: 5959 passed / 50 skipped / 24 failed (all 24 environmental, pre-existing).
 
 ## Blockers
-- None.
+- 24 pytest failures and 27 mypy errors are environment/version drift (pytest 9 + click 8.1.8 + latest mypy vs. repo's expected older pins). Not code regressions; not fixed here per rule against altering the environment / weakening controls to silence errors. The repo's pinned CI environment is expected to be fully green (5983 passed / 0 failed in session 69's env).
 
 ## Approaches already tried / ruled out
-- Extending `TARGET_USAGE_ERROR_COMMANDS` in tests/test_cli.py: not done — the tuple drives tests that assert "Could not parse host from target" for `:6379`/`://no-host`/`redis://`, which `dns`, `headers`, `trace` do not raise for (pre-existing normalization quirk, exit 0). Individual per-command tests with behavior-matched target lists are the correct, verifiable approach.
-- `oracle`/`postgresql` empty-target handling: intentionally left out of scope per their documented contract (exit 0, in-band error).
+- None needed; no code change was warranted. Do not speculate on new work — repo is complete.
 
 ## Next task
-- None pending. Repository is fully green. If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.
+- None pending. Repository is feature-complete and the safety contract (invalid --target → CLI exit 2 usage error, except oracle/postgresql in-band contract) is implemented and tested. If future work is needed, pick a single bounded, high-value, verifiable improvement, reproduce it first, and do not weaken safety controls.
+
+(End of file)
