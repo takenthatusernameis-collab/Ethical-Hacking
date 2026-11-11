@@ -396,7 +396,25 @@ class _TargetGroup(click.Group):
     having to opt in, and a command that is added later cannot leak the
     error. The library modules stay free of click: this is the only place
     where the translation happens.
+
+    Invoking the tool without a subcommand is also a usage error (exit code 2)
+    rather than a silent help print: the help is still shown, so the user
+    learns what to run, but the exit code says the tool was not asked to do
+    anything.
     """
+
+    def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
+        # Click prints the group help and exits 0 when no subcommand is given
+        # (``no_args_is_help``). ethscan's contract is that invoking the tool
+        # without a subcommand is a usage error (exit code 2): the help is
+        # still shown, so the user learns what to run, but the exit code says
+        # "you did not ask me to do anything". This used to be click's own
+        # behaviour; newer versions changed it, so enforce it here rather than
+        # silently accept the new default.
+        if not args and self.no_args_is_help and not ctx.resilient_parsing:
+            click.echo(ctx.get_help(), color=ctx.color)
+            ctx.exit(2)
+        return super().parse_args(ctx, args)
 
     def invoke(self, ctx: click.Context) -> Any:
         try:
