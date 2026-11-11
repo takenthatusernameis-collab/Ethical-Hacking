@@ -1,16 +1,13 @@
 # Next Task
 
 ## Task
-- None pending. Repository is fully green (session 76: expanded `TARGET_USAGE_ERROR_COMMANDS` in `tests/test_cli.py` with 20 target-accepting commands that were missing coverage for the empty-target usage-error safety contract; all pass the full unusable-targets matrix).
+- Verify the session 77 README-only documentation fix in an environment with dev dependencies: run `python -m pytest -q`, `python -m ruff check ethscan/ tests/`, and `python -m mypy ethscan/ tests/`.
 
 ## Evidence
-- Working tree clean except for the test-harness expansion in `tests/test_cli.py`.
-- `python -m pytest -q` → 5988 passed, 50 skipped, 0 failed.
-- `python -m ruff check ethscan/ tests/` → All checks passed.
-- `python -m mypy ethscan/ tests/` → Success: no issues found in 187 source files.
-- Targeted invalid-target CLI tests → 5 passed.
+- Session 77 removed a stale editorial sentence from the `cve` feature bullet in `README.md` (no source code changes). `python3 -m compileall ethscan tests -q` clean; `ethscan cve --help` shows no `--salt`/`--pepper`/`--algorithm`.
+- `pytest`/`ruff`/`mypy` were not installed in session 77’s environment, so full regression checks were not rerun. Session 76 baseline: 5988 passed, 50 skipped, 0 failed; ruff clean; mypy clean on 187 source files.
 
 ## Next task after that
-- If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling and the `dns`/`dnssec`/`headers`/`mac`/`trace`/`web` bare-port (`:6379`/`://no-host`) behavior remain intentionally out of scope unless a task asks to change them.
+- If verification is green, mark repository fully green and pick one bounded, high-value, verifiable improvement (reproduce first; do not speculate or weaken safety controls). `oracle`/`postgresql` empty-target handling and `dns`/`dnssec`/`headers`/`mac`/`trace`/`web` bare-port (`:6379`/`://no-host`) behavior remain intentionally out of scope unless explicitly tasked.
 
-(End of file - total 21 lines)
+(End of file)
