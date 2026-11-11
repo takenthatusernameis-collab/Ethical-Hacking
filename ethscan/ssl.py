@@ -51,7 +51,7 @@ def _estimate_key_size(public_key_info) -> int | None:
         return None
 
 
-def _parse_cert(cert: dict) -> dict:
+def _parse_cert(cert: object) -> dict:
     """Parse a dict-form certificate into a structured dictionary.
 
     Args:

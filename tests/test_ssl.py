@@ -83,6 +83,25 @@ def test_parse_cert_empty() -> None:
     assert parsed["key_size"] is None
 
 
+def test_parse_cert_non_dict() -> None:
+    parsed = _parse_cert(None)
+    assert parsed["subject"] is None
+    assert parsed["issuer"] is None
+    assert parsed["sans"] == []
+    assert parsed["not_before"] is None
+    assert parsed["not_after"] is None
+    assert parsed["signature_algorithm"] is None
+    assert parsed["key_size"] is None
+    parsed = _parse_cert("not a certificate")
+    assert parsed["subject"] is None
+    assert parsed["issuer"] is None
+    assert parsed["sans"] == []
+    assert parsed["not_before"] is None
+    assert parsed["not_after"] is None
+    assert parsed["signature_algorithm"] is None
+    assert parsed["key_size"] is None
+
+
 def test_format_ssl_report_json() -> None:
     data = {
         "target": "example.com",
