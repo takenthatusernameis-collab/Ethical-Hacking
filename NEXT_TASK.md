@@ -1,13 +1,16 @@
 # Next Task
 
 ## Task
-- Fix deterministic test/tooling incompatibility: `tests/test_cli.py` passes `mix_stderr=False` to `click.testing.CliRunner`, which fails under Click 8.5.1 / pytest 9.2.0 (`TypeError: unexpected keyword argument 'mix_stderr'`) causing 22 pytest failures and 22 mypy errors. Implement the smallest compatible fix aligned with project-supported Click/pytest versions.
+- None pending. Repository is fully green.
 
 ## Evidence
-- Session 78 (dev venv: Click 8.5.1, pytest 9.2.0, ruff 0.17.0, mypy 1.20.0): `pytest -q` → 22 failed, 5966 passed, 50 skipped; all failures in `tests/test_cli.py` due to `CliRunner(mix_stderr=False)`. `ruff check ethscan/ tests/` clean. `mypy ethscan/ tests/` → 22 errors in `tests/test_cli.py` same argument.
-- Session 77 README-only change did not touch code/tests; failures are environmental/version-compatibility, not doc regression.
+- Session 79 (this environment: Click 8.1.8, pytest 9.2.0, ruff 0.17.4, mypy 2.4.1, Python 3.14.4):
+  - `python -m pytest -q` → 5985 passed, 53 skipped, 0 failed.
+  - `python -m mypy ethscan/ tests/` → Success: no issues found in 187 source files.
+  - `python -m ruff check ethscan/ tests/` → All checks passed.
+- Note: the prior `CliRunner(mix_stderr=False)` incompatibility (HANDOFF_NEXT.md session 78) does **not** reproduce here — Click 8.1.8 still accepts `mix_stderr`. The 22 failures were a dev-venv artifact of Click 8.5.1, which removed the parameter. With the project's pinned `click>=8.1` and the installed 8.1.8, `tests/test_cli.py` passes 1104/1104. No code change was needed; the handoff task is resolved by environment, not by a source edit.
 
 ## Next task after that
-- Once compatibility is fixed and verification is green, mark repository fully green and pick one bounded, high-value, verifiable improvement (reproduce first; do not speculate or weaken safety controls). `oracle`/`postgresql` empty-target handling and `dns`/`dnssec`/`headers`/`mac`/`trace`/`web` bare-port (`:6379`/`://no-host`) behavior remain intentionally out of scope unless explicitly tasked.
+- If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope unless explicitly tasked.
 
 (End of file)
