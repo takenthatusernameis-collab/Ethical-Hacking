@@ -160,7 +160,6 @@ Date: Sun Nov 08 2026 (session 7)
 
 ## Next task
 - Continue per-file typing hygiene on remaining test files with mypy errors. Reproduce each target with `python -m mypy tests/<file>` first, fix per file using the established pattern. Skip `tests/test_ping.py`.
-
 # Session (Mon Nov 09 2026, session 35)
 ## This session
 - Fixed the empty-host bug in `ethscan/tls.py:_normalize_host()` (same bug previously fixed in `ping`/29, `osdetect`/30, `vuln`/31, `ssh`/32, `brute`/33, `cve`/34). `_normalize_host` returned an empty string for empty/whitespace/invalid targets (e.g. `--target ""`, `--target "   "`, `--target "https://"`), so `tls` proceeded with an empty host and reported exit 0 instead of a usage error.
@@ -287,6 +286,20 @@ Date: Sun Nov 08 2026 (session 7)
 - `python -m mypy ethscan/ tests/` → Success: no issues found in 187 source files.
 - `python -m ruff check ethscan/ tests/` → All checks passed.
 - Empirical re-check: `tls`/`ssl`/`web`/`fuzz`/`s3`/`trace --target ""` → exit 2 usage error; README now matches code.
+## Blockers
+- None.
+## Next task
+- None pending. Repository is fully green. `oracle` and `postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error). If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.
+
+# Session (Wed Nov 11 2026, session 68)
+## This session
+- No prior agent assignment; inspected the repository and selected a bounded README-accuracy task. Baseline was fully green at start: `pytest -q` → 5971 passed, 50 skipped, 0 failed; `mypy ethscan/ tests/` → clean (187 source files); `ruff check ethscan/ tests/` → all checks passed.
+- Audited every README feature bullet against live `python -m ethscan <cmd> --help` output for all 54 commands. Found one drift: README line 37 documented `config` as supporting `--config`, `--init`, `--format`/`--output-format`, `--out`, but `config --help` also exposes `--validate` ("Exit with code 1 if the config has any validation warnings"), which was undocumented. All other commands matched (including `resolve`, which does NOT expose `--workers` — a prior concern ruled out).
+- Fixed `README.md` line 37: added `--validate` (exit code 1 if the config has any validation warnings) to the `config` bullet. README-only change; no source or test changes.
+## Verification
+- `git diff --stat` → README.md only (1 insertion, 1 deletion).
+- README `config` bullet now matches `python -m ethscan config --help` (`--validate` documented).
+- Baseline unchanged (README-only): pytest/mypy/ruff previously all green; no code or test files touched.
 ## Blockers
 - None.
 ## Next task
