@@ -708,6 +708,22 @@ def test_format_dns_report_csv_non_list_values() -> None:
     assert "single-value" in out
 
 
+def test_format_dns_report_markdown_non_dict() -> None:
+    """Cover line 218: a non-dict payload is reset to {} instead of raising."""
+    hostiles: tuple[object, ...] = (None, [], "not a dict", 123, ("tuple",), {"nested": {"bad": "data"}})
+    for hostile in hostiles:
+        out = format_dns_report_markdown(hostile)  # type: ignore[arg-type]
+        assert isinstance(out, str)
+
+
+def test_format_dns_report_csv_non_dict() -> None:
+    """Cover line 254: a non-dict payload is reset to {} instead of raising."""
+    hostiles: tuple[object, ...] = (None, [], "not a dict", 123, ("tuple",), {"nested": {"bad": "data"}})
+    for hostile in hostiles:
+        out = format_dns_report_csv(hostile)  # type: ignore[arg-type]
+        assert isinstance(out, str)
+
+
 class _RaisingFuture:
     def result(self):
         raise RuntimeError("boom")
