@@ -4940,6 +4940,85 @@ def test_scan_csv_out(monkeypatch, tmp_path) -> None:
     assert "80,false" in lines
 
 
+def test_scan_open_only_json(monkeypatch) -> None:
+    """--open-only filters closed ports in JSON output."""
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        return [(22, True), (80, False), (443, True)]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "22,80,443", "--output-format", "json", "--open-only"])
+    assert result.exit_code == 0
+    import json
+    data = json.loads(result.output)
+    assert data["open_only"] is True
+    assert data["open_ports"] == [22, 443]
+    assert len(data["details"]) == 2
+    assert all(d["open"] for d in data["details"])
+    assert {d["port"] for d in data["details"]} == {22, 443}
+
+
+def test_scan_open_only_markdown(monkeypatch) -> None:
+    """--open-only filters closed ports in Markdown output."""
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        return [(22, True), (80, False), (443, True)]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "22,80,443", "--output-format", "markdown", "--open-only"])
+    assert result.exit_code == 0
+    assert "Open Ports:** 22, 443" in result.output
+    assert "| 22 | Open |" in result.output
+    assert "| 443 | Open |" in result.output
+    assert "| 80 | Closed |" not in result.output
+
+
+def test_scan_open_only_csv(monkeypatch) -> None:
+    """--open-only filters closed ports in CSV output."""
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        return [(22, True), (80, False), (443, True)]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "22,80,443", "--output-format", "csv", "--open-only"])
+    assert result.exit_code == 0
+    lines = result.output.strip().split("\n")
+    assert lines[0] == "port,open"
+    assert "22,true" in lines
+    assert "443,true" in lines
+    assert "80,false" not in lines
+    assert len(lines) == 3  # header + 2 open ports
+
+
+def test_scan_open_only_disabled_by_default(monkeypatch) -> None:
+    """--no-open-only (default) includes all ports in output."""
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        return [(22, True), (80, False)]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "22,80", "--output-format", "json"])
+    assert result.exit_code == 0
+    import json
+    data = json.loads(result.output)
+    assert data["open_only"] is False
+    assert len(data["details"]) == 2
+    assert {d["port"] for d in data["details"]} == {22, 80}
+
+
+def test_scan_open_only_help() -> None:
+    """--help for scan command must show the --open-only option."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--help"])
+    assert result.exit_code == 0
+    assert "--open-only" in result.output
+    assert "--no-open-only" in result.output
+
+
 def test_scan_output_format_precedence(monkeypatch) -> None:
     """--output-format should take precedence over deprecated --format."""
     def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):

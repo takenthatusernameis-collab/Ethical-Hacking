@@ -920,8 +920,14 @@ def _check_config_path(path: str) -> None:
     type=click.Path(writable=True),
     help="Output file path (default: stdout)",
 )
+@click.option(
+    "--open-only/--no-open-only",
+    "open_only",
+    default=False,
+    help="Filter scan results to open ports only (JSON, Markdown, and CSV output).",
+)
 @click.pass_context
-def scan(ctx: click.Context, target: str, ports: str, profile: str | None, timeout: float, workers: int, output_fmt: str | None, fmt: str, out_path: str | None) -> None:
+def scan(ctx: click.Context, target: str, ports: str, profile: str | None, timeout: float, workers: int, output_fmt: str | None, fmt: str, out_path: str | None, open_only: bool) -> None:
     """Run a port scan against TARGET."""
     host = normalize_host(target)
     if profile:
@@ -942,6 +948,10 @@ def scan(ctx: click.Context, target: str, ports: str, profile: str | None, timeo
 
     open_ports = [port for port, is_open in results if is_open]
 
+    scan_details = [{"port": port, "open": is_open} for port, is_open in results]
+    if open_only:
+        scan_details = [d for d in scan_details if d["open"]]
+
     # Prepare structured output for formatters
     scan_data = {
         "target": target,
@@ -949,7 +959,8 @@ def scan(ctx: click.Context, target: str, ports: str, profile: str | None, timeo
         "timeout": timeout,
         "ports_scanned": len(port_list),
         "open_ports": open_ports,
-        "details": [{"port": port, "open": is_open} for port, is_open in results],
+        "details": scan_details,
+        "open_only": open_only,
     }
 
     # --output-format takes precedence over the deprecated --format alias
