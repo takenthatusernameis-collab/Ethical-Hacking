@@ -49,11 +49,14 @@ def test_cli_version_markdown() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["version", "--format", "markdown"])
     assert result.exit_code == 0
-    assert result.output.startswith("ethscan 0.1.0\n")
-    assert "Python:" in result.output
-    assert "Dependencies:" in result.output
-    assert "Config file:" in result.output
-    assert "Cache directory:" in result.output
+    assert result.output.startswith("# ethscan Version Report\n")
+    assert "**Version:** 0.1.0" in result.output
+    assert "## Dependencies" in result.output
+    assert "| Dependency | Version |" in result.output
+    assert "| click |" in result.output
+    assert "## Configuration" in result.output
+    assert "**Config file:**" in result.output
+    assert "**Cache directory:**" in result.output
 
 
 def test_cli_help_lists_commands() -> None:

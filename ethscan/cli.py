@@ -5676,14 +5676,23 @@ def version(
         output = output_io.getvalue()
     else:
         lines = [
-            f"ethscan {data['version']}",
-            f"Python: {data['python']} ({data['platform']}, {data['architecture']})",
-            "Dependencies:",
-            f"  click: {dependencies['click']}",
-            f"  pyyaml: {dependencies['pyyaml']}",
-            f"  dnspython: {dependencies['dnspython']}",
-            f"Config file: {data['config_file']}",
-            f"Cache directory: {data['cache_directory']}",
+            f"# ethscan Version Report",
+            "",
+            f"- **Version:** {data['version']}",
+            f"- **Python:** {data['python']} ({data['platform']}, {data['architecture']})",
+            "",
+            "## Dependencies",
+            "",
+            "| Dependency | Version |",
+            "|------------|---------|",
+            f"| click | {dependencies['click']} |",
+            f"| pyyaml | {dependencies['pyyaml']} |",
+            f"| dnspython | {dependencies['dnspython']} |",
+            "",
+            "## Configuration",
+            "",
+            f"- **Config file:** {data['config_file']}",
+            f"- **Cache directory:** {data['cache_directory']}",
         ]
         output = "\n".join(lines) + "\n"
 
