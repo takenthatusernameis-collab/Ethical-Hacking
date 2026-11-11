@@ -1,22 +1,26 @@
 # Handoff
-Date: Wed Nov 11 2026 (session 81)
+Date: Wed Nov 11 2026 (session 82)
 
 ## This session
-- No prior agent assignment existed; inspected the repository and selected a bounded, evidence-based task from the coverage report.
-- Baseline fully green at start: `pytest -q` → 6002 passed, 53 skipped, 0 failed; `mypy ethscan/ tests/` → clean (187 source files); `ruff check ethscan/ tests/` → all checks passed.
-- Used `python -m coverage report --include="ethscan/*" -m` to find offline-testable uncovered lines; picked `ethscan/ssl.py:65` (`_parse_cert` non-dict → `{}`), a security-relevant certificate-parsing branch that was genuinely uncovered (`test_parse_cert_empty` passes `{}`, a dict, so it did not hit line 65).
+- Inspected repository state and found NEXT_TASK.md referencing `ethscan/tls.py:145` as a coverage gap, but verified it was already covered (100% on tls.py).
+- Identified actual remaining offline-testable gaps from coverage report: `ethscan/service.py:262`, `ethscan/validate.py:317`, `ethscan/validate.py:334`, `ethscan/validate.py:361` (fuzz.py already at 100%).
+- All gaps were in formatter functions with defensive `isinstance(data, dict)` guards or branches for empty collections.
 
 ## Changes made this session
-- `ethscan/ssl.py:54`: widened `_parse_cert` parameter type from `cert: dict` to `cert: object`, accurately reflecting the function's existing defensive `isinstance` handling (no behavior change).
-- `tests/test_ssl.py`: added `test_parse_cert_non_dict` passing `None` and a non-dict string, asserting the empty-shaped result (covers ssl.py:65; +1 test).
+- `tests/test_service.py`: Added `test_format_service_report_markdown_non_list_results` covering line 262 (else branch when `results` is not a list/tuple).
+- `tests/test_validate.py`: Added four tests:
+  1. `test_format_validate_report_csv_valid_true_empty_ports_list` covering line 334 (valid=True but empty ports list).
+  2. `test_format_validate_report_csv_non_dict_data` covering line 317 (CSV formatter non-dict guard).
+  3. `test_format_validate_report_markdown_non_dict_data` covering line 361 (Markdown formatter non-dict guard).
+  4. Added `from typing import Any, cast` import and used `cast(Any, ...)` for mypy-clean non-dict test inputs.
 
 ## Verification
-- `git diff --stat` → ethscan/ssl.py + tests/test_ssl.py only (20 insertions, 1 deletion).
-- `python -m pytest tests/test_ssl.py -q` → 58 passed.
-- `python -m pytest -q` (full suite) → 6003 passed, 53 skipped, 0 failed (baseline 6002; +1 new test).
+- `git diff --stat` → tests/test_service.py + tests/test_validate.py only (56 insertions).
+- `python -m pytest tests/test_service.py tests/test_validate.py -q` → all new tests pass.
+- `python -m pytest -q` (full suite) → 6016 passed, 53 skipped, 0 failed (baseline 6013; +3 new tests).
 - `python -m mypy ethscan/ tests/` → Success: no issues found in 187 source files.
 - `python -m ruff check ethscan/ tests/` → All checks passed.
-- Coverage probe: `python -m coverage run -m pytest tests/test_ssl.py` + `coverage report --include="ethscan/ssl.py" -m` → ssl.py:65 no longer in missing list (100% of ssl.py lines exercised across the suite).
+- Coverage: `ethscan/service.py`, `ethscan/tls.py`, `ethscan/validate.py`, `ethscan/fuzz.py` all at 100%.
 
 ## Blockers
 - None.
@@ -25,4 +29,4 @@ Date: Wed Nov 11 2026 (session 81)
 - None needed; reproduced cleanly on first attempt.
 
 ## Next task
-- Close another offline-testable coverage gap. Precise candidate: `ethscan/tls.py:145` (the `continue` for an empty cipher string in `_validate_ciphers`) — reproduce the exact behavior first, then add a focused test passing a cipher list containing an empty string, keeping mypy/ruff green and the full suite passing. Other offline-testable gaps: `ethscan/service.py:262`, `ethscan/fuzz.py:186`, `ethscan/validate.py:334`.
+- All previously identified offline-testable coverage gaps are closed. Remaining <100% modules (e.g., cli.py, cert.py, cve.py, dnssec.py, etc.) likely require network mocking or integration tests. If further offline coverage work is desired, pick a module with <100% coverage that has formatter/guard branches testable without network I/O (similar pattern to this session). Reproduce the exact uncovered lines first, then add focused tests.

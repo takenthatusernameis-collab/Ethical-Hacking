@@ -2,6 +2,7 @@
 
 import ipaddress
 import json
+from typing import Any, cast
 
 from ethscan.validate import (
     _format_network_info,
@@ -564,6 +565,33 @@ def test_format_validate_report_csv_valid_with_empty_ports() -> None:
     assert "No ports in specification" in lines[1]
 
 
+def test_format_validate_report_csv_valid_true_empty_ports_list() -> None:
+    # Directly construct a valid port result with an empty ports list
+    # to cover the branch where valid=True but ports=[] (line 334)
+    data = {
+        "ports": [
+            {
+                "spec": "80",
+                "valid": True,
+                "ports": [],
+                "count": 1,
+                "error": None,
+            }
+        ],
+        "cidrs": [],
+        "summary": {"ports_specified": 1, "ports_valid": 1, "ports_total": 1, "cidrs_specified": 0, "cidrs_valid": 0, "all_valid": True},
+        "notes": [],
+    }
+    output = format_validate_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "type,spec,valid,detail"
+    assert len(lines) == 2
+    # valid=True, so "true" in second column
+    assert "true" in lines[1]
+    # detail should be str(count) = "1" since ports list is empty
+    assert lines[1].endswith(",1")
+
+
 def test_format_validate_report_markdown_long_expanded() -> None:
     # Create a long range that exceeds 80 chars when formatted
     list(range(1, 30))  # 1-29 is "1-29" which is short; better make many single ports
@@ -735,3 +763,18 @@ def test_format_validate_report_markdown_cidr_valid_network_not_dict() -> None:
     output = format_validate_report_markdown(data)
     assert "192.168.1.0/24" in output
     assert "N/A" in output
+
+
+def test_format_validate_report_csv_non_dict_data() -> None:
+    # Line 317: non-dict data is normalized to empty dict
+    output = format_validate_report_csv(cast(Any, "not a dict"))
+    lines = output.splitlines()
+    assert lines[0] == "type,spec,valid,detail"
+    assert len(lines) == 1
+
+
+def test_format_validate_report_markdown_non_dict_data() -> None:
+    # Line 361: non-dict data is normalized to empty dict
+    output = format_validate_report_markdown(cast(Any, "not a dict"))
+    assert "# ethscan Validate Report" in output
+    assert "## Summary" in output

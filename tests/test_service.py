@@ -223,6 +223,19 @@ def test_format_service_report_markdown_no_results() -> None:
     assert "*No services detected.*" in output
 
 
+def test_format_service_report_markdown_non_list_results() -> None:
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "timeout": 3.0,
+        "ports_scanned": 3,
+        "services_found": 0,
+        "results": "not-a-list",
+    }
+    output = format_service_report_markdown(data)
+    assert "*No services detected.*" in output
+
+
 def test_banner_truncation_in_markdown(monkeypatch) -> None:
     long_banner = "A" * 100
 
