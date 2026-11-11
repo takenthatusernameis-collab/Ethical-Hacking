@@ -32,6 +32,7 @@ from ethscan.target import (
     TargetSpecError,
     check_port,
     check_target_host,
+    normalize_host,
     parse_url,
     strip_userinfo,
     url_port,
@@ -766,3 +767,74 @@ def test_parse_url_brackets_unbracketed_ipv6_literal() -> None:
 def test_parse_url_leaves_already_bracketed_or_ipv4_unchanged() -> None:
     parsed = parse_url("http://[::1]:443")
     assert parsed.netloc == "[::1]:443"
+
+
+# --- The shared host normalizer ---------------------------------------------
+#
+# :func:`normalize_host` extracts a bare hostname from a target that may be a
+# bare host or a URL. Every module that rejects an unusable target delegates
+# to it, so its contract (empty host raises, whitespace is stripped, the host
+# is lowercased, scheme/port/path/query/fragment are dropped) is tested here
+# directly instead of only through each module's wrapper.
+
+EMPTY_HOST_TARGETS = ("", "   ", "://no-host", "redis://", ":6379", "https://", "http://", "/")
+
+
+def test_normalize_host_returns_a_bare_host() -> None:
+    """A bare host is returned unchanged."""
+    assert normalize_host("example.com") == "example.com"
+
+
+def test_normalize_host_lowercases_the_host() -> None:
+    """The host is lowercased."""
+    assert normalize_host("EXAMPLE.COM") == "example.com"
+    assert normalize_host("Example.COM") == "example.com"
+
+
+def test_normalize_host_strips_url_scheme_path_query_and_fragment() -> None:
+    """A URL is reduced to its bare hostname."""
+    assert normalize_host("https://example.com/path?q=1#frag") == "example.com"
+    assert normalize_host("http://sub.example.com:8080/foo") == "sub.example.com"
+    assert normalize_host("https://example.com") == "example.com"
+
+
+def test_normalize_host_strips_the_port() -> None:
+    """An explicit port is not part of the hostname."""
+    assert normalize_host("example.com:443") == "example.com"
+    assert normalize_host("https://example.com:8443") == "example.com"
+
+
+def test_normalize_host_keeps_an_ipv6_literal() -> None:
+    """An IPv6 literal is kept, bracketed or not, with or without a port."""
+    assert normalize_host("2001:db8::1") == "2001:db8::1"
+    assert normalize_host("[2001:db8::1]:443") == "2001:db8::1"
+    assert normalize_host("https://[::1]:443") == "::1"
+
+
+def test_normalize_host_strips_whitespace() -> None:
+    """Surrounding whitespace is removed."""
+    assert normalize_host("  example.com  ") == "example.com"
+
+
+def test_normalize_host_uses_https_as_the_default_scheme() -> None:
+    """A target without a scheme is read as https://."""
+    assert normalize_host("example.com") == "example.com"
+
+
+def test_normalize_host_uses_the_given_default_scheme() -> None:
+    """The caller can override the default scheme."""
+    assert normalize_host("example.com", default_scheme="http://") == "example.com"
+
+
+@pytest.mark.parametrize("target", EMPTY_HOST_TARGETS)
+def test_normalize_host_rejects_a_target_without_a_usable_host(target: str) -> None:
+    """A target without a usable host raises the dedicated error type."""
+    with pytest.raises(TargetSpecError) as excinfo:
+        normalize_host(target)
+    assert str(excinfo.value) == f"Could not parse host from target {target!r}"
+
+
+def test_normalize_host_error_is_still_a_value_error() -> None:
+    """Existing ``except ValueError`` handlers keep working."""
+    with pytest.raises(ValueError):
+        normalize_host("")
