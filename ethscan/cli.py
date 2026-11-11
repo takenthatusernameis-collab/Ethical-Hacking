@@ -618,7 +618,9 @@ def _read_stdin_text() -> str:
     The bytes that are not valid UTF-8 are replaced instead of raising a
     ``UnicodeDecodeError``, which would reach the user as a raw traceback.
     """
-    return click.get_text_stream("stdin", errors="replace").read()
+    import sys
+    data = sys.stdin.buffer.read()
+    return data.decode("utf-8", errors="replace")
 
 
 def _require_utf8(path: str, param_hint: str) -> None:
@@ -5615,19 +5617,19 @@ def version(
 
     try:
         import click as click_module
-        click_version = click_module.__version__
+        click_version = str(click_module.__version__)
     except (ImportError, AttributeError):
         click_version = "unknown"
 
     try:
         import yaml
-        yaml_version = yaml.__version__
+        yaml_version = str(yaml.__version__)
     except (ImportError, AttributeError):
         yaml_version = "unknown"
 
     try:
         import dns
-        dns_version = dns.__version__
+        dns_version = str(dns.__version__)
     except (ImportError, AttributeError):
         dns_version = "not installed"
 

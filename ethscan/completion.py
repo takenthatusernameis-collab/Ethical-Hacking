@@ -51,7 +51,7 @@ def _completion_class_for(shell: str):
 
 
 def generate_completion_script(
-    cli_obj: click.BaseCommand,
+    cli_obj: click.Command,
     shell: str,
     prog_name: str = DEFAULT_PROG_NAME,
 ) -> str:
@@ -73,7 +73,7 @@ def generate_completion_script(
 
 
 def run_completion(
-    cli_obj: click.BaseCommand,
+    cli_obj: click.Command,
     shell: str,
     prog_name: str = DEFAULT_PROG_NAME,
 ) -> dict[str, Any]:
