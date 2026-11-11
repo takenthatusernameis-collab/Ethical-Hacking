@@ -837,3 +837,21 @@ def test_format_ftp_report_csv_anonymous_not_checked() -> None:
     assert reader[1][4] == ""
     assert reader[1][5] == ""
     assert reader[1][6] == ""
+
+
+def test_format_ftp_report_markdown_non_dict() -> None:
+    """Cover line 231: a non-dict payload is reset to {} instead of raising."""
+    for hostile: object in (None, [], "not a dict", 123, ("tuple",), {"nested": {"bad": "data"}}):
+        output = format_ftp_report_markdown(hostile)  # type: ignore[arg-type]
+        assert "# ethscan FTP Report" in output
+        assert "Target:**" in output
+        assert "Anonymous Login:** not checked" in output
+
+
+def test_format_ftp_report_csv_non_dict() -> None:
+    """Cover line 275: a non-dict payload is reset to {} instead of raising."""
+    for hostile: object in (None, [], "not a dict", 123, ("tuple",)):
+        output = format_ftp_report_csv(hostile)  # type: ignore[arg-type]
+        reader = list(csv.reader(io.StringIO(output)))
+        assert reader[0] == ["target", "host", "port", "banner", "anonymous_login", "anonymous_message", "error"]
+        assert reader[1] == ["", "", "", "", "", "", ""]
