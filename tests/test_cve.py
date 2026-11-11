@@ -1684,3 +1684,27 @@ def test_cve_scan_skips_non_dict_entry_in_service_list(monkeypatch) -> None:
     monkeypatch.setattr(cve, "_lookup_cve_id", lambda p, v: None)
     res = cve.run_cve("example.com")
     assert cast(int, res["services_checked"]) == 1
+
+
+def test_extract_cve_summary_non_dict_input() -> None:
+    # Line 171: non-dict input returns empty dict
+    assert _extract_cve_summary(cast(Any, "not a dict")) == {}
+    assert _extract_cve_summary(cast(Any, None)) == {}
+    assert _extract_cve_summary(cast(Any, 42)) == {}
+
+
+def test_format_cve_report_csv_non_dict_data() -> None:
+    # Line 518: non-dict data is normalized to empty dict
+    output = format_cve_report_csv(cast(Any, "not a dict"))
+    lines = output.splitlines()
+    assert lines[0] == "source,port,product,version,cve_id,severity,score,title,description,references,cached,offline_fallback"
+    assert len(lines) == 1  # only header row
+
+
+def test_format_cve_report_markdown_non_dict_data() -> None:
+    # Line 589: non-dict data is normalized to empty dict
+    output = format_cve_report_markdown(cast(Any, "not a dict"))
+    assert "# ethscan CVE Report" in output
+    assert "## Severity Summary" in output
+    assert "## CVE Findings" in output
+    assert "*No CVEs matched.*" in output

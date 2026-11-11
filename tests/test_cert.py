@@ -5,7 +5,7 @@ import io
 import json
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -743,6 +743,22 @@ def test_format_cert_report_csv_empty() -> None:
     reader = list(csv.reader(io.StringIO(output)))
     assert len(reader) == 2  # header + one empty row
     assert reader[1] == ["example.com", "example.com", "", ""]
+
+
+def test_format_cert_report_markdown_non_dict_data() -> None:
+    # Line 250: non-dict data is normalized to empty dict
+    output = format_cert_report_markdown(cast(Any, "not a dict"))
+    assert "# ethscan Certificate Transparency Report" in output
+    assert "## Summary" not in output
+
+
+def test_format_cert_report_csv_non_dict_data() -> None:
+    # Line 305: non-dict data is normalized to empty dict
+    output = format_cert_report_csv(cast(Any, "not a dict"))
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0] == ["target", "domain", "ip", "subdomain"]
+    assert len(reader) == 2  # header + empty row
+    assert reader[1] == ["", "", "", ""]
 
 
 def test_resolver_failure_of_an_unknown_type_is_reported(monkeypatch) -> None:
