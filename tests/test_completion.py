@@ -68,7 +68,7 @@ def test_completion_class_for_fish() -> None:
 
 def test_completion_class_for_unknown_raises() -> None:
     with pytest.raises(ValueError):
-        _completion_class_for("powershell")
+        _completion_class_for("__ethscan_unsupported_shell__")
 
 
 # ---------------------------------------------------------------------------
@@ -76,7 +76,7 @@ def test_completion_class_for_unknown_raises() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _make_cli() -> click.BaseCommand:
+def _make_cli() -> click.Command:
     @click.group()
     def grp() -> None:
         pass
