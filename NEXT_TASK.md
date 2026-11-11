@@ -4,9 +4,9 @@
 - None pending. Repository is fully green.
 
 ## Evidence
-- Baseline (this environment, Python 3.14.4, session 68): `python -m pytest -q` → 5971 passed, 50 skipped, 0 failed; `python -m mypy ethscan/ tests/` → Success (187 source files); `python -m ruff check ethscan/ tests/` → All checks passed.
-- `python -m ethscan --version` → `0.1.0`; `python -m ethscan --help` lists 54 commands. No TODO/FIXME/XXX/HACK markers in `ethscan/`. `git status` clean.
-- Last change (session 68): README.md only — documented the `config --validate` option in the `config` feature bullet. All README feature bullets verified against live `--help` output for all 54 commands; no remaining drift.
+- Baseline (this environment, Python 3.14.4, session 69): `python -m pytest -q` → 5983 passed, 50 skipped, 0 failed; `python -m mypy ethscan/ tests/` → Success (187 source files); `python -m ruff check ethscan/ tests/` → All checks passed.
+- `python -m ethscan --version` → `0.1.0`; `python -m ethscan --help` lists 54 commands. No TODO/FIXME/XXX/HACK markers in `ethscan/`. `git status` clean apart from this session's changes (README.md, tests/test_cli.py; not committed).
+- Last change (session 69): README.md documents `recon`/`geo` invalid-target rejection as usage error (exit 2); tests/test_cli.py adds `test_*_invalid_target_is_usage_error` for `dns`, `dnsbrute`, `geo`, `headers`, `recon`, `resolve`, `stale`, `subdomains`, `subtake`, `trace`, `urlcheck`, `whois`.
 - No reproducible, bounded, high-value code issue identified.
 
 ## Next task after that

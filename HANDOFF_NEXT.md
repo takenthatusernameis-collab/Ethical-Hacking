@@ -1,23 +1,27 @@
 # Handoff
-Date: Wed Nov 11 2026 (session 68)
+Date: Wed Nov 11 2026 (session 69)
 
 ## This session
-- No prior agent assignment; inspected the repository and selected a bounded README-accuracy task. Baseline was fully green at start: `pytest -q` → 5971 passed, 50 skipped, 0 failed; `mypy ethscan/ tests/` → clean (187 source files); `ruff check ethscan/ tests/` → all checks passed.
-- Audited every README feature bullet against live `python -m ethscan <cmd> --help` output for all 54 commands. Found one drift: README line 37 documented `config` as supporting `--config`, `--init`, `--format`/`--output-format`, `--out`, but `config --help` also exposes `--validate` ("Exit with code 1 if the config has any validation warnings"), which was undocumented. All other commands matched (including `resolve`, which does NOT expose `--workers` — a prior concern ruled out).
-- Fixed `README.md` line 37: added `--validate` (exit code 1 if the config has any validation warnings) to the `config` bullet. README-only change; no source or test changes.
+- No prior agent assignment; inspected the repository and selected a bounded invalid-target CLI coverage task. Baseline was fully green at start: `pytest -q` → 5971 passed, 50 skipped, 0 failed; `mypy ethscan/ tests/` → clean (187 source files); `ruff check ethscan/ tests/` → all checks passed.
+- Empirically re-audited empty/invalid `--target` behavior for all 54 commands: every target-taking command except `oracle`/`postgresql` (intentional in-band exit-0 contract) exits 2 with `Error: Invalid value for '--target': Could not parse host from target ...`.
+- Found README drift: README lines 215-216 claimed `recon` and `geo` report the problem in their own output and still exit 0; code exits 2. Fixed README to say `recon`/`geo` reject a target without a usable host as a usage error (exit 2).
+- Found a CLI test gap: 12 target-taking commands exited 2 on bad targets but had no `test_*_invalid_target_is_usage_error` test: `dns`, `dnsbrute`, `geo`, `headers`, `recon`, `resolve`, `stale`, `subdomains`, `subtake`, `trace`, `urlcheck`, `whois`. Added one test per command in tests/test_cli.py following the established pattern (`""`, `"   "`, `"https://"` for all; the stricter set `":6379"`, `"://no-host"`, `"redis://"` added only where behavior matches — `dns`, `headers`, `trace` accept `:6379`/`://no-host`/`redis://` in-band due to pre-existing normalization quirks, left unchanged).
+- README-only + test-only change; no source (`ethscan/`) changes.
 
 ## Verification
-- `git diff --stat` → README.md only (1 insertion, 1 deletion).
-- README `config` bullet now matches `python -m ethscan config --help` (`--validate` documented).
-- `git status --short` → clean (working tree clean after edit; no commit made).
-- Baseline unchanged (README-only): pytest/mypy/ruff previously all green; no code or test files touched.
+- `git diff --stat` → README.md (4 changes) and tests/test_cli.py (+120 lines).
+- `python -m pytest tests/test_cli.py -q -k "invalid_target_is_usage_error"` → 32 passed (12 new + 20 pre-existing).
+- `python -m pytest -q` → 5983 passed, 50 skipped, 0 failed (baseline 5971; +12 new tests).
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 187 source files.
+- `python -m ruff check ethscan/ tests/` → All checks passed.
+- `git status --short` → only README.md and tests/test_cli.py modified; no commit made.
 
 ## Blockers
 - None.
 
 ## Approaches already tried / ruled out
-- Empty-target consistency audit across all commands: all consistent (only `oracle`/`postgresql` exit 0, intentionally in-band and out of scope). No code change needed there.
-- `resolve --workers` drift concern: ruled out — README does not claim `--workers` for `resolve`.
+- Extending `TARGET_USAGE_ERROR_COMMANDS` in tests/test_cli.py: not done — the tuple drives tests that assert "Could not parse host from target" for `:6379`/`://no-host`/`redis://`, which `dns`, `headers`, `trace` do not raise for (pre-existing normalization quirk, exit 0). Individual per-command tests with behavior-matched target lists are the correct, verifiable approach.
+- `oracle`/`postgresql` empty-target handling: intentionally left out of scope per their documented contract (exit 0, in-band error).
 
 ## Next task
-- None pending. Repository is fully green. `oracle` and `postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error). If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.
+- None pending. Repository is fully green. If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.

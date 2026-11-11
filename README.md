@@ -212,8 +212,8 @@ Try 'python -m ethscan trace --help' for help.
 Error: Invalid value for '--target': Could not parse host from target ''
 ```
 
-The `recon` and `geo` commands run the traceroute as one of their modules,
-so they report the same problem in their own output and still exit 0.
+The `recon` and `geo` commands reject a target without a usable host as a
+usage error (exit code 2), the same way as the other target-taking commands.
 
 The `s3` command rejects a target without a usable host as a usage error
 (exit 2), the same way as the other target-taking commands:

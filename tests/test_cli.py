@@ -6034,6 +6034,126 @@ def test_report_invalid_target_is_usage_error() -> None:
         assert "Could not parse host from target" in result.output
 
 
+def test_dns_invalid_target_is_usage_error() -> None:
+    """An unusable dns target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://"):
+        result = runner.invoke(cli, ["dns", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
+def test_dnsbrute_invalid_target_is_usage_error() -> None:
+    """An unusable dnsbrute target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://", ":6379", "://no-host", "redis://"):
+        result = runner.invoke(cli, ["dnsbrute", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
+def test_geo_invalid_target_is_usage_error() -> None:
+    """An unusable geo target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://", ":6379", "://no-host", "redis://"):
+        result = runner.invoke(cli, ["geo", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
+def test_headers_invalid_target_is_usage_error() -> None:
+    """An unusable headers target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://"):
+        result = runner.invoke(cli, ["headers", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
+def test_recon_invalid_target_is_usage_error() -> None:
+    """An unusable recon target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://", ":6379", "://no-host", "redis://"):
+        result = runner.invoke(cli, ["recon", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
+def test_resolve_invalid_target_is_usage_error() -> None:
+    """An unusable resolve target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://", ":6379", "://no-host", "redis://"):
+        result = runner.invoke(cli, ["resolve", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
+def test_stale_invalid_target_is_usage_error() -> None:
+    """An unusable stale target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://", ":6379", "://no-host", "redis://"):
+        result = runner.invoke(cli, ["stale", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
+def test_subdomains_invalid_target_is_usage_error() -> None:
+    """An unusable subdomains target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://", ":6379", "://no-host", "redis://"):
+        result = runner.invoke(cli, ["subdomains", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
+def test_subtake_invalid_target_is_usage_error() -> None:
+    """An unusable subtake target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://", ":6379", "://no-host", "redis://"):
+        result = runner.invoke(cli, ["subtake", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
+def test_trace_invalid_target_is_usage_error() -> None:
+    """An unusable trace target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://"):
+        result = runner.invoke(cli, ["trace", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
+def test_urlcheck_invalid_target_is_usage_error() -> None:
+    """An unusable urlcheck target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://", ":6379", "://no-host", "redis://"):
+        result = runner.invoke(cli, ["urlcheck", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
+def test_whois_invalid_target_is_usage_error() -> None:
+    """An unusable whois target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://", ":6379", "://no-host", "redis://"):
+        result = runner.invoke(cli, ["whois", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
 def test_vuln_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["vuln", "--help"])
