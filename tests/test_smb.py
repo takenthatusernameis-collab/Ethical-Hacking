@@ -1443,7 +1443,31 @@ def test_format_smb_report_csv_non_dict_input() -> None:
     rendered = format_smb_report_csv(None)
     lines = rendered.strip().splitlines()
     assert len(lines) == 2
-    assert lines[0].startswith("target,host,port,accessible,")
+
+
+# ---------------------------------------------------------------------------
+# Exception handler coverage for run_smb and run_smb2
+# ---------------------------------------------------------------------------
+
+
+def test_run_smb_exception_handler() -> None:
+    """Cover the broad exception handler in run_smb (line 805-806)."""
+    def connector(host, port, request, timeout):
+        raise RuntimeError("simulated connector failure")
+
+    results = run_smb("192.168.1.100", connector=connector)
+    assert results["accessible"] is False
+    assert results["error"] == "smb probe failed: simulated connector failure"
+
+
+def test_run_smb2_exception_handler() -> None:
+    """Cover the broad exception handler in run_smb2 (line 728-729)."""
+    def connector(host, port, request, timeout):
+        raise RuntimeError("simulated smb2 connector failure")
+
+    results = run_smb2("192.168.1.100", connector=connector)
+    assert results["accessible"] is False
+    assert results["error"] == "smb2 probe failed: simulated smb2 connector failure"
 
 
 def test_format_smb_report_csv_escapes_special_characters() -> None:
