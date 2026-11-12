@@ -1027,3 +1027,21 @@ def test_normalize_target_ipv6_bracket_bad_port() -> None:
         result = None
     # Should be handled reasonably
     assert result is not None or True
+
+
+# ---------------------------------------------------------------------------
+# format_redis_report_markdown/csv defensive guards (non-dict input)
+# ---------------------------------------------------------------------------
+
+
+def test_format_redis_report_markdown_non_dict_input():
+    rendered = format_redis_report_markdown(None)
+    assert "# ethscan Redis Reconnaissance Report" in rendered
+    assert "**Accessible:** No" in rendered
+
+
+def test_format_redis_report_csv_non_dict_input():
+    rendered = format_redis_report_csv(None)
+    lines = rendered.strip().splitlines()
+    assert len(lines) == 2
+    assert lines[0].startswith("target,host,port,accessible,")
