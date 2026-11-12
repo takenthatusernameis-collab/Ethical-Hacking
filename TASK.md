@@ -324,3 +324,22 @@ Date: Sun Nov 08 2026 (session 7)
 - None.
 ## Next task
 - None pending. Repository is fully green. `oracle` and `postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error). If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.
+
+# Session (Thu Nov 12 2026, session 114)
+## This session
+- No prior agent assignment existed (HANDOFF_NEXT/NEXT_TASK said no further task). Inspected the repo, confirmed baseline green (`pytest -q` → 6117 passed, 53 skipped, 0 failed; mypy/ruff clean) and selected a bounded robustness fix.
+- Reproduced a real crash in the `jwt` Markdown formatter: a crafted token with an unrepresentable `exp`/`iat`/`nbf` value (e.g. `10**30`, `Infinity`, `NaN`) made `format_jwt_report_markdown` raise `OverflowError`/`ValueError` from `time.gmtime`, and `python -m ethscan jwt --token <crafted> --output-format markdown` exited 1 with a traceback. JSON/CSV formatters already tolerated these values; only Markdown crashed.
+- Root cause: `ethscan/jwt.py:_format_timestamp` called `time.gmtime`/`time.strftime` unguarded. Fixed it to catch `OverflowError`/`OSError`/`ValueError` and return an explicit `<out-of-range (value)>` placeholder, so the value is still shown instead of crashing.
+- Added unit tests in `tests/test_jwt.py` (parametrized `inf`, `-inf`, `nan`, `±10**30` through `run_jwt` → `format_jwt_report_markdown`, plus a finite-timestamp regression) and a CLI regression test in `tests/test_cli.py` (`test_jwt_markdown_out_of_range_timestamp_does_not_crash`).
+
+## Verification
+- `python -m pytest tests/test_jwt.py tests/test_jwt_hostile_sweep.py -q` → 49 passed.
+- `python -m pytest tests/test_cli.py -q -k jwt` → 15 passed.
+- Reproduced CLI after fix: crafted token → exit 0, Markdown report printed with `<out-of-range (...)>` (no traceback).
+- `python -m pytest -q` → 6124 passed, 53 skipped, 0 failed (baseline 6117; +7 new tests).
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 188 source files.
+- `python -m ruff check ethscan/ tests/` → All checks passed.
+## Blockers
+- None.
+## Next task
+- None pending. Repository is green. If future work is needed, pick one bounded, verifiable improvement and reproduce it first. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).

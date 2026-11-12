@@ -5,6 +5,8 @@ import json
 import time
 from typing import cast
 
+import pytest
+
 from ethscan.jwt import (
     KNOWN_ALGORITHMS,
     LONG_LIVED_THRESHOLD_SECONDS,
@@ -460,3 +462,35 @@ def test_csv_error_and_other_claims() -> None:
     assert "error,boom" in csv_out
     assert "other_claim,value" in csv_out
     assert "foo,bar" in csv_out
+
+
+@pytest.mark.parametrize(
+    "timestamp",
+    [
+        float("inf"),
+        float("-inf"),
+        float("nan"),
+        10**30,
+        -(10**30),
+    ],
+)
+def test_format_jwt_report_markdown_handles_unrepresentable_timestamps(
+    timestamp: float,
+) -> None:
+    """Crafted exp/iat/nbf values must not crash the Markdown formatter."""
+    token = _make_token(
+        {"alg": "HS256"},
+        {"exp": timestamp, "iat": timestamp, "nbf": timestamp},
+    )
+    data = run_jwt(token)
+    md = format_jwt_report_markdown(data)
+    assert "JWT Inspection Report" in md
+    assert "Expiration (exp)" in md
+    assert "<out-of-range" in md
+
+
+def test_format_jwt_report_markdown_finite_timestamp_still_iso() -> None:
+    token = _make_token({"alg": "HS256"}, {"exp": NOW})
+    md = format_jwt_report_markdown(run_jwt(token, now=NOW))
+    assert "2023-11-14T22:13:20Z" in md
+    assert "<out-of-range" not in md

@@ -14719,6 +14719,15 @@ def test_jwt_invalid_token() -> None:
     assert "false" in result.output
 
 
+def test_jwt_markdown_out_of_range_timestamp_does_not_crash() -> None:
+    token = _make_jwt({"alg": "HS256"}, {"exp": 10**30})
+    runner = CliRunner()
+    result = runner.invoke(cli, ["jwt", "--token", token, "--format", "markdown"])
+    assert result.exit_code == 0, result.output
+    assert "JWT Inspection Report" in result.output
+    assert "<out-of-range" in result.output
+
+
 def test_jwt_no_token_empty_stdin() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["jwt"], input="")

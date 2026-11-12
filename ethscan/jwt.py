@@ -84,8 +84,18 @@ def parse_jwt(token: str) -> dict[str, object]:
 
 
 def _format_timestamp(timestamp: float) -> str:
-    """Format a Unix timestamp as an ISO-8601 UTC string."""
-    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(timestamp))
+    """Format a Unix timestamp as an ISO-8601 UTC string.
+
+    Crafted tokens can carry ``exp``/``iat``/``nbf`` values that are not
+    representable as a calendar time on this platform (for example ``NaN``,
+    infinities, or integers beyond ``time_t`` range). Rather than letting the
+    Markdown formatter crash, fall back to an explicit placeholder that still
+    shows the raw value.
+    """
+    try:
+        return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(timestamp))
+    except (OverflowError, OSError, ValueError):
+        return f"<out-of-range ({timestamp})>"
 
 
 def _escape(value: str) -> str:
