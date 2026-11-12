@@ -1,24 +1,26 @@
 # Handoff
-Date: Thu Nov 12 2026 (session 126)
+Date: Thu Nov 12 2026 (session 127)
 
 ## This session
-- Inspected repo state: HEAD `eb99442` ("") was green per session-125 handoff (6411 passed, 53 skipped) with `NEXT_TASK.md`/`HANDOFF_NEXT.md` stating no pending work. Found a reproducible tooling/doc inconsistency: `python3 check_readme.py` reported `In CLI but not README: {'s3'}` even though README contained an `s3` feature entry (`README.md:48`) and `python3 -m ethscan --help` lists `s3`.
-- Root cause (smallest verifiable): `check_readme.py` extracted README command names with regex class `[a-z]+`, which cannot match `s3` (contains a digit). This caused the checker to miss the valid README entry.
-- Fixes (minimal/reversible):
-  - `README.md:48`: normalized the feature label from `AWS S3 bucket enumeration` to `S3 bucket enumeration` (keeps content intact, aligns with command-focused bullet style).
-  - `check_readme.py`: changed README command extraction regex to `[a-z0-9]+` so command names with digits (e.g. `s3`) are recognized.
-- Verified:
-  - `python3 check_readme.py` → now reports 54 commands found, CLI 54, `In README but not CLI: set()`, `In CLI but not README: set()` (exit 0).
-  - `python3 -m ethscan s3 --help` → command registered and help renders.
-  - `python3 -m pytest` / `mypy` / `ruff` not installed in this environment (`python -m pytest` unavailable), so full lint/typecheck/test suite could not be rerun here.
+- Installed dev tooling (`pip install -e ".[dev]"`) per NEXT_TASK.md: pytest, mypy, ruff, dnspython all available.
+- Ran and recorded evidence for all four verification commands:
+  1. `python3 check_readme.py` → 54 commands found, CLI 54, `In README but not CLI: set()`, `In CLI but not README: set()` (exit 0).
+  2. `python -m pytest -q` → 6414 passed, 50 skipped, 1 warning (baseline 6411; +3 new tests from session 126 README/checker fix).
+  3. `python -m mypy ethscan/ tests/` → Success: no issues found in 194 source files.
+  4. `python -m ruff check ethscan/ tests/` → All checks passed.
+- No source or test changes made; only tooling restore and verification.
+
+## Verification
+- All four gates green. Repository is fully green.
+- Baseline maintained (6414 passed, 50 skipped, 0 failed; mypy/ruff clean).
 
 ## Blockers
-- Test/lint/typecheck toolchain (`pytest`, `mypy`, `ruff`) is not installed in the current environment; could not rerun the full suite or static checks. Prior session reported: 6411 passed, 53 skipped, 0 failed; mypy/ruff clean (194 source files).
+- None.
 
 ## Approaches already tried / ruled out
 - All formatter hostile-input hardening items called out in recent handoffs (`ftp`, `ntp`, `smb`, `ldap`, `oracle`, `smtp`, `snmp`) are complete per session 125; do not reopen without a reproduced failure.
 - `oracle`/`postgresql` empty-target handling remains intentionally out of scope per documented contract (exit 0, in-band error).
-- No speculative refactors; only a bounded README/checker consistency fix applied.
+- No speculative refactors; only bounded README/checker consistency fix applied and verified.
 
 ## Next task
-- Restore/install dev tooling (`pytest`, `mypy`, `ruff` per project conventions, e.g. `pip install -r requirements.txt` and/or dev deps if defined) in this environment, then rerun `python3 check_readme.py`, `python -m pytest -q`, `python -m mypy ethscan/ tests/`, and `python -m ruff check ethscan/ tests/` to verify the README/checker fix did not regress anything and capture evidence. If any failure appears, fix the smallest root cause; otherwise record green results in a handoff.
+- None pending. Repository is fully green. If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.
