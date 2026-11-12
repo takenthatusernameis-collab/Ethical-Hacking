@@ -639,3 +639,20 @@ def test_assess_version_none():
 def test_assess_version_invalid():
     findings = _assess_version("unknown")
     assert findings == ["Memcached server version: unknown"]
+
+
+def test_format_memcached_report_markdown_non_dict():
+    """A non-dict input to the markdown formatter is normalized to {} (line 322)."""
+    output = format_memcached_report_markdown("not a dict")
+    assert "# ethscan Memcached Reconnaissance Report" in output
+    assert "**Target:** " in output
+    assert "**Port:** 11211" in output
+
+
+def test_format_memcached_report_csv_non_dict():
+    """A non-dict input to the CSV formatter is normalized to {} (line 390)."""
+    output = format_memcached_report_csv(["not", "a", "dict"])
+    lines = output.strip().split("\n")
+    header = lines[0].rstrip("\r")
+    assert header == "target,host,port,accessible,version,uptime,bytes,curr_connections,cmd_get,cmd_set,get_hits,get_misses,evictions,findings,error"
+    assert "false" in lines[1]
