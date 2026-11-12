@@ -220,6 +220,19 @@ def run_ftp(
     return results
 
 
+def _normalize_findings(findings: Any) -> list[object]:
+    """Coerce a hostile ``findings`` value into an iterable list.
+
+    Non-list/tuple values (``None``, an ``int``, ``bool``, ``str``, a dict,
+    ...) normalize to an empty list so the formatters can always iterate
+    without raising ``TypeError``. List/tuple elements are returned as-is;
+    each formatter renders them (f-strings / csv writer stringify them).
+    """
+    if not isinstance(findings, (list, tuple)):
+        return []
+    return list(findings)
+
+
 def format_ftp_report_json(data: dict[str, Any]) -> str:
     """Format FTP reconnaissance results as JSON."""
     return json.dumps(data, indent=2, default=str)
@@ -247,7 +260,7 @@ def format_ftp_report_markdown(data: dict[str, Any]) -> str:
         lines.append("- **Anonymous Login:** not checked")
     if data.get("anonymous_message"):
         lines.append(f"- **Anonymous Message:** {data['anonymous_message']}")
-    findings = data.get("findings") or []
+    findings = _normalize_findings(data.get("findings"))
     if findings:
         lines.append("")
         lines.append("## Findings")
@@ -288,8 +301,8 @@ def format_ftp_report_csv(data: dict[str, Any]) -> str:
             "",  # anonymous_message
             str(error),
         ])
-        findings = data.get("findings")
-        if isinstance(findings, list) and findings:
+        findings = _normalize_findings(data.get("findings"))
+        if findings:
             writer.writerow([])
             writer.writerow(["finding"])
             for finding in findings:
@@ -313,8 +326,8 @@ def format_ftp_report_csv(data: dict[str, Any]) -> str:
         data.get("error") or "",
     ])
 
-    findings = data.get("findings")
-    if isinstance(findings, list) and findings:
+    findings = _normalize_findings(data.get("findings"))
+    if findings:
         writer.writerow([])
         writer.writerow(["finding"])
         for finding in findings:

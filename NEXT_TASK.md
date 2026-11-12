@@ -1,14 +1,15 @@
 # Next Task
 
 ## Status
-Session 119 closed the `smb` formatter `security_flags` hostile-shape gap (the source hardening from session 118 was already in place; this session fixed its defective test so the sweep is green).
+Session 121 closed the `ftp` formatter `findings` hostile-shape gap (the handoff's `features`/`auth_types` field names did not match the code; the real field is `findings`, now hardened in both Markdown and CSV formatters).
 
 ## One precise next task
-Harden `ldap` formatter `root_dse` handling: `ethscan/ldap.py` `format_ldap_report_markdown` (lines 692-712) and `format_ldap_report_csv` (lines 776-780) iterate `root_dse` as a dict and join its values, raising when `root_dse` is `None`/`int`/`str`/`list` or a dict with non-list/non-string values. Reproduce with the 7 hostile shapes, fix by coercing `root_dse` to a normalized dict of string-lists (reject non-dict; stringify list elements; drop non-list values), add a focused hostile-sweep test, verify module tests + mypy/ruff. One module, reproduce first.
+Harden one remaining module from the session 117 fuzzer list where both Markdown and CSV iterate a potentially wrong-typed list field. Candidate: `ntp` (also still open: `oracle`, `smtp`, `snmp`).
 
-Repro evidence (pre-fix): `{"root_dse": 1}` → TypeError; `{"root_dse": "string"}` / `{"root_dse": [1,2]}` → AttributeError; `{"root_dse": {"vendorName": 1}}` / `{"vendorName": None}` → TypeError; `{"vendorName": [None, 1]}` → TypeError.
+Steps:
+1. Reproduce first: craft hostile shapes for the module's list field(s) (e.g. `None`, an `int`/`bool`, a bare `str`, a list with non-string elements `[None, 1]`) and confirm `format_*_report_markdown` / `format_*_report_csv` raise `TypeError`/`AttributeError`.
+2. Fix: add a normalization helper (following the `_normalize_findings` / `_normalize_security_flags` / `_normalize_root_dse` pattern) that coerces non-list/tuple to `[]` and stringifies list/tuple elements; apply it in both formatters.
+3. Add a focused hostile-sweep test (one file, e.g. `tests/test_<module>_formatter_hostile_sweep.py` or extend the existing hostile-sweep file).
+4. Verify: module tests, full `pytest -q`, `mypy ethscan/ tests/`, `ruff check ethscan/ tests/`.
 
-## Notes
-- `oracle` and `postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
-- Other hostile-shape gaps noted by the session 117 fuzzer (wrong-typed iterable fields in ftp/ntp/oracle/smtp/snmp and others) remain open but are separate bounded families — pick one at a time and reproduce first.
-- Do not weaken CLI validation or tests. Preserve oracle/postgresql in-band exit-0 contract vs usage-error exits elsewhere.
+Constraints: one module per session (do not batch); preserve the oracle/postgresql in-band exit-0 contract; do not weaken CLI validation or tests; reproduce before fixing — no speculative changes.
