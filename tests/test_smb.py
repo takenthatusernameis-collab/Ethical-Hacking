@@ -1428,6 +1428,24 @@ def test_format_smb_report_csv_unchanged_without_smb2() -> None:
     ]
 
 
+# ---------------------------------------------------------------------------
+# format_smb_report_markdown/csv defensive guards (non-dict input)
+# ---------------------------------------------------------------------------
+
+
+def test_format_smb_report_markdown_non_dict_input() -> None:
+    rendered = format_smb_report_markdown(None)
+    assert "# ethscan SMB Reconnaissance Report" in rendered
+    assert "- **Accessible:** No" in rendered
+
+
+def test_format_smb_report_csv_non_dict_input() -> None:
+    rendered = format_smb_report_csv(None)
+    lines = rendered.strip().splitlines()
+    assert len(lines) == 2
+    assert lines[0].startswith("target,host,port,accessible,")
+
+
 def test_format_smb_report_csv_escapes_special_characters() -> None:
     # Test that CSV formatter properly escapes special characters in banner and challenge
     results = _accessible_results()
