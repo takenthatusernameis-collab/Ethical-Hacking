@@ -403,6 +403,19 @@ def format_smtp_report_json(data: dict[str, Any]) -> str:
     return json.dumps(data, indent=2, default=str)
 
 
+def _normalize_findings(findings: Any) -> list[object]:
+    """Coerce findings to a list for safe iteration in formatters.
+
+    Non-list/tuple values (including ``None``, scalars, dicts, and strings)
+    normalize to an empty list, so both formatters omit the findings block
+    without raising. Lists and tuples are returned as-is so well-formed
+    findings still render.
+    """
+    if isinstance(findings, (list, tuple)):
+        return list(findings)
+    return []
+
+
 def format_smtp_report_markdown(data: dict[str, Any]) -> str:
     """Format SMTP reconnaissance results as Markdown."""
     if not isinstance(data, dict):
@@ -435,7 +448,7 @@ def format_smtp_report_markdown(data: dict[str, Any]) -> str:
         relay_str = "VULNERABLE" if data["open_relay"] else "not vulnerable"
         lines.append("")
         lines.append(f"- **Open Relay:** {relay_str}")
-    findings = data.get("findings") or []
+    findings = _normalize_findings(data.get("findings"))
     if findings:
         lines.append("")
         lines.append("## Findings")
@@ -473,8 +486,8 @@ def format_smtp_report_csv(data: dict[str, Any]) -> str:
             "",
             str(error),
         ])
-        findings = data.get("findings")
-        if isinstance(findings, list) and findings:
+        findings = _normalize_findings(data.get("findings"))
+        if findings:
             writer.writerow([])
             writer.writerow(["finding"])
             for finding in findings:
@@ -513,8 +526,8 @@ def format_smtp_report_csv(data: dict[str, Any]) -> str:
                 u.get("description", "") or "",
             ])
 
-    findings = data.get("findings")
-    if isinstance(findings, list) and findings:
+    findings = _normalize_findings(data.get("findings"))
+    if findings:
         writer.writerow([])
         writer.writerow(["finding"])
         for finding in findings:
