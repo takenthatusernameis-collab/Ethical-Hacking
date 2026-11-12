@@ -600,6 +600,19 @@ def format_snmp_report_json(data: dict[str, Any]) -> str:
     return json.dumps(data, indent=2, default=str)
 
 
+def _normalize_findings(findings: Any) -> list[object]:
+    """Coerce findings to a list for safe iteration in formatters.
+
+    Non-list/tuple values (including ``None``, scalars, dicts, and strings)
+    normalize to an empty list, so both formatters omit the findings block
+    without raising or mis-iterating. Lists and tuples are returned as-is so
+    well-formed findings still render.
+    """
+    if isinstance(findings, (list, tuple)):
+        return list(findings)
+    return []
+
+
 def _escape_markdown(value: Any) -> str:
     """Escape pipe characters for Markdown tables/lists."""
     return str(value).replace("|", "\\|")
@@ -664,7 +677,7 @@ def format_snmp_report_markdown(data: dict[str, Any]) -> str:
         lines.append("## Assessment")
         lines.append("- No valid community strings found.")
 
-    findings = data.get("findings") or []
+    findings = _normalize_findings(data.get("findings"))
     if findings:
         lines.append("")
         lines.append("## Findings")
@@ -745,8 +758,8 @@ def format_snmp_report_csv(data: dict[str, Any]) -> str:
             "community", community, valid, community_version, community_error,
         ])
 
-    findings = data.get("findings")
-    if isinstance(findings, list) and findings:
+    findings = _normalize_findings(data.get("findings"))
+    if findings:
         writer.writerow([])
         writer.writerow(["finding"])
         for finding in findings:
