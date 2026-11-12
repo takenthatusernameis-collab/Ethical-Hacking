@@ -22528,6 +22528,18 @@ def test_postgresql_probes_pass_through(monkeypatch) -> None:
     assert captured["probes"] == ["startup"]
 
 
+def test_postgresql_empty_target_is_inband_error() -> None:
+    """PostgreSQL keeps the in-band error contract: empty target -> exit 0 with error in JSON."""
+    runner = CliRunner()
+    for target in ("", "   ", "https://"):
+        result = runner.invoke(cli, ["postgresql", "--target", target, "--output-format", "json"])
+        assert result.exit_code == 0, f"postgresql --target {target!r} should exit 0, got {result.exit_code}"
+        import json
+        data = json.loads(result.output)
+        assert data["error"] == "Could not parse host from target " + repr(target)
+        assert data["host"] is None
+
+
 def test_mssql_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["mssql", "--help"])
@@ -22788,6 +22800,19 @@ def test_oracle_probes_pass_through(monkeypatch) -> None:
     result = runner.invoke(cli, ["oracle", "--target", "example.com", "--probes", "version"])
     assert result.exit_code == 0
     assert captured["probes"] == ["version"]
+
+
+def test_oracle_empty_target_is_inband_error() -> None:
+    """Oracle keeps the in-band error contract: empty target -> exit 0 with error in JSON."""
+    runner = CliRunner()
+    for target in ("", "   ", "https://"):
+        result = runner.invoke(cli, ["oracle", "--target", target, "--output-format", "json"])
+        assert result.exit_code == 0, f"oracle --target {target!r} should exit 0, got {result.exit_code}"
+        import json
+        data = json.loads(result.output)
+        assert data["error"] == "Could not parse host from target " + repr(target)
+        assert data["host"] is None
+
 
 def test_hash_stdin_with_out_csv(tmp_path) -> None:
     out_file = tmp_path / "hash.csv"
