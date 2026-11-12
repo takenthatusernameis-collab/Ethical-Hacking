@@ -459,10 +459,14 @@ def format_ntp_report_markdown(data: dict[str, Any]) -> str:
             lines.append(f"- **Offset:** {mon_resp.get('offset', 'N/A')}")
             lines.append(f"- **Count:** {mon_resp.get('count', 'N/A')}")
             lines.append(f"- **Peer Count:** {mon_resp.get('peer_count', 0)}")
-            if mon_resp.get("peer_count", 0) > 0:
+            peers = _normalize_peers(mon_resp.get("peers"))
+            if peers:
                 lines.append("- **Peers:**")
-                for peer in _normalize_peers(mon_resp.get("peers")):
-                    lines.append(f"  - {peer['address']}:{peer['port']} (mode={peer['mode']}, version={peer['version']})")
+                for peer in peers:
+                    lines.append(
+                        f"  - {peer.get('address', '?')}:{peer.get('port', '?')} "
+                        f"(mode={peer.get('mode', 'N/A')}, version={peer.get('version', 'N/A')})"
+                    )
 
     if data.get("is_reflector"):
         lines.append("")
