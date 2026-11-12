@@ -7,9 +7,11 @@ and never raises; a connector that blows up is reported the same way.
 """
 from __future__ import annotations
 
+import io
 from typing import Callable
 
 from ethscan import smb
+from ethscan.smb import format_smb_report_csv, format_smb_report_markdown
 
 TARGET = "127.0.0.1"
 
@@ -50,3 +52,51 @@ def test_transport_failure_is_reported_not_raised() -> None:
         results = runner(TARGET, connector=connector)
         assert isinstance(results, dict)
         assert results.get("error")
+
+
+# ---------------------------------------------------------------------------
+# Hostile ``security_flags`` shapes in the report formatters
+# ---------------------------------------------------------------------------
+# A hostile SMB answer (or a hand-crafted result dict) can carry a
+# ``security_flags`` value that is ``None``, a scalar, or a list with
+# non-string elements. Both the Markdown and CSV formatters join that
+# field and would otherwise raise ``TypeError``. They must never raise;
+# hostile shapes render as an empty flag list.
+
+SECURITY_FLAG_HOSTILE: tuple[object, ...] = (
+    None,
+    1,
+    0,
+    True,
+    3.14,
+    "user_security",
+    [None, 1, 2.5],
+    ["user_security", None, "signing_enabled"],
+)
+
+
+def test_security_flags_hostile_shapes_do_not_raise() -> None:
+    for flags in SECURITY_FLAG_HOSTILE:
+        for accessible in (True, False):
+            payload = {"accessible": accessible, "security_flags": flags}
+            csv_out = format_smb_report_csv(payload)
+            md_out = format_smb_report_markdown(payload)
+            assert isinstance(csv_out, str)
+            assert isinstance(md_out, str)
+            rows = list(csv.reader(io.StringIO(csv_out)))
+            # security_flags is column index 8 in the header row.
+            assert rows[1][8] == ""
+            # A well-formed string list is still rendered verbatim.
+            if isinstance(flags, list) and all(isinstance(x, str) for x in flags):
+                assert "|".join(flags) in csv_out
+                assert ", ".join(flags) in md_out
+            elif accessible:
+                assert "**Security Flags:** none" in md_out
+
+
+def test_security_flags_string_is_rendered() -> None:
+    payload = {"accessible": True, "security_flags": ["user_security", "signing_enabled"]}
+    csv_out = format_smb_report_csv(payload)
+    md_out = format_smb_report_markdown(payload)
+    assert "user_security|signing_enabled" in csv_out
+    assert "user_security, signing_enabled" in md_out

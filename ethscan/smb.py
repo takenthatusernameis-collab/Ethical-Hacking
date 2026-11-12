@@ -362,6 +362,19 @@ def _parse_smb_response(
     return result
 
 
+def _normalize_security_flags(flags: Any) -> list[str]:
+    """Coerce a hostile ``security_flags`` value into a list of strings.
+
+    A well-formed value is a list of strings; hostile shapes (``None``,
+    a scalar, or a plain string) are normalized to an empty list so the
+    formatters never raise on join, matching the findings-formatter
+    hardening pattern. List/tuple elements are stringified before join.
+    """
+    if not isinstance(flags, (list, tuple)):
+        return []
+    return [str(item) for item in flags]
+
+
 def _build_banner(parsed: dict[str, Any]) -> str | None:
     """Build a short human-readable banner from a parsed SMB response."""
     if parsed.get("protocol") != "SMB1":
@@ -832,7 +845,7 @@ def format_smb_report_markdown(results: Mapping[str, Any]) -> str:
         lines.append(f"- **Dialect:** {results.get('dialect') or 'n/a'}")
         lines.append(f"- **Dialect Index:** {results.get('dialect_index')}")
         lines.append(f"- **Security Mode:** 0x{results.get('security_mode', 0):02x}")
-        flags = results.get("security_flags") or []
+        flags = _normalize_security_flags(results.get("security_flags"))
         lines.append(f"- **Security Flags:** {', '.join(flags) if flags else 'none'}")
         lines.append(f"- **User Security:** {'Yes' if results.get('user_security') else 'No'}")
         lines.append(f"- **Challenge/Response:** {'Yes' if results.get('challenge_response') else 'No'}")
@@ -919,7 +932,7 @@ def format_smb_report_csv(results: Mapping[str, Any]) -> str:
         results.get("dialect") or "",
         results.get("dialect_index"),
         f"0x{results.get('security_mode', 0):02x}",
-        "|".join(results.get("security_flags", [])),
+        "|".join(_normalize_security_flags(results.get("security_flags", []))),
         "true" if results.get("user_security") else "false",
         "true" if results.get("challenge_response") else "false",
         "true" if results.get("signing_required") else "false",
