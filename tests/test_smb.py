@@ -5,7 +5,7 @@ import io
 import json
 import socket
 import struct
-from typing import Any
+from typing import Any, cast
 from unittest.mock import patch
 
 import pytest
@@ -1434,13 +1434,13 @@ def test_format_smb_report_csv_unchanged_without_smb2() -> None:
 
 
 def test_format_smb_report_markdown_non_dict_input() -> None:
-    rendered = format_smb_report_markdown(None)
+    rendered = format_smb_report_markdown(cast(Any, None))
     assert "# ethscan SMB Reconnaissance Report" in rendered
     assert "- **Accessible:** No" in rendered
 
 
 def test_format_smb_report_csv_non_dict_input() -> None:
-    rendered = format_smb_report_csv(None)
+    rendered = format_smb_report_csv(cast(Any, None))
     lines = rendered.strip().splitlines()
     assert len(lines) == 2
 

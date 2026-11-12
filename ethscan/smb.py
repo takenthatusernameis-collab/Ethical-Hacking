@@ -42,7 +42,7 @@ import json
 import os
 import socket
 import struct
-from typing import Any
+from typing import Any, Mapping
 
 from ethscan.target import TargetSpecError, check_port, parse_url, url_port
 
@@ -813,7 +813,7 @@ def format_smb_report_json(results: dict[str, Any]) -> str:
     return json.dumps(results, indent=2, default=str)
 
 
-def format_smb_report_markdown(results: dict[str, Any]) -> str:
+def format_smb_report_markdown(results: Mapping[str, Any]) -> str:
     """Format SMB reconnaissance results as Markdown."""
     if not isinstance(results, dict):
         results = {}
@@ -886,7 +886,7 @@ def format_smb_report_markdown(results: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def format_smb_report_csv(results: dict[str, Any]) -> str:
+def format_smb_report_csv(results: Mapping[str, Any]) -> str:
     """Format SMB reconnaissance results as CSV."""
     if not isinstance(results, dict):
         results = {}
