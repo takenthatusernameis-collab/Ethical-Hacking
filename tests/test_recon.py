@@ -3,7 +3,7 @@
 import csv
 import io
 import json
-from typing import cast
+from typing import Any, cast
 
 from unittest.mock import patch
 
@@ -772,3 +772,56 @@ def test_format_recon_report_markdown_geo_no_data() -> None:
     output = format_recon_report_markdown(data)
     assert "IP Geolocation" in output
     assert "No geolocation data available" in output
+
+
+def test_format_recon_report_markdown_tuple_modules_run() -> None:
+    """A tuple ``modules_run`` exercises the tuple/set branch of ``_as_list``."""
+    data: dict[str, object] = {
+        "target": "example.com",
+        "domain": "example.com",
+        "modules_run": ("subdomains", "dns"),
+        "subdomains": None,
+        "dns": None,
+        "whois": None,
+        "geo": None,
+        "trace": None,
+        "notes": [],
+    }
+    output = format_recon_report_markdown(data)
+    assert "**Modules Run:** subdomains, dns" in output
+
+
+def test_format_recon_report_markdown_dns_records_non_list_truthy() -> None:
+    """A non-list truthy DNS record value exercises the ``elif values:`` branch."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "modules_run": ["dns"],
+        "subdomains": None,
+        "dns": {"record_types_queried": ["A"], "records": {"A": "1.2.3.4"}},
+        "whois": None,
+        "geo": None,
+        "trace": None,
+        "notes": [],
+    }
+    output = format_recon_report_markdown(data)
+    assert "A Records" in output
+    assert "1.2.3.4" in output
+
+
+def test_format_recon_report_markdown_dns_records_non_list_falsy() -> None:
+    """A non-list falsy DNS record value exercises the ``else`` branch."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "modules_run": ["dns"],
+        "subdomains": None,
+        "dns": {"record_types_queried": ["A"], "records": {"A": ""}},
+        "whois": None,
+        "geo": None,
+        "trace": None,
+        "notes": [],
+    }
+    output = format_recon_report_markdown(data)
+    assert "A Records" in output
+    assert "No records found" in output
