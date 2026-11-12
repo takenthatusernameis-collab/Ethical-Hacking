@@ -564,6 +564,19 @@ def test_format_postgresql_report_with_none_host():
     assert "Could not parse host" in lines[1]  # error in last field
 
 
+def test_format_postgresql_report_markdown_non_dict_input():
+    rendered = format_postgresql_report_markdown(None)
+    assert "# PostgreSQL Reconnaissance Report" in rendered
+    assert "**Host:** N/A" in rendered
+
+
+def test_format_postgresql_report_csv_non_dict_input():
+    rendered = format_postgresql_report_csv(None)
+    lines = rendered.strip().splitlines()
+    assert len(lines) == 2
+    assert lines[0].startswith("target,host,port,accessible,")
+
+
 # --- helpers -----------------------------------------------------------------
 
 
