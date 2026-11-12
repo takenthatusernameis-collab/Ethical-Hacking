@@ -11,7 +11,7 @@ Date: Thu Nov 12 2026 (session 108)
 - `python -m ruff check ethscan/ tests/` → All checks passed.
 - `python -m coverage report --include='ethscan/*'` → every ethscan module at 100% (0 misses).
 - `grep -rnE "TODO|FIXME|XXX|HACK" ethscan/ tests/` → none found.
-- README feature/option claims audited against live `python -m ethscan <cmd> --help`: salt/pepper/algorithm present on audit/hash/vuln/report (cve phantom options removed in session 55); README command list (54) matches actual CLI commands exactly.
+- README feature/option claims audited against live `python -m ethscan <cmd> --help`: salt/pepper/algorithm present on audit/hash/vuln/report (cve phantom options removed in session 55); README command list and live CLI command inventory (55 commands) match exactly.
 - Empty-target behavior audited live for all commands: oracle/postgresql exit 0 in-band (documented contract); all other target-taking commands exit 2 with `Could not parse host from target ...` — matches README lines 149-260 exactly.
 
 ## Blockers
