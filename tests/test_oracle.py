@@ -1316,3 +1316,20 @@ def test_format_oracle_report_csv_no_findings() -> None:
     }
     output = format_oracle_report_csv(data)
     assert "finding" not in output
+
+
+def test_format_oracle_report_markdown_non_dict_input() -> None:
+    """Test markdown formatter defensive guard for non-dict input (line 474-475)."""
+    md = format_oracle_report_markdown(None)  # type: ignore[arg-type]
+    assert "# Oracle Reconnaissance Report" in md
+    assert "**Target:** " in md
+    assert "**Host:** N/A" in md
+    assert "**Accessible:** No" in md
+
+
+def test_format_oracle_report_csv_non_dict_input() -> None:
+    """Test CSV formatter defensive guard for non-dict input (line 510-511)."""
+    output = format_oracle_report_csv(None)  # type: ignore[arg-type]
+    lines = output.strip().splitlines()
+    assert lines[0] == "target,host,port,accessible,version,error"
+    assert lines[1] == f",,{DEFAULT_PORT},false,,"
