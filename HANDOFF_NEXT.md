@@ -1,22 +1,23 @@
 # Handoff
-Date: Thu Nov 12 2026 (session 109)
+Date: Thu Nov 12 2026 (session 110)
 
 ## This session
-- Prior handoff reported repository fully green. Inspected baseline and found README "Usage" error-handling examples had regressed into a malformed/truncated state (malformed `--ports` example missing, CIDR/target examples displaced, duplicate file-path error block/stray text).
-- Restored `README.md` so documented CLI error examples match current behavior: malformed `--ports` for `scan` shows `Invalid port number 'abc'` (exit 2), CIDR invalid/radix mixed-family and empty-target examples preserved in correct order, file-path content errors (`--services-file`/`--input-file`) remain documented.
+- Baseline verification complete: `python -m pytest -q` → 6108 passed, 53 skipped, 0 failed; `python -m ruff check ethscan/ tests/` → All checks passed; `python -m mypy ethscan/ tests/` → Success: no issues found in 188 source files.
+- Audited all 15 README CLI error-handling examples against live command behavior — all match exactly (malformed `--ports`, invalid CIDR, mixed-family radix, empty target across protocol commands, file-path existence/content errors, port-out-of-range, host/path space/control-char validation).
+- No source, test, or documentation changes required; repository fully green.
 
 ## Verification (this session)
-- `python -m ethscan scan --target 127.0.0.1 --ports "abc"` → exit 2, `Invalid port number 'abc'` (matches README).
-- `python -m ethscan cidr --cidr bogus` → exit 2, `'bogus/128' does not appear to be an IPv4 or IPv6 network`.
-- `python -m ruff check ethscan/ tests/` → All checks passed.
-- `python -m mypy ethscan/ tests/` → Success: no issues found in 188 source files.
-- Full pytest suite not rerun in this session (README-only change; baseline previously 6106 passed, 53 skipped, 0 failed).
+- All three baseline checks pass (pytest, ruff, mypy).
+- All 15 documented `python -m ethscan ...` console examples reproduce the exact error messages and exit codes shown in README.
+- Protocol-command empty-target list in README (lines 150-151) matches `redis`, `memcached`, `ntp`, `snmp`, `ftp`, `ldap`, `netbios`, `smb`, `smtp`, `service`, `dnssec`, `ssl`, `tls`, `web`, `fuzz`, `headers`, `urlcheck`, `ssh`, `trace`, `recon`, `geo`, `s3`, `mysql`, `mongodb`, `mssql` — all reject unusable targets with `TargetSpecError` (CLI exit 2).
+- `oracle` and `postgresql` correctly preserve in-band exit-0 contract.
+- File-path options (`--services-file`, `--input-file`, `--file`, `--wordlist`, `--user-file`, `--pass-file`, `--audit-file`) consistently reject missing files/directories and invalid content as usage errors (exit 2).
 
 ## Blockers
 - None.
 
 ## Approaches already tried / ruled out
-- No speculative code/test changes; issue was reproducible as documentation drift and fixed directly.
+- No speculative changes; all verification was evidence-based.
 
 ## Next task
-- Run full baseline verification to confirm README-only change did not affect runtime/test expectations: `python -m pytest -q`, `python -m ruff check ethscan/ tests/`, `python -m mypy ethscan/ tests/`. If green, continue high-value maintenance only when evidenced (e.g. audit other README CLI examples against live behavior); do not speculate or weaken safety controls.
+- None pending. Repository is fully green. If future work is needed, pick a single high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.
