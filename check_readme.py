@@ -3,7 +3,7 @@ with open('README.md') as f:
     content = f.read()
 
 # Find all bullet points that start with **- **...: \`<cmd>\` command
-matches = re.findall(r'^-\s+\*\*[^:]+:\s+`([a-z]+)`\s+command', content, re.MULTILINE)
+matches = re.findall(r'^-\s+\*\*[^:]+:\s+`([a-z0-9]+)`\s+command', content, re.MULTILINE)
 for m in sorted(matches):
     print(m)
 print('---')

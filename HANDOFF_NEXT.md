@@ -1,33 +1,24 @@
 # Handoff
-Date: Thu Nov 12 2026 (session 125)
+Date: Thu Nov 12 2026 (session 126)
 
 ## This session
-- Executed the pending next task from HANDOFF_NEXT/NEXT_TASK (session 124): hardened the `snmp` findings formatters against non-iterable/wrong-typed `findings`.
-- Reproduced first (before fixing): `format_snmp_report_markdown` crashed with `TypeError: 'int'/'bool'/'float' object is not iterable` for `findings=1/True/3.14`, and iterated a bare `str` char-by-char (`- f`, `- i`, ...); `format_snmp_report_csv` silently dropped findings for tuples and all non-list scalals via its `isinstance(findings, list)` guard.
-- Hardened `ethscan/snmp.py`:
-  - Added `_normalize_findings(findings: Any) -> list[object]` (non-list/tuple → `[]`; list/tuple returned as-is), matching the oracle/ntp/ftp/smtp pattern.
-  - Applied it at both sites: `format_snmp_report_markdown` (was `data.get("findings") or []`) and `format_snmp_report_csv` (was `isinstance(findings, list)` guard).
-- Added `tests/test_snmp_formatter_hostile_sweep.py` covering non-iterable findings × both formatters, hostile element lists × both formatters, and well-formed regression × both formatters.
+- Inspected repo state: HEAD `eb99442` ("") was green per session-125 handoff (6411 passed, 53 skipped) with `NEXT_TASK.md`/`HANDOFF_NEXT.md` stating no pending work. Found a reproducible tooling/doc inconsistency: `python3 check_readme.py` reported `In CLI but not README: {'s3'}` even though README contained an `s3` feature entry (`README.md:48`) and `python3 -m ethscan --help` lists `s3`.
+- Root cause (smallest verifiable): `check_readme.py` extracted README command names with regex class `[a-z]+`, which cannot match `s3` (contains a digit). This caused the checker to miss the valid README entry.
+- Fixes (minimal/reversible):
+  - `README.md:48`: normalized the feature label from `AWS S3 bucket enumeration` to `S3 bucket enumeration` (keeps content intact, aligns with command-focused bullet style).
+  - `check_readme.py`: changed README command extraction regex to `[a-z0-9]+` so command names with digits (e.g. `s3`) are recognized.
 - Verified:
-  - `python -m pytest tests/test_snmp.py tests/test_snmp_formatter_hostile_sweep.py -q` → 150 passed.
-  - `python -m pytest -q` (full suite) → 6411 passed, 53 skipped, 0 failed (up from 6387: +24 snmp hostile-sweep cases).
-  - `python -m mypy ethscan/ tests/` → Success: no issues found in 194 source files.
-  - `python -m ruff check ethscan/ tests/` → All checks passed.
-  - Post-fix smoke: `1/True/3.14/"finding"/None/{}/(1,2)/["a","b"]` all render without crash in both formatters; well-formed `["a","b"]` still renders.
+  - `python3 check_readme.py` → now reports 54 commands found, CLI 54, `In README but not CLI: set()`, `In CLI but not README: set()` (exit 0).
+  - `python3 -m ethscan s3 --help` → command registered and help renders.
+  - `python3 -m pytest` / `mypy` / `ruff` not installed in this environment (`python -m pytest` unavailable), so full lint/typecheck/test suite could not be rerun here.
 
 ## Blockers
-- None.
+- Test/lint/typecheck toolchain (`pytest`, `mypy`, `ruff`) is not installed in the current environment; could not rerun the full suite or static checks. Prior session reported: 6411 passed, 53 skipped, 0 failed; mypy/ruff clean (194 source files).
 
 ## Approaches already tried / ruled out
-- `ftp` findings hardening (sessions 120-121): complete.
-- `ntp` findings/peers hardening (session 121/122): complete, regression fixed.
-- `smb` security_flags, `ldap` root_dse, CSV findings stringification (sessions 117-119): complete.
-- `oracle` findings hardening (HEAD `78bc67d`, verified session 123): complete.
-- `smtp` findings hardening (session 124): complete.
-- `snmp` findings hardening (HEAD, verified this session): complete.
-- No remaining fuzzer-list module with the Markdown/CSV `findings` pattern is open.
+- All formatter hostile-input hardening items called out in recent handoffs (`ftp`, `ntp`, `smb`, `ldap`, `oracle`, `smtp`, `snmp`) are complete per session 125; do not reopen without a reproduced failure.
+- `oracle`/`postgresql` empty-target handling remains intentionally out of scope per documented contract (exit 0, in-band error).
+- No speculative refactors; only a bounded README/checker consistency fix applied.
 
 ## Next task
-- None pending. Repository is fully green. If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
-
-(End of file)
+- Restore/install dev tooling (`pytest`, `mypy`, `ruff` per project conventions, e.g. `pip install -r requirements.txt` and/or dev deps if defined) in this environment, then rerun `python3 check_readme.py`, `python -m pytest -q`, `python -m mypy ethscan/ tests/`, and `python -m ruff check ethscan/ tests/` to verify the README/checker fix did not regress anything and capture evidence. If any failure appears, fix the smallest root cause; otherwise record green results in a handoff.
