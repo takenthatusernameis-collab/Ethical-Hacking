@@ -1033,3 +1033,19 @@ def test_resolver_failure_of_unnamed_type_is_reported(monkeypatch) -> None:
     assert result["ip"] is None
     notes = cast(list[str], result["notes"])
     assert any("Could not resolve host" in note for note in notes)
+
+
+def test_format_geo_report_markdown_non_dict() -> None:
+    """Cover line 292: a non-dict payload is reset to {} instead of raising."""
+    hostiles: tuple[object, ...] = (None, [], "not a dict", 123, ("tuple",), {"nested": {"bad": "data"}})
+    for hostile in hostiles:
+        out = format_geo_report_markdown(hostile)  # type: ignore[arg-type]
+        assert isinstance(out, str)
+
+
+def test_format_geo_report_csv_non_dict() -> None:
+    """Cover line 455: a non-dict payload is reset to {} instead of raising."""
+    hostiles: tuple[object, ...] = (None, [], "not a dict", 123, ("tuple",), {"nested": {"bad": "data"}})
+    for hostile in hostiles:
+        out = format_geo_report_csv(hostile)  # type: ignore[arg-type]
+        assert isinstance(out, str)
