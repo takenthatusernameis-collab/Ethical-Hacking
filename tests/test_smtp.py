@@ -1362,6 +1362,21 @@ def test_run_smtp_hostile_server_does_not_leak_a_traceback(fake_smtp) -> None:
     assert results["open_relay"] is False
 
 
+def test_format_smtp_report_markdown_non_dict_input() -> None:
+    """A non-dict input is normalized to an empty dict (line 409)."""
+    output = format_smtp_report_markdown(cast(Any, "not a dict"))  # type: ignore[arg-type]
+    assert "# ethscan SMTP Report" in output
+    assert "mail.example.com" not in output
+
+
+def test_format_smtp_report_csv_non_dict_input() -> None:
+    """A non-dict input is normalized to an empty dict (line 460)."""
+    output = format_smtp_report_csv(cast(Any, 42))  # type: ignore[arg-type]
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0] == ["target", "host", "port", "user", "found", "code", "description"]
+    assert reader[1] == ["", "", "", "", "", "", ""]
+
+
 def test_smtp_command_hostile_server_does_not_leak_a_traceback() -> None:
     """The command line answers a hostile server without leaking a traceback."""
     from unittest.mock import patch
