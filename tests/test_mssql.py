@@ -1225,3 +1225,54 @@ def test_run_mssql_connector_raises_unhandled_exception():
     result = run_mssql(target="example.com:1433", connector=connector)
     assert result["accessible"] is False
     assert "unexpected probe failure" in result["error"]
+
+
+def test_run_mssql_invalid_target_re_raises_target_spec_error():
+    """TargetSpecError from _normalize_target is re-raised (covers line 530)."""
+
+    def connector(*args, **kwargs):
+        return b"", None
+
+    try:
+        run_mssql(target="", connector=connector)
+    except TargetSpecError:
+        pass
+    else:
+        raise AssertionError("Expected TargetSpecError")
+
+
+def test_format_mssql_report_markdown_non_dict_input():
+    """format_mssql_report_markdown handles non-dict input (covers line 606)."""
+    md = format_mssql_report_markdown("not a dict")
+    assert "# MSSQL Reconnaissance Report" in md
+    assert "**Host:** N/A" in md
+
+
+def test_format_mssql_report_csv_non_dict_input():
+    """format_mssql_report_csv handles non-dict input (covers line 656)."""
+    csv_out = format_mssql_report_csv("not a dict")
+    reader = csv.reader(io.StringIO(csv_out))
+    rows = list(reader)
+    assert rows[0] == [
+        "target", "host", "port", "accessible", "version", "encryption",
+        "instance_name", "thread_id", "findings", "error",
+    ]
+    assert rows[1][3] == "false"
+
+
+def test_run_mssql_normalize_target_value_error_branch(monkeypatch):
+    """A plain ValueError from _normalize_target returns error dict (covers line 530 False branch)."""
+    import ethscan.mssql as mssql_module
+
+    def fake_normalize(target):
+        raise ValueError("plain value error")
+
+    monkeypatch.setattr(mssql_module, "_normalize_target", fake_normalize)
+
+    def connector(*args, **kwargs):
+        return b"", None
+
+    result = run_mssql(target="example.com", connector=connector)
+    assert result["accessible"] is False
+    assert result["error"] == "plain value error"
+    assert result["host"] is None
