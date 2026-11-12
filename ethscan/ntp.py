@@ -374,6 +374,31 @@ def run_ntp(
     return results
 
 
+def _normalize_findings(findings: Any) -> list[object]:
+    """Coerce a hostile ``findings`` value into an iterable list.
+
+    Non-list/tuple values (``None``, an ``int``, ``bool``, ``str``, a dict,
+    ...) normalize to an empty list so the formatters can always iterate
+    without raising ``TypeError``. List/tuple elements are returned as-is;
+    each formatter renders them (f-strings / csv writer stringify them).
+    """
+    if not isinstance(findings, (list, tuple)):
+        return []
+    return list(findings)
+
+
+def _normalize_peers(peers: Any) -> list[dict[str, Any]]:
+    """Coerce a hostile ``peers`` value into a list of peer dicts.
+
+    Non-list/tuple values normalize to an empty list. List/tuple elements
+    that are not dicts are dropped so the formatters never call ``.get``
+    on a non-dict (which would raise ``AttributeError``).
+    """
+    if not isinstance(peers, (list, tuple)):
+        return []
+    return [p for p in peers if isinstance(p, dict)]
+
+
 def format_ntp_report_json(data: dict[str, Any]) -> str:
     """Format NTP reconnaissance results as JSON."""
     return json.dumps(data, indent=2, default=str)
@@ -436,7 +461,7 @@ def format_ntp_report_markdown(data: dict[str, Any]) -> str:
             lines.append(f"- **Peer Count:** {mon_resp.get('peer_count', 0)}")
             if mon_resp.get("peer_count", 0) > 0:
                 lines.append("- **Peers:**")
-                for peer in mon_resp.get("peers", []):
+                for peer in _normalize_peers(mon_resp.get("peers")):
                     lines.append(f"  - {peer['address']}:{peer['port']} (mode={peer['mode']}, version={peer['version']})")
 
     if data.get("is_reflector"):
@@ -451,7 +476,7 @@ def format_ntp_report_markdown(data: dict[str, Any]) -> str:
         lines.append("- **Reflector:** NO")
         lines.append("  (Server did not return peer data in monlist response)")
 
-    findings = data.get("findings") or []
+    findings = _normalize_findings(data.get("findings"))
     if findings:
         lines.append("")
         lines.append("## Findings")
@@ -535,8 +560,8 @@ def format_ntp_report_csv(data: dict[str, Any]) -> str:
     ])
 
     # Peer rows (one per peer)
-    if not mon_resp.get("error") and mon_resp.get("peers"):
-        for peer in mon_resp.get("peers", []):
+    if not mon_resp.get("error"):
+        for peer in _normalize_peers(mon_resp.get("peers")):
             writer.writerow([
                 data.get("target", ""),
                 data.get("port", ""),
@@ -550,8 +575,8 @@ def format_ntp_report_csv(data: dict[str, Any]) -> str:
                 peer.get("version", ""),
             ])
 
-    findings = data.get("findings")
-    if isinstance(findings, list) and findings:
+    findings = _normalize_findings(data.get("findings"))
+    if findings:
         writer.writerow([])
         writer.writerow(["finding"])
         for finding in findings:
