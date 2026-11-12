@@ -1098,3 +1098,19 @@ def test_netbios_command_hostile_short_name_does_not_leak_a_traceback() -> None:
         f"the netbios command leaked a traceback: {type(exc).__name__}: {exc}"
     )
     assert result.exit_code == 0
+
+
+def test_format_netbios_report_markdown_non_dict() -> None:
+    """Cover line 621: a non-dict payload is reset to {} instead of raising."""
+    hostiles: tuple[object, ...] = (None, [], "not a dict", 123, ("tuple",), {"nested": {"bad": "data"}})
+    for hostile in hostiles:
+        out = format_netbios_report_markdown(hostile)  # type: ignore[arg-type]
+        assert isinstance(out, str)
+
+
+def test_format_netbios_report_csv_non_dict() -> None:
+    """Cover line 708: a non-dict payload is reset to {} instead of raising."""
+    hostiles: tuple[object, ...] = (None, [], "not a dict", 123, ("tuple",), {"nested": {"bad": "data"}})
+    for hostile in hostiles:
+        out = format_netbios_report_csv(hostile)  # type: ignore[arg-type]
+        assert isinstance(out, str)
