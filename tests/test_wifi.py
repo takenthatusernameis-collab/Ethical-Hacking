@@ -655,6 +655,34 @@ def test_format_wifi_report_markdown_missing_optional_fields() -> None:
     assert "N/A" in output
 
 
+def test_format_wifi_report_markdown_non_dict_interface() -> None:
+    """A non-dict interface entry is skipped (ethscan/wifi.py:368)."""
+    results = {
+        "platform": "Linux",
+        "platform_supported": True,
+        "interfaces": ["not-a-dict"],
+        "access_points": [],
+        "notes": [],
+    }
+    output = format_wifi_report_markdown(results)
+    assert "## Wireless Interfaces" in output
+    assert "not-a-dict" not in output
+
+
+def test_format_wifi_report_markdown_non_dict_access_point() -> None:
+    """A non-dict access point entry is skipped (ethscan/wifi.py:384)."""
+    results = {
+        "platform": "Linux",
+        "platform_supported": True,
+        "interfaces": [{"interface": "wlan0", "status": 0, "link_quality": 45.0, "signal_level": -45.0, "noise_level": -256.0}],
+        "access_points": ["not-a-dict"],
+        "notes": [],
+    }
+    output = format_wifi_report_markdown(results)
+    assert "## Access Points" in output
+    assert "not-a-dict" not in output
+
+
 # ---------------------------------------------------------------------------
 # CSV formatter
 # ---------------------------------------------------------------------------
