@@ -598,3 +598,102 @@ def test_run_trace_accepts_the_working_target_forms():
             for target in ("example.com", "example.com:80", "http://example.com/"):
                 res = trace.run_trace(target, max_hops=1, probes_per_hop=1)
                 assert res["target"] == "example.com"
+
+
+def test_format_trace_report_markdown_recursive_non_dict_guards():
+    """Cover defensive guards for malformed recursive trace entries."""
+    result = {
+        "target": "example.com",
+        "recursive_traces": [
+            "not a dict",
+            {
+                "target": "1.1.1.1",
+                "hops": [
+                    "bad-hop",
+                    {"hop": 1, "ip": "1.1.1.1", "rtt_ms": 5.0, "reached": True},
+                ],
+            },
+        ],
+    }
+    md = trace.format_trace_report_markdown(result)
+    assert "Recursive Trace 2: 1.1.1.1" in md
+    assert "1.1.1.1" in md
+
+
+def test_format_trace_report_csv_recursive_non_dict_guards():
+    """Cover defensive guards for malformed recursive trace entries in CSV."""
+    result = {
+        "target": "example.com",
+        "hops": [],
+        "recursive_traces": [
+            "not a dict",
+            {
+                "target": "1.1.1.1",
+                "hops": [
+                    {"hop": 1, "ip": "1.1.1.1", "rtt_ms": 5.0, "reached": True},
+                ],
+            },
+        ],
+    }
+    csv_text = trace.format_trace_report_csv(result)
+    reader = csv.DictReader(io.StringIO(csv_text))
+    rows = list(reader)
+    assert len(rows) == 1
+    assert rows[0]["target"] == "1.1.1.1"
+    assert rows[0]["hop"] == "1"
+
+
+def test_format_trace_report_markdown_non_dict_and_malformed_structures():
+    """Cover defensive guards in markdown formatter for malformed inputs."""
+    assert trace.format_trace_report_markdown("not-a-dict").startswith("# TCP Traceroute Report")
+
+    result = {
+        "target": "example.com",
+        "hops": "not-a-list",
+        "recursive_traces": "not-a-list",
+    }
+    md = trace.format_trace_report_markdown(result)
+    assert "No hops recorded." in md
+
+    result2 = {
+        "target": "example.com",
+        "hops": ["bad-hop", {"hop": 1, "ip": "1.1.1.1", "rtt_ms": 1.0, "reached": True}],
+        "recursive_traces": [
+            {
+                "target": "1.1.1.1",
+                "hops": "not-a-list",
+            }
+        ],
+    }
+    md2 = trace.format_trace_report_markdown(result2)
+    assert "1.1.1.1" in md2
+    assert md2.count("No hops recorded.") >= 1
+
+
+def test_format_trace_report_csv_non_dict_and_malformed_structures():
+    """Cover defensive guards in CSV formatter for malformed inputs."""
+    csv_text = trace.format_trace_report_csv("not-a-dict")
+    reader = csv.DictReader(io.StringIO(csv_text))
+    assert reader.fieldnames is not None
+    assert list(reader) == []
+
+    result = {
+        "target": "example.com",
+        "hops": "not-a-list",
+        "recursive_traces": "not-a-list",
+    }
+    csv_text2 = trace.format_trace_report_csv(result)
+    rows = list(csv.DictReader(io.StringIO(csv_text2)))
+    assert rows == []
+
+    result2 = {
+        "target": "example.com",
+        "hops": ["bad-hop", {"hop": 1, "ip": "1.1.1.1", "rtt_ms": 1.0, "reached": True}],
+        "recursive_traces": [
+            {"target": "2.2.2.2", "hops": "not-a-list"},
+        ],
+    }
+    csv_text3 = trace.format_trace_report_csv(result2)
+    rows3 = list(csv.DictReader(io.StringIO(csv_text3)))
+    assert len(rows3) == 1
+    assert rows3[0]["ip"] == "1.1.1.1"
