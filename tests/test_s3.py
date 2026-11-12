@@ -1210,3 +1210,60 @@ def test_normalize_target_rejects_empty_target() -> None:
     for bad in ("", "   ", "https://"):
         with pytest.raises(TargetSpecError, match="Could not parse host from target"):
             _normalize_target(bad)
+
+
+# ---------------------------------------------------------------------------
+# Defensive-branch coverage for s3.py uncovered lines
+# ---------------------------------------------------------------------------
+
+
+def test_build_bucket_candidates_empty_domain(monkeypatch) -> None:
+    """_build_bucket_candidates returns [] when _normalize_target returns empty string (line 211)."""
+    monkeypatch.setattr("ethscan.s3._normalize_target", lambda target: "")
+    result = _build_bucket_candidates("example.com")
+    assert result == []
+
+
+def test_check_bucket_public_httperror_close_raises(monkeypatch) -> None:
+    """HTTPError.close() raising is caught and ignored (lines 312-313)."""
+    monkeypatch.setattr("ethscan.s3._resolve_s3_endpoint", _mock_dns("1.2.3.4"))
+
+    def _raise_httperror(req, timeout=None):
+        err = urllib.error.HTTPError("https://x", 403, "Forbidden", {}, None)
+
+        def _bad_close():
+            raise RuntimeError("close failed")
+
+        err.close = _bad_close
+        raise err
+
+    monkeypatch.setattr("ethscan.s3.urllib.request.urlopen", _raise_httperror)
+    result = check_bucket_public("mybucket", "us-east-1", 1.0)
+    assert result["status_code"] == 403
+    assert result["exists"] is True
+    assert result["public"] is False
+    assert result["error"] is None
+
+
+def test_run_s3_no_candidates(monkeypatch) -> None:
+    """run_s3 returns early with note when _build_bucket_candidates returns [] (lines 367-368)."""
+    monkeypatch.setattr("ethscan.s3._build_bucket_candidates", lambda target, wordlist=None: [])
+
+    result = run_s3("example.com", timeout=1.0, max_workers=5)
+    assert result["candidates_tested"] == 0
+    assert result["results"] == []
+    assert result["public_buckets"] == []
+    assert result["private_buckets"] == []
+    assert result["existing_buckets"] == []
+    assert any(
+        "No bucket candidates could be derived" in cast(str, note)
+        for note in cast(list[Any], result["notes"])
+    )
+
+
+def test_format_s3_report_csv_data_not_dict() -> None:
+    """format_s3_report_csv returns header only when data is not a dict (line 579)."""
+    output = format_s3_report_csv("not-a-dict")  # type: ignore[arg-type]
+    lines = output.strip().split("\n")
+    assert lines[0] == "target,domain,bucket,region,url,status_code,dns_resolved,exists,public,error"
+    assert len(lines) == 1
