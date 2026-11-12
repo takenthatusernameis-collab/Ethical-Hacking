@@ -976,9 +976,12 @@ def test_format_ntp_report_markdown_with_timestamps() -> None:
         float("nan"),
         10**30,
         -10**30,
+        "not-a-number",
+        [1, 2],
+        {"a": 1},
     ],
 )
-def test_format_ntp_report_markdown_handles_unrepresentable_timestamps(ts_val: float) -> None:
+def test_format_ntp_report_markdown_handles_unrepresentable_timestamps(ts_val: object) -> None:
     """Markdown formatter must not crash on unrepresentable timestamp values."""
     data = {
         "target": "ntp.example.com",
