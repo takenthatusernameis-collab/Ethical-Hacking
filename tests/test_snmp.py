@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+from typing import Any, cast
 
 import pytest
 
@@ -1434,3 +1435,15 @@ def test_run_snmp_connector_uncaught_exception_is_caught() -> None:
     assert result["error"] == "snmp probe failed: hostile connector"
     assert result["communities"] == []
     assert result["valid_communities"] == []
+
+def test_format_snmp_report_markdown_non_dict_input() -> None:
+    """A non-dict payload is treated as empty rather than crashing."""
+    output = format_snmp_report_markdown(cast(Any, None))
+    assert "# ethscan SNMP Report" in output
+
+
+def test_format_snmp_report_csv_non_dict_input() -> None:
+    """A non-dict payload is treated as empty rather than crashing."""
+    rows = list(csv.reader(io.StringIO(format_snmp_report_csv(cast(Any, None)))))
+    assert rows[0][0] == "target"
+    assert rows[1][9] == "summary"
