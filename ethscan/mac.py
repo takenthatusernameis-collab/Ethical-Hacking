@@ -105,12 +105,25 @@ def _is_cache_valid(entry: dict, ttl: int = CACHE_TTL) -> bool:
     return (time.time() - timestamp) < ttl
 
 
+def _normalize_mac_for_api(mac: str) -> str:
+    """Return ``mac`` with all separators stripped and lowercased.
+
+    The public OUI API at ``api.macvendors.com`` expects a bare hex MAC
+    address (e.g. ``001a2b3c4d5e``) appended to the base URL. A MAC that still
+    carries colons, dashes, or dots is rejected with a 4xx error, so a lookup
+    that succeeds for ``001A2B3C4D5E`` fails for ``00:1A:2B:3C:4D:5E`` even
+    though both denote the same address. This helper produces the bare form
+    that the API accepts.
+    """
+    return mac.replace(":", "").replace("-", "").replace(".", "").lower()
+
+
 def _fetch_mac_data(
     mac: str, timeout: float = DEFAULT_TIMEOUT, api_url: str | None = None
 ) -> dict[str, Any] | None:
     """Fetch MAC vendor data from the public OUI API."""
     base = (api_url or DEFAULT_API_URL).rstrip("/") + "/"
-    url = f"{base}{mac}"
+    url = f"{base}{_normalize_mac_for_api(mac)}"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "ethscan/0.1"})
         with urllib.request.urlopen(req, timeout=timeout) as response:

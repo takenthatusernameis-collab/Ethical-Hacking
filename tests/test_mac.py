@@ -258,6 +258,39 @@ def test_fetch_mac_data_custom_api_url() -> None:
     assert called_urls[0].startswith("https://custom-api.example.com/")
 
 
+def test_fetch_mac_data_strips_separators_for_api_url() -> None:
+    """The vendor API expects a bare hex MAC, so separators are stripped.
+
+    ``api.macvendors.com`` rejects a MAC that still carries colons, dashes,
+    or dots with a 4xx error, so ``00:1A:2B:3C:4D:5E`` and ``00-1A-2B-3C-4D-5E``
+    must both be sent as the bare ``001a2b3c4d5e``.
+    """
+    called_urls = []
+    mock_urlopen = MagicMock()
+    mock_urlopen.__enter__.return_value.read.return_value = b"Vendor"
+
+    def mock_urlopen_func(req, *args, **kwargs):
+        called_urls.append(req.full_url)
+        return mock_urlopen
+
+    with patch("urllib.request.urlopen", side_effect=mock_urlopen_func):
+        for mac in ("00:1A:2B:3C:4D:5E", "00-1A-2B-3C-4D-5E", "00.1A.2B.3C.4D.5E", "001A2B3C4D5E"):
+            called_urls.clear()
+            result = _fetch_mac_data(mac, timeout=1.0)
+            assert result is not None
+            assert called_urls[0].endswith("001a2b3c4d5e"), called_urls[0]
+
+
+def test_normalize_mac_for_api() -> None:
+    from ethscan.mac import _normalize_mac_for_api
+
+    assert _normalize_mac_for_api("00:1A:2B:3C:4D:5E") == "001a2b3c4d5e"
+    assert _normalize_mac_for_api("00-1A-2B-3C-4D-5E") == "001a2b3c4d5e"
+    assert _normalize_mac_for_api("00.1A.2B.3C.4D.5E") == "001a2b3c4d5e"
+    assert _normalize_mac_for_api("001A2B3C4D5E") == "001a2b3c4d5e"
+    assert _normalize_mac_for_api("00:1a:2b:3c:4d:5e") == "001a2b3c4d5e"
+
+
 # ---------------------------------------------------------------------------
 # _get_cached_or_fetch
 # ---------------------------------------------------------------------------
