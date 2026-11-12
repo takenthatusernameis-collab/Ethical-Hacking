@@ -7,6 +7,7 @@ and never raises; a connector that blows up is reported the same way.
 """
 from __future__ import annotations
 
+import csv
 import io
 from typing import Callable
 
@@ -85,13 +86,18 @@ def test_security_flags_hostile_shapes_do_not_raise() -> None:
             assert isinstance(md_out, str)
             rows = list(csv.reader(io.StringIO(csv_out)))
             # security_flags is column index 8 in the header row.
-            assert rows[1][8] == ""
-            # A well-formed string list is still rendered verbatim.
-            if isinstance(flags, list) and all(isinstance(x, str) for x in flags):
-                assert "|".join(flags) in csv_out
-                assert ", ".join(flags) in md_out
-            elif accessible:
-                assert "**Security Flags:** none" in md_out
+            if isinstance(flags, (list, tuple)):
+                # A list/tuple is accepted; elements are stringified before join.
+                expected = "|".join(str(x) for x in flags)
+                assert rows[1][8] == expected
+                # A well-formed string list is rendered verbatim in markdown too.
+                if all(isinstance(x, str) for x in flags) and accessible:
+                    assert ", ".join(flags) in md_out
+            else:
+                # A non-iterable scalar is normalized to an empty flag list.
+                assert rows[1][8] == ""
+                if accessible:
+                    assert "**Security Flags:** none" in md_out
 
 
 def test_security_flags_string_is_rendered() -> None:
