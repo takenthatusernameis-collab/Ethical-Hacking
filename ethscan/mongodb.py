@@ -354,7 +354,9 @@ def format_mongodb_report_markdown(data: dict[str, Any]) -> str:
                 lines.append(f"- **{key}:** {buildinfo[key]}")
         lines.append("")
 
-    findings = data.get('findings') or []
+    findings = data.get('findings')
+    if not isinstance(findings, (list, tuple)):
+        findings = []
     if findings:
         lines.append("## Findings")
         lines.append("")
@@ -395,7 +397,9 @@ def format_mongodb_report_csv(data: dict[str, Any]) -> str:
     ])
 
     buildinfo = data.get('buildInfo') or {}
-    findings = data.get('findings') or []
+    findings = data.get('findings')
+    if not isinstance(findings, (list, tuple)):
+        findings = []
     writer.writerow([
         data.get('target', ''),
         data.get('host', ''),

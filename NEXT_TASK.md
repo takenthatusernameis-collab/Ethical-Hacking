@@ -1,15 +1,13 @@
 # Next Task
 
 ## Status
-Session 117 hardened the six findings-joining CSV formatters (`mysql`, `memcached`, `mongodb`, `mssql`, `postgresql`, `redis`) to stringify each element before joining, fixing a `TypeError` on non-string findings (`None`/`int`/nested). Markdown formatters already tolerated the same data. `pytest` 6166 passed (+30), `mypy` clean (189 files), `ruff` clean. New test: `tests/test_findings_csv_hostile_sweep.py`.
+Session 118 hardened the six findings formatters (`mysql`, `memcached`, `mongodb`, `mssql`, `postgresql`, `redis`) against non-iterable findings/list fields: `{"findings": 1}` / `{"dangerous_findings": 1}` no longer raises `TypeError` in Markdown or CSV (coerced to `[]`). Extended `tests/test_findings_csv_hostile_sweep.py` (+84). Targeted tests green; repo-wide gates to be confirmed by the session final run (see HANDOFF_NEXT.md).
 
 ## One precise next task
-Harden the same six formatters against a non-iterable list field. A dict like `{"findings": 1}` (or `{"dangerous_findings": 1}` for redis) still raises `TypeError: 'int' object is not iterable` in both the Markdown and CSV formatters, because `data.get("findings") or []` yields the truthy scalar and the code iterates it. Reproduce with a temporary fuzzer over the public `format_*` functions, guard the extraction (coerce a non-list/tuple value to `[]`), and extend `tests/test_findings_csv_hostile_sweep.py` with the non-iterable shape. Keep the change minimal and preserve valid-output behavior.
+Harden formatter handling of `smb` hostile `security_flags`: `ethscan/smb.py` `format_smb_report_csv` (and/or markdown) joins `security_flags` with `"|".join(...)` and will raise `TypeError` when `security_flags` is `None` or a non-iterable/non-string-element value. Reproduce with a minimal hostile payload (e.g. `{"security_flags": None}`, `{"security_flags": 1}`, `{"security_flags": [None, 1]}`), fix by coercing to an empty/normalized iterable and stringifying elements before join, add a small hostile-sweep test, and verify with module tests plus mypy/ruff.
 
 ## Notes
 - Keep README examples evidence-based; do not invent outputs.
 - Do not weaken CLI validation or tests. Preserve oracle/postgresql in-band exit-0 contract vs usage-error exits elsewhere.
 - `oracle` and `postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
-- Broader formatter hostile-shape gaps exist beyond this task (see TASK.md session 117 "Approaches already tried"); pick them one bounded family at a time.
-
-(End of file)
+- Other hostile-shape gaps noted by session 117 fuzzer (ldap `root_dse` non-dict; wrong-typed iterable fields in ftp/ntp/oracle/smtp/snmp and others) — tackle one bounded module/family at a time after reproducing.

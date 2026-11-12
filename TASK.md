@@ -364,3 +364,24 @@ Date: Sun Nov 08 2026 (session 7)
 - Did not widen scope to non-iterable findings (e.g. `{"findings": 1}`): that is a separate, larger class — the fuzzer found ~12 modules where both Markdown and CSV iterate a wrong-typed list field (ftp, ntp, oracle, smtp, snmp, memcached, mongodb, mssql, mysql, postgresql, redis), plus `smb` `security_flags: None` (`"|".join(None)`) and `ldap` `root_dse` non-dict. Left for the next bounded task.
 ## Next task
 - One precise next task: harden the six findings CSV/Markdown formatters against a non-iterable list field (`{"findings": 1}` / `{"dangerous_findings": 1}`), which still raises `TypeError: 'int' object is not iterable` in both output formats. Reproduce with the same fuzzer, guard the list extraction (e.g. coerce non-list/tuple to `[]`), and extend `tests/test_findings_csv_hostile_sweep.py` with the non-iterable shape. Keep changes minimal and preserve valid-output behavior.
+
+# Session (Thu Nov 12 2026, session 118)
+## This session
+- No prior agent assignment existed. Picked the precise next task from HANDOFF/NEXT_TASK (session 117): harden the six findings CSV/Markdown formatters against a non-iterable findings/list field.
+- Reproduced: `{"findings": 1}` / `{"dangerous_findings": 1}` raised `TypeError: 'int' object is not iterable` in both Markdown and CSV formatters for `mysql`, `memcached`, `mongodb`, `mssql`, `postgresql`, `redis` (12 formatter functions).
+- Fixed all six modules (`ethscan/{mysql,memcached,mongodb,mssql,postgresql,redis}.py`): findings extraction now coerces non-`list`/`tuple` values to `[]` (`if not isinstance(findings, (list, tuple)): findings = []`) in both markdown and csv formatters. Minimal, preserves valid-output behavior and prior stringified-element behavior.
+- Extended `tests/test_findings_csv_hostile_sweep.py` to cover non-iterable shapes for all 12 formatters (markdown+csv × 7 hostile scalar types: 1,0,"finding",dict,None,True,3.14), asserting no crash and "no findings" rendering.
+
+## Verification
+- Repro (pre-fix): all 12 formatters raised `TypeError: 'int' object is not iterable`; post-fix all OK (coerced to empty).
+- `python -m pytest tests/test_findings_csv_hostile_sweep.py -q` → 114 passed (+84).
+- `python -m pytest tests/test_mysql.py tests/test_memcached.py tests/test_mongodb.py tests/test_mssql.py tests/test_postgresql.py tests/test_redis.py -q` → 464 passed.
+- `python -m mypy` on changed modules/tests → Success: no issues in 7 source files.
+- `python -m ruff check` on changed files → All checks passed.
+- Full-suite / repo-wide mypy/ruff to be run as final gate and recorded in handoff.
+
+## Blockers
+- None.
+
+## Next task
+- Broader formatter hostile-shape gaps remain (per session 117 fuzzer): ~12 modules where both Markdown and CSV iterate a wrong-typed list field beyond findings (ftp, ntp, oracle, smtp, snmp, memcached, mongodb, mssql, mysql, postgresql, redis), plus `smb` `security_flags: None` (`"|".join(None)`) and `ldap` `root_dse` non-dict. Pick one bounded family/module at a time, reproduce first.

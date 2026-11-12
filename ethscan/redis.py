@@ -429,7 +429,9 @@ def format_redis_report_markdown(data: dict[str, Any]) -> str:
                 lines.append(f"- **{key}:** {config[key]}")
         lines.append("")
 
-    findings = data.get("dangerous_findings") or []
+    findings = data.get("dangerous_findings")
+    if not isinstance(findings, (list, tuple)):
+        findings = []
     if findings:
         lines.append("## Dangerous Findings")
         for finding in findings:
@@ -465,7 +467,9 @@ def format_redis_report_csv(data: dict[str, Any]) -> str:
 
     info = data.get("info") or {}
     config = data.get("config") or {}
-    findings = data.get("dangerous_findings") or []
+    findings = data.get("dangerous_findings")
+    if not isinstance(findings, (list, tuple)):
+        findings = []
     requirepass = config.get("requirepass", "")
     requirepass_set = "true" if requirepass else "false"
 
