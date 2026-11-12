@@ -152,6 +152,32 @@ def test_is_cache_valid_missing_timestamp() -> None:
     assert _is_cache_valid(entry, ttl=60) is False
 
 
+def test_is_cache_valid_timestamp_type_error() -> None:
+    """Non-numeric timestamp raises TypeError on float() conversion."""
+    entry: dict[str, object] = {"timestamp": None}
+    assert _is_cache_valid(entry, ttl=60) is False
+    entry = {"timestamp": ["not", "a", "number"]}  # type: ignore[assignment]
+    assert _is_cache_valid(entry, ttl=60) is False
+    entry = {"timestamp": {"nested": "dict"}}  # type: ignore[assignment]
+    assert _is_cache_valid(entry, ttl=60) is False
+
+
+def test_is_cache_valid_timestamp_value_error() -> None:
+    """Non-numeric string timestamp raises ValueError on float() conversion."""
+    entry = {"timestamp": "not a number"}
+    assert _is_cache_valid(entry, ttl=60) is False
+
+
+def test_is_cache_valid_timestamp_not_finite() -> None:
+    """Infinite or NaN timestamp is rejected by math.isfinite check."""
+    entry = {"timestamp": float("inf")}
+    assert _is_cache_valid(entry, ttl=60) is False
+    entry = {"timestamp": float("-inf")}
+    assert _is_cache_valid(entry, ttl=60) is False
+    entry = {"timestamp": float("nan")}
+    assert _is_cache_valid(entry, ttl=60) is False
+
+
 # ---------------------------------------------------------------------------
 # _fetch_mac_data
 # ---------------------------------------------------------------------------
@@ -901,6 +927,29 @@ def test_format_mac_report_csv_mac_data_not_dict() -> None:
     reader = list(csv.reader(io.StringIO(output)))
     assert reader[0] == ["target", "mac", "oui", "vendor", "cached", "offline_fallback", "error"]
     assert reader[1] == ["00:1A:2B:3C:4D:5E", "00:1a:2b:3c:4d:5e", "001a2b3c", "", "false", "false", ""]
+
+
+def test_format_mac_report_markdown_non_dict() -> None:
+    """Non-dict input to markdown formatter is handled defensively (line 311)."""
+    from typing import Any
+
+    hostile_payloads: tuple[Any, ...] = (None, [], "string", 123, ("a", "b"), {"nested": "dict"})
+    for payload in hostile_payloads:
+        output = format_mac_report_markdown(payload)  # type: ignore[arg-type]
+        assert "# ethscan MAC Vendor Lookup Report" in output
+        assert "*No MAC vendor data available.*" in output
+
+
+def test_format_mac_report_csv_non_dict() -> None:
+    """Non-dict input to CSV formatter is handled defensively (line 354)."""
+    from typing import Any
+
+    hostile_payloads: tuple[Any, ...] = (None, [], "string", 123, ("a", "b"), {"nested": "dict"})
+    for payload in hostile_payloads:
+        output = format_mac_report_csv(payload)  # type: ignore[arg-type]
+        reader = list(csv.reader(io.StringIO(output)))
+        assert reader[0] == ["target", "mac", "oui", "vendor", "cached", "offline_fallback", "error"]
+        assert reader[1] == ["", "", "", "", "false", "false", ""]
 
 
 def test_resolver_failure_of_an_unknown_type_is_reported(monkeypatch) -> None:
