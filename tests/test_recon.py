@@ -3,7 +3,7 @@
 import csv
 import io
 import json
-from typing import Any, cast
+from typing import cast
 
 from unittest.mock import patch
 

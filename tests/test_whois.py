@@ -935,3 +935,19 @@ def test_run_whois_recursive_response_repeat_loop_protection(monkeypatch) -> Non
     assert hop["depth"] == 1
     assert hop["server"] == "whois.registrar.net"
     assert hop["parsed"]["registrar"] == "Test Registrar"
+
+
+def test_format_whois_report_markdown_non_dict() -> None:
+    """Cover line 279: a non-dict payload is reset to {} instead of raising."""
+    hostiles: tuple[object, ...] = (None, [], "not a dict", 123, ("tuple",), {"nested": {"bad": "data"}})
+    for hostile in hostiles:
+        out = format_whois_report_markdown(hostile)  # type: ignore[arg-type]
+        assert isinstance(out, str)
+
+
+def test_format_whois_report_csv_non_dict() -> None:
+    """Cover line 350: a non-dict payload is reset to {} instead of raising."""
+    hostiles: tuple[object, ...] = (None, [], "not a dict", 123, ("tuple",), {"nested": {"bad": "data"}})
+    for hostile in hostiles:
+        out = format_whois_report_csv(hostile)  # type: ignore[arg-type]
+        assert isinstance(out, str)
