@@ -3,7 +3,6 @@
 import csv
 import io
 import json
-import math
 import struct
 from unittest.mock import MagicMock, patch
 
