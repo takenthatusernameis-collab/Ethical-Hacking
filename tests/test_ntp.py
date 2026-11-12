@@ -1027,3 +1027,24 @@ def test_format_ntp_report_csv_no_findings() -> None:
     }
     output = format_ntp_report_csv(data)
     assert "finding" not in output
+
+
+def test_format_ntp_report_markdown_non_dict() -> None:
+    """Non-dict input to markdown formatter triggers data = {} guard (line 368)."""
+    output = format_ntp_report_markdown("not a dict")  # type: ignore[arg-type]
+    assert "# ethscan NTP Report" in output
+    assert "Target:** " in output  # empty target since data became {}
+
+
+def test_format_ntp_report_csv_non_dict() -> None:
+    """Non-dict input to CSV formatter triggers data = {} guard (line 468)."""
+    output = format_ntp_report_csv(["not", "a", "dict"])  # type: ignore[arg-type]
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0] == [
+        "target", "port", "version", "port_open", "peer_count",
+        "record_type", "peer_address", "peer_port", "peer_mode", "peer_version"
+    ]
+    # Empty dict produces a summary row with empty/zero values
+    assert len(reader) == 2
+    assert reader[1][0] == ""  # target
+    assert reader[1][5] == "summary"  # record_type
