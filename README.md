@@ -118,11 +118,11 @@ Invalid option values are reported as usage errors (exit code 2) instead of
 Python tracebacks. A malformed `--ports` specification, for example, gives:
 
 ```console
-$ python -m ethscan scan --target 127.0.0.1 --ports bogus
+$ python -m ethscan scan --target 127.0.0.1 --ports "abc"
 Usage: python -m ethscan scan [OPTIONS]
 Try 'python -m ethscan scan --help' for help.
 
-Error: Invalid value for '--ports': Invalid port number 'bogus'
+Error: Invalid value for '--ports': Invalid port number 'abc'
 ```
 
 The same applies to the CIDR options of the `cidr` and `radix` commands:
@@ -156,6 +156,19 @@ Usage: python -m ethscan redis [OPTIONS]
 Try 'python -m ethscan redis --help' for help.
 
 Error: Invalid value for '--target': Could not parse host from target ''
+```
+
+File-path options are checked for existence and type (a readable regular
+file or a directory is a usage error) and for the content they hold. A JSON
+file that is not JSON, a JSON file that holds something else than an object
+and an Nmap XML file that is not XML are usage errors as well:
+
+```console
+$ python -m ethscan vuln --target example.com --services-file broken.json
+Usage: python -m ethscan vuln [OPTIONS]
+Try 'python -m ethscan vuln --help' for help.
+
+Error: Invalid value for '--services-file': Expecting value: line 1 column 1 (char 0)
 ```
 
 A `--target` whose port is not a number is rejected the same way. This

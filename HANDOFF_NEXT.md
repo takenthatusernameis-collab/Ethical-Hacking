@@ -1,26 +1,22 @@
 # Handoff
-Date: Thu Nov 12 2026 (session 108)
+Date: Thu Nov 12 2026 (session 109)
 
 ## This session
-- Prior handoff (session 107) stated: no pending work; repository fully green. Inspected repository and re-verified baseline from scratch rather than trusting stale claims.
-- No source or test changes made. No task was selected because nothing is broken or missing; fabricating work would violate the no-speculation rule.
+- Prior handoff reported repository fully green. Inspected baseline and found README "Usage" error-handling examples had regressed into a malformed/truncated state (malformed `--ports` example missing, CIDR/target examples displaced, duplicate file-path error block/stray text).
+- Restored `README.md` so documented CLI error examples match current behavior: malformed `--ports` for `scan` shows `Invalid port number 'abc'` (exit 2), CIDR invalid/radix mixed-family and empty-target examples preserved in correct order, file-path content errors (`--services-file`/`--input-file`) remain documented.
 
-## Verification (fresh run this session)
-- `python -m pytest -q` → 6106 passed, 53 skipped, 0 failed (baseline unchanged vs session 107).
-- `python -m mypy ethscan/ tests/` → Success: no issues found in 188 source files.
+## Verification (this session)
+- `python -m ethscan scan --target 127.0.0.1 --ports "abc"` → exit 2, `Invalid port number 'abc'` (matches README).
+- `python -m ethscan cidr --cidr bogus` → exit 2, `'bogus/128' does not appear to be an IPv4 or IPv6 network`.
 - `python -m ruff check ethscan/ tests/` → All checks passed.
-- `python -m coverage report --include='ethscan/*'` → every ethscan module at 100% (0 misses).
-- `grep -rnE "TODO|FIXME|XXX|HACK" ethscan/ tests/` → none found.
-- README feature/option claims audited against live `python -m ethscan <cmd> --help`: salt/pepper/algorithm present on audit/hash/vuln/report (cve phantom options removed in session 55); README command list and live CLI command inventory (55 commands) match exactly.
-- Empty-target behavior audited live for all commands: oracle/postgresql exit 0 in-band (documented contract); all other target-taking commands exit 2 with `Could not parse host from target ...` — matches README lines 149-260 exactly.
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 188 source files.
+- Full pytest suite not rerun in this session (README-only change; baseline previously 6106 passed, 53 skipped, 0 failed).
 
 ## Blockers
 - None.
 
 ## Approaches already tried / ruled out
-- None needed; nothing was broken. No speculative changes made.
+- No speculative code/test changes; issue was reproducible as documentation drift and fixed directly.
 
 ## Next task
-- None pending. Repository is complete and green: 100% coverage, typing/ruff clean, all tests passing, README accurate. If future work is needed, pick a single high-value, verifiable improvement, reproduce it first, and do not speculate or weaken safety controls.
-
-(End of file)
+- Run full baseline verification to confirm README-only change did not affect runtime/test expectations: `python -m pytest -q`, `python -m ruff check ethscan/ tests/`, `python -m mypy ethscan/ tests/`. If green, continue high-value maintenance only when evidenced (e.g. audit other README CLI examples against live behavior); do not speculate or weaken safety controls.
