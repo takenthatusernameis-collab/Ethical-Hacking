@@ -680,7 +680,7 @@ def format_mssql_report_csv(data: dict[str, Any]) -> str:
         prelogin.get("encryption") or "",
         prelogin.get("instance_name") or "",
         prelogin.get("thread_id") or "",
-        "; ".join(findings).replace("\n", " ").replace("\r", " "),
+        "; ".join(str(f) for f in findings).replace("\n", " ").replace("\r", " "),
         data.get("error") or "",
     ])
     return output.getvalue().rstrip("\r\n")

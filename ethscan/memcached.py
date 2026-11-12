@@ -424,7 +424,7 @@ def format_memcached_report_csv(data: dict[str, Any]) -> str:
         stats.get("get_hits", ""),
         stats.get("get_misses", ""),
         stats.get("evictions", ""),
-        "; ".join(findings).replace("\n", " ").replace("\r", " "),
+        "; ".join(str(f) for f in findings).replace("\n", " ").replace("\r", " "),
         data.get("error") or "",
     ])
     return output.getvalue().rstrip("\r\n")

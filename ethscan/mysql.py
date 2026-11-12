@@ -507,7 +507,7 @@ def format_mysql_report_csv(data: dict[str, Any]) -> str:
         handshake.get("charset") or "",
         handshake.get("status") or "",
         handshake.get("auth_plugin_name") or "",
-        "; ".join(findings).replace("\n", " ").replace("\r", " "),
+        "; ".join(str(f) for f in findings).replace("\n", " ").replace("\r", " "),
         data.get("error") or "",
     ])
     return output.getvalue().rstrip("\r\n")

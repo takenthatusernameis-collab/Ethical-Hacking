@@ -404,7 +404,7 @@ def format_mongodb_report_csv(data: dict[str, Any]) -> str:
         data.get('version') or '',
         buildinfo.get('sysInfo', ''),
         buildinfo.get('modules', ''),
-        '; '.join(findings).replace('\n', ' ').replace('\r', ' '),
+        '; '.join(str(f) for f in findings).replace('\n', ' ').replace('\r', ' '),
         data.get('error') or '',
     ])
     return output.getvalue().rstrip('\r\n')

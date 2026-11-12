@@ -481,7 +481,7 @@ def format_redis_report_csv(data: dict[str, Any]) -> str:
         info.get("connected_clients", ""),
         config.get("bind", ""),
         requirepass_set,
-        "; ".join(findings).replace("\n", " ").replace("\r", " "),
+        "; ".join(str(f) for f in findings).replace("\n", " ").replace("\r", " "),
         data.get("error") or "",
     ])
     return output.getvalue().rstrip("\r\n")

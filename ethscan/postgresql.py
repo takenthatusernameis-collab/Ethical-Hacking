@@ -467,7 +467,7 @@ def format_postgresql_report_csv(data: dict[str, Any]) -> str:
         data.get("version") or "",
         startup.get("auth_type_name") or "",
         startup.get("process_id") or "",
-        "; ".join(findings).replace("\n", " ").replace("\r", " "),
+        "; ".join(str(f) for f in findings).replace("\n", " ").replace("\r", " "),
         data.get("error") or "",
     ])
     return output.getvalue().rstrip("\r\n")

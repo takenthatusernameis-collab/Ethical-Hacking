@@ -343,3 +343,24 @@ Date: Sun Nov 08 2026 (session 7)
 - None.
 ## Next task
 - None pending. Repository is green. If future work is needed, pick one bounded, verifiable improvement and reproduce it first. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
+
+# Session (Thu Nov 12 2026, session 117)
+## This session
+- No prior agent assignment existed (HANDOFF_NEXT/NEXT_TASK said no further task). Inspected the repo and confirmed the baseline green before starting: `pytest -q` → 6136 passed, 53 skipped, 0 failed; `mypy ethscan/ tests/` → clean (188 source files); `ruff check` → clean.
+- Selected a bounded robustness gap in the CSV report formatters. A temporary formatter fuzzer (every public `format_*` function × hostile shapes) reproduced `TypeError: sequence item N: expected str instance, NoneType found` from `"; ".join(findings)` when the findings list carries a non-string element (None/int/nested). The Markdown formatters tolerate the same data via f-strings; only the CSV formatters crashed — the same pattern fixed for `jwt` (session 114) and `ntp` (session 116).
+- Fixed six CSV formatters to stringify each element before joining: `ethscan/{mysql,memcached,mongodb,mssql,postgresql}.py` (`findings`) and `ethscan/redis.py` (`dangerous_findings`). No behavior change for string findings.
+- Added `tests/test_findings_csv_hostile_sweep.py`: parametrized over all six formatters × hostile findings (`[None]`, `[1]`, `[None, 1]`, `["ok", None, 1, 2.5, ["nested"]]`), plus a regression that string findings are still joined with `"; "`.
+
+## Verification
+- `python -m pytest tests/test_findings_csv_hostile_sweep.py -q` → 30 passed.
+- `python -m pytest tests/test_mysql.py tests/test_memcached.py tests/test_mongodb.py tests/test_mssql.py tests/test_postgresql.py tests/test_redis.py -q` → 464 passed.
+- Reproduced all six pre-fix TypeErrors; post-fix formatters return CSV containing the stringified values.
+- `python -m pytest -q` → 6166 passed, 53 skipped, 0 failed (baseline 6136; +30 new tests).
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 189 source files.
+- `python -m ruff check ethscan/ tests/` → All checks passed.
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- Did not widen scope to non-iterable findings (e.g. `{"findings": 1}`): that is a separate, larger class — the fuzzer found ~12 modules where both Markdown and CSV iterate a wrong-typed list field (ftp, ntp, oracle, smtp, snmp, memcached, mongodb, mssql, mysql, postgresql, redis), plus `smb` `security_flags: None` (`"|".join(None)`) and `ldap` `root_dse` non-dict. Left for the next bounded task.
+## Next task
+- One precise next task: harden the six findings CSV/Markdown formatters against a non-iterable list field (`{"findings": 1}` / `{"dangerous_findings": 1}`), which still raises `TypeError: 'int' object is not iterable` in both output formats. Reproduce with the same fuzzer, guard the list extraction (e.g. coerce non-list/tuple to `[]`), and extend `tests/test_findings_csv_hostile_sweep.py` with the non-iterable shape. Keep changes minimal and preserve valid-output behavior.
