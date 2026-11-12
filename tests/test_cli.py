@@ -6236,6 +6236,96 @@ def test_whois_invalid_target_is_usage_error() -> None:
         assert "Could not parse host from target" in result.output
 
 
+def test_ftp_invalid_target_is_usage_error() -> None:
+    """An unusable ftp target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://", ":6379", "://no-host", "redis://"):
+        result = runner.invoke(cli, ["ftp", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
+def test_smtp_invalid_target_is_usage_error() -> None:
+    """An unusable smtp target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://", ":6379", "://no-host", "redis://"):
+        result = runner.invoke(cli, ["smtp", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
+def test_ntp_invalid_target_is_usage_error() -> None:
+    """An unusable ntp target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://", ":6379", "://no-host", "redis://"):
+        result = runner.invoke(cli, ["ntp", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
+def test_snmp_invalid_target_is_usage_error() -> None:
+    """An unusable snmp target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://", ":6379", "://no-host", "redis://"):
+        result = runner.invoke(cli, ["snmp", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
+def test_ldap_invalid_target_is_usage_error() -> None:
+    """An unusable ldap target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://", ":6379", "://no-host", "redis://"):
+        result = runner.invoke(cli, ["ldap", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
+def test_netbios_invalid_target_is_usage_error() -> None:
+    """An unusable netbios target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://", ":6379", "://no-host", "redis://"):
+        result = runner.invoke(cli, ["netbios", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
+def test_smb_invalid_target_is_usage_error() -> None:
+    """An unusable smb target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://", ":6379", "://no-host", "redis://"):
+        result = runner.invoke(cli, ["smb", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
+def test_redis_invalid_target_is_usage_error() -> None:
+    """An unusable redis target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://", ":6379", "://no-host", "redis://"):
+        result = runner.invoke(cli, ["redis", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
+def test_memcached_invalid_target_is_usage_error() -> None:
+    """An unusable memcached target is rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("", "   ", "https://", ":6379", "://no-host", "redis://"):
+        result = runner.invoke(cli, ["memcached", "--target", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--target'" in result.output
+        assert "Could not parse host from target" in result.output
+
+
 def test_vuln_help() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["vuln", "--help"])

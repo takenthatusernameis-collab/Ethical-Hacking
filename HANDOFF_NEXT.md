@@ -1,26 +1,26 @@
 # Handoff
-Date: Thu Nov 12 2026 (session 112)
+Date: Thu Nov 12 2026 (session 113)
 
 ## This session
-- Inspected repo state, recent history, `NEXT_TASK.md`, `HANDOFF_NEXT.md`, README, and tooling config; working tree was clean and `ruff check` passed.
-- Completed the precise next task from session 111: made the README `nmap --input-file broken.xml` example resilient to parser wording differences.
-  - Replaced the parser-specific tail (`syntax error: line 1, column 0`) with `<parser-specific detail>` and added a sentence documenting the stable contract: usage error exit 2 and the `Invalid value for '--input-file': invalid Nmap XML:` prefix, noting the tail depends on the XML parser in use.
-- Verified behavior after edit:
-  - `python -m ethscan nmap --input-file /tmp/broken.xml` (content `<not-xml`) -> exit 2, `Error: Invalid value for '--input-file': invalid Nmap XML: unclosed token: line 1, column 0` (prefix matches the documented contract).
-  - `python -m ruff check ethscan/ tests/` -> `All checks passed!`.
-- Did not run full `pytest`/`mypy` (README-only edit, no code or test changes).
+- Inspected repo state, recent history, `NEXT_TASK.md`, `HANDOFF_NEXT.md`, README, and tooling config; working tree was clean and all checks passed (`pytest` 6108 passed, `mypy` clean, `ruff` clean).
+- Identified a bounded, high-value test coverage gap: 9 protocol commands (`ftp`, `smtp`, `ntp`, `snmp`, `ldap`, `netbios`, `smb`, `redis`, `memcached`) reject empty/unusable targets as usage errors (exit 2) but lacked the corresponding `test_<cmd>_invalid_target_is_usage_error` CLI tests that exist for all other target-taking commands.
+- Added 9 new CLI tests in `tests/test_cli.py` following the established pattern (comprehensive bad target set: `""`, `"   "`, `"https://"`, `":6379"`, `"://no-host"`, `"redis://"`).
+- Verified behavior empirically before writing tests: all 9 commands reject all 6 bad target formats with exit 2 and the expected error message prefix.
 
 ## Verification (this session)
-- `python -m ethscan nmap --input-file /tmp/broken.xml` (temp malformed file) => exit 2, `Error: Invalid value for '--input-file': invalid Nmap XML: unclosed token: line 1, column 0`
-- `python -m ruff check ethscan/ tests/` => pass
+- `python -m pytest tests/test_cli.py::test_ftp_invalid_target_is_usage_error ... test_memcached_invalid_target_is_usage_error` → 9 passed
+- `python -m pytest -q` → 6117 passed, 53 skipped, 0 failed (baseline was 6108; +9 new tests)
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 188 source files
+- `python -m ruff check ethscan/ tests/` → All checks passed
+- Empirical CLI checks confirmed exit 2 with `Invalid value for '--target': Could not parse host from target` for all 9 commands and all 6 bad target formats.
 
 ## Blockers
 - None.
 
 ## Approaches already tried / ruled out
-- None new this session; the prior session's approach (minimal, evidence-based README deduplication) was continued and completed.
+- None; the task was straightforward test coverage completion following existing patterns.
 
 ## Next task
-- No further task identified. If a new task is needed, inspect `TASK.md`, the README, and recent git history for the next bounded, high-value improvement.
+- No further task identified. Repository is fully green with comprehensive test coverage for empty-target rejection across all target-taking commands. If a new task is needed, inspect `TASK.md`, the README, and recent git history for the next bounded, high-value improvement. `oracle` and `postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
 
-(End of file - total 27 lines)
+(End of file - total 34 lines)
