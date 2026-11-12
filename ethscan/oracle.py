@@ -469,6 +469,13 @@ def _markdown_escape(text: object) -> str:
     return str(text).replace("|", "\\|").replace("\n", " ")
 
 
+def _normalize_findings(findings: Any) -> list[object]:
+    """Coerce findings to a list for safe iteration in formatters."""
+    if isinstance(findings, (list, tuple)):
+        return list(findings)
+    return []
+
+
 def format_oracle_report_markdown(data: dict[str, Any]) -> str:
     """Format Oracle reconnaissance results as Markdown."""
     if not isinstance(data, dict):
@@ -486,7 +493,7 @@ def format_oracle_report_markdown(data: dict[str, Any]) -> str:
         lines.append(f"**Server Version:** {data['version']}")
         lines.append("")
 
-    findings = data.get("findings") or []
+    findings = _normalize_findings(data.get("findings"))
     if findings:
         lines.append("## Findings")
         lines.append("")
@@ -508,7 +515,7 @@ def format_oracle_report_markdown(data: dict[str, Any]) -> str:
 def format_oracle_report_csv(data: dict[str, Any]) -> str:
     """Format Oracle reconnaissance results as CSV."""
     if not isinstance(data, dict):
-            data = {}
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
@@ -528,8 +535,8 @@ def format_oracle_report_csv(data: dict[str, Any]) -> str:
         data.get("error") or "",
     ])
 
-    findings = data.get("findings")
-    if isinstance(findings, list) and findings:
+    findings = _normalize_findings(data.get("findings"))
+    if findings:
         writer.writerow([])
         writer.writerow(["finding"])
         for finding in findings:
