@@ -3,7 +3,7 @@
 import socket
 import socketserver
 import threading
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -752,6 +752,28 @@ def test_format_subtake_report_csv_malformed_all_results() -> None:
     assert output == "subdomain,hostname,cname,a_records,aaaa_records,vulnerable,service,fingerprint,http_confirmed"
 
 
+def test_format_subtake_report_csv_non_dict_input() -> None:
+    """Non-dict input to CSV formatter returns only the header row (line 601)."""
+    output = format_subtake_report_csv(cast(Any, "not-a-dict"))
+    assert output == "subdomain,hostname,cname,a_records,aaaa_records,vulnerable,service,fingerprint,http_confirmed"
+
+    output = format_subtake_report_csv(cast(Any, None))
+    assert output == "subdomain,hostname,cname,a_records,aaaa_records,vulnerable,service,fingerprint,http_confirmed"
+
+
+def test_format_subtake_report_csv_non_dict_entry() -> None:
+    """Non-dict entries in all_results are skipped (line 607)."""
+    data = {
+        "target": "example.com",
+        "domain": "example.com",
+        "subdomains_tested": 1,
+        "vulnerable_count": 0,
+        "all_results": ["not-a-dict"],
+    }
+    output = format_subtake_report_csv(data)
+    assert output == "subdomain,hostname,cname,a_records,aaaa_records,vulnerable,service,fingerprint,http_confirmed"
+
+
 def test_format_subtake_report_csv_non_dict_takeover() -> None:
     """Non-dict takeover is normalized to an empty dict."""
     data = {
@@ -1391,3 +1413,17 @@ def test_resolve_aaaa_records_swallows_hostile_exception(monkeypatch, exc):
         assert subtake_mod.resolve_aaaa_records("example.com", timeout=1.0, resolver="8.8.8.8") == []
     finally:
         _restore_subtake(monkeypatch)
+
+
+def test_format_subtake_report_markdown_non_dict_input() -> None:
+    """Non-dict input to markdown formatter returns the 'No structured report data' message (lines 642-643)."""
+    output = format_subtake_report_markdown(cast(Any, "not-a-dict"))
+    assert "# ethscan Subdomain Takeover Report" in output
+    assert "*No structured report data.*" in output
+    assert output == "# ethscan Subdomain Takeover Report\n\n*No structured report data.*"
+
+    output = format_subtake_report_markdown(cast(Any, None))
+    assert "*No structured report data.*" in output
+
+    output = format_subtake_report_markdown(cast(Any, ["not-a-dict"]))
+    assert "*No structured report data.*" in output
