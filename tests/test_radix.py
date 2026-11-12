@@ -972,6 +972,20 @@ def test_format_csv_defensive_branches():
     assert "original_cidr" in out
 
 
+def test_format_radix_report_csv_invalid_cidr_skipped():
+    """Invalid CIDR strings in cidrs list are skipped (lines 687-688)."""
+    data = run_radix(["192.168.1.0/24", "10.0.0.0/8"])
+    # Inject an invalid CIDR that ip_network will reject even with strict=False
+    data["cidrs"].append("not-a-cidr")
+    output = format_radix_report_csv(data)
+    lines = [line.rstrip("\r") for line in output.strip().split("\n")]
+    # Header + 2 valid CIDRs (invalid one skipped)
+    assert len(lines) == 3
+    assert "192.168.1.0/24" in output
+    assert "10.0.0.0/8" in output
+    assert "not-a-cidr" not in output
+
+
 def test_format_csv_diff_cidrs_empty():
     data = {
         "cidrs": ["10.0.0.0/8"],
