@@ -1148,3 +1148,27 @@ def test_assess_handshake_unparseable_version_marker():
     handshake = {"server_version": "foo-5.0.bar"}
     findings = _assess_handshake(handshake)
     assert any("Old MySQL version detected" in f for f in findings)
+
+
+def test_run_mysql_normalize_target_value_error_branch(monkeypatch):
+    def _boom(_target):
+        raise ValueError("boom")
+
+    monkeypatch.setattr("ethscan.mysql._normalize_target", _boom)
+    result = run_mysql("example.com")
+    assert result["accessible"] is False
+    assert result["host"] is None
+    assert result["error"] == "boom"
+
+
+def test_format_mysql_report_markdown_non_dict_input():
+    rendered = format_mysql_report_markdown(None)
+    assert "# MySQL Reconnaissance Report" in rendered
+    assert "**Host:** N/A" in rendered
+
+
+def test_format_mysql_report_csv_non_dict_input():
+    rendered = format_mysql_report_csv(None)
+    lines = rendered.strip().splitlines()
+    assert len(lines) == 2
+    assert lines[0].startswith("target,host,port,accessible,")
