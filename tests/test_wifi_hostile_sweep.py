@@ -34,6 +34,12 @@ def test_wifi_formatters_hostile_nested_shapes_never_raise() -> None:
         {"notes": 42},
         {"notes": "x"},
         {"interfaces": [{"interface": "wlan0"}], "access_points": [{"ssid": "foo"}]},
+        # Lists that pass the ``isinstance(list)`` guard but carry non-dict
+        # elements must be skipped element-wise, not crash the formatter.
+        {"interfaces": [None, 1, 2.5]},
+        {"access_points": [None, 1, 2.5]},
+        {"interfaces": [{"interface": "wlan0"}, None, 1]},
+        {"access_points": [{"ssid": "foo"}, None, 2.5]},
     ]
     for data in cases:
         json.loads(wifi.format_wifi_report_json(data))
@@ -41,3 +47,25 @@ def test_wifi_formatters_hostile_nested_shapes_never_raise() -> None:
         csv_text = wifi.format_wifi_report_csv(data)
         assert isinstance(md, str)
         assert isinstance(csv_text, str)
+
+
+def test_wifi_csv_renders_well_formed_elements_amid_hostile() -> None:
+    """Well-formed list elements are still rendered when mixed with hostile ones."""
+    data = {
+        "interfaces": [
+            {"interface": "wlan0", "status": "up", "link_quality": "70", "signal_level": "-50", "noise_level": "-90"},
+            None,
+            1,
+        ],
+        "access_points": [
+            {"ssid": "foo", "bssid": "aa:bb:cc:dd:ee:ff", "channel": "6", "frequency": 2.437,
+             "encryption": "WPA2", "signal_dbm": -50, "quality": "70"},
+            None,
+        ],
+    }
+    md = wifi.format_wifi_report_markdown(data)
+    csv_text = wifi.format_wifi_report_csv(data)
+    assert "wlan0" in md and "foo" in md
+    assert "wlan0" in csv_text and "foo" in csv_text
+    assert "No wireless interfaces found." not in md
+    assert "No access points discovered." not in md

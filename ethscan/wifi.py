@@ -425,6 +425,8 @@ def format_wifi_report_csv(results: dict[str, Any]) -> str:
     writer.writerow([])
     writer.writerow(["interface", "status", "link_quality", "signal_level", "noise_level"])
     for iface in interfaces:
+        if not isinstance(iface, dict):
+            continue
         writer.writerow([
             iface.get("interface", ""),
             iface.get("status", ""),
@@ -440,6 +442,8 @@ def format_wifi_report_csv(results: dict[str, Any]) -> str:
     writer.writerow([])
     writer.writerow(["interface", "bssid", "ssid", "channel", "frequency_ghz", "encryption", "signal_dbm", "quality"])
     for ap in access_points:
+        if not isinstance(ap, dict):
+            continue
         ssid = ap.get("ssid", "") if ap.get("ssid") else "<hidden>"
         freq_val = ap.get("frequency")
         freq = f"{freq_val:.3f}" if isinstance(freq_val, (int, float)) else "N/A"
