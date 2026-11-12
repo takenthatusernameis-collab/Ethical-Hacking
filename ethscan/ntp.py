@@ -13,6 +13,7 @@ defaults to a raw UDP socket so tests can substitute a local fake server.
 from __future__ import annotations
 
 import csv
+import datetime
 import io
 import json
 import socket
@@ -20,6 +21,22 @@ import struct
 from typing import Any, cast
 
 from ethscan.target import TargetSpecError, check_port, parse_url, url_port
+
+
+def _format_timestamp(timestamp: float) -> str:
+    """Format a Unix timestamp as an ISO-8601 UTC string.
+
+    Crafted or malformed NTP responses can carry timestamp values that are not
+    representable as a calendar time on this platform (for example ``NaN``,
+    infinities, or integers beyond ``time_t`` range). Rather than letting the
+    Markdown formatter crash, fall back to an explicit placeholder that still
+    shows the raw value.
+    """
+    try:
+        dt = datetime.datetime.fromtimestamp(timestamp, tz=datetime.timezone.utc)
+        return dt.isoformat()
+    except (OverflowError, OSError, ValueError):
+        return f"<out-of-range ({timestamp})>"
 
 DEFAULT_PORT = 123
 DEFAULT_TIMEOUT = 3.0
@@ -391,9 +408,7 @@ def format_ntp_report_markdown(data: dict[str, Any]) -> str:
             for ts_key in ["reference_timestamp", "originate_timestamp", "receive_timestamp", "transmit_timestamp"]:
                 ts_val = time_resp.get(ts_key)
                 if ts_val is not None:
-                    import datetime
-                    dt = datetime.datetime.fromtimestamp(ts_val, tz=datetime.timezone.utc)
-                    lines.append(f"- **{ts_key.replace('_', ' ').title()}:** {dt.isoformat()}")
+                    lines.append(f"- **{ts_key.replace('_', ' ').title()}:** {_format_timestamp(ts_val)}")
                 else:
                     lines.append(f"- **{ts_key.replace('_', ' ').title()}:** N/A")
 

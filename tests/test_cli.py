@@ -20940,6 +20940,40 @@ def test_ntp_output_format_markdown(monkeypatch) -> None:
     assert "Peer Count:** 3" in result.output
 
 
+def test_ntp_markdown_out_of_range_timestamp_does_not_crash(monkeypatch) -> None:
+    """CLI markdown output must not crash when NTP response carries unrepresentable timestamps."""
+    mock_results = {
+        "target": "ntp.example.com",
+        "host": "ntp.example.com",
+        "port": 123,
+        "time_response": {
+            "leap_indicator": "no warning",
+            "version": 4,
+            "mode": 4,
+            "stratum": 2,
+            "poll": 4,
+            "precision": -20,
+            "root_delay_ms": 250.0,
+            "root_dispersion_ms": 125.0,
+            "reference_id": "0x0a0b0c0d",
+            "reference_timestamp": 10**30,
+            "originate_timestamp": None,
+            "receive_timestamp": None,
+            "transmit_timestamp": None,
+        },
+        "monlist_response": None,
+        "is_reflector": False,
+        "amplification_factor": None,
+        "error": None,
+    }
+    monkeypatch.setattr("ethscan.cli.run_ntp", lambda *a, **k: mock_results)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ntp", "--target", "ntp.example.com", "--output-format", "markdown", "--timeout", "1.0"])
+    assert result.exit_code == 0, result.output
+    assert "# ethscan NTP Report" in result.output
+    assert "<out-of-range" in result.output
+
+
 def test_ntp_no_monlist_check_flag(monkeypatch) -> None:
     captured = {}
 

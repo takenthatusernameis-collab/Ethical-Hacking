@@ -3,6 +3,7 @@
 import csv
 import io
 import json
+import math
 import struct
 from unittest.mock import MagicMock, patch
 
@@ -966,6 +967,78 @@ def test_format_ntp_report_markdown_with_timestamps() -> None:
     output = format_ntp_report_markdown(data)
     assert "Reference Timestamp" in output
     assert "N/A" in output
+
+
+@pytest.mark.parametrize(
+    "ts_val",
+    [
+        float("inf"),
+        float("-inf"),
+        float("nan"),
+        10**30,
+        -10**30,
+    ],
+)
+def test_format_ntp_report_markdown_handles_unrepresentable_timestamps(ts_val: float) -> None:
+    """Markdown formatter must not crash on unrepresentable timestamp values."""
+    data = {
+        "target": "ntp.example.com",
+        "host": "ntp.example.com",
+        "port": 123,
+        "time_response": {
+            "leap_indicator": "no warning",
+            "version": 4,
+            "mode": 4,
+            "stratum": 2,
+            "poll": 4,
+            "precision": -20,
+            "root_delay_ms": 250.0,
+            "root_dispersion_ms": 125.0,
+            "reference_id": "0x0a0b0c0d",
+            "reference_timestamp": ts_val,
+            "originate_timestamp": None,
+            "receive_timestamp": None,
+            "transmit_timestamp": None,
+        },
+        "monlist_response": None,
+        "is_reflector": False,
+        "amplification_factor": None,
+        "error": None,
+    }
+    output = format_ntp_report_markdown(data)
+    # Should not crash and should show the placeholder
+    assert "<out-of-range" in output
+    assert str(ts_val) in output
+
+
+def test_format_ntp_report_markdown_finite_timestamp_still_iso() -> None:
+    """Finite timestamps should still render as ISO-8601 UTC strings."""
+    data = {
+        "target": "ntp.example.com",
+        "host": "ntp.example.com",
+        "port": 123,
+        "time_response": {
+            "leap_indicator": "no warning",
+            "version": 4,
+            "mode": 4,
+            "stratum": 2,
+            "poll": 4,
+            "precision": -20,
+            "root_delay_ms": 250.0,
+            "root_dispersion_ms": 125.0,
+            "reference_id": "0x0a0b0c0d",
+            "reference_timestamp": 1700000000,  # 2023-11-14T22:13:20Z
+            "originate_timestamp": None,
+            "receive_timestamp": None,
+            "transmit_timestamp": None,
+        },
+        "monlist_response": None,
+        "is_reflector": False,
+        "amplification_factor": None,
+        "error": None,
+    }
+    output = format_ntp_report_markdown(data)
+    assert "2023-11-14T22:13:20" in output  # ISO format with timezone
 
 
 def test_run_ntp_connector_exception_caught() -> None:
