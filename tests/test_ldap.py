@@ -1099,3 +1099,18 @@ def test_send_recv_close_exception() -> None:
         assert err is None
     finally:
         setattr(ldap_mod.socket, "socket", orig)  # noqa: B010
+
+
+def test_format_ldap_report_markdown_non_dict_input() -> None:
+    """Non-dict input should be handled defensively."""
+    report = format_ldap_report_markdown(None)  # type: ignore[arg-type]
+    assert "# ethscan LDAP Reconnaissance Report" in report
+
+
+def test_format_ldap_report_csv_non_dict_input() -> None:
+    """Non-dict input should be handled defensively."""
+    report = format_ldap_report_csv(None)  # type: ignore[arg-type]
+    reader = csv.reader(io.StringIO(report))
+    rows = list(reader)
+    assert rows[0][0] == "target"
+    assert len(rows) == 2
