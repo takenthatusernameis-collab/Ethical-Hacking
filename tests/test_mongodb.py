@@ -403,3 +403,32 @@ def test_run_mongodb_parse_failure_reported(monkeypatch):
     result = run_mongodb("localhost", connector=lambda *a: (b"\x00", None))
     assert result["accessible"] is False
     assert "parse boom" in result["error"]
+
+
+def test_run_mongodb_plain_valueerror_reported_in_band(monkeypatch):
+    """A plain ValueError (not TargetSpecError) from _normalize_target is
+    reported in-band, not raised (ethscan/mongodb.py:260)."""
+
+    def boom(target):
+        raise ValueError("plain value error")
+
+    monkeypatch.setattr("ethscan.mongodb._normalize_target", boom)
+
+    result = run_mongodb("localhost")
+    assert result["accessible"] is False
+    assert result["error"] == "plain value error"
+    assert result["host"] is None
+    assert result["buildInfo"] == {}
+
+
+def test_format_mongodb_report_markdown_non_dict():
+    """A non-dict input to the markdown formatter is normalized to {} (ethscan/mongodb.py:333)."""
+    output = format_mongodb_report_markdown("not a dict")
+    assert "# MongoDB Reconnaissance Report" in output
+    assert "N/A" in output
+
+
+def test_format_mongodb_report_csv_non_dict():
+    """A non-dict input to the CSV formatter is normalized to {} (ethscan/mongodb.py:382)."""
+    output = format_mongodb_report_csv(["not", "a", "dict"])
+    assert "target,host,port,accessible,version,sysInfo,modules,findings,error" in output

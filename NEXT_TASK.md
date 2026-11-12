@@ -1,14 +1,16 @@
 # Next Task
 
 ## Status
-Repository is fully green: `python -m pytest -q` → 6043 passed, 53 skipped, 0 failed; `python -m mypy ethscan/ tests/` → clean (187 source files); `python -m ruff check ethscan/ tests/` → all checks passed.
+Repository is fully green: `python -m pytest -q` → 6046 passed, 53 skipped, 0 failed; `python -m mypy ethscan/ tests/` → clean (187 source files); `python -m ruff check ethscan/ tests/` → all checks passed.
 
-`ethscan/wifi.py` is now 100% coverage (was 99%). Every `ethscan/` module is now ≥98%.
+`ethscan/wifi.py` and `ethscan/mongodb.py` are now 100% coverage (were 99% and 98%). Every `ethscan/` module is now ≥98%.
 
 ## Remaining <100% modules (1-5 defensive lines each)
-mongodb.py (260, 333, 382), geo.py (292, 455), mysql.py (352, 426, 477), postgresql.py (385, 445), subtake.py (642-643), s3.py (211, 312-313, 367-368), memcached.py (322, 390), oracle.py (475, 511), trace.py (354, 382, 443), ntp.py (368, 468), redis.py (394, 447), smtp.py (409, 460), mssql.py (530, 606, 656), radix.py (687-688), ldap.py (667, 740), dnssec.py (615, 822), snmp.py (611, 706), smb.py (819, 892), cli.py (567-569, 770, 797, 863, 902, 4278, 4353, 4426, 4499, 5380, 5518, 5591, 5650-5651, 5656-5657, 5661).
+cli.py (567-569, 770, 797, 863, 902, 4278, 4353, 4426, 4499, 5380, 5518, 5591, 5650-5651, 5656-5657, 5661), s3.py (211, 312-313, 367-368), trace.py (354, 382, 443), mssql.py (530, 606, 656), mysql.py (352, 426, 477), postgresql.py (385, 445), radix.py (687-688), redis.py (394, 447), smtp.py (409, 460), smb.py (819, 892), snmp.py (611, 706), subtake.py (642-643), dnssec.py (615, 822), ldap.py (667, 740), ntp.py (368, 468), oracle.py (475, 511), memcached.py (322, 390).
 
-Most are network-probe error branches or hard-to-trigger defensive guards (e.g. cleanup `except OSError: pass`). Reproduce exact uncovered lines first via `python -m coverage report --include="ethscan/*" -m`, then add focused offline/mock-based tests following the fileio.py (session 83), vuln.py (session 84), ftp.py (session 85), dns.py (session 86), whois.py (session 87), mac.py (session 88), and wifi.py (session 89) patterns.
+TOTAL miss: 57 (was 60).
+
+Most are network-probe error branches or hard-to-trigger defensive guards (e.g. cleanup `except OSError: pass`). Reproduce exact uncovered lines first via `python -m coverage report --include="ethscan/*" -m`, then add focused offline/mock-based tests following the fileio.py (session 83), vuln.py (session 84), ftp.py (session 85), dns.py (session 86), whois.py (session 87), mac.py (session 88), wifi.py (session 89), and mongodb.py (this session) patterns.
 
 ## Session environment
 - Python 3.14.4, pytest 9.2.0, ruff 0.17.4, mypy 2.4.1, Click 8.1.8.
