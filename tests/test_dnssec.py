@@ -1822,3 +1822,16 @@ def test_format_dnssec_report_csv_ds_records_skip_non_dict():
     }
     csv_out = dnssec.format_dnssec_report_csv(data)
     assert "ds,x," in csv_out
+
+
+def test_format_dnssec_report_markdown_non_dict():
+    """A non-dict input to the markdown formatter is normalized to {} (ethscan/dnssec.py:615)."""
+    output = format_dnssec_report_markdown("not a dict")
+    assert "# ethscan DNSSEC Validation Report" in output
+    assert "No" in output
+
+
+def test_format_dnssec_report_csv_non_dict():
+    """A non-dict input to the CSV formatter is normalized to {} (ethscan/dnssec.py:822)."""
+    output = format_dnssec_report_csv(["not", "a", "dict"])
+    assert "target,domain,validated,record_type,name" in output
