@@ -14,7 +14,7 @@ import socket
 import time
 from typing import Any
 
-from ethscan.target import TargetSpecError
+from ethscan.target import TargetSpecError, normalize_host
 
 DEFAULT_PORT = 80
 DEFAULT_MAX_HOPS = 30
@@ -31,20 +31,8 @@ __all__ = [
 
 
 def _normalize_host(target: str) -> str:
-    t = (target or "").strip()
-    if t.startswith("http://"):
-        t = t[7:]
-    elif t.startswith("https://"):
-        t = t[8:]
-    if "/" in t:
-        t = t.split("/", 1)[0]
-    if ":" in t and not t.startswith("["):
-        parts = t.rsplit(":", 1)
-        if parts[0] and parts[1].isdigit():
-            t = parts[0]
-    if not t:
-        raise TargetSpecError(f"Could not parse host from target {target!r}")
-    return t
+    """Wrapper around :func:`ethscan.target.normalize_host` for backward compatibility."""
+    return normalize_host(target)
 
 
 def _fmt_rtt(rtt_ms: float | None) -> str:
@@ -91,7 +79,7 @@ def _trace_single(
             error is a :class:`ValueError` subclass, so callers that treat
             an unusable target as a failed probe keep working unchanged.
     """
-    host = _normalize_host(target)
+    host = normalize_host(target)
 
     try:
         dst_ip = socket.gethostbyname(host)
