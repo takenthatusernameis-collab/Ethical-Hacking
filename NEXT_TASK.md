@@ -1,11 +1,11 @@
 # Next Task
 
 ## Status
-Session 110 completed full baseline verification and README CLI example audit. All checks pass: `pytest -q` → 6108 passed, 53 skipped, 0 failed; `ruff check ethscan/ tests/` clean; `mypy ethscan/ tests/` clean (188 source files). All 15 documented CLI error examples reproduce exactly; protocol-command empty-target behavior matches code; `oracle`/`postgresql` in-band exit-0 contract preserved; file-path validation consistent.
+Session 111 removed duplicated README usage/error text (repeated mysql/mongodb/mssql vs oracle/postgresql target-contract note and duplicated file-validation/example block) while preserving verified command behaviors. `ruff check ethscan/ tests/` passed; representative CLI checks reproduced expected usage-error behavior for malformed nmap XML and invalid UTF-8 credential-file input.
 
 ## One precise next task
-None pending. Repository is fully green. If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.
+Make the README `nmap --input-file broken.xml` example resilient to parser wording differences by documenting/illustrating the stable contract (usage error, exit 2, `Invalid value for '--input-file': invalid Nmap XML:` prefix) rather than asserting one specific parser tail message, then verify the updated example against `python -m ethscan nmap --input-file /tmp/broken.xml` (or equivalent malformed file) and run `python -m ruff check README.md` is not applicable—run `python -m ruff check ethscan/ tests/`.
 
 ## Notes
-- Keep oracle/postgresql empty-target in-band contract (exit 0) distinct from commands that reject with usage error exit 2.
-- Do not weaken safety/validation checks or tests to force green.
+- Keep README examples evidence-based; do not invent outputs.
+- Do not weaken CLI validation or tests. Preserve oracle/postgresql in-band exit-0 contract vs usage-error exits elsewhere.

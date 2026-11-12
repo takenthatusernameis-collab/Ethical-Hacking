@@ -1,23 +1,27 @@
 # Handoff
-Date: Thu Nov 12 2026 (session 110)
+Date: Thu Nov 12 2026 (session 111)
 
 ## This session
-- Baseline verification complete: `python -m pytest -q` → 6108 passed, 53 skipped, 0 failed; `python -m ruff check ethscan/ tests/` → All checks passed; `python -m mypy ethscan/ tests/` → Success: no issues found in 188 source files.
-- Audited all 15 README CLI error-handling examples against live command behavior — all match exactly (malformed `--ports`, invalid CIDR, mixed-family radix, empty target across protocol commands, file-path existence/content errors, port-out-of-range, host/path space/control-char validation).
-- No source, test, or documentation changes required; repository fully green.
+- Inspected repo state, recent history, `NEXT_TASK.md`, `HANDOFF_NEXT.md`, README, and tooling config; no prior assignment beyond handoff docs and baseline was fully green per session 110.
+- Selected and completed a bounded, high-value documentation cleanup: removed duplicated README usage/error content near the end of the "Usage" examples.
+  - Removed repeated sentence stating mysql/mongodb/mssql reject unusable targets with exit 2 while oracle/postgresql keep in-band exit-0 behavior (already stated earlier).
+  - Removed duplicated file-path validation block and duplicate broken-services-file JSON example, keeping one coherent file-validation section plus UTF-8 credential-file example.
+- Verified behavior after edit:
+  - `python -m ethscan nmap --input-file /tmp/broken.xml` (content `<not-xml`) -> usage error exit 2 with `invalid Nmap XML: unclosed token: line 1, column 0`.
+  - `python -m ethscan audit --file /tmp/badutf8.txt` (invalid UTF-8 byte) -> usage error exit 2 with `the file is not valid UTF-8`.
+  - `python -m ruff check ethscan/ tests/` -> `All checks passed!`.
+- Did not run full `pytest`/`mypy` (no code changes; README-only edit).
 
 ## Verification (this session)
-- All three baseline checks pass (pytest, ruff, mypy).
-- All 15 documented `python -m ethscan ...` console examples reproduce the exact error messages and exit codes shown in README.
-- Protocol-command empty-target list in README (lines 150-151) matches `redis`, `memcached`, `ntp`, `snmp`, `ftp`, `ldap`, `netbios`, `smb`, `smtp`, `service`, `dnssec`, `ssl`, `tls`, `web`, `fuzz`, `headers`, `urlcheck`, `ssh`, `trace`, `recon`, `geo`, `s3`, `mysql`, `mongodb`, `mssql` — all reject unusable targets with `TargetSpecError` (CLI exit 2).
-- `oracle` and `postgresql` correctly preserve in-band exit-0 contract.
-- File-path options (`--services-file`, `--input-file`, `--file`, `--wordlist`, `--user-file`, `--pass-file`, `--audit-file`) consistently reject missing files/directories and invalid content as usage errors (exit 2).
+- `python -m ethscan nmap --input-file /tmp/broken.xml` (temp malformed file) => exit 2, `Error: Invalid value for '--input-file': invalid Nmap XML: unclosed token: line 1, column 0`
+- `python -m ethscan audit --file /tmp/badutf8.txt` (temp invalid UTF-8) => exit 2, `Error: Invalid value for '--file': the file is not valid UTF-8`
+- `python -m ruff check ethscan/ tests/` => pass
 
 ## Blockers
 - None.
 
 ## Approaches already tried / ruled out
-- No speculative changes; all verification was evidence-based.
+- Considered broader README example audit/fixes (e.g. normalizing parser-specific nmap XML error tail text), but limited this session to deduplication with directly verified examples to keep the change minimal and reversible; left precise follow-up as next task.
 
 ## Next task
-- None pending. Repository is fully green. If future work is needed, pick a single high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.
+- Make the README `nmap --input-file broken.xml` example resilient to parser wording differences by documenting the stable contract (usage error exit 2 and `Invalid value for '--input-file': invalid Nmap XML:` prefix) rather than a single parser-specific tail, update the example accordingly based on reproduced evidence, and verify with `python -m ruff check ethscan/ tests/`.
