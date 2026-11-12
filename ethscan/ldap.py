@@ -689,7 +689,7 @@ def format_ldap_report_markdown(results: dict[str, Any]) -> str:
         lines.append(f"- **Referral:** {results.get('referral')}")
     lines.append("")
 
-    root_dse = results.get("root_dse") or {}
+    root_dse = _normalize_root_dse(results.get("root_dse"))
     if root_dse:
         lines.append("## Server Identity (RootDSE)")
         shown = {
@@ -760,7 +760,7 @@ def format_ldap_report_csv(results: dict[str, Any]) -> str:
         "banner",
         "error",
     ])
-    root_dse = results.get("root_dse") or {}
+    root_dse = _normalize_root_dse(results.get("root_dse"))
     writer.writerow([
         results.get("target", ""),
         results.get("host", ""),
@@ -784,6 +784,24 @@ def format_ldap_report_csv(results: dict[str, Any]) -> str:
     return output.getvalue().rstrip("\r\n")
 
 
+def _normalize_root_dse(root_dse: Any) -> dict[str, list[str]]:
+    """Coerce a hostile ``root_dse`` value into a dict of string lists.
+
+    A well-formed value is a dict mapping attribute names to lists of strings.
+    Hostile shapes (non-dict, or dict with non-list values) are normalized:
+    - Non-dict input becomes an empty dict.
+    - Dict values that are not list/tuple are dropped.
+    - List/tuple elements are stringified before join.
+    """
+    if not isinstance(root_dse, dict):
+        return {}
+    normalized: dict[str, list[str]] = {}
+    for key, value in root_dse.items():
+        if isinstance(value, (list, tuple)):
+            normalized[str(key)] = [str(item) for item in value]
+    return normalized
+
+
 __all__ = [
     "DEFAULT_LDAPS_PORT",
     "DEFAULT_LDAP_VERSION",
@@ -798,6 +816,7 @@ __all__ = [
     "TargetSpecError",
     "_build_bind_request",
     "_build_root_dse_search",
+    "_normalize_root_dse",
     "_normalize_target",
     "_parse_ldap_response",
     "_read_length",
