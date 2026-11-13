@@ -14,7 +14,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from ethscan.fileio import load_json
 from ethscan.target import normalize_host
@@ -286,6 +286,18 @@ def _markdown_escape(text: object) -> str:
     return str(text).replace("|", "\\|").replace("\n", " ")
 
 
+def _normalize_hops(hops: Any) -> list[dict[str, object]]:
+    """Coerce a hostile ``hops`` value into a list of dicts.
+
+    Non-list/tuple values normalize to an empty list. List/tuple elements
+    that are not dicts are dropped so the formatters never call ``.get``
+    on a non-dict (which would raise ``AttributeError``).
+    """
+    if not isinstance(hops, (list, tuple)):
+        return []
+    return [h for h in hops if isinstance(h, dict)]
+
+
 def format_geo_report_markdown(data: dict[str, object]) -> str:
     """Format geolocation results as Markdown."""
     if not isinstance(data, dict):
@@ -340,14 +352,14 @@ def format_geo_report_markdown(data: dict[str, object]) -> str:
         lines.append("*No geolocation data available.*")
     lines.append("")
 
-    hops = cast(list[dict[str, object]], data.get("hops") or [])
+    hops = _normalize_hops(data.get("hops"))
     if data.get("recursive") and hops:
         lines.append("## Hop Geolocation")
         lines.append("| Hop | IP | Host | Response | RTT Avg (ms) | Country | City | ISP |")
         lines.append("|-----|----|------|----------|--------------|---------|------|-----|")
         for hop in hops:
-            hop = cast(dict[str, object], hop)
-            hop_geo = cast(dict[str, object], hop.get("geolocation") or {})
+            hop_geo_raw = hop.get("geolocation")
+            hop_geo = hop_geo_raw if isinstance(hop_geo_raw, dict) else {}
             country = hop_geo.get("country", "")
             city = hop_geo.get("city", "")
             isp = hop_geo.get("isp", "")
@@ -462,7 +474,8 @@ def format_geo_report_csv(data: dict[str, object]) -> str:
     target = cast(str, data.get("target", ""))
     geo = cast(dict[str, object], data.get("geolocation") or {})
     writer.writerow(_geo_csv_row(target, data.get("ip"), geo))
-    for hop in cast(list[dict[str, object]], data.get("hops") or []):
-        hop_geo = cast(dict[str, object], hop.get("geolocation") or {})
+    for hop in _normalize_hops(data.get("hops")):
+        hop_geo_raw = hop.get("geolocation")
+        hop_geo = hop_geo_raw if isinstance(hop_geo_raw, dict) else {}
         writer.writerow(_geo_csv_row(target, hop.get("ip"), hop_geo, hop))
     return output.getvalue().rstrip("\r\n")

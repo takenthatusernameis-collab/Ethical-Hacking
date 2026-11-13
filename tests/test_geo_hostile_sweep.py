@@ -4,11 +4,16 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
 from ethscan import geo
+from ethscan.geo import (
+    format_geo_report_csv,
+    format_geo_report_json,
+    format_geo_report_markdown,
+)
 
 
 HOSTILE_CACHE_BODIES: tuple[str, ...] = (
@@ -94,3 +99,48 @@ def test_hostile_transport_error_type_reported(
     assert isinstance(geo_data, dict)
     assert geo_data["status"] == "fail"
     assert "error" in geo_data
+
+
+# ---------------------------------------------------------------------------
+# Formatter sweep: hostile top-level and nested shapes are rendered, never raised.
+# ---------------------------------------------------------------------------
+
+HOSTILE_TOP_LEVEL: tuple[object, ...] = (None, [], "x", 123, 1.5, True, b"bytes")
+
+
+def test_geo_formatters_never_raise_on_hostile_top_level() -> None:
+    for bad in HOSTILE_TOP_LEVEL:
+        bad_any: Any = bad
+        json.loads(format_geo_report_json(cast(Any, bad_any)))
+        md = format_geo_report_markdown(cast(Any, bad_any))
+        csv_text = format_geo_report_csv(cast(Any, bad_any))
+        assert isinstance(md, str)
+        assert isinstance(csv_text, str)
+        assert "ethscan IP Geolocation Report" in md
+
+
+def test_geo_formatters_hostile_nested_shapes_never_raise() -> None:
+    cases: list[dict[str, object]] = [
+        {"target": "x", "host": "x", "ip": "8.8.8.8", "timeout": 1.0, "use_cache": False, "offline_fallback": False, "recursive": False, "error": "boom"},
+        {"target": "x", "host": "x", "ip": "8.8.8.8", "timeout": 1.0, "use_cache": False, "offline_fallback": False, "recursive": False, "error": ""},
+        {"target": "x", "host": "x", "ip": "8.8.8.8", "timeout": 1.0, "use_cache": False, "offline_fallback": False, "recursive": True, "hops": "not a list"},
+        {"target": "x", "host": "x", "ip": "8.8.8.8", "timeout": 1.0, "use_cache": False, "offline_fallback": False, "recursive": True, "hops": ["not a dict", 123, None]},
+        {"target": "x", "host": "x", "ip": "8.8.8.8", "timeout": 1.0, "use_cache": False, "offline_fallback": False, "recursive": True, "hops": [{"geolocation": "not a dict"}, {"geolocation": {}}]},
+        {"target": "x", "host": "x", "ip": "8.8.8.8", "timeout": 1.0, "use_cache": False, "offline_fallback": False, "recursive": True, "hops": [{"geolocation": {"country": "US"}}, {"geolocation": {"city": "NYC"}}]},
+        {"target": "x", "host": "x", "ip": "8.8.8.8", "timeout": 1.0, "use_cache": False, "offline_fallback": False, "recursive": False, "notes": "not a list"},
+        {"target": "x", "host": "x", "ip": "8.8.8.8", "timeout": 1.0, "use_cache": False, "offline_fallback": False, "recursive": False, "notes": ["note1", 123, None]},
+    ]
+    for data in cases:
+        json.loads(format_geo_report_json(data))
+        md = format_geo_report_markdown(data)
+        csv_text = format_geo_report_csv(data)
+        assert isinstance(md, str)
+        assert isinstance(csv_text, str)
+        assert "ethscan IP Geolocation Report" in md
+        # A hostile hops value must not render a Hop Geolocation section
+        if not isinstance(data.get("hops"), (list, tuple)):
+            assert "## Hop Geolocation" not in md
+        # Notes are rendered when present and non-empty after normalization
+        notes_val = data.get("notes")
+        if isinstance(notes_val, (list, tuple)) and notes_val:
+            assert "## Notes" in md
