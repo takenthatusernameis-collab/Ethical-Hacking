@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from typing import Any, Mapping, cast
 
+import pytest
+
 from ethscan.vuln import (
     format_vuln_report_csv,
     format_vuln_report_json,
@@ -63,5 +65,94 @@ def test_vuln_formatters_hostile_nested_shapes_never_raise() -> None:
         json.loads(format_vuln_report_json(data))
         assert "ethscan Vulnerability Report" in format_vuln_report_markdown(data)
         assert isinstance(format_vuln_report_csv(data), str)
+
+
+HOSTILE_HOSTS_SCANNED: tuple[object, ...] = (None, 0, 1, True, 1.5, "x", b"bytes")
+
+
+@pytest.mark.parametrize("shape", HOSTILE_HOSTS_SCANNED)
+def test_vuln_markdown_recursive_hosts_scanned_hostile(shape: object) -> None:
+    """Permanent sweep: scalar recursive_hosts_scanned must not crash markdown."""
+    data = cast(
+        Any,
+        {
+            "target": "1.2.3.4",
+            "host": "1.2.3.4",
+            "recursive": True,
+            "max_depth": 2,
+            "recursive_hosts_scanned": shape,
+            "recursive_findings": [],
+        },
+    )
+    md = format_vuln_report_markdown(data)
+    assert isinstance(md, str)
+    assert "ethscan Vulnerability Report" in md
+    assert "Recursive Scan Results" not in md
+
+
+@pytest.mark.parametrize("shape", HOSTILE_HOSTS_SCANNED)
+def test_vuln_markdown_recursive_findings_hostile(shape: object) -> None:
+    """Permanent sweep: scalar recursive_findings must not crash markdown."""
+    data = cast(
+        Any,
+        {
+            "target": "1.2.3.4",
+            "host": "1.2.3.4",
+            "recursive": True,
+            "max_depth": 2,
+            "recursive_hosts_scanned": ["1.2.3.5"],
+            "recursive_findings": shape,
+        },
+    )
+    md = format_vuln_report_markdown(data)
+    assert isinstance(md, str)
+    assert "ethscan Vulnerability Report" in md
+
+
+def test_vuln_markdown_recursive_findings_elem_hostile() -> None:
+    """Permanent sweep: non-dict recursive findings elements must not crash."""
+    for bad in (None, 0, "x", (1, 2), {1, 2}, b"bytes", True, [1, 2]):
+        data = cast(
+            Any,
+            {
+                "target": "1.2.3.4",
+                "host": "1.2.3.4",
+                "recursive": True,
+                "max_depth": 2,
+                "recursive_hosts_scanned": ["1.2.3.5"],
+                "recursive_findings": [bad],
+            },
+        )
+        md = format_vuln_report_markdown(data)
+        assert isinstance(md, str)
+        assert "ethscan Vulnerability Report" in md
+
+
+def test_vuln_markdown_well_formed_recursive_preserved() -> None:
+    """Well-formed recursive scan data renders verbatim."""
+    data = cast(
+        Any,
+        {
+            "target": "1.2.3.4",
+            "host": "1.2.3.4",
+            "recursive": True,
+            "max_depth": 2,
+            "recursive_hosts_scanned": ["1.2.3.5", "1.2.3.6"],
+            "recursive_findings": [
+                {
+                    "host": "1.2.3.5",
+                    "depth": 1,
+                    "finding_count": 0,
+                    "services_checked": 1,
+                    "severity_counts": {},
+                    "findings": [],
+                },
+            ],
+        },
+    )
+    md = format_vuln_report_markdown(data)
+    assert "Recursive Scan Results" in md
+    assert "1.2.3.5" in md
+    assert "**Recursive Hosts Scanned:** 2" in md
 """
 """

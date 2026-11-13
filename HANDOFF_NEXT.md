@@ -1,23 +1,25 @@
 # Handoff
-Date: Fri Nov 13 2026 (session 135)
+Date: Fri Nov 13 2026 (session 136)
 
 ## This session
-- Inspected prior handoff: HEAD had the NetBIOS `names` and DNS `records` formatter crashes fixed (session 134). Baseline confirmed green on entry: full suite 6915 passed, 146 skipped, 0 failed; mypy clean; ruff clean; `check_readme.py` 54/54.
-- Continued the per-key formatter hostile-sweep campaign with evidence-first reproduction. Probed many modules with a generic hostile-shape harness (top-level non-dict + 50 hostile dict shapes across every `format_*_report_markdown/csv` formatter): 0 crashes — formatters are already hardened at the top level.
-- Probed nested per-key shapes by replacing each top-level key of a well-formed result dict with hostile shapes for `recon`: 0 crashes (`_as_dict`/`_as_list` already guard).
-- Found and fixed one new formatter crash family via direct reproduction:
-  1. **Stale `A` / `AAAA` / `stale_reasons` fields**: `format_stale_report_markdown` and `format_stale_report_csv` crashed on non-list/tuple/set `A`/`AAAA`/`stale_reasons` values (`TypeError: 'int' object is not iterable`). Added `_normalize_records` helper (mirrors `_normalize_peers`/`_normalize_communities` pattern) and updated both formatters. Scalars (int/bool/float/str) are wrapped in a single-element list so a lone record value is preserved; `None`/bytes/dicts normalize to empty.
-- Added comprehensive parametrized hostile-sweep formatter tests:
-  - `tests/test_stale_formatter_hostile_sweep.py` (16 record-shape tests + normalize helper + well-formed preservation for both markdown and CSV).
+- Continued the per-key formatter hostile-sweep campaign with evidence-first reproduction.
+- Probed `vuln` formatters with hostile nested shapes: scalar `recursive_hosts_scanned` (int/float/bool) crashed `format_vuln_report_markdown` at `ethscan/vuln.py:1198` with `TypeError: object of type 'int' has no len()`. The line used `len(cast(list, data.get('recursive_hosts_scanned', []) or []))` directly on an untrusted value.
+- Fixed `ethscan/vuln.py` by introducing an inline `isinstance(recursive_hosts, (list, tuple, set))` guard (mirrors the existing `recursive_findings` guard below it); non-list/tuple/set values normalize to `[]`, so the count renders as 0 instead of raising.
+- Added permanent hostile-sweep tests in `tests/test_vuln_hostile_sweep.py`:
+  - `test_vuln_markdown_recursive_hosts_scanned_hostile` (7 parametrized shapes: None, 0, 1, True, 1.5, "x", b"bytes").
+  - `test_vuln_markdown_recursive_findings_hostile` (same 7 shapes on `recursive_findings`).
+  - `test_vuln_markdown_recursive_findings_elem_hostile` (non-dict recursive finding elements: None, 0, "x", (1,2), {1,2}, b"bytes", True, [1,2]).
+  - `test_vuln_markdown_well_formed_recursive_preserved` (valid recursive data renders verbatim, including `**Recursive Hosts Scanned:** 2`).
+- Added `import pytest` to the test file (was missing).
 
 ## Verification
-- Repro before fix: `stale` markdown/CSV crashed on non-list `A`/`AAAA`/`stale_reasons`; after fix all render without raising.
-- `pytest tests/test_stale_formatter_hostile_sweep.py tests/test_stale_hostile_sweep.py tests/test_stale.py -q` -> 91 passed.
-- `python -m pytest -q` -> 6957 passed, 146 skipped, 0 failed (baseline +35 new tests).
-- `python -m mypy ethscan/stale.py tests/test_stale_formatter_hostile_sweep.py` -> Success: no issues found.
-- `python -m ruff check ethscan/stale.py tests/test_stale_formatter_hostile_sweep.py` -> All checks passed.
+- Repro before fix: `format_vuln_report_markdown` with `recursive_hosts_scanned=42` raised `TypeError`; after fix all hostile shapes render without raising.
+- `pytest tests/test_vuln_hostile_sweep.py tests/test_vuln.py -q` -> 135 passed.
+- `python -m pytest -q` -> 7056 passed, 146 skipped, 0 failed (baseline +18 new tests).
+- `python -m mypy ethscan/vuln.py tests/test_vuln_hostile_sweep.py` -> Success: no issues found.
+- `python -m ruff check ethscan/vuln.py tests/test_vuln_hostile_sweep.py` -> All checks passed.
 - `python3 check_readme.py` -> 54/54, no diffs.
-- `git diff --stat` (uncommitted): `ethscan/stale.py` (+35/-16), plus one new test file.
+- `git diff --stat` (uncommitted): `ethscan/vuln.py` (+4/-1), plus new tests appended to existing test file.
 
 ## Blockers
 - None.
@@ -29,6 +31,6 @@ Date: Fri Nov 13 2026 (session 135)
 - Did not commit (no explicit commit request).
 
 ## Next task
-- Continue the per-key formatter hostile-sweep campaign by reproducing (with evidence) the next concrete crash family. Remaining unguarded iteration sites observed this session (all currently guarded by inline `isinstance` checks, so probe with nested hostile shapes before "fixing"): `vuln` (`recursive_findings`), `hash` (`results`), `urlcheck` (`fuzz.all_results`), `osdetect` (`probes`), `subtake` (`vulnerable`/`all_results`), `subdomains` (`resolved`/`all_results`/`per_depth`), `dnssec` (`dnskey.keys`/`ds.records`/`chain`), `ping` (`probes`), `cidr` (`diff.difference`), `stale` (now fixed), `s3` (`results`), `tls` (`versions`/`ciphers`), `ssl` (`sans`), `dnsbrute` (`axfr_entries`), `resolve` (`records`), `recon` (now probed), `trace` (`hops`/`recursive_traces`), `stale` (now fixed). Pick one module, probe its formatter with hostile nested shapes (non-dict containers, non-iterable list fields, non-string elements), and if a crash reproduces, apply the minimal `_normalize_*`/coercion pattern, add parametrized hostile-sweep tests, and verify. Do not widen scope; do not commit unless explicitly asked.
+- Continue the per-key formatter hostile-sweep campaign by reproducing (with evidence) the next concrete crash family. Remaining unguarded iteration sites observed this session (all currently guarded by inline `isinstance` checks, so probe with nested hostile shapes before "fixing"): `hash` (`results`), `urlcheck` (`fuzz.all_results`), `osdetect` (`probes`), `subtake` (`vulnerable`/`all_results`), `subdomains` (`resolved`/`all_results`/`per_depth`), `dnssec` (`dnskey.keys`/`ds.records`/`chain`), `ping` (`probes`), `cidr` (`diff.difference`), `s3` (`results`), `tls` (`versions`/`ciphers`), `ssl` (`sans`), `dnsbrute` (`axfr_entries`), `resolve` (`records`), `trace` (`hops`/`recursive_traces`). Pick one module, probe its formatter with hostile nested shapes (non-dict containers, non-iterable list fields, non-string elements), and if a crash reproduces, apply the minimal `_normalize_*`/coercion pattern, add parametrized hostile-sweep tests, and verify. Do not widen scope; do not commit unless explicitly asked.
 
 (End of file - total 39 lines)

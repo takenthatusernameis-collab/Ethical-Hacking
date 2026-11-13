@@ -1195,7 +1195,10 @@ def format_vuln_report_markdown(data: Mapping[str, object]) -> str:
     if data.get("recursive"):
         lines.append("- **Recursive:** Yes")
         lines.append(f"- **Max Depth:** {data.get('max_depth', 0)}")
-        lines.append(f"- **Recursive Hosts Scanned:** {len(cast(list, data.get('recursive_hosts_scanned', []) or []))}")
+        recursive_hosts = data.get("recursive_hosts_scanned") or []
+        if not isinstance(recursive_hosts, (list, tuple, set)):
+            recursive_hosts = []
+        lines.append(f"- **Recursive Hosts Scanned:** {len(recursive_hosts)}")
     lines.append("")
 
     severity_counts = data.get("severity_counts") or {}
