@@ -635,10 +635,10 @@ def _format_records_table(lines: list[str], entries: list[Mapping[str, object]])
     for entry in entries:
         if not isinstance(entry, Mapping):
             continue
-        a_raw = entry.get("a") or []
-        aaaa_raw = entry.get("aaaa") or []
-        a_records = ", ".join(str(x) for x in cast(list[object], a_raw)) if a_raw else "N/A"
-        aaaa_records = ", ".join(str(x) for x in cast(list[object], aaaa_raw)) if aaaa_raw else "N/A"
+        a_records_list = cast(list[object], _normalize_list(entry.get("a")))
+        aaaa_records_list = cast(list[object], _normalize_list(entry.get("aaaa")))
+        a_records = ", ".join(str(x) for x in a_records_list) if a_records_list else "N/A"
+        aaaa_records = ", ".join(str(x) for x in aaaa_records_list) if aaaa_records_list else "N/A"
         lines.append(
             f"| {_markdown_escape(entry.get('subdomain'))} | "
             f"{_markdown_escape(entry.get('hostname'))} | "
@@ -691,7 +691,7 @@ def format_dnsbrute_report_markdown(data: Mapping[str, object]) -> str:
             lines.append(f"- **Records:** {entry.get('records_count')}")
             if entry.get("error"):
                 lines.append(f"- **Error:** {entry.get('error')}")
-            records_axfr = cast(list[object], entry.get("records") or [])
+            records_axfr = cast(list[object], _normalize_list(entry.get("records")))
             if records_axfr:
                 lines.append("")
                 lines.append("```")
@@ -716,7 +716,7 @@ def format_dnsbrute_report_markdown(data: Mapping[str, object]) -> str:
             lines.append(f"- **Records:** {entry.get('records_count')}")
             if entry.get("error"):
                 lines.append(f"- **Error:** {entry.get('error')}")
-            records_axfr_r = cast(list[object], entry.get("records") or [])
+            records_axfr_r = cast(list[object], _normalize_list(entry.get("records")))
             if records_axfr_r:
                 lines.append("")
                 lines.append("```")
@@ -759,10 +759,8 @@ def _dnsbrute_subdomain_row(
     target: str, domain: str, entry: Mapping[str, object]
 ) -> list[str]:
     """Build a CSV row for a subdomain brute-force result."""
-    a_raw = entry.get("a") or []
-    aaaa_raw = entry.get("aaaa") or []
-    a_records = cast(list[object], a_raw)
-    aaaa_records = cast(list[object], aaaa_raw)
+    a_records = cast(list[object], _normalize_list(entry.get("a")))
+    aaaa_records = cast(list[object], _normalize_list(entry.get("aaaa")))
     return [
         target,
         domain,

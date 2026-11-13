@@ -33,6 +33,13 @@ def test_dnsbrute_formatters_hostile_nested_shapes_never_raise() -> None:
         {"target": "x", "recursive_axfr": [None, {}]},
         {"target": "x", "nameservers": "x"},
         {"target": "x", "resolved": None},
+        {"target": "x", "axfr": [{"nameserver": "ns", "records": 123}]},
+        {"target": "x", "axfr": [{"nameserver": "ns", "records": True}]},
+        {"target": "x", "axfr": [{"nameserver": "ns", "records": "scalar"}]},
+        {"target": "x", "resolved": [{"subdomain": "a", "hostname": "a.x", "a": 123, "aaaa": []}]},
+        {"target": "x", "resolved": [{"subdomain": "a", "hostname": "a.x", "a": [], "aaaa": True}]},
+        {"target": "x", "all_results": [{"subdomain": "a", "hostname": "a.x", "a": 1.5, "aaaa": []}]},
+        {"target": "x", "recursive_axfr": [{"nameserver": "ns", "records": b"bytes"}]},
     ]
     for data in cases:
         json.loads(dnsbrute.format_dnsbrute_report_json(data))
