@@ -215,6 +215,25 @@ def format_stale_report_json(data: dict[str, Any]) -> str:
     return json.dumps(data, indent=2, default=str)
 
 
+def _normalize_records(value: Any) -> list[str]:
+    """Coerce a hostile ``A``/``AAAA``/``stale_reasons`` value into a list of strings.
+
+    A well-formed value is a list/tuple/set of strings (IP addresses or reasons).
+    Hostile shapes are normalized:
+    - Non-list/tuple/set input (including ``None`` and ``b"bytes"``) becomes an
+      empty list, so the record columns render as "None"/empty.
+    - Scalars (``int``, ``bool``, ``float``, ``str``) are wrapped in a
+      single-element list so a lone record value is preserved rather than
+      dropped.
+    - List/tuple/set elements are stringified so ``", ".join`` never raises.
+    """
+    if isinstance(value, (list, tuple, set)):
+        return [str(item) for item in value]
+    if value is None or isinstance(value, (bytes, bytearray)):
+        return []
+    return [str(value)]
+
+
 def format_stale_report_markdown(data: dict[str, Any]) -> str:
     """Format stale detection results as Markdown."""
     if not isinstance(data, dict):
@@ -233,13 +252,13 @@ def format_stale_report_markdown(data: dict[str, Any]) -> str:
         for entry in stale_results:
             if not isinstance(entry, dict):
                 continue
-            a_list = entry.get("A") or []
-            aaaa_list = entry.get("AAAA") or []
-            a_str = ", ".join(str(x) for x in a_list) if a_list else "None"
-            aaaa_str = ", ".join(str(x) for x in aaaa_list) if aaaa_list else "None"
+            a_list = _normalize_records(entry.get("A"))
+            aaaa_list = _normalize_records(entry.get("AAAA"))
+            a_str = ", ".join(a_list) if a_list else "None"
+            aaaa_str = ", ".join(aaaa_list) if aaaa_list else "None"
             cname_str = entry.get("CNAME") or "None"
-            reasons = entry.get("stale_reasons") or []
-            reasons_str = "; ".join(str(x) for x in reasons)
+            reasons = _normalize_records(entry.get("stale_reasons"))
+            reasons_str = "; ".join(reasons)
             lines.append(f"| {entry.get('domain', '')} | {a_str} | {aaaa_str} | {cname_str} | {reasons_str} |")
         lines.append("")
 
@@ -251,10 +270,10 @@ def format_stale_report_markdown(data: dict[str, Any]) -> str:
         for entry in results:
             if not isinstance(entry, dict):
                 continue
-            a_list = entry.get("A") or []
-            aaaa_list = entry.get("AAAA") or []
-            a_str = ", ".join(str(x) for x in a_list) if a_list else "None"
-            aaaa_str = ", ".join(str(x) for x in aaaa_list) if aaaa_list else "None"
+            a_list = _normalize_records(entry.get("A"))
+            aaaa_list = _normalize_records(entry.get("AAAA"))
+            a_str = ", ".join(a_list) if a_list else "None"
+            aaaa_str = ", ".join(aaaa_list) if aaaa_list else "None"
             cname_str = entry.get("CNAME") or "None"
             stale_str = "Yes" if entry.get("stale") else "No"
             lines.append(f"| {entry.get('domain', '')} | {a_str} | {aaaa_str} | {cname_str} | {stale_str} |")
@@ -280,14 +299,14 @@ def format_stale_report_csv(data: dict[str, Any]) -> str:
         for entry in results:
             if not isinstance(entry, dict):
                 continue
-            a_list = entry.get("A") or []
-            aaaa_list = entry.get("AAAA") or []
-            a_str = ", ".join(str(x) for x in a_list)
-            aaaa_str = ", ".join(str(x) for x in aaaa_list)
+            a_list = _normalize_records(entry.get("A"))
+            aaaa_list = _normalize_records(entry.get("AAAA"))
+            a_str = ", ".join(a_list)
+            aaaa_str = ", ".join(aaaa_list)
             cname_str = entry.get("CNAME") or ""
             stale_str = "true" if entry.get("stale") else "false"
-            reasons = entry.get("stale_reasons") or []
-            reasons_str = "; ".join(str(x) for x in reasons)
+            reasons = _normalize_records(entry.get("stale_reasons"))
+            reasons_str = "; ".join(reasons)
             writer.writerow([entry.get("domain", ""), a_str, aaaa_str, cname_str, stale_str, reasons_str])
 
     return output.getvalue().rstrip("\r\n")
