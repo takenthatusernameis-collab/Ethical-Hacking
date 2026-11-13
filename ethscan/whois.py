@@ -342,7 +342,12 @@ def format_whois_report_markdown(data: Mapping[str, object]) -> str:
 
     lines.append("## Raw Response")
     lines.append("```")
-    lines.append(cast("str", data.get("raw", "") or "").strip())
+    raw = data.get("raw")
+    if raw is None:
+        raw = ""
+    if not isinstance(raw, str):
+        raw = str(raw)
+    lines.append(raw.strip())
     lines.append("```")
 
     recursive_hops = _normalize_hops(data.get("recursive_hops"))

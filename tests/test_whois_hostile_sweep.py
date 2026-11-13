@@ -106,3 +106,39 @@ def test_recursive_hop_transport_failure_is_reported_not_raised(monkeypatch) -> 
     hops = result.get("recursive_hops") or []
     assert isinstance(hops, list)
     assert any(hop.get("error") for hop in hops)
+
+
+# ---------------------------------------------------------------------------
+# Formatter sweep: hostile ``raw`` field shapes are rendered, never raised.
+# ---------------------------------------------------------------------------
+
+HOSTILE_RAW_FIELD_VALUES: tuple[object, ...] = (
+    None,
+    123,
+    1.5,
+    True,
+    [],
+    {},
+    ("tuple",),
+    b"bytes",
+)
+
+
+@pytest.mark.parametrize(
+    "bad_raw", HOSTILE_RAW_FIELD_VALUES, ids=[f"rawfield{i}" for i in range(len(HOSTILE_RAW_FIELD_VALUES))]
+)
+def test_formatters_hostile_raw_field_never_raise(bad_raw: object) -> None:
+    data = {
+        "target": TARGET,
+        "server": "whois.example",
+        "port": 43,
+        "raw": bad_raw,
+        "parsed": {"registrar": "r"},
+        "recursive": False,
+        "recursive_hops": [],
+    }
+    md = whois.format_whois_report_markdown(data)
+    csv_text = whois.format_whois_report_csv(data)
+    assert isinstance(md, str)
+    assert isinstance(csv_text, str)
+    assert "ethscan WHOIS Lookup Report" in md

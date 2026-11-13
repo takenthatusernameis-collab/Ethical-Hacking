@@ -1,33 +1,30 @@
 # Next Task
 
 ## Status
-Session 131 (Fri Nov 13 2026) closed a bounded formatter-robustness gap: the protocol-recon
-formatters assumed a nested response container was a dict. Baseline was fully green at start:
-- `python -m pytest -q` → 6621 passed, 50 skipped, 0 failed
-- `python -m mypy ethscan/ tests/` → clean (195 source files)
-- `python -m ruff check ethscan/ tests/` → all checks passed
-- `python3 check_readme.py` → 54/54, no diffs
+Session 132 handoff's stated next item (`geo` `geolocation` non-dict crash) was already fixed in
+HEAD (f15760b, `_normalize_geo` + hostile-sweep coverage). Baseline at session 133 start: fully
+green (`python -m pytest -q` → 6839 passed, 146 skipped; mypy clean 196 files; ruff clean;
+`check_readme.py` → 54/54).
 
-Session 132 (this session) closed the `dnsbrute` nested-field crash family:
-- Reproduced crashes: `axfr.records` (md), `resolved.a`/`resolved.aaaa` (md), `all_results.a`
-  (md+csv), `recursive_axfr.records` (md) on truthy non-list scalars (`123`, `1.5`, `True`)
-  → `TypeError: 'X' object is not iterable`. Top-level `axfr`/`nameservers`/`resolved`/
-  `all_results`/`recursive_axfr` were already safe via `_normalize_list`.
-- Fixed `ethscan/dnsbrute.py`: routed nested `records`/`a`/`aaaa` extraction through the
-  existing `_normalize_list` helper in `_format_records_table`, both markdown AXFR sites,
-  and `_dnsbrute_subdomain_row` (CSV).
-- Added 8 hostile nested-shape cases to `tests/test_dnsbrute_hostile_sweep.py`.
-- Verified: focused `pytest tests/test_dnsbrute.py tests/test_dnsbrute_hostile_sweep.py`
-  → 109 passed; full suite → 6838 passed, 146 skipped, 0 failed; mypy clean; ruff clean;
-  `check_readme.py` → 54/54, no diffs; valid-input output byte-identical (git stash A/B).
-- Changes are uncommitted in the working tree (2 files, 18 insertions, 10 deletions).
+Session 133 (this session) closed a reproduced `whois` per-key formatter crash:
+- Reproduced: `format_whois_report_markdown` crashed on top-level `raw` non-string
+  (`123`/`True`/`1.5` etc.) with `AttributeError: 'X' object has no attribute 'strip'`.
+- Fixed `ethscan/whois.py` markdown raw rendering to coerce `None`/non-str safely.
+- Added hostile-sweep formatter cases in `tests/test_whois_hostile_sweep.py`.
+- Verified: focused `pytest tests/test_whois.py tests/test_whois_hostile_sweep.py -q` → 81 passed;
+  full suite → 6847 passed, 146 skipped, 0 failed; mypy/ruff clean on touched files;
+  `check_readme.py` → 54/54. Valid-input string `raw` behavior preserved.
+- Changes uncommitted (whois fix/tests + handoff docs). No commit requested.
 
 ## One precise next task
-- Close the remaining per-key formatter crash family, one module at a time (reproduce first,
-  then apply the `_as_dict` / `_normalize_*` pattern and add parametrized hostile-sweep tests):
-  - `geo`: `geolocation` non-dict → `AttributeError: 'int' object has no attribute 'get'`.
+- Continue the per-key formatter hostile-sweep campaign with evidence-first reproduction:
+  probe `ldap` and `smb` formatter paths called out in prior notes (`ldap.raw_preview` elements
+  / unexpected container shapes, `smb.smb2` nested shapes) and other modules for unguarded
+  `.get`/iteration/string ops on untrusted keys. If a crash reproduces, fix that single bounded
+  family with the minimal `_as_dict`/`_normalize_*`/coercion pattern, add parametrized
+  hostile-sweep tests, and verify. If probes show no crash, record the exact probed shapes as
+  evidence and select the next module with a demonstrated formatter crash.
 - Constraints: do not change valid-input output; keep changes minimal and reversible; do not
-  commit unless explicitly asked. `oracle`/`postgresql` empty-target handling remains
-  intentionally out of scope per their documented contract (exit 0, in-band error).
+  commit unless explicitly asked. `oracle`/`postgresql` empty-target contract remains out of scope.
 
-(End of file - total 48 lines)
+(End of file)
