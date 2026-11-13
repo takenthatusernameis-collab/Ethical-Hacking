@@ -1,22 +1,23 @@
 # Next Task
 
 ## Status
-Previous handoff task completed: added permanent formatter hostile-sweep coverage for `ping` (coverage-only; formatters already defensive). Baseline at start of this session was fully green (8479 passed, 149 skipped, 0 failed; mypy/ruff clean; check_readme 54/54).
+Previous handoff task completed (session 147): added permanent formatter hostile-sweep coverage for `fuzz` (coverage-only; formatters already defensive). Repository is fully green.
 
-## This session
-- Reproduced formatter behavior first (probe-only): 0 crashes for non-mapping top-level and hostile nested ping payloads (`probes`/`notes`/`target`/`host`/`ip`/`count`/`raw_socket_available`/`port`/`rtt` fields) across json/markdown/csv formatters.
-- No production fix required.
-- Added `tests/test_ping_formatter_hostile_sweep.py` with hostile top-level/nested cases and a well-formed regression.
+## Baseline (verified this session)
+- `python -m pytest -q` → 8632 passed, 149 skipped, 1 warning (pre-existing `RuntimeWarning` in `tests/test_cli_cov_gaps.py::test_cli_main_guard_executes`).
+- `python -m ruff check ethscan/ tests/` / `python -m mypy ethscan/ tests/` / `python3 check_readme.py` reported clean at handoff.
 
-## Verification
-- `python -m pytest tests/test_ping_formatter_hostile_sweep.py -q` → 75 passed.
-- `python -m pytest -q` (full suite) → 8554 passed, 149 skipped, 1 warning (pre-existing `RuntimeWarning` in `tests/test_cli_cov_gaps.py::test_cli_main_guard_executes`; +75 vs baseline).
-- `python -m ruff check ethscan/ tests/` → All checks passed.
-- `python -m mypy ethscan/ tests/` → Success: no issues found in 215 source files.
-- `python3 check_readme.py` → 54/54, README and CLI in sync.
+## Next task (bounded, verifiable)
+Probe and, if no crashes found, add coverage-only `tests/test_nmap_formatter_hostile_sweep.py` for `ethscan.nmap` report formatters (`format_nmap_report_json`, `format_nmap_report_markdown`, `format_nmap_report_csv`).
 
-## Blockers
-- None.
+Steps:
+1. Inspect `ethscan/nmap.py` formatter signatures and expected report shape.
+2. Probe hostile inputs first (non-mapping top-level like `None/1/True/"x"/[]`; hostile nested values in key report fields such as hosts/ports/scripts/results/target/notes) without editing production code.
+3. If no crashes: add `tests/test_nmap_formatter_hostile_sweep.py` mirroring existing `*_formatter_hostile_sweep.py` pattern (hostile top-level, hostile nested, well-formed regression).
+4. If crashes: make the smallest defensive formatter fix, then add regression coverage.
+5. Verify focused tests, then targeted ruff/mypy on touched files; run full suite and `python3 check_readme.py` if changes warrant.
 
-## Next task
-- None pending. Repository is fully green. If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce it first (e.g. probe and add formatter hostile-sweep coverage for one remaining single-arg formatter module lacking a dedicated `*_formatter_hostile_sweep.py`, such as `fuzz` or `nmap`) — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
+Constraints/evidence:
+- Do not speculate or weaken safety controls.
+- `oracle`/`postgresql` empty-target handling remains intentionally out of scope per documented contract (exit 0, in-band error).
+- `passwords` formatters use a different multi-arg signature and are not a drop-in for this pattern.
