@@ -1,17 +1,36 @@
 # Next Task
 
 ## Status
-This session added `tests/test_postgresql_formatter_hostile_sweep.py` (88 tests) covering hostile `startup`, nested `parameters`, and `findings` for both Markdown and CSV formatters. The `postgresql` formatters were already guarded inline via `_as_dict` and `isinstance(findings, (list, tuple))` (no source changes needed). `redis` is now the last module in the group of 2 that lacked dedicated formatter hostile-sweep tests.
+The incoming handoff was stale: its task (`tests/test_redis_formatter_hostile_sweep.py`)
+was already committed in `ae117d9` and is green (80 tests). This session instead
+fixed a real crash in the SSH Markdown formatter and added its permanent
+formatter hostile-sweep test (317 tests). Repo is fully green: `pytest -q` ->
+7738 passed, 149 skipped, 0 failed; mypy/ruff clean; README 54/54.
 
 ## One precise next task
-- Add a similar formatter hostile-sweep test file for `redis`. The `redis` formatters iterate over `info` and `config` (via `_as_dict` guard) plus `dangerous_findings`. Create `tests/test_redis_formatter_hostile_sweep.py` following the `test_postgresql_formatter_hostile_sweep.py` pattern:
-  - Test `info`: non-dict values, hostile dicts with non-string/nested values, well-formed regression
-  - Test `config`: non-dict values, hostile dicts with non-string/nested values, well-formed regression
-  - Test `dangerous_findings`: non-iterable scalars, hostile lists, well-formed regression
-  - Cover both Markdown and CSV formatters
-- Reproduce the redis formatter behavior first (confirm `_as_dict`/`isinstance` guards), then add comprehensive tests.
-- Verify with `pytest tests/test_redis_formatter_hostile_sweep.py -q`, then full suite, mypy, ruff.
-- Repository remains fully green: `pytest -q` -> 7341 passed, 149 skipped, 0 failed; mypy/ruff clean.
+Add permanent formatter hostile-sweep tests for the three modules that still
+have NO formatter-input coverage: `cert`, `cve`, `mac`.
+- Their `tests/test_<mod>_hostile_sweep.py` only exercises `run_*` (the network
+  entry point), never `format_*`; none has `tests/test_<mod>_formatter_hostile_sweep.py`.
+- Reproduce first (do not assume a bug): call each `format_*_{json,markdown,csv}`
+  with hostile shapes:
+  - non-dict top-level (None, int, str, list, bool, float)
+  - `subdomains`/`notes`/`cert_data`/`cert_data.entries`/`mac_data`/
+    `vulnerabilities`/`cve_data` set to scalars, lists with non-dict elements,
+    and dicts with hostile nested values
+- A hostile-shape probe run this session on these three modules produced 0
+  crashes, so the expectation is that the formatters are already guarded and the
+  deliverable is regression coverage, not a fix. If a crash does reproduce, fix
+  it minimally (see the ssh precedent: `_normalize_algo_list` in `ethscan/ssh.py`).
+- Create `tests/test_cert_formatter_hostile_sweep.py` first (then cve, then mac),
+  following `tests/test_ssh_formatter_hostile_sweep.py`: parametrized over all
+  formatters, assert `isinstance(output, str)` for every hostile shape, plus a
+  well-formed regression.
+- Verify: `pytest tests/test_cert_formatter_hostile_sweep.py -q`, then full
+  `pytest -q`, `mypy ethscan/ tests/`, `ruff check ethscan/ tests/`.
 
 ## Approaches already tried / ruled out
-- `postgresql` formatter hostile-sweep: complete this session (88 tests, all green). No source changes needed; formatters already guarded.
+- `redis` formatter hostile-sweep: already complete (commit `ae117d9`); no work needed.
+- Session-137 batch (hash/urlcheck/osdetect/subtake/subdomains/dnssec/ping/cidr/
+  s3/tls/ssl/dnsbrute/resolve/trace): probed, already guarded; do not add guards.
+- `cert`/`cve`/`mac` formatter hostile probe (plausible shapes): 0 crashes.

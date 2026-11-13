@@ -610,6 +610,19 @@ def run_ssh(
     return result
 
 
+def _normalize_algo_list(value: object) -> list[str]:
+    """Coerce a hostile algorithm-list field into a list of strings.
+
+    A well-formed value is a list/tuple of algorithm names. Any other shape
+    (a scalar, ``None``, a dict, ...) normalizes to an empty list, and list
+    elements are stringified so ``set(...)``/``sorted(...)`` never raise on a
+    malformed or hostile answer.
+    """
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [str(item) for item in value]
+
+
 def format_ssh_report_json(data: Mapping[str, object]) -> str:
     """Format SSH assessment results as JSON."""
     if not isinstance(data, Mapping):
@@ -642,9 +655,9 @@ def format_ssh_report_markdown(data: Mapping[str, object]) -> str:
         lines.append(f"## {title}")
         if not isinstance(algo_data, dict):
             algo_data = {}
-        supported = algo_data.get("supported") or []
-        weak = set(algo_data.get("weak") or [])
-        strong = set(algo_data.get("strong") or [])
+        supported = _normalize_algo_list(algo_data.get("supported"))
+        weak = set(_normalize_algo_list(algo_data.get("weak")))
+        strong = set(_normalize_algo_list(algo_data.get("strong")))
         if supported:
             lines.append("### Supported Algorithms")
             for algo in sorted(supported):
