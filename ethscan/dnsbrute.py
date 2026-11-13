@@ -611,6 +611,19 @@ def format_dnsbrute_report_json(data: Mapping[str, object]) -> str:
     return json.dumps(data, indent=2, default=str)
 
 
+def _normalize_list(value: object) -> list[object]:
+    """Coerce a hostile list field into a list.
+
+    A well-formed value is a list/tuple of entries; hostile shapes
+    (non-list/tuple scalars, dicts, None) are normalized to an empty list
+    so the formatters never raise on iteration. List/tuple elements are
+    preserved as-is so callers can still apply their own Mapping guard.
+    """
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [item for item in value]
+
+
 def _markdown_escape(text: object) -> str:
     """Escape pipe characters and newlines for Markdown table cells."""
     return str(text).replace("|", "\\|").replace("\n", " ")
@@ -643,7 +656,7 @@ def format_dnsbrute_report_markdown(data: Mapping[str, object]) -> str:
     lines.append(f"- **Target:** {data.get('target')}")
     lines.append(f"- **Domain:** {data.get('domain')}")
     lines.append(f"- **Zone:** {data.get('zone')}")
-    ns_list_md = cast(list[object], data.get("nameservers") or [])
+    ns_list_md = _normalize_list(data.get("nameservers"))
     nameservers = ", ".join(str(x) for x in ns_list_md) if ns_list_md else "None"
     lines.append(
         f"- **Nameservers:** {nameservers} (source: {data.get('nameserver_source')})"
@@ -667,7 +680,7 @@ def format_dnsbrute_report_markdown(data: Mapping[str, object]) -> str:
     lines.append("")
 
     lines.append("## AXFR Attempts")
-    axfr_entries = cast(list[Mapping[str, object]], data.get("axfr") or [])
+    axfr_entries = cast(list[Mapping[str, object]], _normalize_list(data.get("axfr")))
     if axfr_entries:
         for entry_raw in axfr_entries:
             if not isinstance(entry_raw, Mapping):
@@ -691,7 +704,7 @@ def format_dnsbrute_report_markdown(data: Mapping[str, object]) -> str:
         lines.append("")
 
     # Recursive AXFR attempts
-    recursive_axfr = cast(list[Mapping[str, object]], data.get("recursive_axfr", []) or [])
+    recursive_axfr = cast(list[Mapping[str, object]], _normalize_list(data.get("recursive_axfr")))
     if recursive_axfr:
         lines.append("## Recursive AXFR Attempts")
         for entry_raw in recursive_axfr:
@@ -714,10 +727,10 @@ def format_dnsbrute_report_markdown(data: Mapping[str, object]) -> str:
         lines.append("")
 
     lines.append("## Resolved Subdomains")
-    _format_records_table(lines, cast(list[Mapping[str, object]], data.get("resolved") or []))
+    _format_records_table(lines, cast(list[Mapping[str, object]], _normalize_list(data.get("resolved"))))
 
     lines.append("## All Results")
-    _format_records_table(lines, cast(list[Mapping[str, object]], data.get("all_results") or []))
+    _format_records_table(lines, cast(list[Mapping[str, object]], _normalize_list(data.get("all_results"))))
 
     return "\n".join(lines)
 
@@ -810,17 +823,17 @@ def format_dnsbrute_report_csv(data: Mapping[str, object]) -> str:
     domain = str(data.get("domain", "") or "")
 
     # Subdomain brute-force results
-    for entry in cast(list[Mapping[str, object]], data.get("all_results", []) or []):
+    for entry in cast(list[Mapping[str, object]], _normalize_list(data.get("all_results"))):
         if not isinstance(entry, dict):
             continue
         writer.writerow(_dnsbrute_subdomain_row(target, domain, entry))
 
     # Initial AXFR attempts
-    for entry in cast(list[Mapping[str, object]], data.get("axfr", []) or []):
+    for entry in cast(list[Mapping[str, object]], _normalize_list(data.get("axfr"))):
         if not isinstance(entry, dict):
             continue
         entry_dict = entry
-        records_raw = entry_dict.get("records", []) or []
+        records_raw = _normalize_list(entry_dict.get("records"))
         records = cast(list[object], records_raw)
         if records:
             for record in records:
@@ -830,11 +843,11 @@ def format_dnsbrute_report_csv(data: Mapping[str, object]) -> str:
             writer.writerow(_dnsbrute_axfr_row(target, domain, entry_dict, "", "axfr"))
 
     # Recursive AXFR attempts
-    for entry in cast(list[Mapping[str, object]], data.get("recursive_axfr", []) or []):
+    for entry in cast(list[Mapping[str, object]], _normalize_list(data.get("recursive_axfr"))):
         if not isinstance(entry, dict):
             continue
         entry_dict = entry
-        records_raw = entry_dict.get("records", []) or []
+        records_raw = _normalize_list(entry_dict.get("records"))
         records = cast(list[object], records_raw)
         if records:
             for record in records:
