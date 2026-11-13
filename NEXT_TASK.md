@@ -1,23 +1,22 @@
 # Next Task
 
 ## Status
-Previous handoff task completed: added permanent formatter hostile-sweep tests for `geo` and `web`. Baseline was fully green at start (`pytest -q` → 8023 passed, 149 skipped, 0 failed; mypy/ruff clean; check_readme 54/54).
+Previous handoff task completed: added permanent formatter hostile-sweep coverage for `dnssec` (coverage-only; formatters already defensive). Baseline at start of this session was fully green (8326 passed, 149 skipped, 0 failed; mypy/ruff clean; check_readme 54/54).
 
 ## This session
-- Reproduced formatter behavior first (probe-only, no assumptions): 0 crashes for non-mapping top-level and hostile `geolocation`/`hops`/`notes` payloads across all six geo formatters; 0 crashes across all six web formatters EXCEPT one real crash.
-- Found and fixed a real crash: `format_web_report_csv` raised `TypeError: 'int' object is not iterable` when `security_headers["present"]`/`["missing"]` was a truthy non-list (e.g. `1`, `"x"`), because `for header in sh.get("present") or []` iterated a non-iterable. Fixed `ethscan/web.py` to only iterate `present`/`missing` when they are `list`/`tuple` (matching the markdown formatter's existing guard). Markdown and JSON were already safe.
-- Added `tests/test_geo_formatter_hostile_sweep.py` (coverage-only; geo formatters already guarded): parametrized over the 3 formatters × non-mapping top-level, hostile `geolocation`, hostile `hops`, hostile `notes`, plus a well-formed regression.
-- Added `tests/test_web_formatter_hostile_sweep.py` (coverage + regression): parametrized over the 3 formatters × non-mapping top-level, hostile `security_headers`, `information_disclosure`, `findings`, `ssl`, `notes`, plus a well-formed regression and a regression test pinning the exact `{"security_headers": {"present": 1, ...}}` crash payload.
+- Reproduced formatter behavior first (probe-only): 0 crashes for non-mapping top-level and hostile nested dnssec payloads (`dnskey`/`ds`/`rrsig`/`chain`/`findings`/`notes`/`nameservers`/`records`) across json/markdown/csv formatters.
+- No production fix required.
+- Added `tests/test_dnssec_formatter_hostile_sweep.py` with hostile top-level/nested cases and a well-formed regression.
 
 ## Verification
-- `python -m pytest tests/test_geo_formatter_hostile_sweep.py tests/test_web_formatter_hostile_sweep.py -q` → 303 passed.
-- `python -m pytest -q` (full suite) → 8326 passed, 149 skipped, 0 failed (baseline 8023; +303).
-- `python -m mypy ethscan/ tests/` → Success: no issues found in 213 source files.
+- `python -m pytest tests/test_dnssec_formatter_hostile_sweep.py -q` → 153 passed.
+- `python -m pytest -q` (full suite) → 8479 passed, 149 skipped, 1 warning (pre-existing `RuntimeWarning` in `tests/test_cli_cov_gaps.py::test_cli_main_guard_executes`; +153 vs baseline).
 - `python -m ruff check ethscan/ tests/` → All checks passed.
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 213 source files.
 - `python3 check_readme.py` → 54/54, README and CLI in sync.
 
 ## Blockers
 - None.
 
 ## Next task
-- None pending. Repository is fully green. If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
+- None pending. Repository is fully green. If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce it first (e.g. probe and add formatter hostile-sweep coverage for one remaining single-arg formatter module lacking a dedicated `*_formatter_hostile_sweep.py`, such as `fuzz` or `ping`) — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
