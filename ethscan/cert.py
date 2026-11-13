@@ -241,6 +241,8 @@ def run_cert(
 
 def format_cert_report_json(data: dict[str, Any]) -> str:
     """Format cert results as JSON."""
+    if not isinstance(data, dict):
+        return "{}"
     return json.dumps(data, indent=2, default=str)
 
 

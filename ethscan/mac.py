@@ -315,6 +315,8 @@ def _is_ip_address(value: str) -> bool:
 
 def format_mac_report_json(data: dict[str, Any]) -> str:
     """Format MAC vendor results as JSON."""
+    if not isinstance(data, dict):
+        return "{}"
     return json.dumps(data, indent=2, default=str)
 
 

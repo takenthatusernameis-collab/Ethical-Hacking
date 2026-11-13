@@ -118,7 +118,7 @@ def test_cert_formatters_tolerate_non_list_subdomains(
     output = formatter({"subdomains": subdomains})
     assert isinstance(output, str)
     if formatter is format_cert_report_markdown:
-        assert "Subdomains Found: 0" in output
+        assert "**Subdomains Found:** 0" in output
 
 
 @pytest.mark.parametrize("formatter", CERT_FORMATTERS, ids=_formatter_id)

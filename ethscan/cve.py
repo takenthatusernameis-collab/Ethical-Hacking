@@ -509,6 +509,8 @@ def _lookup_cve_id(product: str, version: str) -> str | None:
 
 def format_cve_report_json(data: dict[str, object]) -> str:
     """Format CVE lookup results as JSON."""
+    if not isinstance(data, dict):
+        return "{}"
     return json.dumps(data, indent=2, default=str)
 
 
