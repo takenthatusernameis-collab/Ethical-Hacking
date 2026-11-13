@@ -1609,3 +1609,32 @@ def test_format_smtp_report_csv_error_with_findings() -> None:
     assert "banner read failed: boom" in output
     assert "finding" in lines
     assert "SMTP server version: 2.0.5" in lines
+
+
+HOSTILE_SCALARS = [1, 0, None, True, 3.14]
+
+
+@pytest.mark.parametrize("value", HOSTILE_SCALARS)
+def test_format_smtp_report_markdown_hostile_capabilities(value):
+    """A non-list ``capabilities`` field is treated as empty (line 432)."""
+    output = format_smtp_report_markdown({"capabilities": value})
+    assert "**Capabilities:**" not in output
+
+
+@pytest.mark.parametrize("value", HOSTILE_SCALARS)
+def test_format_smtp_report_csv_hostile_capabilities(value):
+    """A non-list ``capabilities`` field is treated as empty (line 432)."""
+    output = format_smtp_report_csv({"capabilities": value})
+    # No error branch: falls through to the no-users summary row.
+    lines = output.splitlines()
+    assert len(lines) == 2
+    assert lines[0].rstrip("\r") == "target,host,port,user,found,code,description"
+
+
+@pytest.mark.parametrize("value", HOSTILE_SCALARS)
+def test_format_smtp_report_csv_hostile_users(value):
+    """A non-list ``users`` field is treated as empty (line 499)."""
+    output = format_smtp_report_csv({"users": value})
+    lines = output.splitlines()
+    assert len(lines) == 2
+    assert lines[0].rstrip("\r") == "target,host,port,user,found,code,description"

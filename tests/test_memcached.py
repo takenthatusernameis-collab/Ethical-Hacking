@@ -656,3 +656,25 @@ def test_format_memcached_report_csv_non_dict():
     header = lines[0].rstrip("\r")
     assert header == "target,host,port,accessible,version,uptime,bytes,curr_connections,cmd_get,cmd_set,get_hits,get_misses,evictions,findings,error"
     assert "false" in lines[1]
+
+
+HOSTILE_SCALARS = [1, 0, "stats", None, True, 3.14]
+
+
+@pytest.mark.parametrize("value", HOSTILE_SCALARS)
+def test_format_memcached_report_markdown_hostile_stats(value):
+    """A non-dict ``stats`` field is treated as empty (line 337)."""
+    output = format_memcached_report_markdown({"stats": value})
+    assert "No stats collected." in output
+    assert "| Stat |" not in output
+
+
+@pytest.mark.parametrize("value", HOSTILE_SCALARS)
+def test_format_memcached_report_csv_hostile_stats(value):
+    """A non-dict ``stats`` field is treated as empty (line 413)."""
+    output = format_memcached_report_csv({"stats": value})
+    lines = output.splitlines()
+    row = lines[1].rstrip("\r")
+    # uptime/bytes/... columns are empty when stats is not a dict.
+    assert row.split(",")[5] == ""  # uptime
+    assert row.split(",")[6] == ""  # bytes

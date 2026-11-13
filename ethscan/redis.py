@@ -419,7 +419,9 @@ def format_redis_report_markdown(data: dict[str, Any]) -> str:
                 lines.append(f"- **{label}:** {info[key]}")
         lines.append("")
 
-    config = data.get("config") or {}
+    config = data.get("config")
+    if not isinstance(config, dict):
+        config = {}
     if config:
         lines.append("## Configuration (selected)")
         # show key dangerous indicators
@@ -465,8 +467,12 @@ def format_redis_report_csv(data: dict[str, Any]) -> str:
         "error",
     ])
 
-    info = data.get("info") or {}
-    config = data.get("config") or {}
+    info = data.get("info")
+    if not isinstance(info, dict):
+        info = {}
+    config = data.get("config")
+    if not isinstance(config, dict):
+        config = {}
     findings = data.get("dangerous_findings")
     if not isinstance(findings, (list, tuple)):
         findings = []

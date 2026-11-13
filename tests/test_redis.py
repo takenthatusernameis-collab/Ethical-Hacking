@@ -1045,3 +1045,26 @@ def test_format_redis_report_csv_non_dict_input():
     lines = rendered.strip().splitlines()
     assert len(lines) == 2
     assert lines[0].startswith("target,host,port,accessible,")
+
+
+HOSTILE_SCALARS = [1, 0, "config", None, True, 3.14]
+
+
+@pytest.mark.parametrize("value", HOSTILE_SCALARS)
+def test_format_redis_report_markdown_hostile_config(value):
+    """A non-dict ``config`` field is treated as empty (line 422)."""
+    rendered = format_redis_report_markdown({"config": value})
+    assert "Configuration (selected)" not in rendered
+    assert "**bind:**" not in rendered
+
+
+@pytest.mark.parametrize("value", HOSTILE_SCALARS)
+def test_format_redis_report_csv_hostile_config(value):
+    """A non-dict ``config`` field is treated as empty (line 469)."""
+    rendered = format_redis_report_csv({"config": value})
+    lines = rendered.strip().splitlines()
+    row = lines[1].rstrip("\r")
+    fields = row.split(",")
+    # bind (index 9) and requirepass_set (index 10) are empty/false when config is not a dict.
+    assert fields[9] == ""
+    assert fields[10] == "false"

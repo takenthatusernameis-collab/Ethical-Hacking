@@ -334,7 +334,9 @@ def format_memcached_report_markdown(data: dict[str, Any]) -> str:
         lines.append(f"- **Memcached Version:** {data.get('version')}")
         lines.append("")
 
-    stats = data.get("stats") or {}
+    stats = data.get("stats")
+    if not isinstance(stats, dict):
+        stats = {}
     if stats:
         lines.append("## Stats")
         # Show the most interesting fields first, then the rest.
@@ -410,7 +412,9 @@ def format_memcached_report_csv(data: dict[str, Any]) -> str:
         "error",
     ])
 
-    stats = data.get("stats") or {}
+    stats = data.get("stats")
+    if not isinstance(stats, dict):
+        stats = {}
     findings = data.get("findings")
     if not isinstance(findings, (list, tuple)):
         findings = []

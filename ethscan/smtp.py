@@ -429,9 +429,11 @@ def format_smtp_report_markdown(data: dict[str, Any]) -> str:
         lines.append(f"- **Banner:** {data['banner']}")
     lines.append(f"- **EHLO Success:** {data.get('ehlo_success', False)}")
     lines.append(f"- **STARTTLS Advertised:** {data.get('starttls_advertised', False)}")
-    caps = data.get("capabilities") or []
+    caps = data.get("capabilities")
+    if not isinstance(caps, (list, tuple)):
+        caps = []
     if caps:
-        lines.append(f"- **Capabilities:** {', '.join(caps)}")
+        lines.append(f"- **Capabilities:** {', '.join(str(c) for c in caps)}")
     if data.get("users"):
         lines.append("")
         lines.append("## VRFY User Enumeration")
@@ -494,7 +496,9 @@ def format_smtp_report_csv(data: dict[str, Any]) -> str:
                 writer.writerow([finding])
         return output.getvalue().rstrip("\r\n")
 
-    users = data.get("users") or []
+    users = data.get("users")
+    if not isinstance(users, (list, tuple)):
+        users = []
     if not users:
         relay = data.get("open_relay")
         if relay is True:
