@@ -1,56 +1,39 @@
 # Handoff
-Date: Fri Nov 13 2026 (session 142)
+Date: Fri Nov 13 2026 (session 143)
 
 ## This session
-- Found the incoming handoff was stale: its pending task (add
-  `tests/test_redis_formatter_hostile_sweep.py`) was already completed and
-  committed in `ae117d9` before this session. Verified it: 80 tests pass; the
-  redis formatters were already guarded via `_as_dict` + `isinstance`.
-- Selected a real, reproducible gap instead of redundant work. Confirmed via a
-  hostile-shape probe that `format_ssh_report_markdown` crashed on hostile
-  algorithm sections: `render_algo_section` did
-  `set(algo_data.get("weak") or [])` / `sorted(supported)`, raising
-  `TypeError` for non-iterable scalars (`{"weak": 1}`), unhashable elements
-  (`{"weak": [["nested"]]}`), and mixed-type lists (`{"supported": ["a", 1]}`).
-  The CSV/JSON ssh formatters were already safe.
-- Fixed `ethscan/ssh.py`: added `_normalize_algo_list` (non-list/tuple -> `[]`,
-  list elements stringified) and used it for `supported`/`weak`/`strong`.
-- Added `tests/test_ssh_formatter_hostile_sweep.py` (317 tests) covering
-  non-Mapping top-level data, all four algorithm sections, `host_key`, and
-  `findings` for markdown/csv/json, plus a regression test pinning the exact
-  former-crash payloads.
+- Executed the pending handoff task: added permanent formatter hostile-sweep
+  coverage for the three modules that had no `*_formatter_hostile_sweep.py`
+  (`cert`, `cve`, `mac`). Confirmed via pre-implementation probe that plausible
+  hostile formatter shapes produced 0 crashes in all three, so the deliverable is
+  regression coverage (no production fixes required).
+- Added `tests/test_cert_formatter_hostile_sweep.py` (84 tests): parametrized
+  over `format_cert_report_{markdown,csv,json}` for non-mapping top-level inputs
+  and hostile `cert_data`/`cert_data.entries`, `subdomains`, and `notes`, plus a
+  well-formed regression.
+- Added `tests/test_cve_formatter_hostile_sweep.py` (114 tests): hostile
+  `cve_entries` (including non-dict/bad `finding` and `cve` payloads),
+  `severity_counts`, `notes`, and `ports`, plus a well-formed regression.
+- Added `tests/test_mac_formatter_hostile_sweep.py` (87 tests): hostile
+  `mac_data` and `notes`, plus a well-formed regression.
 
 ## Verification
-- `python -m pytest tests/test_ssh_formatter_hostile_sweep.py -q` -> 317 passed
-- `python -m pytest -q` (full suite) -> 7738 passed, 149 skipped, 0 failed
-  (baseline 7421; +317)
-- `python -m mypy ethscan/ tests/` -> Success: no issues found in 208 source files
-- `python -m ruff check ethscan/ tests/` -> All checks passed
-- `python3 check_readme.py` -> 54/54, README and CLI in sync
-- Re-ran the original repro: all former-crash payloads now return a string.
+- `python -m pytest tests/test_cert_formatter_hostile_sweep.py tests/test_cve_formatter_hostile_sweep.py tests/test_mac_formatter_hostile_sweep.py -q` -> 285 passed
+- `python -m pytest -q` (full suite) -> 8023 passed, 149 skipped, 1 warning, 0 failed (baseline 7738; +285)
+- `python -m mypy ethscan/ tests/` -> Success: no issues found in 211 source files
+- `python -m ruff check ethscan/ tests/` -> All checks passed!
+- `python3 check_readme.py` -> 54/54, README and CLI in sync (`In README but not CLI: set()`, `In CLI but not README: set()`)
 
 ## Blockers
 - None.
 
 ## Approaches already tried / ruled out
-- Redundant formatter tests for the session-137 batch (hash/urlcheck/s3/tls/...):
-  probed and already guarded; do not add speculative guards.
-- `cert`/`cve`/`mac` formatter hostile probe: 0 crashes on plausible shapes;
-  their formatters are already guarded (no fix needed, coverage-only gap).
+- Pre-implementation hostile-shape probe for `cert`/`cve`/`mac` formatters (top-level scalars, hostile `cert_data`/`entries`/`subdomains`/`notes`, hostile `cve_entries`/`severity_counts`/nested finding+cve, hostile `mac_data`/`notes`): 0 crashes reproduced. Formatters are already guarded; no minimal fix needed (ssh precedent of `_normalize_algo_list` not applicable).
+- `redis` formatter hostile-sweep and session-137 batch (hash/urlcheck/osdetect/subtake/subdomains/dnssec/ping/cidr/s3/tls/ssl/dnsbrute/resolve/trace): previously probed/covered, do not duplicate.
 
 ## Next task
-- Add a permanent formatter hostile-sweep test for the three modules that still
-  have NO formatter-input coverage: `cert`, `cve`, `mac`. Their generic
-  `*_hostile_sweep.py` tests exercise `run_*` only and never call `format_*`,
-  and none has a `*_formatter_hostile_sweep.py`.
-- Reproduce first: import each module's `format_*_{json,markdown,csv}` and pass
-  hostile shapes (non-dict top-level; `subdomains`/`notes`/`cert_data.entries`/
-  `mac_data`/`vulnerabilities`/`cve_data` as scalars, lists of non-dicts, and
-  dicts with hostile nested values). Expected: all guarded (no crash); if a
-  crash reproduces, fix minimally as done for ssh.
-- Add `tests/test_cert_formatter_hostile_sweep.py` (then cve, mac) following
-  `tests/test_ssh_formatter_hostile_sweep.py`, asserting each formatter returns
-  a `str` for every hostile shape plus a well-formed regression.
-- Verify with the focused file, then full `pytest -q`, `mypy`, `ruff`.
-
-(End of file - total 55 lines)
+- Add permanent formatter hostile-sweep tests for `geo` and `web` (modules with `format_*_report_*` that lack dedicated `*_formatter_hostile_sweep.py` coverage). Evidence: scan of `ethscan/*.py` vs formatter-sweep tests shows `geo` and `web` among modules still without formatter hostile-sweep coverage (others missing include brute/completion/config/dnsbrute/dnssec/ftp/fuzz/hash/headers/jwt/nmap/passwords/ping/radix/recon/resolve/s3/scanner/service/smb/ssl/subdomains/subtake/tls/trace/urlcheck/validate/vuln/wifi); note there is no `ethscan/audit.py` module.
+- Reproduce first (do not assume a bug): for each, call `format_*_{json,markdown,csv}` with hostile shapes: non-dict top-level (None/int/str/list/bool/float) and key payload fields set to scalars, non-dict list elements, and hostile nested dicts (inspect `ethscan/geo.py` and `ethscan/web.py` for actual fields, e.g. `geo_data`/`notes`/coordinate-like fields for geo; `security_headers`/`headers`/`notes`/`redirects`/`cookies` or analogous fields for web). Record any `TypeError`/`AttributeError`.
+- If a crash reproduces, fix minimally in the formatter and add regression tests pinning the exact crash payloads; if none, deliver coverage-only tests.
+- Create `tests/test_geo_formatter_hostile_sweep.py` and `tests/test_web_formatter_hostile_sweep.py` (follow `tests/test_cert_formatter_hostile_sweep.py` / `tests/test_ssh_formatter_hostile_sweep.py`): parametrize over formatters, assert `isinstance(output, str)` for every hostile shape, assert JSON returns `"{}"` for non-mapping top-level, plus a well-formed regression.
+- Verify: focused pytest on new files, then full `python -m pytest -q`, `python -m mypy ethscan/ tests/`, `python -m ruff check ethscan/ tests/`, `python3 check_readme.py`. Update `HANDOFF_NEXT.md` and `NEXT_TASK.md` with evidence.
