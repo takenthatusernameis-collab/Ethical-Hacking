@@ -416,6 +416,18 @@ def _normalize_findings(findings: Any) -> list[object]:
     return []
 
 
+def _normalize_users(users: Any) -> list[dict[str, Any]]:
+    """Coerce a hostile ``users`` value into a list of user dicts.
+
+    Non-list/tuple values normalize to an empty list. List/tuple elements
+    that are not dicts are dropped so the formatters never call ``.get``
+    on a non-dict (which would raise ``AttributeError``).
+    """
+    if not isinstance(users, (list, tuple)):
+        return []
+    return [u for u in users if isinstance(u, dict)]
+
+
 def format_smtp_report_markdown(data: dict[str, Any]) -> str:
     """Format SMTP reconnaissance results as Markdown."""
     if not isinstance(data, dict):
@@ -439,7 +451,7 @@ def format_smtp_report_markdown(data: dict[str, Any]) -> str:
         lines.append("## VRFY User Enumeration")
         lines.append("| User | Found | Code | Description |")
         lines.append("|------|-------|------|-------------|")
-        for u in data["users"]:
+        for u in _normalize_users(data.get("users")):
             found = u.get("found")
             found_str = "Yes" if found is True else ("No" if found is False else "Unknown")
             lines.append(
@@ -496,9 +508,7 @@ def format_smtp_report_csv(data: dict[str, Any]) -> str:
                 writer.writerow([finding])
         return output.getvalue().rstrip("\r\n")
 
-    users = data.get("users")
-    if not isinstance(users, (list, tuple)):
-        users = []
+    users = _normalize_users(data.get("users"))
     if not users:
         relay = data.get("open_relay")
         if relay is True:
