@@ -106,3 +106,70 @@ def test_security_flags_string_is_rendered() -> None:
     md_out = format_smb_report_markdown(payload)
     assert "user_security|signing_enabled" in csv_out
     assert "user_security, signing_enabled" in md_out
+
+
+# ---------------------------------------------------------------------------
+# Hostile ``smb2`` shapes in the report formatters
+# ---------------------------------------------------------------------------
+# A hostile SMB answer (or a hand-crafted result dict) can carry an
+# ``smb2`` value that is ``None``, a scalar, a list, or a dict with
+# non-dict nested elements. The Markdown formatter must never raise;
+# hostile shapes render without crashing.
+SMB2_HOSTILE: tuple[object, ...] = (
+    None,
+    123,
+    True,
+    1.5,
+    "string",
+    [],
+    [1, 2],
+    {"a": 1},
+    [None, {}],
+    {"accessible": True, "dialect": "SMB 3.1.1", "capability_flags": ["encryption", 123], "negotiate_contexts": [{"type": 1}, "not a dict"], "notes": ["note1", 456]},
+)
+
+
+def test_smb2_hostile_shapes_do_not_raise() -> None:
+    for smb2 in SMB2_HOSTILE:
+        payload = {"accessible": True, "smb2": smb2}
+        md_out = format_smb_report_markdown(payload)
+        csv_out = format_smb_report_csv(payload)
+        assert isinstance(md_out, str)
+        assert isinstance(csv_out, str)
+
+
+# ---------------------------------------------------------------------------
+# Hostile ``raw_preview`` shapes in the report formatters
+# ---------------------------------------------------------------------------
+# A hostile SMB answer (or a hand-crafted result dict) can carry a
+# ``raw_preview`` value that is ``None``, a scalar, bytes, or a non-string
+# iterable. Both the Markdown and CSV formatters must never raise; hostile
+# shapes render as a stringified preview.
+RAW_PREVIEW_HOSTILE: tuple[object, ...] = (
+    None,
+    123,
+    True,
+    1.5,
+    [],
+    {},
+    b"bytes",
+    "valid string",
+)
+
+
+@pytest.mark.parametrize("raw", RAW_PREVIEW_HOSTILE)
+def test_format_smb_report_markdown_hostile_raw_preview(raw: object) -> None:
+    results = {"accessible": True, "raw_preview": raw}
+    report = format_smb_report_markdown(results)
+    assert isinstance(report, str)
+    assert "# ethscan SMB Reconnaissance Report" in report
+
+
+@pytest.mark.parametrize("raw", RAW_PREVIEW_HOSTILE)
+def test_format_smb_report_csv_hostile_raw_preview(raw: object) -> None:
+    results = {"accessible": True, "raw_preview": raw}
+    report = format_smb_report_csv(results)
+    assert isinstance(report, str)
+    reader = list(csv.reader(io.StringIO(report)))
+    assert reader[0][0] == "target"
+    assert len(reader) == 2  # header + one data row

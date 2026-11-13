@@ -858,7 +858,7 @@ def format_smb_report_markdown(results: Mapping[str, Any]) -> str:
         lines.append("")
 
     smb2_results = results.get("smb2")
-    if smb2_results:
+    if isinstance(smb2_results, dict):
         lines.append("## SMB2 Negotiation")
         lines.append(f"- **Accessible:** {'Yes' if smb2_results.get('accessible') else 'No'}")
         if smb2_results.get("error"):
@@ -872,23 +872,33 @@ def format_smb_report_markdown(results: Mapping[str, Any]) -> str:
             if smb2_results.get("server_guid"):
                 lines.append(f"- **Server GUID:** {smb2_results.get('server_guid')}")
             caps = smb2_results.get("capability_flags") or []
-            lines.append(f"- **Capabilities:** {', '.join(caps) if caps else 'none'}")
+            if not isinstance(caps, (list, tuple)):
+                caps = []
+            lines.append(f"- **Capabilities:** {', '.join(str(c) for c in caps) if caps else 'none'}")
             if smb2_results.get("negotiate_context_count"):
                 lines.append(f"- **Negotiate Contexts:** {smb2_results.get('negotiate_context_count')}")
                 for ctx in smb2_results.get("negotiate_contexts") or []:
-                    name = ctx.get("type_name") or f"0x{ctx.get('type', 0):04x}"
-                    detail = ctx.get("detail")
-                    if detail:
-                        lines.append(f"  - **{name}:** {detail}")
-                    else:
-                        lines.append(f"  - **{name}**")
+                    if isinstance(ctx, dict):
+                        name = ctx.get("type_name") or f"0x{ctx.get('type', 0):04x}"
+                        detail = ctx.get("detail")
+                        if detail:
+                            lines.append(f"  - **{name}:** {detail}")
+                        else:
+                            lines.append(f"  - **{name}**")
             if smb2_results.get("banner"):
                 lines.append(f"- **Banner:** {smb2_results.get('banner')}")
-            for note in smb2_results.get("notes") or []:
+            notes = smb2_results.get("notes") or []
+            if not isinstance(notes, (list, tuple)):
+                notes = []
+            for note in notes:
                 lines.append(f"- **Note:** {note}")
         lines.append("")
 
     raw = results.get("raw_preview")
+    if raw is None:
+        raw = ""
+    if not isinstance(raw, str):
+        raw = str(raw)
     if raw:
         lines.append("## Response Preview")
         lines.append("```")

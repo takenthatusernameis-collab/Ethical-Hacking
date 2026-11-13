@@ -726,6 +726,10 @@ def format_ldap_report_markdown(results: dict[str, Any]) -> str:
         lines.append("")
 
     raw = results.get("raw_preview")
+    if raw is None:
+        raw = ""
+    if not isinstance(raw, str):
+        raw = str(raw)
     if raw:
         lines.append("## Response Preview")
         lines.append("```")

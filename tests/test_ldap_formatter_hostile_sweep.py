@@ -121,3 +121,40 @@ def test_format_ldap_report_csv_well_formed_preserved() -> None:
     # root_dse_attributes column contains all attributes
     assert "vendorName=OpenLDAP" in row[15]
     assert "namingContexts=dc=example,dc=com" in row[15]
+
+
+# ---------------------------------------------------------------------------
+# Hostile ``raw_preview`` shapes in the report formatters
+# ---------------------------------------------------------------------------
+# A hostile LDAP answer (or a hand-crafted result dict) can carry a
+# ``raw_preview`` value that is ``None``, a scalar, bytes, or a non-string
+# iterable. Both the Markdown and CSV formatters must never raise; hostile
+# shapes render as a stringified preview.
+RAW_PREVIEW_HOSTILE: tuple[object, ...] = (
+    None,
+    123,
+    True,
+    1.5,
+    [],
+    {},
+    b"bytes",
+    "valid string",
+)
+
+
+@pytest.mark.parametrize("raw", RAW_PREVIEW_HOSTILE)
+def test_format_ldap_report_markdown_hostile_raw_preview(raw: object) -> None:
+    results = {"raw_preview": raw, "accessible": True}
+    report = format_ldap_report_markdown(results)
+    assert isinstance(report, str)
+    assert "# ethscan LDAP Reconnaissance Report" in report
+
+
+@pytest.mark.parametrize("raw", RAW_PREVIEW_HOSTILE)
+def test_format_ldap_report_csv_hostile_raw_preview(raw: object) -> None:
+    results = {"raw_preview": raw, "accessible": True}
+    report = format_ldap_report_csv(results)
+    assert isinstance(report, str)
+    reader = list(csv.reader(io.StringIO(report)))
+    assert reader[0][0] == "target"
+    assert len(reader) == 2  # header + one data row
