@@ -629,6 +629,20 @@ def _normalize_communities(communities: Any) -> list[dict[str, Any]]:
     return [item for item in communities if isinstance(item, dict)]
 
 
+def _normalize_valid_communities(communities: Any) -> list[str]:
+    """Coerce a hostile ``valid_communities`` value into a list of strings.
+
+    A well-formed value is a list of community strings. Hostile shapes are
+    normalized:
+    - Non-list/tuple input (including ``None``, scalars, dicts, strings)
+      becomes an empty list.
+    - List/tuple elements are stringified.
+    """
+    if not isinstance(communities, (list, tuple)):
+        return []
+    return [str(item) for item in communities]
+
+
 def _escape_markdown(value: Any) -> str:
     """Escape pipe characters for Markdown tables/lists."""
     return str(value).replace("|", "\\|")
@@ -675,7 +689,7 @@ def format_snmp_report_markdown(data: dict[str, Any]) -> str:
         else:
             lines.append(f"- **{label}:** {_escape_markdown(value)}")
 
-    communities = data.get("valid_communities") or []
+    communities = _normalize_valid_communities(data.get("valid_communities"))
     if communities:
         lines.append("")
         lines.append("## Assessment")
