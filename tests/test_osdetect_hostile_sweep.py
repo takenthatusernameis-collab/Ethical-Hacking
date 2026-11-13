@@ -42,6 +42,8 @@ def test_osdetect_formatters_hostile_nested_shapes_never_raise() -> None:
         {"target": "x", "host": "x", "ports_probed": 1, "inferred_os": [1, None, "Linux"]},
         {"target": "x", "host": "x", "ports_probed": 1, "notes": "x"},
         {"target": "x", "host": "x", "ports_probed": 1, "notes": [None, 5, {}]},
+        {"target": "x", "host": "x", "ports_probed": 1, "notes": 1},
+        {"target": "x", "host": "x", "ports_probed": 1, "notes": None},
         {"target": "x", "host": "x", "ports_probed": 1, "probe_findings": "x"},
     ]
     for data in cases:

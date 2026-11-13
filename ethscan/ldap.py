@@ -717,6 +717,8 @@ def format_ldap_report_markdown(results: dict[str, Any]) -> str:
         lines.append("")
 
     notes = results.get("notes") or []
+    if not isinstance(notes, (list, tuple)):
+        notes = []
     if notes:
         lines.append("## Notes")
         for note in notes:

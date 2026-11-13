@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import io
+from typing import Any, cast
 
 import pytest
 
@@ -45,6 +46,39 @@ def test_format_ldap_report_csv_hostile_root_dse(shape, label) -> None:
     reader = list(csv.reader(io.StringIO(report)))
     assert reader[0][0] == "target"
     assert len(reader) == 2  # header + one data row
+
+
+HOSTILE_NOTES: tuple[object, ...] = (1, None, "x", [1, None], {"a": 1})
+
+
+@pytest.mark.parametrize("notes", HOSTILE_NOTES)
+def test_format_ldap_report_markdown_hostile_notes(notes: object) -> None:
+    results: dict[str, object] = {
+        "root_dse": {},
+        "accessible": True,
+        "notes": notes,
+    }
+    report = format_ldap_report_markdown(cast(Any, results))
+    assert isinstance(report, str)
+    assert "# ethscan LDAP Reconnaissance Report" in report
+    if isinstance(notes, (list, tuple)):
+        for note in notes:
+            assert str(note) in report
+    else:
+        assert "## Notes" not in report
+
+
+@pytest.mark.parametrize("notes", HOSTILE_NOTES)
+def test_format_ldap_report_csv_hostile_notes(notes: object) -> None:
+    results: dict[str, object] = {
+        "root_dse": {},
+        "accessible": True,
+        "notes": notes,
+    }
+    report = format_ldap_report_csv(cast(Any, results))
+    assert isinstance(report, str)
+    reader = list(csv.reader(io.StringIO(report)))
+    assert reader[0][0] == "target"
 
 
 def test_normalize_root_dse_hostile_shapes() -> None:

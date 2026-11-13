@@ -600,6 +600,30 @@ def test_format_geo_report_markdown_with_notes() -> None:
     output = format_geo_report_markdown(data)
     assert "Note 1" in output
     assert "Note 2" in output
+
+
+def test_format_geo_report_markdown_hostile_notes() -> None:
+    for notes in (1, None, "x", [1, None, "Note"]):
+        data: dict[str, object] = {
+            "target": "8.8.8.8",
+            "host": "8.8.8.8",
+            "ip": "8.8.8.8",
+            "timeout": 5.0,
+            "use_cache": True,
+            "offline_fallback": True,
+            "geolocation": {"status": "success", "query": "8.8.8.8"},
+            "notes": notes,
+        }
+        output = format_geo_report_markdown(data)
+        assert isinstance(output, str)
+        assert "# ethscan IP Geolocation Report" in output
+        if isinstance(notes, (list, tuple)):
+            for note in notes:
+                assert str(note) in output
+        else:
+            assert "## Notes" not in output
+
+
 def test_format_geo_report_csv_basic() -> None:
     data = {
         "target": "8.8.8.8",

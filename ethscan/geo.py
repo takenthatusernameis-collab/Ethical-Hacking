@@ -363,7 +363,10 @@ def format_geo_report_markdown(data: dict[str, object]) -> str:
             )
         lines.append("")
 
-    notes = cast(list[object], data.get("notes") or [])
+    notes = data.get("notes") or []
+    if not isinstance(notes, (list, tuple)):
+        notes = []
+    notes = cast(list[object], notes)
     if notes:
         lines.append("## Notes")
         for note in notes:

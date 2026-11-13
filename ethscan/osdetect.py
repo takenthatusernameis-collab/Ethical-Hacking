@@ -531,7 +531,10 @@ def format_osdetect_report_markdown(data: Mapping[str, object]) -> str:
         lines.append("*No probes performed.*")
     lines.append("")
 
-    notes = cast(list[str], data.get("notes") or [])
+    notes = data.get("notes") or []
+    if not isinstance(notes, (list, tuple)):
+        notes = []
+    notes = cast(list[str], notes)
     if notes:
         lines.append("## Notes")
         for note in notes:
