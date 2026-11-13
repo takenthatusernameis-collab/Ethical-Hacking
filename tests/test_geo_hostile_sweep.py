@@ -144,3 +144,35 @@ def test_geo_formatters_hostile_nested_shapes_never_raise() -> None:
         notes_val = data.get("notes")
         if isinstance(notes_val, (list, tuple)) and notes_val:
             assert "## Notes" in md
+
+
+# ---------------------------------------------------------------------------
+# Formatter sweep: hostile geolocation (top-level) non-dict values
+# ---------------------------------------------------------------------------
+
+HOSTILE_GEOLOCATION_VALUES: tuple[object, ...] = (None, 123, 1.5, True, "string", [], [1, 2, 3], b"bytes")
+
+
+def test_geo_formatters_hostile_geolocation_never_raise() -> None:
+    """Top-level geolocation as non-dict must not crash formatters."""
+    for bad_geo in HOSTILE_GEOLOCATION_VALUES:
+        data: dict[str, object] = {
+            "target": "8.8.8.8",
+            "host": "8.8.8.8",
+            "ip": "8.8.8.8",
+            "timeout": 1.0,
+            "use_cache": False,
+            "offline_fallback": False,
+            "recursive": False,
+            "geolocation": bad_geo,
+            "notes": [],
+        }
+        json.loads(format_geo_report_json(data))
+        md = format_geo_report_markdown(data)
+        csv_text = format_geo_report_csv(data)
+        assert isinstance(md, str)
+        assert isinstance(csv_text, str)
+        assert "ethscan IP Geolocation Report" in md
+        # No geolocation section should be rendered for hostile geolocation
+        assert "## Geolocation Data" not in md
+        assert "Query IP" not in md

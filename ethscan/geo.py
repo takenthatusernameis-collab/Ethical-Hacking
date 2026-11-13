@@ -298,6 +298,17 @@ def _normalize_hops(hops: Any) -> list[dict[str, object]]:
     return [h for h in hops if isinstance(h, dict)]
 
 
+def _normalize_geo(geo: Any) -> dict[str, object]:
+    """Coerce a hostile ``geolocation`` value into a dict.
+
+    Non-dict values normalize to an empty dict so the formatters never
+    call ``.get`` on a non-dict (which would raise ``AttributeError``).
+    """
+    if not isinstance(geo, dict):
+        return {}
+    return geo
+
+
 def format_geo_report_markdown(data: dict[str, object]) -> str:
     """Format geolocation results as Markdown."""
     if not isinstance(data, dict):
@@ -316,7 +327,7 @@ def format_geo_report_markdown(data: dict[str, object]) -> str:
         )
     lines.append("")
 
-    geo = cast(dict[str, object] | None, data.get("geolocation"))
+    geo = _normalize_geo(data.get("geolocation"))
     if geo:
         lines.append("## Geolocation Data")
         if geo.get("status") == "success":
@@ -472,7 +483,7 @@ def format_geo_report_csv(data: dict[str, object]) -> str:
     writer = csv.writer(output)
     writer.writerow(_geo_csv_header())
     target = cast(str, data.get("target", ""))
-    geo = cast(dict[str, object], data.get("geolocation") or {})
+    geo = _normalize_geo(data.get("geolocation"))
     writer.writerow(_geo_csv_row(target, data.get("ip"), geo))
     for hop in _normalize_hops(data.get("hops")):
         hop_geo_raw = hop.get("geolocation")
