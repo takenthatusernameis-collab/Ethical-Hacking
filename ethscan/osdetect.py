@@ -513,7 +513,8 @@ def format_osdetect_report_markdown(data: Mapping[str, object]) -> str:
     lines.append("")
 
     lines.append("## TCP/IP Stack Probes")
-    probes = cast(list[dict[str, object]], data.get("probes") or [])
+    probes_obj = data.get("probes")
+    probes = cast(list[dict[str, object]], list(probes_obj) if isinstance(probes_obj, (list, tuple)) else [])
     if probes:
         lines.append("| Port | Probe | Connected | Response | Flags Observed | Error |")
         lines.append("|------|-------|-----------|----------|----------------|-------|")
