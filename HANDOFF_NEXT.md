@@ -1,50 +1,34 @@
 # Handoff
-Date: Fri Nov 13 2026 (session 133)
+Date: Fri Nov 13 2026 (session 134)
 
 ## This session
-- Inspected prior handoff: HEAD (f15760b) already closed `geo` per-key formatter crash
-  (`geolocation` non-dict -> `AttributeError`) via `_normalize_geo` and added
-  `test_geo_formatters_hostile_geolocation_never_raise` in `tests/test_geo_hostile_sweep.py`.
-  Baseline confirmed green on entry: full suite 6839 passed, 146 skipped, 0 failed; mypy clean
-  (196 files); ruff clean; `check_readme.py` 54/54.
-- Executed next bounded task (next unresolved family from prior handoff): closed `whois`
-  formatter crash where top-level `raw` non-string (e.g. `123`, `True`, `1.5`, list/dict/None/
-  bytes) caused `AttributeError: 'X' object has no attribute 'strip'` in markdown formatter.
-- Fixed `ethscan/whois.py`: render `raw` defensively in markdown (`None` -> empty, non-str ->
-  `str(raw)`, then `.strip()`), preserving normal string behavior.
-- Added parametrized hostile-sweep formatter cases `test_formatters_hostile_raw_field_never_raise`
-  to `tests/test_whois_hostile_sweep.py` (8 hostile shapes, markdown+csv).
-- Valid-input behavior unchanged for string `raw`; README/CLI untouched.
+- Inspected prior handoff: HEAD had `whois` formatter crash fixed (session 133). Baseline confirmed green on entry: full suite 6880 passed, 146 skipped, 0 failed; mypy clean (196 files); ruff clean; `check_readme.py` 54/54.
+- Continued the per-key formatter hostile-sweep campaign by probing `ldap` and `smb` formatter paths per prior handoff notes. Found no crashes in `ldap.raw_preview`/`raw_dse` or `smb.smb2` — current formatters already handle hostile shapes via `_normalize_root_dse`, `_normalize_security_flags`, and dict guards.
+- Discovered and fixed two new formatter crash families via evidence-first reproduction:
+  1. **NetBIOS `names` field**: `format_netbios_report_markdown` and `format_netbios_report_csv` crashed on non-list/tuple `names` values (`TypeError: 'int' object is not iterable`, `AttributeError: 'str' object has no attribute 'get'`). Added `_normalize_names` helper (mirrors `_normalize_peers`/`_normalize_communities` pattern) and updated both formatters.
+  2. **DNS `records` field (markdown only)**: `format_dns_report_markdown` crashed when `records` dict values were non-iterable (`TypeError: 'int' object is not iterable`). Added inline normalization to coerce non-list/tuple/set values to single-element lists.
+- Added comprehensive parametrized hostile-sweep formatter tests:
+  - `tests/test_netbios_formatter_hostile_sweep.py` (16 tests covering 6 hostile `names` shapes + well-formed preservation)
+  - `tests/test_dns_formatter_hostile_sweep.py` (19 tests covering 8 hostile `records` shapes + well-formed preservation)
+- Fixed pre-existing `tests/test_smb_hostile_sweep.py` missing `import pytest` (was causing collection error).
 
 ## Verification
-- Repro before fix: `format_whois_report_markdown` crashed on `raw=123/True/...` with
-  `AttributeError` on `.strip()`; after fix renders without raising.
-- `pytest tests/test_whois.py tests/test_whois_hostile_sweep.py -q` -> 81 passed.
-- `python -m pytest -q` -> 6847 passed, 146 skipped, 0 failed.
-- `python -m mypy ethscan/whois.py tests/test_whois_hostile_sweep.py` -> clean.
-- `python -m ruff check ethscan/whois.py tests/test_whois_hostile_sweep.py` -> all passed.
+- Repro before fix: NetBIOS markdown/CSV and DNS markdown crashed on hostile shapes; after fix all render without raising.
+- `pytest tests/test_netbios_formatter_hostile_sweep.py tests/test_dns_formatter_hostile_sweep.py -q` -> 35 passed.
+- `pytest tests/test_netbios.py tests/test_dns.py tests/test_netbios_hostile_sweep.py tests/test_dns_hostile_sweep.py -q` -> 146 passed (existing tests unchanged).
+- `python -m pytest -q` -> 6915 passed, 146 skipped, 0 failed (baseline +35 new tests).
+- `python -m mypy ethscan/ tests/` -> Success: no issues found in 198 source files.
+- `python -m ruff check ethscan/ tests/` -> All checks passed.
 - `python3 check_readme.py` -> 54/54, no diffs.
-- `git diff --stat` (uncommitted): `ethscan/whois.py`, `tests/test_whois_hostile_sweep.py`
-  (+42/-1 net shown), plus this handoff update.
+- `git diff --stat` (uncommitted): `ethscan/dns.py`, `ethscan/netbios.py`, `tests/test_smb_hostile_sweep.py` (+26/-2), plus two new test files.
 
 ## Blockers
 - None.
 
 ## Approaches already tried / ruled out
-- `geo.geolocation` non-dict crash: already fixed in HEAD (f15760b); not reworked.
-- Probed `ldap.raw_preview` elements and `smb.smb2` non-dict per prior handoff notes: current
-  formatters did not crash on the quick hostile shapes probed; do not "fix" without a reproduced
-  failure and evidence.
-- `oracle`/`postgresql` empty-target handling remains intentionally out of scope per documented
-  contract (exit 0, in-band error).
+- Probed `ldap.raw_preview`/`root_dse` and `smb.smb2` non-dict per prior handoff notes: current formatters did not crash on the quick hostile shapes probed; do not "fix" without a reproduced failure and evidence.
+- `oracle`/`postgresql` empty-target handling remains intentionally out of scope per documented contract (exit 0, in-band error).
 - Did not commit (no explicit commit request).
 
 ## Next task
-- One precise next task: continue the per-key formatter hostile-sweep campaign by reproducing
-  (with evidence) the next concrete crash family — try `ldap` fields named in prior notes
-  (e.g. `raw_preview` non-string elements / unexpected container shapes in formatters) and/or
-  `smb.smb2` nested non-dict cases beyond the quick probe; if a crash is reproduced, apply the
-  minimal `_as_dict`/`_normalize_*`/string-coercion pattern, add parametrized hostile-sweep
-  tests, and verify. If no crash reproduces, record that evidence and pick the next module with a
-  demonstrated formatter crash (search for unguarded `.get`/iteration over untrusted keys).
-  Do not widen scope; do not commit unless explicitly asked.
+- Continue the per-key formatter hostile-sweep campaign by reproducing (with evidence) the next concrete crash family. Search for unguarded `.get`/iteration/string operations on untrusted keys in remaining module formatters. Prior candidates from earlier fuzzer notes: `ftp`, `snmp`, `smtp`, `ldap` (other fields), `netbios` (other fields), `smb` (other fields), `redis`, `memcached`, `mongodb`, `mssql`, `mysql`, `postgresql`, `oracle`, `ntp`, `ssh`, `cert`, `geo`, `mac`, `cve`, `vuln`, `scan`, `web`, `headers`, `fuzz`, `subdomains`, `dnsbrute`, `whois`, `ssl`, `tls`, `brute`, `service`, `osdetect`, `ping`, `cidr`, `radix`, `stale`, `urlcheck`, `subtake`, `s3`, `recon`, `nmap`, `resolve`, `validate`, `jwt`, `wifi`, `hash`, `passwords`, `report`, `config`. Pick one module, probe its formatter with hostile shapes (non-dict containers, non-iterable list fields, non-string elements), and if a crash reproduces, apply the minimal `_normalize_*`/coercion pattern, add parametrized hostile-sweep tests, and verify. Do not widen scope; do not commit unless explicitly asked.

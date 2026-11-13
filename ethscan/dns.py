@@ -233,6 +233,12 @@ def format_dns_report_markdown(data: dict[str, object]) -> str:
 
     for rtype, values in records.items():
         lines.append(f"## {rtype} Records")
+        # Normalize values to an iterable list; non-list/tuple values become a single-element list
+        if not isinstance(values, (list, tuple, set)):
+            if values is not None:
+                values = [values]
+            else:
+                values = []
         if values:
             for value in values:
                 lines.append(f"- {value}")

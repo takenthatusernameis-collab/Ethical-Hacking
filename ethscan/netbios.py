@@ -615,6 +615,23 @@ def _escape_markdown(value: Any) -> str:
     return str(value).replace("|", "\\|")
 
 
+def _normalize_names(names: Any) -> list[dict[str, Any]]:
+    """Coerce a hostile ``names`` value into a list of name dicts.
+
+    A well-formed value is a list of dicts (each carrying ``name``,
+    ``suffix``, ``suffix_hex``, ``service_type``, ``flags``). Hostile
+    shapes are normalized:
+    - Non-list/tuple input (including ``None``, scalars, dicts, strings)
+      becomes an empty list, so the names table is omitted.
+    - List/tuple elements that are not dicts are dropped so the formatters
+      never call ``.get`` on a non-dict (which would raise
+      ``AttributeError``).
+    """
+    if not isinstance(names, (list, tuple)):
+        return []
+    return [item for item in names if isinstance(item, dict)]
+
+
 def format_netbios_report_markdown(data: dict[str, Any]) -> str:
     """Format NetBIOS reconnaissance results as Markdown."""
     if not isinstance(data, dict):
@@ -628,7 +645,7 @@ def format_netbios_report_markdown(data: dict[str, Any]) -> str:
         lines.append(f"- **MAC:** {_escape_markdown(data.get('mac'))}")
     lines.append(f"- **Names Found:** {data.get('num_names', 0)}")
 
-    names = data.get("names") or []
+    names = _normalize_names(data.get("names"))
     if names:
         lines.append("")
         lines.append("## Names")
@@ -718,7 +735,7 @@ def format_netbios_report_csv(data: dict[str, Any]) -> str:
         "is_server", "hostname", "is_domain_member", "error",
     ])
 
-    names = data.get("names") or []
+    names = _normalize_names(data.get("names"))
     num_names = data.get("num_names", len(names))
 
     def _name_fields(entry: dict[str, Any]) -> list[Any]:
