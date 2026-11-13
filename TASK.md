@@ -433,3 +433,22 @@ Date: Sun Nov 08 2026 (session 7)
 
 ## Next task
 - None pending. Repository is fully green. If future work is needed, pick a single high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
+
+# Session (Fri Nov 13 2026, session 137)
+## This session
+- Executed the pending next task: continued the per-key formatter hostile-sweep campaign with evidence-first reproduction on the 13-module batch (hash `results`, urlcheck `fuzz.all_results`, osdetect `probes`, subtake `vulnerable`/`all_results`, subdomains `resolved`/`all_results`/`per_depth`, dnssec `dnskey.keys`/`ds.records`/`chain`, ping `probes`, cidr `diff.difference`, s3 `results`, tls `versions`/`ciphers`, ssl `sans`, dnsbrute `axfr_entries`, resolve `records`, trace `hops`/`recursive_traces`).
+- Wrote and ran three hostile-shape probes (single-key, nested, combined) totaling 212 formatter calls across markdown + csv for each module, using None/int/bool/float/str/bytes/dict values and lists with non-dict/non-string elements plus dict-when-list-expected shapes.
+- Result: 0 crashes. All formatters in this batch are already guarded with inline isinstance checks before iteration/indexing/join. `hash` and `urlcheck` confirmed guarded by source review (non-dict `results` entries skipped; `all_results`/`sans` guarded).
+- No source or test changes made; probe-only, fully reversible. Working tree clean.
+## Verification
+- Probe: 212 formatter calls, 0 crashes.
+- `python -m pytest -q` -> 7056 passed, 146 skipped, 0 failed (baseline unchanged).
+- `python -m mypy ethscan/ tests/` -> clean (189 source files).
+- `python -m ruff check ethscan/ tests/` -> all checks passed.
+- `python3 check_readme.py` -> 54/54, README and CLI in sync.
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- Per-key hostile sweep on this batch: no crash reproduces; not a fixable finding. Do not speculate or add unneeded guards.
+## Next task
+- None pending. Repository is fully green. The pending hostile-sweep batch is complete (no crashes found). If future work is needed, pick a single bounded, verifiable improvement and reproduce it first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).

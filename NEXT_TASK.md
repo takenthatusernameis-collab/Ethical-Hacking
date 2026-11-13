@@ -25,20 +25,8 @@ Also probed (no crash reproduced, do not "fix" without evidence):
   the others were already guarded.
 
 ## One precise next task
-- Continue the per-key formatter hostile-sweep campaign with evidence-first reproduction:
-  probe remaining modules for unguarded `.get`/iteration/string ops on untrusted keys in
-  formatters. Remaining unguarded iteration sites observed this session (all currently
-  guarded by inline `isinstance` checks, so probe with nested hostile shapes before
-  "fixing"): `hash` (`results`), `urlcheck` (`fuzz.all_results`), `osdetect` (`probes`),
-  `subtake` (`vulnerable`/`all_results`), `subdomains` (`resolved`/`all_results`/`per_depth`),
-  `dnssec` (`dnskey.keys`/`ds.records`/`chain`), `ping` (`probes`), `cidr` (`diff.difference`),
-  `s3` (`results`), `tls` (`versions`/`ciphers`), `ssl` (`sans`), `dnsbrute` (`axfr_entries`),
-  `resolve` (`records`), `trace` (`hops`/`recursive_traces`). Pick one module, probe its
-  formatter with hostile nested shapes (non-dict containers, non-iterable list fields,
-  non-string elements), and if a crash reproduces, apply the minimal `_normalize_*`/coercion
-  pattern, add parametrized hostile-sweep tests, and verify.
-- Constraints: do not change valid-input output; keep changes minimal and reversible; do
-  not commit unless explicitly asked. `oracle`/`postgresql` empty-target contract remains
-  out of scope.
+- None pending. The per-key formatter hostile-sweep batch was executed this session with evidence-first reproduction: 212 hostile formatter calls across 13 modules (hash `results`, urlcheck `fuzz.all_results`, osdetect `probes`, subtake `vulnerable`/`all_results`, subdomains `resolved`/`all_results`/`per_depth`, dnssec `dnskey.keys`/`ds.records`/`chain`, ping `probes`, cidr `diff.difference`, s3 `results`, tls `versions`/`ciphers`, ssl `sans`, dnsbrute `axfr_entries`, resolve `records`, trace `hops`/`recursive_traces`) — 0 crashes reproduce. All formatters in this batch are already guarded with inline `isinstance` checks before iteration/indexing/join, so no fix is needed; do not speculate or add unneeded guards.
+- Repository is fully green: `pytest -q` → 7056 passed, 146 skipped, 0 failed; `mypy ethscan/ tests/` clean (189 source files); `ruff check ethscan/ tests/` all checks passed; `python3 check_readme.py` → 54/54.
+- If future work is needed, pick a single bounded, verifiable improvement and reproduce it first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
 
 (End of file - total 35 lines)
