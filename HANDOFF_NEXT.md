@@ -2,29 +2,27 @@
 Date: Fri Nov 13 2026 (session 141)
 
 ## This session
-- Selected the bounded, high-value task from the handoff: add a permanent formatter hostile-sweep test file for `mysql` covering both `findings` and `handshake` fields.
-- Created `tests/test_mysql_formatter_hostile_sweep.py` with 50 tests covering:
-  - `findings` field: non-iterable scalars (7 shapes), hostile lists (4 shapes), well-formed regression
-  - `handshake` field: non-dict values (7 shapes), hostile dicts with non-string/nested values (5 shapes), well-formed regression
-  - Both Markdown and CSV formatters tested against all shapes
+- Executed the pending next task: added `tests/test_postgresql_formatter_hostile_sweep.py` (88 tests) covering hostile `startup` (non-dict scalars/lists, hostile dicts), nested `parameters` (non-dict values, hostile dicts incl. non-string keys), and `findings` (non-iterable scalars, hostile lists) for both Markdown and CSV formatters, following the `test_mysql_formatter_hostile_sweep.py` pattern.
 
 ## Verification
-- `pytest tests/test_mysql_formatter_hostile_sweep.py -q` -> 50 passed
-- `pytest tests/test_mysql.py tests/test_mysql_formatter_hostile_sweep.py -q` -> 140 passed
-- `pytest -q` (full suite) -> 7253 passed, 149 skipped, 0 failed (baseline 7203; +50 new tests here = 7253)
-- `python -m mypy ethscan/ tests/` -> Success: no issues found in 205 source files
+- `pytest tests/test_postgresql_formatter_hostile_sweep.py -q` -> 88 passed
+- `pytest -q` (full suite) -> 7341 passed, 149 skipped, 0 failed
+- `python -m mypy ethscan/ tests/` -> Success: no issues found in 206 source files
 - `python -m ruff check ethscan/ tests/` -> All checks passed
-- `python3 check_readme.py` -> 54/54, README and CLI in sync
 
 ## Blockers
 - None.
 
 ## Approaches already tried / ruled out
-- Adding formatter hostile-sweep tests to the shared `test_findings_csv_hostile_sweep.py`: kept separate per-module for maintainability and to match the pattern used by ftp, ntp, oracle, smtp, snmp, etc.
-- Testing only `findings`: expanded to cover `handshake` since the formatters also iterate/access that field.
+- None for this session.
 
 ## Next task
-- Add similar formatter hostile-sweep test files for the remaining 2 modules that lack them: `postgresql`, `redis`. Each should cover all fields their formatters iterate over (e.g., `startup`/`parameters` for postgresql, `info`/`config` for redis), following the same pattern established here.
-- Pick one module at a time, reproduce the formatter behavior first, then add comprehensive tests.
+- Add the remaining formatter hostile-sweep test file for `redis` (the last module in the group of 2 that lack dedicated formatter hostile-sweep tests). The `redis` formatters iterate over `info` and `config` (via `_as_dict` guard). Create `tests/test_redis_formatter_hostile_sweep.py` following the `test_postgresql_formatter_hostile_sweep.py` / `test_mysql_formatter_hostile_sweep.py` pattern:
+  - Test `info`: non-dict values, hostile dicts with non-string/nested values, well-formed regression
+  - Test `config`: non-dict values, hostile dicts with non-string/nested values, well-formed regression
+  - Test `findings`/`dangerous_findings`: non-iterable scalars, hostile lists, well-formed regression
+  - Cover both Markdown and CSV formatters
+- Verify with `pytest tests/test_redis_formatter_hostile_sweep.py -q`, then full suite, mypy, ruff.
+- Repository remains fully green: `pytest -q` -> 7341 passed, 149 skipped, 0 failed; mypy/ruff clean.
 
 (End of file - total 38 lines)

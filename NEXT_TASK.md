@@ -1,14 +1,17 @@
 # Next Task
 
 ## Status
-Session 141 added a permanent formatter hostile-sweep test file for `mysql` covering both `findings` and `handshake` fields (50 new tests). The module's formatters were already guarded inline via `_as_dict` and `isinstance(findings, (list, tuple))` (no source changes needed), but lacked dedicated hostile-sweep tests matching the pattern used by ftp, ntp, oracle, smtp, snmp, etc.
+This session added `tests/test_postgresql_formatter_hostile_sweep.py` (88 tests) covering hostile `startup`, nested `parameters`, and `findings` for both Markdown and CSV formatters. The `postgresql` formatters were already guarded inline via `_as_dict` and `isinstance(findings, (list, tuple))` (no source changes needed). `redis` is now the last module in the group of 2 that lacked dedicated formatter hostile-sweep tests.
 
 ## One precise next task
-- Add a similar formatter hostile-sweep test file for `postgresql` (next module in the group of 2 that lack dedicated formatter hostile-sweep tests). The `postgresql` formatters iterate over `startup` and `parameters` (via `_as_dict` guard). Create `tests/test_postgresql_formatter_hostile_sweep.py` following the `test_mysql_formatter_hostile_sweep.py` pattern:
-  - Test `startup`: non-iterable scalars, hostile lists, well-formed regression
-  - Test `parameters`: non-dict values, hostile dicts with non-string/nested values, well-formed regression
+- Add a similar formatter hostile-sweep test file for `redis`. The `redis` formatters iterate over `info` and `config` (via `_as_dict` guard) plus `dangerous_findings`. Create `tests/test_redis_formatter_hostile_sweep.py` following the `test_postgresql_formatter_hostile_sweep.py` pattern:
+  - Test `info`: non-dict values, hostile dicts with non-string/nested values, well-formed regression
+  - Test `config`: non-dict values, hostile dicts with non-string/nested values, well-formed regression
+  - Test `dangerous_findings`: non-iterable scalars, hostile lists, well-formed regression
   - Cover both Markdown and CSV formatters
-- Verify with `pytest tests/test_postgresql_formatter_hostile_sweep.py -q`, then full suite, mypy, ruff.
-- Repository remains fully green: `pytest -q` -> 7253 passed, 149 skipped, 0 failed; mypy/ruff clean; check_readme 54/54.
+- Reproduce the redis formatter behavior first (confirm `_as_dict`/`isinstance` guards), then add comprehensive tests.
+- Verify with `pytest tests/test_redis_formatter_hostile_sweep.py -q`, then full suite, mypy, ruff.
+- Repository remains fully green: `pytest -q` -> 7341 passed, 149 skipped, 0 failed; mypy/ruff clean.
 
-(End of file - total 14 lines)
+## Approaches already tried / ruled out
+- `postgresql` formatter hostile-sweep: complete this session (88 tests, all green). No source changes needed; formatters already guarded.
