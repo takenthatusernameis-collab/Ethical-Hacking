@@ -238,6 +238,19 @@ def _escape(value: str) -> str:
     return value.replace("|", "\\|")
 
 
+def _normalize_difference(value: object) -> list[str]:
+    """Coerce a hostile ``difference`` field into a list of strings.
+
+    A well-formed value is a list/tuple of CIDR strings. Hostile shapes
+    (non-list/tuple scalars, dicts, None, sets) are normalized to an empty list
+    so the formatters never raise on iteration. List/tuple elements are
+    stringified so ``str.join`` never raises.
+    """
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [str(item) for item in value]
+
+
 def format_cidr_report_markdown(data: Mapping[str, object]) -> str:
     """Format CIDR results as Markdown."""
     if not isinstance(data, dict):
@@ -286,9 +299,7 @@ def format_cidr_report_markdown(data: Mapping[str, object]) -> str:
         lines.append("### Difference Networks")
         lines.append("| Network | Address Range | Total Addresses |")
         lines.append("|---------|---------------|-----------------|")
-        for net_str in diff.get("difference", []) or []:
-            if not isinstance(net_str, str):
-                continue
+        for net_str in _normalize_difference(diff.get("difference")):
             try:
                 network = ipaddress.ip_network(net_str, strict=False)
                 start = str(network.network_address)
@@ -333,6 +344,7 @@ def format_cidr_report_csv(data: Mapping[str, object]) -> str:
     diff = data.get("diff")
     if not isinstance(diff, dict):
         diff = {}
+    diff_list = _normalize_difference(diff.get("difference"))
     writer.writerow([
         data.get("cidr", ""),
         network.get("network_address", ""),
@@ -347,7 +359,7 @@ def format_cidr_report_csv(data: Mapping[str, object]) -> str:
         contains.get("ip", "") if isinstance(contains, dict) else (contains or ""),
         "true" if (isinstance(contains, dict) and contains.get("in_network")) else "false",
         diff.get("difference_network_count", "") if diff else "",
-        diff.get("difference", [""])[0] if diff and diff.get("difference") else "",
-        diff.get("difference", [""])[-1] if diff and diff.get("difference") else "",
+        diff_list[0] if diff_list else "",
+        diff_list[-1] if diff_list else "",
     ])
     return output.getvalue().rstrip("\r\n")
