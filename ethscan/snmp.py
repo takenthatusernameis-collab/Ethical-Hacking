@@ -689,14 +689,14 @@ def format_snmp_report_markdown(data: dict[str, Any]) -> str:
         else:
             lines.append(f"- **{label}:** {_escape_markdown(value)}")
 
-    communities = _normalize_valid_communities(data.get("valid_communities"))
-    if communities:
+    valid_communities = _normalize_valid_communities(data.get("valid_communities"))
+    if valid_communities:
         lines.append("")
         lines.append("## Assessment")
         lines.append(
-            f"- **Valid communities:** {', '.join(_escape_markdown(c) if c else '(empty)' for c in communities)}"
+            f"- **Valid communities:** {', '.join(_escape_markdown(c) if c else '(empty)' for c in valid_communities)}"
         )
-        default_valid = [c for c in communities if c in ("public", "private", "default", "")]
+        default_valid = [c for c in valid_communities if c in ("public", "private", "default", "")]
         if default_valid:
             lines.append(
                 "- **Misconfiguration:** default community strings are accepted "
