@@ -47,6 +47,16 @@ _AUTH_TYPE_NAMES: dict[int, str] = {
 }
 
 
+def _as_dict(value: object) -> dict[str, Any]:
+    """Coerce a nested response container into a dict.
+
+    A well-formed value is a dict; any other shape (a scalar, a list, or
+    ``None``) is normalized to an empty dict so the formatters never raise
+    when a hostile or malformed answer is rendered.
+    """
+    return value if isinstance(value, dict) else {}
+
+
 def _normalize_target(target: str) -> tuple[str, int]:
     """Parse a target into a bare host and integer port.
 
@@ -396,7 +406,7 @@ def format_postgresql_report_markdown(data: dict[str, Any]) -> str:
         lines.append(f"**Server Version:** {data['version']}")
         lines.append("")
 
-    startup = data.get("startup") or {}
+    startup = _as_dict(data.get("startup"))
     if startup:
         lines.append("## Server Greeting")
         lines.append("")
@@ -408,14 +418,14 @@ def format_postgresql_report_markdown(data: dict[str, Any]) -> str:
         ]:
             if key in startup and startup[key] is not None:
                 lines.append(f"- **{key}:** {_markdown_escape(startup[key])}")
-        parameters = startup.get("parameters") or {}
+        parameters = _as_dict(startup.get("parameters"))
         if parameters:
             lines.append("")
             lines.append("## Server Parameters")
             lines.append("")
             lines.append("| Parameter | Value |")
             lines.append("|-----------|-------|")
-            for key in sorted(parameters):
+            for key in sorted(parameters, key=str):
                 lines.append(f"| {key} | {_markdown_escape(parameters[key])} |")
             lines.append("")
         lines.append("")
@@ -459,7 +469,7 @@ def format_postgresql_report_csv(data: dict[str, Any]) -> str:
         "error",
     ])
 
-    startup = data.get("startup") or {}
+    startup = _as_dict(data.get("startup"))
     findings = data.get("findings")
     if not isinstance(findings, (list, tuple)):
         findings = []
@@ -481,6 +491,7 @@ __all__ = [
     "DEFAULT_PORT",
     "DEFAULT_PROBES",
     "DEFAULT_TIMEOUT",
+    "_as_dict",
     "_assess_startup",
     "_build_startup_request",
     "_normalize_target",

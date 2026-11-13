@@ -26,6 +26,16 @@ DEFAULT_TIMEOUT = 3.0
 DEFAULT_PROBES = ("handshake",)
 
 
+def _as_dict(value: object) -> dict[str, Any]:
+    """Coerce a nested response container into a dict.
+
+    A well-formed value is a dict; any other shape (a scalar, a list, or
+    ``None``) is normalized to an empty dict so the formatters never raise
+    when a hostile or malformed answer is rendered.
+    """
+    return value if isinstance(value, dict) else {}
+
+
 def _normalize_target(target: str) -> tuple[str, int]:
     """Parse a target into a bare host and integer port.
 
@@ -437,7 +447,7 @@ def format_mysql_report_markdown(data: dict[str, Any]) -> str:
         lines.append(f"**Server Version:** {data['version']}")
         lines.append("")
 
-    handshake = data.get("handshake") or {}
+    handshake = _as_dict(data.get("handshake"))
     if handshake:
         lines.append("## Handshake")
         lines.append("")
@@ -495,7 +505,7 @@ def format_mysql_report_csv(data: dict[str, Any]) -> str:
         "error",
     ])
 
-    handshake = data.get("handshake") or {}
+    handshake = _as_dict(data.get("handshake"))
     findings = data.get("findings")
     if not isinstance(findings, (list, tuple)):
         findings = []
@@ -521,6 +531,7 @@ __all__ = [
     "DEFAULT_PORT",
     "DEFAULT_PROBES",
     "DEFAULT_TIMEOUT",
+    "_as_dict",
     "_assess_handshake",
     "_normalize_target",
     "_parse_handshake",

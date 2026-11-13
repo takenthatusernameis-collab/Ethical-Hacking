@@ -129,6 +129,16 @@ def _build_monlist_request() -> bytes:
     )
 
 
+def _as_dict(value: object) -> dict[str, Any]:
+    """Coerce a nested response container into a dict.
+
+    A well-formed value is a dict; any other shape (a scalar, a list, or
+    ``None``) is normalized to an empty dict so the formatters never raise
+    when a hostile or malformed answer is rendered.
+    """
+    return value if isinstance(value, dict) else {}
+
+
 def _parse_time_response(data: bytes) -> dict[str, Any]:
     """Parse an NTP time response packet (mode 4, server)."""
     if len(data) < 48:
@@ -413,7 +423,7 @@ def format_ntp_report_markdown(data: dict[str, Any]) -> str:
     lines.append(f"- **Host:** {data.get('host', '')}")
     lines.append(f"- **Port:** {data.get('port', '')}")
 
-    time_resp = data.get("time_response")
+    time_resp = _as_dict(data.get("time_response"))
     if time_resp:
         if "error" in time_resp:
             lines.append("")
@@ -437,7 +447,7 @@ def format_ntp_report_markdown(data: dict[str, Any]) -> str:
                 else:
                     lines.append(f"- **{ts_key.replace('_', ' ').title()}:** N/A")
 
-    mon_resp = data.get("monlist_response")
+    mon_resp = _as_dict(data.get("monlist_response"))
     if mon_resp:
         lines.append("")
         lines.append("## Monlist Response (Amplification Check)")
@@ -540,8 +550,8 @@ def format_ntp_report_csv(data: dict[str, Any]) -> str:
         ])
         return output.getvalue().rstrip("\r\n")
 
-    time_resp = data.get("time_response") or {}
-    mon_resp = data.get("monlist_response") or {}
+    time_resp = _as_dict(data.get("time_response"))
+    mon_resp = _as_dict(data.get("monlist_response"))
 
     # Extract summary data
     version = time_resp.get("version", "") if not time_resp.get("error") else ""

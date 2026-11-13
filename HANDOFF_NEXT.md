@@ -1,41 +1,90 @@
 # Handoff
-Date: Fri Nov 13 2026 (session 130)
+Date: Fri Nov 13 2026 (session 131)
 
 ## This session
-- Prior session 129 closed a bounded formatter-robustness gap (smtp/memcached/redis). Baseline was fully green at start: `pytest -q` → 6515 passed, 50 skipped, 0 failed; mypy/ruff/readme clean.
-- No prior agent assignment existed (HANDOFF_NEXT/NEXT_TASK said no further task). Inspected the repo, confirmed baseline green, and ran a comprehensive hostile-shape fuzzer over every public `format_*_report_{markdown,csv}` function to find remaining formatter crashes from the session-117 backlog.
-- Fuzzer reproduced two real crash families (the `passwords` hits were false positives — that formatter takes two args):
-  - **`snmp` `communities`**: non-list/tuple scalars (`1`, `True`, `3.14`, `"string"`, `{"x":1}`) raised `TypeError: 'X' object is not iterable`; lists of non-dict elements (`[None]`, `[1]`, `["ok", None, 1, 2.5, ["nested"]]`) raised `AttributeError: 'X' object has no attribute 'get'` in both `format_snmp_report_markdown` and `format_snmp_report_csv`.
-  - **`whois` `parsed`**: non-dict scalars raised `AttributeError: 'X' object has no attribute 'get'`; lists raised the same. Also `parsed.nameservers` / `parsed.status_codes` non-list/tuple scalars raised `TypeError: 'X' object is not iterable` (Markdown) / `TypeError: can only join an iterable` (CSV), and non-string list elements raised `TypeError: sequence item N: expected str instance, ...` (CSV only). Also `recursive_hops` non-list/tuple scalars and lists of non-dicts crashed both formats.
-- Root cause: the formatters iterated `data.get(...)` directly and called `.get()` on each element, assuming well-typed structures.
-- Fixed `ethscan/snmp.py`:
-  - Added `_normalize_communities(communities)` helper that coerces non-list/tuple to `[]` and filters non-dict elements.
-  - Updated `format_snmp_report_markdown` (community-probes table) and `format_snmp_report_csv` (per-community rows) to use the helper.
-- Fixed `ethscan/whois.py`:
-  - Added `_normalize_parsed(parsed)` (non-dict → `{}`), `_normalize_str_list(value)` (non-list/tuple → `[]`, elements stringified before join), `_normalize_hops(hops)` (non-list/tuple → `[]`, non-dict elements dropped).
-  - Updated `format_whois_report_markdown` and `format_whois_report_csv` to use all three helpers at every extraction site (`parsed`, `parsed.nameservers`, `parsed.status_codes`, `recursive_hops`, and inner `hop.parsed`).
-- No behavior change for valid inputs; non-dict elements are dropped silently (matching the session-117 findings-formatter precedent).
-- Added `tests/test_whois_formatter_hostile_sweep.py` (new file): parametrized over 2 formatters × hostile `parsed` (7 scalars + 3 lists), `nameservers`, `status_codes`, `recursive_hops`, plus a well-formed regression.
-- Extended `tests/test_snmp_formatter_hostile_sweep.py` with hostile `communities` coverage (7 scalars + 3 lists × 2 formatters) plus a well-formed regression.
+- Prior handoff (session 130) was stale: it described uncommitted snmp/whois work, but
+  the working tree was clean at session start (those changes had already been committed,
+  plus a later `geo.py` fix in `8621d62`). Established the real baseline first:
+  `pytest -q` → 6621 passed, 50 skipped, 0 failed; mypy clean (195 files); ruff clean;
+  `check_readme.py` → 54/54, no diffs.
+- No prior agent assignment existed. Selected a bounded, high-value task: harden the
+  protocol-recon formatters against a **hostile nested response container**.
+- Reproduced with a temporary per-key hostile fuzzer over every public
+  `format_*_report_{markdown,csv}` (derived the keys each formatter reads from its source).
+  Confirmed a coherent crash family in 6 modules where the formatter assumes a nested
+  response container is a dict:
+  - `mongodb` `buildInfo` — Markdown `TypeError: argument of type 'int' is not a container`;
+    CSV `AttributeError: 'int' object has no attribute 'get'`.
+  - `mssql` `prelogin` — same two shapes.
+  - `mysql` `handshake` — same two shapes (plus Markdown `str`/`list` `.get`).
+  - `postgresql` `startup` — same two shapes; also nested `startup.parameters` non-dict
+    (`TypeError: 'int' object is not iterable`) and mixed-type parameter keys
+    (`TypeError: '<' not supported between instances of 'str' and 'int'`).
+  - `ntp` `time_response` / `monlist_response` — same shapes in both formats.
+  - `redis` `info` / `config` — Markdown `TypeError` for non-dict `info`.
+  Root cause: each formatter did `container = data.get(key) or {}` then called `.get()`
+  / `in` / `sorted()` on the result, so any truthy non-dict (including a string such as
+  `"error"` or `"version"`, which is truthy) crashed the render.
+- Fixed all six modules by adding a local `_as_dict(value)` helper (non-dict → `{}`,
+  matching the existing `_normalize_*` precedent in `ldap`/`smb`/`snmp`) and routing every
+  container extraction through it:
+  - `ethscan/mongodb.py`: `_as_dict` + both `buildInfo` sites.
+  - `ethscan/mssql.py`: `_as_dict` + both `prelogin` sites.
+  - `ethscan/mysql.py`: `_as_dict` + both `handshake` sites.
+  - `ethscan/postgresql.py`: `_as_dict` + both `startup` sites + nested `parameters`;
+    also `sorted(parameters, key=str)` so mixed key types no longer raise.
+  - `ethscan/ntp.py`: `_as_dict` + markdown `time_response`/`monlist_response` and CSV
+    `time_response`/`monlist_response` sites.
+  - `ethscan/redis.py`: `_as_dict` + markdown `info`/`config` and CSV `info`/`config`
+    sites (replacing the existing inline `isinstance` guards).
+  - Added `_as_dict` to `__all__` in mongodb/mssql/mysql/postgresql (the four modules that
+    declare `__all__`; ntp/redis do not).
+- No behavior change for valid inputs: byte-for-byte diff of all 12 formatters on
+  well-formed payloads is identical before vs after (verified via `git stash` A/B).
+- Added `tests/test_nested_container_hostile_sweep.py`: parametrized over 12 formatters ×
+  12 hostile container shapes (scalars, strings incl. `"error"`/`"version"`, lists,
+  list-of-dict), a secondary-container sweep (`monlist_response`/`config`), a both-hostile
+  case, a well-formed regression per formatter, and a mixed-key `parameters` regression.
 
 ## Verification
-- Repro before fix: all hostile `communities`/`parsed`/`nameservers`/`status_codes`/`recursive_hops` shapes raised `TypeError`/`AttributeError`; after fix all render without crashing.
-- `python -m pytest tests/test_snmp_formatter_hostile_sweep.py tests/test_snmp.py tests/test_whois_formatter_hostile_sweep.py tests/test_whois.py tests/test_whois_hostile_sweep.py -q` → 327 passed.
-- `python -m pytest -q` (full suite) → 6619 passed, 50 skipped, 0 failed (baseline 6515; +104 new tests).
-- `python -m mypy ethscan/ tests/` → Success: no issues found in 195 source files.
+- Repro before fix: all 6 modules' markdown/CSV formatters raised on non-dict containers;
+  after fix all render without raising (`FAILS: 0` across 12 formatters × 12 shapes +
+  `parameters` shapes).
+- `python -m pytest tests/test_nested_container_hostile_sweep.py -q` → 217 passed, 96 skipped.
+- Focused: `pytest tests/test_mongodb.py tests/test_mssql.py tests/test_mysql.py
+  tests/test_postgresql.py tests/test_ntp.py tests/test_ntp_formatter_hostile_sweep.py
+  tests/test_redis.py tests/test_redis_hostile_sweep.py
+  tests/test_nested_container_hostile_sweep.py -q` → 753 passed, 96 skipped.
+- `python -m pytest -q` (full suite) → 6838 passed, 146 skipped, 0 failed (baseline 6621;
+  +217 new tests, +96 new skips from the secondary-container parametrization).
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 196 source files.
 - `python -m ruff check ethscan/ tests/` → All checks passed.
 - `python3 check_readme.py` → 54/54, no diffs.
-- `git diff --stat` → 3 files, 172 insertions, 16 deletions (ethscan/snmp.py + ethscan/whois.py + tests/test_snmp_formatter_hostile_sweep.py); plus 1 new untracked test file (tests/test_whois_formatter_hostile_sweep.py). README untouched; no source behavior change for valid inputs.
+- `git diff --stat` → 6 files, 82 insertions, 24 deletions; plus 1 new test file.
+  README untouched; no CLI/behavior change for valid inputs.
 
 ## Blockers
 - None.
 
 ## Approaches already tried / ruled out
-- Did NOT widen to the remaining session-117 fuzzer families (`ftp`/`ntp`/`oracle` wrong-typed list fields beyond findings, `smb` `security_flags`, `ldap` `root_dse`) — each is a separate bounded task; reproduce per module first. Note: `ftp`/`ntp`/`oracle` already guard `findings` via `_normalize_findings`; `smb` already guards `security_flags` via `_normalize_security_flags`; `ldap` already guards `root_dse` via `_normalize_root_dse`.
-- Did not touch `oracle`/`postgresql` empty-target handling (intentionally out of scope per documented contract).
+- Did NOT touch `dnsbrute`/`geo`/`whois`/`ldap`/`smb` remaining per-key formatter crashes
+  found by the same fuzzer (e.g. `dnsbrute` `axfr`/`nameservers`/`resolved`/`all_results`
+  non-iterable; `geo` `geolocation` non-dict; `whois` `raw` non-string; `ldap`
+  `raw_preview` non-string elements; `smb` `smb2` non-dict; `mongodb` `buildInfo` non-dict
+  was fixed here, but `geo`/`whois`/`ldap`/`smb`/`dnsbrute` remain). Each is a separate
+  bounded task — reproduce per module first; several already have partial hostile sweeps
+  that cover top-level shapes but not every nested key.
 - Did not commit (no explicit commit request); changes are uncommitted in the working tree.
+- Note: the six `_as_dict` helpers are intentionally duplicated per module to match the
+  existing per-module `_normalize_*` convention rather than adding a shared util module.
 
 ## Next task
-- None pending. Repository is fully green. If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.
+- One precise next task: close the remaining per-key formatter crash families the fuzzer
+  surfaced in `dnsbrute` (`axfr`, `nameservers`, `resolved`, `all_results`,
+  `recursive_axfr` as non-iterable scalars), `geo` (`geolocation` non-dict), `whois`
+  (`raw` non-string), `ldap` (`raw_preview` non-string elements), and `smb` (`smb2`
+  non-dict) — reproduce each with the same per-key hostile probe, apply the `_as_dict` /
+  `_normalize_*` pattern, and add parametrized hostile-sweep tests. Pick one module at a
+  time; do not widen scope beyond a single bounded family per change.
 
-(End of file - total 71 lines)
+(End of file - total 76 lines)

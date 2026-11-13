@@ -203,6 +203,16 @@ def _send_recv(
             sock.close()
 
 
+def _as_dict(value: object) -> dict[str, Any]:
+    """Coerce a nested response container into a dict.
+
+    A well-formed value is a dict; any other shape (a scalar, a list, or
+    ``None``) is normalized to an empty dict so the formatters never raise
+    when a hostile or malformed answer is rendered.
+    """
+    return value if isinstance(value, dict) else {}
+
+
 def _parse_info(data: bytes) -> dict[str, str]:
     """Parse Redis INFO response into a dict.
 
@@ -406,7 +416,7 @@ def format_redis_report_markdown(data: dict[str, Any]) -> str:
         lines.append(f"- **Response:** {data.get('ping')}")
         lines.append("")
 
-    info = data.get("info") or {}
+    info = _as_dict(data.get("info"))
     if info:
         lines.append("## Server Info")
         # Extract common fields
@@ -419,9 +429,7 @@ def format_redis_report_markdown(data: dict[str, Any]) -> str:
                 lines.append(f"- **{label}:** {info[key]}")
         lines.append("")
 
-    config = data.get("config")
-    if not isinstance(config, dict):
-        config = {}
+    config = _as_dict(data.get("config"))
     if config:
         lines.append("## Configuration (selected)")
         # show key dangerous indicators
@@ -467,12 +475,8 @@ def format_redis_report_csv(data: dict[str, Any]) -> str:
         "error",
     ])
 
-    info = data.get("info")
-    if not isinstance(info, dict):
-        info = {}
-    config = data.get("config")
-    if not isinstance(config, dict):
-        config = {}
+    info = _as_dict(data.get("info"))
+    config = _as_dict(data.get("config"))
     findings = data.get("dangerous_findings")
     if not isinstance(findings, (list, tuple)):
         findings = []

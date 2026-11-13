@@ -27,6 +27,16 @@ DEFAULT_TIMEOUT = 3.0
 DEFAULT_PROBES = ("buildInfo",)
 
 
+def _as_dict(value: object) -> dict[str, Any]:
+    """Coerce a nested response container into a dict.
+
+    A well-formed value is a dict; any other shape (a scalar, a list, or
+    ``None``) is normalized to an empty dict so the formatters never raise
+    when a hostile or malformed answer is rendered.
+    """
+    return value if isinstance(value, dict) else {}
+
+
 def _normalize_target(target: str) -> tuple[str, int]:
     """Parse a target into a bare host and integer port.
 
@@ -344,7 +354,7 @@ def format_mongodb_report_markdown(data: dict[str, Any]) -> str:
         lines.append(f"**Server Version:** {data['version']}")
         lines.append("")
 
-    buildinfo = data.get('buildInfo') or {}
+    buildinfo = _as_dict(data.get('buildInfo'))
     if buildinfo:
         lines.append("## Build Info")
         lines.append("")
@@ -396,7 +406,7 @@ def format_mongodb_report_csv(data: dict[str, Any]) -> str:
         'error',
     ])
 
-    buildinfo = data.get('buildInfo') or {}
+    buildinfo = _as_dict(data.get('buildInfo'))
     findings = data.get('findings')
     if not isinstance(findings, (list, tuple)):
         findings = []
@@ -418,6 +428,7 @@ __all__ = [
     'DEFAULT_PORT',
     'DEFAULT_PROBES',
     'DEFAULT_TIMEOUT',
+    '_as_dict',
     '_assess_buildinfo',
     '_build_buildinfo_request',
     '_normalize_target',

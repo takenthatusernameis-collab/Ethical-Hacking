@@ -185,6 +185,16 @@ _OPTION_PARTITIONRESERVED126 = 0x110
 _OPTION_PARTITIONRESERVED127 = 0x111
 
 
+def _as_dict(value: object) -> dict[str, Any]:
+    """Coerce a nested response container into a dict.
+
+    A well-formed value is a dict; any other shape (a scalar, a list, or
+    ``None``) is normalized to an empty dict so the formatters never raise
+    when a hostile or malformed answer is rendered.
+    """
+    return value if isinstance(value, dict) else {}
+
+
 def _normalize_target(target: str) -> tuple[str, int]:
     """Parse a target into a bare host and integer port.
 
@@ -617,7 +627,7 @@ def format_mssql_report_markdown(data: dict[str, Any]) -> str:
         lines.append(f"**Server Version:** {data['version']}")
         lines.append("")
 
-    prelogin = data.get("prelogin") or {}
+    prelogin = _as_dict(data.get("prelogin"))
     if prelogin:
         lines.append("## PRELOGIN Response")
         lines.append("")
@@ -671,7 +681,7 @@ def format_mssql_report_csv(data: dict[str, Any]) -> str:
         "error",
     ])
 
-    prelogin = data.get("prelogin") or {}
+    prelogin = _as_dict(data.get("prelogin"))
     findings = data.get("findings")
     if not isinstance(findings, (list, tuple)):
         findings = []
@@ -694,6 +704,7 @@ __all__ = [
     "DEFAULT_PORT",
     "DEFAULT_PROBES",
     "DEFAULT_TIMEOUT",
+    "_as_dict",
     "_assess_prelogin",
     "_build_prelogin_request",
     "_normalize_target",
