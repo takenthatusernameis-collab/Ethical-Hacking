@@ -613,6 +613,22 @@ def _normalize_findings(findings: Any) -> list[object]:
     return []
 
 
+def _normalize_communities(communities: Any) -> list[dict[str, Any]]:
+    """Coerce a hostile ``communities`` value into a list of dicts.
+
+    A well-formed value is a list of dicts (each carrying ``community``,
+    ``valid``, ``version``, ``error``). Hostile shapes are normalized:
+    - Non-list/tuple input (including ``None``, scalars, dicts, strings)
+      becomes an empty list, so the community-probes block is omitted.
+    - List/tuple elements that are not dicts are dropped (matching the
+      session-117 findings-formatter precedent of dropping non-dict
+      elements rather than mis-iterating them).
+    """
+    if not isinstance(communities, (list, tuple)):
+        return []
+    return [item for item in communities if isinstance(item, dict)]
+
+
 def _escape_markdown(value: Any) -> str:
     """Escape pipe characters for Markdown tables/lists."""
     return str(value).replace("|", "\\|")
@@ -629,7 +645,7 @@ def format_snmp_report_markdown(data: dict[str, Any]) -> str:
     if data.get("snmp_version"):
         lines.append(f"- **SNMP Version:** {data.get('snmp_version')}")
 
-    communities = data.get("communities") or []
+    communities = _normalize_communities(data.get("communities"))
     if communities:
         lines.append("")
         lines.append("## Community Probes")
@@ -747,7 +763,7 @@ def format_snmp_report_csv(data: dict[str, Any]) -> str:
 
     # One row per probed community (valid or invalid) so per-community
     # structure, version and error are preserved rather than collapsed.
-    for entry in data.get("communities") or []:
+    for entry in _normalize_communities(data.get("communities")):
         community = entry.get("community") or ""
         valid = "true" if entry.get("valid") else "false"
         community_version = entry.get("version") or ""

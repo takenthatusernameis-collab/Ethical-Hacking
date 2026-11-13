@@ -1,8 +1,9 @@
 """Permanent sweep test: hostile SNMP formatter inputs are rendered, never raised.
 
 Covers ``format_snmp_report_markdown`` and ``format_snmp_report_csv`` against
-hostile ``findings`` values (non-list/tuple scalars, lists of hostile elements).
-Every shape yields a string and never raises.
+hostile ``findings`` values (non-list/tuple scalars, lists of hostile
+elements) and hostile ``communities`` values (non-list/tuple scalars, lists
+of non-dict elements). Every shape yields a string and never raises.
 """
 from __future__ import annotations
 
@@ -32,6 +33,14 @@ HOSTILE_FINDING_LISTS: list[list[object]] = [
     [1],
     [None, 1],
     ["ok", None, 1, 2.5, {"nested": True}],
+]
+
+NON_ITERABLE_COMMUNITIES: list[object] = [None, 1, 0, True, 3.14, "string", {"x": 1}]
+
+HOSTILE_COMMUNITY_LISTS: list[list[object]] = [
+    [None],
+    [1],
+    ["ok", None, 1, 2.5, ["nested"]],
 ]
 
 
@@ -66,3 +75,38 @@ def test_snmp_formatters_still_render_well_formed_findings(
     assert isinstance(output, str)
     assert "first" in output
     assert "second" in output
+
+
+@pytest.mark.parametrize("formatter", SNMP_FORMATTERS, ids=_formatter_id)
+@pytest.mark.parametrize("communities", NON_ITERABLE_COMMUNITIES)
+def test_snmp_formatters_tolerate_non_iterable_communities(
+    formatter: Callable[[dict[str, Any]], str], communities: object
+) -> None:
+    output = formatter({"communities": communities})
+    assert isinstance(output, str)
+    assert "pub" not in output
+
+
+@pytest.mark.parametrize("formatter", SNMP_FORMATTERS, ids=_formatter_id)
+@pytest.mark.parametrize("communities", HOSTILE_COMMUNITY_LISTS)
+def test_snmp_formatters_tolerate_hostile_community_lists(
+    formatter: Callable[[dict[str, Any]], str], communities: list[object]
+) -> None:
+    output = formatter({"communities": communities})
+    assert isinstance(output, str)
+    assert "pub" not in output
+
+
+@pytest.mark.parametrize("formatter", SNMP_FORMATTERS, ids=_formatter_id)
+def test_snmp_formatters_still_render_well_formed_communities(
+    formatter: Callable[[dict[str, Any]], str]
+) -> None:
+    output = formatter({
+        "communities": [
+            {"community": "pub", "valid": True, "version": 2, "error": None},
+            {"community": "priv", "valid": False, "version": 1, "error": "timeout"},
+        ],
+    })
+    assert isinstance(output, str)
+    assert "pub" in output
+    assert "priv" in output
