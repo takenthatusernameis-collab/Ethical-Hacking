@@ -475,10 +475,14 @@ def format_web_report_csv(data: dict[str, object]) -> str:
     if isinstance(sh, dict):
         writer.writerow([])
         writer.writerow(["security_header", "status"])
-        for header in sh.get("present") or []:
-            writer.writerow([header, "present"])
-        for header in sh.get("missing") or []:
-            writer.writerow([header, "missing"])
+        present = sh.get("present")
+        if isinstance(present, (list, tuple)):
+            for header in present:
+                writer.writerow([header, "present"])
+        missing = sh.get("missing")
+        if isinstance(missing, (list, tuple)):
+            for header in missing:
+                writer.writerow([header, "missing"])
 
     findings = data.get("information_disclosure")
     if isinstance(findings, list):
