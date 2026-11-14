@@ -72,6 +72,10 @@ def test_normalize_target():
     # IPv6
     assert _normalize_target("[::1]") == ("::1", DEFAULT_PORT)
     assert _normalize_target("[::1]:1434") == ("::1", 1434)
+    # Bracketed host without closing bracket keeps literal host and default port.
+    assert _normalize_target("[example.com") == ("[example.com", DEFAULT_PORT)
+    # Non-digit port suffix in host:port form keeps literal target and default port.
+    assert _normalize_target("host:notaport") == ("host:notaport", DEFAULT_PORT)
     # URL
     assert _normalize_target("mssql://example.com") == ("example.com", DEFAULT_PORT)
     assert _normalize_target("mssql://example.com:1434") == ("example.com", 1434)

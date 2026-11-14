@@ -1,18 +1,17 @@
 # Handoff
-Date: Sat Nov 14 2026 (session 174)
+Date: Sat Nov 14 2026 (session 175)
 
 ## This session
-- Executed queued task context from session 173 (`ethscan/web.py` branch arcs). Reproduced with `python3 -m pytest tests/test_web.py --cov=ethscan.web --cov-branch --cov-report=term-missing -q` and confirmed `ethscan/web.py` is already 100% branch covered (88 passed); prior handoff arc list was stale/no longer present.
-- Selected and completed a bounded alternative: improved `ethscan/ftp.py` branch coverage with minimal public-contract tests in `tests/test_ftp.py`:
-  - `test_normalize_target_bracket_host_nondigit_port_suffix`: bracket `host:port` with non-digit port keeps literal target/default port; `[]:21` exercises empty-bracket parse failure.
-  - `test_normalize_target_host_nondigit_port_suffix`: non-bracket host with non-digit suffix keeps literal target/default port.
-  - `test_run_ftp_connector_failure_leaves_client_unset`: connector raises before client assignment; error reported and `finally` runs with unset client.
+- Executed queued next task: closed remaining `ethscan/mssql.py` branch arcs `219->230, 226->230` in `_normalize_target`.
+- Reproduced with `python3 -m pytest tests/test_mssql.py --cov=ethscan.mssql --cov-branch --cov-report=term-missing -q` (90 passed, arcs present before change).
+- Added minimal public-contract cases in `tests/test_mssql.py::test_normalize_target`:
+  - bracketed host without closing bracket (e.g. `[example.com`) exercises `close <= 0` path and returns literal host with default port.
+  - host with non-digit port suffix (e.g. `host:notaport`) exercises `host:port` split where `rest.isdigit()` is false and returns literal target with default port.
 - No production code changed.
 
 ## Verification
-- `python3 -m pytest tests/test_ftp.py tests/test_ftp_hostile_sweep.py --cov=ethscan.ftp --cov-branch --cov-report=term-missing -q` → 85 passed; `ethscan/ftp.py` 99% branch (181 stmts, 62 branches, 2 partial: `46->59, 216->220`).
-- `python3 -m pytest tests/test_web.py --cov=ethscan.web --cov-branch -q` → 88 passed; `ethscan/web.py` 100% branch.
-- `python3 -m pytest -q` → 31986 passed, 146 skipped, 0 failed.
+- `python3 -m pytest tests/test_mssql.py --cov=ethscan.mssql --cov-branch --cov-report=term-missing -q` → 90 passed; `ethscan/mssql.py` 100% branch.
+- `python3 -m pytest -q` → 31986 passed, 146 skipped, 0 failed (1 existing warning: `tests/test_cli_cov_gaps.py::test_cli_main_guard_executes` RuntimeWarning).
 - `python3 -m mypy ethscan/ tests/` → Success: no issues found in 236 source files.
 - `python3 -m ruff check ethscan/ tests/` → All checks passed.
 - `python3 check_readme.py` → 54/54, README and CLI in sync.
@@ -21,14 +20,15 @@ Date: Sat Nov 14 2026 (session 174)
 - None.
 
 ## Changes left uncommitted
-- `tests/test_ftp.py` (+3 tests) — uncommitted.
+- `tests/test_mssql.py` (+4 assertions in `test_normalize_target`) — uncommitted.
 - `HANDOFF_NEXT.md`, `NEXT_TASK.md` updated for this handoff.
+- Note: prior session handoff mentioned uncommitted `tests/test_ftp.py` changes, but current working tree only shows the changes listed above; inspect `git status`/diff before checkpointing.
 
 ## Approaches already tried / ruled out
-- `web.py` partial-arc closure task from prior handoff: not actionable; module already 100% branch covered in current tree.
-- `ethscan/ftp.py` `46->59`: `[]:21` exercises `bracket_end <= 0` path but arc still reported partial by coverage; needs precise arc-condition analysis before further attempts.
-- `ethscan/ftp.py` `216->220`: connector-failure path exercised `client is None` in `finally`; arc still partial (likely missing complementary taken/not-taken context) — avoid contrived production edits.
+- `ethscan/mssql.py` arcs `219->230` and `226->230` closed via public `_normalize_target` inputs (no contrived production changes).
+- `ethscan/web.py` remains 100% branch covered (stale prior target).
+- `ethscan/hash.py` has partial arcs/misses (e.g. `589->596`, `592->591`, and uncovered lines 553, 576, 602, 652, 684, 690 per focused run in this session) — candidate for next targeted work; inspect exact conditions before adding tests.
 - `oracle`/`postgresql` empty-target handling intentionally out of scope per documented contract.
 
 ## Next task
-- Close one small, reachable branch-coverage gap in another module (e.g. `ethscan/hash.py` arc `589->596` or `ethscan/mssql.py` arc `226->230`). Reproduce with focused `--cov=<module> --cov-branch --cov-report=term-missing`, inspect the exact branch condition, add minimal public-contract test(s), then run focused coverage and full gate (`pytest -q`, `mypy ethscan/ tests/`, `ruff check ethscan/ tests/`, `check_readme.py`). Document and skip if not reachable without contrivance.
+- Pick one small, reachable branch-coverage gap in `ethscan/hash.py` (e.g. investigate arc `589->596` / `592->591` in `format_hash_report_markdown` notes handling). Reproduce with `python3 -m pytest tests/test_hash.py --cov=ethscan.hash --cov-branch --cov-report=term-missing -q`, inspect exact branch conditions, add minimal public-contract test(s) if reachable, then run focused module coverage and full gate (`pytest -q`, `mypy ethscan/ tests/`, `ruff check ethscan/ tests/`, `check_readme.py`). If not reachable without contrivance, document evidence and move to the next specific gap.

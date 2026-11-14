@@ -1,29 +1,25 @@
 # Next Task
 
 ## Status
-Session 174 (Sat Nov 14 2026): closed reachable branch arcs in `ethscan/ftp.py` target normalization and connection-failure handling.
-- Added `tests/test_ftp.py::test_normalize_target_bracket_host_nondigit_port_suffix`
-- Added `tests/test_ftp.py::test_normalize_target_host_nondigit_port_suffix`
-- Added `tests/test_ftp.py::test_run_ftp_connector_failure_leaves_client_unset`
-- `ethscan/ftp.py` branch coverage improved (62 branches, 2 partial remaining: `46->59`, `216->220`).
-- Prior queued task (`ethscan/web.py` arcs in old handoff) was stale: focused check shows `ethscan/web.py` 100% branch coverage (`python3 -m pytest tests/test_web.py --cov=ethscan.web --cov-branch -q`).
+Session 175 (Sat Nov 14 2026): closed remaining branch arcs in `ethscan/mssql.py` `_normalize_target`.
+- Added cases to `tests/test_mssql.py::test_normalize_target` for bracket-without-close host (`[example.com`) and non-digit port suffix (`host:notaport`).
+- `ethscan/mssql.py` is now 100% branch covered by focused check.
 
 ## Baseline (verified this session)
-- `python3 -m pytest -q` → 31986 passed, 146 skipped, 0 failed.
-- `python3 -m pytest tests/test_ftp.py tests/test_ftp_hostile_sweep.py --cov=ethscan.ftp --cov-branch -q` → 85 passed, 99% branch on `ethscan/ftp.py` (missing/partial: `46->59, 216->220`).
-- `python3 -m pytest tests/test_web.py --cov=ethscan.web --cov-branch -q` → 88 passed, 100% branch on `ethscan/web.py`.
+- `python3 -m pytest -q` → 31986 passed, 146 skipped, 0 failed (1 existing warning).
+- `python3 -m pytest tests/test_mssql.py --cov=ethscan.mssql --cov-branch -q` → 90 passed, 100% branch on `ethscan/mssql.py`.
 - `python3 -m mypy ethscan/ tests/` → Success: no issues found in 236 source files.
 - `python3 -m ruff check ethscan/ tests/` → All checks passed.
 - `python3 check_readme.py` → 54/54, README and CLI in sync.
 
 ## Blockers
 - None.
-- `tests/test_ftp.py` changes are uncommitted (no commit without explicit request).
+- `tests/test_mssql.py` changes are uncommitted (no commit without explicit request).
 
 ## Approaches already tried / ruled out
-- `ethscan/ftp.py` `46->59`: exercised `[]:21` (empty bracket host, `bracket_end <= 0`) via `_normalize_target` raising `TargetSpecError`; branch path taken but coverage still reports partial arc — investigate exact condition/arc semantics before adding contrived cases.
-- `ethscan/ftp.py` `216->220`: exercised `client is None` at `finally` by making connector raise before assignment (caught and returned inside try/finally); arc remains partial — likely needs complementary path exercising `client is not None` close suppression in same coverage context or is structurally hard; do not add contrived production changes.
+- `ethscan/mssql.py` `219->230`, `226->230`: closed via public `_normalize_target` inputs; no production changes needed.
+- `ethscan/web.py` already 100% branch covered (stale prior queued target).
 - `oracle`/`postgresql` empty-target handling intentionally out of scope per documented contract.
 
 ## Next task
-- Pick the next highest-value small branch-coverage gap outside `web.py` (already 100%). Suggested: inspect `ethscan/hash.py` partial `589->596` or `ethscan/mssql.py` `226->230` via `python3 -m pytest --cov=ethscan --cov-branch --cov-report=term-missing -q` and targeted module tests. Reproduce the specific arc, add a minimal public-contract test if reachable, then run focused module coverage and full gate (`pytest -q`, `mypy ethscan/ tests/`, `ruff check ethscan/ tests/`, `check_readme.py`). If an arc is not reachable without contrivance, document evidence and move to the next module.
+- Target a small, reachable coverage gap in `ethscan/hash.py`. Focused run: `python3 -m pytest tests/test_hash.py --cov=ethscan.hash --cov-branch --cov-report=term-missing -q` → 128 passed, 97% branch; reported `589->596, 592->591, 602, 652, 684, 690` plus misses (553, 576). Inspect `format_hash_report_markdown` notes iteration/guard conditions around 586-596 and add minimal public-contract test(s) to exercise reachable branches (e.g. non-empty `notes` list with non-scalar/None filtering behavior if contract allows). Run focused coverage and full gate (`pytest -q`, `mypy ethscan/ tests/`, `ruff check ethscan/ tests/`, `check_readme.py`). Document and move on if any arc is unreachable without contrivance.
