@@ -778,3 +778,17 @@ def test_format_validate_report_markdown_non_dict_data() -> None:
     output = format_validate_report_markdown(cast(Any, "not a dict"))
     assert "# ethscan Validate Report" in output
     assert "## Summary" in output
+
+
+def test_run_validate_port_result_with_non_list_ports(monkeypatch) -> None:
+    # Arc 253->251: a port result whose "ports" value is not a list is skipped
+    # by the isinstance guard in run_validate's all_ports update loop.
+    import ethscan.validate as v
+
+    def fake(spec: str) -> dict[str, object]:
+        return {"spec": spec, "valid": True, "ports": "not-a-list", "count": 0, "error": None}
+
+    monkeypatch.setattr(v, "_validate_port_spec", fake)
+    result = v.run_validate(ports="x")
+    assert result["summary"]["ports_total"] == 0
+    assert result["summary"]["ports_specified"] == 1
