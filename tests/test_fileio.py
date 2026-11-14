@@ -250,6 +250,31 @@ def test_write_json_atomicity_on_failure(tmp_path) -> None:
     assert leftovers == []
 
 
+def test_load_json_tracks_the_shallowest_opening_bracket(tmp_path) -> None:
+    """A bracket that opens at or below the deepest level is still counted.
+
+    The depth guard walks every character and only bumps ``max_depth`` when a
+    bracket opens deeper than any seen so far; a bracket that opens at the
+    current depth must not be skipped.
+    """
+    path = tmp_path / "file.json"
+    path.write_text('[[1], [2]]')
+    assert load_json(str(path)) == [[1], [2]]
+
+
+def test_load_json_ignores_a_closing_bracket_that_overflows_depth(tmp_path) -> None:
+    """A stray closing bracket at depth zero is ignored by the guard.
+
+    The guard only decrements depth when it is positive, so an unbalanced
+    closer does not drive depth negative; the file is then rejected by the
+    JSON parser as unusable.
+    """
+    path = tmp_path / "file.json"
+    path.write_text("]")
+    with pytest.raises(ValueError):
+        load_json(str(path))
+
+
 def test_load_json_converts_a_parser_recursion_error_to_value_error(tmp_path, monkeypatch) -> None:
     """A RecursionError from the JSON parser is reported as an unusable value,
     like broken JSON, instead of leaking a traceback."""
