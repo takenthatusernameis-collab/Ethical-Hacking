@@ -471,3 +471,28 @@ Date: Sun Nov 08 2026 (session 7)
 - Regex is not word-boundary anchored, so a suffix appended to `command` is not caught; only a missing/renamed bullet is (accepted — not an observed drift mode).
 ## Next task
 - None pending. Repository fully green. `oracle`/`postgresql` empty-target handling remains intentionally out of scope.
+
+# Session (Sat Nov 14 2026, session 167)
+## This session
+- No queued assignment (session 166 left "none pending", repo green). Inspected the repo and selected a bounded, evidence-based task: close the last 3 uncovered statements in `ethscan/` to reach 100% statement coverage and prove the defensive guards are exercised.
+- Environment note: dev deps are NOT preinstalled. Ran `python -m pip install -e ".[dev,dns]"` first; also installed `pytest-cov`/`coverage` (measurement only, not a project dep).
+- Re-verified baseline (not trusted): `pytest -q` → 31930 passed, 146 skipped, 0 failed; `mypy ethscan/ tests/` clean (236 files); `ruff check` clean; `check_readme.py` 54/54.
+- `pytest --cov=ethscan --cov-report=term-missing` showed 99% with exactly 3 missing statements: `ethscan/dns.py:241` (record value `None`), `ethscan/smb.py:876` (non-list `capability_flags`), `ethscan/smb.py:892` (non-list `notes`).
+- Added two tests only (no production code):
+  - `tests/test_dns.py::test_format_dns_report_markdown_none_record_values` — `records={"A": None}` → `*No records found*`.
+  - `tests/test_smb_hostile_sweep.py::test_smb2_scalar_capabilities_and_notes_do_not_raise` — scalar `capability_flags`/`notes` → `- **Capabilities:** none`, no `- **Note:**`.
+## Verification
+- Targeted run of the two new tests → 2 passed.
+- Targeted coverage (`test_dns.py test_smb.py test_smb_hostile_sweep.py --cov=ethscan.dns --cov=ethscan.smb`) → `ethscan/smb.py` 100%; `ethscan/dns.py:241` no longer missing.
+- Full suite with coverage → `31932 passed, 146 skipped, 0 failed`; TOTAL 15534 stmts, 0 miss, 100%.
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 236 source files.
+- `python -m ruff check ethscan/ tests/` → All checks passed.
+- `python3 check_readme.py` → 54/54, README and CLI in sync.
+- `git status` → only the two test files modified (29 insertions); no production code, no stray files (`.coverage` gitignored).
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- Adding `--cov-fail-under=100` to `pyproject.toml`: rejected — `pytest-cov` is not a project dep and would break plain `pytest` elsewhere. Coverage is measured manually.
+- Duplicate/looser dns test: avoided; the new test targets the exact `values is None` branch.
+## Next task
+- None required. Repository fully green: 31932 passed, 146 skipped, 0 failed; mypy/ruff clean; README in sync; 100% statement coverage of `ethscan/`. `oracle`/`postgresql` empty-target handling remains intentionally out of scope. If future work is needed, pick one bounded, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls.

@@ -1,29 +1,34 @@
 # Handoff
-Date: Sat Nov 14 2026 (session 166)
+Date: Sat Nov 14 2026 (session 167)
 
 ## This session
-- No prior agent assignment existed (HANDOFF_NEXT/NEXT_TASK from session 165 said no further task; repo was clean/green at baseline: 31927 passed, 146 skipped, 0 failed; mypy/ruff clean; README in sync). Inspected the repo and selected a bounded, durable reliability improvement.
-- Environment note: dev dependencies (pytest, mypy, ruff, dnspython) were NOT installed in this checkout. Installed with `python -m pip install -e ".[dev,dns]"` before verifying anything. The next session must do the same before trusting any tool result.
-- Confirmed the baseline claim empirically (not just trusted): full suite 31927 passed / 146 skipped / 0 failed; `mypy ethscan/ tests/` clean (235 files); `ruff check` clean; `check_readme.py` in sync (54/54).
-- Finding: `check_readme.py` (command presence check) was a manual, untested script. README/CLI drift had already recurred in at least 5 prior sessions (TASK.md sessions 43, 44, 55, 61, 68: phantom options, missing options, wrong exit-code docs, wrong command names). Nothing in the test suite prevented a command from being registered in the CLI but never documented in README (or a README bullet naming a command that no longer exists).
-- Added `tests/test_readme_sync.py` (new file, +79 lines): a deterministic regression guard. It parses README command bullets with the same regex as `check_readme.py` (`^-\s+\*\*[^:]+:\s+`([a-z0-9]+)`\s+command`) and compares the set against `ethscan.cli.cli.commands` programmatically (no subprocess). Three tests: (1) every CLI command has a README bullet, (2) README has no unknown commands, (3) a parser-sanity guard (parser finds >=50 and the same count as the CLI) so the check can never silently become vacuous.
-- No production code changed; purely a test addition, fully reversible. Only `tests/test_readme_sync.py` added (untracked).
+- No queued assignment (session 166 left "none pending", repo green). Inspected the repo and selected a bounded, evidence-based task: close the last 3 uncovered lines in `ethscan/` to reach 100% statement coverage, and prove the defensive guards are exercised.
+- Environment note: dev deps are NOT preinstalled in this checkout. Ran `python -m pip install -e ".[dev,dns]"` first. Also installed `pytest-cov`/`coverage` (only needed for the coverage measurement; not added to project deps).
+- Baseline (re-verified, not trusted): `pytest -q` → 31930 passed, 146 skipped, 0 failed; `mypy ethscan/ tests/` clean (236 files); `ruff check` clean; `check_readme.py` 54/54.
+- Coverage measurement (`pytest --cov=ethscan --cov-report=term-missing`) showed the entire package at 99% with exactly 3 missing statements:
+  - `ethscan/dns.py:241` — `values = []` when a record value is `None`.
+  - `ethscan/smb.py:876` — `caps = []` when `capability_flags` is not a list/tuple.
+  - `ethscan/smb.py:892` — `notes = []` when `notes` is not a list/tuple.
+- Added two tests (only test files changed; no production code):
+  - `tests/test_dns.py::test_format_dns_report_markdown_none_record_values` — `records={"A": None}` → asserts `*No records found*`.
+  - `tests/test_smb_hostile_sweep.py::test_smb2_scalar_capabilities_and_notes_do_not_raise` — scalar `capability_flags`/`notes` → asserts `- **Capabilities:** none` and no `- **Note:**`.
+- These are real guard branches that previously had no test; the tests confirm the normalization behavior, not just line execution.
 
 ## Verification
-- `python -m pytest tests/test_readme_sync.py -q` → 3 passed.
-- Negative test (proving the guard bites, not just passes on green): deleted the entire `- **Wi-Fi reconnaissance: `wifi` command ...` bullet from README → 2 of 3 tests failed (`test_readme_documents_every_cli_command`: missing `wifi`; count check 53 vs 54). Restored README via `cp /tmp/README.bak README.md`; `git diff README.md` empty afterwards. (A looser mutation that only appended a suffix to `command` did NOT trip the regex, because `\s+command` is not word-boundary anchored — this is acceptable; the realistic drift is a missing/renamed bullet, which is caught.)
-- `python -m pytest -q` → 31930 passed, 146 skipped, 1 warning, 0 failed (baseline 31927; +3 new tests).
+- `python -m pytest tests/test_dns.py::test_format_dns_report_markdown_none_record_values tests/test_smb_hostile_sweep.py::test_smb2_scalar_capabilities_and_notes_do_not_raise -q` → 2 passed.
+- Targeted coverage (`test_dns.py test_smb.py test_smb_hostile_sweep.py --cov=ethscan.dns --cov=ethscan.smb`) → `ethscan/smb.py` 100%; `ethscan/dns.py` line 241 no longer missing.
+- Full suite with coverage: `31932 passed, 146 skipped, 0 failed`; `TOTAL 15534 stmts, 0 miss, 100%`.
 - `python -m mypy ethscan/ tests/` → Success: no issues found in 236 source files.
 - `python -m ruff check ethscan/ tests/` → All checks passed.
-- `python3 check_readme.py` → 54/54, README and CLI in sync (no drift).
+- `python3 check_readme.py` → 54/54, README and CLI in sync.
+- `git status` → only `tests/test_dns.py` and `tests/test_smb_hostile_sweep.py` modified (29 insertions). No production code, no stray files (`.coverage` is gitignored).
 
 ## Blockers
 - None.
 
 ## Approaches already tried / ruled out
-- Do not trust handoff tool-result numbers without re-running: this checkout started with no pytest/mypy/ruff installed (`No module named pytest`). Install dev deps first.
-- Comparing every README *option* against `--help` was rejected as too brittle/slow for a permanent test; command-presence is exact and catches the most damaging drift.
-- The regex is not word-boundary anchored, so a bullet that merely appends characters to `command` is not caught; only a truly missing/renamed bullet is. Accepted: the observed drift is always a missing or misnamed command bullet, not a suffix.
+- Adding a `--cov-fail-under=100` gate to `pyproject.toml` was rejected: `pytest-cov` is not a project dependency, so a coverage addopt would break a plain `pytest` run in any environment without the plugin. Coverage is measured manually, not enforced.
+- A looser/duplicate dns test was avoided; the new test targets the exact `values is None` branch rather than re-testing the already-covered empty-records path.
 
 ## Next task
-- None pending. Repository is fully green (31930 passed, 146 skipped, 0 failed). `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error). If future work is needed, pick a single bounded, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.
+- None required. Repository is fully green: 31932 passed, 146 skipped, 0 failed; mypy/ruff clean; README in sync; 100% statement coverage of `ethscan/`. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract. If future work is needed, pick one bounded, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls.

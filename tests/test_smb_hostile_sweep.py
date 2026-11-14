@@ -139,6 +139,22 @@ def test_smb2_hostile_shapes_do_not_raise() -> None:
         assert isinstance(csv_out, str)
 
 
+def test_smb2_scalar_capabilities_and_notes_do_not_raise() -> None:
+    """Non-list ``capability_flags``/``notes`` normalize to empty lists."""
+    smb2 = {
+        "accessible": True,
+        "dialect": "SMB 3.1.1",
+        "capability_flags": "not-a-list",
+        "notes": "not-a-list",
+    }
+    payload = {"accessible": True, "smb2": smb2}
+    md_out = format_smb_report_markdown(payload)
+    csv_out = format_smb_report_csv(payload)
+    assert "- **Capabilities:** none" in md_out
+    assert "- **Note:**" not in md_out
+    assert isinstance(csv_out, str)
+
+
 # ---------------------------------------------------------------------------
 # Hostile ``raw_preview`` shapes in the report formatters
 # ---------------------------------------------------------------------------
