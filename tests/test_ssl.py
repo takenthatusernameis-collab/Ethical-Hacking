@@ -4,6 +4,7 @@
 import ssl
 
 from ethscan.ssl import (
+    _estimate_key_size,
     _normalize_host,
     _parse_cert,
     _rdn_to_str,
@@ -100,6 +101,17 @@ def test_parse_cert_non_dict() -> None:
     assert parsed["not_after"] is None
     assert parsed["signature_algorithm"] is None
     assert parsed["key_size"] is None
+
+
+def test_estimate_key_size_falsy_size() -> None:
+    # dict with no usable bits/size: falsy size takes the 46->51 arc and
+    # the else: return None branch.
+    assert _estimate_key_size({}) is None
+    assert _estimate_key_size({"size": 0}) is None
+    assert _estimate_key_size({"bits": 0, "size": 0}) is None
+    # non-dict input falls through to the same else branch.
+    assert _estimate_key_size(None) is None
+    assert _estimate_key_size("not a key") is None
 
 
 def test_format_ssl_report_json() -> None:
@@ -500,6 +512,22 @@ def test_inspect_certificate_no_cert(monkeypatch):
     monkeypatch.setattr(_sslmod, '_wrap_socket', lambda ctx,h,p,t: (None, None, 0))
     res = _sslmod.inspect_certificate('x.com')
     assert res['cert'] is None
+
+
+def test_inspect_certificate_missing_not_after(monkeypatch):
+    from ethscan import ssl as _sslmod
+    # cert is present but carries no notAfter: skips the expiry block
+    # (arc 247->263), leaving days_remaining None and valid False.
+    monkeypatch.setattr(
+        _sslmod,
+        '_wrap_socket',
+        lambda ctx, h, p, t: (None, {'subject': ((('commonName', 'x.com'),),)}, 1),
+    )
+    res = _sslmod.inspect_certificate('x.com')
+    assert res['error'] is None
+    assert res['cert'] is not None
+    assert res['days_remaining'] is None
+    assert res['valid'] is False
 
 
 def test_inspect_certificate_generic_error(monkeypatch):
