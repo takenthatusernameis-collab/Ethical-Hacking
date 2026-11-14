@@ -212,6 +212,22 @@ def test_normalize_target_ipv6_url() -> None:
     assert port == DEFAULT_PORT
 
 
+def test_normalize_target_bracket_host_nondigit_port_suffix() -> None:
+    # bracketed host:port form but port part not digits -> keep literal target
+    host, port = _normalize_target("[::1]:notaport")
+    assert host == "[::1]:notaport"
+    assert port == DEFAULT_PORT
+    # bracket_end <= 0 path: empty host inside brackets remains unparsable
+    with pytest.raises(ValueError):
+        _normalize_target("[]:21")
+
+
+def test_normalize_target_host_nondigit_port_suffix() -> None:
+    host, port = _normalize_target("host:abc")
+    assert host == "host:abc"
+    assert port == DEFAULT_PORT
+
+
 # ---------------------------------------------------------------------------
 # _connect
 # ---------------------------------------------------------------------------
@@ -356,6 +372,15 @@ def test_run_ftp_connection_refused() -> None:
     assert result["anonymous_login"] is None
     assert result["error"] is not None
     assert "connection failed" in result["error"]
+
+
+def test_run_ftp_connector_failure_leaves_client_unset() -> None:
+    def bad_connector() -> None:
+        raise RuntimeError("connector boom")
+
+    result = run_ftp("ftp.example.com", connector=bad_connector)
+    assert result["connected"] is False
+    assert result["error"] == "connection failed: connector boom"
 
 
 def test_run_ftp_connection_timeout() -> None:

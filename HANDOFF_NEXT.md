@@ -1,16 +1,18 @@
 # Handoff
-Date: Sat Nov 14 2026 (session 173)
+Date: Sat Nov 14 2026 (session 174)
 
 ## This session
-- Executed the queued next task from session 172: close branch arc `307->320` in `ethscan/web.py` (`if not_after:` False path when a peer certificate has no `notAfter` field).
-- Reproduced by inspecting `ethscan/web.py:307-320` and `tests/test_web.py` (existing `notAfter` mocks at ~288/340/1260). The arc is reachable via the public helper by mocking `getpeercert()` to return a cert dict without `notAfter`.
-- Added `tests/test_web.py::test_check_ssl_cert_missing_not_after` (cert dict without `notAfter`): asserts `not_after is None`, `days_remaining is None`, `valid is False`, `error is None` (matching initial result defaults; the `if not_after:` block is skipped).
-- Restored `tests/test_web.py::test_check_ssl_cert_invalid_date_format` which was accidentally truncated during edit; its behavior/intent unchanged (unparseable `notAfter` sets `valid` False).
-- No production code changed. `tests/test_web.py` (+1 net test) is uncommitted (standing instruction).
+- Executed queued task context from session 173 (`ethscan/web.py` branch arcs). Reproduced with `python3 -m pytest tests/test_web.py --cov=ethscan.web --cov-branch --cov-report=term-missing -q` and confirmed `ethscan/web.py` is already 100% branch covered (88 passed); prior handoff arc list was stale/no longer present.
+- Selected and completed a bounded alternative: improved `ethscan/ftp.py` branch coverage with minimal public-contract tests in `tests/test_ftp.py`:
+  - `test_normalize_target_bracket_host_nondigit_port_suffix`: bracket `host:port` with non-digit port keeps literal target/default port; `[]:21` exercises empty-bracket parse failure.
+  - `test_normalize_target_host_nondigit_port_suffix`: non-bracket host with non-digit suffix keeps literal target/default port.
+  - `test_run_ftp_connector_failure_leaves_client_unset`: connector raises before client assignment; error reported and `finally` runs with unset client.
+- No production code changed.
 
 ## Verification
-- `python3 -m pytest tests/test_web.py --cov=ethscan.web --cov-branch --cov-report=term-missing -q` → 81 passed; `ethscan/web.py` 97% branch (290 stmts, 3 miss, 114 branches, 10 partial; arc `307->320` no longer listed). Remaining partials: `421->420, 443->445, 445->447, 447->449, 449->451, 464, 479->482, 483->487, 493` plus misses `388`.
-- `python3 -m pytest -q` → 31976 passed, 146 skipped, 0 failed (baseline 31975; +1).
+- `python3 -m pytest tests/test_ftp.py tests/test_ftp_hostile_sweep.py --cov=ethscan.ftp --cov-branch --cov-report=term-missing -q` → 85 passed; `ethscan/ftp.py` 99% branch (181 stmts, 62 branches, 2 partial: `46->59, 216->220`).
+- `python3 -m pytest tests/test_web.py --cov=ethscan.web --cov-branch -q` → 88 passed; `ethscan/web.py` 100% branch.
+- `python3 -m pytest -q` → 31986 passed, 146 skipped, 0 failed.
 - `python3 -m mypy ethscan/ tests/` → Success: no issues found in 236 source files.
 - `python3 -m ruff check ethscan/ tests/` → All checks passed.
 - `python3 check_readme.py` → 54/54, README and CLI in sync.
@@ -19,12 +21,14 @@ Date: Sat Nov 14 2026 (session 173)
 - None.
 
 ## Changes left uncommitted
-- `tests/test_web.py` (added `test_check_ssl_cert_missing_not_after`, restored `test_check_ssl_cert_invalid_date_format`) — uncommitted.
+- `tests/test_ftp.py` (+3 tests) — uncommitted.
+- `HANDOFF_NEXT.md`, `NEXT_TASK.md` updated for this handoff.
 
 ## Approaches already tried / ruled out
-- Initially asserted `'days_remaining' not in result` / `'valid' not in result` for the missing-`notAfter` case, but `check_ssl_configuration` initializes these keys (`None`/`False`) and only overwrites on the `if not_after:` path; corrected assertions to match actual contract.
-- Per-module branch-arc closure remains the right bounded granularity (do not attempt all remaining arcs in one session).
-- `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract.
+- `web.py` partial-arc closure task from prior handoff: not actionable; module already 100% branch covered in current tree.
+- `ethscan/ftp.py` `46->59`: `[]:21` exercises `bracket_end <= 0` path but arc still reported partial by coverage; needs precise arc-condition analysis before further attempts.
+- `ethscan/ftp.py` `216->220`: connector-failure path exercised `client is None` in `finally`; arc still partial (likely missing complementary taken/not-taken context) — avoid contrived production edits.
+- `oracle`/`postgresql` empty-target handling intentionally out of scope per documented contract.
 
 ## Next task
-- Close the next reachable branch arcs in `ethscan/web.py` with a small, bounded set of tests. Reproduce first: `python3 -m pytest tests/test_web.py --cov=ethscan.web --cov-branch --cov-report=term-missing -q` shows partials `421->420` (`run_web_checks`: loop/branch over `checks`), `443->445, 445->447, 447->449, 449->451` (sequential check dispatch branches), `464`, `479->482, 483->487, 493` (result/formatting paths). Pick the simplest reachable arc (inspect code and existing tests around those lines), add minimal tests in `tests/test_web.py`, then run the focused coverage command and full gate (`pytest -q`, `mypy ethscan/ tests/`, `ruff check ethscan/ tests/`, `check_readme.py`). If an arc is not reachable via the public helper/CLI contract, document evidence and pick the next module instead of contrived tests.
+- Close one small, reachable branch-coverage gap in another module (e.g. `ethscan/hash.py` arc `589->596` or `ethscan/mssql.py` arc `226->230`). Reproduce with focused `--cov=<module> --cov-branch --cov-report=term-missing`, inspect the exact branch condition, add minimal public-contract test(s), then run focused coverage and full gate (`pytest -q`, `mypy ethscan/ tests/`, `ruff check ethscan/ tests/`, `check_readme.py`). Document and skip if not reachable without contrivance.
