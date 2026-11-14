@@ -38,7 +38,15 @@ def _normalize_host(target: str) -> str:
 def _fmt_rtt(rtt_ms: float | None) -> str:
     if rtt_ms is None:
         return "N/A"
-    return f"{rtt_ms:.2f}ms"
+    if isinstance(rtt_ms, bool):
+        return "N/A"
+    if isinstance(rtt_ms, (int, float)):
+        return f"{rtt_ms:.2f}ms"
+    if isinstance(rtt_ms, str):
+        with contextlib.suppress(TypeError, ValueError):
+            return f"{float(rtt_ms):.2f}ms"
+        return "N/A"
+    return "N/A"
 
 
 def _probe_once(dst_ip: str, port: int, ttl: int, timeout: float) -> dict[str, Any]:
