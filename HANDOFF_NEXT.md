@@ -1,34 +1,29 @@
 # Handoff
-Date: Sat Nov 14 2026 (session 165)
+Date: Sat Nov 14 2026 (session 166)
 
 ## This session
-- No prior agent assignment existed (HANDOFF_NEXT/NEXT_TASK from session 164 said no further task; repo was clean/green at baseline: 15442 passed, 146 skipped, 0 failed). Inspected the repo and selected a bounded formatter-robustness task.
-- Added a per-field hostile contract test `test_formatter_survives_hostile_report_field` to `tests/test_all_formatters_hostile_contract.py`: injects a single hostile field into an otherwise-valid report dict (`_VALID_REPORT`) across all 157 single-argument formatters × 15 fields × 7 hostile values, asserting `str` return and parseable JSON for `*_report_json` variants. Complements the existing top-level hostile sweep (`test_formatter_survives_hostile_input`) by exercising code paths that only activate once the formatter decides to render a real report.
-- Added module-level constants `_VALID_REPORT` and `_HOSTILE_FIELD_VALUES`.
-- No production code changed; purely test addition, fully reversible. Only `tests/test_all_formatters_hostile_contract.py` modified (+58 lines).
+- No prior agent assignment existed (HANDOFF_NEXT/NEXT_TASK from session 165 said no further task; repo was clean/green at baseline: 31927 passed, 146 skipped, 0 failed; mypy/ruff clean; README in sync). Inspected the repo and selected a bounded, durable reliability improvement.
+- Environment note: dev dependencies (pytest, mypy, ruff, dnspython) were NOT installed in this checkout. Installed with `python -m pip install -e ".[dev,dns]"` before verifying anything. The next session must do the same before trusting any tool result.
+- Confirmed the baseline claim empirically (not just trusted): full suite 31927 passed / 146 skipped / 0 failed; `mypy ethscan/ tests/` clean (235 files); `ruff check` clean; `check_readme.py` in sync (54/54).
+- Finding: `check_readme.py` (command presence check) was a manual, untested script. README/CLI drift had already recurred in at least 5 prior sessions (TASK.md sessions 43, 44, 55, 61, 68: phantom options, missing options, wrong exit-code docs, wrong command names). Nothing in the test suite prevented a command from being registered in the CLI but never documented in README (or a README bullet naming a command that no longer exists).
+- Added `tests/test_readme_sync.py` (new file, +79 lines): a deterministic regression guard. It parses README command bullets with the same regex as `check_readme.py` (`^-\s+\*\*[^:]+:\s+`([a-z0-9]+)`\s+command`) and compares the set against `ethscan.cli.cli.commands` programmatically (no subprocess). Three tests: (1) every CLI command has a README bullet, (2) README has no unknown commands, (3) a parser-sanity guard (parser finds >=50 and the same count as the CLI) so the check can never silently become vacuous.
+- No production code changed; purely a test addition, fully reversible. Only `tests/test_readme_sync.py` added (untracked).
 
 ## Verification
-- Focused: `python -m pytest tests/test_all_formatters_hostile_contract.py -q` → 18685 passed (was 2200; +16485 = 157×15×7 new cases).
-- Full: `python -m pytest -q` → 31927 passed, 146 skipped, 1 warning, 0 failed (baseline was 15442 passed, 146 skipped, 1 warning; +16485 tests).
-- `python -m mypy tests/test_all_formatters_hostile_contract.py --follow-imports=skip` → Success.
-- `python -m ruff check tests/test_all_formatters_hostile_contract.py` → All checks passed.
-- `python -m mypy ethscan/ tests/` → Success: no issues found.
+- `python -m pytest tests/test_readme_sync.py -q` → 3 passed.
+- Negative test (proving the guard bites, not just passes on green): deleted the entire `- **Wi-Fi reconnaissance: `wifi` command ...` bullet from README → 2 of 3 tests failed (`test_readme_documents_every_cli_command`: missing `wifi`; count check 53 vs 54). Restored README via `cp /tmp/README.bak README.md`; `git diff README.md` empty afterwards. (A looser mutation that only appended a suffix to `command` did NOT trip the regex, because `\s+command` is not word-boundary anchored — this is acceptable; the realistic drift is a missing/renamed bullet, which is caught.)
+- `python -m pytest -q` → 31930 passed, 146 skipped, 1 warning, 0 failed (baseline 31927; +3 new tests).
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 236 source files.
 - `python -m ruff check ethscan/ tests/` → All checks passed.
-- `python3 check_readme.py` → 54 CLI commands, README and CLI in sync (no drift).
-- Pre-fuzz due diligence: single-field (23,550 calls), multi-field (593,490 calls), and `nmap` `NMapResult` hostile injection → 0 crashes across ~617k calls; formatters already defensive, so no production fix was needed.
+- `python3 check_readme.py` → 54/54, README and CLI in sync (no drift).
 
 ## Blockers
 - None.
 
-## Campaign status
-- Discovery covers 53 formatter modules and 157 single-argument formatters; 3 `ethscan.passwords.format_audit_report_*` remain in the documented non-standard allowlist.
-- Every discovered single-argument formatter survives the hostile matrix and per-field hostile injection, returns `str`, emits parseable JSON for `*_report_json` variants, does not mutate input, and is deterministic.
-
 ## Approaches already tried / ruled out
-- Per-field and multi-field hostile fuzzing across all formatters: 0 crashes (~617k calls). Not a fixable finding — formatters are already defensive. No source change warranted.
-- Asserting every `*_report_json` output is a top-level JSON object is too strict: hostile non-mapping input renders as a parseable JSON string, which is the documented contract.
-- `oracle`/`postgresql` empty-target handling remains intentionally out of scope (exit 0, in-band error).
-- Extreme Python edge cases (circular refs, unstringifiable objects, non-str dict keys) remain out of scope (not realistic parser outputs).
+- Do not trust handoff tool-result numbers without re-running: this checkout started with no pytest/mypy/ruff installed (`No module named pytest`). Install dev deps first.
+- Comparing every README *option* against `--help` was rejected as too brittle/slow for a permanent test; command-presence is exact and catches the most damaging drift.
+- The regex is not word-boundary anchored, so a bullet that merely appends characters to `command` is not caught; only a truly missing/renamed bullet is. Accepted: the observed drift is always a missing or misnamed command bullet, not a suffix.
 
 ## Next task
-None queued. The per-field hostile contract test is complete and fully verified. The repo is in a clean, green state (31927 passed, 146 skipped, 0 failed). If starting a new session, the repo requires no further work; `oracle`/`postgresql` empty-target handling remains intentionally out of scope unless a task asks to change it.
+- None pending. Repository is fully green (31930 passed, 146 skipped, 0 failed). `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error). If future work is needed, pick a single bounded, verifiable improvement and reproduce it first — do not speculate or weaken safety controls.

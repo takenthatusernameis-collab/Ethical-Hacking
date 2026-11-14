@@ -452,3 +452,22 @@ Date: Sun Nov 08 2026 (session 7)
 - Per-key hostile sweep on this batch: no crash reproduces; not a fixable finding. Do not speculate or add unneeded guards.
 ## Next task
 - None pending. Repository is fully green. The pending hostile-sweep batch is complete (no crashes found). If future work is needed, pick a single bounded, verifiable improvement and reproduce it first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
+
+# Session (Sat Nov 14 2026, session 166)
+## This session
+- No prior agent assignment existed (session 165 left no queued task). Inspected the repo, installed missing dev deps (`python -m pip install -e ".[dev,dns]"` — the checkout had no pytest/mypy/ruff), and independently confirmed the baseline: `pytest -q` → 31927 passed, 146 skipped, 0 failed; `mypy ethscan/ tests/` clean (235 files); `ruff check` clean; `check_readme.py` in sync.
+- Found a real, recurring reliability gap: README/CLI command-presence drift was only checked by a manual, untested `check_readme.py`, and had already recurred in prior sessions (43, 44, 55, 61, 68). Added `tests/test_readme_sync.py` — a deterministic guard that parses README command bullets (same regex as the script) and compares against `ethscan.cli.cli.commands` programmatically. Three tests: every CLI command documented; no unknown README commands; parser-sanity guard.
+- No production code changed; purely a test addition, fully reversible.
+## Verification
+- Negative test: removing the whole `wifi` bullet from README failed 2 of 3 tests (missing `wifi`; 53 vs 54); README restored (diff clean).
+- `python -m pytest -q` → 31930 passed, 146 skipped, 1 warning, 0 failed (baseline 31927; +3 new tests).
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 236 source files.
+- `python -m ruff check ethscan/ tests/` → All checks passed.
+- `python3 check_readme.py` → 54/54, README and CLI in sync.
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- Option-level README vs `--help` comparison: too brittle/slow for a permanent test; command presence only.
+- Regex is not word-boundary anchored, so a suffix appended to `command` is not caught; only a missing/renamed bullet is (accepted — not an observed drift mode).
+## Next task
+- None pending. Repository fully green. `oracle`/`postgresql` empty-target handling remains intentionally out of scope.
