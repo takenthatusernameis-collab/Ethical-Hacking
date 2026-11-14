@@ -86,6 +86,31 @@ HOSTILE_MATRIX: list[tuple[str, Any]] = [
     ("all_hostile_fields", ALL_HOSTILE_FIELDS),
 ]
 
+# A minimal valid report exercising the common fields formatters read. Used to
+# inject a single hostile field into an otherwise-valid report, exercising
+# code paths that only activate when some fields are valid (complementary to
+# the "all-fields-hostile" top-level sweep in HOSTILE_MATRIX).
+_VALID_REPORT: dict[str, Any] = {
+    "target": "example.com",
+    "port": 443,
+    "hops": [],
+    "notes": [],
+    "recursive_traces": [],
+    "cves": [],
+    "certificates": [],
+    "results": [],
+    "findings": [],
+    "services": [],
+    "records": {},
+    "entries": [],
+    "items": [],
+    "data": {},
+    "error": None,
+}
+
+# Hostile values most likely to expose type-assumption crashes in formatters.
+_HOSTILE_FIELD_VALUES: list[Any] = [None, 1, "x", [], {}, b"bytes", float("nan")]
+
 
 def _is_report_formatter(attr: str, obj: object) -> bool:
     return (
@@ -181,6 +206,39 @@ def test_formatter_is_pure_and_deterministic(formatter: Formatter) -> None:
     assert value == snapshot, f"{_formatter_id(formatter)} mutated its input"
     second = formatter(value)
     assert first == second, f"{_formatter_id(formatter)} is not deterministic"
+
+
+@pytest.mark.parametrize(
+    "formatter",
+    SINGLE_ARG_FORMATTERS,
+    ids=[_formatter_id(f) for f in SINGLE_ARG_FORMATTERS],
+)
+@pytest.mark.parametrize("field", sorted(_VALID_REPORT), ids=lambda f: f"field={f}")
+@pytest.mark.parametrize(
+    "hostile",
+    _HOSTILE_FIELD_VALUES,
+    ids=lambda h: f"hostile={type(h).__name__}",
+)
+def test_formatter_survives_hostile_report_field(
+    formatter: Formatter, field: str, hostile: Any
+) -> None:
+    """A formatter must not crash or return non-str when one report field is hostile.
+
+    Complements ``test_formatter_survives_hostile_input``: that test passes the
+    hostile value as the *entire* argument (so formatters often short-circuit on
+    a non-dict or all-hostile dict). Here a single field of an otherwise-valid
+    report is hostile, exercising code paths that only activate once the
+    formatter has decided to render a real report.
+    """
+    data = dict(_VALID_REPORT)
+    data[field] = hostile
+    result = formatter(data)
+    assert isinstance(result, str), (
+        f"{_formatter_id(formatter)} returned {type(result).__name__}, not str "
+        f"for field {field!r}={hostile!r}"
+    )
+    if formatter.__name__.endswith("_report_json"):
+        json.loads(result)
 
 
 def test_discovery_finds_expected_formatter_modules() -> None:
