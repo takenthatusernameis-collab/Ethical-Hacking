@@ -1335,3 +1335,89 @@ def test_format_ping_report_markdown_notes_non_list() -> None:
     }
     out = format_ping_report_markdown(data)
     assert "# ethscan Ping Report" in out
+
+
+def test_run_ping_supplied_raw_socket_skips_creation(monkeypatch) -> None:
+    """run_ping uses an explicitly supplied raw socket without creating one."""
+
+    class _SuppliedSocket:
+        def close(self) -> None:
+            pass
+
+    supplied = _SuppliedSocket()
+    created: list[bool] = []
+
+    def mock_probe(
+        host,
+        timeout=2.0,
+        ttl=64,
+        raw_socket=None,
+        identifier=0,
+        sequence=0,
+        payload=b"",
+        resolved_ip=None,
+        port=80,
+    ):
+        assert raw_socket is supplied
+        return {
+            "ip": "10.0.0.1",
+            "rtt_ms": 2.0,
+            "ttl": ttl,
+            "sequence": sequence,
+            "response_type": RESP_ECHO_REPLY,
+            "error": None,
+        }
+
+    def fail_create():
+        created.append(True)
+        raise AssertionError("raw socket must not be created when one is supplied")
+
+    monkeypatch.setattr("ethscan.ping._resolve_host", lambda h: "10.0.0.1")
+    monkeypatch.setattr("ethscan.ping.probe_icmp", mock_probe)
+    monkeypatch.setattr("ethscan.ping._try_create_raw_socket", fail_create)
+
+    result = run_ping("example.com", count=1, timeout=1.0, raw_socket=supplied)
+    assert created == []
+    assert result["raw_socket_available"] is True
+    assert result["successful"] == 1
+    assert result["failed"] == 0
+
+
+def test_run_ping_successful_probe_with_non_numeric_rtt_excluded_from_stats(monkeypatch) -> None:
+    """A successful probe without a numeric rtt_ms contributes no RTT sample."""
+    import ethscan.ping as ping_mod
+
+    def mock_probe(
+        host,
+        timeout=2.0,
+        ttl=64,
+        raw_socket=None,
+        identifier=0,
+        sequence=0,
+        payload=b"",
+        resolved_ip=None,
+        port=80,
+    ):
+        return {
+            "ip": "10.0.0.1",
+            "rtt_ms": None,
+            "ttl": ttl,
+            "sequence": sequence,
+            "response_type": RESP_CONNECTED,
+            "error": None,
+        }
+
+    orig_probe = ping_mod.probe_icmp
+    orig_raw = ping_mod._try_create_raw_socket
+    ping_mod.probe_icmp = mock_probe
+    ping_mod._try_create_raw_socket = lambda: None
+    try:
+        result = run_ping("example.com", count=2, timeout=1.0)
+        assert result["successful"] == 2
+        assert result["failed"] == 0
+        assert result["rtt_min_ms"] is None
+        assert result["rtt_max_ms"] is None
+        assert result["rtt_avg_ms"] is None
+    finally:
+        ping_mod.probe_icmp = orig_probe
+        ping_mod._try_create_raw_socket = orig_raw
