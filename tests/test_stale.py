@@ -125,6 +125,13 @@ class TestResolveCNAME:
         result = resolve_cname("example.com", timeout=1.0)
         assert result is None
 
+    @patch("socket.getaddrinfo")
+    def test_empty_results(self, mock_getaddrinfo):
+        """getaddrinfo returns an empty list (no CNAME, no records)."""
+        mock_getaddrinfo.return_value = []
+        result = resolve_cname("example.com", timeout=1.0)
+        assert result is None
+
     @patch("socket.getaddrinfo", side_effect=socket.gaierror("fail"))
     def test_failure(self, mock_getaddrinfo):
         result = resolve_cname("example.com", timeout=1.0)

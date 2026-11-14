@@ -153,3 +153,30 @@ def test_format_stale_report_csv_well_formed_preserved() -> None:
     assert row[3] == "target.example.com"
     assert row[4] == "true"
     assert row[5] == "IP 1.2.3.4 unreachable"
+
+
+def test_format_stale_report_markdown_non_dict_data() -> None:
+    """Non-dict data is normalized to empty dict."""
+    md = format_stale_report_markdown(cast(Any, "not a dict"))
+    assert isinstance(md, str)
+    assert "ethscan Stale DNS Record Detection Report" in md
+    assert "**Total Checked:** 0" in md
+
+
+def test_format_stale_report_csv_non_dict_data() -> None:
+    """Non-dict data is normalized to empty dict."""
+    csv_text = format_stale_report_csv(cast(Any, "not a dict"))
+    assert isinstance(csv_text, str)
+    lines = csv_text.strip().splitlines()
+    assert lines[0] == "domain,A_records,AAAA_records,CNAME,stale,stale_reasons"
+    assert len(lines) == 1
+
+
+def test_format_stale_report_csv_non_list_results() -> None:
+    """Non-list results is treated as empty."""
+    data = {"results": "not a list"}
+    csv_text = format_stale_report_csv(cast(Any, data))
+    assert isinstance(csv_text, str)
+    lines = csv_text.strip().splitlines()
+    assert lines[0] == "domain,A_records,AAAA_records,CNAME,stale,stale_reasons"
+    assert len(lines) == 1
