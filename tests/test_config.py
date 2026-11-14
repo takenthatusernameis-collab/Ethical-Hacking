@@ -180,6 +180,21 @@ def test_validate_config_clean() -> None:
     assert validate_config({"defaults": {}, "commands": {}}) == []
 
 
+def test_validate_config_no_sections() -> None:
+    """A config with neither section is valid; there is nothing to check."""
+    assert validate_config({}) == []
+
+
+def test_validate_config_defaults_with_no_known_options() -> None:
+    """When no command accepts any option, defaults are left unchecked."""
+    warnings = validate_config(
+        {"defaults": {"timeout": 5.0}},
+        known_commands=[],
+        known_options={"scan": set()},
+    )
+    assert warnings == []
+
+
 def test_validate_config_parse_error() -> None:
     cfg = {"defaults": {}, "commands": {}, "_parse_error": "boom"}
     warnings = validate_config(cfg)
