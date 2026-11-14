@@ -1021,6 +1021,40 @@ def test_run_geo_recursive_exception():
     assert any("recursive hop geolocation failed" in note for note in result["notes"])
 
 
+def test_run_geo_recursive_no_trace_notes():
+    """Cover the branch where trace_result has no notes (254->260)."""
+    with patch("ethscan.geo._resolve_host", return_value="8.8.8.8"), patch(
+        "ethscan.geo._get_cached_or_fetch",
+        return_value={
+            "status": "success",
+            "country": "United States",
+            "cached": False,
+            "offline_fallback": False,
+        },
+    ), patch(
+        "ethscan.trace.run_trace",
+        return_value={
+            "hops": [
+                {
+                    "hop": 1,
+                    "ip": "10.0.0.1",
+                    "host": "router.local",
+                    "response_type": "TTL",
+                    "rtt_avg_ms": 1.5,
+                    "notes": [],
+                },
+            ],
+            "notes": [],
+        },
+    ):
+        result = run_geo("8.8.8.8", timeout=1.0, recursive=True)
+
+    assert result["recursive"] is True
+    assert result["hop_count"] == 1
+    assert result["hops"][0]["ip"] == "10.0.0.1"
+    assert not any("traceroute" in note for note in result["notes"])
+
+
 def test_resolver_failure_of_an_unknown_type_is_reported(monkeypatch) -> None:
     """A resolver that fails with an unknown error type is a failed lookup, not a raise."""
 
