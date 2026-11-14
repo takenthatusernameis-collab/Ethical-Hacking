@@ -50,6 +50,25 @@ HOSTILE_FIELD_DICT: dict[str, Any] = {
     "recursive_traces": [None, {"hops": "x"}],
 }
 
+# A dict whose every common report field holds a hostile value.
+ALL_HOSTILE_FIELDS: dict[str, Any] = {
+    "target": None,
+    "port": "x",
+    "hops": [None, {}],
+    "notes": [1, {}],
+    "recursive_traces": [{"hops": "x"}, []],
+    "cves": [None, {}],
+    "certificates": [None, {}],
+    "results": [None, {}],
+    "findings": [None, {}],
+    "services": [None, {}],
+    "records": [None, {}],
+    "entries": [None, {}],
+    "items": [None, {}],
+    "data": [None, {}],
+    "error": [None, {}],
+}
+
 # (id, value) pairs exercised against every discovered formatter.
 HOSTILE_MATRIX: list[tuple[str, Any]] = [
     ("none", None),
@@ -59,6 +78,12 @@ HOSTILE_MATRIX: list[tuple[str, Any]] = [
     ("bytes", b"bytes"),
     ("empty_dict", {}),
     ("hostile_fields", HOSTILE_FIELD_DICT),
+    ("nan", float("nan")),
+    ("inf", float("inf")),
+    ("neg_inf", float("-inf")),
+    ("deeply_nested_list", [[[[{"a": [1, {"b": [None]}]}]]]]),
+    ("list_of_hostile_dicts", [{"rtt_avg_ms": "x"}, None]),
+    ("all_hostile_fields", ALL_HOSTILE_FIELDS),
 ]
 
 
