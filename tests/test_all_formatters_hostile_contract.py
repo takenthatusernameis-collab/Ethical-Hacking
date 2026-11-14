@@ -8,7 +8,8 @@ single-argument formatter:
 * returns ``str`` for a hostile top-level matrix (``None``, scalars,
   containers, ``bytes`` and a hostile field dict), and
 * never raises, and
-* emits parseable JSON when the formatter is a ``*_report_json`` variant.
+* emits parseable JSON when the formatter is a ``*_report_json`` variant, and
+* does not mutate its input and renders the same input identically twice.
 
 Formatters with non-standard signatures are tracked in an explicit allowlist
 (``ethscan.passwords.format_audit_report_*``) rather than blanket-skipped, and
@@ -17,6 +18,7 @@ silently drop coverage.
 """
 from __future__ import annotations
 
+import copy
 import importlib
 import inspect
 import json
@@ -121,7 +123,7 @@ def _formatter_id(func: Formatter) -> str:
 )
 @pytest.mark.parametrize(
     "value",
-    HOSTILE_MATRIX,
+    [value for _value_id, value in HOSTILE_MATRIX],
     ids=[value_id for value_id, _ in HOSTILE_MATRIX],
 )
 def test_formatter_survives_hostile_input(formatter: Formatter, value: Any) -> None:
@@ -130,7 +132,30 @@ def test_formatter_survives_hostile_input(formatter: Formatter, value: Any) -> N
         f"{_formatter_id(formatter)} returned {type(result).__name__}, not str"
     )
     if formatter.__name__.endswith("_report_json"):
+        # A hostile non-mapping input is rendered as a JSON string; the contract
+        # only requires that the output is parseable JSON.
         json.loads(result)
+
+
+@pytest.mark.parametrize(
+    "formatter",
+    SINGLE_ARG_FORMATTERS,
+    ids=[_formatter_id(f) for f in SINGLE_ARG_FORMATTERS],
+)
+def test_formatter_is_pure_and_deterministic(formatter: Formatter) -> None:
+    """A formatter must not mutate its input and must render it the same twice.
+
+    The report formatters are called once per command, but a formatter that
+    pops or sorts its input would corrupt a caller that reuses the parsed
+    result, and one that depends on dict/set iteration order would produce
+    unstable reports.
+    """
+    value = copy.deepcopy(HOSTILE_FIELD_DICT)
+    snapshot = copy.deepcopy(value)
+    first = formatter(value)
+    assert value == snapshot, f"{_formatter_id(formatter)} mutated its input"
+    second = formatter(value)
+    assert first == second, f"{_formatter_id(formatter)} is not deterministic"
 
 
 def test_discovery_finds_expected_formatter_modules() -> None:
