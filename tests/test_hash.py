@@ -358,6 +358,58 @@ def test_format_hash_report_markdown_multiple_algorithms() -> None:
     assert "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8" in output
 
 
+def test_format_hash_report_markdown_non_dict_data() -> None:
+    output = format_hash_report_markdown(None)
+    assert "Password Hash Report" in output
+    assert "Algorithm:** None" in output
+    assert "Passwords Hashed:** None" in output
+
+
+def test_format_hash_report_markdown_non_dict_entry_in_results() -> None:
+    data = {
+        "algorithm": "md5",
+        "passwords_hashed": 1,
+        "salt": False,
+        "pepper": False,
+        "iterations": None,
+        "salt_value": None,
+        "results": ["not a dict", {"password": "pwd", "algorithm": "md5", "hash": "abc"}],
+        "notes": [],
+    }
+    output = format_hash_report_markdown(data)
+    assert "Password Hash Report" in output
+    assert "pwd" in output
+    assert "abc" in output
+
+
+def test_format_hash_report_markdown_notes_all_invalid_type() -> None:
+    data = run_hash(["password"], "md5")
+    data["notes"] = [None, None, None]
+    output = format_hash_report_markdown(data)
+    assert "## Notes" in output
+    # All notes are None, so no bullet points should be added
+    assert output.count("-") == 0 or "- None" not in output
+
+
+def test_format_hash_report_markdown_note_invalid_type_in_list() -> None:
+    data = run_hash(["password"], "md5")
+    data["notes"] = ["valid note", None, 42]
+    output = format_hash_report_markdown(data)
+    assert "## Notes" in output
+    assert "- valid note" in output
+    assert "- 42" in output
+    # None should be skipped
+    assert "\n- None" not in output
+
+
+def test_format_hash_report_markdown_empty_notes_list() -> None:
+    data = run_hash(["password"], "md5")
+    data["notes"] = []
+    output = format_hash_report_markdown(data)
+    # Empty notes list should not add Notes section
+    assert "## Notes" not in output
+
+
 # ---------------------------------------------------------------------------
 # Password check (run_check)
 # ---------------------------------------------------------------------------
@@ -504,6 +556,14 @@ def test_format_check_report_markdown_no_algorithm() -> None:
     result = run_check("password", "deadbeef")
     output = format_check_report_markdown(result)
     # algorithm is None -> no Algorithm line
+    assert "**Algorithm:**" not in output
+
+
+def test_format_check_report_markdown_non_dict_data() -> None:
+    output = format_check_report_markdown(None)
+    assert "Password Check Report" in output
+    assert "**Password:**" in output
+    assert "**Digest:**" in output
     assert "**Algorithm:**" not in output
 
 
@@ -1180,6 +1240,35 @@ def test_format_check_report_csv_pipe_escaping() -> None:
 
     # With QUOTE_MINIMAL, pipe characters don't require quoting
     assert "pass|word" in output
+
+
+def test_format_hash_report_csv_non_dict_data() -> None:
+    output = format_hash_report_csv(None)
+    lines = output.strip().split("\n")
+    assert lines[0] == "password,digest,algorithm,salt,pepper,iterations,computed,match,error"
+    assert len(lines) == 1  # only header
+
+
+def test_format_hash_report_csv_non_dict_entry_in_results() -> None:
+    data = {
+        "algorithm": "md5",
+        "salt": False,
+        "pepper": False,
+        "iterations": None,
+        "results": ["not a dict", {"password": "pwd", "hash": "abc", "algorithm": "md5", "salt": False, "pepper": False, "iterations": None}],
+    }
+    output = format_hash_report_csv(data)
+    lines = output.strip().split("\n")
+    assert len(lines) == 2  # header + 1 valid row
+    assert "pwd" in lines[1]
+    assert "abc" in lines[1]
+
+
+def test_format_check_report_csv_non_dict_data() -> None:
+    output = format_check_report_csv(None)
+    lines = output.strip().split("\n")
+    assert lines[0] == "password,digest,algorithm,salt,pepper,iterations,computed,match,error"
+    assert len(lines) == 1  # only header
 
 
 # ---------------------------------------------------------------------------
