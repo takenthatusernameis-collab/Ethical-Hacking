@@ -1349,6 +1349,33 @@ def test_format_web_report_markdown_with_notes() -> None:
     assert 'Some extra context' in output
 
 
+def test_format_web_report_markdown_non_dict_input() -> None:
+    """Non-dict input is normalized to empty dict (line 388)."""
+    output = format_web_report_markdown("not a dict")  # type: ignore[arg-type]
+    assert "# ethscan Web Security Report" in output
+    assert "- **Target:** " in output
+
+
+def test_format_web_report_markdown_information_disclosure_non_dict_finding() -> None:
+    """Non-dict finding in information_disclosure is skipped (line 421)."""
+    data = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "information_disclosure": [
+            {"header": "Server", "value": "Apache", "description": "Server header"},
+            "not a dict",
+            123,
+            None,
+        ],
+    }
+    output = format_web_report_markdown(data)
+    assert "## Information Disclosure" in output
+    assert "Apache" in output
+    assert "not a dict" not in output
+
+
 def test_format_web_report_markdown_with_error() -> None:
     """Test top-level error renders in markdown report."""
     data = {
@@ -1362,6 +1389,46 @@ def test_format_web_report_markdown_with_error() -> None:
     assert '**Error:** Connection refused' in output
 
 
+def test_format_web_report_markdown_ssl_partial_fields() -> None:
+    """Test SSL section with various field combinations (lines 443, 445, 447, 449)."""
+    # Only subject present
+    data = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "ssl": {"valid": True, "subject": "CN=example.com"},
+    }
+    output = format_web_report_markdown(data)
+    assert "## SSL/TLS" in output
+    assert "**Valid:** Yes" in output
+    assert "**Subject:** CN=example.com" in output
+    assert "**Issuer:**" not in output
+    assert "**Expires:**" not in output
+    assert "**Days Remaining:**" not in output
+
+    # Only issuer present
+    data["ssl"] = {"valid": True, "issuer": "Let's Encrypt"}
+    output = format_web_report_markdown(data)
+    assert "**Subject:**" not in output
+    assert "**Issuer:** Let's Encrypt" in output
+
+    # Only not_after present
+    data["ssl"] = {"valid": True, "not_after": "Jan  1 00:00:00 2027 GMT"}
+    output = format_web_report_markdown(data)
+    assert "**Expires:** Jan  1 00:00:00 2027 GMT" in output
+
+    # days_remaining = 0 (falsy but not None)
+    data["ssl"] = {"valid": False, "days_remaining": 0}
+    output = format_web_report_markdown(data)
+    assert "**Days Remaining:** 0" in output
+
+    # days_remaining = None (not rendered)
+    data["ssl"] = {"valid": False, "days_remaining": None}
+    output = format_web_report_markdown(data)
+    assert "**Days Remaining:**" not in output
+
+
 def test_parse_url_rejects_empty_target() -> None:
     import pytest
 
@@ -1370,3 +1437,71 @@ def test_parse_url_rejects_empty_target() -> None:
     for bad in ("", "   ", "https://"):
         with pytest.raises(TargetSpecError, match="Could not parse host from target"):
             _parse_url(bad)
+
+
+# ---------------------------------------------------------------------------
+# CSV formatter additional coverage
+# ---------------------------------------------------------------------------
+
+
+def test_format_web_report_csv_non_dict_input() -> None:
+    """Non-dict input is normalized to empty dict (line 464)."""
+    output = format_web_report_csv("not a dict")  # type: ignore[arg-type]
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+    assert "target," in lines[1]
+
+
+def test_format_web_report_csv_security_headers_non_list() -> None:
+    """security_headers.present/missing not list/tuple are skipped (lines 479, 483)."""
+    data = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "security_headers": {
+            "present": "not a list",
+            "missing": 123,
+        },
+    }
+    output = format_web_report_csv(data)
+    # Header row is written but no data rows
+    assert "security_header,status" in output
+    lines = output.splitlines()
+    header_idx = lines.index("security_header,status")
+    # Should be the last line (no data rows written after header)
+    assert header_idx == len(lines) - 1
+
+
+def test_format_web_report_csv_information_disclosure_non_list() -> None:
+    """information_disclosure not a list is skipped (line 488)."""
+    data = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "information_disclosure": "not a list",
+    }
+    output = format_web_report_csv(data)
+    assert "disclosure_header,value,description" not in output
+
+
+def test_format_web_report_csv_information_disclosure_non_dict_finding() -> None:
+    """Non-dict finding in information_disclosure is skipped (line 493)."""
+    data = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "information_disclosure": [
+            {"header": "Server", "value": "Apache", "description": "Server header"},
+            "not a dict",
+            123,
+            None,
+        ],
+    }
+    output = format_web_report_csv(data)
+    # Should have the valid finding but skip invalid ones
+    assert "Server,Apache,Server header" in output
+    assert "not a dict" not in output
+    assert "123" not in output
