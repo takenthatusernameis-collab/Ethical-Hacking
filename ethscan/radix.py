@@ -534,11 +534,14 @@ def _render_node_md(node: dict[str, object], lines: list[str], depth: int = 0) -
     if not isinstance(children, list):
         children = []
     for child in children:
+        if not isinstance(child, dict):
+            continue
         side = child.get("side", "")
         child_node = child.get("node")
-        if child_node is not None:
-            lines.append(f"{indent}  - {side}:")
-            _render_node_md(child_node, lines, depth + 2)
+        if not isinstance(child_node, dict):
+            continue
+        lines.append(f"{indent}  - {side}:")
+        _render_node_md(child_node, lines, depth + 2)
 
 
 def format_radix_report_markdown(data: Mapping[str, object]) -> str:
@@ -676,6 +679,8 @@ def format_radix_report_csv(data: Mapping[str, object]) -> str:
         if not isinstance(diff, dict):
             diff = {}
         diff_cidrs = diff.get("diff_cidrs", [])
+        if not isinstance(diff_cidrs, list):
+            diff_cidrs = []
         if diff_cidrs:
             diff_cidr = diff_cidrs[0]
 
