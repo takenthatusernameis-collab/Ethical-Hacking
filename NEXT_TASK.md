@@ -1,27 +1,25 @@
 # Next Task
 
 ## Status
-Session complete (Sat Nov 14 2026, session 172): closed the three uncovered branch arcs in `ethscan/config.py`, pushing that module to 100% branch coverage (whole-repo missing arcs 114→111).
-- `tests/test_config.py::test_validate_config_no_sections` covers `validate_config({})` (arcs `292->310` and `310->336`).
-- `tests/test_config.py::test_validate_config_defaults_with_no_known_options` covers a truthy `known_options` mapping whose union of accepted options is empty (arc `302->310`).
+Session 173 (Sat Nov 14 2026): closed branch arc `307->320` in `ethscan/web.py` (`if not_after:` False path).
+- Added `tests/test_web.py::test_check_ssl_cert_missing_not_after`.
+- `ethscan/web.py` branch coverage improved (arc `307->320` closed; remaining partials: `421->420, 443->445, 445->447, 447->449, 449->451, 464, 479->482, 483->487, 493`, miss `388`).
 
 ## Baseline (verified this session)
-- `python -m pytest -q` → 31975 passed, 146 skipped, 0 failed (baseline 31973; +2 tests).
-- `python -m pytest --cov=ethscan --cov-branch` → `ethscan/config.py` 100% branch; TOTAL 15546 stmts, 0 miss, 111 missing branches (was 114).
-- `python -m mypy ethscan/ tests/` → Success: no issues found in 236 source files.
-- `python -m ruff check ethscan/ tests/` → All checks passed.
+- `python3 -m pytest -q` → 31976 passed, 146 skipped, 0 failed.
+- `python3 -m pytest tests/test_web.py --cov=ethscan.web --cov-branch` → 81 passed, 97% branch on `ethscan/web.py`.
+- `python3 -m mypy ethscan/ tests/` → Success: no issues found in 236 source files.
+- `python3 -m ruff check ethscan/ tests/` → All checks passed.
 - `python3 check_readme.py` → 54/54, README and CLI in sync.
 
 ## Blockers
 - None.
-- The two new tests in `tests/test_config.py` are uncommitted (no commit without explicit request).
+- `tests/test_web.py` changes are uncommitted (no commit without explicit request).
 
 ## Approaches already tried / ruled out
-- Whole-repo formatter fuzz with non-dict top-level values (314 formatters × 11 hostile shapes): 0 crashes — no defect, do not add guards.
-- Closing all 111 remaining branch arcs in one session: not bounded; per-module closure is the right granularity.
-- `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract.
+- Missing-`notAfter` assertions must reflect initialized defaults (`days_remaining`/`valid` keys exist); do not assert key absence.
+- Per-module branch-arc closure is the right bounded granularity.
+- `oracle`/`postgresql` empty-target handling intentionally out of scope per documented contract.
 
 ## Next task
-- Close the last branch arc in `ethscan/web.py` (`307->320`, `if not_after:` False path). Reproduce by mocking the TLS socket so `getpeercert()` returns a dict without `notAfter` (see existing mocks in `tests/test_web.py`), then assert `result["not_after"] is None` and no `days_remaining`/`valid` keys. Verify with `pytest tests/test_web.py --cov=ethscan.web --cov-branch --cov-report=term-missing` and the full gate (`pytest -q`, `mypy ethscan/ tests/`, `ruff check ethscan/ tests/`, `check_readme.py`). If unreachable via the public helper, document the evidence and choose the next module rather than adding contrived tests.
-
-(End of file - total 23 lines)
+- Close the next reachable branch arc(s) in `ethscan/web.py`. Reproduce: `python3 -m pytest tests/test_web.py --cov=ethscan.web --cov-branch --cov-report=term-missing -q` and inspect code around the reported partials (`421->420, 443->445, 445->447, 447->449, 449->451, 464, 479->482, 483->487, 493`) and miss `388`. Add minimal tests in `tests/test_web.py` for the simplest reachable case(s), then run focused coverage and full gate (`pytest -q`, `mypy ethscan/ tests/`, `ruff check ethscan/ tests/`, `check_readme.py`). If an arc is unreachable via public helper/CLI contract, document evidence and move to the next module instead of contrived tests.

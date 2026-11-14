@@ -1287,6 +1287,45 @@ def test_check_ssl_cert_invalid_date_format() -> None:
         assert result['valid'] is False
 
 
+def test_check_ssl_cert_missing_not_after() -> None:
+    """Cert with no notAfter leaves validity fields unset."""
+
+    class FakeSSock:
+        def getpeercert(self, binary_form: bool = False):
+            if binary_form:
+                return b'goodbytes'
+            return {
+                'subject': ((('commonName', 'x.com'),),),
+                'issuer': ((('commonName', 'ca'),),),
+            }
+
+        def get_verified_chain(self):
+            return []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return None
+
+    class FakeConn:
+        def __enter__(self):
+            return MagicMock()
+
+        def __exit__(self, *a):
+            return None
+
+    ctx = MagicMock()
+    ctx.wrap_socket.return_value = FakeSSock()
+    with patch('socket.create_connection', return_value=FakeConn()), \
+         patch('ssl.create_default_context', return_value=ctx):
+        result = check_ssl_configuration('x.com', 443, 5.0)
+        assert result['not_after'] is None
+        assert result['days_remaining'] is None
+        assert result['valid'] is False
+        assert result['error'] is None
+
+
 def test_run_web_checks_ssl_on_http() -> None:
     """Test ssl check on a non-HTTPS target returns error branch."""
     results = run_web_checks('http://example.com', ['ssl'], timeout=1.0)
