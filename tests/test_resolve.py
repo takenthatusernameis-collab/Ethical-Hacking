@@ -450,6 +450,40 @@ def test_resolve_a_records_restores_default_socket_timeout(monkeypatch) -> None:
         socket.setdefaulttimeout(previous)
 
 
+def test_resolve_a_records_skips_non_string_sockaddr(monkeypatch) -> None:
+    """A getaddrinfo entry with a non-str address is skipped, not fatal.
+
+    The sockaddrs returned by getaddrinfo are expected to carry a string host,
+    but a malformed entry (e.g. ``None``) must not abort the lookup; only the
+    valid string address should survive.
+    """
+    from ethscan import resolve
+
+    fake_results = [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", (None, 0)),
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.0.2.1", 0)),
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", (b"192.0.2.2", 0)),
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.0.2.1", 0)),
+    ]
+
+    monkeypatch.setattr("ethscan.resolve.socket.getaddrinfo", lambda *a, **k: fake_results)
+    assert resolve.resolve_a_records("example.invalid") == ["192.0.2.1"]
+
+
+def test_resolve_aaaa_records_skips_non_string_sockaddr(monkeypatch) -> None:
+    """Malformed AAAA sockaddrs are skipped while valid string IPs are kept."""
+    from ethscan import resolve
+
+    fake_results = [
+        (socket.AF_INET6, socket.SOCK_STREAM, 6, "", (None, 0, 0, 0)),
+        (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("2001:db8::1", 0, 0, 0)),
+        (socket.AF_INET6, socket.SOCK_STREAM, 6, "", (b"2001:db8::2", 0, 0, 0)),
+    ]
+
+    monkeypatch.setattr("ethscan.resolve.socket.getaddrinfo", lambda *a, **k: fake_results)
+    assert resolve.resolve_aaaa_records("example.invalid") == ["2001:db8::1"]
+
+
 def test_resolve_cname_records_no_dnspython() -> None:
     from ethscan import resolve
     # When DNS_AVAILABLE is False, returns empty
@@ -1192,6 +1226,23 @@ def test_format_resolve_report_csv_values_not_list() -> None:
     output = format_resolve_report_csv(data)
     reader = list(csv.reader(io.StringIO(output)))
     assert reader[1] == ["example.com", "example.com", "A", "1.2.3.4"]
+
+
+def test_format_resolve_report_csv_non_dict_data() -> None:
+    """A non-dict mapping only emits the header row."""
+    output = format_resolve_report_csv(cast(Any, ["not", "a", "dict"]))
+    assert output == "target,normalized,record_type,record_value"
+
+
+def test_format_resolve_report_csv_none_values_skipped() -> None:
+    """A record type mapped to None is skipped without a row."""
+    data = {
+        "target": "example.com",
+        "normalized": "example.com",
+        "records": {"A": None},
+    }
+    output = format_resolve_report_csv(data)
+    assert output == "target,normalized,record_type,record_value"
 
 
 def test_resolve_specific_type_all_supported_continues() -> None:
