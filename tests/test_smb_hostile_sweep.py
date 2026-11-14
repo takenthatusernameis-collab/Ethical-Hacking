@@ -156,6 +156,58 @@ def test_smb2_scalar_capabilities_and_notes_do_not_raise() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Hostile ``security_mode`` shapes in the report formatters
+# ---------------------------------------------------------------------------
+# A hostile SMB answer (or a hand-crafted result dict) can carry a
+# ``security_mode`` value that is ``None``, a float, a string, or another
+# non-int shape. The formatters render it with ``0x..:02x``, which raises
+# ``TypeError``/``ValueError`` on such values; they must never raise and
+# coerce a non-int to ``0`` (``0x00``). A bool is an ``int`` subclass and
+# renders as ``0x00``/``0x01``.
+
+SECURITY_MODE_HOSTILE: tuple[object, ...] = (
+    None,
+    3.14,
+    "x",
+    "0x1",
+    [1],
+    {"a": 1},
+    b"\x01",
+)
+
+
+@pytest.mark.parametrize("mode", SECURITY_MODE_HOSTILE)
+def test_security_mode_hostile_shapes_do_not_raise(mode: object) -> None:
+    payload = {"accessible": True, "security_mode": mode}
+    csv_out = format_smb_report_csv(payload)
+    md_out = format_smb_report_markdown(payload)
+    assert isinstance(csv_out, str)
+    assert isinstance(md_out, str)
+    rows = list(csv.reader(io.StringIO(csv_out)))
+    # A non-int security_mode is coerced to 0 (0x00).
+    assert rows[1][7] == "0x00"
+    assert "- **Security Mode:** 0x00" in md_out
+
+
+@pytest.mark.parametrize("mode", (0, 1, 255, True, False))
+def test_security_mode_int_shapes_render(mode: int) -> None:
+    payload = {"accessible": True, "security_mode": mode}
+    csv_out = format_smb_report_csv(payload)
+    md_out = format_smb_report_markdown(payload)
+    rows = list(csv.reader(io.StringIO(csv_out)))
+    assert rows[1][7] == f"0x{int(mode):02x}"
+    assert f"- **Security Mode:** 0x{int(mode):02x}" in md_out
+
+
+@pytest.mark.parametrize("mode", SECURITY_MODE_HOSTILE)
+def test_smb2_security_mode_hostile_shapes_do_not_raise(mode: object) -> None:
+    payload = {"accessible": True, "smb2": {"accessible": True, "security_mode": mode}}
+    md_out = format_smb_report_markdown(payload)
+    assert isinstance(md_out, str)
+    assert "- **Security Mode:** 0x00" in md_out
+
+
+# ---------------------------------------------------------------------------
 # Hostile ``raw_preview`` shapes in the report formatters
 # ---------------------------------------------------------------------------
 # A hostile SMB answer (or a hand-crafted result dict) can carry a

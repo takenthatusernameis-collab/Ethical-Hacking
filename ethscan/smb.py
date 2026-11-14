@@ -375,6 +375,22 @@ def _normalize_security_flags(flags: Any) -> list[str]:
     return [str(item) for item in flags]
 
 
+def _normalize_security_mode(mode: Any) -> int:
+    """Coerce a hostile ``security_mode`` value into an int for ``0x..`` output.
+
+    The real value is an SMB security-mode bitfield parsed from the wire,
+    but a hand-crafted or hostile result dict can carry ``None``, a float,
+    a string, or another non-int shape. Formatting such a value with ``:02x``
+    raises ``TypeError``/``ValueError``; coerce it to ``0`` instead so the
+    formatters never raise.
+    """
+    if isinstance(mode, bool):
+        return int(mode)
+    if isinstance(mode, int):
+        return mode
+    return 0
+
+
 def _build_banner(parsed: dict[str, Any]) -> str | None:
     """Build a short human-readable banner from a parsed SMB response."""
     if parsed.get("protocol") != "SMB1":
@@ -844,7 +860,9 @@ def format_smb_report_markdown(results: Mapping[str, Any]) -> str:
         lines.append(f"- **Protocol:** {results.get('protocol') or 'unknown'}")
         lines.append(f"- **Dialect:** {results.get('dialect') or 'n/a'}")
         lines.append(f"- **Dialect Index:** {results.get('dialect_index')}")
-        lines.append(f"- **Security Mode:** 0x{results.get('security_mode', 0):02x}")
+        lines.append(
+            f"- **Security Mode:** 0x{_normalize_security_mode(results.get('security_mode', 0)):02x}"
+        )
         flags = _normalize_security_flags(results.get("security_flags"))
         lines.append(f"- **Security Flags:** {', '.join(flags) if flags else 'none'}")
         lines.append(f"- **User Security:** {'Yes' if results.get('user_security') else 'No'}")
@@ -866,7 +884,9 @@ def format_smb_report_markdown(results: Mapping[str, Any]) -> str:
         if smb2_results.get("accessible"):
             lines.append(f"- **Dialect:** {smb2_results.get('dialect') or 'n/a'}")
             lines.append(f"- **Dialect Revision:** {smb2_results.get('dialect_revision')}")
-            lines.append(f"- **Security Mode:** 0x{smb2_results.get('security_mode', 0):02x}")
+            lines.append(
+                f"- **Security Mode:** 0x{_normalize_security_mode(smb2_results.get('security_mode', 0)):02x}"
+            )
             lines.append(f"- **Signing Required:** {'Yes' if smb2_results.get('signing_required') else 'No'}")
             lines.append(f"- **Signing Enabled:** {'Yes' if smb2_results.get('signing_enabled') else 'No'}")
             if smb2_results.get("server_guid"):
@@ -879,7 +899,9 @@ def format_smb_report_markdown(results: Mapping[str, Any]) -> str:
                 lines.append(f"- **Negotiate Contexts:** {smb2_results.get('negotiate_context_count')}")
                 for ctx in smb2_results.get("negotiate_contexts") or []:
                     if isinstance(ctx, dict):
-                        name = ctx.get("type_name") or f"0x{ctx.get('type', 0):04x}"
+                        name = ctx.get("type_name") or (
+                            f"0x{_normalize_security_mode(ctx.get('type', 0)):04x}"
+                        )
                         detail = ctx.get("detail")
                         if detail:
                             lines.append(f"  - **{name}:** {detail}")
@@ -941,7 +963,7 @@ def format_smb_report_csv(results: Mapping[str, Any]) -> str:
         results.get("protocol") or "",
         results.get("dialect") or "",
         results.get("dialect_index"),
-        f"0x{results.get('security_mode', 0):02x}",
+        f"0x{_normalize_security_mode(results.get('security_mode', 0)):02x}",
         "|".join(_normalize_security_flags(results.get("security_flags", []))),
         "true" if results.get("user_security") else "false",
         "true" if results.get("challenge_response") else "false",

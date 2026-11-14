@@ -139,6 +139,22 @@ def _as_dict(value: object) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _normalize_hex(value: object) -> int:
+    """Coerce a hostile value into an int for ``0x..`` hex output.
+
+    The real value is an int bitfield parsed from the wire, but a hostile
+    or malformed answer can carry ``None``, a float, a string, or another
+    non-int shape. Formatting such a value with ``:04x`` raises
+    ``TypeError``/``ValueError``; coerce it to ``0`` instead so the
+    formatters never raise.
+    """
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    return 0
+
+
 def _parse_time_response(data: bytes) -> dict[str, Any]:
     """Parse an NTP time response packet (mode 4, server)."""
     if len(data) < 48:
@@ -464,7 +480,9 @@ def format_ntp_report_markdown(data: dict[str, Any]) -> str:
             lines.append(f"- **Implementation:** {mon_resp.get('implementation', 'N/A')} (MON_GETLIST=42)")
             lines.append(f"- **Request Code:** {mon_resp.get('request_code', 'N/A')}")
             lines.append(f"- **Sequence:** {mon_resp.get('sequence', 'N/A')}")
-            lines.append(f"- **Status:** 0x{mon_resp.get('status', 0):04x}")
+            lines.append(
+                f"- **Status:** 0x{_normalize_hex(mon_resp.get('status', 0)):04x}"
+            )
             lines.append(f"- **Association ID:** {mon_resp.get('association_id', 'N/A')}")
             lines.append(f"- **Offset:** {mon_resp.get('offset', 'N/A')}")
             lines.append(f"- **Count:** {mon_resp.get('count', 'N/A')}")

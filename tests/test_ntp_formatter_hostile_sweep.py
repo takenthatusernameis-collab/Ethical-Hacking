@@ -130,3 +130,22 @@ def test_ntp_csv_renders_well_formed_peers() -> None:
         {"monlist_response": {"peers": [{"address": "1.2.3.4", "port": 123, "mode": 3, "version": 4}]}}
     )
     assert "1.2.3.4" in output
+
+# ---------------------------------------------------------------------------
+# Hostile ``monlist_response.status`` shapes
+# ---------------------------------------------------------------------------
+# The monlist status is an int bitfield parsed from the wire, but a hostile
+# answer can carry ``None``, a float, a string, or another non-int shape.
+# The Markdown formatter renders it with ``0x..:04x``; hostile shapes must
+# be coerced to ``0`` (``0x0000``) and never raise.
+@pytest.mark.parametrize("status", (None, 3.14, "x", [1], {"a": 1}, b"\x01"))
+def test_ntp_markdown_tolerates_hostile_monlist_status(status: object) -> None:
+    output = format_ntp_report_markdown({"monlist_response": {"status": status}})
+    assert isinstance(output, str)
+    assert "- **Status:** 0x0000" in output
+
+
+@pytest.mark.parametrize("status", (0, 1, 255, True, False))
+def test_ntp_markdown_renders_int_monlist_status(status: int) -> None:
+    output = format_ntp_report_markdown({"monlist_response": {"status": status}})
+    assert f"- **Status:** 0x{int(status):04x}" in output
