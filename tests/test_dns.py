@@ -708,6 +708,18 @@ def test_format_dns_report_csv_non_list_values() -> None:
     assert "single-value" in out
 
 
+def test_format_dns_report_csv_none_record_value() -> None:
+    """Cover arc 272->267: a record value of None is skipped (no row emitted)."""
+    data: dict[str, Any] = {
+        "target": "example.com",
+        "domain": "example.com",
+        "records": {"A": None, "TXT": "single-value"},
+    }
+    out = format_dns_report_csv(data)
+    assert "single-value" in out
+    assert "example.com,example.com,A," not in out
+
+
 def test_format_dns_report_markdown_none_record_values() -> None:
     """Cover the ``values is None`` branch: renders *No records found*."""
     data: dict[str, Any] = {
