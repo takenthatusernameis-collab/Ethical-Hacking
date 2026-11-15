@@ -7,7 +7,7 @@ import json
 import re
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Pattern
+from re import Pattern
 
 from ethscan.target import normalize_host
 

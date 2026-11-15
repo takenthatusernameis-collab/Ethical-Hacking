@@ -18582,7 +18582,7 @@ def test_validate_out_option_csv() -> None:
         result = runner.invoke(cli, ["validate", "--ports", "80,443", "--output-format", "csv", "--out", out_path])
         assert result.exit_code == 0
         assert os.path.exists(out_path)
-        with open(out_path, "r", encoding="utf-8") as handle:
+        with open(out_path, encoding="utf-8") as handle:
             content_out = handle.read()
         assert "type,spec,valid,detail" in content_out
 

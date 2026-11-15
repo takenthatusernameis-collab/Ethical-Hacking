@@ -42,7 +42,8 @@ import json
 import os
 import socket
 import struct
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from ethscan.target import TargetSpecError, check_port, parse_url, url_port
 

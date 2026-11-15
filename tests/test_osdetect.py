@@ -281,7 +281,7 @@ def test_run_osdetect_banners_file(tmp_path) -> None:
             }
         )
     )
-    with open(services_file, "r", encoding="utf-8") as handle:
+    with open(services_file, encoding="utf-8") as handle:
         services = json.load(handle)
     banners = {}
     for entry in services.get("results") or []:

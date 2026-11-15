@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Mapping, cast
+from typing import Any, cast
+from collections.abc import Mapping
 
 import pytest
 

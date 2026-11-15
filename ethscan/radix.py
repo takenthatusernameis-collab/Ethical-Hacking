@@ -10,7 +10,8 @@ from __future__ import annotations
 import csv
 import io
 import ipaddress
-from typing import TYPE_CHECKING, Mapping, Sequence, TypedDict, cast
+from typing import TYPE_CHECKING, TypedDict, cast
+from collections.abc import Mapping, Sequence
 
 if TYPE_CHECKING:
     from typing import NotRequired  # type: ignore[attr-defined]  # typing.NotRequired exists on Python 3.11+

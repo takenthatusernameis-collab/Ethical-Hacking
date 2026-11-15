@@ -12,7 +12,8 @@ import hmac
 import io
 import json
 import re
-from typing import Any, Mapping, cast
+from typing import Any, cast
+from collections.abc import Mapping
 from typing_extensions import TypedDict
 
 from ethscan.service import run_service

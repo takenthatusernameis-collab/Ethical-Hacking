@@ -8,7 +8,8 @@ from __future__ import annotations
 import csv
 import io
 import json
-from typing import Mapping, cast
+from typing import cast
+from collections.abc import Mapping
 
 from ethscan.dns import run_dns
 from ethscan.geo import run_geo

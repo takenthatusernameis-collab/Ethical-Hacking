@@ -5,7 +5,8 @@ import csv
 import io
 import ipaddress
 import socket
-from typing import Mapping, TypedDict
+from typing import TypedDict
+from collections.abc import Mapping
 
 from ethscan.target import normalize_host
 

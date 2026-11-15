@@ -12,7 +12,8 @@ import json
 import socket
 import struct
 import time
-from typing import Any, Mapping, TypedDict, cast
+from typing import Any, TypedDict, cast
+from collections.abc import Mapping
 
 from ethscan.target import normalize_host
 
