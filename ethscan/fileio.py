@@ -29,7 +29,7 @@ def read_text(path: str | Path) -> str:
     Returns:
         The content of the file.
     """
-    with open(path, "r", encoding="utf-8", errors="replace") as handle:
+    with open(path, encoding="utf-8", errors="replace") as handle:
         return handle.read()
 
 
@@ -73,7 +73,7 @@ def load_json(path: str | Path) -> Any:
             is a ``ValueError``), or it nests too deeply to be parsed.
         OSError: The file cannot be read.
     """
-    with open(path, "r", encoding="utf-8", errors="replace") as handle:
+    with open(path, encoding="utf-8", errors="replace") as handle:
         text = handle.read()
     # Guard against inputs that nest deeper than the parser can safely handle
     # (Python's json parser may not raise RecursionError on every version).
