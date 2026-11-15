@@ -1,19 +1,19 @@
 # Next Task
 
 ## Status
-Sun Nov 15 2026 (session 3): fixed 9 mypy errors in `tests/test_hash.py` (test typing hygiene only; no source/behavior change). Baseline remains green.
+Sun Nov 15 2026 (session 4): Cleaned up 9 unused `type: ignore` comments across `ethscan/validate.py`, `ethscan/config.py`, and `ethscan/service.py`. Added explicit type annotation to `SERVICE_SIGNATURES` in `service.py` to satisfy mypy after removing the ignores. All checks pass.
 
 ## Baseline / verification this session
-- `python3 -m pytest tests/test_hash.py -q` → 137 passed.
-- `python3 -m mypy tests/test_hash.py` → Success: no issues found.
-- `python3 -m ruff check tests/test_hash.py` → All checks passed.
-- Full gate: `pytest -q` → 32032 passed, 146 skipped, 0 failed (baseline unchanged); `mypy ethscan/ tests/` clean (236 source files); `ruff check ethscan/ tests/` clean; `check_readme.py` 54/54.
+- `python -m pytest -q` → 32032 passed, 146 skipped, 0 failed (baseline unchanged).
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 236 source files.
+- `python -m ruff check ethscan/ tests/` → All checks passed.
+- `python3 check_readme.py` → 54/54, README and CLI in sync.
 
 ## Blockers
 - None.
 
 ## Approaches already tried / ruled out
-- Established `cast(Any, ...)` test-mocking pattern applied (matches prior test_resolve/test_main/test_recon fixes). No alternatives needed.
+- None needed; the unused ignores were cleanly removable once `SERVICE_SIGNATURES` was properly typed.
 
 ## Next task
-- None required. Repository fully green. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error). If future work is needed, pick a single bounded, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls.
+- None required. Repository fully green: 32032 passed, 146 skipped, 0 failed; mypy/ruff clean; README in sync. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error). If future work is needed, pick a single bounded, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls.

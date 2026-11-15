@@ -7,6 +7,7 @@ import json
 import re
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Pattern
 
 from ethscan.target import normalize_host
 
@@ -20,7 +21,7 @@ DEFAULT_WORKERS = 50
 BANNER_MAX_LENGTH = 1024
 
 
-SERVICE_SIGNATURES = {
+SERVICE_SIGNATURES: dict[str, list[tuple[Pattern[str], str | None]]] = {
     "ftp": [
         (re.compile(r"^220.*FTP", re.IGNORECASE), "FTP"),
         (re.compile(r"^220.*FileZilla", re.IGNORECASE), "FileZilla FTP"),
@@ -161,8 +162,8 @@ def grab_banner(host: str, port: int, timeout: float) -> tuple[int, str | None, 
     if banner and service_name:
         if service_name in SERVICE_SIGNATURES:
             sigs = SERVICE_SIGNATURES.get(service_name) or []
-            for pattern, name in sigs:  # type: ignore
-                match = pattern.search(banner)  # type: ignore
+            for pattern, name in sigs:
+                match = pattern.search(banner)
                 if match:
                     detected_service = name or (match.group(1) if match.groups() else service_name.upper())
                     break
@@ -210,7 +211,7 @@ def run_service(
                     entry["service"] = service
                 results.append(entry)
 
-    results.sort(key=_port_key)  # type: ignore[arg-type]
+    results.sort(key=_port_key)
 
     return {
         "target": target,
@@ -244,10 +245,10 @@ def format_service_report_markdown(data: dict[str, object]) -> str:
             lines.append("## Detected Services")
             lines.append("| Port | Service | Banner |")
             lines.append("|------|---------|--------|")
-            for result in results:  # type: ignore
+            for result in results:
                 if not isinstance(result, dict):
                     continue
-                res = result  # type: ignore
+                res = result
                 port = res.get("port")
                 service = res.get("service", "Unknown")
                 banner = res.get("banner", "") or ""
@@ -277,10 +278,10 @@ def format_service_report_csv(data: dict[str, object]) -> str:
     writer.writerow(["port", "service", "banner"])
     results = data.get("results") or []
     if isinstance(results, (list, tuple)):
-        for result in results:  # type: ignore
+        for result in results:
             if not isinstance(result, dict):
                 continue
-            res = result  # type: ignore
+            res = result
             port = res.get("port", "")
             service = res.get("service", "")
             banner = str(res.get("banner", "") or "").replace("\n", " ").replace("\r", "")

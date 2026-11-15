@@ -329,7 +329,7 @@ def format_validate_report_csv(data: dict[str, Any]) -> str:
             if valid_flag:
                 ports_val = r.get("ports", [])
                 if ports_val:
-                    detail = _ports_to_ranges(ports_val)  # type: ignore
+                    detail = _ports_to_ranges(ports_val)
                 else:
                     detail = str(r.get("count", 0))
             else:
@@ -387,7 +387,7 @@ def format_validate_report_markdown(data: dict[str, Any]) -> str:
             valid_flag = bool(r.get("valid"))
             ports_val = r.get("ports", [])
             if valid_flag and ports_val:
-                expanded = _ports_to_ranges(ports_val)  # type: ignore
+                expanded = _ports_to_ranges(ports_val)
                 if len(expanded) > 80:
                     expanded = expanded[:77] + "..."
             else:

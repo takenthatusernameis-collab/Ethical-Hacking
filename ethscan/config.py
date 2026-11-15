@@ -42,7 +42,7 @@ from ethscan.fileio import read_text
 try:
     import yaml
 except ImportError:  # pragma: no cover - pyyaml is a declared dependency
-    yaml = None  # type: ignore
+    yaml = None
 
 # Candidate locations searched in order. The first existing file wins.
 # Evaluated lazily (see ``_candidate_paths``) so that ``Path.home()`` reflects
