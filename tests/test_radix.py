@@ -235,6 +235,31 @@ def test_build_radix_node_max_depth() -> None:
     assert _build_radix_node(nets, depth=65, max_depth=64) is None
     assert _build_radix_node([], depth=0, max_depth=64) is None
 
+
+def test_build_radix_node_dedupes_duplicate_networks() -> None:
+    """Duplicate networks exercise the dedupe false branch."""
+    from ethscan.radix import _build_radix_node
+
+    net = ipaddress.ip_network("192.168.1.0/24")
+    node = _build_radix_node([net, net])
+    assert node is not None
+    assert node["networks"] == ["192.168.1.0/24"]
+
+
+def test_build_radix_node_single_side_children() -> None:
+    """All networks partition to one side so only the left child is added."""
+    from ethscan.radix import _build_radix_node
+
+    nets = [
+        ipaddress.ip_network("192.168.1.0/25"),
+        ipaddress.ip_network("192.168.1.0/26"),
+    ]
+    node = _build_radix_node(nets)
+    assert node is not None
+    children = cast(list[dict[str, object]], node["children"])
+    assert len(children) == 1
+    assert children[0]["side"] == "left (0)"
+
 # ---------------------------------------------------------------------------
 # run_radix
 # ---------------------------------------------------------------------------
