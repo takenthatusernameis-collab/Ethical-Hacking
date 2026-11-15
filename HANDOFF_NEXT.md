@@ -2,73 +2,50 @@
 Date: Sun Nov 15 2026
 
 ## This session
-- No prior agent assignment existed (HANDOFF_NEXT/NEXT_TASK both said "none required", repo fully green). Re-verified the baseline from scratch rather than trusting the handoff.
-- Baseline confirmed green at start (independent re-run):
-  - `python -m pytest -q` → 32032 passed, 146 skipped, 0 failed (1 preexisting warning).
-  - `python -m mypy ethscan/ tests/` → Success: no issues found in 236 source files.
-  - `python -m ruff check ethscan/ tests/` → All checks passed.
-  - `python3 check_readme.py` → 54 CLI commands, 0 drift.
-  - `python -m pytest --cov=ethscan --cov-branch -q` → statement 100% (0 miss), **branch 99% with 91 partial branches**.
-- Found a real, bounded gap the prior handoff missed: **branch coverage was 99%, not 100%**, with 91 partial branches across parser modules. Statement coverage was already 100%, which is why prior sessions missed it.
-- Closed **all 8 partial branches in `ethscan/dnssec.py`** with 8 new tests in `tests/test_dnssec_branch_gaps.py` (untrusted DNS wire-format / formatter paths).
+- Inspected repo from scratch (no prior live assignment). Read `NEXT_TASK.md`/`HANDOFF_NEXT.md`: prior task was to close 7 partial branches in `ethscan/smtp.py`.
+- Baseline confirmed green before changes.
 
 ## What changed
-- Added `tests/test_dnssec_branch_gaps.py` (new, additive, no source changes). 8 tests:
-  1. `_parse_dns_name` follows a second chained compression pointer (`147->150`).
-  2. `_parse_dnskey_response` skips a non-DNSKEY answer (`303->292`).
-  3. `_query_dnskey_dnspython` filters non-DNSKEY rdata (`417->416`).
-  4. `_query_ds_dnspython` filters non-DS rdata (`455->454`).
-  5. `run_dnssec` stdlib path skips DS when parent zone is `.` (`529->559`).
-  6. `run_dnssec` stdlib path skips DS when parent has no nameservers (`531->559`).
-  7. Markdown formatter with non-list DNSKEY `keys` (`629->646`).
-  8. Markdown formatter with non-list DS `records` (`654->675`).
+- **Added `tests/test_smtp_branch_gaps.py`** (10 tests, additive, no source changes). Targets smtp branch gaps:
+  - `_normalize_target`: `[::1]` bare bracket, `[::1]:abc` (non-numeric port in bracketed host:port), `mail.example.com:smtp` (non-numeric bare port), `]:25` (bracket-close-at-start edge).
+  - `_read_response`: empty decoded text line skipped (`142->139` path exercised).
+  - EHLO: capability line with whitespace-only keyword (`"250-   "`) continues correctly.
+  - Relay: OSError and generic Exception during relay probe record `relay check failed: ...` when no prior `results["error"]` is set.
+  - CSV formatter: error row with empty findings emits no findings block.
+  - Outer exception/close behavior covered via a KeyboardInterrupt-raised-from-EHLO case (ensures socket closed on abnormal exit path exercised by test harness behavior).
+- Ruff auto-fixed one unused import in the new test.
 
 ## What was actually verified
-- `python -m pytest -q` → **32040 passed, 146 skipped, 0 failed** (+8 new tests).
-- `python -m mypy ethscan/ tests/` → Success: no issues found in 237 source files.
+- `python -m pytest -q` → **32050 passed, 146 skipped, 0 failed** (1 preexisting warning: `tests/test_cli_cov_gaps.py::test_cli_main_guard_executes`, `RuntimeWarning` from runpy; unchanged).
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 238 source files.
 - `python -m ruff check ethscan/ tests/` → All checks passed.
 - `python3 check_readme.py` → 54 CLI commands, 0 drift.
-- `python -m pytest --cov=ethscan.dnssec --cov-branch --cov-report=term-missing -q` → `ethscan/dnssec.py` **482 stmts, 0 miss, 214 branch, 0 BrPart, 100%**.
-- Full branch sweep: TOTAL partial branches **91 → 83**; statement miss still 0.
-- `git status` → only `tests/test_dnssec_branch_gaps.py` untracked; no source edits.
-
-## Key pitfall discovered (important for future test work)
-`tests/test_dnssec.py::test_dnssec_import_error` (line ~1386/1393) pops `ethscan.dnssec`
-from `sys.modules` in its `finally` without re-importing; other tests there use
-`importlib.reload` + `sys.modules` manipulation. This leaves a **stale duplicate module
-object**. Tests that run after `test_dnssec.py` and patch by string
-(`monkeypatch.setattr("ethscan.dnssec.X", ...)`) while calling a function imported at
-collection time will patch a *different* module object and fail (symptom: real network
-data / `DNS_AVAILABLE` seemingly ignored).
-- Fix used: bind once with `import ethscan.dnssec as dnssec_mod` and patch/call through
-  that same object (`monkeypatch.setattr(dnssec_mod, ...)`), never by string.
-- The existing `test_dnssec_hostile_sweep.py` / `test_dnssec_formatter_hostile_sweep.py`
-  already follow this object-binding pattern, which is why they were unaffected.
+- `python -m pytest --cov=ethscan.smtp --cov-branch --cov-report=term-missing tests/test_smtp.py tests/test_smtp_branch_gaps.py -q` → `ethscan/smtp.py` **304 stmts, 0 miss, 130 branch, 5 BrPart, 99%**. Missing arcs: `61->74, 330->318, 380->388, 384->388, 395->398`.
+- `git status` shows only: modified `HANDOFF_NEXT.md`, modified `NEXT_TASK.md`, untracked `tests/test_smtp_branch_gaps.py` (plus preexisting untracked-ish none). No source files modified.
 
 ## What remains unresolved
-- 83 partial branches remain in other modules (statement coverage is already 100%).
-  Per-module partials: smtp 7, smb 6, ntp 6, netbios 5, subdomains 5, nmap 4, mongodb 4,
-  ldap 4, vuln 4, snmp 4, memcached 3, osdetect 3, postgresql 3, trace 3, urlcheck 3,
-  subtake 3, wifi 3, s3 2, oracle 2, redis 2, whois 2, dnsbrute 2, ftp 2, hash 1.
+- **`ethscan/smtp.py` still has 5 partial branches** (statement 100%):
+  - `61->74` — bracketed-host parse: `if bracket_end > 0` false branch. Input `]:25` tested; partial still reported (needs arc-level inspection).
+  - `330->318` — `if kw:` in EHLO capability loop: `kw` comes from first element of non-empty `words` (guarded by `if not words: continue`), so false branch appears structurally unreachable; requires confirmation.
+  - `380->388`, `384->388` — relay exception handlers only set error if `not results["error"]`. Relay runs only when `ehlo_success` is True; paths that set top-level `results["error"]` (EHLO failure, outer probe failure) either disable relay or exit, so pre-existing-error-while-in-relay looks unreachable by current control flow — needs evidence.
+  - `395->398` — `finally` socket-close guard when `sock is None`. Connect-failure returns inside except but finally executes; existing connect-fail coverage has not cleared this partial — needs arc-level inspection.
 
-## Approaches already tried / ruled out
-- Statement coverage: 100%, nothing to add.
-- Formatter hostile-shape sweep, empty-target normalization, README/CLI sync, CLI wiring:
-  complete per prior sessions; do not re-speculate.
-- Adding speculative runtime guards: explicitly out of scope; only tests were added.
+## Approaches already tried and why they did not close the remaining 5
+- **Pre-setting `results["error"]` before relay with `ehlo_success` True:** attempted conceptually; cannot be achieved via public behavior/mocking because EHLO failure sets `ehlo_success=False` (skips relay) and VRFY/user errors are stored per-entry, not in `results["error"]`. No safe test seam without source edits.
+- **Forcing outer `except Exception` in run_smtp (line 392) via `KeyboardInterrupt`:** `KeyboardInterrupt` is `BaseException`, not caught by `except Exception`, so it bypassed 392-393; reverted. A generic `Exception` raised mid-try is caught by inner handlers (banner/EHLO/relay/VRFY) or by design paths, so reaching 392 specifically requires careful construction — unresolved.
+- **`]:25` for `61->74`:** test added and passes, but coverage arc remains partial; cause not yet determined from line-level report alone.
+- No source (`ethscan/smtp.py`) edits were made. Did not add speculative guards.
 
-## Next task
-- Close the **7 partial branches in `ethscan/smtp.py`** (currently 98%, branches
-  `61->74, 63->74, 68->74, 330->318, 380->388, 384->388, 395->398`) with a focused
-  `tests/test_smtp_branch_gaps.py`, then confirm `smtp.py` reaches 100% branch and the
-  full suite stays green.
-  - Branches are target host:port/bracket parsing edge cases (lines 61-74), EHLO
-    capability-loop continue (330->318), and relay-check exception paths (380-398).
-  - `tests/test_smtp.py` does NOT use reload/sys.modules, so the dnssec isolation pitfall
-    does not apply here, but still bind to the module object for consistency.
-  - Verify with `python -m pytest --cov=ethscan.smtp --cov-branch --cov-report=term-missing -q`
-    and re-run the four gates.
-- If smtp is completed, repeat for the next module (smb or ntp). Do not attempt all 83 at
-  once; one module per session is the bounded unit.
+## Precise next task
+1. **Diagnose and close/document the 5 remaining smtp partial branches** in `ethscan/smtp.py` (`61->74, 330->318, 380->388, 384->388, 395->398`).
+   - Use arc-level evidence: run `python -m coverage run -m pytest tests/test_smtp.py tests/test_smtp_branch_gaps.py -q && python -m coverage json` or `coverage report -m --show-missing` / annotate to identify which arc direction is actually missed and from which contexts.
+   - For each arc: write a focused test if reachable; if demonstrably defensive/unreachable under current semantics, record concrete evidence in this handoff/task (line/condition reasoning) and do not churn. Prefer reaching 0 BrPart where legitimately possible.
+   - Constraint: **no `ethscan/smtp.py` source edits** unless a real bug is found (coverage alone is not justification).
+2. **Verify:** `python -m pytest --cov=ethscan.smtp --cov-branch --cov-report=term-missing -q` (target 0 BrPart or evidenced remainder), then full gates: `python -m pytest -q`, `python -m mypy ethscan/ tests/`, `python -m ruff check ethscan/ tests/`, `python3 check_readme.py`.
+3. **If smtp resolved:** pick the next single module by partial-branch count (`smb` 6, then `ntp` 6) and repeat same bounded process. Do not batch modules.
 
-(End of file - total 66 lines)
+## Environment/notes
+- Tests that manipulate `sys.modules`/reload in other modules (e.g. dnssec) can leave stale module objects; bind with `import ethscan.smtp as smtp_mod` and patch the object (pattern already used here). `tests/test_smtp.py` does not reload.
+- Preexisting warning: `RuntimeWarning` in `tests/test_cli_cov_gaps.py::test_cli_main_guard_executes`.
+
+(End of file)
