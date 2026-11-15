@@ -1022,6 +1022,143 @@ def test_format_csv_diff_cidrs_empty():
     assert "10.0.0.0/8" in out
 
 
+def test_render_node_md_non_dict_child():
+    """Non-dict child in children list is skipped (line 538)."""
+    from ethscan.radix import _render_node_md
+
+    node = {
+        "prefix": "p",
+        "start_address": "s",
+        "end_address": "e",
+        "total_addresses": 1,
+        "networks": [],
+        "children": ["not-a-dict", 123, None],
+    }
+    lines = []
+    _render_node_md(node, lines)
+    assert any("p" in l for l in lines)
+
+
+def test_render_node_md_non_dict_child_node():
+    """Child with non-dict node is skipped (line 542)."""
+    from ethscan.radix import _render_node_md
+
+    node = {
+        "prefix": "p",
+        "start_address": "s",
+        "end_address": "e",
+        "total_addresses": 1,
+        "networks": [],
+        "children": [
+            {"side": "left (0)", "node": "not-a-dict"},
+            {"side": "right (1)", "node": 123},
+            {"side": "left (0)", "node": {"prefix": "child", "start_address": "cs", "end_address": "ce", "total_addresses": 1, "networks": [], "children": [], "depth": 1}},
+        ],
+    }
+    lines = []
+    _render_node_md(node, lines)
+    assert any("child" in l for l in lines)
+
+
+def test_format_markdown_merged_non_string_elements():
+    """Non-string elements in merged list are skipped (line 568)."""
+    data = run_radix(["192.168.1.0/24", "10.0.0.0/8"])
+    data["merged"] = ["192.168.1.0/24", 123, None, "10.0.0.0/8"]
+    output = format_radix_report_markdown(data)
+    assert "192.168.1.0/24" in output
+    assert "10.0.0.0/8" in output
+
+
+def test_format_markdown_diff_non_string_elements():
+    """Non-string elements in diff difference list are skipped (line 618)."""
+    data = run_radix(["192.168.1.0/24"], diff=["192.168.1.128/25"])
+    data["diff"]["difference"] = ["192.168.1.0/25", 123, None]
+    output = format_radix_report_markdown(data)
+    assert "192.168.1.0/25" in output
+
+
+def test_format_csv_merged_non_string_elements():
+    """Non-string elements in merged list are skipped (line 669)."""
+    data = run_radix(["192.168.1.0/24", "10.0.0.0/8"])
+    data["merged"] = ["192.168.1.0/24", 123, None, "10.0.0.0/8"]
+    output = format_radix_report_csv(data)
+    assert "192.168.1.0/24" in output
+    assert "10.0.0.0/8" in output
+
+
+def test_format_csv_merged_invalid_network():
+    """Invalid network strings in merged list are skipped (lines 672-673)."""
+    data = run_radix(["192.168.1.0/24", "10.0.0.0/8"])
+    data["merged"] = ["192.168.1.0/24", "not-a-network", "10.0.0.0/8"]
+    output = format_radix_report_csv(data)
+    assert "192.168.1.0/24" in output
+    assert "10.0.0.0/8" in output
+
+
+def test_format_csv_diff_cidrs_non_list():
+    """Non-list diff_cidrs is normalized to empty list (line 683)."""
+    data = {
+        "cidrs": ["10.0.0.0/8"],
+        "merged": ["10.0.0.0/8"],
+        "compression_ratio": 1.0,
+        "diff": {"diff_cidrs": "not-a-list"},
+    }
+    out = format_radix_report_csv(data)
+    assert "10.0.0.0/8" in out
+
+
+def test_format_csv_cidrs_non_string_elements():
+    """Non-string elements in cidrs list are skipped (line 689)."""
+    data = run_radix(["192.168.1.0/24", "10.0.0.0/8"])
+    data["cidrs"] = ["192.168.1.0/24", 123, None, "10.0.0.0/8"]
+    output = format_radix_report_csv(data)
+    lines = [line.rstrip("\r") for line in output.strip().split("\n")]
+    # Header + 2 valid CIDRs (non-strings skipped)
+    assert len(lines) == 3
+    assert "192.168.1.0/24" in output
+    assert "10.0.0.0/8" in output
+
+
+def test_format_csv_subnet_of_branch():
+    """Exercise the subnet_of matching branch in CSV formatter (lines 695-708)."""
+    # When an original CIDR is a subnet of a merged network, it should match the merged network
+    data = run_radix(["192.168.1.0/25", "192.168.1.128/25"])
+    # These should merge to 192.168.1.0/24
+    output = format_radix_report_csv(data)
+    lines = [line.rstrip("\r") for line in output.strip().split("\n")]
+    assert len(lines) == 3  # header + 2 original CIDRs
+    # Both original /25s should map to the merged /24
+    assert "192.168.1.0/24" in lines[1]
+    assert "192.168.1.0/24" in lines[2]
+
+
+def test_format_csv_empty_merged_networks():
+    """Exercise the for-loop branch when merged_networks is empty (line 695->708)."""
+    data = {
+        "cidrs": ["10.0.0.0/8"],
+        "merged": [],  # empty merged -> merged_networks will be empty
+        "compression_ratio": 1.0,
+    }
+    output = format_radix_report_csv(data)
+    lines = [line.rstrip("\r") for line in output.strip().split("\n")]
+    assert len(lines) == 2  # header + 1 original CIDR
+    # Original maps to itself when no merged networks
+    assert "10.0.0.0/8" in lines[1]
+    assert "10.0.0.0/8" in output
+
+
+def test_format_markdown_non_dict_data():
+    """Non-dict data passed to markdown formatter is normalized (line 550)."""
+    output = format_radix_report_markdown("not-a-dict")
+    assert "ethscan Radix Tree Report" in output
+
+
+def test_format_csv_non_dict_data():
+    """Non-dict data passed to CSV formatter is normalized (line 635)."""
+    output = format_radix_report_csv("not-a-dict")
+    assert "original_cidr" in output
+
+
 def test_merge_overlapping_larger_second():
     nets = [ipaddress.ip_network("10.0.0.0/24"), ipaddress.ip_network("10.0.0.0/16")]
     out = _merge_networks(nets)
