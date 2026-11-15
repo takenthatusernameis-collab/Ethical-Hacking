@@ -2,41 +2,47 @@
 Date: Sun Nov 15 2026
 
 ## This session
-- Prior assignment (`NEXT_TASK.md`/`HANDOFF_NEXT.md`): reproduce and close `ethscan/snmp.py` partial branches.
-- Reproduced with `python -m coverage run --branch --source=ethscan.snmp -m pytest tests/test_snmp.py tests/test_snmp_hostile_sweep.py tests/test_snmp_formatter_hostile_sweep.py -q` + `python -m coverage report --show-missing --include='ethscan/snmp.py'`.
-- Initial state: 388 stmts, 0 miss, 162 branch, 4 BrPart (99%), missing `133->146, 135->146, 140->146, 577->576`.
-- Closed 2 reachable arcs; 2 remain reported.
+- Prior assignment (NEXT_TASK.md/HANDOFF_NEXT.md): classify `ethscan/snmp.py` remaining arcs `133->146, 577->576`, then proceed to `ethscan/nmap.py` (4 BrPart).
+- `ethscan/snmp.py` re-measured: still 2 BrPart (`133->146, 577->576`), both **proven unreachable** by control-flow analysis (no test can reach them; see evidence below).
+- `ethscan/nmap.py` re-measured: 4 BrPart (`138->157, 186->184, 194->200, 315->313`). Closed 3 reachable arcs with focused tests in `tests/test_nmap_branch_gaps.py`; `315->313` classified unreachable.
 
 ## What changed
-- Added `tests/test_snmp_branch_gaps.py` (3 tests, test-only, reversible):
-  - `test_normalize_target_bracketed_host_with_non_numeric_port_suffix` → covers `135->146` (`_normalize_target`: `[::1]:abc` has bracket+`]:` but non-numeric port suffix, so parsing falls through without assigning host/port).
-  - `test_normalize_target_host_with_non_numeric_port_suffix` → covers `140->146` (`_normalize_target`: `host:abc` has non-numeric suffix, falls through).
-  - `test_run_snmp_preserves_existing_sys_fields_on_second_valid_community` → exercises `577->576` false branch in sys-field copy loop (first valid community populates fields; second valid community finds each `results[key]` already set). Connector follows module contract `(data, err)` return.
-- Updated `NEXT_TASK.md` / `HANDOFF_NEXT.md`. No `ethscan/` source edits.
+- Added `tests/test_nmap_branch_gaps.py` (4 tests, test-only/reversible):
+  - `test_parse_port_without_service_element_uses_empty_banner` → covers `138->157` (`_parse_port`: port with `<state>` only, no `<service>` child → `service_elem is None`, empty banner).
+  - `test_parse_host_hostname_with_empty_name_is_skipped` → covers `186->184` (`_parse_host`: `<hostname name="">` → false branch of `if name:`).
+  - `test_parse_host_without_ports_element` → covers `194->200` (`_parse_host`: host with no `<ports>` child → false branch of `if ports_elem is not None`).
+  - `test_run_nmap_exercises_parser_branch_gaps` → integration via `run_nmap` on a tmp XML exercising all three above plus empty severity_counts.
+- No `ethscan/` source edits. Updated `NEXT_TASK.md` / `HANDOFF_NEXT.md`.
 
 ## What was actually verified
-- Targeted snmp tests: `python -m pytest tests/test_snmp.py tests/test_snmp_hostile_sweep.py tests/test_snmp_formatter_hostile_sweep.py tests/test_snmp_branch_gaps.py -q` → **177 passed**.
-- Targeted branch coverage: `ethscan/snmp.py` **388 stmts, 0 miss, 162 branch, 2 BrPart (99%)**, missing `133->146, 577->576`.
-- `python -m mypy ethscan/ tests/` → Success: no issues found in 246 source files.
+- `ethscan/snmp.py`: 388 stmts, 0 miss, 162 branch, 2 BrPart, missing `133->146, 577->576` (unchanged — both unreachable, see evidence).
+- `ethscan/nmap.py`: 297 stmts, 0 miss, 98 branch, **1 BrPart**, missing `315->313`; targeted tests `tests/test_nmap.py tests/test_nmap_hostile_sweep.py tests/test_nmap_formatter_hostile_sweep.py tests/test_nmap_branch_gaps.py` → **142 passed**.
+- Full suite: `python -m coverage run --branch -m pytest -q` → **32093 passed, 146 skipped** (baseline 32086 + 7 new nmap tests).
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 247 source files.
 - `python -m ruff check ethscan/ tests/` → All checks passed.
-- `python3 check_readme.py` → 54 CLI commands, 0 drift.
-- Full suite not rerun this session (prior baseline: 32086 passed, 146 skipped, 1 preexisting warning; change is test-only).
+- `python3 check_readme.py` → 54 CLI commands, 0 drift (no CLI change).
+
+## Evidence: remaining arcs classified unreachable
+- `ethscan/snmp.py:133->146`: reached only inside `host.startswith("[") and "]:" in host` (snmp.py:131), which guarantees `host.find("]:") >= 1`, so `bracket_end > 0` (snmp.py:133) is always true; the `133->146` arc can never fire.
+- `ethscan/snmp.py:577->576`: `_probe_community` sets `entry["version"]` unconditionally on every valid entry (snmp.py:472), so `run_snmp`'s `if results["snmp_version"] is None` gate (snmp.py:574) passes exactly once; at that sole loop entry all four sys fields are still `None` (snmp.py:559-562), so `results[key] is None` (snmp.py:577) is always true — false arc `577->576` never fires.
+- `ethscan/nmap.py:315->313`: `run_nmap` findings come only from `match_service_vulns` → `_finding` (vuln.py:599-609), which always copies `entry["severity"]` from `SERVICE_VULNS`; every `SERVICE_VULNS` severity is `critical`/`high`/`medium` (vuln.py:91-200), all in `SEVERITIES` (vuln.py:26), so `level in severity_counts` (nmap.py:315) is always true; false arc `315->313` never fires.
 
 ## What remains unresolved
-- `ethscan/snmp.py` `133->146`: **unreachable** under current control flow — `host.startswith("[") and "]:" in host` implies `find("]:") >= 1`, so `bracket_end > 0` cannot be false.
-- `ethscan/snmp.py` `577->576`: still reported by coverage as partial after adding the false-branch exercise for `if results[key] is None`. Requires arc-level confirmation (loop back-edge/exit accounting vs remaining reachable case).
-- `ethscan/vuln.py` `1036->1029` and `ethscan/subdomains.py` `240->239` remain documented unreachable.
+- `ethscan/vuln.py` `1036->1029` and `ethscan/subdomains.py` `240->239` remain documented unreachable from prior sessions (not re-measured this session).
+- `ethscan/snmp.py` (2 BrPart, both unreachable) and `ethscan/nmap.py` (1 BrPart, unreachable) are fully classified; no further snmp/nmap work.
 
 ## Approaches already tried and ruled out
-- `smtp` (5 documented unreachable arcs) — do not re-attempt. `oracle`/`postgresql` empty-target handling out of scope.
-- `snmp` connector must return `(data, err)`; an initial test returned only `bytes` and all communities were treated invalid. Corrected to match `_send_recv` contract.
+- `smtp` (5 documented unreachable arcs) — do not re-attempt. `oracle`/`postgresql` empty-target handling out of scope per contract.
+- `snmp` `133->146` / `577->576`: unreachable by string/loop invariant (see evidence); no test possible.
+- `nmap` `315->313`: unreachable by severity-domain invariant (see evidence); no test possible.
 
 ## Precise next task
-- Re-measure and classify remaining `ethscan/snmp.py` arcs `133->146, 577->576` with evidence (confirm `577->576` is loop/accounting artifact or find reachable trigger). If fully classified/unreachable, proceed to `ethscan/nmap.py` (next by prior ordering, 4 BrPart).
-- Reproduce command: `python -m coverage erase && python -m coverage run --branch --source=ethscan.snmp -m pytest tests/test_snmp.py tests/test_snmp_hostile_sweep.py tests/test_snmp_formatter_hostile_sweep.py tests/test_snmp_branch_gaps.py -q && python -m coverage report --show-missing --include='ethscan/snmp.py'`.
-- Then for nmap: `python -m coverage erase && python -m coverage run --branch --source=ethscan.nmap -m pytest tests/test_nmap.py tests/test_nmap_hostile_sweep.py tests/test_nmap_formatter_hostile_sweep.py -q && python -m coverage report --show-missing --include='ethscan/nmap.py'`.
-- Classify each reported arc as reachable (add focused tests, e.g. `tests/test_<module>_branch_gaps.py`) or unreachable/defensive with arc-level evidence; do not batch modules.
+- Continue one module per session by partial-branch count (reproduce each with branch coverage first; classify reachable vs defensive/unreachable before editing tests; do not batch modules).
+- Precise next: `ethscan/wifi.py` (3 BrPart; `smtp.py` ruled out, `postgresql.py` out of scope). Reproduce command:
+  `python -m coverage erase && python -m coverage run --branch --source=ethscan.wifi -m pytest tests/test_wifi.py tests/test_wifi_hostile_sweep.py tests/test_wifi_formatter_hostile_sweep.py -q && python -m coverage report --show-missing --include='ethscan/wifi.py'`
+- If wifi is fully classified, proceed down the 3-BrPart list (urlcheck, trace, subtake, osdetect, ntp, memcached), re-measuring each before acting.
 
 ## Environment/notes
 - Dev deps present: pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3, Python 3.14.4.
 - Preexisting warning: `RuntimeWarning` in `tests/test_cli_cov_gaps.py::test_cli_main_guard_executes`.
+- Caches (`.coverage`, `.mypy_cache/`, `.ruff_cache/`, `.pytest_cache/`, `*.egg-info/`) are gitignored; commit only source/test/handoff files.
