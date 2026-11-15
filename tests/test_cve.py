@@ -1708,3 +1708,111 @@ def test_format_cve_report_markdown_non_dict_data() -> None:
     assert "## Severity Summary" in output
     assert "## CVE Findings" in output
     assert "*No CVEs matched.*" in output
+
+
+def _write_services(path: Path, payload: object) -> str:
+    path.write_text(json.dumps(payload))
+    return str(path)
+
+
+def test_run_cve_fetched_data_without_cache_marks_uncached(tmp_path, monkeypatch) -> None:
+    services_file = _write_services(
+        tmp_path / "services.json",
+        {"results": [{"port": 22, "banner": "SSH-2.0-OpenSSH_7.2p2"}]},
+    )
+    monkeypatch.setattr(
+        "ethscan.cve._fetch_cve_data",
+        lambda *a, **k: {
+            "vulnerabilities": [
+                {
+                    "cve": {
+                        "id": "CVE-2016-6210",
+                        "descriptions": [{"lang": "en", "value": "desc"}],
+                    }
+                }
+            ]
+        },
+    )
+
+    result = run_cve(
+        "example.com", services_file=services_file, timeout=0.5, use_cache=False
+    )
+    nvd_entries = [
+        entry
+        for entry in cast(list[dict[str, Any]], result["cve_entries"])
+        if entry.get("source") == "nvd"
+    ]
+    assert nvd_entries
+    assert nvd_entries[0]["cached"] is False
+    assert nvd_entries[0]["cve"]["severity"] is None
+
+
+def test_run_cve_non_object_services_document(tmp_path, monkeypatch) -> None:
+    services_file = _write_services(
+        tmp_path / "services.json", [{"banner": "SSH-2.0-OpenSSH_7.2p2"}]
+    )
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+
+    result = run_cve(
+        "example.com", services_file=services_file, timeout=0.5, use_cache=False
+    )
+    assert result["services_checked"] == 0
+    assert result["cve_count"] == 0
+
+
+def test_run_cve_services_document_without_results_or_services(tmp_path, monkeypatch) -> None:
+    services_file = _write_services(tmp_path / "services.json", {})
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+
+    result = run_cve(
+        "example.com", services_file=services_file, timeout=0.5, use_cache=False
+    )
+    assert result["services_checked"] == 0
+    assert any(
+        "No service banners detected" in str(n)
+        for n in cast(list[object], result["notes"])
+    )
+
+
+def test_run_cve_severity_filter_drops_nonmatching(tmp_path, monkeypatch) -> None:
+    services_file = _write_services(
+        tmp_path / "services.json",
+        {"results": [{"port": 22, "banner": "SSH-2.0-OpenSSH_7.2p2"}]},
+    )
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+
+    result = run_cve(
+        "example.com",
+        services_file=services_file,
+        timeout=0.5,
+        use_cache=False,
+        severity="high",
+    )
+    assert result["severity_filter"] == "high"
+    assert result["cve_count"] == 0
+
+
+def test_run_cve_invalid_min_severity_skips_threshold(tmp_path, monkeypatch) -> None:
+    services_file = _write_services(
+        tmp_path / "services.json",
+        {"results": [{"port": 22, "banner": "SSH-2.0-OpenSSH_7.2p2"}]},
+    )
+    monkeypatch.setattr("ethscan.cve._fetch_cve_data", lambda *a, **k: None)
+
+    result = run_cve(
+        "example.com",
+        services_file=services_file,
+        timeout=0.5,
+        use_cache=False,
+        min_severity="bogus",
+    )
+    assert result["min_severity_filter"] == "bogus"
+    assert cast(int, result["cve_count"]) >= 1
+
+
+def test_finding_detail_without_port_omits_port() -> None:
+    detail = _finding_detail(
+        {"kind": "service", "product": "OpenSSH", "version": "7.2p2"}
+    )
+    assert detail == "OpenSSH 7.2p2"
+    assert "port" not in detail
