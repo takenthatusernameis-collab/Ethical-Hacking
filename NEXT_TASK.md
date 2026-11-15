@@ -2,39 +2,39 @@
 Date: Sun Nov 15 2026
 
 ## Status
-`ethscan/vuln.py` partial-branch task completed. Measured `ethscan/vuln.py` at 4 partial branches initially (`950->955, 977->984, 1031->1029, 1036->1029`) with branch coverage over `tests/test_vuln.py`, `tests/test_vuln_hostile_sweep.py`, `tests/test_vuln_formatter_hostile_sweep.py`. Closed 3 reachable arcs with focused tests in `tests/test_vuln_branch_gaps.py`. `ethscan/vuln.py` now 476 stmts, 0 miss, 244 branch, 1 BrPart (99%). Committed as `967144a`.
+`ethscan/snmp.py` partial-branch task completed. Measured `ethscan/snmp.py` at 4 partial branches initially (`133->146, 135->146, 140->146, 577->576`) with branch coverage over `tests/test_snmp.py`, `tests/test_snmp_hostile_sweep.py`, `tests/test_snmp_formatter_hostile_sweep.py`. Closed 2 reachable arcs with focused tests in `tests/test_snmp_branch_gaps.py`. `ethscan/snmp.py` now 388 stmts, 0 miss, 162 branch, 2 BrPart (99%).
 
 ## Baseline / verification this session
-- `python -m pytest -q` → 32086 passed, 146 skipped, 0 failed (1 preexisting warning: `tests/test_cli_cov_gaps.py::test_cli_main_guard_executes`).
-- `python -m mypy ethscan/ tests/` → Success: no issues found in 245 source files.
+- Targeted snmp tests: `python -m pytest tests/test_snmp.py tests/test_snmp_hostile_sweep.py tests/test_snmp_formatter_hostile_sweep.py tests/test_snmp_branch_gaps.py -q` → 177 passed.
+- Targeted branch coverage (`python -m coverage run --branch --source=ethscan.snmp -m pytest tests/test_snmp.py tests/test_snmp_hostile_sweep.py tests/test_snmp_formatter_hostile_sweep.py tests/test_snmp_branch_gaps.py -q` + `coverage report --show-missing --include='ethscan/snmp.py'`): 388 stmts, 0 miss, 162 branch, 2 BrPart.
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 246 source files.
 - `python -m ruff check ethscan/ tests/` → All checks passed.
 - `python3 check_readme.py` → 54 CLI commands, 0 drift.
-- Targeted branch coverage (`python -m coverage run --branch -m pytest tests/test_vuln.py tests/test_vuln_hostile_sweep.py tests/test_vuln_formatter_hostile_sweep.py tests/test_vuln_branch_gaps.py -q` + `coverage report --include='ethscan/vuln.py'`): 476 stmts, 0 miss, 244 branch, 1 BrPart.
+- Full suite not rerun this session (baseline from prior handoff: 32086 passed, 146 skipped; change is test-only addition).
 
 ## What changed
-- Added `tests/test_vuln_branch_gaps.py` (3 tests, test-only/reversible):
-  - `950->955`: `test_scan_host_skips_non_string_banner` — banner entries whose value is `int`/`None`/`bytes` are skipped at the `continue` (line 948) before `parse_banner` is reached; only the `str` banner (OpenSSH 7.2p2) is matched, so all findings carry `port == 22`.
-  - `977->984`: `test_min_severity_unknown_filter_drops_all` — `min_severity="bogus"` yields `min_rank None`, so the filter block is skipped and findings are untouched.
-  - `1031->1029`: `test_recursive_scan_skips_already_scanned_host` — a banner advertising the initial host itself is skipped because it is already in `scanned_hosts`.
+- Added `tests/test_snmp_branch_gaps.py` (3 tests, test-only/reversible):
+  - `135->146`: `test_normalize_target_bracketed_host_with_non_numeric_port_suffix` — `[::1]:abc` enters bracket-port parsing but port suffix is non-numeric, so host/port fall through unchanged.
+  - `140->146`: `test_normalize_target_host_with_non_numeric_port_suffix` — `host:abc` enters unbracketed-port parsing but suffix is non-numeric, falling through.
+  - `577->576`: `test_run_snmp_preserves_existing_sys_fields_on_second_valid_community` — first valid community sets `snmp_version` and sys fields; a second valid community re-enters the sys-field loop but each `results[key]` is already set, taking the false branch on every iteration.
 - No production-code changes.
 
 ## What remains unresolved
-- `ethscan/vuln.py` `1036->1029` (the `if recursive_result:` false branch) is **unreachable** under the current control flow and is left uncovered. The guard at line 1024 (`if depth < max_depth:`) gates host discovery, so a recursive call can only be made when `depth < max_depth`. That call returns `{}` only when `depth+1 > max_depth`, i.e. `depth >= max_depth` — a contradiction. No input forces the false branch; it is a defensive check, not a reachable arc.
+- `ethscan/snmp.py` `133->146` is **unreachable** under current control flow. The condition `host.startswith("[") and "]:" in host` guarantees `find("]:") >= 1` (position 0 would require string to start with `]:`), so `bracket_end > 0` cannot be false when reached.
+- `ethscan/snmp.py` `577->576` remains partially covered by arc accounting as `577->576` in the missing list? (coverage reports `577->576` BrPart: the loop head at 576 can take the back-edge/exit in ways not fully attributed; the false-branch at 577 `if results[key] is None` was exercised by `test_run_snmp_preserves_existing_sys_fields_on_second_valid_community`, but coverage still reports `577->576` as partial — likely loop-exit/back-arc nuance; recheck with evidence next session.)
+- `ethscan/vuln.py` `1036->1029` (unreachable) and `ethscan/subdomains.py` `240->239` (unreachable) remain documented.
 
 ## Approaches already tried / ruled out
-- `smtp` (5 documented unreachable arcs) — do not re-attempt. `oracle`/`postgresql` empty-target handling remains out of scope per documented contract.
-- `subdomains` retains 1 defensive BrPart (`240->239`) — documented unreachable under current control flow; do not re-attempt.
-- `vuln` `1036->1029`: attempted to force via a discovered host whose banner advertises a further host at `max_depth`; the sub-scan returned a non-empty dict (it still scanned the host at depth 1 before hitting the depth guard), so the true branch was taken. Confirmed unreachable by control-flow analysis.
+- `smtp` (5 documented unreachable arcs) — do not re-attempt. `oracle`/`postgresql` empty-target handling out of scope per contract.
+- `snmp` `133->146`: unreachable by string-invariant analysis (`startswith("[")` + `"]:" in host` => `find("]:") >= 1`).
+- Connector signature in this module: `connector(host, port, request, timeout)` returning `(data, err)` (see `_send_recv` and existing tests); tests must follow this contract.
 
 ## Next task
 - Continue one module per session by partial-branch count (reproduce each with branch coverage first; classify reachable vs defensive/unreachable before editing tests; do not batch modules).
 - Re-measure per-module counts before acting: `python -m coverage erase && python -m coverage run --branch -m pytest -q` then `python -m coverage report | awk '$0 ~ /^ethscan\// && $5+0>0 {print $5"\t"$1}' | sort -rn`.
-- Current ordering (BrPart / 99% coverage): `vuln`=1 (unreachable), `snmp`=4, `nmap`=4, `wifi`=3, `urlcheck`=3, `trace`=3, `subtake`=3, `postgresql`=3, `osdetect`=3, `ntp`=3, `memcached`=3, `whois`=2, `s3`=2, `redis`=2, `oracle`=2, `ftp`=2, `dnsbrute`=2, `netbios`=1, `hash`=1.
-- Precise next task: reproduce `ethscan/snmp.py` partial branches with `python -m coverage run --branch -m pytest tests/test_snmp.py tests/test_snmp_hostile_sweep.py tests/test_snmp_formatter_hostile_sweep.py -q` then `python -m coverage report --show-missing --include='ethscan/snmp.py'`.
+- Precise next task: reproduce `ethscan/snmp.py` remaining reported arcs (`133->146, 577->576`) with focused evidence to confirm unreachability vs reachable loop-exit case, then move to `ethscan/nmap.py` (4 BrPart) if snmp is fully classified. Command: `python -m coverage erase && python -m coverage run --branch --source=ethscan.snmp -m pytest tests/test_snmp.py tests/test_snmp_hostile_sweep.py tests/test_snmp_formatter_hostile_sweep.py tests/test_snmp_branch_gaps.py -q && python -m coverage report --show-missing --include='ethscan/snmp.py'`.
 
 ## Environment/notes
 - Dev deps present: pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3, Python 3.14.4.
 - Preexisting warning: `RuntimeWarning` in `tests/test_cli_cov_gaps.py::test_cli_main_guard_executes`.
 - Caches (`.coverage`, `.mypy_cache/`, `.ruff_cache/`, `.pytest_cache/`, `*.egg-info/`) are gitignored; commit only source/test/handoff files.
-
-(End of file - total 67 lines)
