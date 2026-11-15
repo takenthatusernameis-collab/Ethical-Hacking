@@ -2,7 +2,7 @@
 Date: Sun Nov 15 2026
 
 ## Status
-`ethscan/vuln.py` partial-branch task completed. Measured `ethscan/vuln.py` at 4 partial branches initially (`950->955, 977->984, 1031->1029, 1036->1029`) with branch coverage over `tests/test_vuln.py`, `tests/test_vuln_hostile_sweep.py`, `tests/test_vuln_formatter_hostile_sweep.py`. Closed 3 reachable arcs with focused tests in `tests/test_vuln_branch_gaps.py`. `ethscan/vuln.py` now 476 stmts, 0 miss, 244 branch, 1 BrPart (99%).
+`ethscan/vuln.py` partial-branch task completed. Measured `ethscan/vuln.py` at 4 partial branches initially (`950->955, 977->984, 1031->1029, 1036->1029`) with branch coverage over `tests/test_vuln.py`, `tests/test_vuln_hostile_sweep.py`, `tests/test_vuln_formatter_hostile_sweep.py`. Closed 3 reachable arcs with focused tests in `tests/test_vuln_branch_gaps.py`. `ethscan/vuln.py` now 476 stmts, 0 miss, 244 branch, 1 BrPart (99%). Committed as `967144a`.
 
 ## Baseline / verification this session
 - `python -m pytest -q` → 32086 passed, 146 skipped, 0 failed (1 preexisting warning: `tests/test_cli_cov_gaps.py::test_cli_main_guard_executes`).
