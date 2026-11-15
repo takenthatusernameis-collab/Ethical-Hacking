@@ -2,6 +2,8 @@
 
 import json
 
+from typing import Any, cast
+
 from ethscan.hash import (
     MD4_AVAILABLE,
     _compute_hash,
@@ -359,7 +361,7 @@ def test_format_hash_report_markdown_multiple_algorithms() -> None:
 
 
 def test_format_hash_report_markdown_non_dict_data() -> None:
-    output = format_hash_report_markdown(None)
+    output = format_hash_report_markdown(cast(Any, None))
     assert "Password Hash Report" in output
     assert "Algorithm:** None" in output
     assert "Passwords Hashed:** None" in output
@@ -384,7 +386,7 @@ def test_format_hash_report_markdown_non_dict_entry_in_results() -> None:
 
 def test_format_hash_report_markdown_notes_all_invalid_type() -> None:
     data = run_hash(["password"], "md5")
-    data["notes"] = [None, None, None]
+    data["notes"] = cast(Any, [None, None, None])
     output = format_hash_report_markdown(data)
     assert "## Notes" in output
     # All notes are None, so no bullet points should be added
@@ -393,7 +395,7 @@ def test_format_hash_report_markdown_notes_all_invalid_type() -> None:
 
 def test_format_hash_report_markdown_note_invalid_type_in_list() -> None:
     data = run_hash(["password"], "md5")
-    data["notes"] = ["valid note", None, 42]
+    data["notes"] = cast(Any, ["valid note", None, 42])
     output = format_hash_report_markdown(data)
     assert "## Notes" in output
     assert "- valid note" in output
@@ -560,7 +562,7 @@ def test_format_check_report_markdown_no_algorithm() -> None:
 
 
 def test_format_check_report_markdown_non_dict_data() -> None:
-    output = format_check_report_markdown(None)
+    output = format_check_report_markdown(cast(Any, None))
     assert "Password Check Report" in output
     assert "**Password:**" in output
     assert "**Digest:**" in output
@@ -1243,7 +1245,7 @@ def test_format_check_report_csv_pipe_escaping() -> None:
 
 
 def test_format_hash_report_csv_non_dict_data() -> None:
-    output = format_hash_report_csv(None)
+    output = format_hash_report_csv(cast(Any, None))
     lines = output.strip().split("\n")
     assert lines[0] == "password,digest,algorithm,salt,pepper,iterations,computed,match,error"
     assert len(lines) == 1  # only header
@@ -1265,7 +1267,7 @@ def test_format_hash_report_csv_non_dict_entry_in_results() -> None:
 
 
 def test_format_check_report_csv_non_dict_data() -> None:
-    output = format_check_report_csv(None)
+    output = format_check_report_csv(cast(Any, None))
     lines = output.strip().split("\n")
     assert lines[0] == "password,digest,algorithm,salt,pepper,iterations,computed,match,error"
     assert len(lines) == 1  # only header

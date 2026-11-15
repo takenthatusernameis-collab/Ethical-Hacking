@@ -496,3 +496,29 @@ Date: Sun Nov 08 2026 (session 7)
 - Duplicate/looser dns test: avoided; the new test targets the exact `values is None` branch.
 ## Next task
 - None required. Repository fully green: 31932 passed, 146 skipped, 0 failed; mypy/ruff clean; README in sync; 100% statement coverage of `ethscan/`. `oracle`/`postgresql` empty-target handling remains intentionally out of scope. If future work is needed, pick one bounded, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls.
+
+# Session (Sun Nov 15 2026, session 3)
+## This session
+- No prior agent assignment existed; inspected the repository and selected a bounded typing-hygiene task. Baseline at start: `pytest -q` → 32032 passed, 146 skipped, 0 failed; `ruff check` clean; `check_readme.py` 54/54; `mypy ethscan/ tests/` reported 9 errors in `tests/test_hash.py`.
+- Reproduced the 9 mypy errors in `tests/test_hash.py`:
+  - 4 × `arg-type`: passing `None` to `format_hash_report_markdown`, `format_check_report_markdown`, `format_hash_report_csv`, `format_check_report_csv` (params typed `Mapping[str, object]`).
+  - 5 × `list-item`: assigning `[None, None, None]` and `["valid note", None, 42]` to `data["notes"]` (inferred `list[str]` from `HashResult` TypedDict via `run_hash`).
+- Fixed `tests/test_hash.py` only (no source/behavior change; test typing hygiene, fully reversible):
+  - Added `from typing import Any, cast`.
+  - Wrapped the 4 `None` formatter args with `cast(Any, None)`.
+  - Cast the 2 non-str `notes` list assignments with `cast(Any, ...)`.
+## Verification
+- `python3 -m mypy tests/test_hash.py` → Success: no issues found in 1 source file.
+- `python3 -m ruff check tests/test_hash.py` → All checks passed.
+- `python3 -m pytest tests/test_hash.py -q` → 137 passed.
+- Full gate: `python3 -m mypy ethscan/ tests/` → Success: no issues found in 236 source files.
+- Full gate: `python3 -m ruff check ethscan/ tests/` → All checks passed.
+- Full gate: `python3 -m pytest -q` → 32032 passed, 146 skipped, 0 failed (baseline unchanged).
+- Full gate: `python3 check_readme.py` → 54/54, README and CLI in sync.
+- `git status` → only `tests/test_hash.py` modified (8 insertions, 6 deletions); no stray files.
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- Established `cast(Any, ...)` test-mocking pattern (used in prior sessions for test_resolve/test_main/test_recon) applied cleanly; no alternatives needed.
+## Next task
+- None required. Repository fully green: 32032 passed, 146 skipped, 0 failed; mypy/ruff clean; README in sync. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error). If future work is needed, pick a single bounded, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls.
