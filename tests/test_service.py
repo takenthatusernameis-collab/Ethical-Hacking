@@ -685,15 +685,82 @@ def test_run_service_port_key_fallback_for_non_dict(monkeypatch) -> None:
     assert results[0]["port"] == "not-a-dict"
 
 
-def test_run_service_port_key_fallback_for_invalid_port_value(monkeypatch) -> None:
-    """Cover branch 205->210: _port_key returns 0 when port value raises on int()."""
-    def mock_grab_banner(host, port, timeout):
-        return port, "banner", "TestService"
+def test_port_key_fallback_non_dict() -> None:
+    """_port_key returns 0 for non-dict input (branch 205->210 / not-a-dict)."""
+    from ethscan.service import _port_key
+    assert _port_key("not-a-dict") == 0
+    assert _port_key(None) == 0
+    assert _port_key(123) == 0
 
-    monkeypatch.setattr("ethscan.service.grab_banner", mock_grab_banner)
 
-    # Pass a port that will cause issues in _port_key when the entry has a non-int port
-    # We need to trigger the case where x is a dict but val is not convertible to int
-    # This is harder to test directly since grab_banner returns the original port
-    # But we can test by making grab_banner return a dict with bad port
-    pass  # The existing test_run_service_sort_key_fallback_for_non_int_port covers this
+def test_port_key_fallback_invalid_port_value() -> None:
+    """_port_key returns 0 when port value cannot be converted to int."""
+    from ethscan.service import _port_key
+    assert _port_key({"port": "not-a-number"}) == 0
+    assert _port_key({"port": object()}) == 0
+
+def test_format_service_report_markdown_non_dict_data() -> None:
+    """Markdown formatter handles non-dict data input."""
+    out = format_service_report_markdown(None)  # type: ignore[arg-type]
+    assert "# ethscan Service Detection Report" in out
+    assert "*No services detected.*" in out
+
+
+def test_format_service_report_markdown_skips_non_dict_result() -> None:
+    """Markdown formatter skips non-dict entries in results list."""
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "ports_scanned": 1,
+        "services_found": 1,
+        "results": ["not-a-dict", {"port": 80, "service": "HTTP", "banner": "ok"}],
+    }
+    out = format_service_report_markdown(data)
+    assert "| 80 | HTTP | ok |" in out
+
+
+def test_format_service_report_csv_non_dict_data() -> None:
+    """CSV formatter returns header only for non-dict data."""
+    out = format_service_report_csv(None)  # type: ignore[arg-type]
+    assert out.strip() == "port,service,banner"
+
+
+def test_format_service_report_csv_skips_non_dict_result() -> None:
+    """CSV formatter skips non-dict entries in results list."""
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "ports_scanned": 1,
+        "services_found": 1,
+        "results": ["not-a-dict", {"port": 80, "service": "HTTP", "banner": "ok"}],
+    }
+    out = format_service_report_csv(data)
+    lines = [line.rstrip("\r") for line in out.strip().split("\n")]
+    assert lines[0] == "port,service,banner"
+    assert lines[1] == "80,HTTP,ok"
+
+
+def test_format_service_report_markdown_entry_without_banner() -> None:
+    """Markdown row renders when banner is absent (no truncation branch)."""
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "ports_scanned": 1,
+        "services_found": 1,
+        "results": [{"port": 80, "service": "HTTP"}],
+    }
+    out = format_service_report_markdown(data)
+    assert "| 80 | HTTP |  |" in out
+
+
+def test_format_service_report_csv_non_list_results() -> None:
+    """CSV formatter handles non-list results value."""
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "ports_scanned": 1,
+        "services_found": 0,
+        "results": "not-a-list",
+    }
+    out = format_service_report_csv(data)
+    assert out.strip() == "port,service,banner"

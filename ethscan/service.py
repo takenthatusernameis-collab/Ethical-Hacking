@@ -107,6 +107,16 @@ COMMON_SERVICE_PORTS = {
 }
 
 
+def _port_key(x: object) -> int:
+    try:
+        if isinstance(x, dict):
+            val = x.get("port")
+            return int(val or 0)
+    except (TypeError, ValueError):
+        pass
+    return 0
+
+
 def grab_banner(host: str, port: int, timeout: float) -> tuple[int, str | None, str | None]:
     """Connect to a port and attempt to grab the banner.
 
@@ -199,15 +209,6 @@ def run_service(
                 if service:
                     entry["service"] = service
                 results.append(entry)
-
-    def _port_key(x: object) -> int:
-        try:
-            if isinstance(x, dict):
-                val = x.get("port")
-                return int(val or 0)
-        except (TypeError, ValueError):
-            pass
-        return 0
 
     results.sort(key=_port_key)  # type: ignore[arg-type]
 
