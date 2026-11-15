@@ -119,6 +119,18 @@ def test_normalize_target_empty_raises() -> None:
         _normalize_target("   ")
 
 
+def test_normalize_target_bracket_without_close() -> None:
+    host, port = _normalize_target("[invalid")
+    assert host == "[invalid"
+    assert port == DEFAULT_PORT
+
+
+def test_normalize_target_host_non_numeric_port() -> None:
+    host, port = _normalize_target("host:notaport")
+    assert host == "host:notaport"
+    assert port == DEFAULT_PORT
+
+
 # ---------------------------------------------------------------------------
 # _build_smb1_negotiate_request
 # ---------------------------------------------------------------------------
