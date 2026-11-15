@@ -2,42 +2,48 @@
 Date: Sun Nov 15 2026
 
 ## This session
-- Prior assignment: close/document the 5 remaining partial branches in `ethscan/smtp.py` (`61->74, 330->318, 380->388, 384->388, 395->398`), left by session 118.
-- No source (`ethscan/smtp.py`) changes were made, per the constraint that coverage alone is not justification to edit source.
+- Prior assignment (from `HANDOFF_NEXT.md`/`NEXT_TASK.md`): continue one module per session by partial-branch count — next candidate `smb`.
+- Reproduced `ethscan/smb.py` branch coverage and found **5** reachable partial branches (the handoff said 6; actual measured count is 5): `340->343, 360->363, 416->418, 754->761, 902->901`.
+- Closed all 5 with focused tests; no production-code changes.
 
 ## What changed
-- **Diagnosed all 5 partial branches with arc-level coverage evidence** (`python -m coverage run --branch ... && coverage json`, `missing_branches` confirmed exactly the 5 arcs).
-- Determined all 5 are **unreachable defensive branches** under current control flow; documented concrete reasoning for each (see "What remains unresolved" / evidence below).
-- No new tests added; existing `tests/test_smtp.py` + `tests/test_smtp_branch_gaps.py` already exercise every reachable path and leave exactly these 5 defensive arcs unhit.
+- Added `tests/test_smb_branch_gaps.py` (5 tests, mirroring the `test_smtp_branch_gaps.py` convention):
+  - `test_parse_smb1_share_level_security_no_user_bit` → `340->343`
+  - `test_parse_smb1_short_challenge_blob_skips_challenge` → `360->363`
+  - `test_build_banner_without_challenge_omits_marker` → `416->418`
+  - `test_run_smb2_signing_disabled_skips_note` → `754->761`
+  - `test_format_markdown_non_dict_negotiate_context_skips` → `902->901`
+- Updated `NEXT_TASK.md` / `HANDOFF_NEXT.md`. No `ethscan/` source edits.
 
 ## What was actually verified
-- Arc-level coverage: `ethscan/smtp.py` 304 stmts, 0 miss, 130 branch, **5 BrPart, 99%**; missing arcs exactly `61->74, 330->318, 380->388, 384->388, 395->398`.
-- Each missing arc proven unreachable (reasoning in "Evidence" below); no test can reach them without source edits, which would be speculative churn.
-- `python -m pytest -q` → **32050 passed, 146 skipped, 0 failed** (baseline unchanged).
-- `python -m mypy ethscan/ tests/` → Success: no issues in 238 source files.
+- Targeted branch coverage (`pytest tests/test_smb.py tests/test_smb_hostile_sweep.py tests/test_smb_branch_gaps.py` + `coverage --branch`): `ethscan/smb.py` 489 stmts, 0 miss, **156/156 branches, 0 BrPart (100%)**.
+- Full-suite branch coverage (`pytest -q` + `coverage --branch`): `ethscan/smb.py` 100% statement + 100% branch; `ethscan/` total 0 missing statements, 75 remaining partial branches (all other modules, unchanged).
+- `python -m pytest -q` → **32057 passed, 146 skipped, 0 failed** (baseline 32050 per prior handoff; +5 new tests, plus normal collection variance).
+- `python -m mypy ethscan/ tests/` → Success: no issues in 239 source files.
 - `python -m ruff check ethscan/ tests/` → All checks passed.
 - `python3 check_readme.py` → 54 CLI commands, 0 drift.
+- `git status` → only the new `tests/test_smb_branch_gaps.py` plus the two handoff docs changed; no production code, no stray files.
 
-## Evidence (each partial branch is unreachable defensive code)
-
-1. `61->74` — `_normalize_target` `if bracket_end > 0:` (line 61). Reached only when line 59 (`host.startswith("[") and "]:" in host`) is True. Then host[0]=='[' and `]:` is present, so `host.find("]:") >= 1`; `bracket_end > 0` is always True. The False arc is unreachable. (`]:25` test reaches line 74 but not via line 61, since `]:25` doesn't start with `[`.)
-
-2. `330->318` — EHLO capability loop `if kw:` (line 330), loop back-edge. `words = line[4:].split()` is guarded by `if not words: continue` (line 325), so `kw = words[0]` is always a non-empty string → always truthy. `if kw:` False (skip `caps.append`) never happens; unreachable.
-
-3. `380->388` / `384->388` — relay `except` handlers `if not results["error"]:` (lines 380, 384). Relay runs only when `results["ehlo_success"]` is True (line 367). Any prior error either returns early (banner/connect) or sets `ehlo_success=False` (EHLO failure → relay skipped). VRFY errors go to per-entry `error`, not `results["error"]`. So `results["error"]` is always falsy at relay; `if not` False arc unreachable.
-
-4. `395->398` — `finally` `if sock is not None:` (line 395). The `finally` (line 394) belongs to the outer try entered at line 307, which is reached only after `sock = _connect(...)` succeeded at line 288. Connect failures return via the earlier `except` (line 301-305) before entering that try. So `sock` is never None at the `finally`; False arc unreachable.
+## Evidence (why each branch is reachable, not defensive)
+1. `340->343` — `security_mode & SMB1_SECURITY_USER` is clear for share-level servers (`security_mode` bit 0x01 unset). A `security_mode=0x02` response reaches the False arc; `user_security` stays False.
+2. `360->363` — the data blob is `bytecount` bytes; any `bytecount < 8` skips the challenge assignment. A 4-byte data section reaches the False arc.
+3. `416->418` — `_build_banner` skips the "challenge present" marker when the parsed dict has no `challenge` (e.g. blob < 8 above).
+4. `754->761` — `run_smb2` notes only fire when `signing_required` or `signing_enabled`; an SMB2 response with `security_mode=0` makes both false and reaches the `elif`-false fallthrough.
+5. `902->901` — the Markdown formatter iterates `negotiate_contexts` only when `negotiate_context_count` is truthy; a counted list containing a non-dict entry skips the `isinstance` body and loops back.
 
 ## What remains unresolved
-- Nothing. All 5 smtp partial branches are accounted for as unreachable defensive code. Statement coverage 100%, branch 99% with 5 evidenced defensive BrPart.
+- Nothing for smb. Note: the existing `SMB2_HOSTILE` case in `test_smb_hostile_sweep.py` (line 129) already contains a non-dict context but never sets `negotiate_context_count`, so it cannot cover `902->901` — hence the dedicated test.
 
 ## Approaches already tried and ruled out
-- Session 118 attempted: pre-setting `results["error"]` before relay with `ehlo_success` True (not achievable via public API — EHLO failure disables relay), forcing outer `except Exception` via `KeyboardInterrupt` (BaseException, bypasses handler), `]:25` for `61->74` (doesn't reach line 61). None cover the defensive arcs; all confirmed unreachable.
+- Reusing `SMB2_HOSTILE` (no `negotiate_context_count`) to cover `902->901`: insufficient; the context loop is never entered. A counted non-dict entry is required.
+- Editing source to simplify defensive arcs: not justified — all 5 smb arcs are reachable via inputs, so tests (not source changes) are the correct fix.
+- `oracle`/`postgresql` empty-target handling: intentionally out of scope per documented contract.
 
 ## Precise next task
-- smtp branch task is **resolved** (5 unreachable defensive branches documented; no source changes).
-- Repository fully green. If future work is needed, continue one module at a time by partial-branch count: next candidates are `smb` (6) and `ntp` (6). Reproduce each with branch coverage first; do not batch modules. `oracle`/`postgresql` empty-target handling remains intentionally out of scope.
+- Reproduce `ethscan/ntp.py` partial branches `61->74, 63->74, 68->74, 245->243, 393->400, 473->499` with `pytest tests/test_ntp.py tests/test_ntp_hostile_sweep.py` + `coverage --branch`, then classify each as reachable (add focused tests) or unreachable defensive code (document with arc-level evidence). Do not batch modules.
+- Do not re-attempt `smtp` (5 documented unreachable arcs).
 
 ## Environment/notes
+- Dev deps are NOT preinstalled in a fresh checkout. Installed with `python -m pip install -e ".[dev]" coverage` (pytest/mypy/ruff/dnspython/coverage).
 - Python 3.14.4, pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3.
 - Preexisting warning: `RuntimeWarning` in `tests/test_cli_cov_gaps.py::test_cli_main_guard_executes`.
