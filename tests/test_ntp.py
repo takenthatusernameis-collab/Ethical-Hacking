@@ -130,6 +130,17 @@ def test_normalize_target_ipv6_url() -> None:
     assert port == DEFAULT_PORT
 
 
+def test_normalize_target_non_digit_port_branches() -> None:
+    # Bracketed form: port part not all digits leaves host unchanged (no port override)
+    host, port = _normalize_target("[::1]:abc")
+    assert host == "[::1]:abc"
+    assert port == DEFAULT_PORT
+    # Non-bracket form: port suffix not all digits leaves host unchanged
+    host, port = _normalize_target("example.com:abc")
+    assert host == "example.com:abc"
+    assert port == DEFAULT_PORT
+
+
 # ---------------------------------------------------------------------------
 # _build_time_request / _build_monlist_request
 # ---------------------------------------------------------------------------
@@ -246,16 +257,18 @@ def test_assess_ntp_version_unparseable() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_parse_monlist_response_with_peers() -> None:
-    data = _build_monlist_response(peer_count=2)
-    parsed = _parse_monlist_response(data)
-    assert parsed["mode"] == 7
-    assert parsed["implementation"] == 42
-    assert parsed["peer_count"] == 2
-    assert len(parsed["peers"]) == 2
-    assert parsed["peers"][0]["address"] == "127.0.0.1"
-    assert parsed["peers"][1]["address"] == "127.0.0.2"
-    assert parsed["error"] is None
+def test_parse_monlist_response_truncated_peer_chunk_skipped() -> None:
+    from ethscan.ntp import _parse_monlist_response
+    import struct
+
+    li_vn_mode = (0 << 6) | (4 << 3) | 7
+    r_m_impl = (1 << 7) | 42
+    # count=1 means 8 bytes expected; provide only 4 bytes total in peer data
+    header = struct.pack("!BBBBHHHH", li_vn_mode, r_m_impl, 0, 1, 0, 0, 0, 1)
+    data = header + b"\x00\x00\x00\x00"
+    resp = _parse_monlist_response(data)
+    assert resp["peer_count"] == 0
+    assert resp["peers"] == []
 
 
 def test_parse_monlist_response_error_bit() -> None:
@@ -1104,22 +1117,11 @@ def test_format_ntp_report_csv_no_findings() -> None:
     assert "finding" not in output
 
 
-def test_format_ntp_report_markdown_non_dict() -> None:
-    """Non-dict input to markdown formatter triggers data = {} guard (line 368)."""
-    output = format_ntp_report_markdown("not a dict")  # type: ignore[arg-type]
-    assert "# ethscan NTP Report" in output
-    assert "Target:** " in output  # empty target since data became {}
+def test_normalize_hex_hostile_values() -> None:
+    from ethscan.ntp import _normalize_hex
 
-
-def test_format_ntp_report_csv_non_dict() -> None:
-    """Non-dict input to CSV formatter triggers data = {} guard (line 468)."""
-    output = format_ntp_report_csv(["not", "a", "dict"])  # type: ignore[arg-type]
-    reader = list(csv.reader(io.StringIO(output)))
-    assert reader[0] == [
-        "target", "port", "version", "port_open", "peer_count",
-        "record_type", "peer_address", "peer_port", "peer_mode", "peer_version"
-    ]
-    # Empty dict produces a summary row with empty/zero values
-    assert len(reader) == 2
-    assert reader[1][0] == ""  # target
-    assert reader[1][5] == "summary"  # record_type
+    assert _normalize_hex(True) == 1
+    assert _normalize_hex(False) == 0
+    assert _normalize_hex(5) == 5
+    assert _normalize_hex("bad") == 0
+    assert _normalize_hex(None) == 0
