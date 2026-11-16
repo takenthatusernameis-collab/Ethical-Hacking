@@ -174,6 +174,7 @@ def test_version_dependency_attribute_errors(monkeypatch) -> None:
 def test_cli_main_guard_executes() -> None:
     # Execute module as __main__ to cover the guard; invoke version to exit quickly.
     old_argv = sys.argv
+    removed = sys.modules.pop("ethscan.cli", None)
     try:
         sys.argv = ["ethscan.cli", "version", "--output-format", "json"]
         with pytest.raises(SystemExit) as exc:
@@ -181,6 +182,8 @@ def test_cli_main_guard_executes() -> None:
         assert exc.value.code == 0
     finally:
         sys.argv = old_argv
+        if removed is not None:
+            sys.modules["ethscan.cli"] = removed
 
 
 @pytest.mark.parametrize(
