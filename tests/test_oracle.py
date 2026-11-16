@@ -372,6 +372,12 @@ def test_normalize_target_url_with_port_and_path():
     assert _normalize_target("tns://example.com:1522/sid") == ("example.com", 1522)
 
 
+def test_normalize_target_non_digit_port_suffix():
+    """A non-digit port suffix keeps the host:port form intact (58->62)."""
+    assert _normalize_target("example.com:abc") == ("example.com:abc", DEFAULT_PORT)
+    assert _normalize_target("oracle://example.com:abc") == ("example.com:abc", DEFAULT_PORT)
+
+
 # ---------------------------------------------------------------------------
 # _build_connect_request structure tests
 # ---------------------------------------------------------------------------

@@ -198,6 +198,12 @@ def test_normalize_target_url_with_path():
     assert _normalize_target("redis://example.com/0") == ("example.com", DEFAULT_PORT)
 
 
+def test_normalize_target_bare_host_non_digit_port_suffix():
+    """A non-digit port suffix keeps the host:port form intact (62->68)."""
+    assert _normalize_target("example.com:abc") == ("example.com:abc", DEFAULT_PORT)
+    assert _normalize_target("redis://example.com:abc") == ("example.com:abc", DEFAULT_PORT)
+
+
 # ---------------------------------------------------------------------------
 # _build_resp_array additional cases
 # ---------------------------------------------------------------------------

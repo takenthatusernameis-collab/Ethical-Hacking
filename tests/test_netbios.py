@@ -145,6 +145,16 @@ def test_normalize_target_ipv6_url() -> None:
     assert port == DEFAULT_PORT
 
 
+def test_normalize_target_bracket_without_port_separator() -> None:
+    """A bracketed host lacking ``]:`` keeps the literal target (131->144)."""
+    host, port = _normalize_target("[example")
+    assert host == "[example"
+    assert port == DEFAULT_PORT
+    host, port = _normalize_target("netbios://[example")
+    assert host == "[example"
+    assert port == DEFAULT_PORT
+
+
 # ---------------------------------------------------------------------------
 # Name encoding / decoding (RFC 1001 first-level encoding)
 # ---------------------------------------------------------------------------

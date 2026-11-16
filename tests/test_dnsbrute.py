@@ -477,6 +477,16 @@ def test_extract_ns_records_with_trailing_dot() -> None:
     assert ns_records == ["ns1.example.com", "ns2.example.com"]
 
 
+def test_extract_ns_records_ns_without_target() -> None:
+    """An NS record with no target field skips the empty target (309->304)."""
+    records = [
+        "example.com 300 IN NS",
+        "example.com 300 IN NS ns1.example.com",
+        "example.com 300 IN NS ",
+    ]
+    assert _extract_ns_records(records) == ["ns1.example.com"]
+
+
 def test_is_subdomain_of_exact_match() -> None:
     assert _is_subdomain_of("example.com", "example.com") is True
 
@@ -1498,6 +1508,18 @@ def test_parse_dns_name_invalid_length_byte() -> None:
 def test_parse_dns_name_label_past_end_of_data() -> None:
     """A declared label longer than the remaining data stops parsing (line 127)."""
     assert _parse_dns_name(b"\x03ab", 0) == ("", 1)
+
+
+def test_parse_dns_name_follows_second_compression_pointer() -> None:
+    """A pointer that points at another pointer sets end_offset (199->202)."""
+    # Offset 0: pointer to offset 6. Offset 6: pointer to offset 12 where
+    # "example.com" is stored. The first jump records end_offset=2 (the
+    # position of the first pointer); the second jump does not overwrite it.
+    name_data = _encode_dns_name("example.com")
+    data = b"\xc0\x06" + b"\x00" * 4 + b"\xc0\x0c" + b"\x00" * 4 + name_data
+    name, offset = _parse_dns_name(data, 0)
+    assert name == "example.com"
+    assert offset == 2
 
 
 # ---------------------------------------------------------------------------

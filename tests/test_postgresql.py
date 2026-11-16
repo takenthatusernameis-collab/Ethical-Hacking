@@ -90,6 +90,12 @@ def test_normalize_target_port_override_in_url():
     assert _normalize_target("postgresql://db.example.com:5433") == ("db.example.com", 5433)
 
 
+def test_normalize_target_non_digit_port_suffix():
+    """A non-digit port suffix keeps the host:port form intact (88->92)."""
+    assert _normalize_target("example.com:abc") == ("example.com:abc", DEFAULT_PORT)
+    assert _normalize_target("postgresql://example.com:abc") == ("example.com:abc", DEFAULT_PORT)
+
+
 # --- request building -----------------------------------------------------
 
 
