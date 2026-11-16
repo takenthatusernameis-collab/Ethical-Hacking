@@ -288,12 +288,14 @@ def check_bucket_public(
         with urllib.request.urlopen(req, timeout=timeout) as response:
             status = response.getcode()
             result["status_code"] = status
-            if status == 200:
+            if 200 <= status < 300:
                 result["exists"] = True
-                result["public"] = True
+                result["public"] = status == 200
             elif status == 403:
                 result["exists"] = True
                 result["public"] = False
+            else:
+                result["error"] = f"Unexpected HTTP status {status}"
     except urllib.error.HTTPError as exc:
         status = exc.code
         result["status_code"] = status
@@ -307,6 +309,10 @@ def check_bucket_public(
             result["exists"] = False
             result["public"] = False
             result["error"] = "Invalid bucket name or request"
+        elif 500 <= status < 600:
+            result["error"] = f"Server error: HTTP {status}"
+        else:
+            result["error"] = f"Unexpected HTTP status {status}"
         try:
             exc.close()
         except Exception:  # noqa: BLE001, S110 - closing an HTTPError response must not abort the probe
