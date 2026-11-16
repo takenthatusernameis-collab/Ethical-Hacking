@@ -2,19 +2,16 @@
 Date: Mon Nov 16 2026
 
 ## Status
-- No prior agent assignment existed; HANDOFF_NEXT/NEXT_TASK said "none pending" and the last commit only touched those handoff files. Baseline was re-verified independently.
-- Selected and completed a bounded, evidence-based correctness fix in `ethscan/dnssec.py` (see below). No commit was made; changes are in the working tree for the controller to stage/commit.
+- No prior agent assignment existed; HANDOFF_NEXT/NEXT_TASK state "none required" and the DNSSEC fix is committed in e59adca. Baseline was re-verified independently this session.
+- Nothing changed this session (baseline verification only). Repository is fully green.
 
 ## What changed
-- `ethscan/dnssec.py::_build_dns_query`: stopped setting the DNS header QR bit (`0x8000`) while claiming it was the "DO bit"; now appends a proper EDNS0 OPT pseudo-record (type 41, UDP payload 4096, DO flag `0x8000`, rdlen 0, `ARCOUNT=1`) when `want_dnssec` is true, and emits no OPT (`ARCOUNT=0`) otherwise.
-- `tests/test_dnssec.py`: corrected `test_build_dns_query` (was asserting the buggy `0x8100`/no-OPT bytes) and added `test_build_dns_query_sets_do_bit_not_qr` and `test_build_dns_query_without_dnssec_has_no_opt`.
+- None (no new task was selected; no source or test changes).
 
 ## What was verified
-- Repro before: flags `0x8100`, QR=1, AR=0, no OPT. After: flags `0x0100`, QR=0, RD=1, AR=1, OPT `(41, 4096, 0x8000, 0)`.
-- `pytest -q` -> 32188 passed, 146 skipped, 0 failed (baseline 32186; +2 tests).
+- `pytest -q` -> 32188 passed, 146 skipped, 0 failed (matches committed baseline; +2 tests vs the pre-fix 32186).
 - Branch coverage -> 100%, 0 missing branches.
-- `mypy ethscan/ tests/` clean (259 files); `ruff check` clean; `check_readme.py` 54/54; `git diff --check` clean.
-- `git status` -> only `ethscan/dnssec.py` and `tests/test_dnssec.py` modified.
+- `mypy ethscan/ tests/` clean (259 files); `ruff check` clean; `check_readme.py` 54/54; `git status` clean; branch `main` up to date with `origin/main`.
 
 ## Next task
 - None required. Repository is fully green. If future work is needed, pick one bounded, high-value improvement and reproduce the gap first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope (exit 0, in-band error). `passwords.py` salted/peppered audit intentionally evaluates the derived hash (tested design); do not change without an explicit task.
