@@ -547,16 +547,60 @@ def test_format_dnssec_report_csv_escaping() -> None:
     assert reader[2][10] == 'ab,cd"ef'
 
 
+# EDNS0 OPT record appended to a DNSSEC-requesting query: root name, type 41,
+# UDP payload size 4096, flags field with DO (0x8000) set, empty RDATA.
+_OPT_DO_RECORD = b"\x00" + struct.pack(">HHIH", 41, 4096, 0x8000, 0)
+
+
+def _skip_question(data: bytes, offset: int = 12) -> int:
+    """Return the offset just past the single question starting at ``offset``."""
+    while data[offset] != 0:
+        offset += 1 + data[offset]
+    return offset + 1 + 4  # root label + qtype + qclass
+
+
 def test_build_dns_query():
     q = _build_dns_query("example.com", DNSKEY_QTYPE, True)
-    assert struct.unpack(">H", q[2:4])[0] == 0x8100
-    assert q[12:] == b"\x07example\x03com\x00" + struct.pack(">HH", DNSKEY_QTYPE, 1)
+    assert struct.unpack(">H", q[2:4])[0] == 0x0100
+    assert struct.unpack(">H", q[10:12])[0] == 1  # ARCOUNT
+    assert q[12:] == (
+        b"\x07example\x03com\x00" + struct.pack(">HH", DNSKEY_QTYPE, 1) + _OPT_DO_RECORD
+    )
     q2 = _build_dns_query("example.com", DS_QTYPE, False)
     assert struct.unpack(">H", q2[2:4])[0] == 0x0100
+    assert struct.unpack(">H", q2[10:12])[0] == 0  # no OPT when DNSSEC not requested
+    assert q2[12:] == b"\x07example\x03com\x00" + struct.pack(">HH", DS_QTYPE, 1)
     q3 = _build_dns_query("com", DNSKEY_QTYPE, True)
-    assert q3[12:] == b"\x03com\x00" + struct.pack(">HH", DNSKEY_QTYPE, 1)
+    assert q3[12:] == b"\x03com\x00" + struct.pack(">HH", DNSKEY_QTYPE, 1) + _OPT_DO_RECORD
     q4 = _build_dns_query("sub.example.com", DS_QTYPE, True)
-    assert q4[12:] == b"\x03sub\x07example\x03com\x00" + struct.pack(">HH", DS_QTYPE, 1)
+    assert q4[12:] == (
+        b"\x03sub\x07example\x03com\x00" + struct.pack(">HH", DS_QTYPE, 1) + _OPT_DO_RECORD
+    )
+
+
+def test_build_dns_query_sets_do_bit_not_qr():
+    q = _build_dns_query("example.com", DNSKEY_QTYPE, want_dnssec=True)
+    _qid, flags, qd, an, ns, ar = struct.unpack(">HHHHHH", q[:12])
+    # A query must never set QR (0x8000); the DO bit is carried by EDNS0.
+    assert flags & 0x8000 == 0
+    assert flags & 0x0100 == 0x0100  # RD set
+    assert (qd, an, ns, ar) == (1, 0, 0, 1)
+
+    offset = _skip_question(q)
+    assert q[offset] == 0  # OPT owner name is the root
+    rtype, udp_size, ttl, rdlen = struct.unpack(">HHIH", q[offset + 1 : offset + 11])
+    assert rtype == 41  # OPT
+    assert udp_size == 4096
+    assert ttl & 0x8000 == 0x8000  # DO bit set
+    assert rdlen == 0
+
+
+def test_build_dns_query_without_dnssec_has_no_opt():
+    q = _build_dns_query("example.com", DNSKEY_QTYPE, want_dnssec=False)
+    _qid, flags, qd, an, ns, ar = struct.unpack(">HHHHHH", q[:12])
+    assert flags == 0x0100
+    assert (qd, an, ns, ar) == (1, 0, 0, 0)
+    assert q[12:] == b"\x07example\x03com\x00" + struct.pack(">HH", DNSKEY_QTYPE, 1)
 
 
 def test_parse_dns_name_basic():

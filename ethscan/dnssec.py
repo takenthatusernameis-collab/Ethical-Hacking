@@ -95,30 +95,50 @@ def _get_parent_zone(domain: str) -> str:
     return ".".join(labels[1:]) + "."
 
 
+# EDNS0 OPT pseudo-record (RFC 6891) used to signal DNSSEC support.
+_OPT_RR_TYPE = 41
+_OPT_UDP_PAYLOAD_SIZE = 4096
+_OPT_DO_FLAG = 0x8000  # DO is the top bit of the OPT 16-bit flags field
+
+
 def _build_dns_query(name: str, qtype: int, want_dnssec: bool = True) -> bytes:
     """Build a DNS query message.
 
     Args:
         name: Domain name to query.
         qtype: Query type (e.g., DNSKEY, DS).
-        want_dnssec: Whether to set the DO (DNSSEC OK) bit.
+        want_dnssec: Whether to request DNSSEC records by setting the DO
+            (DNSSEC OK) bit in an EDNS0 OPT pseudo-record appended to the
+            additional section.
 
     Returns:
         DNS query message bytes.
     """
     import random
     query_id = random.randint(0, 65535)
-    flags = 0x0100  # Standard query with recursion desired
-    if want_dnssec:
-        flags |= 0x8000  # DO bit (DNSSEC OK)
-    header = struct.pack(">HHHHHH", query_id, flags, 1, 0, 0, 0)
+    flags = 0x0100  # Standard query with recursion desired; QR stays clear (0)
     labels = [label for label in name.strip().rstrip(".").split(".") if label]
     question = b"".join(
         bytes([len(label)]) + label.encode("ascii", errors="replace")
         for label in labels
     ) + b"\x00"
     question += struct.pack(">HH", qtype, 1)
-    return header + question
+
+    if want_dnssec:
+        # The DO bit lives in the OPT record's 32-bit flags field, not in the
+        # header flags: the header bit 0x8000 is QR, which would mark the
+        # query as a response and make a server drop it. Append an OPT record
+        # with DO set and advertise our UDP payload size.
+        additional = b"\x00" + struct.pack(
+            ">HHIH", _OPT_RR_TYPE, _OPT_UDP_PAYLOAD_SIZE, _OPT_DO_FLAG, 0
+        )
+        arcount = 1
+    else:
+        additional = b""
+        arcount = 0
+
+    header = struct.pack(">HHHHHH", query_id, flags, 1, 0, 0, arcount)
+    return header + question + additional
 
 
 def _parse_dns_name(data: bytes, offset: int) -> tuple[str, int]:

@@ -2,35 +2,36 @@
 Date: Mon Nov 16 2026
 
 ## This session
-- No prior agent assignment existed (HANDOFF_NEXT/NEXT_TASK both said "None required / None pending"). Inspected the repository and confirmed the working baseline is green before selecting work.
-- Baseline: `python3 -m pytest -q` → 32186 passed, 146 skipped, 0 failed; `mypy ethscan/ tests/` clean; `ruff check ethscan/ tests/` clean; `python3 check_readme.py` → 54/54, 0 drift; `git status` clean, up to date with origin/main.
-- Originated no change: ran bounded, evidence-based reproduction across the remaining risk surfaces and found no reproducible bug or gap, so per the reliability rules no speculative change was made.
+- No prior agent assignment existed (HANDOFF_NEXT/NEXT_TASK said "none pending"; the previous commit only updated those handoff files — a control-marker-only commit, not project progress). I independently re-verified the baseline, then selected a bounded, evidence-based correctness fix.
+- Baseline confirmed before changes: `pytest -q` -> 32186 passed, 146 skipped, 0 failed; `mypy ethscan/ tests/` clean (259 files); `ruff check` clean; `check_readme.py` -> 54/54, 0 drift; branch coverage 100% (5890 branches, 0 missing); working tree clean.
 
-## Reproduction performed (all clean — no defect found)
-- CLI hostile-target fuzzer: every command × unusable targets (`""`, `"   "`, `"https://"`, `"host name"`, `"http://"`, `":6379"`) → exit 0 or 2, no tracebacks (262 invocations).
-- CLI numeric-option fuzzer: `--timeout`/`--workers`/`--count`/`--ttl`/etc. with negative/zero/huge values across 39 commands → no tracebacks; only 4 commands (cert, snmp, ntp, netbios) block with `--timeout 999999`, which is user-requested extreme timeout, not a crash.
-- Formatter hostile-field fuzzer: ftp, ntp, oracle, smtp, snmp, memcached, mongodb, mssql, mysql, postgresql, redis — markdown+csv × ~55 fields × 11 hostile values → 28,677 combinations, zero crashes.
-- Empty-target CLI audit: all 47 target-taking commands → exit 2 ("Could not parse host from target") except oracle/postgresql, which intentionally exit 0 with in-band error per their documented contract.
-- No TODO/FIXME/XXX/HACK markers in ethscan/.
+## Bug fixed (real, reproduced): malformed DNSSEC query in `ethscan/dnssec.py`
+- `_build_dns_query()` set `flags |= 0x8000` with the comment "DO bit (DNSSEC OK)". In the DNS header, `0x8000` is the **QR** bit (query/response); the **DO** bit lives in an EDNS0 OPT pseudo-record (RFC 6891), which was never appended.
+- Effect: every stdlib-only DNSSEC query (used when `dnspython` is absent) was marked as a *response* (`QR=1`, flags `0x8100`) with `ARCOUNT=0`, so a real server would drop it and DNSSEC was never actually requested. This is the exact "tests codify the bug" pattern seen in the prior `/31` fix.
+- Reproduction (pre-fix): `struct.unpack(">H", q[2:4])[0] == 0x8100`, `ARCOUNT == 0`, no OPT record.
+- Fix: keep `QR` clear, and when `want_dnssec` is true append an EDNS0 OPT record (type 41, UDP payload 4096, flags `0x8000` = DO, rdlen 0) with `ARCOUNT=1`; when false, emit no OPT and `ARCOUNT=0`. Only `ethscan/dnssec.py` and `tests/test_dnssec.py` changed.
+- Tests: rewrote the bug-codifying `test_build_dns_query` (expected `0x8100` -> `0x0100` + OPT) and added `test_build_dns_query_sets_do_bit_not_qr` and `test_build_dns_query_without_dnssec_has_no_opt`. Raw-query tests already used `ANY` for the query bytes, so no other test needed changes.
 
 ## What was actually verified
-- Repository fully green: tests, typing, lint, README sync, 100% branch coverage (prior session), CLI/formatter robustness.
-- No uncommitted changes; working tree clean.
+- Post-fix repro: flags `0x0100`, `QR=0`, `RD=1`, `AR=1`, OPT present with `(type=41, udp=4096, ttl=0x8000, rdlen=0)`.
+- `pytest -q` -> 32188 passed, 146 skipped, 0 failed (baseline 32186; +2 new tests).
+- `pytest --cov=ethscan --cov-report=...` (branch) -> 100%, 0 missing branches.
+- `mypy ethscan/ tests/` -> Success, no issues (259 files); `ruff check ethscan/ tests/` -> All checks passed.
+- `check_readme.py` -> 54/54, 0 drift; `git diff --check` -> clean.
+- `git status` -> only `ethscan/dnssec.py` and `tests/test_dnssec.py` modified. No commit made (controller stages/commits).
 
-## What remains unresolved
-- None. There is no pending fix.
+## What remains unresolved / ruled out
+- `passwords.py::evaluate_password` computes strength metrics on the salted/peppered *hash* (so any password rates "strong" with `--salt`/`--pepper`). A subagent flagged this as a bug, but it is a **deliberate, tested design**: `tests/test_passwords.py:346-370` explicitly assert `length == 64` ("Salted password should be longer (SHA-256 = 64 hex chars)") and README documents "salted/peppered evaluation". Not changed — doing so would break codified behavior on an ambiguous design choice. Revisit only if a task explicitly asks to redefine salted/peppered audit semantics.
+- MAC `oui` field returns 8 hex chars (32 bits) though the docstring says "24-bit OUI": cosmetic/display only; tests codify 8 chars; not changed.
+- No other correctness bug reproduced. Cross-module differential (`cidr`/`radix`/`validate` `_format_network_info` over IPv4 /0../32 and IPv6 /0,/1,/2,/3,/31,/32,/48,/64,/127,/128) -> 0 differences; all match stdlib `ipaddress`.
 
 ## Approaches already tried / ruled out
-- Speculative formatter hardening: ruled out — all formatters already defensive (28,677 fuzz combos clean).
-- Speculative CLI crash fixes: ruled out — no tracebacks in 795 CLI invocations.
-- Speculative empty-target fixes: ruled out — contract is uniform and tested (`test_invalid_target_is_a_usage_error_for_every_target_command` + per-command tests).
-- `--timeout 999999` hang in cert/snmp/ntp/netbios: not a bug (user-requested extreme timeout); no change warranted.
+- Speculative changes: rejected. Baseline is green with 100% branch coverage; fuzzing (CLI/formatters) already clean in prior sessions.
+- Modifying `passwords.py` salt/pepper semantics: ruled out (tested intentional design, see above).
+- Refactoring the three network calculators into a shared helper: ruled out (no defect; would enlarge the patch).
 
 ## Next task
-- None pending. Repository is fully green with 100% branch coverage. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error). If future work is needed, pick one bounded, high-value improvement, reproduce the gap first, and do not speculate or weaken safety controls.
+- None required. The DNSSEC query-encoding defect is fixed and verified; repository is green (32188 passed, 146 skipped, 0 failed; mypy/ruff/README clean; 100% branch coverage). If future work is needed, pick one bounded, high-value improvement and reproduce the gap first. `oracle`/`postgresql` empty-target handling (exit 0, in-band error) remains intentionally out of scope.
 
 ## Environment/notes
-- Dev deps: pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3, Python 3.14.4.
-- No commit was created; nothing to commit (working tree clean).
-
-(End of file)
+- Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3. Dev deps were already installed in this checkout.
