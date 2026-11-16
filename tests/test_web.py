@@ -428,6 +428,54 @@ def test_fetch_headers_reports_a_transport_failure(mock_urlopen) -> None:
 
 
 @patch("ethscan.web.urllib.request.urlopen")
+def test_fetch_headers_records_status_on_success(mock_urlopen) -> None:
+    mock_response = MagicMock()
+    mock_response.status = 200
+    mock_response.headers = {
+        "Content-Type": "text/html",
+        "Server": "Apache/2.4.1",
+    }
+    mock_urlopen.return_value.__enter__.return_value = mock_response
+
+    headers = fetch_headers("https://example.com")
+    assert headers.status == 200
+    assert headers.error is None
+    assert headers["server"] == "Apache/2.4.1"
+
+
+@patch("ethscan.web.urllib.request.urlopen")
+def test_fetch_headers_records_status_on_http_error(mock_urlopen) -> None:
+    import urllib.error
+
+    error = urllib.error.HTTPError(
+        url="https://example.com",
+        code=500,
+        msg="Server Error",
+        hdrs=cast(Any, {"Content-Type": "text/html", "Server": "Apache/2.4.1"}),
+        fp=None,
+    )
+    mock_urlopen.side_effect = error
+
+    headers = fetch_headers("https://example.com")
+    # Headers of the error response are returned, the status is recorded, and
+    # no transport error is reported: a 5xx with headers is not a fetch failure.
+    assert headers.status == 500
+    assert headers.error is None
+    assert headers["content-type"] == "text/html"
+    assert headers["server"] == "Apache/2.4.1"
+
+
+@patch("ethscan.web.urllib.request.urlopen")
+def test_fetch_headers_status_none_on_transport_failure(mock_urlopen) -> None:
+    mock_urlopen.side_effect = RuntimeError("hostile transport")
+
+    headers = fetch_headers("https://example.com")
+
+    assert headers.status is None
+    assert headers.error is not None and "hostile transport" in headers.error
+
+
+@patch("ethscan.web.urllib.request.urlopen")
 def test_run_web_checks_reports_a_transport_failure(mock_urlopen) -> None:
     mock_urlopen.side_effect = RuntimeError("hostile transport")
 
@@ -436,6 +484,59 @@ def test_run_web_checks_reports_a_transport_failure(mock_urlopen) -> None:
     assert "hostile transport" in cast(str, results.get("error") or "")
     assert results["headers"] == {}
     assert cast(int, cast(dict[str, object], results["security_headers"])["missing_count"]) > 0
+
+
+@patch("ethscan.web.urllib.request.urlopen")
+def test_run_web_checks_records_http_error_status(mock_urlopen) -> None:
+    import urllib.error
+
+    error = urllib.error.HTTPError(
+        url="https://example.com",
+        code=403,
+        msg="Forbidden",
+        hdrs=cast(Any, {"Server": "Apache/2.4.1", "Content-Type": "text/html"}),
+        fp=None,
+    )
+    mock_urlopen.side_effect = error
+
+    results = run_web_checks("https://example.com", ["headers"], timeout=1.0)
+
+    # A 4xx response carries headers and a status: it must be distinguishable
+    # from a transport failure (status None, error set).
+    assert results["status"] == 403
+    assert results["error"] is None
+    assert results["headers"] == {"server": "Apache/2.4.1", "content-type": "text/html"}
+
+
+@patch("ethscan.web.urllib.request.urlopen")
+def test_run_web_checks_records_5xx_status(mock_urlopen) -> None:
+    import urllib.error
+
+    error = urllib.error.HTTPError(
+        url="https://example.com",
+        code=500,
+        msg="Server Error",
+        hdrs=cast(Any, {}),
+        fp=None,
+    )
+    mock_urlopen.side_effect = error
+
+    results = run_web_checks("https://example.com", ["headers"], timeout=1.0)
+
+    assert results["status"] == 500
+    assert results["error"] is None
+    assert results["headers"] == {}
+
+
+@patch("ethscan.web.urllib.request.urlopen")
+def test_run_web_checks_status_none_on_transport_failure(mock_urlopen) -> None:
+    mock_urlopen.side_effect = RuntimeError("hostile transport")
+
+    results = run_web_checks("https://example.com", ["headers"], timeout=1.0)
+
+    assert results["error"] is not None and "hostile transport" in cast(str, results["error"])
+    assert results["headers"] == {}
+    assert "status" not in results
 
 
 def test_run_web_checks_malformed_status_line() -> None:
@@ -592,6 +693,30 @@ def test_format_web_report_json_empty() -> None:
     assert parsed == {}
 
 
+def test_format_web_report_json_includes_status() -> None:
+    data = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "status": 500,
+    }
+    parsed = json.loads(format_web_report_json(data))
+    assert parsed["status"] == 500
+
+
+def test_format_web_report_json_status_none_when_transport_failure() -> None:
+    data = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "error": "header fetch failed: hostile transport",
+    }
+    parsed = json.loads(format_web_report_json(data))
+    assert parsed.get("status") is None
+
+
 # ---------------------------------------------------------------------------
 # Markdown formatter
 # ---------------------------------------------------------------------------
@@ -640,6 +765,30 @@ def test_format_web_report_markdown_no_security_headers() -> None:
     assert "## Security Headers" not in output
     assert "## Information Disclosure" in output
     assert "## SSL/TLS" in output
+
+
+def test_format_web_report_markdown_includes_status() -> None:
+    data = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "status": 403,
+    }
+    output = format_web_report_markdown(data)
+    assert "- **Status:** 403" in output
+
+
+def test_format_web_report_markdown_omits_status_when_none() -> None:
+    data = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "error": "header fetch failed: hostile transport",
+    }
+    output = format_web_report_markdown(data)
+    assert "Status" not in output
 
 
 def test_format_web_report_markdown_no_information_disclosure() -> None:
@@ -763,6 +912,31 @@ def test_format_web_report_csv_basic() -> None:
     assert "Server,Apache,Server header exposed" in lines
     assert "ssl_field,value" in lines
     assert "subject,CN=example.com" in lines
+
+
+def test_format_web_report_csv_includes_status() -> None:
+    data = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "status": 403,
+    }
+    lines = format_web_report_csv(data).splitlines()
+    assert lines[0] == "field,value"
+    assert "status,403" in lines
+
+
+def test_format_web_report_csv_omits_status_when_none() -> None:
+    data = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "error": "header fetch failed: hostile transport",
+    }
+    lines = format_web_report_csv(data).splitlines()
+    assert not any(line.startswith("status,") for line in lines)
 
 
 def test_format_web_report_csv_empty() -> None:

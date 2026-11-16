@@ -111,13 +111,20 @@ class FetchedHeaders(dict):
     The headers stay a plain mapping of lowercase names to values, so every
     caller that treats them as a dict keeps working. ``error`` holds the
     reason the fetch failed and is ``None`` when the fetch worked.
+    ``status`` holds the HTTP status code of the response (``response.status``
+    on success, ``exc.code`` on an ``HTTPError``) and is ``None`` when no
+    response was received (transport failures, malformed status lines).
     """
 
     error: str | None
+    status: int | None
 
-    def __init__(self, *args: Any, error: str | None = None, **kwargs: Any) -> None:
+    def __init__(
+        self, *args: Any, error: str | None = None, status: int | None = None, **kwargs: Any
+    ) -> None:
         super().__init__(*args, **kwargs)
         self.error = error
+        self.status = status
 
 
 def _parse_url(target: str) -> tuple[str, int, bool]:
@@ -165,18 +172,29 @@ def fetch_headers(target: str, timeout: float = 5.0) -> FetchedHeaders:
 
     Returns:
         Dictionary of lowercase header names to values. A target that cannot
-        be reached has no headers; the reason is in ``error``.
+        be reached has no headers; the reason is in ``error``. ``status`` is
+        the HTTP status code of the response (on success and on ``HTTPError``)
+        and is ``None`` when no response was received.
     """
     try:
         request = urllib.request.Request(strip_userinfo(target), method="HEAD")
         with urllib.request.urlopen(request, timeout=timeout) as response:
-            return FetchedHeaders({key.lower(): value for key, value in response.headers.items()})
+            return FetchedHeaders(
+                {key.lower(): value for key, value in response.headers.items()},
+                status=response.status,
+            )
     except urllib.error.HTTPError as exc:
-        # HTTPError still carries headers.
+        # HTTPError still carries headers. Record the status code so callers
+        # can distinguish a 4xx/5xx response (headers were received) from a
+        # transport failure (no response); the error stays ``None`` because a
+        # response was obtained, matching how fuzz_path records exc.code.
         try:
-            return FetchedHeaders({key.lower(): value for key, value in exc.headers.items()})
+            return FetchedHeaders(
+                {key.lower(): value for key, value in exc.headers.items()},
+                status=exc.code,
+            )
         except Exception:  # noqa: BLE001 - HTTPError.headers may raise arbitrarily
-            return FetchedHeaders()
+            return FetchedHeaders(status=exc.code)
     except http.client.HTTPException as exc:
         # ``http.client.BadStatusLine`` (a server that answers with a
         # malformed status line) derives from ``HTTPException`` and not from
@@ -352,6 +370,9 @@ def run_web_checks(target: str, checks: list[str], timeout: float = 5.0) -> dict
         fetch_error = getattr(fetched, "error", None)
         if fetch_error:
             results["error"] = fetch_error
+        fetch_status = getattr(fetched, "status", None)
+        if fetch_status is not None:
+            results["status"] = fetch_status
 
     if "headers" in checks or "security_headers" in checks:
         results["security_headers"] = check_security_headers(headers)
@@ -393,6 +414,9 @@ def format_web_report_markdown(data: dict[str, object]) -> str:
     lines.append(f"- **HTTPS:** {'Yes' if data.get('secure') else 'No'}")
     if data.get("error"):
         lines.append(f"- **Error:** {data.get('error')}")
+    status = data.get("status")
+    if status is not None:
+        lines.append(f"- **Status:** {status}")
     lines.append("")
 
     sh = data.get("security_headers")
@@ -470,6 +494,9 @@ def format_web_report_csv(data: dict[str, object]) -> str:
     writer.writerow(["port", data.get("port", "")])
     writer.writerow(["https", "true" if data.get("secure") else "false"])
     writer.writerow(["error", data.get("error") or ""])
+    status = data.get("status")
+    if status is not None:
+        writer.writerow(["status", status])
 
     sh = data.get("security_headers")
     if isinstance(sh, dict):

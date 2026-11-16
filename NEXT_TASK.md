@@ -2,28 +2,31 @@
 Date: Mon Nov 16 2026
 
 ## Status
-- Repository green (fuzz audit applied): `python3 -m pytest tests/test_fuzz.py -q` -> **31 passed** (baseline 30). `python3 -m mypy ethscan/fuzz.py tests/test_fuzz.py` -> success. `python3 -m ruff check ethscan/fuzz.py tests/test_fuzz.py` -> all checks passed. `python3 check_readme.py` -> 54 CLI commands, 0 drift.
-- Full-suite/whole-repo mypy/ruff not rerun this session (focused change only); prior baseline was 32147 passed, 0 warnings, mypy/ruff clean across `ethscan/ tests/`.
+- Repository green for `ethscan/web.py` audit: `tests/test_web.py` -> **100 passed**; `mypy ethscan/web.py tests/test_web.py` -> success; `ruff check ethscan/web.py tests/test_web.py` -> all checks passed; `check_readme.py` -> 54 CLI commands, 0 drift.
+- Full suite `pytest -q` -> 32149 passed, 146 skipped, **10 failed**, all verified pre-existing on the clean tree (`git stash`), none caused by this change:
+  - `tests/test_cli.py::test_fuzz_output_format_markdown`
+  - 7x `tests/test_fuzz_hostile_sweep.py::test_markdown_non_list_findings_never_raises[...]`
+  - `tests/test_fuzz_formatter_hostile_sweep.py::test_fuzz_formatters_tolerate_hostile_nested_shapes[data15-format_fuzz_report_csv]`
+  - `tests/test_target.py::test_fetch_headers_drops_the_userinfo_of_the_target`
 
 ## What changed this session
-- Focused functional audit of `ethscan/fuzz.py` finding classification with concrete reproducer (fake `urlopen`/`HTTPError` returning 200/401/403/404/429/500/502 + transport error).
-- **Reproduced defect:** every non-404 response with a status (including 5xx server errors and 429 rate limits) was reported as a `finding` / `is_finding=true` in JSON/MD/CSV, inflating results with server-failure/rate-limit artifacts rather than present/protected paths. 401/403 correctly indicate presence/protection and remain findings.
-- Fix (small, reversible): `run_fuzz` now classifies a response as a finding only when status is not `None`, not `404`, not `429`, and not `5xx`. `all_results` still records every probe unchanged. CSV `is_finding` and findings section derive from the same `findings` list. Markdown label changed from `Findings (non-404)` to `Findings`.
-- `ethscan/fuzz.py`: finding classifier + consistent CSV/MD rendering.
-- `tests/test_fuzz.py`: added `test_run_fuzz_classifies_server_errors_and_rate_limits_not_findings` (covers 200/401/403/404/429/500/502/transport-error across JSON/MD/CSV/all_results); updated existing finding-count assertions.
-- `README.md`: fuzz feature text documents that 404/5xx/429 are not findings (still listed in all results).
+- Focused functional audit of `ethscan/web.py` header/status handling (per prior handoff).
+- **Reproduced defect:** `fetch_headers` returned `HTTPError` headers with `error=None` and discarded `exc.code`, so 4xx/5xx responses were indistinguishable from successes and transport failures in JSON/Markdown/CSV.
+- Fix: `FetchedHeaders` gains a `status` attribute; `fetch_headers` records `response.status`/`exc.code`; `run_web_checks` surfaces `results["status"]`; Markdown/CSV render status; JSON includes it automatically. Follows the `fuzz_path` precedent (`ethscan/fuzz.py:96-97`).
+- +13 regression tests in `tests/test_web.py`; README `web` feature bullet documents status reporting.
 
 ## What remains unresolved
-- 18 partial branches remain across `ethscan/`; all statically unreachable per prior handoff evidence (`ftp.py` 46->59/216->220, `netbios.py` 131->144, `ntp.py` 61->74/245->243/393->400, `hash.py` 589->596, `memcached.py` 144->133/151->133, `nmap.py` 315->313, `smtp.py` 61->74/330->318/380->388/384->388/395->398, `snmp.py` 133->146/577->576, `vuln.py` 1036->1029). No known functional defect reproduced.
+- 10 pre-existing test failures listed above (fuzz `Findings (non-404)` label gone stale, hostile-sweep TypeError, test_target userinfo assertion). Unrelated to `web.py`; reproduce-verified on clean tree.
+- 18 statically unreachable partial branches across `ethscan/` (prior handoff); no known functional defect.
+- `ethscan/headers.py` could also surface `fetched.status`; left unchanged (bounded scope).
 
 ## Approaches already tried / ruled out
-- Treating all non-404 as findings: ruled out (false positives on 5xx/429); replaced with presence/protection-oriented classification.
-- Chasing remaining BrParts: unreachable; do not add speculative tests or weaken code.
-- Blanket `-W error` suite gate: pre-existing unrelated unraisable-exception warnings elsewhere; standard gate is plain `pytest -q`.
+- Making HTTPError a transport error: ruled out; `error=None` + recorded `status` matches `fuzz_path` precedent and preserves headers.
+- Chasing BrParts / blanket `-W error`: ruled out (prior handoff).
 
 ## Next task
-- Perform one focused functional audit with a concrete reproducer. Candidate (from prior handoff): `ethscan/web.py` header/status handling (`fetch_headers`/`run_web_checks`, ~`ethscan/web.py:172-188+` / `:323+`). Reproduce with a fake `urlopen`/`HTTPError` exercising non-200/redirect/error cases and inspect how status/headers/errors surface in JSON/MD/CSV (e.g. does `fetch_headers` preserve status context on HTTPError, are 3xx/4xx/5xx distinguished from transport failures). If a defect: smallest fix + regression test + README. Constraints: concrete scenario, no speculation, no weakened safety controls, reversible change.
+- Reconcile the 10 pre-existing test failures: update stale `**Findings (non-404):**` label assertions to `**Findings:**` in `tests/test_cli.py` and `tests/test_fuzz_hostile_sweep.py`; inspect the TypeError in `tests/test_fuzz_formatter_hostile_sweep.py` data15 CSV case and the `{'server': 'test'}` vs `{}` assertion in `tests/test_target.py::test_fetch_headers_drops_the_userinfo_of_the_target`. Smallest change; tests must match current intended behavior. Verify with `pytest tests/test_cli.py tests/test_fuzz*.py tests/test_target.py -q` and `python3 check_readme.py`. Do not modify `ethscan/` source unless a functional defect is reproduced.
 
 ## Environment/notes
-- Dev deps present: pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3, Python 3.14.4.
+- Dev deps: pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3, Python 3.14.4.
 - Caches gitignored; controller stages/commits source/test/handoff files automatically.
