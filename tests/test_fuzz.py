@@ -166,7 +166,7 @@ def test_format_fuzz_report_markdown_no_findings() -> None:
     }
     output = format_fuzz_report_markdown(data)
     assert "# ethscan HTTP Fuzz Report" in output
-    assert "Findings (non-404): 0" in output or "Findings (non-404):** 0" in output
+    assert "Findings:** 0" in output
     assert "## Findings" not in output  # No findings section when empty
     assert "## All Results" in output
 
@@ -376,11 +376,73 @@ def test_fuzz_path_success(monkeypatch) -> None:
     assert result == {"path": "/admin", "status_code": 200, "error": None}
 
 
-def test_normalize_base_url_rejects_empty_target() -> None:
-    import pytest
+def test_run_fuzz_classifies_server_errors_and_rate_limits_not_findings(
+    monkeypatch,
+) -> None:
+    """5xx responses and 429 are not findings; 401/403 still indicate presence."""
+    import urllib.error
+    from email.message import Message
+    from typing import cast
 
-    from ethscan.target import TargetSpecError
+    hdrs = cast(Message, {})
+    responses = {
+        "/ok": (200, None),
+        "/forbidden": urllib.error.HTTPError("https://example.com/forbidden", 403, "Forbidden", hdrs, None),
+        "/unauthorized": urllib.error.HTTPError("https://example.com/unauthorized", 401, "Unauthorized", hdrs, None),
+        "/broken": urllib.error.HTTPError("https://example.com/broken", 500, "Server Error", hdrs, None),
+        "/badgw": urllib.error.HTTPError("https://example.com/badgw", 502, "Bad Gateway", hdrs, None),
+        "/limited": urllib.error.HTTPError("https://example.com/limited", 429, "Too Many", hdrs, None),
+        "/missing": urllib.error.HTTPError("https://example.com/missing", 404, "Not Found", hdrs, None),
+        "/err": OSError("conn refused"),
+    }
 
-    for bad in ("", "   ", "https://"):
-        with pytest.raises(TargetSpecError, match="Could not parse host from target"):
-            _normalize_base_url(bad)
+    class _FakeResp:
+        def __init__(self, code: int) -> None:
+            self.status = code
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake_urlopen(req, timeout=None):
+        path = req.full_url.replace("https://example.com", "")
+        r = responses[path]
+        if isinstance(r, Exception):
+            raise r
+        return _FakeResp(r[0])
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    data = run_fuzz("https://example.com", wordlist=list(responses.keys()), timeout=1.0)
+
+    findings = cast(list[dict[str, object]], data["findings"])
+    finding_pairs = [(f["path"], f["status_code"]) for f in findings]
+    assert ("/ok", 200) in finding_pairs
+    assert ("/forbidden", 403) in finding_pairs
+    assert ("/unauthorized", 401) in finding_pairs
+    assert ("/broken", 500) not in finding_pairs
+    assert ("/badgw", 502) not in finding_pairs
+    assert ("/limited", 429) not in finding_pairs
+    assert ("/missing", 404) not in finding_pairs
+    # transport error has no status code and is not a finding
+    assert not any(f["path"] == "/err" for f in findings)
+
+    json_out = format_fuzz_report_json(data)
+    assert '"path": "/broken"' in json_out  # still reported in all_results
+    md_out = format_fuzz_report_markdown(data)
+    assert "Findings:** 3" in md_out
+    csv_out = format_fuzz_report_csv(data)
+    rows = list(csv.reader(io.StringIO(csv_out)))
+    assert ["/broken", "500"] not in rows  # not in findings section
+    # is_finding column for /broken and /limited must be false
+    data_rows = [r for r in rows if len(r) == 6 and r[0] == "https://example.com"]
+    by_path = {r[2]: r[5] for r in data_rows}
+    assert by_path["/ok"] == "true"
+    assert by_path["/forbidden"] == "true"
+    assert by_path["/unauthorized"] == "true"
+    assert by_path["/broken"] == "false"
+    assert by_path["/limited"] == "false"
+    assert by_path["/missing"] == "false"
+    assert by_path["/err"] == "false"

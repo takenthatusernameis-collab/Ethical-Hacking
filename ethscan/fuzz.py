@@ -152,17 +152,28 @@ def run_fuzz(
     path_to_index = {path: i for i, path in enumerate(paths)}
     results.sort(key=lambda r: path_to_index.get(cast("str", r.get("path", "")), 0))
 
-    non_404 = []
-    for r in results:
-        status_code = cast("int | None", r.get("status_code"))
-        if status_code is not None and status_code != 404:
-            non_404.append(r)
+    def _is_finding(status_code: int | None) -> bool:
+        # A finding is a response that suggests the probed path is present or
+        # protected, not a missing resource, server error, or rate-limit
+        # artifact. 404 means absent; 5xx are server failures and 429 is rate
+        # limiting rather than path discovery.
+        if status_code is None:
+            return False
+        if status_code == 404:
+            return False
+        if 500 <= status_code <= 599:
+            return False
+        if status_code == 429:
+            return False
+        return True
+
+    findings = [r for r in results if _is_finding(cast("int | None", r.get("status_code")))]
 
     return {
         "target": target,
         "base_url": base_url,
         "paths_tested": len(paths),
-        "findings": non_404,
+        "findings": findings,
         "all_results": results,
     }
 
@@ -184,7 +195,7 @@ def format_fuzz_report_markdown(data: dict[str, object]) -> str:
     findings_list = data.get("findings") or []
     if not isinstance(findings_list, list):
         findings_list = []
-    lines.append(f"- **Findings (non-404):** {len(findings_list)}")
+    lines.append(f"- **Findings:** {len(findings_list)}")
     lines.append("")
 
     if findings_list:
@@ -219,6 +230,16 @@ def format_fuzz_report_csv(data: dict[str, object]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["target", "base_url", "path", "status_code", "error", "is_finding"])
+
+    findings = data.get("findings") or [] if isinstance(data, dict) else []
+    if not isinstance(findings, list):
+        findings = []
+    finding_keys = {
+        (f.get("path"), f.get("status_code"))
+        for f in findings
+        if isinstance(f, dict)
+    }
+
     all_results_data = data.get("all_results") if isinstance(data, dict) else None
     if not isinstance(all_results_data, list):
         all_results_data = []
@@ -226,7 +247,7 @@ def format_fuzz_report_csv(data: dict[str, object]) -> str:
         if not isinstance(result, dict):
             continue
         status_code = result.get("status_code")
-        is_finding = status_code is not None and status_code != 404
+        is_finding = (result.get("path"), status_code) in finding_keys
         writer.writerow([
             data.get("target", "") if isinstance(data, dict) else "",
             data.get("base_url", "") if isinstance(data, dict) else "",
@@ -236,12 +257,8 @@ def format_fuzz_report_csv(data: dict[str, object]) -> str:
             "true" if is_finding else "false",
         ])
 
-    # A findings section mirroring the Markdown report: every non-404 result
-    # is listed as a finding. The all_results table above already marks each
-    # row with is_finding, but a reader filtering by the "finding" section
-    # header gets the same list the Markdown and JSON reports show.
-    findings = data.get("findings") or [] if isinstance(data, dict) else []
-    if isinstance(findings, list) and findings:
+    # A findings section mirroring the Markdown report.
+    if findings:
         writer.writerow([])
         writer.writerow(["finding_path", "finding_status_code"])
         for finding in findings:
