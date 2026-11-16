@@ -6,14 +6,18 @@ ethscan/memcached.py.
 Covered in this file (reachable):
 - 53->64: bracketed host with no closing "]" (e.g. "[incomplete")
 - 60->64: unbracketed host:port with non-digit rest (e.g. "host:abc")
-- 144->133: STAT line (space) with no value parts (e.g. "STAT \r\n")
-- 151->133: STAT line (tab) with no value parts (e.g. "STAT\t\r\n")
 - 357->365: primary stats present but empty (no key in primary_keys),
   while other (non-primary) stats are present.
+
+Unreachable (defensive) branches - static invariants prevent coverage:
+- 144->133: STAT line (space) with no value parts. The `line.strip()` call
+  removes trailing whitespace, so `line.startswith("STAT ")` can only be True
+  when a non-whitespace key follows, making `body.split(None, 1)` non-empty.
+- 151->133: STAT line (tab) with no value parts. Same invariant as above;
+  `strip()` removes trailing tabs/spaces.
 """
 from ethscan.memcached import (
     _normalize_target,
-    _parse_stats_response,
     format_memcached_report_markdown,
 )
 
@@ -37,19 +41,17 @@ def test_normalize_target_unbracketed_host_nondigit_port() -> None:
     assert port == 11211
 
 
-# --- _parse_stats_response reachable branch gaps (144->133, 151->133) ---
-
-
-def test_parse_stats_response_stat_space_no_value() -> None:
-    # "STAT \r\n" -> body == "" -> parts == [] -> len(parts) != 2 and
-    # len(parts) != 1, so the elif is skipped and the arc 144->133 is taken.
-    assert _parse_stats_response(b"STAT \r\nEND\r\n") == {}
-
-
-def test_parse_stats_response_stat_tab_no_value() -> None:
-    # "STAT\t\r\n" -> body == "" -> parts == [] -> same skip for the tab
-    # branch, taking the arc 151->133.
-    assert _parse_stats_response(b"STAT\t\r\nEND\r\n") == {}
+# --- _parse_stats_response UNREACHABLE branch gaps (144->133, 151->133) ---
+#
+# These branches are statically unreachable due to the `line.strip()` call at
+# line 134. After stripping, `line.startswith("STAT ")` is only True when a
+# non-whitespace key follows, so `body.split(None, 1)` always returns at
+# least one part. The `elif len(parts) == 1:` branches (144->145, 151->152)
+# are reachable (key without value), but the false branches (144->133,
+# 151->133) require `parts == []`, which is impossible post-strip.
+#
+# No test can cover 144->133 or 151->133; they are documented here for
+# classification completeness.
 
 
 # --- format_memcached_report_markdown reachable branch gap (357->365) ---
