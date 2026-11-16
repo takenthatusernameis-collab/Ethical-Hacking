@@ -1,10 +1,31 @@
-"""Focused branch-coverage tests for ethscan/vuln.py partial branches.
+"""Focused branch-coverage tests for ethscan/vuln.py.
 
-Reproduced with: python -m coverage run --branch -m pytest tests/test_vuln.py tests/test_vuln_hostile_sweep.py tests/test_vuln_formatter_hostile_sweep.py -q
+Reproduced with: python -m coverage run --branch --source=ethscan.vuln -m pytest
+tests/test_vuln.py tests/test_vuln_hostile_sweep.py tests/test_vuln_branch_gaps.py
+tests/test_vuln_formatter_hostile_sweep.py -q
 then: python -m coverage report --show-missing --include='ethscan/vuln.py'
-Initial state: 476 stmts, 0 miss, 244 branch, 4 BrPart (99%), missing 950->955, 977->984, 1031->1029, 1036->1029.
-"""
+Final state: 476 stmts, 0 miss, 244 branch, 1 BrPart (99%), missing 1036->1029.
 
+Reachable partial branches closed by tests in this file:
+- 950->955: a banner entry whose value is not a str is skipped.
+- 977->984: an unknown min_severity label yields min_rank None, so the
+  min_severity filter block is skipped entirely (findings untouched).
+- 1031->1029: a discovered host that normalizes to a host already in
+  scanned_hosts (the initial host itself) is skipped — no recursion.
+
+Reachable partial branches closed by tests/test_vuln_formatter_hostile_sweep.py:
+- 1147->1149: a service finding whose port is None skips the "(port N)" suffix.
+- 1259->1270: recursive_hosts_scanned is empty, so the "### Hosts Scanned"
+  subsection is omitted while the "### Recursive Findings" subsection renders.
+
+Unreachable (defensive) branch - static invariants prevent coverage:
+- 1036->1029: `if recursive_result:` is always True. The recursive call at
+  line 1035 is `_recursive_scan(host, depth + 1)` and is only reached when
+  `depth < max_depth` (line 1024), so `depth + 1 <= max_depth`. The callee
+  returns `{}` only when `depth > max_depth` (line 1009), which is therefore
+  false. No input forces the false branch; it is a defensive check, not a
+  reachable arc.
+"""
 from __future__ import annotations
 
 from ethscan.vuln import run_vuln
