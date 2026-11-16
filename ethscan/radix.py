@@ -373,18 +373,23 @@ def _format_network_info(network: ipaddress._BaseNetwork) -> dict[str, object]:
         netmask = str(network.netmask)
         broadcast = str(network.broadcast_address) if network.broadcast_address else None
         wildcard = str(network.hostmask)
-        usable_hosts = max(0, network.num_addresses - 2)
     else:
         netmask = str(network.netmask)
         broadcast = None
         wildcard = str(network.hostmask)
-        usable_hosts = max(0, network.num_addresses - 1)
+
+    if network.num_addresses <= 2:
+        usable_hosts = network.num_addresses
+    elif is_v4:
+        usable_hosts = network.num_addresses - 2
+    else:
+        usable_hosts = network.num_addresses - 1
 
     if network.num_addresses > 2:
         first_host = str(network[1])
         last_host = str(network[-2] if is_v4 else network[-1])
     elif network.num_addresses == 2:
-        first_host = str(network[1])
+        first_host = str(network[0])
         last_host = str(network[1])
     else:
         first_host = str(network.network_address)

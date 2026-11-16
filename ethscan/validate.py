@@ -132,6 +132,12 @@ def _format_network_info(network: ipaddress._BaseNetwork) -> dict[str, Any]:
     """
     is_v4 = network.version == 4
     total = network.num_addresses
+    if total <= 2:
+        usable_hosts = total
+    elif is_v4:
+        usable_hosts = total - 2
+    else:
+        usable_hosts = total - 1
 
     info: dict[str, object] = {
         "network_address": str(network.network_address),
@@ -141,14 +147,14 @@ def _format_network_info(network: ipaddress._BaseNetwork) -> dict[str, Any]:
         "first_host": (
             str(network[1])
             if total > 2
-            else str(network[1]) if total == 2 else str(network.network_address)
+            else str(network[0]) if total == 2 else str(network.network_address)
         ),
         "last_host": (
             str(network[-2] if is_v4 else network[-1])
             if total > 2
             else str(network[1]) if total == 2 else str(network.network_address)
         ),
-        "usable_host_count": max(0, total - 2) if is_v4 else max(0, total - 1),
+        "usable_host_count": usable_hosts,
         "total_addresses": total,
         "prefixlen": network.prefixlen,
         "is_private": network.is_private,

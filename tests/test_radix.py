@@ -828,16 +828,16 @@ def test_format_network_info_ipv4_single() -> None:
     assert info["broadcast_address"] == "192.168.1.1"
     assert info["first_host"] == "192.168.1.1"
     assert info["last_host"] == "192.168.1.1"
-    assert info["usable_host_count"] == 0
+    assert info["usable_host_count"] == 1
 
 
 def test_format_network_info_ipv4_pair() -> None:
     from ethscan.radix import _format_network_info
 
     info = _format_network_info(ipaddress.ip_network("192.168.1.0/31"))
-    assert info["first_host"] == "192.168.1.1"
+    assert info["first_host"] == "192.168.1.0"
     assert info["last_host"] == "192.168.1.1"
-    assert info["usable_host_count"] == 0
+    assert info["usable_host_count"] == 2
 
 
 def test_format_network_info_ipv6_large() -> None:
@@ -856,16 +856,16 @@ def test_format_network_info_ipv6_single() -> None:
     assert info["broadcast_address"] is None
     assert info["first_host"] == "2001:db8::1"
     assert info["last_host"] == "2001:db8::1"
-    assert info["usable_host_count"] == 0
+    assert info["usable_host_count"] == 1
 
 
 def test_format_network_info_ipv6_pair() -> None:
     from ethscan.radix import _format_network_info
 
     info = _format_network_info(ipaddress.ip_network("2001:db8::/127"))
-    assert info["first_host"] == "2001:db8::1"
+    assert info["first_host"] == "2001:db8::"
     assert info["last_host"] == "2001:db8::1"
-    assert info["usable_host_count"] == 1
+    assert info["usable_host_count"] == 2
 
 
 # ---------------------------------------------------------------------------

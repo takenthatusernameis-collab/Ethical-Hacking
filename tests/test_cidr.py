@@ -83,16 +83,16 @@ def test_format_network_info_ipv4_basic() -> None:
 
 
 def test_format_network_info_ipv4_31() -> None:
-    """RFC 3021 /31 networks have no usable hosts in traditional sense."""
+    """RFC 3021 /31 networks have two usable point-to-point hosts."""
 
     network = ipaddress.ip_network("192.168.1.0/31")
     info = _format_network_info(network)
 
     assert info["network_address"] == "192.168.1.0"
     assert info["broadcast_address"] == "192.168.1.1"
-    assert info["first_host"] == "192.168.1.1"
+    assert info["first_host"] == "192.168.1.0"
     assert info["last_host"] == "192.168.1.1"
-    assert info["usable_host_count"] == 0
+    assert info["usable_host_count"] == 2
     assert info["total_addresses"] == 2
 
 
@@ -106,7 +106,7 @@ def test_format_network_info_ipv4_32() -> None:
     assert info["broadcast_address"] == "192.168.1.1"
     assert info["first_host"] == "192.168.1.1"
     assert info["last_host"] == "192.168.1.1"
-    assert info["usable_host_count"] == 0
+    assert info["usable_host_count"] == 1
     assert info["total_addresses"] == 1
 
 
@@ -134,7 +134,7 @@ def test_format_network_info_ipv6_128() -> None:
     assert info["network_address"] == "2001:db8::1"
     assert info["first_host"] == "2001:db8::1"
     assert info["last_host"] == "2001:db8::1"
-    assert info["usable_host_count"] == 0
+    assert info["usable_host_count"] == 1
     assert info["total_addresses"] == 1
 
 
@@ -163,15 +163,34 @@ def test_format_network_info_ipv6_last_host_is_final_address() -> None:
 
 
 def test_format_network_info_ipv6_127_usable_count() -> None:
-    """IPv6 /127 keeps both addresses usable; count excludes only the network."""
+    """IPv6 /127 keeps both addresses usable."""
 
     network = ipaddress.ip_network("2001:db8::/127")
     info = _format_network_info(network)
 
-    assert info["first_host"] == "2001:db8::1"
+    assert info["first_host"] == "2001:db8::"
     assert info["last_host"] == "2001:db8::1"
-    assert info["usable_host_count"] == 1
+    assert info["usable_host_count"] == 2
     assert info["total_addresses"] == 2
+
+
+@pytest.mark.parametrize(
+    "spec",
+    [
+        "192.0.2.0/31",
+        "192.0.2.1/32",
+        "2001:db8::/127",
+        "2001:db8::1/128",
+    ],
+)
+def test_format_network_info_edge_prefixes_match_stdlib_hosts(spec: str) -> None:
+    network = ipaddress.ip_network(spec)
+    hosts = list(network.hosts())
+    info = _format_network_info(network)
+
+    assert info["usable_host_count"] == len(hosts)
+    assert info["first_host"] == str(hosts[0])
+    assert info["last_host"] == str(hosts[-1])
 
 
 # ---------------------------------------------------------------------------
@@ -571,34 +590,38 @@ def test_format_cidr_report_csv_is_private_public_network() -> None:
 # Additional tests for coverage
 
 def test_cidr_ipv4_slash31() -> None:
-    """Test /31 which has 2 addresses (first_host == last_host)."""
+    """Test /31 which has two usable point-to-point addresses."""
     data = run_cidr("192.168.1.0/31")
     net = data["network"]
     assert net["total_addresses"] == 2
-    assert net["first_host"] == net["last_host"]
+    assert net["usable_host_count"] == 2
+    assert net["first_host"] != net["last_host"]
 
 
 def test_cidr_ipv6_slash127() -> None:
-    """Test /127 which has 2 addresses (first_host == last_host)."""
+    """Test /127 which has two usable point-to-point addresses."""
     data = run_cidr("2001:db8::/127")
     net = data["network"]
     assert net["total_addresses"] == 2
-    assert net["first_host"] == net["last_host"]
+    assert net["usable_host_count"] == 2
+    assert net["first_host"] != net["last_host"]
 
 
 def test_cidr_ipv4_slash32() -> None:
-    """Test /32 (single address)."""
+    """Test /32 (single usable address)."""
     data = run_cidr("192.168.1.1/32")
     net = data["network"]
     assert net["total_addresses"] == 1
+    assert net["usable_host_count"] == 1
     assert net["first_host"] == net["last_host"]
 
 
 def test_cidr_ipv6_slash128() -> None:
-    """Test /128 (single address)."""
+    """Test /128 (single usable address)."""
     data = run_cidr("2001:db8::1/128")
     net = data["network"]
     assert net["total_addresses"] == 1
+    assert net["usable_host_count"] == 1
     assert net["first_host"] == net["last_host"]
 
 

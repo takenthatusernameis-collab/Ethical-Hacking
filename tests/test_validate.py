@@ -234,6 +234,7 @@ def test_format_network_info_ipv4_32() -> None:
     assert info["broadcast_address"] == "192.168.1.1"
     assert info["first_host"] == "192.168.1.1"
     assert info["last_host"] == "192.168.1.1"
+    assert info["usable_host_count"] == 1
 
 
 def test_format_network_info_ipv6_no_broadcast() -> None:
@@ -251,8 +252,9 @@ def test_format_network_info_ipv4_31() -> None:
     info = _format_network_info(network)
     assert info["total_addresses"] == 2
     assert info["broadcast_address"] == "192.168.1.1"
-    assert info["first_host"] == "192.168.1.1"
+    assert info["first_host"] == "192.168.1.0"
     assert info["last_host"] == "192.168.1.1"
+    assert info["usable_host_count"] == 2
 
 
 def test_format_network_info_ipv6_127() -> None:
@@ -261,8 +263,18 @@ def test_format_network_info_ipv6_127() -> None:
     info = _format_network_info(network)
     assert info["total_addresses"] == 2
     assert info["broadcast_address"] is None
+    assert info["first_host"] == "2001:db8::"
+    assert info["last_host"] == "2001:db8::1"
+    assert info["usable_host_count"] == 2
+
+
+def test_format_network_info_ipv6_128() -> None:
+    network = ipaddress.ip_network("2001:db8::1/128")
+    info = _format_network_info(network)
+    assert info["total_addresses"] == 1
     assert info["first_host"] == "2001:db8::1"
     assert info["last_host"] == "2001:db8::1"
+    assert info["usable_host_count"] == 1
 
 
 def test_format_network_info_is_private_ipv4() -> None:

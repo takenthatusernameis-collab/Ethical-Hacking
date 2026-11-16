@@ -522,3 +522,33 @@ Date: Sun Nov 08 2026 (session 7)
 - Established `cast(Any, ...)` test-mocking pattern (used in prior sessions for test_resolve/test_main/test_recon) applied cleanly; no alternatives needed.
 ## Next task
 - None required. Repository fully green: 32032 passed, 146 skipped, 0 failed; mypy/ruff clean; README in sync. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error). If future work is needed, pick a single bounded, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls.
+
+# Session (Mon Nov 16 2026)
+## This session
+- No queued assignment existed; independently reproduced the prior green baseline before selecting work: 32169 passed, 146 skipped; mypy/ruff/README checks clean.
+- Reproduced a real correctness gap in all three network-info calculators (`ethscan/cidr.py`, `ethscan/radix.py`, `ethscan/validate.py`): IPv4 `/31` and IPv6 `/127` reported zero or only one usable host, and `/32`/`/128` reported zero, despite the stdlib `ipaddress` treating `/31` and `/127` as two-host links and `/32`/`/128` as single-host networks. Existing test docstrings already described the intended two-host behavior while their assertions codified the old bug.
+- Fixed usable-host counts and host ranges: `/31` and `/127` use both addresses; `/32` and `/128` use their sole address. Valid-prefix behavior for ordinary networks is unchanged.
+- Updated stale assertions in `tests/test_cidr.py`, `tests/test_radix.py`, and `tests/test_validate.py`; added a parametrized CIDR regression test comparing count and host range with `ipaddress.ip_network(...).hosts()`.
+- No commit was created; changes remain in the working tree for review.
+
+## Verification
+- Reproduction before fix: all four edge prefixes reported incorrect counts/ranges in all three modules.
+- Post-fix CLI smoke: `cidr --cidr 192.0.2.0/31`, `validate --cidr 192.0.2.0/31`, `cidr --cidr 2001:db8::/127`, and `validate --cidr 2001:db8::1/128` all exited 0 with corrected output.
+- `python3 -m pytest tests/test_cidr.py tests/test_radix.py tests/test_validate.py -q` -> 335 passed.
+- `python3 -m pytest -q` -> 32174 passed, 146 skipped, 0 failed (baseline 32169; +5 net tests).
+- `python3 -m coverage erase && python3 -m coverage run --branch --source=ethscan -m pytest -q && python3 -m coverage json -o /tmp/ethscan_coverage_after.json` -> 100%, 0 missing branches.
+- `python3 -m mypy ethscan/ tests/` -> clean (259 source files).
+- `python3 -m ruff check ethscan/ tests/` -> all checks passed.
+- `python3 check_readme.py` -> 54 commands, 0 drift.
+- `git diff --check` -> clean.
+
+## Blockers
+- None.
+
+## Approaches already tried / ruled out
+- A shared-helper refactor was rejected to keep the patch minimal and preserve module boundaries.
+- An intermediate edit dropped `netmask`/`broadcast`/`wildcard` locals in `cidr.py`; the post-fix smoke test caught the resulting `NameError`, and the locals were restored before gates passed. No further refactor is supported by evidence.
+- Stale tests asserting `first_host == last_host` for `/31` and `/127` were the defect, not the implementation; they were updated to stdlib semantics.
+
+## Next task
+- None required. Repository fully green with 100% branch coverage. If future work is needed, pick one bounded, high-value improvement and reproduce the gap first. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
