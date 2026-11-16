@@ -4,7 +4,7 @@ Reproduced with: python -m coverage run --branch --source=ethscan.vuln -m pytest
 tests/test_vuln.py tests/test_vuln_hostile_sweep.py tests/test_vuln_branch_gaps.py
 tests/test_vuln_formatter_hostile_sweep.py -q
 then: python -m coverage report --show-missing --include='ethscan/vuln.py'
-Final state: 476 stmts, 0 miss, 244 branch, 1 BrPart (99%), missing 1036->1029.
+Final state: 476 stmts, 0 miss, 243 branch, 0 BrPart (100%).
 
 Reachable partial branches closed by tests in this file:
 - 950->955: a banner entry whose value is not a str is skipped.
@@ -18,13 +18,11 @@ Reachable partial branches closed by tests/test_vuln_formatter_hostile_sweep.py:
 - 1259->1270: recursive_hosts_scanned is empty, so the "### Hosts Scanned"
   subsection is omitted while the "### Recursive Findings" subsection renders.
 
-Unreachable (defensive) branch - static invariants prevent coverage:
-- 1036->1029: `if recursive_result:` is always True. The recursive call at
-  line 1035 is `_recursive_scan(host, depth + 1)` and is only reached when
-  `depth < max_depth` (line 1024), so `depth + 1 <= max_depth`. The callee
-  returns `{}` only when `depth > max_depth` (line 1009), which is therefore
-  false. No input forces the false branch; it is a defensive check, not a
-  reachable arc.
+Defensive branch (excluded from branch coverage as unreachable by control flow):
+- 1036: `if recursive_result:` is always True for calls reached here. Discovery
+  runs only when `depth < max_depth` (line 1024), so `_recursive_scan(..., depth + 1)`
+  never takes its early-return path (`depth > max_depth`); the callee returns a
+  populated result dict. Marked `# pragma: no branch`.
 """
 from __future__ import annotations
 
@@ -103,9 +101,7 @@ def test_recursive_scan_skips_already_scanned_host(monkeypatch) -> None:
     assert call_count["count"] == 1
 
 
-# 1036->1029 (if recursive_result:) is UNREACHABLE under the current control
-# flow and is left uncovered. The guard at line 1024 (if depth < max_depth:)
-# gates host discovery, so a recursive call can only be made when depth <
-# max_depth. That call returns {} only when depth+1 > max_depth, i.e. depth >=
-# max_depth — a contradiction. No input forces the false branch; it is a
-# defensive check, not a reachable arc.
+# 1036 (`if recursive_result:`) is excluded from branch coverage with
+# `# pragma: no branch` because the false path is unreachable by control flow:
+# discovery is gated by `depth < max_depth`, so the recursive call cannot take
+# its early-return path and always yields a populated result dict.

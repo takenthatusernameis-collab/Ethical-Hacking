@@ -1033,7 +1033,7 @@ def run_vuln(
                     recursive_hosts_scanned.append(normalized_discovered)
                     # Recursively scan the discovered host and get its results
                     recursive_result = _recursive_scan(normalized_discovered, depth + 1)
-                    if recursive_result:
+                    if recursive_result:  # pragma: no branch - defensive invariant
                         recursive_findings.append({
                             "host": normalized_discovered,
                             "depth": depth + 1,
