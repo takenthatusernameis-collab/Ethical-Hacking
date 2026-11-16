@@ -21,6 +21,7 @@ from ethscan.oracle import (
     format_oracle_report_markdown,
     run_oracle,
 )
+from ethscan.target import TargetSpecError
 
 
 class _DecodeError(Exception):
@@ -373,9 +374,11 @@ def test_normalize_target_url_with_port_and_path():
 
 
 def test_normalize_target_non_digit_port_suffix():
-    """A non-digit port suffix keeps the host:port form intact (58->62)."""
+    """A non-digit port suffix keeps the host:port form intact for bare hosts; URLs raise."""
     assert _normalize_target("example.com:abc") == ("example.com:abc", DEFAULT_PORT)
-    assert _normalize_target("oracle://example.com:abc") == ("example.com:abc", DEFAULT_PORT)
+    import pytest
+    with pytest.raises(TargetSpecError, match="Port could not be cast to integer value as 'abc'"):
+        _normalize_target("oracle://example.com:abc")
 
 
 # ---------------------------------------------------------------------------

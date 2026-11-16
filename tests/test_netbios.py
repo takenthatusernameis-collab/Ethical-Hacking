@@ -32,6 +32,7 @@ from ethscan.netbios import (
     format_netbios_report_markdown,
     run_netbios,
 )
+from ethscan.target import TargetSpecError
 
 # ---------------------------------------------------------------------------
 # Test helpers to build well-formed NBNS messages
@@ -146,13 +147,13 @@ def test_normalize_target_ipv6_url() -> None:
 
 
 def test_normalize_target_bracket_without_port_separator() -> None:
-    """A bracketed host lacking ``]:`` keeps the literal target (131->144)."""
+    """A bracketed host lacking ``]:`` keeps the literal target; URLs raise."""
     host, port = _normalize_target("[example")
     assert host == "[example"
     assert port == DEFAULT_PORT
-    host, port = _normalize_target("netbios://[example")
-    assert host == "[example"
-    assert port == DEFAULT_PORT
+    import pytest
+    with pytest.raises(TargetSpecError, match="Invalid IPv6 URL"):
+        _normalize_target("netbios://[example")
 
 
 # ---------------------------------------------------------------------------

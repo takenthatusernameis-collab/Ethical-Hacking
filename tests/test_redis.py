@@ -26,6 +26,7 @@ from ethscan.redis import (
     format_redis_report_markdown,
     run_redis,
 )
+from ethscan.target import TargetSpecError
 
 
 def test_normalize_target_basic():
@@ -199,9 +200,11 @@ def test_normalize_target_url_with_path():
 
 
 def test_normalize_target_bare_host_non_digit_port_suffix():
-    """A non-digit port suffix keeps the host:port form intact (62->68)."""
+    """A non-digit port suffix keeps the host:port form intact for bare hosts; URLs raise."""
     assert _normalize_target("example.com:abc") == ("example.com:abc", DEFAULT_PORT)
-    assert _normalize_target("redis://example.com:abc") == ("example.com:abc", DEFAULT_PORT)
+    import pytest
+    with pytest.raises(TargetSpecError, match="Port could not be cast to integer value as 'abc'"):
+        _normalize_target("redis://example.com:abc")
 
 
 # ---------------------------------------------------------------------------

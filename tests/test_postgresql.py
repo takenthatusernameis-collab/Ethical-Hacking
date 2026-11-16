@@ -20,6 +20,7 @@ from ethscan.postgresql import (
     format_postgresql_report_markdown,
     run_postgresql,
 )
+from ethscan.target import TargetSpecError
 
 
 def _pg_msg(msg_type: bytes, body: bytes = b"") -> bytes:
@@ -91,9 +92,11 @@ def test_normalize_target_port_override_in_url():
 
 
 def test_normalize_target_non_digit_port_suffix():
-    """A non-digit port suffix keeps the host:port form intact (88->92)."""
+    """A non-digit port suffix keeps the host:port form intact for bare hosts; URLs raise."""
     assert _normalize_target("example.com:abc") == ("example.com:abc", DEFAULT_PORT)
-    assert _normalize_target("postgresql://example.com:abc") == ("example.com:abc", DEFAULT_PORT)
+    import pytest
+    with pytest.raises(TargetSpecError, match="Port could not be cast to integer value as 'abc'"):
+        _normalize_target("postgresql://example.com:abc")
 
 
 # --- request building -----------------------------------------------------
