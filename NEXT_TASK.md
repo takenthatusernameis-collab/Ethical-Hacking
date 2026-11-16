@@ -2,46 +2,46 @@
 Date: Mon Nov 16 2026
 
 ## Status
-- Repository is green: full suite `python3 -m pytest -q` -> **32159 passed, 146 skipped, 0 failed** (previously 10 failed).
-- The 10 failures inherited from the prior session are resolved:
-  - `tests/test_cli.py::test_fuzz_output_format_markdown` (stale label)
-  - 6x `tests/test_fuzz_hostile_sweep.py::test_markdown_non_list_findings_never_raises[...]` (stale label)
-  - `tests/test_fuzz_hostile_sweep.py::test_csv_hostile_all_results_entries_never_raise` (wrong `is_finding` on hostile handoff)
-  - `tests/test_fuzz_formatter_hostile_sweep.py::...[data15-format_fuzz_report_csv]` (unhashable `path` TypeError)
-  - `tests/test_target.py::test_fetch_headers_drops_the_userinfo_of_the_target` (fake double missing `.status`)
+- Repository is green: full suite `python3 -m pytest -q` -> **32168 passed, 146 skipped, 0 failed**
+  (previously 32159 passed; +9 new tests, no failures).
+- The assigned task (surface HTTP status in `ethscan/headers.py`) is complete.
 
 ## What changed this session
-- `ethscan/fuzz.py`: module-level `_is_finding_status(status_code)` helper (non-int -> `False`; else not a finding for `404`/`5xx`/`429`); used by `run_fuzz` and `format_fuzz_report_csv`; removed the `finding_keys` membership set that crashed on an unhashable `path`.
-- `tests/test_cli.py`, `tests/test_fuzz_hostile_sweep.py`: updated stale `**Findings (non-404):**` assertions to `**Findings:**`.
-- `tests/test_target.py`: `FakeResponse` now sets `status = 200`.
+- `ethscan/headers.py`:
+  - `run_headers` sets `results["status"]` from `getattr(fetched, "status", None)`
+    when not `None` (mirrors `ethscan/web.py:373-375`).
+  - `format_headers_report_markdown` renders `- **Status:** <code>` when present.
+  - `format_headers_report_csv` renders a `status,<code>` row when present
+    (JSON is automatic).
+- `tests/test_headers.py`: 9 new regression tests (success / HTTPError / transport
+  failure / plain-dict; Markdown/CSV/JSON render and omit-when-None).
 
 ## What was verified
-- Focused previously-failing set -> 38 passed.
-- `pytest tests/test_cli.py tests/test_fuzz.py tests/test_fuzz_hostile_sweep.py tests/test_fuzz_formatter_hostile_sweep.py tests/test_target.py -q` -> 1503 passed.
-- `mypy` + `ruff` on touched files -> clean.
+- `pytest tests/test_headers.py tests/test_web.py tests/test_cli.py -q` -> 1247 passed.
 - `python3 check_readme.py` -> 54 commands, 0 drift.
-- Full suite -> 32159 passed, 146 skipped, 0 failed.
+- `mypy` + `ruff` on touched files -> clean.
+- End-to-end render check -> status 200 in dict, Markdown, and CSV.
+- Full suite -> 32168 passed, 146 skipped, 0 failed.
 
 ## What remains unresolved
-- 18 statically unreachable partial branches across `ethscan/` (prior handoff); no known functional defect.
-- `ethscan/headers.py` does not surface `fetched.status` (unlike `ethscan/web.py`).
+- 18 statically unreachable partial branches across `ethscan/` (prior handoff); no
+  known functional defect.
+- `ethscan/headers.py` now matches `ethscan/web.py` for status surfacing.
 
 ## Approaches already tried / ruled out
-- Label-only test edits: rejected as insufficient; CSV formatter had a real source defect.
-- Reverting label to `(non-404)`: rejected; `Findings` is accurate (excludes 5xx/429 too).
-- Loosening `fetch_headers` to `getattr(..., "status", None)`: rejected as masking a test-double deficiency.
+- Test-only edits: rejected; status was genuinely absent from source output.
+- Importing `run_web_checks`/web formatters into `headers.py`: rejected; `run_headers`
+  already receives the `FetchedHeaders` object (with `.status`) from `fetch_headers`,
+  so the change stays local and minimal.
 
 ## Next task
-- Surface the HTTP status in `ethscan/headers.py` `run_headers_check`, mirroring
-  `ethscan/web.py:373-375`: read `getattr(fetched, "status", None)` and set
-  `results["status"]` when not `None`; render `- **Status:** <code>` in
-  `format_headers_report_markdown` and a `status,<code>` row in
-  `format_headers_report_csv` when present (JSON is automatic). Add regression
-  tests in `tests/test_headers.py` (success / HTTPError / transport failure;
-  Markdown/CSV render and omit-when-None).
-  Verify with `pytest tests/test_headers.py tests/test_web.py tests/test_cli.py -q`,
-  `python3 check_readme.py`, `mypy`/`ruff` on touched files, and a full `pytest -q`.
-  Do not modify `ethscan/web.py`.
+- Enumerate and triage the 18 statically unreachable partial branches across `ethscan/`.
+  Run `python3 -m coverage report --show-missing` (or read `coverage.json`) against
+  the full suite to list uncovered lines, group by root cause, and for each decide
+  whether it is genuinely unreachable (targeted `# pragma: no cover` only where truly
+  unreachable) or a missing test. Do not mask reachable paths.
+  Verify with `pytest -q` (green), `mypy`/`ruff` on touched files, and
+  `python3 check_readme.py`. Keep changes minimal and reversible.
 
 ## Environment/notes
 - Dev deps: pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3, Python 3.14.4.

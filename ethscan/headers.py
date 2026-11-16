@@ -43,6 +43,14 @@ def run_headers(target: str, timeout: float = 5.0) -> dict[str, Any]:
     if fetch_error:
         results["error"] = fetch_error
 
+    # A caller that replaces ``fetch_headers`` may hand back a plain dict,
+    # which carries no status of its own; a reachable target reports the HTTP
+    # status code so callers can distinguish a 4xx/5xx response from a
+    # transport failure (no status).
+    fetch_status = getattr(fetched, "status", None)
+    if fetch_status is not None:
+        results["status"] = fetch_status
+
     results["security_headers"] = check_security_headers(headers)
 
     # Assess web server version from Server header
@@ -69,6 +77,9 @@ def format_headers_report_markdown(data: dict[str, Any]) -> str:
     lines.append(f"- **HTTPS:** {'Yes' if data.get('secure') else 'No'}")
     if data.get("error"):
         lines.append(f"- **Error:** {data.get('error')}")
+    status = data.get("status")
+    if status is not None:
+        lines.append(f"- **Status:** {status}")
     lines.append("")
 
     sh = data.get("security_headers") or {}
@@ -112,6 +123,9 @@ def format_headers_report_csv(data: dict[str, Any]) -> str:
     writer.writerow(["port", data.get("port", "")])
     writer.writerow(["https", "true" if data.get("secure") else "false"])
     writer.writerow(["error", data.get("error") or ""])
+    status = data.get("status")
+    if status is not None:
+        writer.writerow(["status", status])
     writer.writerow(["present_count", sh.get("present_count", 0)])
     writer.writerow(["missing_count", sh.get("missing_count", 0)])
     writer.writerow(["total", sh.get("total", 0)])

@@ -388,3 +388,124 @@ def test_format_headers_report_markdown_with_findings():
     output = format_headers_report_markdown(data)
     assert "## Findings" in output
     assert "Web server version: 1.3.3" in output
+
+
+# ---------------------------------------------------------------------------
+# HTTP status surfacing (mirrors ethscan/web.py)
+# ---------------------------------------------------------------------------
+
+
+def test_run_headers_records_status_on_success(monkeypatch):
+    """A reachable target reports the HTTP status code."""
+    class FakeFetch(dict):
+        error = None
+        status = 200
+
+    def mock_fetch_headers(url, timeout=5.0):
+        return FakeFetch({"server": "nginx"})
+
+    monkeypatch.setattr("ethscan.headers.fetch_headers", mock_fetch_headers)
+
+    results = run_headers("https://example.com", timeout=1.0)
+    assert results["status"] == 200
+    assert results["error"] is None
+    assert results["headers"] == {"server": "nginx"}
+
+
+def test_run_headers_records_status_on_http_error(monkeypatch):
+    """A 4xx/5xx response carries a status and headers, no transport error."""
+    class FakeFetch(dict):
+        error = None
+        status = 403
+
+    def mock_fetch_headers(url, timeout=5.0):
+        return FakeFetch({"server": "Apache/2.4.1"})
+
+    monkeypatch.setattr("ethscan.headers.fetch_headers", mock_fetch_headers)
+
+    results = run_headers("https://example.com", timeout=1.0)
+    assert results["status"] == 403
+    assert results["error"] is None
+    assert results["headers"] == {"server": "Apache/2.4.1"}
+
+
+def test_run_headers_status_absent_on_transport_failure(monkeypatch):
+    """A transport failure has no status and an error is reported."""
+    class FakeFetch(dict):
+        error = "hostile transport"
+        status = None
+
+    def mock_fetch_headers(url, timeout=5.0):
+        return FakeFetch()
+
+    monkeypatch.setattr("ethscan.headers.fetch_headers", mock_fetch_headers)
+
+    results = run_headers("https://example.com", timeout=1.0)
+    assert results["error"] == "hostile transport"
+    assert results["headers"] == {}
+    assert "status" not in results
+
+
+def test_run_headers_status_absent_from_plain_dict(monkeypatch):
+    """A plain dict (no .status) never invents a status."""
+    def mock_fetch_headers(url, timeout=5.0):
+        return {"server": "nginx"}
+
+    monkeypatch.setattr("ethscan.headers.fetch_headers", mock_fetch_headers)
+
+    results = run_headers("https://example.com", timeout=1.0)
+    assert "status" not in results
+
+
+def test_format_headers_report_json_includes_status():
+    data = {
+        "target": "https://example.com",
+        "status": 500,
+        "security_headers": {"present": [], "missing": [], "total": 0},
+    }
+    parsed = json.loads(format_headers_report_json(data))
+    assert parsed["status"] == 500
+
+
+def test_format_headers_report_markdown_includes_status():
+    data = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "status": 403,
+        "security_headers": {"present": [], "missing": [], "total": 0},
+    }
+    output = format_headers_report_markdown(data)
+    assert "- **Status:** 403" in output
+
+
+def test_format_headers_report_markdown_omits_status_when_none():
+    data = {
+        "target": "https://example.com",
+        "host": "example.com",
+        "port": 443,
+        "secure": True,
+        "security_headers": {"present": [], "missing": [], "total": 0},
+    }
+    output = format_headers_report_markdown(data)
+    assert "Status" not in output
+
+
+def test_format_headers_report_csv_includes_status():
+    data = {
+        "target": "https://example.com",
+        "status": 403,
+        "security_headers": {"present": [], "missing": [], "total": 0},
+    }
+    lines = format_headers_report_csv(data).splitlines()
+    assert "status,403" in lines
+
+
+def test_format_headers_report_csv_omits_status_when_none():
+    data = {
+        "target": "https://example.com",
+        "security_headers": {"present": [], "missing": [], "total": 0},
+    }
+    lines = format_headers_report_csv(data).splitlines()
+    assert not any(line.startswith("status,") for line in lines)
