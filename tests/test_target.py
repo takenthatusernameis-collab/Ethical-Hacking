@@ -496,6 +496,7 @@ def test_fetch_headers_drops_the_userinfo_of_the_target(monkeypatch) -> None:
     class FakeResponse:
         def __init__(self):
             self.headers = {"Server": "test"}
+            self.status = 200
 
         def __enter__(self):
             return self

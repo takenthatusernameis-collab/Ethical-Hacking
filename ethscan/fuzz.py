@@ -109,6 +109,26 @@ def fuzz_path(base_url: str, path: str, timeout: float = 5.0) -> dict[str, objec
         return {"path": path, "status_code": None, "error": str(exc) or exc.__class__.__name__}
 
 
+def _is_finding_status(status_code: object) -> bool:
+    """Return whether a status code marks a discovered or protected path.
+
+    A finding is a response that suggests the probed path is present or
+    protected, not a missing resource, server error, or rate-limit artifact.
+    404 means absent; 5xx are server failures and 429 is rate limiting rather
+    than path discovery. A status that is not an integer (a hostile handoff
+    can carry a string, a list, or ``None``) is not a finding.
+    """
+    if not isinstance(status_code, int):
+        return False
+    if status_code == 404:
+        return False
+    if 500 <= status_code <= 599:
+        return False
+    if status_code == 429:
+        return False
+    return True
+
+
 def run_fuzz(
     target: str,
     wordlist: list[str] | None = None,
@@ -152,22 +172,7 @@ def run_fuzz(
     path_to_index = {path: i for i, path in enumerate(paths)}
     results.sort(key=lambda r: path_to_index.get(cast("str", r.get("path", "")), 0))
 
-    def _is_finding(status_code: int | None) -> bool:
-        # A finding is a response that suggests the probed path is present or
-        # protected, not a missing resource, server error, or rate-limit
-        # artifact. 404 means absent; 5xx are server failures and 429 is rate
-        # limiting rather than path discovery.
-        if status_code is None:
-            return False
-        if status_code == 404:
-            return False
-        if 500 <= status_code <= 599:
-            return False
-        if status_code == 429:
-            return False
-        return True
-
-    findings = [r for r in results if _is_finding(cast("int | None", r.get("status_code")))]
+    findings = [r for r in results if _is_finding_status(r.get("status_code"))]
 
     return {
         "target": target,
@@ -234,11 +239,6 @@ def format_fuzz_report_csv(data: dict[str, object]) -> str:
     findings = data.get("findings") or [] if isinstance(data, dict) else []
     if not isinstance(findings, list):
         findings = []
-    finding_keys = {
-        (f.get("path"), f.get("status_code"))
-        for f in findings
-        if isinstance(f, dict)
-    }
 
     all_results_data = data.get("all_results") if isinstance(data, dict) else None
     if not isinstance(all_results_data, list):
@@ -247,7 +247,7 @@ def format_fuzz_report_csv(data: dict[str, object]) -> str:
         if not isinstance(result, dict):
             continue
         status_code = result.get("status_code")
-        is_finding = (result.get("path"), status_code) in finding_keys
+        is_finding = _is_finding_status(status_code)
         writer.writerow([
             data.get("target", "") if isinstance(data, dict) else "",
             data.get("base_url", "") if isinstance(data, dict) else "",

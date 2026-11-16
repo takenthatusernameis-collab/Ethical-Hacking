@@ -19647,7 +19647,7 @@ def test_fuzz_output_format_markdown(monkeypatch) -> None:
     assert "# ethscan HTTP Fuzz Report" in result.output
     assert "- **Target:** https://example.com" in result.output
     assert "- **Paths Tested:** 2" in result.output
-    assert "- **Findings (non-404):** 1" in result.output
+    assert "- **Findings:** 1" in result.output
     assert "| /admin | 200 |" in result.output
     assert "| /login | 404 |" in result.output
 

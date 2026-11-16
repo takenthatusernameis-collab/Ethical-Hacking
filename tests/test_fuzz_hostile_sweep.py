@@ -127,7 +127,7 @@ def test_markdown_non_list_findings_never_raises(findings: Any) -> None:
     }
     out = format_fuzz_report_markdown(data)
     assert "## Findings" not in out
-    assert "**Findings (non-404):** 0" in out
+    assert "**Findings:** 0" in out
 
 
 def test_csv_non_iterable_all_results_never_raises() -> None:
