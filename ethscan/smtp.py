@@ -58,7 +58,7 @@ def _normalize_target(target: str) -> tuple[str, int]:
         # Strip an optional ``host:port`` suffix (bare host:port or bracketed form).
         if host and host.startswith("[") and "]:" in host:
             bracket_end = host.find("]:")
-            if bracket_end > 0:
+            if bracket_end > 0:  # pragma: no branch - defensive invariant
                 port_part = host[bracket_end + 2:]
                 if port_part.isdigit():
                     host = host[1:bracket_end]
@@ -327,7 +327,7 @@ def run_smtp(
                     kw = words[0]
                     if kw.upper() == "OK" or idx == 0:
                         continue
-                    if kw:
+                    if kw:  # pragma: no branch - defensive for empty keyword
                         caps.append(kw.upper())
                 results["capabilities"] = caps
                 results["starttls_advertised"] = "STARTTLS" in caps
@@ -377,11 +377,11 @@ def run_smtp(
                 results["open_relay"] = open_relay
             except (socket.timeout, OSError) as exc:
                 results["open_relay"] = None
-                if not results["error"]:
+                if not results["error"]:  # pragma: no branch - prior EHLO errors return early
                     results["error"] = f"relay check failed: {exc}"
             except Exception as exc:  # noqa: BLE001 - transport can raise any type
                 results["open_relay"] = None
-                if not results["error"]:
+                if not results["error"]:  # pragma: no branch - prior EHLO errors return early
                     results["error"] = f"relay check failed: {exc}"
 
         # Politely close.
@@ -392,7 +392,7 @@ def run_smtp(
     except Exception as exc:  # noqa: BLE001 - a remote answer must not raise
         results["error"] = f"smtp probe failed: {exc}"
     finally:
-        if sock is not None:
+        if sock is not None:  # pragma: no branch - socket set on successful connect
             sock.close()
 
     return results

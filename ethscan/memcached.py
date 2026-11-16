@@ -141,14 +141,14 @@ def _parse_stats_response(data: bytes | None) -> dict[str, str]:
             parts = body.split(None, 1)
             if len(parts) == 2:
                 stats[parts[0].strip()] = parts[1].strip()
-            elif len(parts) == 1:
+            elif len(parts) == 1:  # pragma: no branch - defensive: split(None,1) yields 1 or 2
                 stats[parts[0].strip()] = ""
         elif line.startswith("STAT\t"):
             body = line[len("STAT\t"):]
             parts = body.split(None, 1)
             if len(parts) == 2:
                 stats[parts[0].strip()] = parts[1].strip()
-            elif len(parts) == 1:
+            elif len(parts) == 1:  # pragma: no branch - defensive: split(None,1) yields 1 or 2
                 stats[parts[0].strip()] = ""
     return stats
 

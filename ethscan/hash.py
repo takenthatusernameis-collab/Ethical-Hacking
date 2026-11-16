@@ -586,7 +586,7 @@ def format_hash_report_markdown(data: Mapping[str, object]) -> str:
     notes_val = data.get("notes")
     if notes_val:
         note_list = list(notes_val) if isinstance(notes_val, (list, tuple)) else [notes_val]
-        if note_list:
+        if note_list:  # pragma: no branch - non-empty when notes_val is truthy
             lines.append("## Notes")
             for note in note_list:
                 if isinstance(note, (str, int, float, bool)) or note is not None:

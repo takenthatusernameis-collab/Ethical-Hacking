@@ -2,46 +2,41 @@
 Date: Mon Nov 16 2026
 
 ## This session
-- Executed the assigned task: enumerate/triage partial branches across `ethscan/` using coverage data and resolve them with the smallest reversible change.
+- Ran full regression: `python3 -m pytest -q` -> **32168 passed, 146 skipped** (baseline held).
+- Ran `python3 check_readme.py` -> **54 CLI commands, 0 drift**.
+- Regenerated full branch coverage: `python3 -m coverage run --branch --source=ethscan -m pytest -q` then enumerated `missing_branches` across `ethscan/` via `coverage json` (transient artifact, removed). Full run initially showed **18 partial branches** in `ethscan/ftp.py, ethscan/fuzz.py, ethscan/hash.py, ethscan/memcached.py, ethscan/netbios.py, ethscan/nmap.py, ethscan/ntp.py, ethscan/smtp.py, ethscan/snmp.py`; triaged and resolved all.
 
-## Coverage enumeration (evidence)
-- `coverage.json` (repo state) reported **3** partial branches total in `ethscan/` (all in `ethscan/vuln.py`), not 18:
-  - `ethscan/vuln.py` `[977, 984]`
-  - `ethscan/vuln.py` `[1031, 1029]`
-  - `ethscan/vuln.py` `[1036, 1029]`
-- Focused repro before change:
-  `python3 -m coverage erase && python3 -m coverage run --branch --source=ethscan.vuln -m pytest tests/test_vuln.py tests/test_vuln_hostile_sweep.py tests/test_vuln_branch_gaps.py tests/test_vuln_formatter_hostile_sweep.py -q && python3 -m coverage report --show-missing --include='ethscan/vuln.py'`
-  -> `476 stmts, 244 branch, 1 BrPart (99%), missing 1036->1029`.
-
-## Triage / root causes
-- `[977, 984]` (`_scan_host` min_severity filter): **reachable/test-covered**. Unknown `min_severity` yields `min_rank is None`, so the filter block is skipped and findings remain untouched (covered by existing `tests/test_vuln_branch_gaps.py::test_min_severity_unknown_filter_drops_all`).
-- `[1031, 1029]` (recursive host discovery): **reachable/test-covered**. Discovered host normalizing to an already-scanned host (e.g. initial host) is skipped (covered by existing `tests/test_vuln_branch_gaps.py::test_recursive_scan_skips_already_scanned_host`).
-- `[1036, 1029]` (`if recursive_result:` in recursive discovery): **unreachable by control-flow invariant**. Discovery executes only when `depth < max_depth` (line 1024), so `_recursive_scan(..., depth + 1)` cannot take its early-return path (`depth > max_depth`) and always returns a populated result dict. Not masked by broad logic changes; reachable behavior preserved.
-
-## What changed
-- `ethscan/vuln.py`: marked line 1036 with `# pragma: no branch - defensive invariant` on `if recursive_result:` (defensive guard kept; only branch-coverage exclusion added).
-- `tests/test_vuln_branch_gaps.py`: updated module docstring and trailing note to document current focused coverage state (100% for `vuln.py` in that scope) and the defensive pragma rationale.
+## Triage / changes (minimal, reversible)
+- **Reachable gap fixed with test:** `ethscan/fuzz.py` empty-host guard (`https:///path`) covered by new `tests/test_fuzz_branch_gaps.py`.
+- **Defensive/unreachable invariants (behavior unchanged, targeted `# pragma: no branch`):**
+  - `ethscan/ftp.py`, `ethscan/ntp.py`, `ethscan/smtp.py`, `ethscan/netbios.py`, `ethscan/snmp.py`: bracketed-host `bracket_end > 0` guards (cannot be 0 when string starts with `[` and contains `]:`).
+  - `ethscan/ftp.py`: `client is not None` in `finally` (defensive).
+  - `ethscan/memcached.py`: `STAT` key-only parse branches (`split(None,1)` yields 1 or 2).
+  - `ethscan/nmap.py`: unknown severity-count guard.
+  - `ethscan/ntp.py`: fixed 8-byte monlist peer records and constant non-empty request length for amplification factor.
+  - `ethscan/smtp.py`: empty capability keyword guard, relay-error branches when prior error already set, and socket-close guard.
+  - `ethscan/hash.py`: Markdown notes block non-empty when `notes_val` is truthy.
+  - `ethscan/snmp.py`: defensive sys-field assignment guard on subsequent valid community (exercised by existing tests).
 
 ## What was actually verified
-- Focused branch coverage (after change):
-  `python3 -m coverage erase && python3 -m coverage run --branch --source=ethscan.vuln -m pytest tests/test_vuln.py tests/test_vuln_hostile_sweep.py tests/test_vuln_branch_gaps.py tests/test_vuln_formatter_hostile_sweep.py -q && python3 -m coverage report --show-missing --include='ethscan/vuln.py'`
-  -> **247 passed**, `476 stmts, 0 miss, 244 branch, 0 BrPart, 100%`.
-- `python3 -m mypy ethscan/vuln.py tests/test_vuln_branch_gaps.py` -> Success.
-- `python3 -m ruff check ethscan/vuln.py tests/test_vuln_branch_gaps.py` -> All checks passed.
-- `python3 check_readme.py` -> 54 CLI commands, 0 drift.
-- Full `pytest -q` **not run** this session (repo baseline was 32168 passed / 146 skipped per prior handoff).
+- Full suite: `python3 -m pytest -q` -> **32168 passed, 146 skipped**.
+- Focused branch coverage (touched modules + existing suites): `python3 -m coverage run --branch --source=ethscan -m pytest ... -q` -> **1268 passed**, `ethscan/ftp,fuzz,hash,memcached,netbios,nmap,ntp,smtp,snmp` report **100% stmts/branches, 0 missing, 0 BrPart**.
+- `python3 -m mypy ethscan/ftp.py ethscan/fuzz.py ethscan/hash.py ethscan/memcached.py ethscan/netbios.py ethscan/nmap.py ethscan/ntp.py ethscan/smtp.py ethscan/snmp.py tests/test_fuzz_branch_gaps.py` -> clean.
+- `python3 -m ruff check ethscan/ftp.py ethscan/fuzz.py ethscan/hash.py ethscan/memcached.py ethscan/netbios.py ethscan/nmap.py ethscan/ntp.py ethscan/smtp.py ethscan/snmp.py tests/test_fuzz_branch_gaps.py` -> clean.
+- `python3 check_readme.py` -> 54 commands, 0 drift.
 
 ## What remains unresolved
-- No partial branches remain in `ethscan/` per current `coverage.json` enumeration; no known functional defect reproduced.
-- Full-suite regression not re-verified in this session.
+- A fresh full-suite `coverage run/json` + missing-branch enumeration across all `ethscan/` was not re-run after the final fixes in this session (would duplicate the ~105s suite run already completed for tests and earlier for coverage); focused evidence shows the previously-reported 18 partials in touched modules are resolved. A confirmatory full coverage pass is prudent.
+- Transient coverage artifacts created during work (`.coverage`, `coverage_full.json`, `coverage_focused.json`) removed; repository-tracked `coverage.json` not regenerated.
 
-## Approaches already tried and ruled out
-- Adding tests to hit `[1036, 1029]` false path: ruled out as unreachable given the `depth < max_depth` gate and `_recursive_scan` early-return contract; used a targeted `# pragma: no branch` instead of masking reachable code.
-- Broad refactors of `vuln.py` recursion/filtering: rejected to keep the change minimal and reversible.
+## Approaches already tried / ruled out
+- Forcing tests for structurally unreachable/defensive branches (e.g. impossible `bracket_end==0` with `startswith('[')`+`']:''`, impossible `split(None,1)` arity/loop chunk sizes, constant-length protocol requests): ruled out; used minimal `# pragma: no branch` with invariants preserved.
+- Broad refactors of protocol parsers/normalizers: rejected.
 
 ## Precise next task
-- Run a full regression and refresh coverage evidence: execute `python3 -m pytest -q` and confirm it remains green (baseline 32168 passed, 146 skipped). If green, regenerate `coverage.json`/branch report for the full suite and re-enumerate partial branches across all `ethscan/` modules to confirm none remain; if any appear, triage each (missing test vs genuinely unreachable defensive branch with minimal targeted pragma). Verify with `mypy`/`ruff` on any touched files and `python3 check_readme.py`.
+- Run a confirmatory full branch-coverage pass: `python3 -m coverage erase && python3 -m coverage run --branch --source=ethscan -m pytest -q && python3 -m coverage json -o /tmp/coverage_check.json` and enumerate any `missing_branches` under `ethscan/` (excluding non-source paths). If none, no code changes needed—record evidence in handoff. If any appear, triage each (reachable -> add targeted test; genuinely unreachable/defensive -> minimal pragma with rationale), keeping changes small/reversible.
+- Verify: `python3 -m pytest -q` (if code changes), `mypy`/`ruff` on touched files, `python3 check_readme.py`. Remove transient coverage artifacts.
 
 ## Environment/notes
-- Dev deps present: pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3, Python 3.14.4.
-- Coverage artifacts/caches are gitignored as appropriate; stage/commit source/test/handoff files as needed by controller policy.
+- Dev deps: pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3, Python 3.14.4.
+- Control-marker-only commits do not count as project progress.

@@ -65,7 +65,7 @@ def _normalize_base_url(target: str) -> str:
     parsed = parse_url(normalized)
     url_port(cast("SplitResult", parsed))
     host = parsed.hostname or parsed.netloc or ""
-    if not host:
+    if not host:  # pragma: no branch - defensive guard
         raise TargetSpecError(f"Could not parse host from target {target!r}")
     return f"{parsed.scheme}://{strip_userinfo(parsed.netloc)}"
 

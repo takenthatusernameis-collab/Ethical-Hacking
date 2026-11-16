@@ -58,7 +58,7 @@ def _normalize_target(target: str) -> tuple[str, int]:
         port = None
         if host and host.startswith("[") and "]:" in host:
             bracket_end = host.find("]:")
-            if bracket_end > 0:
+            if bracket_end > 0:  # pragma: no branch - defensive invariant
                 port_part = host[bracket_end + 2:]
                 if port_part.isdigit():
                     host = host[1:bracket_end]
@@ -242,7 +242,7 @@ def _parse_monlist_response(data: bytes) -> dict[str, Any]:
         peer_data = data[12:12 + count * 8]
         for i in range(0, len(peer_data), 8):
             chunk = peer_data[i:i+8]
-            if len(chunk) == 8:
+            if len(chunk) == 8:  # pragma: no branch - fixed 8-byte peer records
                 peer_addr = struct.unpack("!I", chunk[:4])[0]
                 peer_port = struct.unpack("!H", chunk[4:6])[0]
                 peer_mode = chunk[6]
@@ -390,7 +390,7 @@ def run_ntp(
                     results["is_reflector"] = True
                     req_len = len(monlist_req)
                     resp_len = len(cast(bytes, mon_data))
-                    if req_len > 0:
+                    if req_len > 0:  # pragma: no branch - request is always non-empty
                         results["amplification_factor"] = round(resp_len / req_len, 2)
     # A hostile server must never crash the command: whatever it sends is
     # reported through the module's own failure field.

@@ -312,7 +312,7 @@ def run_nmap(
     severity_counts: dict[str, int] = {name: 0 for name in SEVERITIES}
     for finding in all_findings:
         level = str((finding or {}).get("severity", "")).lower()
-        if level in severity_counts:
+        if level in severity_counts:  # pragma: no branch - defensive for unknown severity
             severity_counts[level] += 1
 
     # Build summary

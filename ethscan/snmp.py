@@ -130,7 +130,7 @@ def _normalize_target(target: str) -> tuple[str, int]:
         port = None
         if host and host.startswith("[") and "]:" in host:
             bracket_end = host.find("]:")
-            if bracket_end > 0:
+            if bracket_end > 0:  # pragma: no branch - defensive invariant
                 port_part = host[bracket_end + 2:]
                 if port_part.isdigit():
                     host = host[1:bracket_end]
@@ -574,7 +574,7 @@ def run_snmp(
                 if results["snmp_version"] is None:
                     results["snmp_version"] = entry.get("version")
                     for key in ("sysDescr", "sysObjectID", "sysUpTime", "sysName"):
-                        if results[key] is None:
+                        if results[key] is None:  # pragma: no branch - defensive: fields set on first valid
                             results[key] = entry.get(key)
             elif entry.get("error") and first_error is None:
                 first_error = entry["error"]

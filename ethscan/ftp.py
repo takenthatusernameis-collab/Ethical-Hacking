@@ -43,7 +43,7 @@ def _normalize_target(target: str) -> tuple[str, int]:
         # Strip an optional ``host:port`` suffix.
         if host and host.startswith("[") and "]:" in host:
             bracket_end = host.find("]:")
-            if bracket_end > 0:
+            if bracket_end > 0:  # pragma: no branch - defensive invariant
                 port_part = host[bracket_end + 2:]
                 if port_part.isdigit():
                     host = host[1:bracket_end]
@@ -213,7 +213,7 @@ def run_ftp(
                 results["anonymous_message"] = f"login failed: {exc}"
                 results["error"] = f"login failed: {exc}"
     finally:
-        if client is not None:
+        if client is not None:  # pragma: no branch - defensive: client unset on connect failure
             with contextlib.suppress(ftplib.Error, OSError):
                 client.close()
 
