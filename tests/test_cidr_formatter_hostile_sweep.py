@@ -203,3 +203,46 @@ def test_format_cidr_report_csv_well_formed_preserved() -> None:
     # diff_first and diff_last should be the CIDR string
     assert reader[1][13] == "192.168.1.128/25"  # diff_first
     assert reader[1][14] == "192.168.1.128/25"  # diff_last
+
+
+@pytest.mark.parametrize(
+    "bad_data",
+    [
+        None,
+        1,
+        "string",
+        [],
+        [1, 2, 3],
+        {"not": "a valid cidr result"},
+    ],
+)
+def test_format_cidr_report_markdown_non_dict_data(bad_data: object) -> None:
+    """Non-dict top-level data is normalized to empty dict without raising."""
+    md = format_cidr_report_markdown(cast(Any, bad_data))
+    assert isinstance(md, str)
+    assert "ethscan CIDR Network Calculator Report" in md
+    # With empty dict, these fields render as empty strings
+    assert "**CIDR:**" in md
+    assert "**IP Version:**" in md
+
+
+@pytest.mark.parametrize(
+    "bad_data",
+    [
+        None,
+        1,
+        "string",
+        [],
+        [1, 2, 3],
+        {"not": "a valid cidr result"},
+    ],
+)
+def test_format_cidr_report_csv_non_dict_data(bad_data: object) -> None:
+    """Non-dict top-level data is normalized to empty dict without raising."""
+    csv_text = format_cidr_report_csv(cast(Any, bad_data))
+    assert isinstance(csv_text, str)
+    reader = list(csv.reader(io.StringIO(csv_text)))
+    # Header row should still be present
+    assert reader[0][0] == "cidr"
+    # Data row should have empty values
+    assert len(reader) == 2

@@ -2,22 +2,20 @@
 Date: Mon Nov 16 2026
 
 ## Status
-- Completed the edge-prefix usable-host correctness fix in `ethscan/cidr.py`, `ethscan/radix.py`, and `ethscan/validate.py`.
-- IPv4 `/31` and IPv6 `/127` now report both addresses as usable; IPv4 `/32` and IPv6 `/128` report one usable address. Host ranges now match the stdlib `ipaddress` host iteration for these prefixes.
-- Updated the stale tests that codified the old behavior and added a parametrized stdlib cross-check in `tests/test_cidr.py`.
+- Closed a coverage gap in `ethscan/cidr.py`: the markdown and CSV formatters had defensive `if not isinstance(data, dict): data = {}` branches (lines 258, 319) that were not exercised by tests.
+- Added two parametrized tests in `tests/test_cidr_formatter_hostile_sweep.py` covering non-dict input shapes (None, int, string, list, dict) for both formatters.
+- `ethscan/cidr.py` now achieves **100% statement and branch coverage** (0 missing).
 
 ## What was verified
-- Focused: `python3 -m pytest tests/test_cidr.py tests/test_radix.py tests/test_validate.py -q` -> **335 passed**.
-- Full: `python3 -m pytest -q` -> **32,174 passed, 146 skipped, 0 failed**.
-- Full branch coverage: **100%, 0 missing branches**.
-- `python3 -m mypy ethscan/ tests/` -> clean (259 source files).
-- `python3 -m ruff check ethscan/ tests/` -> all checks passed.
-- `python3 check_readme.py` -> 54 commands, 0 drift.
-- `git diff --check` -> clean.
-- CLI smoke checks for `cidr` and `validate` returned the corrected values.
+- Focused test run: `python3 -m pytest tests/test_cidr.py tests/test_radix.py tests/test_validate.py tests/test_cidr_formatter_hostile_sweep.py tests/test_cidr_hostile_sweep.py -q` → **388 passed**.
+- Full mypy: `python3 -m mypy ethscan/ tests/` → Success: no issues found in 259 source files.
+- Full ruff: `python3 -m ruff check ethscan/ tests/` → All checks passed.
+- README sync: `python3 check_readme.py` → 54 commands, 0 drift.
+- `git diff --check` → clean.
+- CLI smoke tests: `cidr --cidr 192.0.2.0/31` with JSON, Markdown, and CSV output all work correctly.
 
 ## Next task
-- None required. Repository is fully green. If future work is needed, pick one bounded, high-value improvement and reproduce the gap first. `oracle`/`postgresql` empty-target handling remains intentionally out of scope.
+- None required. Repository is fully green with 100% branch coverage. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error). If future work is needed, pick a single bounded, high-value improvement and reproduce the gap first — do not speculate or weaken safety controls.
 
 ## Constraints / notes
 - Keep the existing architecture stable; prefer the smallest reversible change.
@@ -25,4 +23,4 @@ Date: Mon Nov 16 2026
 - The `broadcast_address` field remains stdlib-compatible by design; no further change is required by this task.
 - Dev deps: pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3, Python 3.14.4.
 
-(End of file - 27 lines)
+(End of file - 28 lines)
