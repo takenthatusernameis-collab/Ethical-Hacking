@@ -11,7 +11,7 @@ import io
 import json
 import time
 from collections.abc import Mapping
-from typing import cast
+from typing import TypeGuard, cast
 
 KNOWN_ALGORITHMS = {
     "none": "none",
@@ -83,7 +83,7 @@ def parse_jwt(token: str) -> dict[str, object]:
     }
 
 
-def _is_numeric_claim(value: object) -> bool:
+def _is_numeric_claim(value: object) -> TypeGuard[int | float]:
     """Return whether ``value`` is a JSON number usable as a NumericDate.
 
     ``bool`` is a subclass of ``int`` in Python, so a crafted claim such as
