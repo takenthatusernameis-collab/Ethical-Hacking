@@ -2,23 +2,27 @@
 Date: Tue Nov 17 2026
 
 ## Status
-- Repository fully green; no pending task. This session independently re-verified the baseline and investigated for a reproducible gap before selecting work; none was found, each ruled out with evidence.
+- Repository fully green; no pending task. This session found and fixed a real README/CLI option-drift gap and added a permanent guard for it.
 
 ## Baseline (independently re-verified this session)
-- `python -m pytest -q` -> 32217 passed, 146 skipped, 0 failed.
+- `python -m pytest -q` -> 32219 passed, 146 skipped, 0 failed (baseline 32217 + 2 new guards).
 - `python -m mypy ethscan/ tests/` -> Success, no issues in 259 source files.
 - `python -m ruff check ethscan/ tests/` -> All checks passed.
 - `python check_readme.py` -> 54/54, 0 drift.
-- Working tree clean at commit `6c5f342`; nothing committed.
+- `git diff --check` -> clean. Changes are uncommitted in the working tree.
 
-## Investigated and ruled out this session (evidence recorded)
-- Formatter hostile gaps: all 157 single-arg `format_*_report_*` callables probed with a full hostile matrix + all-fields-hostile dict -> 0 crashes. Covered by `tests/test_all_formatters_hostile_contract.py`; the 3 non-standard `ethscan.passwords.format_audit_report_*` formatters are hostile-tested in `tests/test_passwords_hostile_sweep.py`.
-- Empty-target consistency: all 43 `--target` commands run with `--target ""` exit 2 (usage error), matching the README; only `oracle`/`postgresql` exit 0 with an in-band error (documented, intentionally out of scope).
-- Coverage: 100% statement/branch of `ethscan/` (unchanged, no code modified).
-- No `FIXME`/`TODO`/`XXX`/`HACK` markers in `ethscan/` or `tests/`.
+## What this session changed
+- `README.md`: documented previously undocumented CLI options for 8 commands — audit (`--sort-asc`/`--sort-desc`), geo (`--no-recursive`), jwt (`--token`), mac (`--target`/`--timeout`/`--no-cache`/`--no-offline-fallback`/`--api-url`), nmap (`--input-file`/`--output-format`/`--format`/`--out`), resolve (`--target`/`--types`/`--server`/`--timeout`), validate (`--ports`/`--cidr`/`--output-format`/`--format`/`--out`), whois (`--no-recursive`).
+- `tests/test_readme_sync.py`: added deterministic option-presence guards reading Click metadata (`test_readme_documents_every_cli_option`, `test_readme_has_no_unknown_options`); refactored helpers; updated docstring.
+- No `ethscan/` source changes.
+
+## Evidence the gap was real and is fixed
+- Before: README-vs-CLI option scan reported 8 commands with undocumented options (0 README-only).
+- After: both directions clean (0 undocumented, 0 README-only).
+- Mutation check: removing `--timeout` from the geo bullet made the new test fail with `{'geo': ['--timeout']}`, then passed after restore.
 
 ## Next task
-- None pending. Repository is fully green. If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
+- None pending. Repository is fully green. If future work is needed, pick one bounded, high-value, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
 
 ## Constraints / notes
 - Keep the existing architecture stable; prefer the smallest reversible change. Do not commit unless explicitly asked.

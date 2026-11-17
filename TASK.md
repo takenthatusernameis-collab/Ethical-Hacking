@@ -552,3 +552,30 @@ Date: Sun Nov 08 2026 (session 7)
 
 ## Next task
 - None required. Repository fully green with 100% branch coverage. If future work is needed, pick one bounded, high-value improvement and reproduce the gap first. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
+
+# Session (Tue Nov 17 2026)
+## This session
+- No queued assignment existed (prior HANDOFF_NEXT/NEXT_TASK said "none pending; repo fully green"). Independently re-verified the baseline before selecting work: `pytest -q` -> 32217 passed, 146 skipped, 0 failed; mypy/ruff/check_readme clean.
+- Reproduced a real documentation gap rather than trusting the "fully green" claim: `check_readme.py` and `tests/test_readme_sync.py` only verified command *presence*. A per-command option comparison (README `--options` vs Click `param.opts + secondary_opts`, excluding `--help`) found 8 commands whose README bullet omitted real CLI options: audit (`--sort-asc`/`--sort-desc`), geo (`--no-recursive`), jwt (`--token`), mac (`--target`/`--timeout`/`--no-cache`/`--no-offline-fallback`/`--api-url`), nmap (`--input-file`/`--output-format`/`--format`/`--out`), resolve (`--target`/`--types`/`--server`/`--timeout`), validate (`--ports`/`--cidr`/`--output-format`/`--format`/`--out`), whois (`--no-recursive`). No README-only (nonexistent) options existed.
+- Fixed all 8 README bullets to document the missing options; no source (`ethscan/`) changes.
+- Extended `tests/test_readme_sync.py` with two deterministic option-level guards (`test_readme_documents_every_cli_option`, `test_readme_has_no_unknown_options`) that read Click parameter metadata; updated the module docstring (the old note said option checks were deliberately omitted as brittle).
+- Mutation-checked the new guard: temporarily removed `--timeout` from the geo bullet -> `test_readme_documents_every_cli_option` failed with `{'geo': ['--timeout']}`; README restored afterwards.
+
+## Verification
+- `python -m pytest tests/test_readme_sync.py -q` -> 5 passed.
+- `python -m pytest -q` -> 32219 passed, 146 skipped, 0 failed (baseline 32217; +2 new option guards).
+- `python -m ruff check ethscan/ tests/` -> all checks passed.
+- `python -m mypy ethscan/ tests/` -> Success, no issues in 259 source files.
+- `python check_readme.py` -> 54 commands, 0 drift.
+- Option drift re-scan (README vs CLI) -> 0 README-only options, 0 undocumented options, both directions.
+- `git diff --check` -> clean.
+
+## Blockers
+- None.
+
+## Approaches already tried / ruled out
+- Option-level sync was previously rejected as "brittle/slow"; evidence shows it is deterministic when options are read from Click parameter metadata (not scraped from `--help`), and it caught real drift. The reverse (README-only) direction is currently clean and is kept as a guard.
+- No source changes were warranted; the gap was documentation + a missing regression test. Coverage of `ethscan/` was not re-measured this session (no `ethscan/` source changed).
+
+## Next task
+- None pending. Repository fully green (32219 passed; ruff/mypy/README clean). If future work is needed, pick one bounded, high-value improvement and reproduce the gap first. `oracle`/`postgresql` empty-target handling remains intentionally out of scope.
