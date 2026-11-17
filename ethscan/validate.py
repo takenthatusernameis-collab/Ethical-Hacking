@@ -123,7 +123,7 @@ def _validate_port_spec(spec: str) -> dict[str, Any]:
     }
 
 
-def _format_network_info(network: ipaddress._BaseNetwork) -> dict[str, Any]:
+def _format_network_info(network: ipaddress.IPv4Network | ipaddress.IPv6Network) -> dict[str, Any]:
     """Build a structured network-info dictionary for a network object.
 
     Includes address range, netmask, broadcast, host range, and counts.

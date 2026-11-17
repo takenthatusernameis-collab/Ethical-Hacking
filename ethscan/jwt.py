@@ -46,7 +46,7 @@ def _b64url_decode(segment: str) -> bytes | None:
         return None
 
 
-def _decode_json_segment(segment: str) -> dict | None:
+def _decode_json_segment(segment: str) -> dict[str, object] | None:
     """Decode a base64url-encoded JSON object segment."""
     raw = _b64url_decode(segment)
     if raw is None:

@@ -17,6 +17,8 @@ from collections.abc import Mapping, Sequence
 if TYPE_CHECKING:
     from typing import NotRequired  # type: ignore[attr-defined]  # typing.NotRequired exists on Python 3.11+
 
+_Network = ipaddress.IPv4Network | ipaddress.IPv6Network
+
 
 class CidrSpecError(ValueError):
     """Raised when a CIDR specification cannot be parsed.
@@ -85,12 +87,12 @@ def normalize_cidr(value: str) -> str:
 _normalize_cidr = normalize_cidr
 
 
-def _is_ipv4(network: ipaddress._BaseNetwork) -> bool:
+def _is_ipv4(network: _Network) -> bool:
     """Return True if the network is IPv4."""
     return network.version == 4
 
 
-def _format_network_info(network: ipaddress._BaseNetwork) -> dict[str, object]:
+def _format_network_info(network: _Network) -> dict[str, object]:
     """Build the structured network-info dictionary for a network object."""
     is_v4 = _is_ipv4(network)
 
@@ -129,7 +131,7 @@ def _format_network_info(network: ipaddress._BaseNetwork) -> dict[str, object]:
     }
 
 
-def _contains_ip(network: ipaddress._BaseNetwork, ip: str) -> bool:
+def _contains_ip(network: _Network, ip: str) -> bool:
     """Check whether an IP address belongs to the network."""
     try:
         addr = ipaddress.ip_address(ip)
@@ -139,9 +141,9 @@ def _contains_ip(network: ipaddress._BaseNetwork, ip: str) -> bool:
 
 
 def _subtract_networks(
-    minuend: Sequence[ipaddress._BaseNetwork],
-    subtrahend: Sequence[ipaddress._BaseNetwork],
-) -> list[ipaddress._BaseNetwork]:
+    minuend: Sequence[_Network],
+    subtrahend: Sequence[_Network],
+) -> list[_Network]:
     """Subtract subtrahend networks from minuend networks.
 
     Returns a list of networks representing the address ranges in minuend
@@ -152,7 +154,7 @@ def _subtract_networks(
     if not subtrahend:
         return sorted(minuend, key=lambda n: n.network_address)
 
-    result: list[ipaddress._BaseNetwork] = []
+    result: list[_Network] = []
     for m_net in sorted(minuend, key=lambda n: n.network_address):
         remaining = [m_net]
         for s_net in sorted(subtrahend, key=lambda n: n.network_address):
@@ -166,11 +168,12 @@ def _subtract_networks(
                     new_remaining.append(r_net)
                     continue
                 try:
-                    diffs = list(r_net.address_exclude(s_net))
+                    # Both networks have the same version (checked above), so address_exclude is valid
+                    diffs = list(r_net.address_exclude(s_net))  # type: ignore[arg-type]
                 except (ValueError, TypeError):
                     diffs = []
                 if diffs:
-                    new_remaining.extend(diffs)
+                    new_remaining.extend(diffs)  # type: ignore[arg-type]
             remaining = new_remaining
             if not remaining:
                 break
