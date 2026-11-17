@@ -2,15 +2,14 @@
 Date: Tue Nov 17 2026
 
 ## Status
-- Prior handoff’s queued task (`--check-untyped-defs` hygiene on `tests/test_dns.py` / other listed files) was rechecked: all previously listed candidates and all `tests/`/`ethscan/` now pass `python -m mypy --check-untyped-defs`.
-- This session fixed `check_readme.py` to exit non-zero on README/CLI drift (deterministic gate behavior) while preserving synced-output behavior.
-- Focused verification passed: `python check_readme.py` (exit 0), `pytest tests/test_readme_sync.py -q` (5 passed), `ruff`/`mypy` checks on touched and full source trees clean, `git diff --check` clean. Full pytest+coverage not rerun this session.
+- Full baseline verified green this session: pytest 32220 passed, 146 skipped; mypy (default and `--check-untyped-defs`) clean on `ethscan/` and `tests/`; ruff clean; `check_readme.py` reports 54 commands in sync (exit 0); coverage 100% (15661 stmts / 5918 branches).
+- No uncommitted source changes beyond prior `check_readme.py` fix; handoff/task docs updated.
 
 ## Next task
-1. Re-establish full-gate evidence after this session: run `python -m pytest -q`, `python -m mypy ethscan/ tests/`, `python -m ruff check ethscan/ tests/ check_readme.py`, `python check_readme.py`, and `python -m coverage run --branch --source=ethscan -m pytest -q && python -m coverage report`. Record exact counts/results.
-2. If fully green, inspect for one bounded, high-value, evidence-backed improvement (reproduce first). Candidate areas: any newly introduced `mypy --check-untyped-defs` issues anywhere, or a deterministic gap in tests/docs/tooling with clear verification. Avoid speculative refactors.
+1. Reproduce and select one bounded, high-value, evidence-backed improvement if present (concrete bug, missing verification for documented behavior, or deterministic tooling gap). Implement smallest reversible fix and verify with focused checks plus relevant gates.
+2. If no evidenced gap is found after inspection, document what was checked and leave the baseline intact.
 
 ## Constraints / notes
-- Keep architecture stable; smallest reversible change. Do not weaken production annotations or safety checks. Do not commit unless explicitly asked.
-- Dev deps: pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, Python 3.14.4. No pytest-cov plugin.
-- `oracle`/`postgresql` empty-target handling intentionally out of scope (exit 0, in-band error) per documented contract.
+- Keep architecture stable; do not weaken safety/validation. Do not commit unless explicitly asked.
+- `oracle`/`postgresql` empty-target handling intentionally out of scope (exit 0, in-band error).
+- Dev deps: Python 3.14.4, pytest 9.2.0, mypy 2.4.1, ruff 0.17.5. No pytest-cov plugin.
