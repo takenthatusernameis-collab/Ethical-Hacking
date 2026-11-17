@@ -2,9 +2,9 @@
 Date: Tue Nov 17 2026
 
 ## Status
-- Full baseline verified green this session: pytest 32220 passed, 146 skipped; mypy clean on `ethscan/` and `tests/`; ruff clean; `check_readme.py` reports 54 commands in sync (exit 0); 100% statement/branch coverage (measured 15661/15661, 0 missing branches, in prior session).
+- Full baseline verified green this session: pytest 32220 passed, 146 skipped, 0 failed; mypy clean on `ethscan/` and `tests/` (incl. `--check-untyped-defs`); ruff clean; `check_readme.py` reports 54 commands in sync (exit 0); all-formatters hostile contract 18685 passed; 100% statement/branch coverage (15661/15661, 0 missing branches).
 - No uncommitted changes; working tree clean.
-- No evidenced gap found after inspection: the `--check-untyped-defs` backlog named in TASK.md session 5 (`test_dnsbrute.py` et al.) was reproduced and found already clean (fixed in prior sessions without the notes being updated).
+- No evidenced gap found after inspection: every named backlog item (`--check-untyped-defs` hygiene files, empty-host normalization, formatter hostile-shape fixes for ftp/ntp/oracle/smtp/snmp/ldap) was reproduced and found already complete in prior sessions.
 
 ## Next task
 - None pending. Repository fully green. If future work is needed, pick one bounded, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
