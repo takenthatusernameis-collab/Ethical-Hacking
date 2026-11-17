@@ -487,6 +487,16 @@ def test_extract_ns_records_ns_without_target() -> None:
     assert _extract_ns_records(records) == ["ns1.example.com"]
 
 
+def test_extract_ns_records_skips_non_str_records() -> None:
+    """Non-string records are skipped (line 306)."""
+    records = [
+        123,
+        None,
+        "example.com 300 IN NS ns1.example.com",
+    ]
+    assert _extract_ns_records(records) == ["ns1.example.com"]
+
+
 def test_is_subdomain_of_exact_match() -> None:
     assert _is_subdomain_of("example.com", "example.com") is True
 
