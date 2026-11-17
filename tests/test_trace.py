@@ -1,4 +1,5 @@
 import contextlib
+from typing import Any, cast
 import csv
 import io
 import json
@@ -645,7 +646,7 @@ def test_format_trace_report_csv_recursive_non_dict_guards():
 
 def test_format_trace_report_markdown_non_dict_and_malformed_structures():
     """Cover defensive guards in markdown formatter for malformed inputs."""
-    assert trace.format_trace_report_markdown("not-a-dict").startswith("# TCP Traceroute Report")
+    assert trace.format_trace_report_markdown(cast(Any, "not-a-dict")).startswith("# TCP Traceroute Report")
 
     result = {
         "target": "example.com",
@@ -672,7 +673,7 @@ def test_format_trace_report_markdown_non_dict_and_malformed_structures():
 
 def test_format_trace_report_csv_non_dict_and_malformed_structures():
     """Cover defensive guards in CSV formatter for malformed inputs."""
-    csv_text = trace.format_trace_report_csv("not-a-dict")
+    csv_text = trace.format_trace_report_csv(cast(Any, "not-a-dict"))
     reader = csv.DictReader(io.StringIO(csv_text))
     assert reader.fieldnames is not None
     assert list(reader) == []
