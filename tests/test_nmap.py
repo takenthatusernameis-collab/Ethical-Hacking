@@ -3,6 +3,7 @@
 import json
 import tempfile
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
@@ -324,7 +325,7 @@ def test_format_nmap_report_csv_no_findings():
 
 
 def test_format_nmap_report_csv_missing_optional_fields():
-    data = {
+    data: dict[str, Any] = {
         "findings": [
             {
                 "id": "TEST-CVE",
@@ -349,7 +350,7 @@ def test_format_nmap_report_csv_missing_optional_fields():
             },
         ]
     }
-    output = format_nmap_report_csv(data)
+    output = format_nmap_report_csv(cast(Any, data))
     lines = output.strip().split("\n")
     assert len(lines) == 3  # header + 2 findings
     # Minimal finding should not crash; missing fields become empty
@@ -398,20 +399,21 @@ def test_parse_port_with_ostype():
         "method": "probed",
         "conf": "10",
     })
-    result = _parse_port(port_elem)
+    result = cast("dict[str, Any] | None", _parse_port(port_elem))
+    assert result is not None
     assert result["ostype"] == "Linux"
     assert "Linux" in result["banner"]
 
 
 def test_finding_detail_protocol_kind():
     """Test _finding_detail with kind='protocol' (line 259-260)."""
-    finding = {
+    finding: dict[str, Any] = {
         "kind": "protocol",
         "protocol": "TLSv1.0",
         "title": "Obsolete Protocol",
         "severity": "high",
     }
-    detail = _finding_detail(finding)
+    detail = _finding_detail(cast(Any, finding))
     assert detail == "TLSv1.0"
 
 
@@ -452,65 +454,65 @@ def test_run_nmap_skips_a_port_with_an_invalid_id(tmp_path):
 
 def test_finding_detail_cipher_kind():
     """Test _finding_detail with kind='cipher' (line 261-262)."""
-    finding = {
+    finding: dict[str, Any] = {
         "kind": "cipher",
         "cipher": "AES128-SHA",
         "title": "Weak Cipher",
         "severity": "medium",
     }
-    detail = _finding_detail(finding)
+    detail = _finding_detail(cast(Any, finding))
     assert detail == "AES128-SHA"
 
 
 def test_finding_detail_certificate_kind_with_key_size():
     """Test _finding_detail with kind='certificate' and key_size (lines 263-266)."""
-    finding = {
+    finding: dict[str, Any] = {
         "kind": "certificate",
         "key_size": 1024,
         "title": "Weak Key",
         "severity": "high",
     }
-    detail = _finding_detail(finding)
+    detail = _finding_detail(cast(Any, finding))
     assert detail == "key size 1024 bits"
 
 
 def test_finding_detail_certificate_kind_with_signature_algorithm():
     """Test _finding_detail with kind='certificate' and signature_algorithm (lines 267-269)."""
-    finding = {
+    finding: dict[str, Any] = {
         "kind": "certificate",
         "signature_algorithm": "sha1WithRSAEncryption",
         "title": "Weak Signature",
         "severity": "medium",
     }
-    detail = _finding_detail(finding)
+    detail = _finding_detail(cast(Any, finding))
     assert detail == "signature algorithm sha1WithRSAEncryption"
 
 
 def test_finding_detail_certificate_kind_default():
     """Test _finding_detail with kind='certificate' and no key_size/signature (line 270)."""
-    finding = {
+    finding: dict[str, Any] = {
         "kind": "certificate",
         "title": "Cert Issue",
         "severity": "low",
     }
-    detail = _finding_detail(finding)
+    detail = _finding_detail(cast(Any, finding))
     assert detail == ""
 
 
 def test_finding_detail_unknown_kind():
     """Test _finding_detail with unknown kind (line 271 default return)."""
-    finding = {
+    finding: dict[str, Any] = {
         "kind": "unknown_type",
         "title": "Unknown",
         "severity": "info",
     }
-    detail = _finding_detail(finding)
+    detail = _finding_detail(cast(Any, finding))
     assert detail == ""
 
 
 def test_format_nmap_report_csv_score_none():
     """Test format_nmap_report_csv with finding score=None (line 376)."""
-    data = {
+    data: dict[str, Any] = {
         "findings": [
             {
                 "id": "TEST-CVE",
@@ -529,7 +531,7 @@ def test_format_nmap_report_csv_score_none():
             },
         ]
     }
-    output = format_nmap_report_csv(data)
+    output = format_nmap_report_csv(cast(Any, data))
     lines = output.strip().split("\n")
     assert len(lines) == 2  # header + 1 finding
     # score should be empty string, not "None"
