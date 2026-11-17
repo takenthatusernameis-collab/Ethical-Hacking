@@ -1,6 +1,7 @@
 """Unit tests for the stale DNS detection module."""
 
 import socket
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -401,7 +402,7 @@ class TestCSVFormatter:
         assert "IP 192.168.1.1 unreachable on common ports" in lines[1]
 
     def test_csv_format_empty(self):
-        data = {"results": []}
+        data: dict[str, Any] = {"results": []}
         output = format_stale_report_csv(data)
         assert output == "domain,A_records,AAAA_records,CNAME,stale,stale_reasons"
 
