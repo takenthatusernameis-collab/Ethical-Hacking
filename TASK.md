@@ -714,3 +714,27 @@ Date: Sun Nov 08 2026 (session 7)
 
 ## Environment/notes
 - Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.5. No pytest-cov plugin; coverage via `python -m coverage run --branch --source=ethscan -m pytest`. Working tree has uncommitted changes (only `tests/test_mssql.py`). Do not commit unless explicitly asked.
+
+# Session (Tue Nov 17 2026, session 6)
+## This session
+- No prior agent assignment with a concrete task existed. Independently re-verified the baseline: `pytest -q` -> 32220 passed, 146 skipped, 0 failed; `mypy` clean; `ruff` clean; `check_readme.py` 54/54, 0 drift; working tree clean.
+- Inspected for one bounded, high-value, evidence-backed improvement. Reproduced the `--check-untyped-defs` typing-hygiene backlog named in TASK.md session 5 (start with `tests/test_dnsbrute.py`, then `test_redis`, `test_mongodb`, `test_postgresql`, ...). Every named file is already clean — "Success: no issues found" for all 18 files — fixed in prior sessions without the notes being updated. Re-ran the full gate: all green.
+- Per the reliability rules ("If no evidenced gap is found after inspection, document what was checked and leave the baseline intact"), no source or test changes were made. Baseline left intact.
+
+## Verification
+- `python -m mypy --check-untyped-defs tests/test_dnsbrute.py` -> Success: no issues found.
+- Per-file `--check-untyped-defs` on test_redis, test_mongodb, test_postgresql, test_s3, test_oracle, test_subtake, test_resolve, test_trace, test_smtp, test_dns, test_ntp, test_cli, test_nmap, test_dnssec, test_mysql, test_mssql, test_ping -> all Success: no issues found.
+- `python -m mypy --check-untyped-defs ethscan/ tests/` -> Success: no issues in 259 source files.
+- `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
+- `python check_readme.py` -> 54 CLI commands; 0 drift both directions; exit 0.
+- `python -m pytest -q` -> 32220 passed, 146 skipped, 0 failed.
+- `git status` -> clean working tree.
+
+## Blockers
+- None.
+
+## Approaches already tried / ruled out
+- The only candidate task (continue `--check-untyped-defs` hygiene on the named files) was reproduced and found already complete — no fix needed. No speculative refactor warranted.
+
+## Next task
+- None pending. Repository fully green: 32220 passed, 146 skipped, 0 failed; mypy/ruff clean; README in sync; 100% coverage. If future work is needed, pick one bounded, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract.

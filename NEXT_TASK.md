@@ -2,12 +2,12 @@
 Date: Tue Nov 17 2026
 
 ## Status
-- Full baseline verified green this session: pytest 32220 passed, 146 skipped; mypy (default and `--check-untyped-defs`) clean on `ethscan/` and `tests/`; ruff clean; `check_readme.py` reports 54 commands in sync (exit 0); coverage 100% (15661 stmts / 5918 branches).
-- No uncommitted source changes beyond prior `check_readme.py` fix; handoff/task docs updated.
+- Full baseline verified green this session: pytest 32220 passed, 146 skipped; mypy (default and `--check-untyped-defs`) clean on `ethscan/` and `tests/`; ruff clean; `check_readme.py` reports 54 commands in sync (exit 0); 100% statement/branch coverage (15661/15661, 0 missing branches).
+- No uncommitted changes; working tree clean (HEAD f989e8f).
+- No evidenced gap found after inspection: the `--check-untyped-defs` backlog named in TASK.md session 5 (`test_dnsbrute.py` et al.) was reproduced and found already clean (fixed in prior sessions without the notes being updated).
 
 ## Next task
-1. Reproduce and select one bounded, high-value, evidence-backed improvement if present (concrete bug, missing verification for documented behavior, or deterministic tooling gap). Implement smallest reversible fix and verify with focused checks plus relevant gates.
-2. If no evidenced gap is found after inspection, document what was checked and leave the baseline intact.
+- None pending. Repository fully green. If future work is needed, pick one bounded, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
 
 ## Constraints / notes
 - Keep architecture stable; do not weaken safety/validation. Do not commit unless explicitly asked.
