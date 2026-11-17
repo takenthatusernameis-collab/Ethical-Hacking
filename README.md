@@ -85,7 +85,7 @@ commands:
     resolver: 8.8.8.8
 ```
 
-CLI arguments always take precedence over config values. Use `ethscan config --init PATH` to write a sample config file, `ethscan config --set KEY=VALUE` to change a single value in place (e.g. `ethscan config --set defaults.timeout=5.0`), or `ethscan config` to inspect the loaded configuration. `--set` accepts JSON values (numbers, booleans, `null`, lists, objects) and refuses to overwrite a config file that cannot be parsed.
+CLI arguments always take precedence over config values. Use `ethscan config --init PATH` to write a sample config file, `ethscan config --set KEY=VALUE` to change a single value in place (e.g. `ethscan config --set defaults.timeout=5.0`), or `ethscan config` to inspect the loaded configuration. `--set` accepts JSON values (numbers, booleans, `null`, lists, objects) and refuses to overwrite a config file that cannot be parsed. `--set` writes back to the loaded file (the discovered or cwd `ethscan.yaml` when no file is found; an explicit `--config` path must already exist) and works with `--format`/`--out` to emit the updated report.
 
 ## Caching
 

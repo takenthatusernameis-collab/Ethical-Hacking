@@ -845,3 +845,55 @@ def test_config_cli_set_reports_write_failure(monkeypatch, tmp_path) -> None:
     assert result.exit_code == 2, result.output
     assert "Failed to write config" in result.output
     assert not (tmp_path / "ethscan.yaml").exists()
+
+
+def test_config_cli_set_missing_config_path_is_usage_error(tmp_path) -> None:
+    """A non-existent ``--config`` path stays a usage error even with ``--set``."""
+    missing = tmp_path / "nope.yaml"
+    result = CliRunner().invoke(
+        cli.cli,
+        ["config", "--config", str(missing), "--set", "defaults.timeout=4"],
+    )
+    assert result.exit_code == 2, result.output
+    assert "does not exist" in result.output
+    assert not missing.exists()
+
+
+def test_config_cli_set_with_out_writes_report(tmp_path) -> None:
+    """``--out`` redirects the post-``--set`` report to a file."""
+    cfg_path = tmp_path / "custom.yaml"
+    cfg_path.write_text("defaults:\n  timeout: 1\n")
+    out_path = tmp_path / "report.json"
+    result = CliRunner().invoke(
+        cli.cli,
+        [
+            "config",
+            "--config",
+            str(cfg_path),
+            "--set",
+            "defaults.timeout=4",
+            "--format",
+            "json",
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert out_path.exists()
+    import json
+
+    payload = json.loads(out_path.read_text())
+    assert payload["defaults"]["timeout"] == 4
+    assert payload["config_file"] == str(cfg_path)
+
+
+def test_config_cli_set_format_csv_reflects_new_value(tmp_path) -> None:
+    """CSV output after ``--set`` reflects the updated value."""
+    cfg_path = tmp_path / "custom.yaml"
+    cfg_path.write_text("defaults:\n  timeout: 1\n")
+    result = CliRunner().invoke(
+        cli.cli,
+        ["config", "--config", str(cfg_path), "--set", "defaults.timeout=9", "--format", "csv"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "9" in result.output
