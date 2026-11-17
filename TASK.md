@@ -604,3 +604,34 @@ Date: Sun Nov 08 2026 (session 7)
 
 ## Next task
 - None required. Repository fully green: 32220 passed, 146 skipped, 0 failed; mypy/ruff clean; README in sync; 100% coverage. If future work is needed, pick one bounded, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract.
+
+# Session (Tue Nov 17 2026, session 3)
+## This session
+- No queued assignment (HANDOFF_NEXT/NEXT_TASK said "none pending; repo fully green"). Independently re-verified the baseline first: `pytest -q` -> 32220 passed, 146 skipped, 0 failed; `mypy ethscan/ tests/` clean; `ruff` clean; `check_readme.py` 54/54, 0 drift; `git diff --check` clean.
+- Selected a bounded typing-hygiene task per the handoff's suggested direction: fixed all 38 `--check-untyped-defs` mypy errors in `tests/test_dnssec.py` (largest remaining file). Before: errors like `Value of type "object" is not indexable`, `Argument 1 to "len" has incompatible type "object"`, `"object" has no attribute "__iter__"`, `Unsupported right operand type for in ("object")`, `"Callable[[], str]" has no attribute "return_value"`, and hostile-type formatter args.
+- Fixed `tests/test_dnssec.py` only (test-only, fully reversible, no behavior change; file already imported `Any, cast`):
+  - Annotated 20 result locals as `dict[str, Any]` where they hold `dict[str, object]` returns from `run_dnssec`, `_parse_dnskey_response`, `_parse_ds_response`, `_query_dnskey_dnspython`, `_query_ds_dnspython` (`Any` is consistent with `object`, so the assignment typechecks and indexed/iterated/`len()`/`in` accesses pass).
+  - `cast(Any, mock_rdata.__str__).return_value = "dummy deadbeef"` (MagicMock `__str__` is typed `Callable[[], str]`).
+  - `cast(Any, "not a dict")` / `cast(Any, ["not", "a", "dict"])` for the two hostile-type formatter-robustness tests.
+
+## Verification
+- `python -m mypy --check-untyped-defs tests/test_dnssec.py` -> Success (was 38 errors).
+- `python -m ruff check tests/test_dnssec.py` -> All checks passed.
+- `python -m pytest tests/test_dnssec.py -q` -> 116 passed.
+- `python -m mypy ethscan/ tests/` -> Success: no issues found in 259 source files.
+- `python -m ruff check ethscan/ tests/` -> All checks passed.
+- `python check_readme.py` -> 54 commands, 0 drift.
+- `python -m pytest -q` -> 32220 passed, 146 skipped, 0 failed (baseline unchanged).
+- `python -m coverage run --branch --source=ethscan -m pytest -q` -> 100% statement/branch (15661/15661, 0 missing branches).
+- `git diff --check` -> clean; `git status` -> only `tests/test_dnssec.py` modified (23 insertions, 23 deletions). No production code changed.
+
+## Blockers
+- None.
+
+## Approaches already tried / ruled out
+- Changing SOURCE return annotations (`dict[str, object]` -> `Any`) would fix the cluster in one place but weakens production type safety and exceeds a bounded test-hygiene task — rejected.
+- `dict[str, Any]` local annotations verified empirically (probe) to typecheck against a `dict[str, object]` RHS; chosen as the minimal, established pattern.
+- Did not widen scope to other test files.
+
+## Next task
+- Continue per-file `--check-untyped-defs` typing hygiene on `tests/test_radix.py` (11 errors, next-largest). Reproduce with `python -m mypy --check-untyped-defs tests/test_radix.py`, then fix with the established pattern (`dict[str, Any]` locals for `dict[str, object]` results, `cast(Any, ...)` for hostile/monkeypatch inputs). Re-run the full gate and record results. Remaining files with `--check-untyped-defs` errors: test_nmap.py 10, test_mysql.py 7, test_mssql.py 7, test_dnsbrute.py 7, test_redis.py 6, test_mongodb.py 6, test_s3.py 5, test_postgresql.py 5, test_oracle.py 5, test_subtake.py 4, test_resolve.py 3, test_trace.py 2, test_smtp.py 2, test_dns.py 2, test_ntp.py 1, test_cli.py 1. `oracle`/`postgresql` empty-target handling remains intentionally out of scope.

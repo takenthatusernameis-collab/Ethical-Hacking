@@ -674,7 +674,7 @@ def test_parse_dnskey_response_full() -> None:
 
 def test_parse_dnskey_response_empty_key_data():
     data = _dnskey_response_with_key(b"")
-    res = _parse_dnskey_response(data, "example.com")
+    res: dict[str, Any] = _parse_dnskey_response(data, "example.com")
     assert res["success"] is True
     assert res["keys"][0]["key_data"] == ""
 
@@ -707,7 +707,7 @@ def test_parse_dnskey_response_truncated_answer():
     # available data and still emits a key with the bytes it could read.
     ans = b"\xc0\x0c" + struct.pack(">HHIH", DNSKEY_QTYPE, 1, 3600, 20) + b"\x00\x01\x03\x08"
     data = struct.pack(">HHHHHH", 0x1234, 0x8000, 1, 1, 0, 0) + question + ans
-    res = _parse_dnskey_response(data, "example.com")
+    res: dict[str, Any] = _parse_dnskey_response(data, "example.com")
     assert res["success"] is True
     assert len(res["keys"]) == 1
     assert res["keys"][0]["flags"] == 1
@@ -730,7 +730,7 @@ def _ds_response_with_digest(digest: bytes = b"\xaa\xbb\xcc") -> bytes:
 
 def test_parse_ds_response_full():
     data = _ds_response_with_digest()
-    res = _parse_ds_response(data, "example.com")
+    res: dict[str, Any] = _parse_ds_response(data, "example.com")
     assert res["success"] is True
     rec = res["records"][0]
     assert rec["name"] == "example.com"
@@ -983,7 +983,7 @@ def test_run_dnssec_dnspython_dnskey_failed(monkeypatch):
         "ethscan.dnssec._query_ds_dnspython",
         lambda domain, server, timeout: {"success": False, "records": [], "error": "boom"},
     )
-    results = run_dnssec("example.com", timeout=1.0)
+    results: dict[str, Any] = run_dnssec("example.com", timeout=1.0)
     assert results["validated"] is False
     assert results["dnspython_available"] is True
     assert any("DNSKEY query failed: boom" in n for n in results["notes"])
@@ -1001,7 +1001,7 @@ def test_run_dnssec_dnspython_unsigned_zone(monkeypatch):
         "ethscan.dnssec._query_ds_dnspython",
         lambda domain, server, timeout: {"success": True, "records": [], "error": None},
     )
-    results = run_dnssec("example.com", timeout=1.0)
+    results: dict[str, Any] = run_dnssec("example.com", timeout=1.0)
     assert results["validated"] is False
     assert any("No DNSKEY records found (unsigned zone)" in n for n in results["notes"])
     assert any("No DS records found at parent" in n for n in results["notes"])
@@ -1021,7 +1021,7 @@ def test_run_dnssec_single_label_no_ds_query(monkeypatch):
 
     monkeypatch.setattr("ethscan.dnssec._query_dnskey_dnspython", fake_dnskey)
     monkeypatch.setattr("ethscan.dnssec._query_ds_dnspython", fake_ds)
-    results = run_dnssec("com", timeout=1.0)
+    results: dict[str, Any] = run_dnssec("com", timeout=1.0)
     assert results["validated"] is True
     assert results["domain"] == "com"
     assert called["ds"] is False
@@ -1039,7 +1039,7 @@ def test_run_dnssec_stdlib_nameservers_found(monkeypatch):
         "ethscan.dnssec._query_ds_raw",
         lambda ns, domain, timeout: {"success": True, "records": [1], "error": None},
     )
-    results = run_dnssec("example.com", timeout=1.0)
+    results: dict[str, Any] = run_dnssec("example.com", timeout=1.0)
     assert results["validated"] is True
     assert results["dnspython_available"] is False
     assert any("dnspython not installed" in n for n in results["notes"])
@@ -1057,7 +1057,7 @@ def test_run_dnssec_stdlib_ds_failure(monkeypatch):
         "ethscan.dnssec._query_ds_raw",
         lambda ns, domain, timeout: {"success": False, "records": [], "error": "no parent"},
     )
-    results = run_dnssec("example.com", timeout=1.0)
+    results: dict[str, Any] = run_dnssec("example.com", timeout=1.0)
     assert results["validated"] is True
     assert any("DS query failed: no parent" in n for n in results["notes"])
     assert len(results["chain"]) == 1
@@ -1066,7 +1066,7 @@ def test_run_dnssec_stdlib_ds_failure(monkeypatch):
 def test_run_dnssec_no_nameservers(monkeypatch):
     monkeypatch.setattr("ethscan.dnssec.DNS_AVAILABLE", False)
     monkeypatch.setattr("ethscan.dnssec._resolve_nameservers", lambda domain, timeout: [])
-    results = run_dnssec("example.com", timeout=1.0)
+    results: dict[str, Any] = run_dnssec("example.com", timeout=1.0)
     assert results["validated"] is False
     assert results["dnskey"]["error"] == "no nameservers found"
     assert results["ds"]["error"] == "no nameservers found"
@@ -1317,7 +1317,7 @@ def test_query_dnskey_dnspython_success(monkeypatch):
     mock_rdata.flags = 257
     mock_rdata.protocol = 3
     mock_rdata.algorithm = 8
-    mock_rdata.__str__.return_value = "dummy deadbeef"
+    cast(Any, mock_rdata.__str__).return_value = "dummy deadbeef"
     mock_answer = MagicMock()
     mock_answer.__iter__.return_value = [mock_rdata]
     mock_answer.name = "example.com."
@@ -1329,7 +1329,7 @@ def test_query_dnskey_dnspython_success(monkeypatch):
     import ethscan.dnssec as dnssec_mod
 
     monkeypatch.setattr(dnssec_mod, "dns", mock_dns, raising=False)
-    r = _query_dnskey_dnspython("example.com", "1.2.3.4", 1.0)
+    r: dict[str, Any] = _query_dnskey_dnspython("example.com", "1.2.3.4", 1.0)
     assert r["success"] is True
     assert r["error"] is None
     assert len(r["keys"]) == 1
@@ -1349,7 +1349,7 @@ def test_query_dnskey_dnspython_error(monkeypatch):
     import ethscan.dnssec as dnssec_mod
 
     monkeypatch.setattr(dnssec_mod, "dns", mock_dns, raising=False)
-    r = _query_dnskey_dnspython("example.com", None, 1.0)
+    r: dict[str, Any] = _query_dnskey_dnspython("example.com", None, 1.0)
     assert r["success"] is False
     assert r["keys"] == []
     assert "network down" in r["error"]
@@ -1373,7 +1373,7 @@ def test_query_ds_dnspython_success(monkeypatch):
     import ethscan.dnssec as dnssec_mod
 
     monkeypatch.setattr(dnssec_mod, "dns", mock_dns, raising=False)
-    r = _query_ds_dnspython("example.com", "1.2.3.4", 1.0)
+    r: dict[str, Any] = _query_ds_dnspython("example.com", "1.2.3.4", 1.0)
     assert r["success"] is True
     assert r["error"] is None
     assert len(r["records"]) == 1
@@ -1395,7 +1395,7 @@ def test_query_ds_dnspython_error(monkeypatch):
     import ethscan.dnssec as dnssec_mod
 
     monkeypatch.setattr(dnssec_mod, "dns", mock_dns, raising=False)
-    r = _query_ds_dnspython("example.com", None, 1.0)
+    r: dict[str, Any] = _query_ds_dnspython("example.com", None, 1.0)
     assert r["success"] is False
     assert r["records"] == []
     assert "servfail" in r["error"]
@@ -1458,7 +1458,7 @@ def test_query_dnskey_dnspython_swallows_unlisted_exceptions(monkeypatch, exc):
     import ethscan.dnssec as dnssec_mod
 
     monkeypatch.setattr(dnssec_mod, "dns", mock_dns, raising=False)
-    r = dnssec_mod._query_dnskey_dnspython("example.com", None, 1.0)
+    r: dict[str, Any] = dnssec_mod._query_dnskey_dnspython("example.com", None, 1.0)
     assert r["success"] is False
     assert r["keys"] == []
     assert "boom" in r["error"]
@@ -1478,7 +1478,7 @@ def test_query_ds_dnspython_swallows_unlisted_exceptions(monkeypatch, exc):
     import ethscan.dnssec as dnssec_mod
 
     monkeypatch.setattr(dnssec_mod, "dns", mock_dns, raising=False)
-    r = dnssec_mod._query_ds_dnspython("example.com", None, 1.0)
+    r: dict[str, Any] = dnssec_mod._query_ds_dnspython("example.com", None, 1.0)
     assert r["success"] is False
     assert r["records"] == []
     assert "boom" in r["error"]
@@ -1500,7 +1500,7 @@ def test_run_dnssec_does_not_crash_on_unlisted_exceptions(monkeypatch, exc):
     monkeypatch.setattr(dnssec_mod, "dns", mock_dns, raising=False)
     monkeypatch.setattr(dnssec_mod, "DNS_AVAILABLE", True)
 
-    results = dnssec_mod.run_dnssec("example.com", timeout=1.0)
+    results: dict[str, Any] = dnssec_mod.run_dnssec("example.com", timeout=1.0)
     assert results["validated"] is False
     assert any("DNSKEY query failed" in n for n in results["notes"])
 
@@ -1529,7 +1529,7 @@ def test_query_dnskey_dnspython_swallows_hostile_exception(monkeypatch):
     import ethscan.dnssec as dnssec_mod
 
     monkeypatch.setattr(dnssec_mod, "dns", mock_dns, raising=False)
-    r = dnssec_mod._query_dnskey_dnspython("example.com", None, 1.0)
+    r: dict[str, Any] = dnssec_mod._query_dnskey_dnspython("example.com", None, 1.0)
     assert r["success"] is False
     assert r["keys"] == []
     assert "hostile" in r["error"]
@@ -1548,7 +1548,7 @@ def test_query_ds_dnspython_swallows_hostile_exception(monkeypatch):
     import ethscan.dnssec as dnssec_mod
 
     monkeypatch.setattr(dnssec_mod, "dns", mock_dns, raising=False)
-    r = dnssec_mod._query_ds_dnspython("example.com", None, 1.0)
+    r: dict[str, Any] = dnssec_mod._query_ds_dnspython("example.com", None, 1.0)
     assert r["success"] is False
     assert r["records"] == []
     assert "hostile" in r["error"]
@@ -1569,7 +1569,7 @@ def test_run_dnssec_does_not_crash_on_hostile_exception(monkeypatch):
     monkeypatch.setattr(dnssec_mod, "dns", mock_dns, raising=False)
     monkeypatch.setattr(dnssec_mod, "DNS_AVAILABLE", True)
 
-    results = dnssec_mod.run_dnssec("example.com", timeout=1.0)
+    results: dict[str, Any] = dnssec_mod.run_dnssec("example.com", timeout=1.0)
     assert results["validated"] is False
     assert any("DNSKEY query failed" in n for n in results["notes"])
 
@@ -1733,7 +1733,7 @@ def test_run_dnssec_catches_hostile_exception_in_main_try(monkeypatch):
 
     monkeypatch.setattr(dnssec_mod, "_query_dnskey_dnspython", boom)
     monkeypatch.setattr(dnssec_mod, "DNS_AVAILABLE", True)
-    results = dnssec_mod.run_dnssec("example.com")
+    results: dict[str, Any] = dnssec_mod.run_dnssec("example.com")
     assert results["validated"] is False
     assert results["dnskey"]["success"] is False
     assert "dnssec probe failed" in str(results["dnskey"]["error"])
@@ -1870,12 +1870,12 @@ def test_format_dnssec_report_csv_ds_records_skip_non_dict():
 
 def test_format_dnssec_report_markdown_non_dict():
     """A non-dict input to the markdown formatter is normalized to {} (ethscan/dnssec.py:615)."""
-    output = format_dnssec_report_markdown("not a dict")
+    output = format_dnssec_report_markdown(cast(Any, "not a dict"))
     assert "# ethscan DNSSEC Validation Report" in output
     assert "No" in output
 
 
 def test_format_dnssec_report_csv_non_dict():
     """A non-dict input to the CSV formatter is normalized to {} (ethscan/dnssec.py:822)."""
-    output = format_dnssec_report_csv(["not", "a", "dict"])
+    output = format_dnssec_report_csv(cast(Any, ["not", "a", "dict"]))
     assert "target,domain,validated,record_type,name" in output
