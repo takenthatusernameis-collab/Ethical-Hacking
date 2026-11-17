@@ -3,30 +3,29 @@ Date: Tue Nov 17 2026
 
 ## This session
 - Starting from clean baseline (32220 passed, mypy/ruff/coverage all green).
-- Selected next bounded typing-hygiene task: fixed all 7 `--check-untyped-defs` mypy errors in `tests/test_mysql.py` (tied for largest remaining after `test_nmap.py` and `test_dnssec.py`).
+- Selected next bounded typing-hygiene task: fixed all 7 `--check-untyped-defs` mypy errors in `tests/test_mssql.py` (tied for largest remaining after `test_nmap.py` and `test_dnssec.py`).
 
 ## What changed
-- `tests/test_mysql.py` only (test-only, fully reversible, no behavior change):
+- `tests/test_mssql.py` only (test-only, fully reversible, no behavior change):
   - Added `from typing import Any, cast` import.
-  - Fixed `_parse_handshake(None)` → `_parse_handshake(cast(Any, None))` (line 66): hostile input test.
-  - Annotated `handshake: dict[str, Any] = {}` (line 154) for `_assess_handshake` call.
-  - Added `assert err is not None` before `in` check (line 243) in `test_send_recv_socket_oserror` — narrows `str | None` to `str` after `assert data is None`.
-  - Annotated two `data: dict[str, Any] = {...}` locals (lines 565, 1075) passed to formatters.
-  - Fixed `format_mysql_report_markdown(None)` and `format_mysql_report_csv(None)` → `cast(Any, None)` (lines 1165, 1171): hostile input tests.
+  - Added `assert err is not None` before `in` check in `test_send_recv_connector_error` (lines 367, 368) and `test_send_recv_socket_oserror` (line 422) — narrows `str | None` to `str` after `assert data is None`.
+  - Fixed `_build_prelogin_request(..., threadid=42)` → `threadid=cast(Any, 42)` (line 516): `threadid` expects `str | None`.
+  - Annotated `data: dict[str, Any] = {...}` (line 1026) for `format_mssql_report_markdown` call.
+  - Fixed `format_mssql_report_markdown("not a dict")` and `format_mssql_report_csv("not a dict")` → `cast(Any, "not a dict")` (lines 1252, 1259): hostile input tests.
 
 ## What was actually verified
-- `python -m mypy --check-untyped-defs tests/test_mysql.py` -> Success (was 7 errors).
-- `python -m ruff check tests/test_mysql.py` -> All checks passed.
-- `python -m pytest tests/test_mysql.py -q` -> 90 passed.
+- `python -m mypy --check-untyped-defs tests/test_mssql.py` -> Success (was 7 errors).
+- `python -m ruff check tests/test_mssql.py` -> All checks passed.
+- `python -m pytest tests/test_mssql.py -q` -> 90 passed.
 - `python -m mypy ethscan/ tests/` -> Success: no issues in 259 source files.
 - `python -m ruff check ethscan/ tests/` -> All checks passed.
 - `python check_readme.py` -> 54 commands, 0 drift.
 - `python -m pytest -q` -> 32220 passed, 146 skipped, 0 failed (baseline unchanged).
 - `python -m coverage run --branch --source=ethscan -m pytest -q` -> 100% statement/branch (15661/15661, 0 missing branches).
-- `git diff --check` -> clean; `git status` -> only `tests/test_mysql.py` modified (8 insertions, 6 deletions). No production code changed.
+- `git diff --check` -> clean; `git status` -> only `tests/test_mssql.py` modified (12 insertions, 8 deletions). No production code changed.
 
 ## What remains unresolved
-- Other test files still carry pre-existing `--check-untyped-defs` errors (none introduced here). Current counts (`python -m mypy --check-untyped-defs tests/`): test_s3.py 5, test_redis.py 6, test_postgresql.py 5, test_oracle.py 4, test_mssql.py 7, test_mongodb.py 6, test_dnsbrute.py 7, test_trace.py 2, test_dns.py 2, test_resolve.py 3, test_subtake.py 4, test_smtp.py 2, test_ntp.py 1, test_cli.py 1. `test_nmap.py`, `test_dnssec.py`, and `test_mysql.py` are now 0.
+- Other test files still carry pre-existing `--check-untyped-defs` errors (none introduced here). Current counts (`python -m mypy --check-untyped-defs tests/`): test_s3.py 5, test_redis.py 6, test_postgresql.py 5, test_oracle.py 4, test_mongodb.py 6, test_dnsbrute.py 7, test_trace.py 2, test_dns.py 2, test_resolve.py 3, test_subtake.py 4, test_smtp.py 2, test_ntp.py 1, test_cli.py 1. `test_nmap.py`, `test_dnssec.py`, `test_mysql.py`, and `test_mssql.py` are now 0.
 - `oracle`/`postgresql` empty-target handling remains intentionally out of scope (exit 0, in-band error) per their documented contract.
 - Several errors are `dns.resolver`/`dns.exception` attribute errors (likely dnspython version/stub mismatch) — not typing-hygiene issues.
 
@@ -35,9 +34,9 @@ Date: Tue Nov 17 2026
 - `dict[str, Any]` local annotations + `cast(Any, ...)` at call sites verified empirically to typecheck against `dict[str, object]`/`TypedDict` RHS; chosen as the minimal, established pattern.
 
 ## Next task
-- Continue per-file `--check-untyped-defs` typing hygiene on the next-largest file: `tests/test_mssql.py` (7 errors), `tests/test_dnsbrute.py` (7 errors), `tests/test_redis.py` (6), or `tests/test_mongodb.py` (6). Reproduce first: `python -m mypy --check-untyped-defs tests/test_mssql.py`; fix with the established pattern (`dict[str, Any]` locals for `dict[str, object]` results, `cast(Any, ...)` for hostile/monkeypatch inputs). Then re-run the full gate (pytest, mypy ethscan/ tests/, ruff, check_readme.py, coverage) and record results. Skip `tests/test_ping.py` if it still carries the Python 3.14 `socket.timeout` read-only descriptor blocker (verify before assuming).
+- Continue per-file `--check-untyped-defs` typing hygiene on the next-largest file: `tests/test_dnsbrute.py` (7 errors), `tests/test_redis.py` (6), `tests/test_mongodb.py` (6), or `tests/test_postgresql.py` (5). Reproduce first: `python -m mypy --check-untyped-defs tests/test_dnsbrute.py`; fix with the established pattern (`dict[str, Any]` locals for `dict[str, object]` results, `cast(Any, ...)` for hostile/monkeypatch inputs). Then re-run the full gate (pytest, mypy ethscan/ tests/, ruff, check_readme.py, coverage) and record results. Skip `tests/test_ping.py` if it still carries the Python 3.14 `socket.timeout` read-only descriptor blocker (verify before assuming).
 
 ## Environment/notes
-- Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.5. No pytest-cov plugin; coverage via `python -m coverage run --branch --source=ethscan -m pytest`. Working tree has uncommitted changes (only `tests/test_mysql.py`). Do not commit unless explicitly asked.
+- Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.5. No pytest-cov plugin; coverage via `python -m coverage run --branch --source=ethscan -m pytest`. Working tree has uncommitted changes (only `tests/test_mssql.py`). Do not commit unless explicitly asked.
 
 (End of file - total 43 lines)

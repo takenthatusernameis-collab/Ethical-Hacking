@@ -5,6 +5,7 @@ import io
 import json
 import socket
 import struct
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -364,6 +365,7 @@ def test_send_recv_connector_error():
 
     data, err = _send_recv("h", 1433, b"req", 5.0, connector=fake)
     assert data is None
+    assert err is not None
     assert "connector error" in err
     assert "connector broken" in err
 
@@ -417,6 +419,7 @@ def test_send_recv_socket_oserror():
         mock_conn.side_effect = OSError("Network unreachable")
         data, err = _send_recv("127.0.0.1", 1433, b"req", 1.0)
         assert data is None
+        assert err is not None
         assert "Network unreachable" in err
 
 
@@ -511,7 +514,7 @@ def test_build_prelogin_request_total_length():
 def test_build_prelogin_request_ignores_params():
     req1 = _build_prelogin_request()
     req2 = _build_prelogin_request(
-        version="16.0.0", encryption="REQUIRED", instinst="FOO", threadid=42
+        version="16.0.0", encryption="REQUIRED", instinst="FOO", threadid=cast(Any, 42)
     )
     assert req1 == req2
 
@@ -1020,7 +1023,7 @@ def test_format_mssql_report_markdown_empty_prelogin():
 
 
 def test_format_mssql_report_markdown_none_host():
-    data = {
+    data: dict[str, Any] = {
         "target": "testhost:1433",
         "host": None,
         "port": 1433,
@@ -1247,14 +1250,14 @@ def test_run_mssql_invalid_target_re_raises_target_spec_error():
 
 def test_format_mssql_report_markdown_non_dict_input():
     """format_mssql_report_markdown handles non-dict input (covers line 606)."""
-    md = format_mssql_report_markdown("not a dict")
+    md = format_mssql_report_markdown(cast(Any, "not a dict"))
     assert "# MSSQL Reconnaissance Report" in md
     assert "**Host:** N/A" in md
 
 
 def test_format_mssql_report_csv_non_dict_input():
     """format_mssql_report_csv handles non-dict input (covers line 656)."""
-    csv_out = format_mssql_report_csv("not a dict")
+    csv_out = format_mssql_report_csv(cast(Any, "not a dict"))
     reader = csv.reader(io.StringIO(csv_out))
     rows = list(reader)
     assert rows[0] == [
