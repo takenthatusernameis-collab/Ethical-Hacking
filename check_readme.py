@@ -30,5 +30,8 @@ print(len(cli_commands), 'CLI commands')
 readme_commands = set(matches)
 cli_commands_set = set(cli_commands)
 
-print('In README but not CLI:', readme_commands - cli_commands_set)
-print('In CLI but not README:', cli_commands_set - readme_commands)
+missing_in_cli = readme_commands - cli_commands_set
+missing_in_readme = cli_commands_set - readme_commands
+print('In README but not CLI:', missing_in_cli)
+print('In CLI but not README:', missing_in_readme)
+raise SystemExit(1 if missing_in_cli or missing_in_readme else 0)
