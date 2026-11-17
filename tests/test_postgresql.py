@@ -4,7 +4,7 @@ import contextlib
 import json
 import socket
 import threading
-from typing import Any
+from typing import Any, cast
 
 from ethscan.postgresql import (
     _AUTH_TYPE_NAMES,
@@ -125,7 +125,7 @@ def test_build_startup_request_custom_user():
 
 
 def test_parse_startup_response_empty():
-    empty = {
+    empty: dict[str, Any] = {
         "server_version": None,
         "auth_type_code": None,
         "auth_type_name": None,
@@ -134,7 +134,7 @@ def test_parse_startup_response_empty():
         "errors": [],
         "notices": [],
     }
-    assert _parse_startup_response(None) == empty
+    assert _parse_startup_response(cast(Any, None)) == empty
     assert _parse_startup_response(b"") == empty
 
 
@@ -541,7 +541,7 @@ def test_run_postgresql_unknown_probe():
 
 def test_format_postgresql_report_with_none_host():
     """Test formatters handle None host (from invalid target)."""
-    data = {
+    data: dict[str, Any] = {
         "target": "invalid://",
         "host": None,
         "port": 5432,
@@ -574,13 +574,13 @@ def test_format_postgresql_report_with_none_host():
 
 
 def test_format_postgresql_report_markdown_non_dict_input():
-    rendered = format_postgresql_report_markdown(None)
+    rendered = format_postgresql_report_markdown(cast(Any, None))
     assert "# PostgreSQL Reconnaissance Report" in rendered
     assert "**Host:** N/A" in rendered
 
 
 def test_format_postgresql_report_csv_non_dict_input():
-    rendered = format_postgresql_report_csv(None)
+    rendered = format_postgresql_report_csv(cast(Any, None))
     lines = rendered.strip().splitlines()
     assert len(lines) == 2
     assert lines[0].startswith("target,host,port,accessible,")

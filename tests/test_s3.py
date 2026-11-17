@@ -235,7 +235,7 @@ def test_check_bucket_public_403(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.s3._resolve_s3_endpoint", _mock_dns("1.2.3.4"))
 
     def _raise(req, timeout=None):
-        err = urllib.error.HTTPError("https://x", 403, "Forbidden", {}, None)
+        err = urllib.error.HTTPError("https://x", 403, "Forbidden", cast(Any, {}), None)
         err.close()
         raise err
 
@@ -250,7 +250,7 @@ def test_check_bucket_public_404(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.s3._resolve_s3_endpoint", _mock_dns("1.2.3.4"))
 
     def _raise(req, timeout=None):
-        err = urllib.error.HTTPError("https://x", 404, "Not Found", {}, None)
+        err = urllib.error.HTTPError("https://x", 404, "Not Found", cast(Any, {}), None)
         err.close()
         raise err
 
@@ -265,7 +265,7 @@ def test_check_bucket_public_400(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.s3._resolve_s3_endpoint", _mock_dns("1.2.3.4"))
 
     def _raise(req, timeout=None):
-        err = urllib.error.HTTPError("https://x", 400, "Bad Request", {}, None)
+        err = urllib.error.HTTPError("https://x", 400, "Bad Request", cast(Any, {}), None)
         err.close()
         raise err
 
@@ -1229,12 +1229,12 @@ def test_check_bucket_public_httperror_close_raises(monkeypatch) -> None:
     monkeypatch.setattr("ethscan.s3._resolve_s3_endpoint", _mock_dns("1.2.3.4"))
 
     def _raise_httperror(req, timeout=None):
-        err = urllib.error.HTTPError("https://x", 403, "Forbidden", {}, None)
+        err = urllib.error.HTTPError("https://x", 403, "Forbidden", cast(Any, {}), None)
 
         def _bad_close():
             raise RuntimeError("close failed")
 
-        err.close = _bad_close
+        err.close = _bad_close  # type: ignore[method-assign]
         raise err
 
     monkeypatch.setattr("ethscan.s3.urllib.request.urlopen", _raise_httperror)
