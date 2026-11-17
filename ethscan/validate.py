@@ -187,11 +187,21 @@ def _validate_cidr(spec: str) -> dict[str, Any]:
             "error": "Empty CIDR specification",
         }
 
-    try:
-        if "/" not in spec:
-            net_str = spec + ("/32" if "." in spec else "/128")
-        else:
+    if "/" not in spec:
+        # Determine the address family from the literal itself rather than a
+        # "." heuristic: IPv4-mapped/compatible IPv6 literals (e.g.
+        # "::ffff:192.168.1.1" or "::192.168.1.1") contain dots but are IPv6,
+        # and appending "/32" to them silently yields the wrong network
+        # ("::/32"). A bare token that is not an IP is left unchanged so the
+        # ip_network error names the original input.
+        try:
+            addr = ipaddress.ip_address(spec)
+            net_str = spec + ("/32" if addr.version == 4 else "/128")
+        except ValueError:
             net_str = spec
+    else:
+        net_str = spec
+    try:
         network = ipaddress.ip_network(net_str, strict=False)
     except ValueError as exc:
         return {
