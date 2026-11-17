@@ -3,6 +3,7 @@
 import json
 import pytest
 import socket
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 from ethscan.target import TargetSpecError
@@ -63,7 +64,7 @@ def test_normalize_target_rejects_empty_target():
 
 
 def test_parse_handshake_empty():
-    assert _parse_handshake(None) == {}
+    assert _parse_handshake(cast(Any, None)) == {}
     assert _parse_handshake(b"") == {}
     assert _parse_handshake(b"abc") == {}
 
@@ -151,7 +152,7 @@ def test_assess_handshake_mariadb():
 
 
 def test_assess_handshake_capabilities_none():
-    handshake = {}
+    handshake: dict[str, Any] = {}
     findings = _assess_handshake(handshake)
     assert findings == []  # no capabilities key
 
@@ -240,6 +241,7 @@ def test_send_recv_socket_oserror():
         mock_conn.side_effect = OSError("Network unreachable")
         data, err = _send_recv("127.0.0.1", 3306, b"req", 1.0)
         assert data is None
+        assert err is not None
         assert "Network unreachable" in err
 
 
@@ -562,7 +564,7 @@ def test_format_mysql_report_markdown_no_findings():
 
 
 def test_format_mysql_report_markdown_none_host():
-    data = {
+    data: dict[str, Any] = {
         "target": "",
         "host": None,
         "port": 3306,
@@ -1072,7 +1074,7 @@ def test_formatters_full():
 
 
 def test_formatters_minimal():
-    data = {
+    data: dict[str, Any] = {
         "target": "localhost",
         "host": None,
         "port": 3306,
@@ -1162,13 +1164,13 @@ def test_run_mysql_normalize_target_value_error_branch(monkeypatch):
 
 
 def test_format_mysql_report_markdown_non_dict_input():
-    rendered = format_mysql_report_markdown(None)
+    rendered = format_mysql_report_markdown(cast(Any, None))
     assert "# MySQL Reconnaissance Report" in rendered
     assert "**Host:** N/A" in rendered
 
 
 def test_format_mysql_report_csv_non_dict_input():
-    rendered = format_mysql_report_csv(None)
+    rendered = format_mysql_report_csv(cast(Any, None))
     lines = rendered.strip().splitlines()
     assert len(lines) == 2
     assert lines[0].startswith("target,host,port,accessible,")
