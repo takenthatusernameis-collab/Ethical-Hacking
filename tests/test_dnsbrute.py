@@ -5,7 +5,7 @@ import io
 import socket
 import struct
 import threading
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -1578,12 +1578,12 @@ def _install_fake_dns(monkeypatch):
     import sys
     import types
 
-    dns_pkg = types.ModuleType("dns")
+    dns_pkg = cast(Any, types.ModuleType("dns"))
     dns_pkg.__path__ = []
-    dns_resolver = types.ModuleType("dns.resolver")
-    dns_exception = types.ModuleType("dns.exception")
-    dns_query = types.ModuleType("dns.query")
-    dns_zone = types.ModuleType("dns.zone")
+    dns_resolver = cast(Any, types.ModuleType("dns.resolver"))
+    dns_exception = cast(Any, types.ModuleType("dns.exception"))
+    dns_query = cast(Any, types.ModuleType("dns.query"))
+    dns_zone = cast(Any, types.ModuleType("dns.zone"))
 
     class DNSException(Exception):
         pass
