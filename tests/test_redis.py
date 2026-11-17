@@ -369,6 +369,7 @@ def test_send_recv_socket_oserror():
         mock_sock.connect.side_effect = OSError("Connection refused")
         data, err = _send_recv("127.0.0.1", 6379, b"PING", 1.0)
         assert data is None
+        assert err is not None
         assert "Connection refused" in err
 
 
@@ -910,7 +911,7 @@ def test_format_redis_csv_findings_newline_escaped():
 
 
 def test_format_redis_csv_default_port_missing():
-    data = {"target": "h", "host": "h", "ping": None,
+    data: dict[str, Any] = {"target": "h", "host": "h", "ping": None,
             "info": {}, "config": {}, "dangerous_findings": [],
             "accessible": False, "error": None}
     out = format_redis_report_csv(data)
@@ -950,11 +951,11 @@ def test_send_recv_close_raises():
 
 
 def test_parse_info_exception():
-    assert _parse_info(None) == {}
+    assert _parse_info(cast(Any, None)) == {}
 
 
 def test_parse_config_exception():
-    assert _parse_config(None) == {}
+    assert _parse_config(cast(Any, None)) == {}
 
 
 def test_run_redis_ping_bytes_decode_branch():
@@ -1045,13 +1046,13 @@ def test_normalize_target_ipv6_bracket_bad_port() -> None:
 
 
 def test_format_redis_report_markdown_non_dict_input():
-    rendered = format_redis_report_markdown(None)
+    rendered = format_redis_report_markdown(cast(Any, None))
     assert "# ethscan Redis Reconnaissance Report" in rendered
     assert "**Accessible:** No" in rendered
 
 
 def test_format_redis_report_csv_non_dict_input():
-    rendered = format_redis_report_csv(None)
+    rendered = format_redis_report_csv(cast(Any, None))
     lines = rendered.strip().splitlines()
     assert len(lines) == 2
     assert lines[0].startswith("target,host,port,accessible,")
