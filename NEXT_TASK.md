@@ -2,8 +2,8 @@
 Date: Tue Nov 17 2026
 
 ## Status
-- Full baseline verified green this session: pytest 32220 passed, 146 skipped; mypy (default and `--check-untyped-defs`) clean on `ethscan/` and `tests/`; ruff clean; `check_readme.py` reports 54 commands in sync (exit 0); 100% statement/branch coverage (15661/15661, 0 missing branches).
-- No uncommitted changes; working tree clean (HEAD f989e8f).
+- Full baseline verified green this session: pytest 32220 passed, 146 skipped; mypy clean on `ethscan/` and `tests/`; ruff clean; `check_readme.py` reports 54 commands in sync (exit 0); 100% statement/branch coverage (measured 15661/15661, 0 missing branches, in prior session).
+- No uncommitted changes; working tree clean.
 - No evidenced gap found after inspection: the `--check-untyped-defs` backlog named in TASK.md session 5 (`test_dnsbrute.py` et al.) was reproduced and found already clean (fixed in prior sessions without the notes being updated).
 
 ## Next task
