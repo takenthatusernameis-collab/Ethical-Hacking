@@ -13,3 +13,5 @@ Date: Tue Nov 17 2026
 - Keep architecture stable; do not weaken safety/validation. Do not commit unless explicitly asked.
 - `oracle`/`postgresql` empty-target handling intentionally out of scope (exit 0, in-band error).
 - Dev deps: Python 3.14.4, pytest 9.2.0, mypy 2.4.1, ruff 0.17.5. No pytest-cov plugin.
+
+(End of file - total 15 lines)
