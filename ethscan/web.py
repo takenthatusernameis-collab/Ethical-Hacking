@@ -329,8 +329,9 @@ def check_ssl_configuration(host: str, port: int = 443, timeout: float = 5.0) ->
                             from datetime import timezone
                             now_utc = datetime.now(timezone.utc)
                             expiry_tz = expiry.replace(tzinfo=timezone.utc)
-                            result["days_remaining"] = cast(int, (expiry_tz - now_utc).days)
-                            result["valid"] = cast(int, result["days_remaining"]) > 0
+                            days_remaining = (expiry_tz - now_utc).days
+                            result["days_remaining"] = days_remaining
+                            result["valid"] = days_remaining > 0
                         except (ValueError, TypeError):
                             result["valid"] = False
     except Exception as exc:  # noqa: BLE001 - TLS/connection failures are heterogeneous

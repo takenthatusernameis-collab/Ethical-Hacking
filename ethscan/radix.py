@@ -236,17 +236,11 @@ def _merge_networks(networks: Sequence[ipaddress._BaseNetwork]) -> list[ipaddres
             if isinstance(last, ipaddress.IPv4Network) and isinstance(
                 net, ipaddress.IPv4Network
             ):
-                collapsed = _collapse_v4_networks(
-                    cast(ipaddress.IPv4Network, last),
-                    cast(ipaddress.IPv4Network, net),
-                )
+                collapsed = _collapse_v4_networks(last, net)
             elif isinstance(last, ipaddress.IPv6Network) and isinstance(
                 net, ipaddress.IPv6Network
             ):
-                collapsed = _collapse_v6_networks(
-                    cast(ipaddress.IPv6Network, last),
-                    cast(ipaddress.IPv6Network, net),
-                )
+                collapsed = _collapse_v6_networks(last, net)
             else:
                 collapsed = None  # pragma: no cover - defensive
         except ValueError:
