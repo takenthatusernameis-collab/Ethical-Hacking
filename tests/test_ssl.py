@@ -2,6 +2,7 @@
 
 
 import ssl
+from typing import Any, cast
 
 from ethscan.ssl import (
     _estimate_key_size,
@@ -678,8 +679,8 @@ def test_wrap_socket():
 
     orig = socket.create_connection
     try:
-        socket.create_connection = lambda *a, **k: DummySock()
-        sslmod._wrap_socket(DummyCtx(), 'example.com', 443, 5)
+        socket.create_connection = cast(Any, lambda *a, **k: DummySock())
+        sslmod._wrap_socket(cast(Any, DummyCtx()), 'example.com', 443, 5)
     finally:
         socket.create_connection = orig
 
