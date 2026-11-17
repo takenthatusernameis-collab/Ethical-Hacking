@@ -2,6 +2,7 @@
 
 from typing import Any
 
+import pytest
 import yaml
 from click.testing import CliRunner
 
@@ -11,11 +12,14 @@ from ethscan.config import (
     DEFAULT_CONFIG,
     _candidate_paths,
     _merge,
+    _parse_set_value,
+    _set_nested,
     build_default_map,
     dump_default_config,
     find_config_file,
     format_config_report_csv,
     load_config,
+    save_config,
     validate_config,
 )
 
@@ -571,3 +575,273 @@ def test_load_config_yaml_is_none(tmp_path, monkeypatch) -> None:
     assert config["_path"] == str(path)
     assert "_parse_error" in config
     assert "PyYAML is required" in config["_parse_error"]
+
+
+# ---------------------------------------------------------------------------
+# ``config --set`` helpers: _parse_set_value / _set_nested / save_config
+# ---------------------------------------------------------------------------
+
+
+def test_parse_set_value_json_scalars() -> None:
+    """``--set`` values are parsed as JSON when possible (numbers/bools/null)."""
+    assert _parse_set_value("7.5") == 7.5
+    assert _parse_set_value("7") == 7
+    assert _parse_set_value("true") is True
+    assert _parse_set_value("false") is False
+    assert _parse_set_value("null") is None
+
+
+def test_parse_set_value_json_containers() -> None:
+    """JSON lists/objects are decoded into real Python containers."""
+    assert _parse_set_value('["a", "b"]') == ["a", "b"]
+    assert _parse_set_value('{"k": 1}') == {"k": 1}
+
+
+def test_parse_set_value_string_fallback() -> None:
+    """A value that is not valid JSON falls back to the raw string."""
+    assert _parse_set_value("common") == "common"
+    assert _parse_set_value("") == ""
+    assert _parse_set_value("a=b") == "a=b"
+
+
+def test_set_nested_defaults_scalar() -> None:
+    """Setting ``defaults.<key>`` writes a scalar into the defaults section."""
+    config: dict[str, Any] = {"defaults": {}, "commands": {}}
+    _set_nested(config, "defaults.timeout", 5.0)
+    assert config["defaults"] == {"timeout": 5.0}
+
+
+def test_set_nested_commands_creates_intermediate() -> None:
+    """A missing intermediate command section is created on demand."""
+    config: dict[str, Any] = {"defaults": {}, "commands": {}}
+    _set_nested(config, "commands.scan.ports", "common")
+    assert config["commands"] == {"scan": {"ports": "common"}}
+
+
+def test_set_nested_deep_key() -> None:
+    """Dot notation deeper than one level under a command is honored."""
+    config: dict[str, Any] = {"defaults": {}, "commands": {}}
+    _set_nested(config, "commands.scan.deep.key", "v")
+    assert config["commands"] == {"scan": {"deep": {"key": "v"}}}
+
+
+def test_set_nested_invalid_section_raises() -> None:
+    """Only ``defaults`` and ``commands`` are valid top-level sections."""
+    config: dict[str, Any] = {"defaults": {}, "commands": {}}
+    with pytest.raises(ValueError, match="must be 'defaults' or 'commands'"):
+        _set_nested(config, "other.x", 1)
+
+
+def test_set_nested_requires_two_segments() -> None:
+    """A bare section name (``defaults``) is not a settable key."""
+    config: dict[str, Any] = {"defaults": {}, "commands": {}}
+    with pytest.raises(ValueError, match="section.option"):
+        _set_nested(config, "defaults", 99)
+
+
+def test_set_nested_replaces_non_dict_section() -> None:
+    """A non-dict value in the section slot is replaced by a fresh dict."""
+    config: dict[str, Any] = {"defaults": 5, "commands": {}}
+    _set_nested(config, "defaults.timeout", 3)
+    assert config["defaults"] == {"timeout": 3}
+
+
+def test_set_nested_replaces_non_dict_intermediate() -> None:
+    """A non-dict intermediate is replaced so the value is not dropped."""
+    config: dict[str, Any] = {"commands": {"scan": "oops"}}
+    _set_nested(config, "commands.scan.ports", "common")
+    assert config["commands"]["scan"] == {"ports": "common"}
+
+
+def test_set_nested_preserves_existing_dict_intermediate() -> None:
+    """An existing dict intermediate is reused and keeps its other keys."""
+    config: dict[str, Any] = {"commands": {"scan": {"existing": 1}}}
+    _set_nested(config, "commands.scan.ports", "common")
+    assert config["commands"]["scan"] == {"existing": 1, "ports": "common"}
+
+
+def test_save_config_roundtrip(tmp_path) -> None:
+    """A config saved with ``save_config`` loads back identically."""
+    path = tmp_path / "out.yaml"
+    save_config(
+        {"defaults": {"timeout": 5.0}, "commands": {"scan": {"ports": "common"}}},
+        str(path),
+    )
+    loaded = load_config(str(path))
+    assert loaded["defaults"] == {"timeout": 5.0}
+    assert loaded["commands"] == {"scan": {"ports": "common"}}
+
+
+def test_save_config_excludes_metadata(tmp_path) -> None:
+    """Metadata keys (_path, _parse_error) are never written to disk."""
+    path = tmp_path / "out.yaml"
+    save_config(
+        {
+            "defaults": {"timeout": 1},
+            "commands": {},
+            "_path": "/some/path",
+            "_parse_error": "boom",
+        },
+        str(path),
+    )
+    text = path.read_text()
+    assert "_path" not in text
+    assert "_parse_error" not in text
+    assert "boom" not in text
+
+
+def test_save_config_drops_empty_sections(tmp_path) -> None:
+    """Empty sections are omitted but the file still loads as empty config."""
+    path = tmp_path / "out.yaml"
+    save_config({"defaults": {}, "commands": {}}, str(path))
+    loaded = load_config(str(path))
+    assert loaded["defaults"] == {}
+    assert loaded["commands"] == {}
+
+
+def test_save_config_requires_yaml(tmp_path, monkeypatch) -> None:
+    """``save_config`` refuses to write when PyYAML is unavailable."""
+    import ethscan.config as cfg
+
+    monkeypatch.setattr(cfg, "yaml", None)
+    with pytest.raises(RuntimeError, match="PyYAML is required"):
+        cfg.save_config({"defaults": {}, "commands": {}}, str(tmp_path / "x.yaml"))
+
+
+# ---------------------------------------------------------------------------
+# ``config --set`` CLI behaviour
+# ---------------------------------------------------------------------------
+
+
+def _isolate_config_home(monkeypatch, tmp_path) -> None:
+    """Pin cwd, home and XDG so config discovery is fully deterministic."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    monkeypatch.setenv("XDG_CONFIG_HOME", "")
+
+
+def test_config_cli_set_creates_config_when_none(monkeypatch, tmp_path) -> None:
+    """``--set`` with no existing config writes a new file in the cwd."""
+    _isolate_config_home(monkeypatch, tmp_path)
+    result = CliRunner().invoke(cli.cli, ["config", "--set", "defaults.timeout=7.5"])
+    assert result.exit_code == 0, result.output
+    created = tmp_path / "ethscan.yaml"
+    assert created.is_file()
+    assert load_config(str(created))["defaults"] == {"timeout": 7.5}
+
+
+def test_config_cli_set_updates_existing_preserves_other_keys(
+    monkeypatch, tmp_path
+) -> None:
+    """``--set`` updates one value and leaves the rest of the file intact."""
+    _isolate_config_home(monkeypatch, tmp_path)
+    cfg_path = tmp_path / "ethscan.yaml"
+    cfg_path.write_text("defaults:\n  timeout: 1\n  workers: 10\n")
+    result = CliRunner().invoke(cli.cli, ["config", "--set", "defaults.timeout=9"])
+    assert result.exit_code == 0, result.output
+    loaded = load_config(str(cfg_path))
+    assert loaded["defaults"]["timeout"] == 9
+    assert loaded["defaults"]["workers"] == 10
+
+
+def test_config_cli_set_multiple_values(monkeypatch, tmp_path) -> None:
+    """Multiple ``--set`` options are all applied in one invocation."""
+    _isolate_config_home(monkeypatch, tmp_path)
+    cfg_path = tmp_path / "ethscan.yaml"
+    result = CliRunner().invoke(
+        cli.cli,
+        ["config", "--set", "defaults.timeout=9", "--set", "commands.scan.ports=common"],
+    )
+    assert result.exit_code == 0, result.output
+    loaded = load_config(str(cfg_path))
+    assert loaded["defaults"]["timeout"] == 9
+    assert loaded["commands"]["scan"]["ports"] == "common"
+
+
+def test_config_cli_set_invalid_no_equals(monkeypatch, tmp_path) -> None:
+    """A ``--set`` value without ``=`` is a usage error and writes nothing."""
+    _isolate_config_home(monkeypatch, tmp_path)
+    result = CliRunner().invoke(cli.cli, ["config", "--set", "badvalue"])
+    assert result.exit_code == 2, result.output
+    assert "expected KEY=VALUE format" in result.output
+    assert not (tmp_path / "ethscan.yaml").exists()
+
+
+def test_config_cli_set_invalid_section(monkeypatch, tmp_path) -> None:
+    """A ``--set`` key outside defaults/commands is a usage error."""
+    _isolate_config_home(monkeypatch, tmp_path)
+    result = CliRunner().invoke(cli.cli, ["config", "--set", "other.x=1"])
+    assert result.exit_code == 2, result.output
+    assert "must be 'defaults' or 'commands'" in result.output
+
+
+def test_config_cli_set_empty_key(monkeypatch, tmp_path) -> None:
+    """A ``--set`` value with an empty key is a usage error."""
+    _isolate_config_home(monkeypatch, tmp_path)
+    result = CliRunner().invoke(cli.cli, ["config", "--set", "=value"])
+    assert result.exit_code == 2, result.output
+    assert "empty key" in result.output
+
+
+def test_config_cli_set_and_init_mutually_exclusive(tmp_path) -> None:
+    """``--init`` and ``--set`` cannot be combined."""
+    init_path = tmp_path / "init.yaml"
+    result = CliRunner().invoke(
+        cli.cli,
+        ["config", "--init", str(init_path), "--set", "defaults.timeout=1"],
+    )
+    assert result.exit_code == 2, result.output
+    assert "--init and --set cannot be used together" in result.output
+    assert not init_path.is_file()
+
+
+def test_config_cli_set_refuses_unparseable_config(monkeypatch, tmp_path) -> None:
+    """``--set`` refuses to overwrite a config file it cannot parse.
+
+    Overwriting would silently discard the file's (unparseable) contents, so the
+    command must fail as a usage error and leave the file byte-for-byte intact.
+    """
+    _isolate_config_home(monkeypatch, tmp_path)
+    bad = tmp_path / "ethscan.yaml"
+    original = "defaults: [unclosed\n"
+    bad.write_text(original)
+    result = CliRunner().invoke(cli.cli, ["config", "--set", "defaults.timeout=3"])
+    assert result.exit_code == 2, result.output
+    assert "could not be parsed" in result.output
+    assert bad.read_text() == original
+
+
+def test_config_cli_set_respects_config_path(tmp_path) -> None:
+    """``--set`` writes back to the file named by ``--config``."""
+    cfg_path = tmp_path / "custom.yaml"
+    cfg_path.write_text("defaults:\n  timeout: 1\n")
+    result = CliRunner().invoke(
+        cli.cli,
+        ["config", "--config", str(cfg_path), "--set", "defaults.timeout=4"],
+    )
+    assert result.exit_code == 0, result.output
+    assert load_config(str(cfg_path))["defaults"]["timeout"] == 4
+
+
+def test_config_cli_set_output_reflects_new_value(monkeypatch, tmp_path) -> None:
+    """The JSON report printed after ``--set`` shows the new value, no error."""
+    _isolate_config_home(monkeypatch, tmp_path)
+    result = CliRunner().invoke(cli.cli, ["config", "--set", "defaults.timeout=7.5"])
+    assert result.exit_code == 0, result.output
+    assert '"timeout": 7.5' in result.output
+    assert "parse_error" not in result.output
+
+
+def test_config_cli_set_reports_write_failure(monkeypatch, tmp_path) -> None:
+    """A failing write is reported as a usage error, not a traceback."""
+    _isolate_config_home(monkeypatch, tmp_path)
+    import ethscan.config as cfg
+
+    def boom(config: dict[str, Any], path: object) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(cfg, "save_config", boom)
+    result = CliRunner().invoke(cli.cli, ["config", "--set", "defaults.timeout=3"])
+    assert result.exit_code == 2, result.output
+    assert "Failed to write config" in result.output
+    assert not (tmp_path / "ethscan.yaml").exists()

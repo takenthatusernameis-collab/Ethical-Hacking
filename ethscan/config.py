@@ -425,12 +425,17 @@ def _set_nested(config: dict[str, Any], key: str, value: Any) -> None:
 
     Args:
         config: The config dict to modify (e.g., {"defaults": {}, "commands": {}}).
-        key: Dot-separated key path (e.g., "defaults.timeout" or "commands.scan.ports").
+        key: Dot-separated key path in ``section.option`` form (e.g.,
+            "defaults.timeout" or "commands.scan.ports").
         value: The value to set.
+
+    Raises:
+        ValueError: If ``key`` is not in ``section.option`` form or names a
+            section other than ``defaults`` or ``commands``.
     """
     parts = key.split(".")
-    if not parts:
-        return
+    if len(parts) < 2:
+        raise ValueError(f"Config key must be in 'section.option' form, got '{key}'")
     section = parts[0]
     if section not in ("defaults", "commands"):
         raise ValueError(f"Config section must be 'defaults' or 'commands', got '{section}'")
@@ -440,19 +445,17 @@ def _set_nested(config: dict[str, Any], key: str, value: Any) -> None:
         target = {}
         config[section] = target
 
-    # Navigate to the parent of the final key
+    # Navigate to the parent of the final key, replacing any non-dict
+    # intermediate value with a fresh dict so the assignment is not silently
+    # dropped (a scalar where a mapping is expected cannot hold the key).
     for part in parts[1:-1]:
-        target = target.setdefault(part, {})
-        if not isinstance(target, dict):
-            target = {}
-            # Can't really handle this gracefully, just overwrite
-            # This matches the behavior of dict.setdefault with non-dict intermediate
+        child = target.get(part)
+        if not isinstance(child, dict):
+            child = {}
+            target[part] = child
+        target = child
 
-    if len(parts) > 1:
-        target[parts[-1]] = value
-    else:
-        # This shouldn't happen with our key format, but handle it
-        config[section] = value
+    target[parts[-1]] = value
 
 
 def save_config(config: dict[str, Any], path: str | Path) -> None:

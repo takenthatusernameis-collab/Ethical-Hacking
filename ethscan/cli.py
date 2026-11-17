@@ -3971,19 +3971,23 @@ def config(
 
     # Handle --set: update config values and write back to file
     if set_values:
+        # Refuse to overwrite a config file that could not be parsed: writing
+        # would silently discard its (unparseable) contents, so the user must
+        # fix or remove the file before values can be set. This is reported as
+        # a usage error (exit code 2) with the --set hint, like the other
+        # unusable --set inputs below.
+        if loaded.get("_parse_error"):
+            raise click.BadParameter(
+                f"cannot modify {path}: the config file could not be parsed; "
+                "fix or remove it first",
+                param_hint="--set",
+            )
         if not path:
-            # No config file found; use the default location (cwd/ethscan.yaml)
-            from ethscan.config import find_config_file
-            found = find_config_file(config_path)
-            if found:
-                path = str(found)
-            else:
-                path = "ethscan.yaml"
-        # Reload from the actual path to ensure we have the right base
-        if path != config_path:
-            loaded = load_config(path)
-        else:
-            loaded = load_config(path)
+            # No config file was found by load_config, so there is nothing to
+            # update; create one at the default cwd location (ethscan.yaml).
+            path = "ethscan.yaml"
+        # Reload from the path we will write to so the base config matches it.
+        loaded = load_config(path)
         from ethscan.config import _parse_set_value, _set_nested, save_config
         for item in set_values:
             if "=" not in item:
@@ -4018,6 +4022,9 @@ def config(
         click.echo(f"Config updated: {path}")
         # Reload to get the updated config with _path set
         loaded = load_config(path)
+        # The file was just rewritten, so refresh the parse error: any error
+        # captured before the write no longer describes the newly written file.
+        parse_error = loaded.get("_parse_error")
         # path is already set correctly
 
     known_commands = sorted(cli.commands.keys())
