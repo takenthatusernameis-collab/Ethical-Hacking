@@ -347,9 +347,10 @@ def test_normalize_target_empty_raises():
 
 def test_normalize_target_none_raises():
     import pytest
+    from typing import Any, cast
 
     with pytest.raises(ValueError):
-        _normalize_target(None)
+        _normalize_target(cast(Any, None))
 
 
 def test_normalize_target_port_zero_defaults():
@@ -469,6 +470,7 @@ def test_send_recv_connector_error():
 
     data, err = _send_recv("h", 1521, b"req", 5.0, connector=fake)
     assert data is None
+    assert err is not None
     assert "connector error" in err
     assert "connector broken" in err
 
@@ -525,6 +527,7 @@ def test_send_recv_socket_oserror():
         mock_conn.side_effect = OSError("Network unreachable")
         data, err = _send_recv("127.0.0.1", 1521, b"req", 1.0)
         assert data is None
+        assert err is not None
         assert "Network unreachable" in err
 
 
@@ -735,13 +738,17 @@ def test_run_oracle_response_too_short():
     results = run_oracle("localhost", connector=_mock_connector_short)
     assert results["accessible"] is True
     assert results["version"] is None
-    assert "too short" in results["error"].lower()
+    err = results["error"]
+    assert err is not None
+    assert "too short" in err.lower()
 
 
 def test_run_oracle_unexpected_packet_type():
     results = run_oracle("localhost", connector=_mock_connector_unexpected)
     assert results["accessible"] is True
-    assert "Unexpected packet type" in results["error"]
+    err = results["error"]
+    assert err is not None
+    assert "Unexpected packet type" in err
 
 
 def test_run_oracle_case_insensitive_probes():
@@ -1157,7 +1164,7 @@ def test_parse_refuse_response_invalid_code_valueerror():
         def group(self, n):
             return 'notanint'
     try:
-        r.search = lambda pat, s: FakeMatch()
+        r.search = lambda pat, s: FakeMatch()  # type: ignore[assignment]
         header = s.pack('!HHBBH', 8+10, 0, 0x04, 0, 0)
         payload = s.pack('!HH', 0, 6) + b'(ERR=)'
         parsed = oracle._parse_refuse_response(header + payload)
