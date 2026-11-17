@@ -3,7 +3,7 @@
 import ipaddress
 import json
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -941,7 +941,7 @@ def test_render_node_md_non_list_networks_and_children():
     from ethscan.radix import _render_node_md
     node = {"prefix": "p", "start_address": "s", "end_address": "e",
             "total_addresses": 1, "networks": "nope", "children": "nope"}
-    lines = []
+    lines: list[str] = []
     _render_node_md(node, lines)
     assert any("p" in l for l in lines)
 
@@ -1034,7 +1034,7 @@ def test_render_node_md_non_dict_child():
         "networks": [],
         "children": ["not-a-dict", 123, None],
     }
-    lines = []
+    lines: list[str] = []
     _render_node_md(node, lines)
     assert any("p" in l for l in lines)
 
@@ -1055,7 +1055,7 @@ def test_render_node_md_non_dict_child_node():
             {"side": "left (0)", "node": {"prefix": "child", "start_address": "cs", "end_address": "ce", "total_addresses": 1, "networks": [], "children": [], "depth": 1}},
         ],
     }
-    lines = []
+    lines: list[str] = []
     _render_node_md(node, lines)
     assert any("child" in l for l in lines)
 
@@ -1063,7 +1063,7 @@ def test_render_node_md_non_dict_child_node():
 def test_format_markdown_merged_non_string_elements():
     """Non-string elements in merged list are skipped (line 568)."""
     data = run_radix(["192.168.1.0/24", "10.0.0.0/8"])
-    data["merged"] = ["192.168.1.0/24", 123, None, "10.0.0.0/8"]
+    data["merged"] = cast(Any, ["192.168.1.0/24", 123, None, "10.0.0.0/8"])
     output = format_radix_report_markdown(data)
     assert "192.168.1.0/24" in output
     assert "10.0.0.0/8" in output
@@ -1072,7 +1072,7 @@ def test_format_markdown_merged_non_string_elements():
 def test_format_markdown_diff_non_string_elements():
     """Non-string elements in diff difference list are skipped (line 618)."""
     data = run_radix(["192.168.1.0/24"], diff=["192.168.1.128/25"])
-    data["diff"]["difference"] = ["192.168.1.0/25", 123, None]
+    data["diff"]["difference"] = cast(Any, ["192.168.1.0/25", 123, None])
     output = format_radix_report_markdown(data)
     assert "192.168.1.0/25" in output
 
@@ -1080,7 +1080,7 @@ def test_format_markdown_diff_non_string_elements():
 def test_format_csv_merged_non_string_elements():
     """Non-string elements in merged list are skipped (line 669)."""
     data = run_radix(["192.168.1.0/24", "10.0.0.0/8"])
-    data["merged"] = ["192.168.1.0/24", 123, None, "10.0.0.0/8"]
+    data["merged"] = cast(Any, ["192.168.1.0/24", 123, None, "10.0.0.0/8"])
     output = format_radix_report_csv(data)
     assert "192.168.1.0/24" in output
     assert "10.0.0.0/8" in output
@@ -1110,7 +1110,7 @@ def test_format_csv_diff_cidrs_non_list():
 def test_format_csv_cidrs_non_string_elements():
     """Non-string elements in cidrs list are skipped (line 689)."""
     data = run_radix(["192.168.1.0/24", "10.0.0.0/8"])
-    data["cidrs"] = ["192.168.1.0/24", 123, None, "10.0.0.0/8"]
+    data["cidrs"] = cast(Any, ["192.168.1.0/24", 123, None, "10.0.0.0/8"])
     output = format_radix_report_csv(data)
     lines = [line.rstrip("\r") for line in output.strip().split("\n")]
     # Header + 2 valid CIDRs (non-strings skipped)
@@ -1149,13 +1149,13 @@ def test_format_csv_empty_merged_networks():
 
 def test_format_markdown_non_dict_data():
     """Non-dict data passed to markdown formatter is normalized (line 550)."""
-    output = format_radix_report_markdown("not-a-dict")
+    output = format_radix_report_markdown(cast(Any, "not-a-dict"))
     assert "ethscan Radix Tree Report" in output
 
 
 def test_format_csv_non_dict_data():
     """Non-dict data passed to CSV formatter is normalized (line 635)."""
-    output = format_radix_report_csv("not-a-dict")
+    output = format_radix_report_csv(cast(Any, "not-a-dict"))
     assert "original_cidr" in output
 
 
