@@ -411,7 +411,7 @@ def test_run_fuzz_classifies_server_errors_and_rate_limits_not_findings(
         r = responses[path]
         if isinstance(r, Exception):
             raise r
-        return _FakeResp(r[0])
+        return _FakeResp(cast(tuple[int, None], r)[0])
 
     monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
 

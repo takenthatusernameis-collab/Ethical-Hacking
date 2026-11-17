@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 from ethscan.geo import (
@@ -1002,8 +1002,10 @@ def test_run_geo_recursive_success():
 
     assert result["recursive"] is True
     assert result["hop_count"] == 1
-    assert result["hops"][0]["ip"] == "10.0.0.1"
-    assert any("traceroute" in note for note in result["notes"])
+    hops = cast(list[dict[str, Any]], result["hops"])
+    assert hops[0]["ip"] == "10.0.0.1"
+    notes = cast(list[str], result["notes"])
+    assert any("traceroute" in note for note in notes)
 
 
 def test_run_geo_recursive_exception():
@@ -1018,7 +1020,8 @@ def test_run_geo_recursive_exception():
     ), patch("ethscan.trace.run_trace", side_effect=Exception("trace failed")):
         result = run_geo("8.8.8.8", timeout=1.0, recursive=True)
 
-    assert any("recursive hop geolocation failed" in note for note in result["notes"])
+    notes = cast(list[str], result["notes"])
+    assert any("recursive hop geolocation failed" in note for note in notes)
 
 
 def test_run_geo_recursive_no_trace_notes():
@@ -1051,8 +1054,10 @@ def test_run_geo_recursive_no_trace_notes():
 
     assert result["recursive"] is True
     assert result["hop_count"] == 1
-    assert result["hops"][0]["ip"] == "10.0.0.1"
-    assert not any("traceroute" in note for note in result["notes"])
+    hops = cast(list[dict[str, Any]], result["hops"])
+    assert hops[0]["ip"] == "10.0.0.1"
+    notes = cast(list[str], result["notes"])
+    assert not any("traceroute" in note for note in notes)
 
 
 def test_resolver_failure_of_an_unknown_type_is_reported(monkeypatch) -> None:
