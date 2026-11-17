@@ -2,6 +2,7 @@
 
 import json
 import socket
+from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -447,7 +448,7 @@ def test_send_recv_default_socket_oserror(monkeypatch):
     monkeypatch.setattr("ethscan.memcached.socket.socket", lambda *a, **k: sock)
     data, err = _send_recv("localhost", 11211, b"version\r\n", 3.0)
     assert data is None
-    assert "Connection refused" in err
+    assert err is not None and "Connection refused" in err
 
 
 def test_send_recv_default_socket_close_swallowed(monkeypatch):
@@ -469,7 +470,7 @@ def test_coerce_int_invalid():
 
 
 def test_coerce_int_none():
-    assert _coerce_int(None) is None
+    assert _coerce_int(cast(Any, None)) is None
 
 
 def test_parse_version_response_empty_lines_skipped():
@@ -643,7 +644,7 @@ def test_assess_version_invalid():
 
 def test_format_memcached_report_markdown_non_dict():
     """A non-dict input to the markdown formatter is normalized to {} (line 322)."""
-    output = format_memcached_report_markdown("not a dict")
+    output = format_memcached_report_markdown(cast(Any, "not a dict"))
     assert "# ethscan Memcached Reconnaissance Report" in output
     assert "**Target:** " in output
     assert "**Port:** 11211" in output
@@ -651,7 +652,7 @@ def test_format_memcached_report_markdown_non_dict():
 
 def test_format_memcached_report_csv_non_dict():
     """A non-dict input to the CSV formatter is normalized to {} (line 390)."""
-    output = format_memcached_report_csv(["not", "a", "dict"])
+    output = format_memcached_report_csv(cast(Any, ["not", "a", "dict"]))
     lines = output.strip().split("\n")
     header = lines[0].rstrip("\r")
     assert header == "target,host,port,accessible,version,uptime,bytes,curr_connections,cmd_get,cmd_set,get_hits,get_misses,evictions,findings,error"
