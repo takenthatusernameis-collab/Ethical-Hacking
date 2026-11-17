@@ -83,6 +83,18 @@ def parse_jwt(token: str) -> dict[str, object]:
     }
 
 
+def _is_numeric_claim(value: object) -> bool:
+    """Return whether ``value`` is a JSON number usable as a NumericDate.
+
+    ``bool`` is a subclass of ``int`` in Python, so a crafted claim such as
+    ``"exp": true`` would otherwise be treated as the timestamp ``1`` and a
+    token could be reported as expired (or not-yet-valid) on the basis of a
+    boolean. RFC 7519 defines ``exp``/``nbf``/``iat`` as NumericDate (a JSON
+    number); booleans are not numbers and must not be interpreted as one.
+    """
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
 def _format_timestamp(timestamp: float) -> str:
     """Format a Unix timestamp as an ISO-8601 UTC string.
 
@@ -193,26 +205,32 @@ def run_jwt(token: str, now: float | None = None) -> dict[str, object]:
                 other_claims_result[key] = value
 
         exp = payload.get("exp")
-        if isinstance(exp, (int, float)):
+        if _is_numeric_claim(exp):
             result["exp_status"] = "expired" if exp < current_time else "valid"
             if exp < current_time:
                 findings.append("Token is expired")
+        elif "exp" in payload:
+            findings.append("Expiration (exp) claim is not a number")
         else:
             findings.append("Token has no expiration (exp) claim")
 
         nbf = payload.get("nbf")
-        if isinstance(nbf, (int, float)):
+        if _is_numeric_claim(nbf):
             result["nbf_status"] = "not-yet-valid" if nbf > current_time else "valid"
             if nbf > current_time:
                 findings.append("Token is not yet valid (nbf is in the future)")
+        elif "nbf" in payload:
+            findings.append("Not-before (nbf) claim is not a number")
 
         iat = payload.get("iat")
-        if isinstance(iat, (int, float)):
+        if _is_numeric_claim(iat):
             result["iat_status"] = "not-yet-valid" if iat > current_time else "valid"
             if iat > current_time:
                 findings.append("Issued-at (iat) is in the future")
-            if isinstance(exp, (int, float)) and exp - iat > LONG_LIVED_THRESHOLD_SECONDS:
+            if _is_numeric_claim(exp) and exp - iat > LONG_LIVED_THRESHOLD_SECONDS:
                 findings.append("Long-lived token (lifetime exceeds 1 year)")
+        elif "iat" in payload:
+            findings.append("Issued-at (iat) claim is not a number")
 
     result["findings"] = findings
     result["finding_count"] = len(findings)
@@ -277,15 +295,15 @@ def format_jwt_report_markdown(data: Mapping[str, object]) -> str:
     if "jti" in claims:
         lines.append(f"- **JWT ID (jti):** {_escape(_format_value(claims['jti']))}")
     exp = claims.get("exp")
-    if isinstance(exp, (int, float)):
+    if _is_numeric_claim(exp):
         status = data.get("exp_status") or "valid"
         lines.append(f"- **Expiration (exp):** {_format_timestamp(exp)} ({status})")
     iat = claims.get("iat")
-    if isinstance(iat, (int, float)):
+    if _is_numeric_claim(iat):
         status = data.get("iat_status") or "valid"
         lines.append(f"- **Issued At (iat):** {_format_timestamp(iat)} ({status})")
     nbf = claims.get("nbf")
-    if isinstance(nbf, (int, float)):
+    if _is_numeric_claim(nbf):
         status = data.get("nbf_status") or "valid"
         lines.append(f"- **Not Before (nbf):** {_format_timestamp(nbf)} ({status})")
     lines.append("")

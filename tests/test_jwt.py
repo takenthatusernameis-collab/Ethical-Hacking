@@ -494,3 +494,47 @@ def test_format_jwt_report_markdown_finite_timestamp_still_iso() -> None:
     md = format_jwt_report_markdown(run_jwt(token, now=NOW))
     assert "2023-11-14T22:13:20Z" in md
     assert "<out-of-range" not in md
+
+
+@pytest.mark.parametrize("claim", ["exp", "nbf", "iat"])
+def test_run_jwt_boolean_time_claim_is_not_a_timestamp(claim: str) -> None:
+    """A JSON boolean time claim must not be read as the timestamp 1.
+
+    ``bool`` subclasses ``int``, so ``{"exp": True}`` would otherwise be
+    treated as ``exp == 1`` and reported as expired.
+    """
+    token = _make_token({"alg": "HS256"}, {claim: True})
+    data = run_jwt(token, now=NOW)
+    assert data[f"{claim}_status"] is None
+    findings = cast(list[str], data["findings"])
+    assert not any("expired" in f.lower() for f in findings)
+    assert not any("not yet valid" in f.lower() for f in findings)
+    assert not any("in the future" in f.lower() for f in findings)
+    assert any("not a number" in f.lower() for f in findings)
+
+
+def test_run_jwt_false_boolean_exp_not_expired() -> None:
+    token = _make_token({"alg": "HS256"}, {"exp": False})
+    data = run_jwt(token, now=NOW)
+    assert data["exp_status"] is None
+    findings = cast(list[str], data["findings"])
+    assert not any("expired" in f.lower() for f in findings)
+
+
+def test_run_jwt_numeric_string_time_claim_is_not_a_timestamp() -> None:
+    token = _make_token({"alg": "HS256"}, {"exp": str(int(NOW) + 3600)})
+    data = run_jwt(token, now=NOW)
+    assert data["exp_status"] is None
+    findings = cast(list[str], data["findings"])
+    assert any("not a number" in f.lower() for f in findings)
+
+
+def test_run_jwt_numeric_time_claim_still_evaluated() -> None:
+    token = _make_token(
+        {"alg": "HS256"},
+        {"exp": NOW + 60, "iat": NOW - 60, "nbf": NOW - 60},
+    )
+    data = run_jwt(token, now=NOW)
+    assert data["exp_status"] == "valid"
+    assert data["iat_status"] == "valid"
+    assert data["nbf_status"] == "valid"
