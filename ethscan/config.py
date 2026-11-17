@@ -33,11 +33,12 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import os
 from pathlib import Path
 from typing import Any
 
-from ethscan.fileio import read_text
+from ethscan.fileio import read_text, write_text
 
 try:
     import yaml
@@ -405,3 +406,72 @@ def format_config_report_csv(config: dict[str, Any]) -> str:
                 writer.writerow([f"commands.{cmd}", key, value])
 
     return output.getvalue().rstrip("\r\n")
+
+
+def _parse_set_value(value: str) -> Any:
+    """Parse a config value string into a Python object.
+
+    Attempts to parse as JSON first (for numbers, booleans, null, lists, objects).
+    Falls back to raw string if JSON parsing fails.
+    """
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError:
+        return value
+
+
+def _set_nested(config: dict[str, Any], key: str, value: Any) -> None:
+    """Set a nested key in a dict using dot notation.
+
+    Args:
+        config: The config dict to modify (e.g., {"defaults": {}, "commands": {}}).
+        key: Dot-separated key path (e.g., "defaults.timeout" or "commands.scan.ports").
+        value: The value to set.
+    """
+    parts = key.split(".")
+    if not parts:
+        return
+    section = parts[0]
+    if section not in ("defaults", "commands"):
+        raise ValueError(f"Config section must be 'defaults' or 'commands', got '{section}'")
+
+    target = config.setdefault(section, {})
+    if not isinstance(target, dict):
+        target = {}
+        config[section] = target
+
+    # Navigate to the parent of the final key
+    for part in parts[1:-1]:
+        target = target.setdefault(part, {})
+        if not isinstance(target, dict):
+            target = {}
+            # Can't really handle this gracefully, just overwrite
+            # This matches the behavior of dict.setdefault with non-dict intermediate
+
+    if len(parts) > 1:
+        target[parts[-1]] = value
+    else:
+        # This shouldn't happen with our key format, but handle it
+        config[section] = value
+
+
+def save_config(config: dict[str, Any], path: str | Path) -> None:
+    """Save a config dict to a YAML file.
+
+    Only the 'defaults' and 'commands' sections are written. Metadata keys
+    (_path, _parse_error, warnings) are excluded.
+
+    Args:
+        config: Config dict as returned by load_config (with 'defaults' and 'commands').
+        path: Path to write the config file.
+    """
+    if yaml is None:
+        raise RuntimeError("PyYAML is required to write configuration files")
+
+    data = {
+        "defaults": config.get("defaults") or {},
+        "commands": config.get("commands") or {},
+    }
+    # Remove empty sections
+    data = {k: v for k, v in data.items() if v}
+    write_text(path, yaml.dump(data, default_flow_style=False, sort_keys=True))

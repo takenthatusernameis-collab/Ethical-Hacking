@@ -3880,6 +3880,13 @@ def mac(
     help="Write a sample config file to PATH and exit.",
 )
 @click.option(
+    "--set",
+    "set_values",
+    multiple=True,
+    metavar="KEY=VALUE",
+    help="Set a config value (e.g., 'defaults.timeout=5.0' or 'commands.scan.ports=common'). Can be used multiple times.",
+)
+@click.option(
     "--format",
     "fmt",
     type=click.Choice(["json", "markdown", "csv"]),
@@ -3910,6 +3917,7 @@ def config(
     ctx,
     config_path: str | None,
     init_path: str | None,
+    set_values: tuple[str, ...],
     fmt: str,
     output_fmt: str | None,
     out_path: str | None,
@@ -3926,6 +3934,11 @@ def config(
         raise click.UsageError(
             "--init and --out cannot be used together: --init writes a sample "
             "config file and has no report to redirect."
+        )
+    if init_path and set_values:
+        raise click.UsageError(
+            "--init and --set cannot be used together: --init writes a sample "
+            "config file and does not modify it."
         )
 
     if init_path:
@@ -3955,6 +3968,57 @@ def config(
     loaded = load_config(config_path)
     path = loaded.get("_path")
     parse_error = loaded.get("_parse_error")
+
+    # Handle --set: update config values and write back to file
+    if set_values:
+        if not path:
+            # No config file found; use the default location (cwd/ethscan.yaml)
+            from ethscan.config import find_config_file
+            found = find_config_file(config_path)
+            if found:
+                path = str(found)
+            else:
+                path = "ethscan.yaml"
+        # Reload from the actual path to ensure we have the right base
+        if path != config_path:
+            loaded = load_config(path)
+        else:
+            loaded = load_config(path)
+        from ethscan.config import _parse_set_value, _set_nested, save_config
+        for item in set_values:
+            if "=" not in item:
+                raise click.BadParameter(
+                    f"Invalid --set value '{item}': expected KEY=VALUE format",
+                    param_hint="--set",
+                )
+            key, val = item.split("=", 1)
+            key = key.strip()
+            val = val.strip()
+            if not key:
+                raise click.BadParameter(
+                    f"Invalid --set value '{item}': empty key",
+                    param_hint="--set",
+                )
+            try:
+                parsed_val = _parse_set_value(val)
+                _set_nested(loaded, key, parsed_val)
+            except ValueError as exc:
+                raise click.BadParameter(
+                    f"Invalid --set key '{key}': {exc}",
+                    param_hint="--set",
+                ) from exc
+        # Write the updated config back
+        try:
+            save_config(loaded, path)
+        except (OSError, ValueError, RuntimeError) as exc:
+            raise click.BadParameter(
+                f"Failed to write config to {path}: {exc}",
+                param_hint="--set",
+            ) from exc
+        click.echo(f"Config updated: {path}")
+        # Reload to get the updated config with _path set
+        loaded = load_config(path)
+        # path is already set correctly
 
     known_commands = sorted(cli.commands.keys())
     known_options: dict[str, set[str]] = {
