@@ -15996,17 +15996,11 @@ def test_resolve_server_option_reaches_cname_resolver(monkeypatch) -> None:
     """End-to-end: `resolve --server` must configure the CNAME lookup resolver."""
     from ethscan import resolve as resolve_mod
 
-    class DummyResolver:
-        def __init__(self):
-            self.timeout = None
-            self.lifetime = None
-            self.nameservers = None
-
-    created: list[DummyResolver] = []
-
     class DummyAnswer:
         def __str__(self):
             return "target.example.com"
+
+    created: list["_DummyResolver"] = []
 
     class _DummyResolver:
         def __init__(self):

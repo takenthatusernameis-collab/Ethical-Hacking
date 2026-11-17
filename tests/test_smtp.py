@@ -1097,6 +1097,7 @@ def test_read_response_timeout_guard_triggers() -> None:
         def recv(self, n): return b"250-continue\r\n"
 
     times = [0, 10]  # start=0, then check gives > timeout*max_lines
+    call = 0
     def fake_monotonic():
         return times[0] if times else 100
 
@@ -1109,7 +1110,6 @@ def test_read_response_timeout_guard_triggers() -> None:
             call += 1
             if call == 1: return 0
             return 1000  # way over
-        call = 0
         smtp_mod.time.monotonic = fake_monotonic2
         lines = smtp_mod._read_response(cast(socket.socket, SlowSock()), timeout=0.1, max_lines=5)
         assert len(lines) >= 1
@@ -1192,6 +1192,7 @@ def test_connection_exception_closes_preassigned_sock() -> None:
             raise _socket.timeout('fail')
         # To get sock non-None, we need connect to have set it. Maybe easier to just test the actual code path
         # by temporarily modifying behavior: let us wrap
+        sock_ref = sock
         def wrapped_connect(h, p, t, connector=None):
             # call original but we want to simulate sock was set? No. Instead, we can do:
             # set a global-like state by patching - simpler: just create a custom path
@@ -1200,7 +1201,6 @@ def test_connection_exception_closes_preassigned_sock() -> None:
             sock_ref.closed = False  # reset
             # simulate sock was assigned
             return sock_ref
-        sock_ref = sock
         smtp_mod._connect = wrapped_connect
         # But then it will proceed to banner read; we need banner read to also fail in outer context? No.
         # This is getting complex - maybe just accept 99% coverage is fine? The missing line is a rare edge case.

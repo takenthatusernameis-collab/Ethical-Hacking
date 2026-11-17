@@ -372,7 +372,7 @@ def _make_fake_connector(
             return monlist_data, monlist_err
         return None, "unknown request"
 
-    connector.state = state
+    connector.state = state  # type: ignore[attr-defined]
     return connector
 
 

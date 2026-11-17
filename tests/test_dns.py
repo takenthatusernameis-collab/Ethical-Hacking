@@ -366,8 +366,8 @@ def _install_fake_dns(monkeypatch, resolver_resolve, dns_exception=None):
     import ethscan.dns as dns_mod
 
     fake_dns = types.ModuleType("dns")
-    fake_dns.resolver = types.ModuleType("dns.resolver")
-    fake_dns.exception = types.ModuleType("dns.exception")
+    fake_dns.resolver = types.ModuleType("dns.resolver")  # type: ignore[attr-defined]
+    fake_dns.exception = types.ModuleType("dns.exception")  # type: ignore[attr-defined]
 
     class DNSException(Exception):
         pass

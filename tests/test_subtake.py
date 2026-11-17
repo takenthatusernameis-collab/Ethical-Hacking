@@ -1093,7 +1093,7 @@ def _install_fake_dns(monkeypatch):
     class DNSException(Exception):
         pass
 
-    dns_exception.DNSException = DNSException
+    dns_exception.DNSException = DNSException  # type: ignore[attr-defined]
 
     class _Resolver:
         def __init__(self):
@@ -1104,9 +1104,9 @@ def _install_fake_dns(monkeypatch):
         def resolve(self, hostname, rdtype):
             return []
 
-    dns_resolver.Resolver = _Resolver
-    dns_pkg.resolver = dns_resolver
-    dns_pkg.exception = dns_exception
+    dns_resolver.Resolver = _Resolver  # type: ignore[attr-defined]
+    dns_pkg.resolver = dns_resolver  # type: ignore[attr-defined]
+    dns_pkg.exception = dns_exception  # type: ignore[attr-defined]
 
     monkeypatch.setitem(sys.modules, "dns", dns_pkg)
     monkeypatch.setitem(sys.modules, "dns.resolver", dns_resolver)
