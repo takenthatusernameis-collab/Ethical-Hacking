@@ -2,28 +2,29 @@
 Date: Tue Nov 17 2026
 
 ## Status
-- Repository fully green; no pending task. This session found and fixed a real README/CLI option-drift gap and added a permanent guard for it.
+- Repository fully green; no pending task. This session fixed mypy `--check-untyped-defs` errors in `tests/test_trace_branch_gaps.py` by adding `cast(Any, ...)` wrappers for test calls that intentionally pass invalid types to exercise branch coverage.
 
 ## Baseline (independently re-verified this session)
-- `python -m pytest -q` -> 32219 passed, 146 skipped, 0 failed (baseline 32217 + 2 new guards).
+- `python -m pytest -q` -> 32220 passed, 146 skipped, 0 failed (baseline unchanged).
 - `python -m mypy ethscan/ tests/` -> Success, no issues in 259 source files.
 - `python -m ruff check ethscan/ tests/` -> All checks passed.
 - `python check_readme.py` -> 54/54, 0 drift.
+- `python -m coverage run --branch --source=ethscan -m pytest -q` -> 100% statement/branch coverage.
 - `git diff --check` -> clean. Changes are uncommitted in the working tree.
 
 ## What this session changed
-- `README.md`: documented previously undocumented CLI options for 8 commands — audit (`--sort-asc`/`--sort-desc`), geo (`--no-recursive`), jwt (`--token`), mac (`--target`/`--timeout`/`--no-cache`/`--no-offline-fallback`/`--api-url`), nmap (`--input-file`/`--output-format`/`--format`/`--out`), resolve (`--target`/`--types`/`--server`/`--timeout`), validate (`--ports`/`--cidr`/`--output-format`/`--format`/`--out`), whois (`--no-recursive`).
-- `tests/test_readme_sync.py`: added deterministic option-presence guards reading Click metadata (`test_readme_documents_every_cli_option`, `test_readme_has_no_unknown_options`); refactored helpers; updated docstring.
-- No `ethscan/` source changes.
+- `tests/test_trace_branch_gaps.py`: added `cast(Any, ...)` to three test assertions calling `_fmt_rtt` with `str`/`object` arguments to satisfy mypy `--check-untyped-defs`. No production code changed; test behavior unchanged.
 
 ## Evidence the gap was real and is fixed
-- Before: README-vs-CLI option scan reported 8 commands with undocumented options (0 README-only).
-- After: both directions clean (0 undocumented, 0 README-only).
-- Mutation check: removing `--timeout` from the geo bullet made the new test fail with `{'geo': ['--timeout']}`, then passed after restore.
+- Before: `python -m mypy tests/test_trace_branch_gaps.py --check-untyped-defs` reported 3 `arg-type` errors (lines 12, 14, 16).
+- After: `python -m mypy tests/test_trace_branch_gaps.py --check-untyped-defs` -> Success: no issues found.
+- Mutation check: removing one `cast(Any, ...)` makes mypy fail again; restoring it passes. The fix is non-vacuous.
 
 ## Next task
-- None pending. Repository is fully green. If future work is needed, pick one bounded, high-value, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
+- None pending. Repository is fully green. Other test files have pre-existing mypy errors under `--check-untyped-defs` (listed in HANDOFF_NEXT.md). If future work is needed, pick one file, reproduce the errors first, then fix using the established `cast(Any, ...)` pattern. `oracle` and `postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
 
 ## Constraints / notes
 - Keep the existing architecture stable; prefer the smallest reversible change. Do not commit unless explicitly asked.
 - Dev deps installed: pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, Python 3.14.4. No pytest-cov plugin — use `python -m coverage run --branch --source=ethscan -m pytest` for coverage.
+
+(End of file - total 29 lines)

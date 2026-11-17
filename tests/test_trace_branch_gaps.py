@@ -1,3 +1,4 @@
+from typing import Any, cast
 from unittest.mock import patch
 
 import ethscan.trace as trace
@@ -9,11 +10,11 @@ def test_fmt_rtt_branch_gaps():
     assert trace._fmt_rtt(True) == "N/A"
     assert trace._fmt_rtt(False) == "N/A"
     # string convertible to float
-    assert trace._fmt_rtt("12.5") == "12.50ms"
+    assert trace._fmt_rtt(cast(Any, "12.5")) == "12.50ms"
     # string not convertible -> suppress path + fallback
-    assert trace._fmt_rtt("not-a-float") == "N/A"
+    assert trace._fmt_rtt(cast(Any, "not-a-float")) == "N/A"
     # unsupported type falls through to final N/A
-    assert trace._fmt_rtt(object()) == "N/A"
+    assert trace._fmt_rtt(cast(Any, object())) == "N/A"
 
 
 def test_trace_single_reached_with_none_rtt_covers_170_172():
