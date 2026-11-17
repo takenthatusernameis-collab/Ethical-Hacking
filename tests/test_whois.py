@@ -4,7 +4,7 @@ import socket
 
 import pytest
 
-from typing import Any
+from typing import Any, cast
 
 from ethscan.whois import (
     DEFAULT_TIMEOUT,
@@ -484,11 +484,11 @@ def test_run_whois_recursive_empty_response(monkeypatch) -> None:
     def mock_query(target, server="whois.iana.org", port=43, timeout=5.0):
         # First response with referral, second response empty
         if not hasattr(mock_query, 'called'):
-            mock_query.called = True
+            mock_query.called = True  # type: ignore[attr-defined]
             return "Registrar: Test Registrar\nReferral Server: whois.registrar.net\n"
         return ""
 
-    monkeypatch.setattr("ethscan.whois.query_whois", mock_query)
+    monkeypatch.setattr("ethscan.whois.query_whois", cast(Any, mock_query))
 
     results = run_whois("example.com", recursive=True)
     assert results["target"] == "example.com"
