@@ -2,6 +2,7 @@
 
 import pytest
 import socket
+from typing import Any, cast
 from unittest.mock import patch
 
 from ethscan.target import TargetSpecError
@@ -83,7 +84,7 @@ def test_build_buildinfo_request():
 
 
 def test_parse_buildinfo_response_empty():
-    assert _parse_buildinfo_response(None) == {}
+    assert _parse_buildinfo_response(cast(Any, None)) == {}
     assert _parse_buildinfo_response(b"") == {}
     assert _parse_buildinfo_response(b"abc") == {}
 
@@ -188,6 +189,7 @@ def test_send_recv_connector_error():
         "localhost", 27017, b"\x00", 1.0, connector=failing_connector
     )
     assert data is None
+    assert err is not None
     assert "connector error" in err
     assert "connector boom" in err
 
@@ -378,7 +380,7 @@ def test_format_mongodb_report_csv_basic():
 
 
 def test_format_mongodb_report_csv_empty():
-    data = {
+    data: dict[str, Any] = {
         "target": "localhost:27017",
         "host": None,
         "port": 27017,
@@ -423,12 +425,12 @@ def test_run_mongodb_plain_valueerror_reported_in_band(monkeypatch):
 
 def test_format_mongodb_report_markdown_non_dict():
     """A non-dict input to the markdown formatter is normalized to {} (ethscan/mongodb.py:333)."""
-    output = format_mongodb_report_markdown("not a dict")
+    output = format_mongodb_report_markdown(cast(Any, "not a dict"))
     assert "# MongoDB Reconnaissance Report" in output
     assert "N/A" in output
 
 
 def test_format_mongodb_report_csv_non_dict():
     """A non-dict input to the CSV formatter is normalized to {} (ethscan/mongodb.py:382)."""
-    output = format_mongodb_report_csv(["not", "a", "dict"])
+    output = format_mongodb_report_csv(cast(Any, ["not", "a", "dict"]))
     assert "target,host,port,accessible,version,sysInfo,modules,findings,error" in output
