@@ -383,6 +383,86 @@ def test_send_recv_socket_success():
         assert err is None
 
 
+def test_send_recv_ipv6_uses_af_inet6():
+    """An IPv6 literal resolves to an AF_INET6 TCP socket."""
+    with patch("ethscan.redis.socket.getaddrinfo") as mock_gai, patch(
+        "ethscan.redis.socket.socket"
+    ) as mock_sock_cls:
+        mock_gai.return_value = [
+            (
+                socket.AF_INET6,
+                socket.SOCK_STREAM,
+                socket.IPPROTO_TCP,
+                "",
+                ("::1", 6379, 0, 0),
+            )
+        ]
+        mock_sock = MagicMock()
+        mock_sock_cls.return_value = mock_sock
+        mock_sock.recv.return_value = b"+PONG\r\n"
+
+        data, err = _send_recv("::1", 6379, b"PING", 1.0)
+
+    assert data == b"+PONG\r\n"
+    assert err is None
+    assert mock_sock_cls.call_args.args[0] == socket.AF_INET6
+    mock_sock.connect.assert_called_once_with(("::1", 6379, 0, 0))
+
+
+def test_send_recv_ipv4_uses_af_inet():
+    """An IPv4 literal resolves to an AF_INET TCP socket."""
+    with patch("ethscan.redis.socket.getaddrinfo") as mock_gai, patch(
+        "ethscan.redis.socket.socket"
+    ) as mock_sock_cls:
+        mock_gai.return_value = [
+            (
+                socket.AF_INET,
+                socket.SOCK_STREAM,
+                socket.IPPROTO_TCP,
+                "",
+                ("127.0.0.1", 6379),
+            )
+        ]
+        mock_sock = MagicMock()
+        mock_sock_cls.return_value = mock_sock
+        mock_sock.recv.return_value = b"+PONG\r\n"
+
+        data, err = _send_recv("127.0.0.1", 6379, b"PING", 1.0)
+
+    assert data == b"+PONG\r\n"
+    assert err is None
+    assert mock_sock_cls.call_args.args[0] == socket.AF_INET
+    mock_sock.connect.assert_called_once_with(("127.0.0.1", 6379))
+
+
+def test_send_recv_getaddrinfo_failure_is_reported():
+    """A resolution failure is surfaced without creating a socket."""
+    with patch("ethscan.redis.socket.getaddrinfo") as mock_gai, patch(
+        "ethscan.redis.socket.socket"
+    ) as mock_sock_cls:
+        mock_gai.side_effect = OSError("name resolution failed")
+        data, err = _send_recv("invalid-host", 6379, b"PING", 1.0)
+
+    assert data is None
+    assert err is not None
+    assert "address resolution failed" in err
+    mock_sock_cls.assert_not_called()
+
+
+def test_send_recv_empty_getaddrinfo_is_reported():
+    """An empty resolution result is surfaced as an error."""
+    with patch("ethscan.redis.socket.getaddrinfo") as mock_gai, patch(
+        "ethscan.redis.socket.socket"
+    ) as mock_sock_cls:
+        mock_gai.return_value = []
+        data, err = _send_recv("invalid-host", 6379, b"PING", 1.0)
+
+    assert data is None
+    assert err is not None
+    assert "no address found" in err
+    mock_sock_cls.assert_not_called()
+
+
 # ---------------------------------------------------------------------------
 # _parse_info edge cases
 # ---------------------------------------------------------------------------

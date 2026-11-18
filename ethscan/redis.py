@@ -186,14 +186,32 @@ def _send_recv(
     timeout: float,
     connector=None,
 ) -> tuple[bytes | None, str | None]:
-    """Send a TCP request and receive the response (injectable for tests)."""
+    """Send a TCP request and receive the response (injectable for tests).
+
+    Uses ``socket.getaddrinfo`` to resolve the endpoint so that both IPv4 and
+    IPv6 targets work. The first returned address family is used.
+    """
     if connector is not None:
         return connector(host, port, request, timeout)
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        infos = socket.getaddrinfo(
+            host,
+            port,
+            type=socket.SOCK_STREAM,
+            proto=socket.IPPROTO_TCP,
+        )
+    except OSError as exc:
+        return None, f"address resolution failed: {exc}"
+
+    if not infos:
+        return None, f"no address found for {host}:{port}"
+
+    family, socktype, proto, canonname, sockaddr = infos[0]
+    sock = socket.socket(family, socktype, proto)
     sock.settimeout(timeout)
     try:
-        sock.connect((host, port))
+        sock.connect(sockaddr)
         sock.sendall(request)
         data = sock.recv(65536)
     except socket.timeout:

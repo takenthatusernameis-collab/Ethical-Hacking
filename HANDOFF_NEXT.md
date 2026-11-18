@@ -1,80 +1,83 @@
 # Handoff
-Date: Wed Nov 18 2026
+Date: Wed Nov 18 2026 (session 13)
 
-## State at HEAD (after this session)
-- `pytest -q` -> 39877 passed, 146 skipped, 0 failed (start-of-session
-  baseline: 39820 passed / 146 skipped). mypy clean (64 files checked,
-  262 source files project-wide); ruff clean; `check_readme.py` 54/54,
-  0 drift; `git diff --check` clean.
-- Full-suite branch coverage: 100% for every touched module and still 100%
-  everywhere except the documented `ethscan/cli.py` defensive guard.
-- Working tree clean; controller committed at HEAD `92cdefc`.
+## State at HEAD (uncommitted work staged by controller)
+- `pytest -q` -> 39885 passed, 146 skipped, 0 failed (start-of-session
+  baseline: 39877 passed / 146 skipped; +8 tests this session).
+- mypy: `Success: no issues found in 59 source files`; ruff: all checks
+  passed; `check_readme.py`: 54 commands, 0 drift both directions;
+  `git diff --check` clean.
+- Full-suite branch coverage for the touched modules:
+  `ethscan/memcached.py` and `ethscan/redis.py` both 100% (270/270 and
+  305/305 stmts, 0 partial branches).
+- Files changed: `ethscan/memcached.py`, `ethscan/redis.py`,
+  `tests/test_memcached.py`, `tests/test_redis.py` (+247/-7).
 
 ## Done this session
-1. The assigned next task (family-aware UDP transports for `ntp`/`netbios`)
-   was ALREADY implemented and committed at HEAD `92cdefc`; the handoff was
-   stale. Verified:
-   - `ethscan/ntp.py` and `ethscan/netbios.py` `_send_recv` now resolve the
-     endpoint with `socket.getaddrinfo(host, port, type=socket.SOCK_DGRAM,
-     proto=socket.IPPROTO_UDP)`, open the socket for the returned family, and
-     `sendto(request, sockaddr)`. The injectable `connector` seam is
-     preserved (it short-circuits before resolution).
-   - Deterministic monkeypatched tests assert `AF_INET6` for `::1` and
-     `AF_INET` for IPv4 in both modules, plus getaddrinfo-failure and
-     empty-result error paths.
-   - CLI: `python -m ethscan ntp --target ::1 --timeout 0.2
-     --format json` -> `host: "::1"`, `port: 123`, `error: "time request
-     failed: timeout"` (no more `[Errno -9] Address family for hostname
-     not supported`).
-2. Confirmed the earlier bare-IPv6 target-parsing fix (14 modules) and the
-   validate/scan port-spec parity fix are still at HEAD and green.
+1. Chose the highest-value pending item from the previous handoff: the
+   remaining `AF_INET`-hardcoded transports, bounded to two TCP modules
+   (`memcached`, `redis`).
+2. Reproduced the defect first:
+   `python -c "from ethscan import memcached, redis;
+   print(memcached.run_memcached('::1', timeout=0.2))"` ->
+   `version request failed: [Errno -9] Address family for hostname
+   not supported`; same for `redis.run_redis('::1')` / `ping request
+   failed: [Errno -9] ...`.
+3. Fixed both `_send_recv` helpers to mirror the `ntp`/`netbios` pattern:
+   resolve with `socket.getaddrinfo(host, port, type=socket.SOCK_STREAM,
+   proto=socket.IPPROTO_TCP)`, take `infos[0]`, create
+   `socket.socket(family, socktype, proto)`, and `connect(sockaddr)`.
+   Resolution failure -> `"address resolution failed: <exc>"`; empty
+   result -> `"no address found for host:port"`. The injectable
+   `connector` seam still short-circuits before resolution.
+4. Added deterministic tests (no real network): AF_INET6 for `::1`,
+   AF_INET for IPv4 (asserting the family passed to `socket()` and the
+   sockaddr passed to `connect`), getaddrinfo-failure path (no socket
+   created), and empty-result path. Updated the existing memcached
+   default-socket success test to stub `getaddrinfo` so it no longer
+   depends on real `localhost` resolution.
 
 ## Verified
-- Repro before fix (from prior session): `run_ntp("::1", connector=rec)`
-   called `rec(":", 1, ...)`; after fix `rec("::1", 123, ...)`.
-- Focused: 212 passed across `test_ntp.py`, `test_netbios.py`,
-   `test_bare_ipv6_target_parsing.py`.
-- Full: 39877 passed, 146 skipped (baseline 39820; +57 tests this session).
-- mypy `Success: no issues found in 64 source files`; ruff all checks
-   passed; `check_readme.py` 54 commands, 0 drift both directions;
-   `git diff --check` clean.
-- Coverage (`coverage run --branch --source=ethscan -m pytest -q`): `ntp.py`,
-   `netbios.py`, `validate.py`, `mac.py` all at 100% branch coverage under
-   the full suite.
+- After fix: `memcached.run_memcached("::1", timeout=0.3)` ->
+  `version request failed: [Errno 111] Connection refused` (IPv6 reach
+  attempted, no family error); same for `redis.run_redis("::1")`.
+  IPv4 control (`127.0.0.1`) also returns Connection refused, unchanged.
+- Focused: 217 passed across `test_memcached.py`, `test_redis.py`,
+  `test_memcached_branch_gaps.py`, `test_redis_branch_gaps.py`.
+- Full: 39885 passed, 146 skipped; mypy/ruff/README/diff-check clean;
+  full-suite branch coverage 100% on both touched modules.
 
 ## Unresolved / known limitations
-- `ldap`, `memcached`, `redis`, `smb`, `snmp`, `dnssec`, `osdetect` still
-  hardcode `socket.AF_INET` for their stream/UDP transports; they accept
-  IPv6 targets syntactically but cannot transport to them yet. Out of scope
-  for the assigned task (bounded to `ntp`/`netbios`).
-- `cli.py:4318` unreachable defensive guard (unchanged).
+- Still `AF_INET`-hardcoded transports (same pattern applies):
+  `ldap.py:468` (TCP), `smb.py:222` (TCP), `snmp.py:407` (UDP),
+  `dnssec.py:191,233` (UDP + explicit AF_INET getaddrinfo),
+  `osdetect.py:190,230,270` (TCP). They accept IPv6 targets
+  syntactically but cannot transport to them yet.
+- `ethscan/cli.py:4318` unreachable defensive guard (documented).
 - `oracle`/`postgresql` in-band empty-target handling by contract.
 - PBKDF2+NTLM intentionally unsupported.
-- `mac._extract_oui` docstring says "24-bit OUI" but returns 8 hex chars
-  (first 4 octets); many tests codify `"001a2b3c"`. Documentation/contract
-  mismatch only; do not change output without evidence.
+- `mac._extract_oui` docstring/contract mismatch (returns 8 hex chars);
+  do not change output without evidence.
 
 ## Approaches already tried / ruled out
-- Interpreting a bare IPv6+port (`::1:3306`) as host+port by testing the
-  prefix with `ipaddress`: rejected as ambiguous (`fe80::abcd:1` is itself a
-  valid literal) and inconsistent with "IPv6 ports require brackets"; the
-  whole literal is kept as the host, matching `target._bracket_ipv6_netloc`'s
-  documented ambiguity note.
-- Treating only IPv6 addresses that fail `ipaddress.ip_address` as hosts:
-  rejected; the failure mode is precisely valid literals ending in a numeric
-  group.
-- Reusing `parse_port_range` inside `validate`: still rejected (the module
-  needs per-spec, in-band error messages); parity is now asserted by a
+- Interpreting a bare `IPv6:port` as host+port: rejected as ambiguous.
+- Sharing `parse_port_range` in `validate`: rejected; parity asserted by
   differential test instead.
+- Do not weaken validation or exit-code contracts to make IPv6 "work".
 
 ## Next task
-- None pending from the handoff. The repository is green with 100% branch
-  coverage on all touched modules. If future work is needed, pick a single
-  high-value, verifiable improvement and reproduce it first — do not
-  speculate or weaken safety controls.
+- Apply the identical family-aware TCP fix to `ethscan/ldap.py` (line
+  ~468) and `ethscan/smb.py` (line ~222): replace
+  `socket.socket(socket.AF_INET, socket.SOCK_STREAM)` +
+  `connect((host, port))` with `getaddrinfo(..., type=SOCK_STREAM,
+  proto=IPPROTO_TCP)` + family-specific socket + `connect(sockaddr)`,
+  keeping the `connector` seam and existing error strings. Reproduce
+  first with `run_ldap("::1")` / `run_smb("::1")` showing Errno -9, add
+  the same four deterministic tests per module, then rerun the full
+  matrix (pytest, mypy, ruff, `check_readme.py`, `git diff --check`,
+  full-suite coverage on both modules). Do not touch `snmp`, `dnssec`,
+  or `osdetect` in the same task.
 
 ## Environment/notes
 - Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3.
 - Do not commit manually: the workflow controller stages/commits/pushes.
-
-(End of file - total 98 lines)
