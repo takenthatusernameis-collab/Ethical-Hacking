@@ -314,7 +314,7 @@ def _assess_ntp_version(time_resp: dict[str, Any] | None) -> list[str]:
         return findings
     try:
         major = int(version)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):
         return findings
     findings.append(f"NTP server version: {version}")
     if major < 4:

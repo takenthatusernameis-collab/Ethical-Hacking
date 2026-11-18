@@ -256,7 +256,7 @@ def _assess_dangerous(config: dict[str, str]) -> list[str]:
     """Identify dangerous Redis configurations."""
     findings: list[str] = []
     bind = config.get("bind", "")
-    if bind and ("0.0.0.0" in bind):
+    if bind and isinstance(bind, str) and "0.0.0.0" in bind:
         findings.append("bind is set to 0.0.0.0 (exposed to network)")
     requirepass = config.get("requirepass", "")
     if not requirepass:

@@ -283,7 +283,10 @@ def _assess_startup(startup: dict[str, Any]) -> list[str]:
     if startup.get("process_id") is not None:
         findings.append(f"Backend process id: {startup['process_id']}")
 
-    for err in startup.get("errors", []) or []:
+    errors = startup.get("errors") or []
+    if not isinstance(errors, list):
+        errors = []
+    for err in errors:
         msg = err.get("message") if isinstance(err, dict) else str(err)
         if msg:
             findings.append(f"Server error: {msg}")

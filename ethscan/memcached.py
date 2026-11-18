@@ -157,7 +157,7 @@ def _coerce_int(value: str) -> int | None:
     """Best-effort integer coercion for stats values."""
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
 
 
