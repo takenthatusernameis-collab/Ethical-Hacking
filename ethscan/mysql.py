@@ -300,7 +300,11 @@ def _assess_handshake(handshake: dict[str, Any]) -> list[str]:
     version = handshake.get("server_version", "")
     if version:
         findings.append(f"MySQL/MariaDB server version: {version}")
-        # Check for very old versions as a simple heuristic
+        # Check for very old versions as a simple heuristic. Coerce to str so a
+        # hostile non-string server_version (e.g. an int) is rendered rather
+        # than raising AttributeError, matching the defensive coercion used by
+        # the sibling assessors.
+        version = str(version)
         v_lower = version.lower()
         if "mariadb" in v_lower:
             findings.append("MariaDB server detected")

@@ -151,6 +151,22 @@ def test_assess_handshake_mariadb():
     assert any("MariaDB server detected" in f for f in findings)
 
 
+@pytest.mark.parametrize(
+    "hostile",
+    [123, 1.5, True, b"bytes", ["x"], {"k": "v"}],
+    ids=["int", "float", "bool", "bytes", "list", "dict"],
+)
+def test_assess_handshake_hostile_version_never_raises(hostile: object) -> None:
+    # A hostile non-string server_version (e.g. a numeric version emitted by a
+    # misbehaving server) must be rendered rather than raising AttributeError
+    # from .lower()/.split(). Valid string input is covered above; this guards
+    # the coercion used by the sibling assessors.
+    handshake: dict[str, Any] = {"server_version": hostile}
+    findings = _assess_handshake(handshake)
+    assert isinstance(findings, list)
+    assert any("MySQL/MariaDB server version" in f for f in findings)
+
+
 def test_assess_handshake_capabilities_none():
     handshake: dict[str, Any] = {}
     findings = _assess_handshake(handshake)

@@ -204,6 +204,21 @@ def test_assess_buildinfo_old_version():
     assert any("Old MongoDB version detected" in f for f in findings)
 
 
+@pytest.mark.parametrize(
+    "hostile",
+    [123, 1.5, True, b"bytes", ["x"], {"k": "v"}],
+    ids=["int", "float", "bool", "bytes", "list", "dict"],
+)
+def test_assess_buildinfo_hostile_version_never_raises(hostile: object) -> None:
+    # A hostile non-string version (e.g. a numeric buildInfo value) must be
+    # rendered rather than raising AttributeError from .lower(). Valid string
+    # input is covered above; this guards the coercion used by the sibling
+    # assessors.
+    findings = _assess_buildinfo({"version": hostile})
+    assert isinstance(findings, list)
+    assert any("MongoDB server version" in f for f in findings)
+
+
 def test_assess_buildinfo_sysinfo_and_modules():
     findings = _assess_buildinfo({"sysInfo": "Linux x86_64", "modules": "ssl"})
     assert any("Build environment: Linux x86_64" in f for f in findings)

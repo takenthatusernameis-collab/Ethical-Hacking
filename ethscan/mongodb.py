@@ -225,8 +225,11 @@ def _assess_buildinfo(buildinfo: dict[str, Any]) -> list[str]:
     version = buildinfo.get('version', '')
     if version:
         findings.append(f"MongoDB server version: {version}")
-        # Check for very old versions as a simple heuristic
-        v_lower = version.lower()
+        # Check for very old versions as a simple heuristic. Coerce to str so a
+        # hostile non-string buildInfo value (e.g. a numeric version) is still
+        # rendered rather than raising AttributeError, matching the defensive
+        # coercion used by the sibling assessors.
+        v_lower = str(version).lower()
         if any(x in v_lower for x in ('2.0', '2.2', '2.4', '2.6')):
             findings.append("Old MongoDB version detected (may lack security features)")
 
