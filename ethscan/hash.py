@@ -113,14 +113,41 @@ def _md4_digest(data: bytes) -> bytes:
     return struct.pack("<4I", a0, b0, c0, d0)
 
 
-def _md4_hmac_hex(key: bytes, message: bytes) -> str:
-    """Return hex HMAC-MD4 of ``message`` keyed by ``key`` (RFC 2104)."""
+def _md4_hmac(key: bytes, message: bytes) -> bytes:
+    """Return raw HMAC-MD4 of ``message`` keyed by ``key`` (RFC 2104)."""
     block_size = 64
     if len(key) > block_size:
         key = _md4_digest(key)
     padded = key.ljust(block_size, b"\0")
     inner = _md4_digest(bytes(byte ^ 0x36 for byte in padded) + message)
-    return _md4_digest(bytes(byte ^ 0x5C for byte in padded) + inner).hex()
+    return _md4_digest(bytes(byte ^ 0x5C for byte in padded) + inner)
+
+
+def _md4_hmac_hex(key: bytes, message: bytes) -> str:
+    """Return hex HMAC-MD4 of ``message`` keyed by ``key`` (RFC 2104)."""
+    return _md4_hmac(key, message).hex()
+
+
+def _pbkdf2_hmac_md4(password: bytes, salt: bytes, iterations: int, dklen: int = 16) -> bytes:
+    """PBKDF2-HMAC-MD4 (RFC 2898) with default dklen 16 (MD4 digest size)."""
+    from math import ceil
+
+    hlen = 16  # MD4 digest size
+    if dklen > (2**32 - 1) * hlen:
+        raise ValueError("dklen too large")
+    l = ceil(dklen / hlen)
+    result = bytearray()
+    for i in range(1, l + 1):
+        # U_1 = PRF(P, S || INT(i))
+        u = _md4_hmac(password, salt + struct.pack(">I", i))
+        t = bytearray(u)
+        # U_j = PRF(P, U_{j-1}) for j = 2 to c
+        for _ in range(1, iterations):
+            u = _md4_hmac(password, u)
+            for k in range(hlen):
+                t[k] ^= u[k]
+        result.extend(t)
+    return bytes(result[:dklen])
 
 
 def _normalize_algorithm(algorithm: str) -> str:
@@ -243,7 +270,7 @@ def _compute_pbkdf2_hash(
 
     Args:
         password: Plaintext password.
-        algorithm: Canonical algorithm key (must be hashlib-backed).
+        algorithm: Canonical algorithm key (must be hashlib-backed or md4).
         salt: Salt bytes (encoded as UTF-8).
         iterations: Number of PBKDF2 iterations (must be positive).
 
@@ -251,13 +278,20 @@ def _compute_pbkdf2_hash(
         Hex digest of ``PBKDF2-HMAC(algorithm, password, salt, iterations)``.
 
     Raises:
-        ValueError: If the algorithm is not hashlib-backed (e.g. NTLM) or
+        ValueError: If the algorithm does not support PBKDF2 (e.g. NTLM) or
             iterations is not positive.
     """
     if iterations <= 0:
         raise ValueError("iterations must be a positive integer.")
     name = _hashlib_name(algorithm)
     if name is None:
+        if algorithm == "md4":
+            return _pbkdf2_hmac_md4(
+                password.encode("utf-8"),
+                salt.encode("utf-8"),
+                iterations,
+                16,
+            ).hex()
         raise ValueError(
             f"Algorithm '{algorithm}' does not support PBKDF2 (no hashlib name)."
         )

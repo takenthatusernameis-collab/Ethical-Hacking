@@ -732,6 +732,43 @@ def test_compute_password_hash_iterations_ntlm_error() -> None:
         pass
 
 
+def test_compute_pbkdf2_hash_md4_known_value() -> None:
+    # PBKDF2-HMAC-MD4("password", "saltvalue", 1000, 16)
+    # Verified against PHP: hash_pbkdf2("md4","password","saltvalue",1000,16,true)
+    expected = "1a87747a9ec8f83f194a7b279d89e593"
+    assert _compute_pbkdf2_hash("password", "md4", "saltvalue", 1000) == expected
+
+
+def test_compute_password_hash_iterations_md4() -> None:
+    expected = "1a87747a9ec8f83f194a7b279d89e593"
+    assert _compute_password_hash(
+        "password", "md4", salt="saltvalue", iterations=1000
+    ) == expected
+
+
+def test_compute_password_hash_iterations_md4_with_pepper() -> None:
+    # Uses hex PBKDF2 digest as HMAC message (consistent with SHA256 behavior)
+    pbkdf2_digest = "1a87747a9ec8f83f194a7b279d89e593"
+    from ethscan.hash import _md4_hmac_hex
+
+    expected = _md4_hmac_hex(b"secretpepper", pbkdf2_digest.encode("utf-8"))
+    assert _compute_password_hash(
+        "password",
+        "md4",
+        salt="saltvalue",
+        pepper="secretpepper",
+        iterations=1000,
+    ) == expected
+
+
+def test_compute_password_hash_iterations_md4_requires_salt() -> None:
+    try:
+        _compute_password_hash("password", "md4", iterations=1000)
+        raise AssertionError("Expected ValueError")
+    except ValueError:
+        pass
+
+
 def test_run_hash_with_salt() -> None:
     result = run_hash(["password"], "md5", salt="saltvalue")
     assert result["salt"] is True

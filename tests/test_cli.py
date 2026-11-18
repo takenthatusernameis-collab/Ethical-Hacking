@@ -14960,6 +14960,119 @@ def test_hash_password_md4_and_ntlm_csv_digests(tmp_path) -> None:
         assert lines[1].split(",")[:3] == ["password", digest, algorithm]
 
 
+def test_hash_password_md4_pbkdf2_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--password",
+            "password",
+            "--algorithm",
+            "md4",
+            "--salt",
+            "saltvalue",
+            "--iterations",
+            "1000",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["algorithm"] == "md4"
+    assert parsed["iterations"] == 1000
+    assert parsed["salt_value"] == "saltvalue"
+    assert parsed["results"][0]["hash"] == "1a87747a9ec8f83f194a7b279d89e593"
+    assert parsed["results"][0]["error"] is None
+
+
+def test_hash_password_md4_pbkdf2_with_pepper_json() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--password",
+            "password",
+            "--algorithm",
+            "md4",
+            "--salt",
+            "saltvalue",
+            "--iterations",
+            "1000",
+            "--pepper",
+            "secretpepper",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["algorithm"] == "md4"
+    assert parsed["iterations"] == 1000
+    assert parsed["pepper"] is True
+    # Uses hex PBKDF2 digest as HMAC message (consistent with SHA256 behavior)
+    pbkdf2_digest = "1a87747a9ec8f83f194a7b279d89e593"
+    from ethscan.hash import _md4_hmac_hex
+    expected = _md4_hmac_hex(b"secretpepper", pbkdf2_digest.encode("utf-8"))
+    assert parsed["results"][0]["hash"] == expected
+    assert parsed["results"][0]["error"] is None
+
+
+def test_hash_password_md4_pbkdf2_csv(tmp_path) -> None:
+    runner = CliRunner()
+    wordlist = tmp_path / "md4_pbkdf2.txt"
+    wordlist.write_text("password\n", encoding="utf-8")
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--algorithm",
+            "md4",
+            "--salt",
+            "saltvalue",
+            "--iterations",
+            "1000",
+            "--output-format",
+            "csv",
+            "--file",
+            str(wordlist),
+        ],
+    )
+    assert result.exit_code == 0
+    lines = result.output.strip().splitlines()
+    assert lines[0] == "password,digest,algorithm,salt,pepper,iterations,computed,match,error"
+    assert lines[1].split(",")[:3] == ["password", "1a87747a9ec8f83f194a7b279d89e593", "md4"]
+    assert "1000" in lines[1]
+
+
+def test_hash_password_ntlm_pbkdf2_error() -> None:
+    # NTLM must remain unsupported for PBKDF2
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "hash",
+            "--password",
+            "password",
+            "--algorithm",
+            "ntlm",
+            "--salt",
+            "saltvalue",
+            "--iterations",
+            "1000",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["results"][0]["error"] is not None
+    assert "PBKDF2" in parsed["results"][0]["error"]
+    assert parsed["results"][0]["hash"] is None
+
+
 def test_hash_password_md5_markdown() -> None:
     runner = CliRunner()
     result = runner.invoke(
