@@ -106,6 +106,16 @@ _VALID_REPORT: dict[str, Any] = {
     "items": [],
     "data": {},
     "error": None,
+    # Install report fields (ethscan.completion.format_install_report_*).
+    # Added so the generic single-field hostile sweep also covers the install
+    # formatters; without them the install formatters were only exercised by
+    # the dedicated sweep in tests/test_completion_hostile_sweep.py.
+    "shell": "bash",
+    "script_path": "/tmp/ethscan_complete.bash",
+    "rc_file": "~/.bashrc",
+    "installed": True,
+    "already_installed": False,
+    "message": "Completion for bash installed successfully.",
 }
 
 # Hostile values most likely to expose type-assumption crashes in formatters.
