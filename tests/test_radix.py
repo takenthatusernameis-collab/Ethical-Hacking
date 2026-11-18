@@ -393,6 +393,75 @@ def test_run_radix_radix_tree_leaf() -> None:
     assert root["networks"] == ["192.168.1.0/24"]
 
 
+def _walk_radix_nodes(node: dict[str, object]) -> list[dict[str, object]]:
+    """Return every node in a radix tree, depth-first."""
+    nodes = [node]
+    children = node.get("children", [])
+    assert isinstance(children, list)
+    for child in children:
+        assert isinstance(child, dict)
+        child_node = child["node"]
+        assert isinstance(child_node, dict)
+        nodes.extend(_walk_radix_nodes(child_node))
+    return nodes
+
+
+def test_radix_tree_leaf_networks_equal_merged() -> None:
+    """The networks at the leaf nodes must cover exactly the merged set.
+
+    Seeded sample across both address families and several ``max_depth``
+    values; the depth bound can leave several networks on a leaf, so the
+    comparison is over the union of all leaves.
+    """
+    rng = random.Random(0x1EAF)
+    for _ in range(100):
+        depth = rng.choice([0, 1, 2, 4, 64])
+        v4 = [
+            f"10.0.0.{rng.randint(0, 255)}/{rng.randint(20, 32)}"
+            for _ in range(rng.randint(1, 6))
+        ]
+        v6 = [
+            f"2001:db8::{rng.randint(0, 0xFFFF):x}/{rng.randint(112, 128)}"
+            for _ in range(rng.randint(1, 6))
+        ]
+        for cidrs in (v4, v6):
+            data = run_radix(cidrs, max_depth=depth)
+            root = data["radix_tree"]
+            assert isinstance(root, dict)
+            leaves = [n for n in _walk_radix_nodes(root) if not n["children"]]
+            leaf_networks = [
+                net
+                for leaf in leaves
+                for net in cast(list[str], leaf["networks"])
+            ]
+            assert sorted(leaf_networks) == sorted(data["merged"])
+
+
+def test_radix_tree_total_addresses_matches_range() -> None:
+    """Every node's ``total_addresses`` equals ``end - start + 1``."""
+    rng = random.Random(0xADD4)
+    for _ in range(100):
+        depth = rng.choice([0, 1, 2, 4, 64])
+        v4 = [
+            f"192.168.{rng.randint(0, 255)}.{rng.randint(0, 255)}"
+            f"/{rng.randint(16, 32)}"
+            for _ in range(rng.randint(1, 6))
+        ]
+        v6 = [
+            f"2001:db8:{rng.randint(0, 0xFFFF):x}::"
+            f"/{rng.randint(96, 128)}"
+            for _ in range(rng.randint(1, 6))
+        ]
+        for cidrs in (v4, v6):
+            data = run_radix(cidrs, max_depth=depth)
+            root = data["radix_tree"]
+            assert isinstance(root, dict)
+            for node in _walk_radix_nodes(root):
+                start = ipaddress.ip_address(cast(str, node["start_address"]))
+                end = ipaddress.ip_address(cast(str, node["end_address"]))
+                assert node["total_addresses"] == int(end) - int(start) + 1
+
+
 def test_run_radix_max_depth() -> None:
     data = run_radix(["192.168.1.0/24", "192.168.2.0/24"], max_depth=1)
     assert data["max_depth"] == 1
