@@ -539,7 +539,7 @@ def test_completion_install_with_out_file(monkeypatch, tmp_path) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["completion", "--install", "--output-format", "json", "--out", str(out_file)])
     assert result.exit_code == 0, result.output
-    assert "Completion for bash" in result.output or "Report written to" in result.output
+    assert "Completion install report written" in result.output
 
     parsed = json.loads(out_file.read_text())
     assert parsed["shell"] == "bash"
@@ -561,6 +561,58 @@ def test_completion_install_default_output_is_human_message(monkeypatch, tmp_pat
     result = runner.invoke(cli, ["completion", "--install"])
     assert result.exit_code == 0, result.output
     assert result.output.strip() == "Completion for bash installed successfully."
+
+
+def test_completion_install_out_default_writes_human_message(monkeypatch, tmp_path) -> None:
+    """``--install --out`` with no format writes the human-readable message.
+
+    Regression: previously ``--install --out FILE`` (no format) wrote the
+    install report JSON into the file, because the install path's default
+    output was the structured report while the non-install path's default was
+    the raw script. ``--out`` is a structured-output opt-in, so with no format
+    selected the file should hold the same human-readable message that would
+    otherwise have been echoed to stdout.
+    """
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _monkeypatch_home(monkeypatch, fake_home)
+    monkeypatch.setenv("SHELL", "/bin/bash")
+
+    out_file = tmp_path / "install.txt"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["completion", "--install", "--out", str(out_file)]
+    )
+    assert result.exit_code == 0, result.output
+    assert "Completion install report written" in result.output
+    assert out_file.read_text().strip() == "Completion for bash installed successfully."
+
+
+def test_completion_install_out_explicit_format_writes_report(monkeypatch, tmp_path) -> None:
+    """``--install --out FILE --output-format json`` writes the JSON report."""
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _monkeypatch_home(monkeypatch, fake_home)
+    monkeypatch.setenv("SHELL", "/bin/bash")
+
+    out_file = tmp_path / "install.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "completion",
+            "--install",
+            "--output-format",
+            "json",
+            "--out",
+            str(out_file),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Completion install report written" in result.output
+    parsed = json.loads(out_file.read_text())
+    assert parsed["shell"] == "bash"
+    assert "message" in parsed
 
 
 def test_completion_install_explicit_format_alias_json(monkeypatch, tmp_path) -> None:

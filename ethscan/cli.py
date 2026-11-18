@@ -4308,7 +4308,7 @@ def completion(
             output = results["message"]
 
         if out_path:
-            _write_output(out_path, output)
+            _write_output(out_path, output, "Completion install report written")
         else:
             click.echo(output)
         return
