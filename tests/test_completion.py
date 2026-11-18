@@ -578,6 +578,42 @@ def test_completion_install_explicit_format_alias_json(monkeypatch, tmp_path) ->
     assert parsed["installed"] is True
 
 
+def test_completion_install_explicit_positional_bash_overrides_detection(
+    monkeypatch, tmp_path
+) -> None:
+    """An explicit positional shell must be honored, not treated as auto-detect.
+
+    Repro: with $SHELL pointing to zsh, `completion bash --install` must
+    install for bash rather than auto-detecting zsh.
+    """
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _monkeypatch_home(monkeypatch, fake_home)
+    monkeypatch.setenv("SHELL", "/bin/zsh")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["completion", "bash", "--install"])
+    assert result.exit_code == 0, result.output
+    assert "bash" in result.output
+    assert "zsh" not in result.output
+
+
+def test_completion_install_no_shell_auto_detects_from_env(
+    monkeypatch, tmp_path
+) -> None:
+    """Without an explicit shell, --install should auto-detect from $SHELL."""
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _monkeypatch_home(monkeypatch, fake_home)
+    monkeypatch.setenv("SHELL", "/bin/zsh")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["completion", "--install"])
+    assert result.exit_code == 0, result.output
+    assert "zsh" in result.output
+    assert "bash" not in result.output
+
+
 def test_completion_install_no_shell_env(monkeypatch, tmp_path) -> None:
     """Test --install when SHELL env var is not set and no --shell given."""
     fake_home = tmp_path / "home"

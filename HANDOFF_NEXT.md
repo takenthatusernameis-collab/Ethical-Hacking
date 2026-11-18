@@ -2,40 +2,35 @@
 Date: Wed Nov 18 2026
 
 ## This session
-- No prior agent assignment existed; HANDOFF_NEXT/NEXT_TASK stated "none pending; repo fully green."
-- Independently re-verified the full baseline from a clean working tree at HEAD 44808fd (working tree clean, no source or test changes).
-- Ran the full gate set: pytest, mypy, ruff, check_readme, coverage. No reproducible defect, typing error, lint issue, README drift, or new coverage gap found.
-- **Reproduced a genuine behavioral defect** by comparing CLI behavior against the documented contract in the `completion` command docstring and README.md:40.
-- Fixed `ethscan/cli.py` `completion` command: the deprecated `--format` default of `"json"` leaked into the `--install` path, so `ethscan completion --install` printed a JSON report instead of the documented "Completion for X installed" human-readable message. The non-install path already handled this correctly via `fmt_explicit`; the install path did not.
-- Added two regression tests in `tests/test_completion.py` and one invariant guard test in `tests/test_completion_branch_gaps.py`.
+- No prior agent assignment existed; inspected repository and handoff state (baseline green per prior session, working tree clean at start).
+- Independently re-verified baseline: `python -m pytest -q` → 32600 passed, 146 skipped, 0 failed; `python -m mypy ethscan/ tests/` → Success (260 source files); `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed; `python check_readme.py` → 54 commands, 0 drift.
+- Reproduced a CLI behavior defect in `completion --install`: with `$SHELL=/bin/zsh`, `ethscan completion bash --install` installed completion for zsh instead of the explicitly requested bash shell. Root cause: install path treated the positional `SHELL` default value (`"bash"`) as non-explicit, so any case without `--shell` and positional `bash` triggered auto-detection.
+- Fixed `ethscan/cli.py` completion install shell selection to auto-detect only when neither `--shell` nor an explicit positional `SHELL` argument is provided (uses `ParameterSource.COMMANDLINE` for the positional arg).
+- Added two regression tests in `tests/test_completion.py`: `test_completion_install_explicit_positional_bash_overrides_detection` and `test_completion_install_no_shell_auto_detects_from_env`.
 
 ## What changed
-- `ethscan/cli.py`:
-  - Hoisted `fmt_source`/`fmt_explicit` computation above the `if do_install:` branch.
-  - Install path now uses `chosen_format = output_fmt if output_fmt is not None else (fmt if fmt_explicit else None)`, so the default emits the human-readable message (line 4302) instead of JSON.
-- `tests/test_completion.py`: added `test_completion_install_default_output_is_human_message` and `test_completion_install_explicit_format_alias_json`.
-- `tests/test_completion_branch_gaps.py`: added `test_completion_non_install_shell_default_never_raises_usage_error` (invariant guard for the unreachable UsageError branch); updated module docstring to document the guard.
+- `ethscan/cli.py`: added `shell_source`/`shell_explicit` and changed install auto-detect condition to `if shell_option is None and not shell_explicit: effective_shell = None`.
+- `tests/test_completion.py`: added regressions covering explicit positional shell overriding `$SHELL` detection and default auto-detect behavior.
 
 ## What was actually verified
-- `python -m pytest -q` → 32600 passed, 146 skipped, 0 failed (baseline 32597 + 2 new + 1 existing delta).
+- Repro before fix: `SHELL=/bin/zsh ethscan completion bash --install` → installed zsh (incorrect). After fix: installs bash; `--install` with no shell still auto-detects zsh.
+- `python -m pytest tests/test_completion.py tests/test_completion_branch_gaps.py -q` → 65 passed.
+- `python -m pytest -q` → 32602 passed, 146 skipped, 0 failed.
+- `python -m mypy ethscan/cli.py tests/test_completion.py tests/test_completion_branch_gaps.py` → Success.
 - `python -m mypy ethscan/ tests/` → Success: no issues found in 260 source files.
 - `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed.
 - `python check_readme.py` → 54 commands, 0 drift both directions.
-- `python -m coverage run --branch --source=ethscan -m pytest -q` → ethscan/cli.py 99%, missing line 4313 only (was 4292 + 4302; 4292 now covered by the fix).
-- Runtime smoke tests: `completion --install` → "Completion for bash installed successfully."; `completion --install --format json` → JSON report; `completion --install --output-format json` → JSON report; `completion` (no shell) → raw bash script.
+- `git diff --stat`: `ethscan/cli.py`, `tests/test_completion.py` modified (2 files, 44 insertions, 3 deletions).
 
 ## What remains unresolved
-- `ethscan/cli.py` line 4313: `raise click.UsageError("Shell argument is required when not using --install")` is genuinely unreachable via the CLI — the positional `SHELL` argument defaults to `"bash"` and is validated by `click.Choice(["bash","zsh","fish"])`, so `effective_shell` is never `None` in non-install mode. Intentionally left open as a defensive guard; covered by an invariant guard test rather than by reaching the branch directly. Approaches ruled out: `# pragma: no cover` (games metric), deleting the branch (weakens safety guard), making the argument required (speculative user-visible behavior change — would break `ethscan completion`).
-- `oracle`/`postgresql` empty-target handling intentionally out of scope per documented contract (exit 0, in-band error).
+- `ethscan/cli.py:4313` (`raise click.UsageError("Shell argument is required when not using --install")`) remains unreachable via CLI (positional `SHELL` defaults to `"bash"` and is choice-validated). Intentionally left as defensive guard; covered by invariant guard test. Not addressed: `# pragma: no cover` would game metric, deleting weakens guard, making argument required is speculative behavior change.
+- `oracle`/`postgresql` empty-target handling remains intentionally out of scope (exit 0, in-band error) per documented contract.
 
 ## Approaches already tried / ruled out
-- No speculative change made; the defect was reproduced from concrete evidence (CLI output vs. documented contract) before fixing, and the fix is the smallest reversible change that aligns behavior with the existing docstring/README.
-- The completion defensive-branch coverage gap at line 4313 was evaluated and deliberately left open; no safe, evidence-based alternative exists without violating the constraints.
+- No failed fix attempts this session. Considered but rejected for line 4313: pragma/delete/required-arg changes (see unresolved). Fix chosen was smallest reversible change aligned with Click parameter-source semantics and existing CLI behavior.
 
 ## Next task
-- None pending. Repository fully green. If future work is needed, pick one bounded, verifiable improvement and reproduce the gap first (focused failing check/test or concrete evidence); do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target remains out of scope unless a task asks to change it.
+- None pending from current evidence. Repository green. If future work is needed, select one bounded, verifiable improvement: reproduce a concrete gap first (failing check/test or behavioral evidence vs documented contract), apply smallest safe fix, rerun focused and relevant broader gates (pytest/mypy/ruff/check_readme/coverage as applicable), and preserve safety/validation. Do not speculate on fully green baseline.
 
 ## Environment/notes
-- Python 3.14.4, pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3. Working tree clean except for the 3 files changed this session. No commit/push performed (not requested).
-
-(End of file - total 57 lines)
+- Python 3.14.4, pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3 available in environment. No commit/push performed (not requested). Working tree not clean due to this session's changes.

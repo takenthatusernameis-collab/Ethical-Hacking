@@ -4281,10 +4281,15 @@ def completion(
         ParameterSource.DEFAULT_MAP,
     )
 
+    shell_source = ctx.get_parameter_source("shell")
+    shell_explicit = shell_source == ParameterSource.COMMANDLINE
+
     if do_install:
-        # For install, shell is optional (auto-detect if not provided)
-        if effective_shell == "bash" and shell_option is None and shell == "bash":
-            # User didn't specify a shell explicitly; let install_completion auto-detect
+        # For install, shell is optional (auto-detect if not provided).
+        # Only auto-detect when neither --shell nor an explicit positional
+        # SHELL argument was given; an explicit `bash` must install bash
+        # rather than being mistaken for the default.
+        if shell_option is None and not shell_explicit:
             effective_shell = None  # type: ignore[assignment]
         try:
             results = install_completion(cli, shell=effective_shell, prog_name=prog_name)
