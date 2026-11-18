@@ -2,29 +2,46 @@
 Date: Wed Nov 18 2026
 
 ## Status
-- Repository fully green: 39780 passed, 149 skipped, 0 failed; mypy/ruff clean; README in sync; 100% statement/branch coverage for all `ethscan/` modules except the documented `cli.py` unreachable guards.
-- Closed the last coverage gap in `ethscan/completion.py` (was 93%, now 100%) by adding hostile top-level input tests for the install report formatters.
+- Repository green: 39783 passed, 149 skipped, 0 failed; mypy/ruff clean;
+  README in sync; `ethscan/hash.py` at 100% statement/branch coverage.
+- Closed a documented-contract defect: NTLM and MD4 hashing previously failed
+  whenever the platform's OpenSSL build did not expose MD4 through `hashlib`.
 
 ## This session (what changed)
-- `tests/test_completion_hostile_sweep.py`: added `test_install_formatters_never_raise_on_hostile_top_level` covering non-dict top-level input (`None`, `[]`, `"x"`, `123`, `1.5`, `True`, `b"bytes"`) for `format_install_report_json`, `format_install_report_markdown`, `format_install_report_csv`.
-- No production code changed; purely a test addition, fully reversible.
+- `ethscan/hash.py`: added self-contained RFC 1320 MD4 (`_md4_digest`,
+  `_rol32`) plus HMAC-MD4 (`_md4_hmac_hex`, `_hmac_hex`); NTLM and MD4 now
+  always work. Native hashlib MD4 is used only to register the name for
+  PBKDF2/HMAC when available. Removed the impossible "MD4 unavailable" notes.
+- `tests/test_hash.py`: RFC 1320 vectors (7 lengths), NTLM/MD4 known digests,
+  HMAC-MD4 vectors (short/long key), `MD4_AVAILABLE is True`, successful MD4
+  `run_check`.
+- `README.md`: hash bullet reflects the built-in MD4 fallback and concrete
+  pepper algorithms.
 
 ## Verified
-- `pytest tests/test_completion_hostile_sweep.py -q` -> 4 passed.
-- `coverage report --include=*/completion.py` -> 100% (115 stmts, 0 miss, 36 branch, 0 partial).
-- `pytest tests/test_completion.py tests/test_completion_branch_gaps.py tests/test_completion_hostile_sweep.py tests/test_all_formatters_hostile_contract.py -q` -> 25833 passed.
-- `mypy ethscan/ tests/` -> Success, 261 files.
-- `ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
-- `check_readme.py` -> 54 commands, 0 drift.
-- `git status` -> only `tests/test_completion_hostile_sweep.py` modified.
+- CLI: `hash --algorithm ntlm` -> `8846f7eaee8fb117ad06bdd830b7586c`;
+  `hash --algorithm md4` -> `8a9d093f14f8701df17732b2bb182c74`; peppered MD4
+  -> `28f58ad8e71156ab54e0513bd039bbfd`; all exit 0.
+- `coverage report --include=*/hash.py` -> 100% (327 stmts, 130 branch).
+- `pytest tests/test_hash.py tests/test_cli.py -q` -> 1256 passed.
+- `pytest -q` -> 39783 passed, 149 skipped.
+- `mypy ethscan/ tests/` -> Success (261 files); `ruff` clean;
+  `check_readme.py` -> 54 commands, 0 drift.
 
 ## Known limitations (intentionally out of scope)
-- `ethscan/cli.py` lines 4318 and 4302: two unreachable defensive branches in the `completion` command. Left as documented known limitation; not weakened, not pragma'd, not deleted.
-- `oracle`/`postgresql` empty-target handling (exit 0, in-band error) per documented contract.
+- PBKDF2 + MD4 still needs native hashlib MD4; otherwise the existing in-band
+  "does not support PBKDF2 (no hashlib name)" error is returned. Not claimed by
+  the README; unchanged.
+- `ethscan/cli.py:4318` remains the documented unreachable completion guard.
 
 ## Next task
-- None pending. Repository is fully green with 100% coverage on all modules except the documented unreachable CLI guards. If future work is needed, reproduce a concrete gap first (failing check/test or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then broader gates (pytest/mypy/ruff/check_readme/coverage), and preserve safety/validation. Do not speculate or weaken safety controls.
+- Add `tests/test_cli.py` regression tests for successful `hash --algorithm md4`
+  and `--algorithm ntlm` output (JSON digest and CSV digest assertions).
+  Existing CLI tests cover only NTLM pepper/PBKDF2 error paths, so this locks
+  the fix at the integration boundary. Then rerun:
+  focused tests, `pytest -q`, `mypy ethscan/ tests/`,
+  `ruff check ethscan/ tests/ check_readme.py`, `python check_readme.py`.
 
 ## Constraints / notes
-- Keep architecture stable; do not weaken safety/validation or permissions. Do not commit unless explicitly asked.
-- Working tree has 1 intended file change (not committed).
+- Keep architecture stable; do not weaken validation/exit-code contracts.
+- Do not commit manually; the workflow controller commits and verifies pushes.

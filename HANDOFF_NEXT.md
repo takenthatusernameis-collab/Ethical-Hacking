@@ -2,37 +2,73 @@
 Date: Wed Nov 18 2026
 
 ## This session
-- Inspected the repository state and confirmed the true baseline from a clean tree at HEAD `1d71553`: `pytest -q` -> 39780 passed, 149 skipped, 0 failed; `mypy ethscan/ tests/` clean (261 files); `ruff` clean; `check_readme.py` 54/54, 0 drift.
-- Found a coverage gap in `ethscan/completion.py`: was at 93% (5 missed statements / 5 partial branches) instead of the repo's 100% coverage standard.
-- The missing coverage was in defensive `isinstance(result, dict)` guards in the completion and install report formatters (lines 147, 188, 199, 298, 319).
-- The existing hostile-sweep test `test_completion_formatters_never_raise_on_hostile_top_level` covered non-dict top-level input for the completion formatters but not for the install formatters.
-- Added `test_install_formatters_never_raise_on_hostile_top_level` to `tests/test_completion_hostile_sweep.py` to cover non-dict top-level input for `format_install_report_json`, `format_install_report_markdown`, and `format_install_report_csv`.
+- No prior assignment was pending (previous handoff said "None pending"). Inspected the repo and reproduced a real, documented defect:
+  `ethscan hash --algorithm ntlm` and `--algorithm md4` returned `"hash": null` with
+  "MD4 is not available on this platform (OpenSSL build)." on this environment
+  (Python 3.14.4, OpenSSL 3.5.5, `hashlib.algorithms_available` has no `md4`).
+  The README documents NTLM and MD4 as supported, so the platform dependency
+  contradicted the documented contract.
+- Baseline before changes: `pytest -q` -> 39781 passed, 149 skipped; mypy/ruff/check_readme clean.
 
 ## What changed
-- `tests/test_completion_hostile_sweep.py`: added one test function `test_install_formatters_never_raise_on_hostile_top_level` that passes the same hostile top-level values (None, [], "x", 123, 1.5, True, b"bytes") to all three install report formatters.
-- No production code changed. No behavior change for valid input.
+- `ethscan/hash.py`:
+  - Added a self-contained RFC 1320 MD4 implementation (`_md4_digest`, `_rol32`)
+    and `_md4_hmac_hex` (RFC 2104 HMAC-MD4, including key > block-size hashing).
+  - `MD4_AVAILABLE` is now always `True`; `hashlib`'s native MD4 is only used to
+    register the name for PBKDF2/HMAC when the OpenSSL build exposes it.
+  - `_compute_md4`/`_compute_ntlm` always compute (UTF-8 / UTF-16LE respectively).
+  - Extracted `_hmac_hex`; peppered MD4 now uses the pure HMAC-MD4 fallback.
+    NTLM HMAC remains unsupported (no hash function of its own), unchanged.
+  - Removed the now-impossible "MD4/NTLM unavailable" notes in `run_hash`;
+    `_supported_algorithms` always includes `md4`.
+- `tests/test_hash.py`: replaced platform-conditional MD4/NTLM tests with
+  deterministic RFC 1320 vectors, NTLM("password") = 8846f7..., MD4("password")
+  = 8a9d093f..., HMAC-MD4 vectors (independently verified with PHP's
+  `hash_hmac`), a `MD4_AVAILABLE is True` assertion, and a real MD4
+  `run_check` match test.
+- `README.md`: hash bullet now states MD4/NTLM work via the built-in RFC 1320
+  implementation; pepper wording lists the concrete HMAC algorithms.
 
 ## What was actually verified
-- `python -m pytest tests/test_completion_hostile_sweep.py -q` -> 4 passed (was 3).
-- `python -m coverage run --branch --source=ethscan -m pytest tests/test_completion.py tests/test_completion_branch_gaps.py tests/test_completion_hostile_sweep.py -q` -> 71 passed.
-- `python -m coverage report --include=*/completion.py` -> 100% (115 stmts, 0 miss, 36 branch, 0 partial) — was 93%.
-- `python -m pytest tests/test_completion.py tests/test_completion_branch_gaps.py tests/test_completion_hostile_sweep.py tests/test_all_formatters_hostile_contract.py -q` -> 25833 passed.
-- `python -m mypy ethscan/ tests/` -> Success: no issues in 261 source files.
+- `python -m ethscan hash --password password --algorithm ntlm` -> hash
+  `8846f7eaee8fb117ad06bdd830b7586c`, exit 0.
+- `python -m ethscan hash --password password --algorithm md4` -> hash
+  `8a9d093f14f8701df17732b2bb182c74` (JSON and CSV), exit 0.
+- `python -m ethscan hash --password password --algorithm md4 --pepper secretpepper`
+  -> `28f58ad8e71156ab54e0513bd039bbfd` (matches independent PHP HMAC-MD4).
+- `python -m coverage run --branch --source=ethscan -m pytest tests/test_hash.py -q`
+  then `coverage report --include=*/hash.py` -> 100% (327 stmts, 130 branch, 0 miss, 0 partial).
+- `python -m pytest tests/test_hash.py tests/test_cli.py -q` -> 1256 passed.
+- `python -m pytest -q` -> 39783 passed, 149 skipped, 0 failed.
+- `python -m mypy ethscan/ tests/` -> Success, 261 files.
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
-- `python check_readme.py` -> 54 commands, 0 drift both directions.
-- `git diff --check` clean; working tree has exactly the 1 intended file modified, nothing else.
+- `python check_readme.py` -> 54 commands, 0 drift; `git diff --check` clean.
+- Working tree contains exactly README.md, ethscan/hash.py, tests/test_hash.py.
 
 ## What remains unresolved
-- `ethscan/cli.py` is at 99% (2 statements: 4318, 4302), both inside the `completion` command and both UNREACHABLE via the CLI: line 4318 is the install-mode `else` "human-readable message" branch, but `--format` defaults to `"json"` so `chosen_format` is always a valid format and bare `--install` emits JSON (verified empirically); line 4302 is the non-install `shell is None` guard, but the positional `shell` defaults to `"bash"` so `effective_shell` is never `None`. These are defensive branches from the completion feature. Intentionally left as documented known limitation.
-- `oracle`/`postgresql` empty-target handling remains intentionally out of scope (exit 0, in-band error) per their documented contract.
+- PBKDF2 + MD4 (`--algorithm md4 --salt ... --iterations ...`) still requires a
+  native `hashlib` MD4 name; on this platform it reports an in-band per-password
+  error ("does not support PBKDF2 (no hashlib name)"). PBKDF2-MD4 was not
+  claimed by the README and was intentionally left unchanged.
+- `ethscan/cli.py` line 4318 remains the known unreachable completion guard
+  (unrelated to this change).
 
 ## Approaches already tried / ruled out
-- Rejected adding `# pragma: no cover` to `cli.py` 4318/4302: would game the coverage metric and hide a real (if benign) gap.
-- Rejected deleting the defensive branches at 4318/4302: they are validation guards; removing them would weaken safety.
-- Rejected changing the `--format` default/`--output-format` precedence to make 4318 reachable: speculative, user-visible behavior change with no reproduced defect.
+- Wrapping `hashlib.new("md4")` errors with a friendlier message only: rejected,
+  it would keep the documented NTLM/MD4 feature unusable.
+- Relying on a third-party MD4 package: rejected, the project is stdlib-only.
+- Adding `# pragma: no cover` to the platform-dependent branches: rejected,
+  the pure implementation is exercised instead.
 
 ## Next task
-- None pending from current evidence. Repository green (39780+ passed; mypy/ruff/README clean; completion.py 100%; only the documented cli.py:4318 unreachable defensive guard uncovered). If future work is needed: reproduce a concrete gap first (failing check/test or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then broader gates (pytest/mypy/ruff/check_readme/coverage), and preserve safety/validation. `oracle`/`postgresql` empty-target handling remains intentionally out of scope (exit 0, in-band error).
+- Add CLI-boundary regression tests for the new MD4/NTLM behavior in
+  `tests/test_cli.py`: assert `hash --algorithm md4` and `--algorithm ntlm`
+  emit the real digests in JSON and CSV (evidence: existing CLI tests cover only
+  the NTLM pepper/PBKDF2 error paths, not successful MD4/NTLM output).
+  Then rerun focused tests plus the full gates (pytest/mypy/ruff/check_readme).
 
 ## Environment/notes
-- Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3. Working tree has uncommitted changes (only `tests/test_completion_hostile_sweep.py`). Do not commit unless explicitly asked.
+- Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3.
+- Native MD4 is absent here (`OpenSSL 3.5.5`), so the pure fallback is the
+  active code path. Tests cross-check against native MD4 when present.
+- Do not commit manually: the workflow controller stages/commits/pushes.

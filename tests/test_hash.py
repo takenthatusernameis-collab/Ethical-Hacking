@@ -1,5 +1,6 @@
 """Tests for the ethscan password hash module."""
 
+import hashlib
 import json
 
 from typing import Any, cast
@@ -179,38 +180,39 @@ def test_compute_hash_dispatch_sha256() -> None:
 
 
 def test_compute_ntlm_uses_md4_of_utf16le() -> None:
-    if not MD4_AVAILABLE:
-        try:
-            _compute_ntlm("password")
-            raise AssertionError("Expected ValueError")
-        except ValueError:
-            return
-    import hashlib
-
-    expected = hashlib.new("md4", "password".encode("utf-16-le")).hexdigest()
-    assert _compute_ntlm("password") == expected
+    # NTLM("password") is the well-known MD4 of the UTF-16LE encoding.
+    assert _compute_ntlm("password") == "8846f7eaee8fb117ad06bdd830b7586c"
+    try:
+        native = hashlib.new("md4", "password".encode("utf-16-le")).hexdigest()
+    except (ValueError, TypeError):
+        return
+    assert _compute_ntlm("password") == native
 
 
-def test_compute_md4_unavailable_when_no_openssl() -> None:
-    if MD4_AVAILABLE:
-        assert _compute_md4("password") is not None
-    else:
-        try:
-            _compute_md4("password")
-            raise AssertionError("Expected ValueError")
-        except ValueError:
-            pass
+def test_compute_md4_known_vectors() -> None:
+    # RFC 1320 test suite.
+    vectors = {
+        "": "31d6cfe0d16ae931b73c59d7e0c089c0",
+        "a": "bde52cb31de33e46245e05fbdbd6fb24",
+        "abc": "a448017aaf21d8525fc10ae87aa6729d",
+        "message digest": "d9130a8164549fe818874806e1c7014b",
+        "abcdefghijklmnopqrstuvwxyz": "d79e1c308aa5bbcdeea8ed63df412da9",
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789": (
+            "043f8582f241db351ce627e153e7f0e4"
+        ),
+        "1234567890" * 8: "e33b4ddc9c38f2199c3e7b164fcc0536",
+    }
+    for message, digest in vectors.items():
+        assert _compute_md4(message) == digest
 
 
-def test_compute_hash_ntlm_unavailable_when_md4_missing() -> None:
-    if MD4_AVAILABLE:
-        assert _compute_hash("password", "ntlm") is not None
-    else:
-        try:
-            _compute_hash("password", "ntlm")
-            raise AssertionError("Expected ValueError")
-        except ValueError:
-            pass
+def test_md4_available_everywhere() -> None:
+    assert MD4_AVAILABLE is True
+    assert "md4" in _supported_algorithms()
+
+
+def test_compute_hash_ntlm_known_value() -> None:
+    assert _compute_hash("password", "ntlm") == _compute_ntlm("password")
 
 
 # ---------------------------------------------------------------------------
@@ -257,23 +259,18 @@ def test_run_hash_unsupported_algorithm_raises() -> None:
         pass
 
 
-def test_run_hash_ntlm_unavailable_note() -> None:
+def test_run_hash_ntlm_known_value() -> None:
     result = run_hash(["password"], "ntlm")
-    if not MD4_AVAILABLE:
-        assert result["results"][0]["hash"] is None
-        assert result["results"][0]["error"] is not None
-        assert any("MD4" in n for n in result["notes"])
-    else:
-        assert result["results"][0]["hash"] is not None
+    assert result["results"][0]["hash"] == "8846f7eaee8fb117ad06bdd830b7586c"
+    assert result["results"][0]["error"] is None
+    assert result["notes"] == []
 
 
-def test_run_hash_md4_unavailable_note() -> None:
+def test_run_hash_md4_known_value() -> None:
     result = run_hash(["password"], "md4")
-    if not MD4_AVAILABLE:
-        assert result["results"][0]["hash"] is None
-        assert any("MD4" in n for n in result["notes"])
-    else:
-        assert result["results"][0]["hash"] is not None
+    assert result["results"][0]["hash"] == "8a9d093f14f8701df17732b2bb182c74"
+    assert result["results"][0]["error"] is None
+    assert result["notes"] == []
 
 
 def test_run_hash_empty_passwords() -> None:
@@ -345,12 +342,10 @@ def test_format_hash_report_markdown_pipe_escape() -> None:
     assert "pass\\|word" in output
 
 
-def test_format_hash_report_markdown_includes_notes() -> None:
+def test_format_hash_report_markdown_includes_ntlm_notes() -> None:
     data = run_hash(["password"], "ntlm")
     output = format_hash_report_markdown(data)
-    if not MD4_AVAILABLE:
-        assert "Notes" in output
-        assert "MD4" in output
+    assert "8846f7eaee8fb117ad06bdd830b7586c" in output
 
 
 def test_format_hash_report_markdown_multiple_algorithms() -> None:
@@ -485,18 +480,16 @@ def test_run_check_unsupported_algorithm_error() -> None:
     assert result["error"] is not None
 
 
-def test_run_check_md4_explicit_when_unavailable() -> None:
-    # 32-char digest with explicit md4 algorithm
+def test_run_check_md4_explicit_digest() -> None:
+    # 32-char digest with explicit md4 algorithm (MD4("password")).
     result = run_check(
         "password",
-        "5f4dcc3b5aa765d61d8327deb882cf99",
+        "8a9d093f14f8701df17732b2bb182c74",
         algorithm="md4",
     )
-    if not MD4_AVAILABLE:
-        assert result["match"] is None
-        assert result["error"] is not None
-    else:
-        assert result["algorithm"] == "md4"
+    assert result["algorithm"] == "md4"
+    assert result["match"] is True
+    assert result["error"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -594,6 +587,23 @@ def test_compute_peppered_hash_unsupported_algorithm() -> None:
         raise AssertionError("Expected ValueError")
     except ValueError:
         pass
+
+
+def test_compute_peppered_hash_md4_known_vectors() -> None:
+    # HMAC-MD4 (RFC 2104 construction) checked against an independent
+    # implementation; works even when OpenSSL does not expose MD4.
+    assert (
+        _compute_peppered_hash("Hi There", "md4", "\x0b" * 16)
+        == "90a79458f58f437e21f169cdba283da6"
+    )
+    assert (
+        _compute_peppered_hash("Test With Truncation", "md4", "\xaa" * 80)
+        == "0d4e5ccdf8842346e08b673beec9d498"
+    )
+    assert (
+        _compute_password_hash("password", "md4", salt="saltvalue", pepper="secretpepper")
+        == "5ac4dd6e10c55875bbed60bfe5b7a059"
+    )
 
 
 def test_compute_password_hash_no_salt_no_pepper() -> None:

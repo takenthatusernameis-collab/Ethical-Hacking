@@ -1,8 +1,10 @@
 """Password hash generation module for ethscan.
 
 Generates cryptographic hashes for passwords using the stdlib ``hashlib``
-module. Supports MD5, SHA-1, SHA-256, SHA-512, NTLM, and MD4 (when available
-via OpenSSL). Fully offline and stdlib-only.
+module. Supports MD5, SHA-1, SHA-256, SHA-512, NTLM, and MD4. MD4 is not
+exposed by every OpenSSL build, so a small, self-contained RFC 1320
+implementation is used for MD4 (and therefore NTLM) when hashlib cannot
+provide it. Fully offline and stdlib-only.
 """
 from __future__ import annotations
 
@@ -10,6 +12,7 @@ import csv
 import hashlib
 import hmac
 import io
+import struct
 
 from collections.abc import Mapping
 from typing import TypedDict
@@ -32,14 +35,92 @@ _ALIASES = {
     "sha-512": "sha512",
 }
 
-# MD4 is only available when OpenSSL exposes it (some builds disable it).
-MD4_AVAILABLE = False
+# MD4 is only available natively when OpenSSL exposes it (some builds
+# disable it). When it is, register it for HMAC/PBKDF2; hashing itself always
+# works because ``_md4_digest`` is a self-contained RFC 1320 implementation.
 try:
     hashlib.new("md4")
-    MD4_AVAILABLE = True  # pragma: no cover - platform dependent
     _HASHLIB_ALGORITHMS["md4"] = "md4"  # pragma: no cover - platform dependent
 except (ValueError, TypeError):
-    MD4_AVAILABLE = False
+    pass
+
+MD4_AVAILABLE = True
+
+_MD4_MASK = 0xFFFFFFFF
+
+
+def _rol32(value: int, shift: int) -> int:
+    """Rotate a 32-bit integer left by ``shift`` bits."""
+    return ((value << shift) | (value >> (32 - shift))) & _MD4_MASK
+
+
+def _md4_digest(data: bytes) -> bytes:
+    """Return the raw RFC 1320 MD4 digest of ``data``.
+
+    Pure Python so that MD4 (and NTLM, which is MD4 over UTF-16LE) works on
+    OpenSSL builds that do not expose MD4 through ``hashlib``.
+    """
+    message = bytearray(data)
+    bit_length = (len(data) * 8) & 0xFFFFFFFFFFFFFFFF
+    message.append(0x80)
+    while len(message) % 64 != 56:
+        message.append(0)
+    message += struct.pack("<Q", bit_length)
+
+    a0, b0, c0, d0 = 0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476
+    for offset in range(0, len(message), 64):
+        words = struct.unpack("<16I", message[offset : offset + 64])
+        a, b, c, d = a0, b0, c0, d0
+        # Round 1: F(b, c, d) = (b & c) | (~b & d)
+        for i in range(0, 16, 4):
+            a = _rol32((a + ((b & c) | (~b & d)) + words[i]) & _MD4_MASK, 3)
+            d = _rol32((d + ((a & b) | (~a & c)) + words[i + 1]) & _MD4_MASK, 7)
+            c = _rol32((c + ((d & a) | (~d & b)) + words[i + 2]) & _MD4_MASK, 11)
+            b = _rol32((b + ((c & d) | (~c & a)) + words[i + 3]) & _MD4_MASK, 19)
+        # Round 2: G(b, c, d) = (b & c) | (b & d) | (c & d)
+        for i in range(4):
+            a = _rol32(
+                (a + ((b & c) | (b & d) | (c & d)) + words[i] + 0x5A827999)
+                & _MD4_MASK,
+                3,
+            )
+            d = _rol32(
+                (d + ((a & b) | (a & c) | (b & c)) + words[i + 4] + 0x5A827999)
+                & _MD4_MASK,
+                5,
+            )
+            c = _rol32(
+                (c + ((d & a) | (d & b) | (a & b)) + words[i + 8] + 0x5A827999)
+                & _MD4_MASK,
+                9,
+            )
+            b = _rol32(
+                (b + ((c & d) | (c & a) | (d & a)) + words[i + 12] + 0x5A827999)
+                & _MD4_MASK,
+                13,
+            )
+        # Round 3: H(b, c, d) = b ^ c ^ d
+        for i in (0, 2, 1, 3):
+            a = _rol32((a + (b ^ c ^ d) + words[i] + 0x6ED9EBA1) & _MD4_MASK, 3)
+            d = _rol32((d + (a ^ b ^ c) + words[i + 8] + 0x6ED9EBA1) & _MD4_MASK, 9)
+            c = _rol32((c + (d ^ a ^ b) + words[i + 4] + 0x6ED9EBA1) & _MD4_MASK, 11)
+            b = _rol32((b + (c ^ d ^ a) + words[i + 12] + 0x6ED9EBA1) & _MD4_MASK, 15)
+        a0 = (a0 + a) & _MD4_MASK
+        b0 = (b0 + b) & _MD4_MASK
+        c0 = (c0 + c) & _MD4_MASK
+        d0 = (d0 + d) & _MD4_MASK
+
+    return struct.pack("<4I", a0, b0, c0, d0)
+
+
+def _md4_hmac_hex(key: bytes, message: bytes) -> str:
+    """Return hex HMAC-MD4 of ``message`` keyed by ``key`` (RFC 2104)."""
+    block_size = 64
+    if len(key) > block_size:
+        key = _md4_digest(key)
+    padded = key.ljust(block_size, b"\0")
+    inner = _md4_digest(bytes(byte ^ 0x36 for byte in padded) + message)
+    return _md4_digest(bytes(byte ^ 0x5C for byte in padded) + inner).hex()
 
 
 def _normalize_algorithm(algorithm: str) -> str:
@@ -61,8 +142,8 @@ def _normalize_algorithm(algorithm: str) -> str:
         return key
     if key == "ntlm":
         return "ntlm"
-    if key == "md4" and MD4_AVAILABLE:
-        return "md4"  # pragma: no cover - platform dependent
+    if key == "md4":
+        return "md4"
     raise ValueError(f"Unsupported algorithm: {algorithm}")  # pragma: no cover - defensive
 
 
@@ -83,9 +164,7 @@ def _compute_sha512(password: str) -> str:
 
 
 def _compute_md4(password: str) -> str:
-    if not MD4_AVAILABLE:
-        raise ValueError("MD4 is not available on this platform (OpenSSL build).")  # pragma: no cover - platform dependent
-    return hashlib.new("md4", password.encode("utf-8")).hexdigest()  # pragma: no cover - platform dependent
+    return _md4_digest(password.encode("utf-8")).hex()
 
 
 def _compute_ntlm(password: str) -> str:
@@ -93,10 +172,7 @@ def _compute_ntlm(password: str) -> str:
 
     NTLM is the MD4 of the UTF-16LE-encoded password.
     """
-    if not MD4_AVAILABLE:
-        raise ValueError("MD4 is not available on this platform (OpenSSL build).")  # pragma: no cover - platform dependent
-    utf16 = password.encode("utf-16-le")  # pragma: no cover - platform dependent
-    return hashlib.new("md4", utf16).hexdigest()  # pragma: no cover - platform dependent
+    return _md4_digest(password.encode("utf-16-le")).hex()
 
 
 def _compute_hash(password: str, algorithm: str) -> str:
@@ -116,12 +192,32 @@ def _compute_hash(password: str, algorithm: str) -> str:
     raise ValueError(f"Unsupported algorithm: {algorithm}")
 
 
+def _hmac_hex(algorithm: str, key: str, message: str) -> str:
+    """Return the hex HMAC of ``message`` keyed by ``key``.
+
+    MD4 is HMACed with the pure-Python implementation, so peppered MD4 works
+    even when the OpenSSL build does not expose MD4 through ``hashlib``.
+    NTLM has no hash function of its own and is therefore unsupported.
+
+    Raises:
+        ValueError: If the algorithm cannot be used for HMAC.
+    """
+    name = _hashlib_name(algorithm)
+    if name is None:
+        if algorithm == "md4":
+            return _md4_hmac_hex(key.encode("utf-8"), message.encode("utf-8"))
+        raise ValueError(
+            f"Algorithm '{algorithm}' does not support HMAC (peppered hashing)."
+        )
+    return hmac.new(key.encode("utf-8"), message.encode("utf-8"), name).hexdigest()
+
+
 def _compute_peppered_hash(password: str, algorithm: str, pepper: str) -> str:
     """Compute an HMAC keyed hash of the password using the pepper as the key.
 
-    Only algorithms backed by a direct hashlib name (md5, sha1, sha256,
-    sha512, md4) can be used for HMAC. NTLM has no hashlib name and is
-    therefore unsupported for peppered hashing.
+    Only algorithms backed by a direct hash function (md5, sha1, sha256,
+    sha512, md4) can be used for HMAC. NTLM has no hash function of its own
+    and is therefore unsupported for peppered hashing.
 
     Args:
         password: Plaintext password (the HMAC message).
@@ -132,18 +228,9 @@ def _compute_peppered_hash(password: str, algorithm: str, pepper: str) -> str:
         Hex digest of ``HMAC(pepper, password, algorithm)``.
 
     Raises:
-        ValueError: If the algorithm cannot be expressed as a hashlib name.
+        ValueError: If the algorithm cannot be expressed as a hash function.
     """
-    name = _hashlib_name(algorithm)
-    if name is None:
-        raise ValueError(
-            f"Algorithm '{algorithm}' does not support HMAC (peppered hashing)."
-        )
-    return hmac.new(
-        pepper.encode("utf-8"),
-        password.encode("utf-8"),
-        name,
-    ).hexdigest()
+    return _hmac_hex(algorithm, pepper, password)
 
 
 def _compute_pbkdf2_hash(
@@ -228,28 +315,10 @@ def _compute_password_hash(
             password, algorithm, salt, iterations
         )
         if pepper:
-            name = _hashlib_name(algorithm)
-            if name is None:
-                raise ValueError(
-                    f"Algorithm '{algorithm}' does not support HMAC (peppered hashing)."
-                )  # pragma: no cover - defensive
-            return hmac.new(
-                pepper.encode("utf-8"),
-                pbkdf2_digest.encode("utf-8"),
-                name,
-            ).hexdigest()
+            return _hmac_hex(algorithm, pepper, pbkdf2_digest)
         return pbkdf2_digest
     if salt and pepper:
-        name = _hashlib_name(algorithm)
-        if name is None:
-            raise ValueError(
-                f"Algorithm '{algorithm}' does not support HMAC (peppered hashing)."
-            )
-        return hmac.new(
-            pepper.encode("utf-8"),
-            (salt + password).encode("utf-8"),
-            name,
-        ).hexdigest()
+        return _hmac_hex(algorithm, pepper, salt + password)
     if salt:
         return _compute_hash(salt + password, algorithm)
     if pepper:
@@ -264,7 +333,7 @@ def _hashlib_name(algorithm: str) -> str | None:
 
 def _supported_algorithms() -> list[str]:
     """Return the list of supported algorithm keys (sorted)."""
-    algos = set(_HASHLIB_ALGORITHMS.keys()) | {"ntlm"}
+    algos = set(_HASHLIB_ALGORITHMS.keys()) | {"ntlm", "md4"}
     return sorted(algos)
 
 
@@ -456,8 +525,8 @@ def run_hash(
         Structured results with the algorithm, salt/pepper/iterations
         indicators, per-password hashes, and notes.
     """
-    # Allow md4/ntlm even when MD4 is unavailable so callers get graceful
-    # per-password errors instead of an exception from run_hash itself.
+    # MD4 and NTLM are normalized explicitly: MD4 is always available through
+    # the built-in RFC 1320 fallback and NTLM is MD4 over UTF-16LE.
     key = algorithm.strip().lower().replace("_", "-")
     if key in _ALIASES:
         normalized = _ALIASES[key]
@@ -511,10 +580,6 @@ def run_hash(
         notes.append(
             f"PBKDF2 iterations: {iterations} applied with the salt."
         )
-    if normalized == "md4" and not MD4_AVAILABLE:
-        notes.append("MD4 is unavailable on this OpenSSL build; use another algorithm.")
-    if normalized == "ntlm" and not MD4_AVAILABLE:
-        notes.append("NTLM requires MD4, which is unavailable on this OpenSSL build.")
 
     return {
         "algorithm": normalized,
