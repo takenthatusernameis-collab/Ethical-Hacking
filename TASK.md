@@ -738,3 +738,36 @@ Date: Sun Nov 08 2026 (session 7)
 
 ## Next task
 - None pending. Repository fully green: 32220 passed, 146 skipped, 0 failed; mypy/ruff clean; README in sync; 100% coverage. If future work is needed, pick one bounded, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract.
+
+# Session (Wed Nov 18 2026, session 7)
+## This session
+- No actionable assignment: the prior HANDOFF_NEXT/NEXT_TASK said "none pending; repo fully green" but were STALE — they referenced HEAD `614e50f` and omitted the shell-completion feature that commits `0ad8986` + `1d71553` added (168-line `ethscan/completion.py`, CLI wiring, ~190-line test file) without updating any handoff. Independently re-verified the true baseline from a clean tree at HEAD `1d71553`: `pytest -q` -> 32592 passed, 146 skipped, 0 failed; `mypy ethscan/ tests/` clean (259 files); `ruff` clean; `check_readme.py` 54/54, 0 drift.
+- Reproduced a real regression in a critical invariant rather than trusting the "fully green" claim: the completion feature left `ethscan/completion.py` at only 93% branch coverage (5 missed statements / 4 partial branches: lines 77, 237, 257->261, 265-267), breaking the repo's documented 100%-coverage standard. The same sessions that added it also skipped the handoff update (rule 8).
+
+## What changed
+- Added `tests/test_completion_branch_gaps.py` (5 tests), matching the established `test_*_branch_gaps.py` convention (dnssec/fuzz/ldap/memcached/mongodb). It covers the previously untested edge paths:
+  - `detect_shell()` returns `None` when `$SHELL` is set but names an unsupported shell (line 77); the CLI tests only covered an *unset* `$SHELL`.
+  - `install_completion(..., shell=<unsupported>)` raises `ValueError` (line 237) — only reachable via a direct call, since the CLI's `click.Choice` rejects the value first.
+  - `install_completion` appending to an RC file that already exists but lacks the source line: non-empty file with no trailing newline (branch 257->261 + lines 265-267) and an empty existing file (line 266 false path).
+- No production code changed. No behavior change.
+
+## What was actually verified
+- `python -m pytest tests/test_completion_branch_gaps.py -q` -> 5 passed.
+- `python -m pytest -q` -> 32597 passed, 146 skipped, 0 failed (was 32592; +5 new tests, baseline otherwise unchanged).
+- `python -m coverage run --branch --source=ethscan -m pytest -q` then `coverage report --include=*/completion.py` -> `ethscan/completion.py` 115 stmts, 0 miss, 36 branch, 0 partial, 100% (was 93%).
+- `python -m ruff check ethscan/ tests/` -> All checks passed.
+- `python -m mypy ethscan/ tests/` -> Success: no issues in 260 source files.
+- `python check_readme.py` -> 54 CLI commands, 0 drift both directions.
+- `git status` -> only `tests/test_completion_branch_gaps.py` added; no source changes. Working tree otherwise clean. Not committed (controller commits).
+
+## What remains unresolved
+- `ethscan/cli.py` is at 99% (2 statements: 4292, 4302), both inside the `completion` command and both UNREACHABLE via the CLI: line 4292 is the install-mode `else` "human-readable message" branch, but `--format` defaults to `"json"` so `chosen_format` is always a valid format and bare `--install` emits JSON (verified empirically); line 4302 is the non-install `shell is None` guard, but the positional `shell` defaults to `"bash"` so `effective_shell` is never `None`. These are defensive branches from the completion feature.
+- `oracle`/`postgresql` empty-target handling remains intentionally out of scope (exit 0, in-band error) per their documented contract.
+
+## Approaches already tried / ruled out
+- Rejected adding `# pragma: no cover` to `cli.py` 4292/4302: that would game the coverage metric and hide a real (if benign) gap rather than reflect it.
+- Rejected deleting the defensive branches at 4292/4302: they are validation guards; removing them to make coverage "pass" would weaken safety and is explicitly forbidden.
+- Rejected changing the `--format` default/`--output-format` precedence to make 4292 reachable: that is a speculative, user-visible behavior change with no reproduced defect behind it.
+
+## Next task
+- Repository is green (32597 passed; mypy/ruff/README clean; completion.py 100%). The only coverage gap is the 2 CLI-unreachable defensive lines in the `completion` command (`cli.py` 4292, 4302); leave them as a documented known limitation unless a task explicitly asks to refactor the completion command's format handling (in which case reproduce the intended behavior first). Otherwise, if new work is needed, reproduce a concrete gap first (focused failing check or evidence) before implementing — do not speculate or weaken safety/validation. `oracle`/`postgresql` empty-target handling remains out of scope.
