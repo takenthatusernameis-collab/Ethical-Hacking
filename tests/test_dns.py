@@ -32,7 +32,14 @@ def test_normalize_domain_bare() -> None:
 def test_normalize_domain_url() -> None:
     from ethscan.dns import _normalize_domain
     assert _normalize_domain("https://example.com/path") == "example.com"
-    assert _normalize_domain("http://sub.example.com:8080/foo") == "sub.example.com:8080"
+    assert _normalize_domain("http://sub.example.com:8080/foo") == "sub.example.com"
+
+
+def test_normalize_domain_url_with_port_is_resolvable() -> None:
+    """A URL port must not leak into the DNS name (a port is not part of one)."""
+    from ethscan.dns import _normalize_domain
+
+    assert _normalize_domain("http://127.0.0.1:8080/") == "127.0.0.1"
 
 
 def test_normalize_domain_ipv6_url() -> None:
@@ -40,6 +47,14 @@ def test_normalize_domain_ipv6_url() -> None:
     from ethscan.dns import _normalize_domain
     assert _normalize_domain("https://[::1]/") == "::1"
     assert _normalize_domain("https://[2001:db8::1]:8080/path") == "2001:db8::1"
+
+
+def test_run_dns_url_with_port_queries_bare_host() -> None:
+    """The port of a URL target must not be sent to the resolver."""
+    data = run_dns("http://127.0.0.1:8080/", ["A"])
+    assert data["domain"] == "127.0.0.1"
+    records = cast(dict[str, list[str]], data["records"])
+    assert records["A"] == ["127.0.0.1"]
 
 
 def test_format_dns_report_json() -> None:

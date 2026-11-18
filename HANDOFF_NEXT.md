@@ -1,74 +1,62 @@
 # Handoff
 Date: Wed Nov 18 2026
 
-## This session
-- No concrete assignment existed. Re-verified baseline: 39798 passed, 146
-  skipped; mypy/ruff clean; README 54/54 with 0 drift; coverage 100% except the
-  documented unreachable `ethscan/cli.py:4318` guard (so the suggested
-  low-coverage sweep had no target).
-- Selected differential testing of the offline set calculators. Found and fixed
-  a real defect in `ethscan/radix.py::_merge_networks`.
+## State at HEAD (after this session)
+- `pytest -q` -> 39813 passed, 146 skipped, 0 failed; mypy clean (261 files);
+  ruff clean; `check_readme.py` 54/54, 0 drift; `git diff --check` clean.
+- Coverage (full suite, branch): every module 100% except the documented
+  unreachable `ethscan/cli.py` defensive guard.
+- Working tree: seven `ethscan/*` modules + seven test files modified; not
+  committed (controller commits).
 
-## The defect (reproduced before the fix)
-`_merge_networks` compared each network only with the immediately preceding
-merged entry, so a supernet formed late in the pass was never re-merged with
-earlier entries:
+## Done this session
+1. Verified the assigned radix-tree invariant tests were already implemented
+   at HEAD `f51eb8c` (`test_radix_tree_leaf_networks_equal_merged`,
+   `test_radix_tree_total_addresses_matches_range`) — the prior handoff was
+   stale, not the work. True HEAD baseline: 39805 passed.
+2. Fixed a real defect: DNS-name normalizers returned `urlparse(...).netloc`,
+   keeping the port (and IPv6 brackets in dnssec/dnsbrute). A URL target such
+   as `http://127.0.0.1:8080/` became the name `127.0.0.1:8080`, so every
+   query failed silently; `dnssec` also computed parent zone `com:8080.`.
+   - Reproduced: `run_dns("http://127.0.0.1:8080/", ["A"])["records"]` was
+     `{'A': []}` vs `{'A': ['127.0.0.1']}` for the bare host.
+   - Fixed by delegating `_normalize_domain` to `ethscan.target.normalize_host`
+     in `dns.py`, `dnssec.py`, `dnsbrute.py`, `subdomains.py`, `recon.py`,
+     `stale.py`, `subtake.py` (cert/geo already did this).
+   - CLI re-check: `python -m ethscan dns --target http://127.0.0.1:8080/
+     --types A --format json` -> `domain "127.0.0.1"`, A `["127.0.0.1"]`.
+3. Updated the tests that had codified the buggy port behavior; added IPv6
+   bracket/port cases and an end-to-end `run_dns` port regression (+8 tests).
 
-```
-run_radix(["10.0.0.0/25", "10.0.0.128/26", "10.0.0.192/26"])["merged"]
-# before: ['10.0.0.0/25', '10.0.0.128/25']   (non-minimal)
-# after:  ['10.0.0.0/24']                    == ipaddress.collapse_addresses(...)
-```
+## Verified
+- Focused: 502 passed across the seven affected test files.
+- Full: 39813 passed, 146 skipped (HEAD 39805, +8).
+- mypy/ruff/README/diff-check clean; touched modules 100% branch coverage.
 
-This contradicted the function docstring ("minimal, non-overlapping set") and
-the documented `radix` merge behavior, and inflated `merged_network_count`.
-
-## What changed
-- `ethscan/radix.py`: existing left-to-right pass renamed to `_merge_once`;
-  new `_merge_networks` repeats the pass until the set stops changing. Merge
-  logic, version grouping, defensive branches and helpers are unchanged.
-  Removed the now-redundant empty-input guard from `_merge_once` (the wrapper
-  still returns `[]` for empty input).
-- `tests/test_radix.py` (+4 tests): IPv4 and IPv6 cascading-supernet units, a
-  run-level test (minimal merge + empty diff vs the covering /24), and a seeded
-  100-case differential check against `ipaddress.collapse_addresses`.
-
-## What was actually verified
-- CLI: `python -m ethscan radix --cidrs 10.0.0.0/25,10.0.0.128/26,10.0.0.192/26 --format json`
-  -> `merged ['10.0.0.0/24']`, count 1, total 256.
-- Ad-hoc fuzzing (not committed): 5,000 random IPv4 + 2,000 random IPv6 sets
-  matched `ipaddress.collapse_addresses` exactly; 3,000 random `run_radix
-  --diff` cases matched brute-force subtraction. 0 mismatches after the fix.
-- `pytest -q` -> 39802 passed, 146 skipped, 0 failed (baseline 39798, +4).
-- `mypy ethscan/ tests/` -> Success (261 files); `ruff` -> All checks passed;
-  `check_readme.py` -> 54 commands, 0 drift; `git diff --check` clean.
-- Coverage: `ethscan/radix.py` 100% (421 stmts, 170 branches) under
-  `coverage run --branch --source=ethscan -m pytest tests/test_radix.py`.
-
-## What remains unresolved
-- Nothing for this defect. Existing documented limitations are unchanged:
-  `cli.py:4318` unreachable defensive guard; `oracle`/`postgresql`
-  empty-target handling stays in-band by contract; PBKDF2+NTLM unsupported
-  by design.
+## Unresolved / known limitations
+- `cli.py:4318` unreachable defensive guard (unchanged).
+- `oracle`/`postgresql` in-band empty-target handling by contract.
+- PBKDF2+NTLM intentionally unsupported.
+- `hash._infer_algorithm` accepts non-hex strings of a known digest length
+  (`"z"*32` -> `"md5"`); see next task.
 
 ## Approaches already tried / ruled out
-- Wholesale replacement with `ipaddress.collapse_addresses`: rejected because
-  tests intentionally monkeypatch `_collapse_v4_networks` to exercise the
-  defensive failure branches; the fixed-point wrapper preserves them.
-- A single extra pass: rejected as not provably minimal. Repeat-until-stable
-  matched the stdlib oracle on 7,000 random cases and terminates because a
-  pass never increases the network count.
+- Slicing the port off in each local helper: rejected; shared
+  `normalize_host` already handles scheme/path/port/brackets and is tested.
+- Removing ports inside `ethscan.target.parse_url`: rejected; ftp/ldap/fuzz/
+  headers legitimately need the port from that parser.
+- xfail-ing the old port assertions: rejected; they encoded wrong behavior.
 
 ## Next task
-- Encode the remaining radix tree invariants (probed clean this session) as
-  durable seeded tests: for random inputs, every network in the leaf nodes of
-  `run_radix(...)["radix_tree"]` equals the `merged` set, and every node's
-  `total_addresses` equals `end_address - start_address + 1`. A one-off probe
-  of 1,000 random cases found 0 mismatches, so this is test hardening only —
-  do not change `_build_radix_node` unless a mismatch is reproduced.
+- Fix `ethscan/hash.py::_infer_algorithm` to return `None` for non-hex input
+  of a known length. Reproduction: `_infer_algorithm("z"*32) == "md5"`;
+  `run_check("x", "z"*32)` -> `{'algorithm': 'md5', 'match': False,
+  'error': None}` instead of the existing "Could not infer algorithm ..."
+  error. Add a hex validation before length matching, tests for non-hex
+  digests of each known length plus positive cases, and keep `hash.py` at
+  100% branch coverage. Do not change `run_check`'s explicit-algorithm
+  comparison contract without evidence.
 
 ## Environment/notes
 - Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3.
 - Do not commit manually: the workflow controller stages/commits/pushes.
-- Working tree at handoff: `ethscan/radix.py`, `tests/test_radix.py`,
-  `TASK.md`, `HANDOFF_NEXT.md`, `NEXT_TASK.md` modified/updated.

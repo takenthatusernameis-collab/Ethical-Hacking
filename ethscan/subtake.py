@@ -11,7 +11,7 @@ import io
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from ethscan.target import parse_url
+from ethscan.target import normalize_host
 
 try:
     try:
@@ -276,11 +276,11 @@ TAKEOVER_SIGNATURES = [
 
 def _normalize_domain(target: str) -> str:
     """Extract a bare domain from a target that may be a URL or host."""
-    normalized = target.strip()
-    if "://" not in normalized:
-        normalized = "https://" + normalized
-    parsed = parse_url(normalized)
-    return parsed.netloc.lower()
+    # A DNS name must not carry a scheme, path or port: ``example.com:8080``
+    # is not a name any resolver accepts, so a URL target would otherwise make
+    # every query fail. ``normalize_host`` also strips IPv6 brackets, keeping
+    # IPv6 literals bare so they are recognized as IP addresses.
+    return normalize_host(target)
 
 
 def resolve_cname(hostname: str, timeout: float = 2.0, resolver: str | None = None) -> str | None:

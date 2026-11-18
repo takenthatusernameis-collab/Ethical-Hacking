@@ -11,7 +11,7 @@ from typing import TypedDict
 
 from ethscan.dns import resolve_a_records, resolve_aaaa_records, resolve_with_dnspython
 from ethscan.subdomains import DEFAULT_SUBDOMAINS
-from ethscan.target import parse_url
+from ethscan.target import normalize_host
 
 try:
     try:
@@ -131,11 +131,11 @@ def _normalize_domain(target: str) -> str:
     Returns:
         Lowercased domain without scheme or path.
     """
-    normalized = target.strip()
-    if "://" not in normalized:
-        normalized = "https://" + normalized
-    parsed = parse_url(normalized)
-    return parsed.netloc.lower()
+    # A DNS name must not carry a scheme, path or port: ``example.com:8080``
+    # is not a name any resolver accepts, so a URL target would otherwise make
+    # every query fail. ``normalize_host`` also strips IPv6 brackets, keeping
+    # IPv6 literals bare so they are recognized as IP addresses.
+    return normalize_host(target)
 
 
 def build_axfr_query(zone: str, query_id: int = DEFAULT_QUERY_ID) -> bytes:

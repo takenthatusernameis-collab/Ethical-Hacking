@@ -38,6 +38,12 @@ class TestNormalizeDomain:
     def test_whitespace(self):
         assert _normalize_domain("  example.com  ") == "example.com"
 
+    def test_url_with_port_strips_port(self):
+        assert _normalize_domain("http://example.com:8080") == "example.com"
+
+    def test_ipv6_url_strips_brackets_and_port(self):
+        assert _normalize_domain("https://[2001:db8::1]:8080/path") == "2001:db8::1"
+
 
 class TestLoadDomainsFromFile:
     def test_basic(self, tmp_path):

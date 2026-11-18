@@ -105,7 +105,11 @@ def test_normalize_domain_strips_whitespace() -> None:
 
 
 def test_normalize_domain_with_port() -> None:
-    assert _normalize_domain("http://example.com:8080") == "example.com:8080"
+    assert _normalize_domain("http://example.com:8080") == "example.com"
+
+
+def test_normalize_domain_ipv6_url_strips_brackets_and_port() -> None:
+    assert _normalize_domain("https://[2001:db8::1]:8080/path") == "2001:db8::1"
 
 
 # ---------------------------------------------------------------------------

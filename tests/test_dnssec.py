@@ -61,7 +61,13 @@ def test_normalize_domain_bare() -> None:
 def test_normalize_domain_url() -> None:
     from ethscan.dnssec import _normalize_domain
     assert _normalize_domain("https://example.com/path") == "example.com"
-    assert _normalize_domain("http://sub.example.com:8080/foo") == "sub.example.com:8080"
+    assert _normalize_domain("http://sub.example.com:8080/foo") == "sub.example.com"
+
+
+def test_normalize_domain_ipv6_url_strips_brackets_and_port() -> None:
+    from ethscan.dnssec import _normalize_domain
+    assert _normalize_domain("https://[::1]/") == "::1"
+    assert _normalize_domain("https://[2001:db8::1]:8080/path") == "2001:db8::1"
 
 
 def test_normalize_domain_rejects_empty_target() -> None:

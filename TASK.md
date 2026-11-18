@@ -840,3 +840,39 @@ Date: Sun Nov 08 2026 (session 7)
 
 ## Environment/notes
 - Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3. Do not commit manually; the workflow controller stages and commits.
+
+# Session (Wed Nov 18 2026, session 10)
+## This session
+- The prior assignment (radix-tree invariant tests) was ALREADY implemented at HEAD `f51eb8c` but the handoff files were not updated: `tests/test_radix.py` already contains `test_radix_tree_leaf_networks_equal_merged` and `test_radix_tree_total_addresses_matches_range` (verified passing; true baseline at HEAD was 39805 passed / 146 skipped). Handoff corrected below.
+- Selected and fixed a real correctness defect found by probing URL-shaped DNS targets: the `_normalize_domain` helpers in the DNS family returned `urlparse(...).netloc`, which keeps the port. A target such as `http://127.0.0.1:8080/` was turned into the DNS name `127.0.0.1:8080`, so every query failed silently (empty records); `dnssec` also derived the bogus parent zone `com:8080.`. `dnssec`/`dnsbrute` additionally kept IPv6 brackets (`[::1]:8080`), so IPv6 literals were not recognized.
+- Reproduction before the fix:
+  `run_dns("http://127.0.0.1:8080/", ["A"])["records"] == {'A': []}` (domain `127.0.0.1:8080`) while `run_dns("127.0.0.1", ["A"]) == {'A': ['127.0.0.1']}`;
+  `dnssec._get_parent_zone("example.com:8080") == "com:8080."`;
+  `dnssec/dnsbrute._normalize_domain("https://[::1]:8080/") == "[::1]:8080"`.
+
+## What changed
+- `ethscan/dns.py`, `ethscan/dnssec.py`, `ethscan/dnsbrute.py`: `_normalize_domain` now delegates to the existing shared `ethscan.target.normalize_host` (which strips scheme, path, port, IPv6 brackets and lowercases) instead of using `netloc`. This matches the convention already used by `cert.py`/`geo.py`. The now-unused `parse_url`/`TargetSpecError` imports were removed. `dnsbrute` now raises `TargetSpecError` for an unusable target like `dns`/`dnssec` already did.
+- Same defect class in four more domain-based modules (they all duplicated the `netloc` helper): `ethscan/subdomains.py`, `ethscan/recon.py`, `ethscan/stale.py`, `ethscan/subtake.py` now also delegate to `normalize_host`.
+- Tests updated where they had codified the buggy behavior (`tests/test_dns.py`, `test_dnssec.py`, `test_dnsbrute.py`, `test_subdomains.py`, `test_recon.py`, `test_subtake.py`, `test_stale.py`): port expectations changed to the bare host; added IPv6 bracket/port cases and an end-to-end `run_dns` regression that asserts a URL port yields the same A record as the bare host. +8 tests net.
+
+## What was actually verified
+- After the fix: `_normalize_domain("http://example.com:8080/") == "example.com"` and `_normalize_domain("https://[2001:db8::1]:8080/path") == "2001:db8::1"` in all seven modules; `dnssec._get_parent_zone` now yields `com.`.
+- CLI: `python -m ethscan dns --target http://127.0.0.1:8080/ --types A --format json` -> `domain: "127.0.0.1"`, `records.A: ["127.0.0.1"]` (was `[]` before the fix).
+- `python -m pytest -q` -> 39813 passed, 146 skipped, 0 failed (true HEAD baseline 39805; +8 tests).
+- `python -m mypy ethscan/ tests/` -> Success (261 files); `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed; `python check_readme.py` -> 54 commands, 0 drift; `git diff --check` clean.
+- Full coverage (`coverage run --branch --source=ethscan -m pytest -q`): the seven touched modules are 100% (dns/dnssec/dnsbrute/subdomains/recon/stale/subtake); only the documented `ethscan/cli.py` defensive guard remains uncovered.
+
+## What remains unresolved
+- Nothing for this defect. Known limitations unchanged: `cli.py:4318` unreachable guard; `oracle`/`postgresql` in-band empty-target handling by contract; PBKDF2+NTLM intentionally unsupported.
+- `ethscan/hash.py::_infer_algorithm` still accepts a non-hex string whose length matches a known digest (e.g. `"z"*32` -> `"md5"`), so `run_check` reports a plain mismatch instead of the "could not infer" error. Evidence gathered, not fixed this session (bounded next task).
+
+## Approaches already tried / ruled out
+- Keeping per-module copies of the netloc logic and only slicing the port off: rejected in favor of delegating to the already-tested shared `normalize_host` (identical behavior for valid hosts; one implementation to maintain).
+- Changing `ethscan.target.parse_url` itself to drop ports: rejected — modules that need the port (ftp/ldap/fuzz/headers) share that parser; only the DNS-name consumers must drop it.
+- Rewriting the existing port-asserting tests as "known bug" xfails: rejected — the assertions encoded wrong behavior and were updated to the correct contract.
+
+## Next task
+- Make `ethscan/hash.py::_infer_algorithm` reject non-hex digests. Evidence: `_infer_algorithm("z"*32) == "md5"` (docstring says "Hex digest string"); `run_check("x", "z"*32)` returns `{'algorithm': 'md5', 'match': False, 'error': None}` instead of the existing "Could not infer algorithm from digest length ..." error. Reproduce first, then add a hex check (e.g. `int(candidate, 16)` in a try/except or `all(c in string.hexdigits ...)`) before length matching, and add tests for non-hex digests of every known length plus a positive case. Do not change `run_check`'s explicit-algorithm comparison contract unless evidence shows it is wrong. Re-run pytest/mypy/ruff/check_readme/coverage; keep `hash.py` at 100%.
+
+## Environment/notes
+- Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3. Do not commit manually; the workflow controller stages and commits.

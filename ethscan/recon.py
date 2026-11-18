@@ -14,7 +14,7 @@ from collections.abc import Mapping
 from ethscan.dns import run_dns
 from ethscan.geo import run_geo
 from ethscan.subdomains import run_subdomains
-from ethscan.target import parse_url
+from ethscan.target import normalize_host
 from ethscan.trace import run_trace
 from ethscan.whois import run_whois
 
@@ -23,11 +23,11 @@ DEFAULT_RECON_MODULES = ["subdomains", "dns", "whois", "geo", "trace"]
 
 def _normalize_domain(target: str) -> str:
     """Extract a bare domain from a target that may be a URL or host."""
-    normalized = target.strip()
-    if "://" not in normalized:
-        normalized = "https://" + normalized
-    parsed = parse_url(normalized)
-    return parsed.netloc.lower()
+    # A DNS name must not carry a scheme, path or port: ``example.com:8080``
+    # is not a name any resolver accepts, so a URL target would otherwise make
+    # every query fail. ``normalize_host`` also strips IPv6 brackets, keeping
+    # IPv6 literals bare so they are recognized as IP addresses.
+    return normalize_host(target)
 
 
 def run_recon(

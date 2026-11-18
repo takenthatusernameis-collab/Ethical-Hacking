@@ -6,7 +6,7 @@ import io
 import socket
 import struct
 
-from ethscan.target import parse_url, TargetSpecError
+from ethscan.target import normalize_host
 
 try:
     try:
@@ -70,14 +70,11 @@ def _normalize_domain(target: str) -> str:
     Returns:
         Lowercased domain without scheme or path.
     """
-    normalized = target.strip()
-    if "://" not in normalized:
-        normalized = "https://" + normalized
-    parsed = parse_url(normalized)
-    domain = parsed.netloc.lower()
-    if not domain:
-        raise TargetSpecError(f"Could not parse host from target {target!r}")
-    return domain
+    # A DNS name must not carry a scheme, path or port: ``example.com:8080``
+    # is not a name any resolver accepts, so a URL target would otherwise make
+    # every query fail. ``normalize_host`` also strips IPv6 brackets, keeping
+    # IPv6 literals bare so they are recognized as IP addresses.
+    return normalize_host(target)
 
 
 def _get_parent_zone(domain: str) -> str:

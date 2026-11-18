@@ -6,7 +6,7 @@ import io
 import socket
 from concurrent.futures import ThreadPoolExecutor
 
-from ethscan.target import TargetSpecError, parse_url
+from ethscan.target import normalize_host
 
 try:
     try:
@@ -34,20 +34,11 @@ def _normalize_domain(target: str) -> str:
     Returns:
         Lowercased domain without scheme or path.
     """
-    normalized = target.strip()
-    if "://" not in normalized:
-        normalized = "https://" + normalized
-    parsed = parse_url(normalized)
-    netloc = parsed.netloc.lower()
-    # parse_url preserves IPv6 brackets in netloc (e.g. "[::1]" or "[::1]:8080").
-    # Strip them so IPv6 literals are consistently represented bare and are
-    # correctly recognized as IP addresses by _is_ip_address(). Bare IPv6 inputs
-    # without brackets (e.g. "2001:db8::1") are passed through unchanged.
-    if netloc.startswith("[") and "]" in netloc:
-        netloc = netloc[1 : netloc.index("]")]
-    if not netloc:
-        raise TargetSpecError(f"Could not parse host from target {target!r}")
-    return netloc
+    # A DNS name must not carry a scheme, path or port: ``example.com:8080``
+    # is not a name any resolver accepts, so a URL target would otherwise make
+    # every query fail. ``normalize_host`` also strips IPv6 brackets, keeping
+    # IPv6 literals bare so they are recognized as IP addresses.
+    return normalize_host(target)
 
 
 def resolve_a_records(domain: str, timeout: float = DEFAULT_TIMEOUT) -> list[str]:
