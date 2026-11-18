@@ -467,6 +467,9 @@ def _send_recv(
     reason travels back to the caller as the error of the request. The socket
     is opened inside the guarded block, so a socket that cannot even be
     created is reported like any other transport failure.
+
+    Uses ``socket.getaddrinfo`` to resolve the endpoint so that both IPv4 and
+    IPv6 targets work. The first returned address family is used.
     """
     if connector is not None:
         try:
@@ -474,11 +477,25 @@ def _send_recv(
         except Exception as exc:  # noqa: BLE001 - connector is a test seam; doubles raise any type
             return None, f"connector error: {exc}"
 
+    try:
+        infos = socket.getaddrinfo(
+            host,
+            port,
+            type=socket.SOCK_DGRAM,
+            proto=socket.IPPROTO_UDP,
+        )
+    except OSError as exc:
+        return None, f"address resolution failed: {exc}"
+
+    if not infos:
+        return None, f"no address found for {host}:{port}"
+
+    family, socktype, proto, canonname, sockaddr = infos[0]
     sock = None
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock = socket.socket(family, socktype, proto)
         sock.settimeout(timeout)
-        sock.sendto(request, (host, port))
+        sock.sendto(request, sockaddr)
         data, _ = sock.recvfrom(65536)
     except socket.timeout:
         return None, "timeout"

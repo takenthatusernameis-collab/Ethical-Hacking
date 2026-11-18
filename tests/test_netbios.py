@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import socket
 import struct
 
 import pytest
@@ -514,6 +515,9 @@ def test_send_recv_socket_creation_failure_is_reported(monkeypatch) -> None:
     def boom(*args, **kwargs):
         raise RuntimeError("hostile transport")
 
+    monkeypatch.setattr("ethscan.netbios.socket.getaddrinfo", lambda host, port, type, proto: [
+        (socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP, "", ("127.0.0.1", 137))
+    ])
     monkeypatch.setattr("ethscan.netbios.socket.socket", boom)
 
     data, err = _send_recv("h", DEFAULT_PORT, b"req", 1.0)
@@ -528,6 +532,9 @@ def test_send_recv_socket_creation_failure_of_unnamed_type_is_reported(monkeypat
     def boom(*args, **kwargs):
         raise ValueError("hostile transport")
 
+    monkeypatch.setattr("ethscan.netbios.socket.getaddrinfo", lambda host, port, type, proto: [
+        (socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP, "", ("127.0.0.1", 137))
+    ])
     monkeypatch.setattr("ethscan.netbios.socket.socket", boom)
 
     data, err = _send_recv("h", DEFAULT_PORT, b"req", 1.0)
@@ -552,12 +559,108 @@ def test_send_recv_socket_failure_is_reported(monkeypatch) -> None:
         def close(self):
             pass
 
+    monkeypatch.setattr("ethscan.netbios.socket.getaddrinfo", lambda host, port, type, proto: [
+        (socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP, "", ("127.0.0.1", 137))
+    ])
     monkeypatch.setattr("ethscan.netbios.socket.socket", lambda *a, **kw: _BoomSocket())
 
     data, err = _send_recv("h", DEFAULT_PORT, b"req", 1.0)
     assert data is None
     assert err is not None
     assert "hostile transport" in err
+
+
+# ---------------------------------------------------------------------------
+# _send_recv - IPv6 family-aware resolution
+# ---------------------------------------------------------------------------
+
+
+def test_send_recv_ipv6_uses_af_inet6(monkeypatch) -> None:
+    """Non-connector path: ::1 resolves to AF_INET6 socket."""
+    captured = {}
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            captured["family"] = family
+            captured["socktype"] = socktype
+            captured["proto"] = proto
+
+        def settimeout(self, timeout):
+            pass
+
+        def sendto(self, data, sockaddr):
+            captured["sendto_sockaddr"] = sockaddr
+
+        def recvfrom(self, size):
+            return (_full_response(mac=b"\xaa\xbb\xcc\xdd\xee\xff"), ("::1", 137))
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("ethscan.netbios.socket.getaddrinfo", lambda host, port, type, proto: [
+        (socket.AF_INET6, socket.SOCK_DGRAM, socket.IPPROTO_UDP, "", ("::1", 137, 0, 0))
+    ])
+    monkeypatch.setattr("ethscan.netbios.socket.socket", FakeSock)
+
+    data, err = _send_recv("::1", 137, b"req", 1.0)
+    assert data is not None
+    assert err is None
+    assert captured["family"] == socket.AF_INET6
+    assert captured["sendto_sockaddr"][0] == "::1"
+
+
+def test_send_recv_ipv4_uses_af_inet(monkeypatch) -> None:
+    """Non-connector path: 127.0.0.1 resolves to AF_INET socket."""
+    captured = {}
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            captured["family"] = family
+            captured["socktype"] = socktype
+            captured["proto"] = proto
+
+        def settimeout(self, timeout):
+            pass
+
+        def sendto(self, data, sockaddr):
+            captured["sendto_sockaddr"] = sockaddr
+
+        def recvfrom(self, size):
+            return (_full_response(mac=b"\xaa\xbb\xcc\xdd\xee\xff"), ("127.0.0.1", 137))
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("ethscan.netbios.socket.getaddrinfo", lambda host, port, type, proto: [
+        (socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP, "", ("127.0.0.1", 137))
+    ])
+    monkeypatch.setattr("ethscan.netbios.socket.socket", FakeSock)
+
+    data, err = _send_recv("127.0.0.1", 137, b"req", 1.0)
+    assert data is not None
+    assert err is None
+    assert captured["family"] == socket.AF_INET
+    assert captured["sendto_sockaddr"][0] == "127.0.0.1"
+
+
+def test_send_recv_getaddrinfo_failure_is_reported(monkeypatch) -> None:
+    """Non-connector path: getaddrinfo failure is reported as error."""
+    monkeypatch.setattr("ethscan.netbios.socket.getaddrinfo", lambda *a, **kw: (_ for _ in ()).throw(OSError("name resolution failed")))
+
+    data, err = _send_recv("invalid-host", 137, b"req", 1.0)
+    assert data is None
+    assert err is not None
+    assert "address resolution failed" in err
+
+
+def test_send_recv_empty_getaddrinfo_is_reported(monkeypatch) -> None:
+    """Non-connector path: empty getaddrinfo result is reported as error."""
+    monkeypatch.setattr("ethscan.netbios.socket.getaddrinfo", lambda *a, **kw: [])
+
+    data, err = _send_recv("invalid-host", 137, b"req", 1.0)
+    assert data is None
+    assert err is not None
+    assert "no address found" in err
 
 
 # ---------------------------------------------------------------------------
@@ -1031,21 +1134,30 @@ def test_send_recv_real_and_errors():
         def sendto(self, req, addr): pass
         def recvfrom(self, n): return (b"data", ("h", 1))
         def close(self): pass
-    with patch("ethscan.netbios.socket.socket", return_value=FakeSock()):
-        data, err = _send_recv("h", 137, b"req", 1.0)
-        assert data == b"data" and err is None
+    with patch("ethscan.netbios.socket.getaddrinfo", return_value=[
+        (socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP, "", ("127.0.0.1", 137))
+    ]):
+        with patch("ethscan.netbios.socket.socket", return_value=FakeSock()):
+            data, err = _send_recv("h", 137, b"req", 1.0)
+            assert data == b"data" and err is None
     # timeout
     class TimeoutSock(FakeSock):
         def recvfrom(self, n): raise _s.timeout()
-    with patch("ethscan.netbios.socket.socket", return_value=TimeoutSock()):
-        data, err = _send_recv("h", 137, b"req", 1.0)
-        assert data is None and err == "timeout"
+    with patch("ethscan.netbios.socket.getaddrinfo", return_value=[
+        (socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP, "", ("127.0.0.1", 137))
+    ]):
+        with patch("ethscan.netbios.socket.socket", return_value=TimeoutSock()):
+            data, err = _send_recv("h", 137, b"req", 1.0)
+            assert data is None and err == "timeout"
     # oserror
     class ErrSock(FakeSock):
         def recvfrom(self, n): raise OSError("boom")
-    with patch("ethscan.netbios.socket.socket", return_value=ErrSock()):
-        data, err = _send_recv("h", 137, b"req", 1.0)
-        assert err == "boom"
+    with patch("ethscan.netbios.socket.getaddrinfo", return_value=[
+        (socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP, "", ("127.0.0.1", 137))
+    ]):
+        with patch("ethscan.netbios.socket.socket", return_value=ErrSock()):
+            data, err = _send_recv("h", 137, b"req", 1.0)
+            assert err == "boom"
 
 
 # ---------------------------------------------------------------------------

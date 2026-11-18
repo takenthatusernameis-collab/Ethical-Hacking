@@ -3,6 +3,7 @@
 import csv
 import io
 import json
+import socket
 import struct
 from unittest.mock import MagicMock, patch
 
@@ -347,6 +348,99 @@ def test_send_recv_real_socket_oserror() -> None:
     assert data is None
     assert err == "boom"
     fake_sock.close.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# _send_recv - IPv6 family-aware resolution
+# ---------------------------------------------------------------------------
+
+
+def test_send_recv_ipv6_uses_af_inet6(monkeypatch) -> None:
+    """Non-connector path: ::1 resolves to AF_INET6 socket."""
+    captured = {}
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            captured["family"] = family
+            captured["socktype"] = socktype
+            captured["proto"] = proto
+
+        def settimeout(self, timeout):
+            pass
+
+        def sendto(self, data, sockaddr):
+            captured["sendto_sockaddr"] = sockaddr
+
+        def recvfrom(self, size):
+            return (b"\x10" * 48, ("::1", 123))
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("ethscan.ntp.socket.getaddrinfo", lambda host, port, type, proto: [
+        (socket.AF_INET6, socket.SOCK_DGRAM, socket.IPPROTO_UDP, "", ("::1", 123, 0, 0))
+    ])
+    monkeypatch.setattr("ethscan.ntp.socket.socket", FakeSock)
+
+    data, err = _send_recv("::1", 123, b"\x00", 1.0)
+    assert data == b"\x10" * 48
+    assert err is None
+    assert captured["family"] == socket.AF_INET6
+    assert captured["sendto_sockaddr"][0] == "::1"
+
+
+def test_send_recv_ipv4_uses_af_inet(monkeypatch) -> None:
+    """Non-connector path: 127.0.0.1 resolves to AF_INET socket."""
+    captured = {}
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            captured["family"] = family
+            captured["socktype"] = socktype
+            captured["proto"] = proto
+
+        def settimeout(self, timeout):
+            pass
+
+        def sendto(self, data, sockaddr):
+            captured["sendto_sockaddr"] = sockaddr
+
+        def recvfrom(self, size):
+            return (b"\x10" * 48, ("127.0.0.1", 123))
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("ethscan.ntp.socket.getaddrinfo", lambda host, port, type, proto: [
+        (socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP, "", ("127.0.0.1", 123))
+    ])
+    monkeypatch.setattr("ethscan.ntp.socket.socket", FakeSock)
+
+    data, err = _send_recv("127.0.0.1", 123, b"\x00", 1.0)
+    assert data == b"\x10" * 48
+    assert err is None
+    assert captured["family"] == socket.AF_INET
+    assert captured["sendto_sockaddr"][0] == "127.0.0.1"
+
+
+def test_send_recv_getaddrinfo_failure_is_reported(monkeypatch) -> None:
+    """Non-connector path: getaddrinfo failure is reported as error."""
+    monkeypatch.setattr("ethscan.ntp.socket.getaddrinfo", lambda *a, **kw: (_ for _ in ()).throw(OSError("name resolution failed")))
+
+    data, err = _send_recv("invalid-host", 123, b"\x00", 1.0)
+    assert data is None
+    assert err is not None
+    assert "address resolution failed" in err
+
+
+def test_send_recv_empty_getaddrinfo_is_reported(monkeypatch) -> None:
+    """Non-connector path: empty getaddrinfo result is reported as error."""
+    monkeypatch.setattr("ethscan.ntp.socket.getaddrinfo", lambda *a, **kw: [])
+
+    data, err = _send_recv("invalid-host", 123, b"\x00", 1.0)
+    assert data is None
+    assert err is not None
+    assert "no address found" in err
 
 
 # ---------------------------------------------------------------------------
@@ -1125,3 +1219,43 @@ def test_normalize_hex_hostile_values() -> None:
     assert _normalize_hex(5) == 5
     assert _normalize_hex("bad") == 0
     assert _normalize_hex(None) == 0
+
+
+# ---------------------------------------------------------------------------
+# Formatter defensive branches (non-dict input)
+# ---------------------------------------------------------------------------
+
+
+def test_format_ntp_report_markdown_non_dict() -> None:
+    """Cover defensive branch: non-dict input is reset to {}."""
+    hostiles: tuple[object, ...] = (None, [], "not a dict", 123, ("tuple",), {"nested": {"bad": "data"}})
+    for hostile in hostiles:
+        output = format_ntp_report_markdown(hostile)  # type: ignore[arg-type]
+        assert isinstance(output, str)
+        assert "# ethscan NTP Report" in output
+
+
+def test_format_ntp_report_csv_non_dict() -> None:
+    """Cover defensive branch: non-dict input is reset to {}."""
+    hostiles: tuple[object, ...] = (None, [], "not a dict", 123, ("tuple",), {"nested": {"bad": "data"}})
+    for hostile in hostiles:
+        output = format_ntp_report_csv(hostile)  # type: ignore[arg-type]
+        assert isinstance(output, str)
+        assert "target,port,version,port_open,peer_count" in output
+
+
+def test_normalize_peers_non_list() -> None:
+    """Cover defensive branch: non-list/tuple peers normalizes to empty list."""
+    from ethscan.ntp import _normalize_peers
+
+    hostiles: tuple[object, ...] = (None, "not a list", 123, {"a": 1})
+    for hostile in hostiles:
+        result = _normalize_peers(hostile)
+        assert result == []
+
+
+def test_normalize_peers_list_with_non_dicts() -> None:
+    """Cover branch: list elements that are not dicts are dropped."""
+    from ethscan.ntp import _normalize_peers
+
+    assert _normalize_peers([{"a": 1}, "not a dict", 123, None, {"b": 2}]) == [{"a": 1}, {"b": 2}]
