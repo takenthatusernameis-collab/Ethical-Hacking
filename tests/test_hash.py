@@ -474,6 +474,16 @@ def test_run_check_unknown_length_error() -> None:
     assert "Could not infer algorithm" in result["error"]
 
 
+def test_run_check_non_hex_digest_known_length_error() -> None:
+    # A 32-char garbage digest must not be silently treated as md5.
+    result = run_check("password", "z" * 32)
+    assert result["match"] is None
+    assert result["algorithm"] is None
+    assert result["computed"] is None
+    assert result["error"] is not None
+    assert "Could not infer algorithm" in result["error"]
+
+
 def test_run_check_unsupported_algorithm_error() -> None:
     result = run_check("password", "5f4dcc3b5aa765d61d8327deb882cf99", algorithm="ripemd160")
     assert result["match"] is None
@@ -1352,6 +1362,35 @@ def test_compute_password_hash_salt_and_pepper_unsupported_algorithm_raises() ->
 
 def test_infer_algorithm_empty_digest() -> None:
     assert _infer_algorithm("") is None
+
+
+def test_infer_algorithm_whitespace_only_digest() -> None:
+    assert _infer_algorithm("   ") is None
+
+
+def test_infer_algorithm_rejects_non_hex_digests() -> None:
+    for length in (32, 40, 64, 128):
+        assert _infer_algorithm("z" * length) is None
+
+
+def test_infer_algorithm_rejects_digest_with_inner_whitespace() -> None:
+    assert _infer_algorithm("5f4dcc3b5aa765d61d8327e b882cf99") is None
+
+
+def test_infer_algorithm_rejects_underscored_digest() -> None:
+    # ``int(..., 16)`` accepts underscores; the hex check must not.
+    assert _infer_algorithm("1_" * 16) is None
+
+
+def test_infer_algorithm_accepts_uppercase_hex() -> None:
+    assert _infer_algorithm("A" * 32) == "md5"
+    assert _infer_algorithm("A" * 40) == "sha1"
+    assert _infer_algorithm("A" * 64) == "sha256"
+    assert _infer_algorithm("A" * 128) == "sha512"
+
+
+def test_infer_algorithm_accepts_surrounding_whitespace() -> None:
+    assert _infer_algorithm("  " + "a" * 32 + "\n") == "md5"
 
 
 def test_infer_algorithm_multiple_matches_without_md5(monkeypatch) -> None:

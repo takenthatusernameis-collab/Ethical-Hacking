@@ -12,6 +12,7 @@ import csv
 import hashlib
 import hmac
 import io
+import string
 import struct
 
 from collections.abc import Mapping
@@ -455,6 +456,12 @@ def _infer_algorithm(digest: str) -> str | None:
     if not digest:
         return None
     candidate = digest.strip().lower()
+    if not candidate:
+        return None
+    # Reject non-hex input before length matching so a mistyped or garbage
+    # digest of a known length is not silently treated as that algorithm.
+    if any(char not in string.hexdigits for char in candidate):
+        return None
     # NTLM and MD4 share the 32-char length with MD5; prefer MD5 as the
     # most common guess but allow callers to disambiguate via --algorithm.
     matches = [name for name, length in _DIGEST_LENGTHS.items() if len(candidate) == length]
