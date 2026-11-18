@@ -41,14 +41,26 @@ def _validate_port_spec(spec: str) -> dict[str, Any]:
             "error": "Empty port specification",
         }
 
-    parts = [p.strip() for p in spec.split(",") if p.strip()]
-    if not parts:
+    parts = [p.strip() for p in spec.split(",")]
+    if not any(parts):
         return {
             "spec": spec,
             "valid": False,
             "ports": [],
             "count": 0,
             "error": "No ports in specification",
+        }
+    # An empty token between separators is rejected by ``parse_port_range``
+    # (the parser used by ``scan`` and the other port consumers), so it must
+    # not be reported as valid here: validation has to accept exactly the
+    # specifications the scanners accept. The wording matches the scanner's.
+    if any(not part for part in parts):
+        return {
+            "spec": spec,
+            "valid": False,
+            "ports": [],
+            "count": 0,
+            "error": f"Empty port token in specification: {spec!r}",
         }
     parsed_ports: list[int] = []
     for part in parts:

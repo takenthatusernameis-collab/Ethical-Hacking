@@ -4,6 +4,7 @@ import ipaddress
 import json
 from typing import Any, cast
 
+from ethscan.scanner import PortSpecError, parse_port_range
 from ethscan.validate import (
     _format_network_info,
     _ports_to_ranges,
@@ -60,6 +61,50 @@ def test_validate_port_strips_whitespace() -> None:
     result = _validate_port_spec("  80 , 443  ")
     assert result["valid"] is True
     assert result["ports"] == [80, 443]
+
+
+def test_validate_port_rejects_empty_tokens() -> None:
+    """A stray separator must not be silently dropped: ``scan`` rejects it."""
+    for spec in (",80", "80,", "80,,443", "80, ,443", "80 ,", " , 80"):
+        result = _validate_port_spec(spec)
+        assert result["valid"] is False, spec
+        assert result["ports"] == [], spec
+        assert result["count"] == 0, spec
+        assert result["error"] is not None, spec
+
+
+def test_validate_port_spec_parity_with_scanner() -> None:
+    """``validate`` accepts exactly the specs ``parse_port_range`` accepts."""
+    specs = [
+        "80",
+        "80,443",
+        "22,80,443,8000-8002",
+        "0",
+        "65535",
+        "80,80",
+        "80 - 90",
+        "80,,443",
+        ",80",
+        "80,",
+        "80, ,443",
+        "90-80",
+        "70000",
+        "aa-80",
+        "80-aa",
+        "70000-70001",
+        "-1",
+    ]
+    for spec in specs:
+        result = _validate_port_spec(spec)
+        try:
+            scanner_ports = parse_port_range(spec)
+        except PortSpecError:
+            scanner_ports = None
+        if scanner_ports is None:
+            assert result["valid"] is False, spec
+        else:
+            assert result["valid"] is True, spec
+            assert result["ports"] == scanner_ports, spec
 
 
 def test_validate_port_empty() -> None:

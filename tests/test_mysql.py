@@ -42,10 +42,10 @@ def test_normalize_target_invalid():
 def test_normalize_target_edge_cases():
     # IPv6 with port in URL
     assert _normalize_target("mysql://[::1]:3307") == ("::1", 3307)
-    # IPv6 without brackets: the code splits on last colon if no bracket found
-    assert _normalize_target("::1:3306") == ("::1", 3306)
-    # Target with multiple colons (IPv6 style) - treated as host if no port part
-    assert _normalize_target("2001:db8::1") == ("2001:db8:", 1)
+    # An unbracketed IPv6 literal is a whole address: the numeric tail is
+    # part of the literal, not a port. A port requires brackets.
+    assert _normalize_target("::1:3306") == ("::1:3306", DEFAULT_PORT)
+    assert _normalize_target("2001:db8::1") == ("2001:db8::1", DEFAULT_PORT)
     # Port zero -> default port
     assert _normalize_target("localhost:0") == ("localhost", DEFAULT_PORT)
     # Port non-numeric -> port remains None -> default port, host includes the colon and non-numeric part

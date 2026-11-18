@@ -876,3 +876,42 @@ Date: Sun Nov 08 2026 (session 7)
 
 ## Environment/notes
 - Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3. Do not commit manually; the workflow controller stages and commits.
+
+# Session (Wed Nov 18 2026, session 11)
+## This session
+- The assigned next task (`hash._infer_algorithm` rejecting non-hex digests) was ALREADY implemented and committed at HEAD `c17edb3`; the handoff was stale. Verified: `_infer_algorithm("z"*32) is None` and `run_check("x", "z"*32)` reports `algorithm: None` with "Could not infer algorithm ...". True start-of-session baseline: 39820 passed / 146 skipped.
+- Selected two evidence-based defects after probing offline parsers:
+  1. `validate` disagreed with the scanners about empty port tokens.
+  2. Bare IPv6 targets were split as `host:port` in 14 protocol modules.
+
+## What changed
+- `ethscan/validate.py` (`_validate_port_spec`): empty comma/whitespace tokens are no longer dropped. `"80,,443"`, `",80"`, `"80,"`, `"80, ,443"`, `" , 80"` now return `valid: False` with `Empty port token in specification: ...`, matching `ethscan.scanner.parse_port_range`. Specs made only of separators still return "No ports in specification" (unchanged contract).
+- `ethscan/{ftp,ldap,memcached,mongodb,mssql,mysql,netbios,ntp,oracle,postgresql,redis,smb,smtp,snmp}.py`: the bare-target port split now requires exactly one colon (`host.count(":") == 1`). Unbracketed IPv6 literals are kept whole as the host; an IPv6 port must be bracketed.
+- `tests/test_bare_ipv6_target_parsing.py` (new, 43 tests): per-module bare-IPv6 preservation, `host:port`/bare-IPv4 parity, bracketed IPv6 parsing, and an `ntp.run_ntp` probe-level regression.
+- `tests/test_validate.py` (+2): empty-token rejection and a differential parity test against `parse_port_range`.
+- `tests/test_mysql.py`: corrected the assertion that codified `_normalize_target("2001:db8::1") == ("2001:db8:", 1)`.
+
+## What was actually verified
+- Before: `ethscan validate --ports "80,,443"` -> `valid: true`, `all_valid: true`; `scan --ports "80,,443"` -> `Error: Empty port token in specification: '80,,443'`. After: both reject it with the same wording.
+- Before: `ntp._normalize_target("::1") == (":", 1)`, `"2001:db8::1" -> ("2001:db8:", 1)`; `run_ntp("::1", connector=rec)` dialled `rec(":", 1, ...)`. After: `("::1", 123)` / `("2001:db8::1", 123)` and `rec("::1", 123, ...)`.
+- CLI after the fix: `python -m ethscan ntp --target ::1 --timeout 0.2 --format json` -> `host: "::1"`, `port: 123` (transport still AF_INET-only, see next task).
+- Focused: 1325 passed across the 14 module test files + the new file.
+- `python -m pytest -q` -> 39865 passed, 146 skipped, 0 failed (start baseline 39820; +45 tests).
+- `python -m mypy ethscan/ tests/` -> Success (262 files); `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed; `python check_readme.py` -> 54 commands, 0 drift; `git diff --check` clean.
+- Full-suite branch coverage (`coverage run --branch --source=ethscan -m pytest -q`): all 14 touched modules and `validate.py` at 100%.
+
+## What remains unresolved
+- `ntp._send_recv` and `netbios._send_recv` still open `socket.AF_INET` UDP sockets, so an IPv6 literal that now parses correctly fails with `[Errno -9] Address family for hostname not supported`. The same direct-`AF_INET` pattern exists in `ldap`, `memcached`, `redis`, `smb`, `snmp`, `dnssec`, `osdetect`.
+- Unchanged known limitations: `cli.py:4318` unreachable guard; `oracle`/`postgresql` in-band empty-target handling by contract; PBKDF2+NTLM intentionally unsupported.
+- `mac._extract_oui` docstring says "24-bit OUI" but returns 8 hex chars (`"001a2b3c"` in many tests): documentation/contract mismatch only.
+
+## Approaches already tried / ruled out
+- Parsing a bare IPv6+port by testing whether the prefix is a valid IPv6 address: rejected as ambiguous (`fe80::abcd:1` is itself a valid literal) and contrary to "IPv6 ports require brackets"; the whole literal is the host.
+- Only treating invalid `ipaddress.ip_address` inputs as hosts: rejected; the defect is valid literals ending in a numeric group.
+- Reusing `parse_port_range` inside `validate`: still rejected (the module needs per-spec errors reported in-band); parity is now enforced by a differential test.
+
+## Next task
+- Make the UDP transport family-aware so the now-correct IPv6 target is usable. Evidence: `python -m ethscan ntp --target ::1 --timeout 0.2 --format json` -> `error: "time request failed: [Errno -9] Address family for hostname not supported"` with `host: "::1"`; `ethscan/ntp.py:291` and `ethscan/netbios.py:479` build `socket.socket(socket.AF_INET, socket.SOCK_DGRAM)`. Resolve with `socket.getaddrinfo(host, port, type=socket.SOCK_DGRAM)` and `sendto(request, sockaddr)`, keep the error-as-field contract and the `connector` seam, add monkeypatched deterministic tests asserting `AF_INET6` for `::1` and `AF_INET` for IPv4, keep both modules at 100% branch coverage, and re-run pytest/mypy/ruff/check_readme/coverage. Do not change the target-parsing contract from this session.
+
+## Environment/notes
+- Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3. Do not commit manually; the workflow controller stages and commits.

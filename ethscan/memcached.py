@@ -55,7 +55,11 @@ def _normalize_target(target: str) -> tuple[str, int]:
                 if maybe_port.startswith(":") and maybe_port[1:].isdigit():
                     port = port or check_port(maybe_port[1:])
                 host = host[1:close]
-        elif host and ":" in host and "]" not in host:
+        # A bare host:port pair has exactly one colon. Two or more colons
+        # mean an unbracketed IPv6 literal such as ``::1``: the text after
+        # the last colon belongs to the address, not to a port, so the whole
+        # value is the host. An IPv6 literal with a port must be bracketed.
+        elif host and host.count(":") == 1 and "]" not in host:
             base, _, rest = host.rpartition(":")
             if rest.isdigit():
                 host = base
