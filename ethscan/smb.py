@@ -219,10 +219,24 @@ def _send_recv(
     if connector is not None:
         return connector(host, port, request, timeout)
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        infos = socket.getaddrinfo(
+            host,
+            port,
+            type=socket.SOCK_STREAM,
+            proto=socket.IPPROTO_TCP,
+        )
+    except OSError as exc:
+        return None, f"address resolution failed: {exc}"
+
+    if not infos:
+        return None, f"no address found for {host}:{port}"
+
+    family, socktype, proto, canonname, sockaddr = infos[0]
+    sock = socket.socket(family, socktype, proto)
     sock.settimeout(timeout)
     try:
-        sock.connect((host, port))
+        sock.connect(sockaddr)
         sock.sendall(request)
         data = sock.recv(65536)
     except socket.timeout:

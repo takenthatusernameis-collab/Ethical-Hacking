@@ -412,6 +412,120 @@ def test_send_recv_real_socket_close_error_swallowed() -> None:
 
 
 # ---------------------------------------------------------------------------
+# _send_recv: family-aware TCP transport (IPv6/IPv4 resolution)
+# ---------------------------------------------------------------------------
+
+
+def test_send_recv_ipv6_uses_af_inet6(monkeypatch) -> None:
+    """An IPv6 literal resolves to an AF_INET6 TCP socket."""
+    captured: dict[str, object] = {}
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            captured["family"] = family
+            captured["socktype"] = socktype
+            captured["proto"] = proto
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect(self, sockaddr):
+            captured["sockaddr"] = sockaddr
+
+        def sendall(self, data):
+            captured["sent"] = data
+
+        def recv(self, size):
+            return b"\xffSMB\x72\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x11\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.smb.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (
+                socket.AF_INET6,
+                socket.SOCK_STREAM,
+                socket.IPPROTO_TCP,
+                "",
+                ("::1", 445, 0, 0),
+            )
+        ],
+    )
+    monkeypatch.setattr("ethscan.smb.socket.socket", FakeSock)
+
+    data, err = _send_recv("::1", DEFAULT_PORT, b"req", 1.0)
+    assert err is None
+    assert captured["family"] == socket.AF_INET6
+    assert captured["sockaddr"] == ("::1", 445, 0, 0)
+
+
+def test_send_recv_ipv4_uses_af_inet(monkeypatch) -> None:
+    """An IPv4 literal resolves to an AF_INET TCP socket."""
+    captured: dict[str, object] = {}
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            captured["family"] = family
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect(self, sockaddr):
+            captured["sockaddr"] = sockaddr
+
+        def sendall(self, data):
+            pass
+
+        def recv(self, size):
+            return b"data"
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.smb.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (
+                socket.AF_INET,
+                socket.SOCK_STREAM,
+                socket.IPPROTO_TCP,
+                "",
+                ("127.0.0.1", 445),
+            )
+        ],
+    )
+    monkeypatch.setattr("ethscan.smb.socket.socket", FakeSock)
+
+    data, err = _send_recv("127.0.0.1", DEFAULT_PORT, b"req", 1.0)
+    assert err is None
+    assert captured["family"] == socket.AF_INET
+    assert captured["sockaddr"] == ("127.0.0.1", 445)
+
+
+def test_send_recv_getaddrinfo_failure_is_reported(monkeypatch) -> None:
+    """A resolution failure is surfaced before any socket is created."""
+    monkeypatch.setattr(
+        "ethscan.smb.socket.getaddrinfo",
+        lambda *a, **kw: (_ for _ in ()).throw(OSError("name resolution failed")),
+    )
+    data, err = _send_recv("invalid-host", DEFAULT_PORT, b"req", 1.0)
+    assert data is None
+    assert err is not None
+    assert "address resolution failed" in err
+
+
+def test_send_recv_empty_getaddrinfo_is_reported(monkeypatch) -> None:
+    """An empty resolution result is surfaced as an error."""
+    monkeypatch.setattr("ethscan.smb.socket.getaddrinfo", lambda *a, **kw: [])
+    data, err = _send_recv("invalid-host", DEFAULT_PORT, b"req", 1.0)
+    assert data is None
+    assert err is not None
+    assert "no address found" in err
+
+
+# ---------------------------------------------------------------------------
 # _build_banner
 # ---------------------------------------------------------------------------
 

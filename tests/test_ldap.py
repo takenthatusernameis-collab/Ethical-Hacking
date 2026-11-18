@@ -1072,8 +1072,15 @@ def test_send_recv_oserror() -> None:
     assert err is not None
 
 
-def test_send_recv_close_exception() -> None:
+def test_send_recv_close_exception(monkeypatch) -> None:
     import ethscan.ldap as ldap_mod
+
+    monkeypatch.setattr(
+        "ethscan.ldap.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("h", 1))
+        ],
+    )
 
     class BadSock:
         def settimeout(self, t):
@@ -1099,6 +1106,120 @@ def test_send_recv_close_exception() -> None:
         assert err is None
     finally:
         setattr(ldap_mod.socket, "socket", orig)  # noqa: B010
+
+
+# ---------------------------------------------------------------------------
+# _send_recv: family-aware TCP transport (IPv6/IPv4 resolution)
+# ---------------------------------------------------------------------------
+
+
+def test_send_recv_ipv6_uses_af_inet6(monkeypatch) -> None:
+    """An IPv6 literal resolves to an AF_INET6 TCP socket."""
+    captured: dict[str, object] = {}
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            captured["family"] = family
+            captured["socktype"] = socktype
+            captured["proto"] = proto
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect(self, sockaddr):
+            captured["sockaddr"] = sockaddr
+
+        def sendall(self, data):
+            captured["sent"] = data
+
+        def recv(self, size):
+            return b"\x30\x0c\x02\x01\x01\x61\x07\x0a\x01\x00\x04\x00\x04\x00"
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.ldap.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (
+                socket.AF_INET6,
+                socket.SOCK_STREAM,
+                socket.IPPROTO_TCP,
+                "",
+                ("::1", 389, 0, 0),
+            )
+        ],
+    )
+    monkeypatch.setattr("ethscan.ldap.socket.socket", FakeSock)
+
+    data, err = _send_recv("::1", 389, b"req", 1.0)
+    assert err is None
+    assert captured["family"] == socket.AF_INET6
+    assert captured["sockaddr"] == ("::1", 389, 0, 0)
+
+
+def test_send_recv_ipv4_uses_af_inet(monkeypatch) -> None:
+    """An IPv4 literal resolves to an AF_INET TCP socket."""
+    captured: dict[str, object] = {}
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            captured["family"] = family
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect(self, sockaddr):
+            captured["sockaddr"] = sockaddr
+
+        def sendall(self, data):
+            pass
+
+        def recv(self, size):
+            return b"data"
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.ldap.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (
+                socket.AF_INET,
+                socket.SOCK_STREAM,
+                socket.IPPROTO_TCP,
+                "",
+                ("127.0.0.1", 389),
+            )
+        ],
+    )
+    monkeypatch.setattr("ethscan.ldap.socket.socket", FakeSock)
+
+    data, err = _send_recv("127.0.0.1", 389, b"req", 1.0)
+    assert err is None
+    assert captured["family"] == socket.AF_INET
+    assert captured["sockaddr"] == ("127.0.0.1", 389)
+
+
+def test_send_recv_getaddrinfo_failure_is_reported(monkeypatch) -> None:
+    """A resolution failure is surfaced before any socket is created."""
+    monkeypatch.setattr(
+        "ethscan.ldap.socket.getaddrinfo",
+        lambda *a, **kw: (_ for _ in ()).throw(OSError("name resolution failed")),
+    )
+    data, err = _send_recv("invalid-host", 389, b"req", 1.0)
+    assert data is None
+    assert err is not None
+    assert "address resolution failed" in err
+
+
+def test_send_recv_empty_getaddrinfo_is_reported(monkeypatch) -> None:
+    """An empty resolution result is surfaced as an error."""
+    monkeypatch.setattr("ethscan.ldap.socket.getaddrinfo", lambda *a, **kw: [])
+    data, err = _send_recv("invalid-host", 389, b"req", 1.0)
+    assert data is None
+    assert err is not None
+    assert "no address found" in err
 
 
 def test_format_ldap_report_markdown_non_dict_input() -> None:
