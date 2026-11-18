@@ -769,6 +769,17 @@ def test_compute_password_hash_iterations_md4_requires_salt() -> None:
         pass
 
 
+def test_pbkdf2_hmac_md4_dklen_too_large() -> None:
+    from ethscan.hash import _pbkdf2_hmac_md4
+
+    dklen = (2**32 - 1) * 16 + 1
+    try:
+        _pbkdf2_hmac_md4(b"password", b"saltvalue", 1, dklen)
+        raise AssertionError("Expected ValueError")
+    except ValueError:
+        pass
+
+
 def test_run_hash_with_salt() -> None:
     result = run_hash(["password"], "md5", salt="saltvalue")
     assert result["salt"] is True
