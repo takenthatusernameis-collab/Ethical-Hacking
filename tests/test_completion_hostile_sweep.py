@@ -36,3 +36,43 @@ def test_completion_formatters_hostile_nested_shapes_never_raise() -> None:
         assert isinstance(md, str)
         assert isinstance(csv_text, str)
         assert "ethscan Shell Completion" in md
+
+
+# Fields read by the installation report formatters. ``message`` is the only
+# one joined raw into the Markdown output (the others are f-string
+# interpolated), so a hostile ``message`` used to raise TypeError from
+# ``"\n".join(...)``.
+INSTALL_REPORT_FIELDS: tuple[str, ...] = (
+    "shell",
+    "script_path",
+    "rc_file",
+    "installed",
+    "already_installed",
+    "message",
+)
+
+INSTALL_HOSTILE_VALUES: tuple[object, ...] = (
+    None,
+    1,
+    1.5,
+    True,
+    "text",
+    b"bytes",
+    [],
+    [None, 1],
+    {},
+    {"k": "v"},
+)
+
+
+def test_install_report_formatters_never_raise_on_hostile_fields() -> None:
+    for field in INSTALL_REPORT_FIELDS:
+        for bad in INSTALL_HOSTILE_VALUES:
+            bad_any: Any = bad
+            data: dict[str, object] = {field: bad_any}
+            json.loads(completion.format_install_report_json(data))
+            md = completion.format_install_report_markdown(data)
+            csv_text = completion.format_install_report_csv(data)
+            assert isinstance(md, str), f"{field}={bad!r} markdown not str"
+            assert isinstance(csv_text, str), f"{field}={bad!r} csv not str"
+            assert "ethscan Completion Installation" in md

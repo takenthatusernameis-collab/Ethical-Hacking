@@ -307,7 +307,7 @@ def format_install_report_markdown(result: dict[str, Any]) -> str:
         "",
         "## Message",
         "",
-        result.get("message", ""),
+        f"{result.get('message', '')}",
         "",
     ]
     return "\n".join(lines)

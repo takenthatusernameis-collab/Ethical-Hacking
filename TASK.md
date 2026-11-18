@@ -771,3 +771,37 @@ Date: Sun Nov 08 2026 (session 7)
 
 ## Next task
 - Repository is green (32597 passed; mypy/ruff/README clean; completion.py 100%). The only coverage gap is the 2 CLI-unreachable defensive lines in the `completion` command (`cli.py` 4292, 4302); leave them as a documented known limitation unless a task explicitly asks to refactor the completion command's format handling (in which case reproduce the intended behavior first). Otherwise, if new work is needed, reproduce a concrete gap first (focused failing check or evidence) before implementing — do not speculate or weaken safety/validation. `oracle`/`postgresql` empty-target handling remains out of scope.
+
+# Session (Wed Nov 18 2026, session 8)
+## This session
+- No actionable prior assignment (NEXT_TASK/HANDOFF said "none pending", repo green). Independently re-verified the true baseline before selecting work: `pytest -q` -> 32602 passed, 146 skipped, 0 failed; `mypy ethscan/ tests/` clean (260 files); `ruff check ethscan/ tests/ check_readme.py` clean; `check_readme.py` 54/54, 0 drift.
+- Selected a bounded, evidence-based task: a comprehensive hostile-shape fuzzer across ALL 163 `format_*` formatters x 19,379 hostile calls found exactly one genuine crash family. Fixed it.
+- Reproduction: `python -c "from ethscan.completion import format_install_report_markdown; format_install_report_markdown({'message': None})"` -> `TypeError: sequence item 10: expected str instance, NoneType found` (same for int/list/dict/bool/bytes message). Fuzzer attributed all 36 crashes to `ethscan/completion.py::format_install_report_markdown`.
+- Root cause: `format_install_report_markdown` built its `lines` list with `result.get("message", "")` inserted RAW (line 310) and then `"\n".join(lines)`. Every other field (shell/script_path/rc_file/installed/already_installed) is f-string interpolated (safe); `format_install_report_json` uses `json.dumps(default=str)` (safe); `format_install_report_csv` goes through `csv.writer` which stringifies (safe). Only the raw markdown message crashed.
+- Why the repo-wide contract test missed it: `tests/test_all_formatters_hostile_contract.py` discovers `format_install_report_markdown` but its `_VALID_REPORT` fixture has none of the completion/install field names (`message`, `shell`, `script_path`, `rc_file`, `installed`, `already_installed`), so `test_formatter_survives_hostile_report_field` never injected a hostile `message`. `tests/test_completion_hostile_sweep.py` previously covered only the non-install `format_completion_report_*`.
+
+## What changed
+- `ethscan/completion.py` (1 line): `result.get("message", "")` -> `f"{result.get('message', '')}"` in `format_install_report_markdown`, matching the 5 sibling f-string fields in the same list. For a valid string message the rendered output is byte-identical (f-string of a str == the str); only hostile non-str values change from crash to a rendered string (consistent with existing `shell=None` -> `- **Shell:** None`).
+- `tests/test_completion_hostile_sweep.py` (+40): added `test_install_report_formatters_never_raise_on_hostile_fields`, parametrized over the 6 install fields x 10 hostile values across json/markdown/csv; asserts str output and the report header.
+
+## What was actually verified
+- Repro before fix: 5/5 hostile message values -> TypeError; after fix: 5/5 -> OK.
+- Fuzzer after fix: `modules=57 formatters=163 calls=19379 crashes=0` (was 36).
+- Extra probe (install field names injected into all 163 single-arg formatters, 7,840 calls): 0 crashes — confirms the field names are otherwise robust and the bug was specific to the raw join.
+- `python -m pytest tests/test_completion.py tests/test_completion_branch_gaps.py tests/test_completion_hostile_sweep.py tests/test_all_formatters_hostile_contract.py -q` -> 19110 passed.
+- `python -m pytest -q` -> 32603 passed, 146 skipped, 0 failed (baseline 32602; +1 new test).
+- `python -m mypy ethscan/ tests/` -> Success: no issues found in 260 source files.
+- `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
+- `python check_readme.py` -> 54 commands, 0 drift both directions.
+- Coverage (`coverage run --branch --source=ethscan`): TOTAL 99%, `completion.py` 100%. The only non-100% module is `ethscan/cli.py` (1 miss line 4318 + 1 partial branch 4317) — the documented, intentionally-out-of-scope unreachable defensive guard `raise click.UsageError("Shell argument is required when not using --install")` (positional SHELL defaults to "bash" and is choice-validated). Pre-existing; unchanged by this session. Line numbers shifted 4313->4318 after the prior commit's shell-selection fix.
+- `git status` -> only `ethscan/completion.py` + `tests/test_completion_hostile_sweep.py` modified; no stray files; not committed (not requested).
+
+## Blockers
+- None.
+
+## Approaches already tried / ruled out
+- Extending the shared `_VALID_REPORT` fixture in `test_all_formatters_hostile_contract.py` with the install field names: proven safe (7,840-call probe, 0 crashes) but rejected to keep the change bounded — it would add ~7,840 parametrized cases across all formatters for mostly-redundant coverage. The focused `test_install_report_formatters_never_raise_on_hostile_fields` is the durable guard.
+- Changing source to coerce non-str message to "" (like `_normalize_findings`): rejected in favor of the f-string, which is byte-identical to the 5 sibling fields in the same function and changes no valid-input behavior.
+
+## Next task
+- None pending from current evidence. Repository green (32603 passed; mypy/ruff/README clean; completion.py 100%; only the documented cli.py:4318 unreachable defensive guard uncovered). If future work is needed: reproduce a concrete gap first (failing check/test or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then broader gates (pytest/mypy/ruff/check_readme/coverage), and preserve safety/validation. `oracle`/`postgresql` empty-target handling remains intentionally out of scope (exit 0, in-band error). The optional durable follow-up (not done this session): add the install field names to the contract test `_VALID_REPORT` if a future task wants the generic contract test to cover them.
