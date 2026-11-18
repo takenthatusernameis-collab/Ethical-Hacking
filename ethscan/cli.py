@@ -35,6 +35,10 @@ from ethscan.completion import (
     format_completion_report_csv,
     format_completion_report_json,
     format_completion_report_markdown,
+    format_install_report_csv,
+    format_install_report_json,
+    format_install_report_markdown,
+    install_completion,
     run_completion,
 )
 from ethscan.config import (
@@ -4213,6 +4217,12 @@ def jwt(token: str | None, fmt: str, output_fmt: str | None, out_path: str | Non
     help="Program name embedded in the completion script (default: ethscan).",
 )
 @click.option(
+    "--install",
+    "do_install",
+    is_flag=True,
+    help="Install completion for the current shell (auto-detected) or the specified shell.",
+)
+@click.option(
     "--output-format",
     "output_fmt",
     type=click.Choice(["json", "markdown", "csv"]),
@@ -4239,6 +4249,7 @@ def completion(
     shell: str,
     shell_option: str | None,
     prog_name: str,
+    do_install: bool,
     fmt: str,
     output_fmt: str | None,
     out_path: str | None,
@@ -4252,9 +4263,43 @@ def completion(
     By default, writes the raw completion script to stdout (suitable for
     redirecting to a file and sourcing). Use --output-format to emit a
     structured report instead.
+
+    Use --install to automatically install completion for the current shell
+    (detected from $SHELL) or a specific shell.
     """
     # The --shell option overrides the positional SHELL argument when both are given.
     effective_shell = shell_option if shell_option is not None else shell
+
+    if do_install:
+        # For install, shell is optional (auto-detect if not provided)
+        if effective_shell == "bash" and shell_option is None and shell == "bash":
+            # User didn't specify a shell explicitly; let install_completion auto-detect
+            effective_shell = None
+        try:
+            results = install_completion(cli, shell=effective_shell, prog_name=prog_name)
+        except ValueError as exc:
+            raise click.UsageError(str(exc)) from exc
+
+        chosen_format = output_fmt if output_fmt is not None else fmt
+        if chosen_format == "json":
+            output = format_install_report_json(results)
+        elif chosen_format == "csv":
+            output = format_install_report_csv(results)
+        elif chosen_format == "markdown":
+            output = format_install_report_markdown(results)
+        else:
+            # Default to human-readable message
+            output = results["message"]
+
+        if out_path:
+            _write_output(out_path, output)
+        else:
+            click.echo(output)
+        return
+
+    # Non-install mode: shell is required
+    if effective_shell is None:
+        raise click.UsageError("Shell argument is required when not using --install")
     try:
         results = run_completion(cli, shell=effective_shell, prog_name=prog_name)
     except ValueError as exc:

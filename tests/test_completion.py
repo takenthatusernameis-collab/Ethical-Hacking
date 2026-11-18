@@ -1,6 +1,10 @@
 """Tests for the ethscan completion module."""
 
 
+import json
+from pathlib import Path
+from typing import Any
+
 import click
 import pytest
 from click.testing import CliRunner
@@ -371,3 +375,192 @@ def test_completion_cli_out_with_output_format_writes_report(tmp_path) -> None:
     parsed = json.loads(out.read_text(encoding="utf-8"))
     assert parsed["shell"] == "bash"
     assert "_ethscan_completion" in parsed["script"]
+
+
+# ---------------------------------------------------------------------------
+# Install completion
+# ---------------------------------------------------------------------------
+
+
+def _run_completion_install_cli(args: list) -> Any:
+    return CliRunner().invoke(cli, ["completion", "--install"] + args)
+
+
+def _monkeypatch_home(monkeypatch, fake_home: Path) -> None:
+    """Monkeypatch os.path.expanduser to use a fake home directory."""
+    import os
+
+    original_expanduser = os.path.expanduser
+
+    def fake_expanduser(path: str) -> str:
+        if path.startswith("~/"):
+            return str(fake_home / path[2:])
+        if path == "~":
+            return str(fake_home)
+        return original_expanduser(path)
+
+    monkeypatch.setattr(os.path, "expanduser", fake_expanduser)
+
+
+def test_completion_install_auto_detect_json(monkeypatch, tmp_path) -> None:
+    """Test --install with auto-detect shell (via SHELL env var) and JSON output."""
+    # Set up a fake home directory and SHELL
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _monkeypatch_home(monkeypatch, fake_home)
+    monkeypatch.setenv("SHELL", "/bin/bash")
+
+    # Run install with JSON output
+    runner = CliRunner()
+    result = runner.invoke(cli, ["completion", "--install", "--output-format", "json"])
+    assert result.exit_code == 0, result.output
+
+    import json
+
+    parsed = json.loads(result.output)
+    assert parsed["shell"] == "bash"
+    assert "script_path" in parsed
+    assert "rc_file" in parsed
+    assert "message" in parsed
+    # Script file should exist
+    script_path = Path(parsed["script_path"])
+    assert script_path.exists()
+    assert "_ethscan_completion" in script_path.read_text()
+
+
+def test_completion_install_explicit_shell_json(monkeypatch, tmp_path) -> None:
+    """Test --install with explicit --shell option and JSON output."""
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _monkeypatch_home(monkeypatch, fake_home)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["completion", "--install", "--shell", "zsh", "--output-format", "json"])
+    assert result.exit_code == 0, result.output
+
+    import json
+
+    parsed = json.loads(result.output)
+    assert parsed["shell"] == "zsh"
+    assert "script_path" in parsed
+    assert "rc_file" in parsed
+    assert parsed["installed"] is True
+    # Script file should exist
+    script_path = Path(parsed["script_path"])
+    assert script_path.exists()
+    assert "compdef" in script_path.read_text()
+
+
+def test_completion_install_fish(monkeypatch, tmp_path) -> None:
+    """Test --install for fish shell."""
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _monkeypatch_home(monkeypatch, fake_home)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["completion", "--install", "--shell", "fish", "--output-format", "json"])
+    assert result.exit_code == 0, result.output
+
+    import json
+
+    parsed = json.loads(result.output)
+    assert parsed["shell"] == "fish"
+    assert "script_path" in parsed
+    assert "completions/ethscan.fish" in parsed["script_path"]
+    assert parsed["installed"] is True
+
+
+def test_completion_install_already_installed(monkeypatch, tmp_path) -> None:
+    """Test --install when already installed (idempotent)."""
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _monkeypatch_home(monkeypatch, fake_home)
+    monkeypatch.setenv("SHELL", "/bin/bash")
+
+    runner = CliRunner()
+    # First install
+    result1 = runner.invoke(cli, ["completion", "--install", "--output-format", "json"])
+    assert result1.exit_code == 0, result1.output
+    import json
+
+    parsed1 = json.loads(result1.output)
+    assert parsed1["installed"] is True
+
+    # Second install should report already_installed
+    result2 = runner.invoke(cli, ["completion", "--install", "--output-format", "json"])
+    assert result2.exit_code == 0, result2.output
+    parsed2 = json.loads(result2.output)
+    assert parsed2["installed"] is False
+    assert parsed2["already_installed"] is True
+
+
+def test_completion_install_invalid_shell(monkeypatch, tmp_path) -> None:
+    """Test --install with invalid shell."""
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _monkeypatch_home(monkeypatch, fake_home)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["completion", "--install", "--shell", "powershell", "--output-format", "json"])
+    assert result.exit_code != 0
+    assert "Unsupported shell" in result.output or "not one of" in result.output
+
+
+def test_completion_install_markdown_output(monkeypatch, tmp_path) -> None:
+    """Test --install with markdown output."""
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _monkeypatch_home(monkeypatch, fake_home)
+    monkeypatch.setenv("SHELL", "/bin/bash")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["completion", "--install", "--output-format", "markdown"])
+    assert result.exit_code == 0, result.output
+    assert "ethscan Completion Installation" in result.output
+    assert "bash" in result.output
+
+
+def test_completion_install_csv_output(monkeypatch, tmp_path) -> None:
+    """Test --install with CSV output."""
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _monkeypatch_home(monkeypatch, fake_home)
+    monkeypatch.setenv("SHELL", "/bin/bash")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["completion", "--install", "--output-format", "csv"])
+    assert result.exit_code == 0, result.output
+    lines = result.output.splitlines()
+    assert lines[0] == "field,value"
+    assert "shell,bash" in lines
+
+
+def test_completion_install_with_out_file(monkeypatch, tmp_path) -> None:
+    """Test --install with --out file."""
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _monkeypatch_home(monkeypatch, fake_home)
+    monkeypatch.setenv("SHELL", "/bin/bash")
+
+    out_file = tmp_path / "install_report.json"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["completion", "--install", "--output-format", "json", "--out", str(out_file)])
+    assert result.exit_code == 0, result.output
+    assert "Completion for bash" in result.output or "Report written to" in result.output
+    import json
+
+    parsed = json.loads(out_file.read_text())
+    assert parsed["shell"] == "bash"
+
+
+def test_completion_install_no_shell_env(monkeypatch, tmp_path) -> None:
+    """Test --install when SHELL env var is not set and no --shell given."""
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _monkeypatch_home(monkeypatch, fake_home)
+    monkeypatch.delenv("SHELL", raising=False)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["completion", "--install", "--output-format", "json"])
+    assert result.exit_code != 0
+    assert "Could not detect shell" in result.output

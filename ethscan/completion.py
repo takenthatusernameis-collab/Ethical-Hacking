@@ -8,6 +8,8 @@ names, option names, and option values.
 
 import csv
 import io
+import os
+from pathlib import Path
 from typing import Any
 
 import click
@@ -15,6 +17,30 @@ from click import shell_completion
 
 # Default program name used in the generated completion scripts.
 DEFAULT_PROG_NAME = "ethscan"
+
+# Shell RC file locations and source snippets.
+_SHELL_RC_INFO: dict[str, dict[str, str]] = {
+    "bash": {
+        "rc_file": "~/.bashrc",
+        "source_line": 'source ~/.ethscan_complete.bash',
+        "script_path": "~/.ethscan_complete.bash",
+    },
+    "zsh": {
+        "rc_file": "~/.zshrc",
+        "source_line": 'source ~/.ethscan_complete.zsh',
+        "script_path": "~/.ethscan_complete.zsh",
+    },
+    "fish": {
+        "rc_file": "~/.config/fish/config.fish",
+        "source_line": "source ~/.config/fish/completions/ethscan.fish",
+        "script_path": "~/.config/fish/completions/ethscan.fish",
+    },
+}
+
+
+def _expand_path(path: str) -> Path:
+    """Expand a path with tilde, using os.path.expanduser for testability."""
+    return Path(os.path.expanduser(path))
 
 
 def _available_shells() -> dict[str, Any]:
@@ -35,6 +61,20 @@ def _available_shells() -> dict[str, Any]:
 def available_shells() -> tuple[str, ...]:
     """Return the tuple of shell names that ethscan can generate completions for."""
     return tuple(sorted(_available_shells().keys()))
+
+
+def detect_shell() -> str | None:
+    """Detect the current user's shell from the SHELL environment variable.
+
+    Returns the shell name (bash, zsh, fish) if recognized, otherwise None.
+    """
+    shell_path = os.environ.get("SHELL", "")
+    if not shell_path:
+        return None
+    shell_name = Path(shell_path).name
+    if shell_name in _available_shells():
+        return shell_name
+    return None
 
 
 def _completion_class_for(shell: str):
@@ -159,5 +199,133 @@ def format_completion_report_csv(result: dict[str, Any]) -> str:
         script = ""
     for line in script.splitlines():
         writer.writerow([line])
+
+    return output.getvalue().rstrip("\r\n")
+
+
+def install_completion(
+    cli_obj: click.Command,
+    shell: str | None = None,
+    prog_name: str = DEFAULT_PROG_NAME,
+) -> dict[str, Any]:
+    """Install shell completion for the detected or specified shell.
+
+    Generates the completion script, writes it to the appropriate location,
+    and appends a source line to the shell's RC file if not already present.
+
+    Args:
+        cli_obj: The click command group to generate completions for.
+        shell: Shell to install for (bash, zsh, fish). If None, attempts
+            to detect from the SHELL environment variable.
+        prog_name: Program name embedded in the completion script.
+
+    Returns:
+        A dict with keys: shell, script_path, rc_file, installed (bool),
+        already_installed (bool), and message (str).
+
+    Raises:
+        ValueError: If the shell is not supported or cannot be detected.
+    """
+    if shell is None:
+        shell = detect_shell()
+    if shell is None:
+        raise ValueError(
+            "Could not detect shell. Please specify with --shell option. "
+            f"Supported: {', '.join(available_shells())}"
+        )
+    if shell not in _available_shells():
+        raise ValueError(
+            f"Unsupported shell: {shell}. Supported: {', '.join(available_shells())}"
+        )
+
+    info = _SHELL_RC_INFO[shell]
+    script_path = _expand_path(info["script_path"])
+    rc_file = _expand_path(info["rc_file"])
+    source_line = info["source_line"]
+
+    # Ensure the script directory exists
+    script_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Generate and write the completion script
+    script = generate_completion_script(cli_obj, shell, prog_name)
+    script_path.write_text(script)
+
+    # Check if already installed in RC file
+    already_installed = False
+    if rc_file.exists():
+        rc_content = rc_file.read_text()
+        if source_line in rc_content:
+            already_installed = True
+
+    # Append source line to RC file if not already present
+    installed = False
+    if not already_installed:
+        # Ensure RC file ends with newline
+        if rc_file.exists():
+            rc_content = rc_file.read_text()
+            if rc_content and not rc_content.endswith("\n"):
+                rc_file.write_text(rc_content + "\n")
+        else:
+            rc_file.write_text("")
+        with rc_file.open("a") as f:
+            f.write(f"\n# ethscan completion\n{source_line}\n")
+        installed = True
+
+    return {
+        "shell": shell,
+        "script_path": str(script_path),
+        "rc_file": str(rc_file),
+        "installed": installed,
+        "already_installed": already_installed,
+        "message": (
+            f"Completion for {shell} installed successfully."
+            if installed
+            else f"Completion for {shell} was already installed."
+        ),
+    }
+
+
+def format_install_report_json(result: dict[str, Any]) -> str:
+    """Render an installation report as JSON."""
+    import json
+
+    return json.dumps(result, indent=2, default=str)
+
+
+def format_install_report_markdown(result: dict[str, Any]) -> str:
+    """Render an installation report as Markdown."""
+    if not isinstance(result, dict):
+        result = {}
+    lines = [
+        "# ethscan Completion Installation",
+        "",
+        f"- **Shell:** {result.get('shell', '')}",
+        f"- **Script Path:** {result.get('script_path', '')}",
+        f"- **RC File:** {result.get('rc_file', '')}",
+        f"- **Installed:** {'Yes' if result.get('installed') else 'No'}",
+        f"- **Already Installed:** {'Yes' if result.get('already_installed') else 'No'}",
+        "",
+        f"## Message",
+        "",
+        result.get("message", ""),
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def format_install_report_csv(result: dict[str, Any]) -> str:
+    """Format installation report as CSV."""
+    if not isinstance(result, dict):
+        result = {}
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow(["field", "value"])
+    writer.writerow(["shell", result.get("shell", "")])
+    writer.writerow(["script_path", result.get("script_path", "")])
+    writer.writerow(["rc_file", result.get("rc_file", "")])
+    writer.writerow(["installed", "true" if result.get("installed") else "false"])
+    writer.writerow(["already_installed", "true" if result.get("already_installed") else "false"])
+    writer.writerow(["message", result.get("message", "")])
 
     return output.getvalue().rstrip("\r\n")
