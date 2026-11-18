@@ -907,6 +907,23 @@ Date: Sun Nov 08 2026 (session 7)
 
 ## Approaches already tried / ruled out
 - Parsing a bare IPv6+port by testing whether the prefix is a valid IPv6 address: rejected as ambiguous (`fe80::abcd:1` is itself a valid literal) and contrary to "IPv6 ports require brackets"; the whole literal is the host.
+
+# Session (Wed Nov 18 2026, session 12)
+## This session
+- The assigned next task (family-aware UDP transports for `ntp`/`netbios`) was ALREADY implemented and committed at HEAD `92cdefc`; the handoff was stale. Verified, no source changes needed.
+- Confirmed `ethscan/ntp.py` and `ethscan/netbios.py` `_send_recv` resolve the endpoint with `socket.getaddrinfo(host, port, type=socket.SOCK_DGRAM, proto=socket.IPPROTO_UDP)`, open the socket for the returned family, and `sendto(request, sockaddr)`, preserving the injectable `connector` seam.
+- Deterministic monkeypatched tests assert `AF_INET6` for `::1` and `AF_INET` for IPv4 in both modules, plus getaddrinfo-failure and empty-result error paths.
+- CLI: `python -m ethscan ntp --target ::1 --timeout 0.2 --format json` -> `host: "::1"`, `port: 123`, `error: "time request failed: timeout"` (no more `[Errno -9] Address family for hostname not supported`).
+
+## Verified
+- Focused: 212 passed across `test_ntp.py`, `test_netbios.py`, `test_bare_ipv6_target_parsing.py`.
+- Full: `pytest -q` -> 39877 passed, 146 skipped, 0 failed (baseline 39820; +57 tests).
+- mypy `Success: no issues found in 64 source files`; ruff all checks passed; `check_readme.py` 54 commands, 0 drift; `git diff --check` clean.
+- Full-suite branch coverage: `ntp.py`, `netbios.py`, `validate.py`, `mac.py` all at 100% under the full suite.
+
+## What remains unresolved
+- The remaining `AF_INET`-hardcoded transports (`ldap`, `memcached`, `redis`, `smb`, `snmp`, `dnssec`, `osdetect`) accept IPv6 targets syntactically but cannot transport to them yet. Out of scope for the assigned task.
+- Unchanged known limitations: `cli.py:4318` unreachable guard; `oracle`/`postgresql` in-band empty-target handling by contract; PBKDF2+NTLM intentionally unsupported; `mac._extract_oui` docstring/contract mismatch.
 - Only treating invalid `ipaddress.ip_address` inputs as hosts: rejected; the defect is valid literals ending in a numeric group.
 - Reusing `parse_port_range` inside `validate`: still rejected (the module needs per-spec errors reported in-band); parity is now enforced by a differential test.
 
