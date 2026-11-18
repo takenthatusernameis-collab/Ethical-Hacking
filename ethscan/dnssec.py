@@ -186,11 +186,29 @@ def _query_udp(
     timeout: float = DEFAULT_TIMEOUT,
     port: int = DNS_PORT,
 ) -> bytes | None:
-    """Send a DNS query via UDP and return the response."""
+    """Send a DNS query via UDP and return the response.
+
+    Uses ``socket.getaddrinfo`` to resolve the endpoint so that both IPv4 and
+    IPv6 nameservers work. The first returned address family is used.
+    """
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        infos = socket.getaddrinfo(
+            nameserver,
+            port,
+            type=socket.SOCK_DGRAM,
+            proto=socket.IPPROTO_UDP,
+        )
+    except OSError:
+        return None
+
+    if not infos:
+        return None
+
+    family, socktype, proto, canonname, sockaddr = infos[0]
+    try:
+        with socket.socket(family, socktype, proto) as sock:
             sock.settimeout(timeout)
-            sock.sendto(query, (nameserver, port))
+            sock.sendto(query, sockaddr)
             data, _ = sock.recvfrom(4096)
             return data
     except Exception:  # noqa: BLE001 - transport can raise any type
@@ -230,7 +248,9 @@ def _resolve_nameservers(domain: str, timeout: float) -> list[str]:
         previous = socket.getdefaulttimeout()
         try:
             socket.setdefaulttimeout(timeout)
-            results = socket.getaddrinfo(domain, DNS_PORT, socket.AF_INET, socket.SOCK_DGRAM)
+            results = socket.getaddrinfo(
+                domain, DNS_PORT, type=socket.SOCK_DGRAM, proto=socket.IPPROTO_UDP
+            )
             ips = sorted({r[4][0] for r in results if isinstance(r[4], tuple) and len(r[4]) > 0 and isinstance(r[4][0], str)})
             return ips
         finally:

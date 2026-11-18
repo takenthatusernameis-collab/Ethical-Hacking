@@ -187,10 +187,18 @@ def probe_rst(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict[st
     }
     sock = None
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        infos = socket.getaddrinfo(
+            host, port, type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP
+        )
+        if not infos:
+            entry["response"] = "NO-RESPONSE"
+            entry["error"] = f"no address found for {host}:{port}"
+            return entry
+        family, socktype, proto, canonname, sockaddr = infos[0]
+        sock = socket.socket(family, socktype, proto)
         sock.settimeout(timeout)
         # Send a RST by connecting then immediately closing
-        err = sock.connect_ex((host, port))
+        err = sock.connect_ex(sockaddr)
         if err == 0:
             entry["connected"] = True
             entry["response"] = "OPEN"
@@ -227,9 +235,17 @@ def probe_fin(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict[st
     }
     sock = None
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        infos = socket.getaddrinfo(
+            host, port, type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP
+        )
+        if not infos:
+            entry["response"] = "NO-RESPONSE"
+            entry["error"] = f"no address found for {host}:{port}"
+            return entry
+        family, socktype, proto, canonname, sockaddr = infos[0]
+        sock = socket.socket(family, socktype, proto)
         sock.settimeout(timeout)
-        err = sock.connect_ex((host, port))
+        err = sock.connect_ex(sockaddr)
         if err == 0:
             # Port is open; FIN behavior is OS-dependent
             entry["connected"] = True
@@ -267,9 +283,17 @@ def probe_ack(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict[st
     }
     sock = None
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        infos = socket.getaddrinfo(
+            host, port, type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP
+        )
+        if not infos:
+            entry["response"] = "NO-RESPONSE"
+            entry["error"] = f"no address found for {host}:{port}"
+            return entry
+        family, socktype, proto, canonname, sockaddr = infos[0]
+        sock = socket.socket(family, socktype, proto)
         sock.settimeout(timeout)
-        err = sock.connect_ex((host, port))
+        err = sock.connect_ex(sockaddr)
         if err == 0:
             entry["connected"] = True
             entry["response"] = "OPEN"

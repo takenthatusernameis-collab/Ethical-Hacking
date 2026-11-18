@@ -1163,10 +1163,17 @@ def test_send_recv_connector_path() -> None:
     assert called
 
 
-def test_send_recv_timeout_and_oserror() -> None:
+def test_send_recv_timeout_and_oserror(monkeypatch) -> None:
     import socket
 
     from ethscan import snmp
+
+    monkeypatch.setattr(
+        "ethscan.snmp.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP, "", ("127.0.0.1", 161))
+        ],
+    )
 
     # timeout
     class BadSock:

@@ -16,6 +16,7 @@ defaults to a raw UDP socket so tests can substitute a local fake server.
 """
 from __future__ import annotations
 
+import contextlib
 import csv
 import io
 import json
@@ -400,14 +401,32 @@ def _send_recv(
     timeout: float,
     connector=None,
 ) -> tuple[bytes | None, str | None]:
-    """Send a UDP request and receive the response (injectable for tests)."""
+    """Send a UDP request and receive the response (injectable for tests).
+
+    Uses ``socket.getaddrinfo`` to resolve the endpoint so that both IPv4 and
+    IPv6 targets work. The first returned address family is used.
+    """
     if connector is not None:
         return connector(host, port, request, timeout)
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        infos = socket.getaddrinfo(
+            host,
+            port,
+            type=socket.SOCK_DGRAM,
+            proto=socket.IPPROTO_UDP,
+        )
+    except OSError as exc:
+        return None, f"address resolution failed: {exc}"
+
+    if not infos:
+        return None, f"no address found for {host}:{port}"
+
+    family, socktype, proto, canonname, sockaddr = infos[0]
+    sock = socket.socket(family, socktype, proto)
     sock.settimeout(timeout)
     try:
-        sock.sendto(request, (host, port))
+        sock.sendto(request, sockaddr)
         data, _ = sock.recvfrom(65536)
     except socket.timeout:
         return None, "timeout"
@@ -416,7 +435,8 @@ def _send_recv(
     else:
         return data, None
     finally:
-        sock.close()
+        with contextlib.suppress(OSError):
+            sock.close()
 
 
 # ---------------------------------------------------------------------------
