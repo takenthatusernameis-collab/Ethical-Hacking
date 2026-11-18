@@ -2,6 +2,7 @@
 
 import ipaddress
 import json
+import random
 from pathlib import Path
 from typing import Any, cast
 
@@ -228,6 +229,61 @@ def test_merge_networks_overlap_larger_successor() -> None:
     assert str(merged[0]) == "192.168.1.0/24"
 
 
+def test_merge_networks_cascading_supernet() -> None:
+    """A supernet formed late must still merge with an earlier network.
+
+    ``10.0.0.128/26`` and ``10.0.0.192/26`` combine into ``10.0.0.128/25``,
+    which is adjacent to the earlier ``10.0.0.0/25``; only a repeated pass
+    reaches the minimal ``10.0.0.0/24``.
+    """
+    nets = [
+        ipaddress.ip_network("10.0.0.0/25"),
+        ipaddress.ip_network("10.0.0.128/26"),
+        ipaddress.ip_network("10.0.0.192/26"),
+    ]
+    merged = _merge_networks(nets)
+    assert [str(net) for net in merged] == ["10.0.0.0/24"]
+
+
+def test_merge_networks_cascading_supernet_ipv6() -> None:
+    nets = [
+        ipaddress.ip_network("2001:db8::/121"),
+        ipaddress.ip_network("2001:db8::80/122"),
+        ipaddress.ip_network("2001:db8::c0/122"),
+    ]
+    merged = _merge_networks(nets)
+    assert [str(net) for net in merged] == ["2001:db8::/120"]
+
+
+def test_merge_networks_matches_collapse_addresses() -> None:
+    """The merge must always produce the same minimal set as the stdlib.
+
+    This is the invariant that the single-pass merge violated for cascading
+    supernets; the seeded sample covers overlaps, duplicates and adjacent
+    blocks in both address families.
+    """
+    rng = random.Random(0xC1D3)
+    for _ in range(100):
+        v4: list[ipaddress.IPv4Network] = [
+            ipaddress.IPv4Network(
+                f"10.0.0.{rng.randint(0, 255)}/{rng.randint(20, 32)}", strict=False
+            )
+            for _ in range(rng.randint(1, 6))
+        ]
+        expected_v4 = [str(net) for net in ipaddress.collapse_addresses(v4)]
+        assert [str(net) for net in _merge_networks(v4)] == expected_v4
+
+        v6: list[ipaddress.IPv6Network] = [
+            ipaddress.IPv6Network(
+                f"2001:db8::{rng.randint(0, 255):x}/{rng.randint(120, 128)}",
+                strict=False,
+            )
+            for _ in range(rng.randint(1, 6))
+        ]
+        expected_v6 = [str(net) for net in ipaddress.collapse_addresses(v6)]
+        assert [str(net) for net in _merge_networks(v6)] == expected_v6
+
+
 def test_build_radix_node_max_depth() -> None:
     from ethscan.radix import _build_radix_node
 
@@ -285,6 +341,19 @@ def test_run_radix_overlapping_merges() -> None:
     data = run_radix(["192.168.1.0/24", "192.168.1.128/25"])
     assert data["merged_network_count"] == 1
     assert data["merged"][0] == "192.168.1.0/24"
+
+
+def test_run_radix_cascading_supernet_reaches_minimal_set() -> None:
+    data = run_radix(
+        ["10.0.0.0/25", "10.0.0.128/26", "10.0.0.192/26"],
+        diff=["10.0.0.0/24"],
+    )
+    assert data["merged"] == ["10.0.0.0/24"]
+    assert data["merged_network_count"] == 1
+    assert data["total_merged_addresses"] == 256
+    diff = cast(dict[str, object], data["diff"])
+    assert diff["difference"] == []
+    assert diff["total_diff_addresses"] == 0
 
 
 def test_run_radix_compression_ratio() -> None:

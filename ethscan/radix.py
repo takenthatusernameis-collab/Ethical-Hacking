@@ -196,15 +196,14 @@ def _subtract_networks(
     return sorted(result, key=lambda n: n.network_address)
 
 
-def _merge_networks(networks: Sequence[ipaddress._BaseNetwork]) -> list[ipaddress._BaseNetwork]:
-    """Merge overlapping and adjacent (supernettable) networks.
+def _merge_once(networks: Sequence[ipaddress._BaseNetwork]) -> list[ipaddress._BaseNetwork]:
+    """Run one left-to-right merge pass over the networks.
 
-    Networks that overlap or can be combined into a single supernet are
-    collapsed. The result is a minimal, non-overlapping set of aggregate
-    networks sorted by address range.
+    Each network is compared with the last entry of the result so far. A
+    merge can turn that entry into a larger supernet that is itself adjacent
+    to an earlier entry, so one pass is not always enough to reach the
+    minimal set; :func:`_merge_networks` repeats the pass until it settles.
     """
-    if not networks:
-        return []
     try:
         # group by version to avoid comparing different versions
         by_ver: dict[int, list[ipaddress._BaseNetwork]] = {}
@@ -268,6 +267,30 @@ def _merge_networks(networks: Sequence[ipaddress._BaseNetwork]) -> list[ipaddres
         except Exception:  # pragma: no cover - defensive  # noqa: BLE001, S110
             pass
     return merged
+
+
+def _merge_networks(networks: Sequence[ipaddress._BaseNetwork]) -> list[ipaddress._BaseNetwork]:
+    """Merge overlapping and adjacent (supernettable) networks.
+
+    Networks that overlap or can be combined into a single supernet are
+    collapsed. The result is a minimal, non-overlapping set of aggregate
+    networks sorted by address range.
+
+    A single left-to-right pass can miss a supernet that only becomes
+    possible after a later merge (for example ``10.0.0.0/25`` plus
+    ``10.0.0.128/26`` plus ``10.0.0.192/26``). The pass is therefore repeated
+    until the set stops changing. The loop terminates because a pass never
+    increases the number of networks, and a pass that changes the set without
+    shrinking it replaces a network with a strictly larger supernet.
+    """
+    if not networks:
+        return []
+    merged = _merge_once(networks)
+    while True:
+        next_merged = _merge_once(merged)
+        if [str(net) for net in next_merged] == [str(net) for net in merged]:
+            return merged
+        merged = next_merged
 
 
 def _common_prefix_of_pair(start, end, is_v4: bool) -> int:

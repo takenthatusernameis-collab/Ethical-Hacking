@@ -805,3 +805,38 @@ Date: Sun Nov 08 2026 (session 7)
 
 ## Next task
 - None pending from current evidence. Repository green (32603 passed; mypy/ruff/README clean; completion.py 100%; only the documented cli.py:4318 unreachable defensive guard uncovered). If future work is needed: reproduce a concrete gap first (failing check/test or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then broader gates (pytest/mypy/ruff/check_readme/coverage), and preserve safety/validation. `oracle`/`postgresql` empty-target handling remains intentionally out of scope (exit 0, in-band error). The optional durable follow-up (not done this session): add the install field names to the contract test `_VALID_REPORT` if a future task wants the generic contract test to cover them.
+
+# Session (Wed Nov 18 2026, session 9)
+## This session
+- No concrete assignment existed (prior handoff: "none pending"). Baseline re-verified at start: `pytest -q` -> 39798 passed, 146 skipped, 0 failed; `mypy ethscan/ tests/` clean (261 files); `ruff` clean; `check_readme.py` 54/54, 0 drift. Full `coverage run --branch --source=ethscan` showed 100% everywhere except the documented `cli.py:4318` guard, so the suggested "low-coverage sweep" had no target.
+- Selected differential testing of the offline set calculators as the bounded, evidence-based task. Reproduced a real correctness defect in `ethscan/radix.py::_merge_networks`: it compared each network only with the immediately preceding merged entry, so a supernet formed late in the pass was never re-merged with earlier entries.
+  Repro: `run_radix(["10.0.0.0/25", "10.0.0.128/26", "10.0.0.192/26"])` -> `['10.0.0.0/25', '10.0.0.128/25']` (2 networks) while `ipaddress.collapse_addresses(...)` -> `['10.0.0.0/24']` (1 network). `merged_network_count`/`total_merged_addresses` therefore reported a non-minimal result, contradicting the function docstring and the documented `radix` merge behavior.
+
+## What changed
+- `ethscan/radix.py`: split the existing left-to-right pass into `_merge_once` and made `_merge_networks` repeat the pass until the set stops changing (compare string forms). The pass logic, version grouping, defensive handling and helpers are unchanged; only the missing re-merge is added. Removed the now-redundant empty-input guard from `_merge_once` (the wrapper still returns `[]` for empty input).
+- `tests/test_radix.py` (+4 tests):
+  - `test_merge_networks_cascading_supernet` and `..._ipv6` (unit regressions).
+  - `test_run_radix_cascading_supernet_reaches_minimal_set` (run-level, asserts minimal merge and empty diff against the covering /24).
+  - `test_merge_networks_matches_collapse_addresses` (seeded 100-case differential check vs `ipaddress.collapse_addresses` for both families).
+
+## What was actually verified
+- Reproduced the defect before the fix and confirmed `['10.0.0.0/24']` after it, including via the CLI: `python -m ethscan radix --cidrs 10.0.0.0/25,10.0.0.128/26,10.0.0.192/26 --format json` -> `merged ['10.0.0.0/24'] count 1 total 256`.
+- Ad-hoc differential fuzzing (not committed): 5,000 random IPv4 and 2,000 random IPv6 sets matched `ipaddress.collapse_addresses` exactly (0 mismatches) after the fix; 3,000 random `run_radix --diff` cases matched brute-force set subtraction (0 mismatches).
+- `python -m pytest tests/test_radix.py -q` -> 152 passed.
+- `python -m pytest -q` -> 39802 passed, 146 skipped, 0 failed (baseline 39798; +4 tests).
+- `python -m mypy ethscan/ tests/` -> Success, 261 files; `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed; `python check_readme.py` -> 54 commands, 0 drift.
+- `python -m coverage run --branch --source=ethscan -m pytest tests/test_radix.py` -> `ethscan/radix.py` 100% (421 stmts, 170 branches, 0 missing).
+- `git diff --check` clean; `git status` -> only `ethscan/radix.py` and `tests/test_radix.py` modified.
+
+## What remains unresolved
+- None for this defect. All previously documented limitations are unchanged: `cli.py:4318` is an unreachable defensive guard; `oracle`/`postgresql` empty-target handling stays in-band by contract; PBKDF2+NTLM remains intentionally unsupported.
+
+## Approaches already tried / ruled out
+- Replacing `_merge_networks` wholesale with `ipaddress.collapse_addresses`: rejected because existing tests exercise the module's defensive collapse/failure branches via monkeypatching `_collapse_v4_networks`; the fixed-point wrapper keeps those contracts intact.
+- Single extra pass only: rejected as not provably minimal; the repeat-until-stable loop is simple, terminates, and matched the stdlib oracle across 7,000 random cases.
+
+## Next task
+- Encode the remaining radix tree invariants found clean during this session's investigation as durable seeded tests: for random inputs, every network in `run_radix(...)["radix_tree"]` leaf nodes must equal the merged set, and each node's `total_addresses` must equal `end_address - start_address + 1`. Evidence: a one-off probe of 1,000 random cases found 0 mismatches, so this is test hardening, not a known defect — do not change `_build_radix_node` unless a mismatch is reproduced. Constraints: keep tests seeded/deterministic, no new dependencies, and re-run pytest/mypy/ruff/check_readme/coverage afterwards.
+
+## Environment/notes
+- Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3. Do not commit manually; the workflow controller stages and commits.
