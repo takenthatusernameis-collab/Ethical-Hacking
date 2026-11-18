@@ -1,5 +1,5 @@
 # Next Task
-Date: Wed Nov 18 2026 (07:29:53 UTC)
+Date: Wed Nov 18 2026 (07:31:08 UTC)
 
 ## Status
 - No prior assignment; baseline re-verified this session at HEAD `c889a10`:
@@ -9,6 +9,7 @@ Date: Wed Nov 18 2026 (07:29:53 UTC)
   - `python check_readme.py` -> 54 commands, 0 drift.
   - `python -m pytest tests/test_readme_sync.py -q` -> 5 passed.
   - No `TODO`/`FIXME`/`XXX`/`HACK` markers in `ethscan/` or `tests/`.
+  - Coverage: 15761 statements, 1 miss (ethscan/cli.py:4318), 5962 branches, 1 partial, 99%.
 
 ## This session
 - No concrete, evidence-based gap found requiring a source/test fix. No production or test code changes made.
@@ -23,6 +24,6 @@ Date: Wed Nov 18 2026 (07:29:53 UTC)
 
 ## Constraints / notes
 - Keep architecture stable; do not weaken safety/validation or permissions. Do not commit unless explicitly asked.
-- `rg` not installed; use Grep tool or `grep`. Working tree contains only handoff-doc updates from this session.
+- `rg` not installed; use Grep tool or `grep`. Working tree clean.
 
 (End of file)
