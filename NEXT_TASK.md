@@ -2,46 +2,49 @@
 Date: Wed Nov 18 2026
 
 ## Status
-- Repository green: 39783 passed, 149 skipped, 0 failed; mypy/ruff clean;
-  README in sync; `ethscan/hash.py` at 100% statement/branch coverage.
-- Closed a documented-contract defect: NTLM and MD4 hashing previously failed
-  whenever the platform's OpenSSL build did not expose MD4 through `hashlib`.
+- Repository green: 39786 passed, 149 skipped, 0 failed; mypy/ruff clean;
+  README in sync (54 commands).
+- Prior fix is now locked at the integration boundary: successful
+  `hash --algorithm md4` and `--algorithm ntlm` output is asserted in JSON and
+  CSV in `tests/test_cli.py`.
 
 ## This session (what changed)
-- `ethscan/hash.py`: added self-contained RFC 1320 MD4 (`_md4_digest`,
-  `_rol32`) plus HMAC-MD4 (`_md4_hmac_hex`, `_hmac_hex`); NTLM and MD4 now
-  always work. Native hashlib MD4 is used only to register the name for
-  PBKDF2/HMAC when available. Removed the impossible "MD4 unavailable" notes.
-- `tests/test_hash.py`: RFC 1320 vectors (7 lengths), NTLM/MD4 known digests,
-  HMAC-MD4 vectors (short/long key), `MD4_AVAILABLE is True`, successful MD4
-  `run_check`.
-- `README.md`: hash bullet reflects the built-in MD4 fallback and concrete
-  pepper algorithms.
+- Added three CLI regression tests in `tests/test_cli.py` (only file touched):
+  `test_hash_password_md4_json_uses_builtin_digest`,
+  `test_hash_password_ntlm_json_uses_builtin_digest`,
+  `test_hash_password_md4_and_ntlm_csv_digests`. The CSV test exercises the
+  real hashing path (no monkeypatching of `run_hash`).
 
 ## Verified
-- CLI: `hash --algorithm ntlm` -> `8846f7eaee8fb117ad06bdd830b7586c`;
-  `hash --algorithm md4` -> `8a9d093f14f8701df17732b2bb182c74`; peppered MD4
-  -> `28f58ad8e71156ab54e0513bd039bbfd`; all exit 0.
-- `coverage report --include=*/hash.py` -> 100% (327 stmts, 130 branch).
-- `pytest tests/test_hash.py tests/test_cli.py -q` -> 1256 passed.
-- `pytest -q` -> 39783 passed, 149 skipped.
+- `pytest -q` -> 39786 passed, 149 skipped.
+- `pytest tests/test_cli.py -q -k "md4 or ntlm"` -> 5 passed.
 - `mypy ethscan/ tests/` -> Success (261 files); `ruff` clean;
-  `check_readme.py` -> 54 commands, 0 drift.
+  `check_readme.py` -> 54 commands, 0 drift; `git diff --check` clean.
 
-## Known limitations (intentionally out of scope)
-- PBKDF2 + MD4 still needs native hashlib MD4; otherwise the existing in-band
-  "does not support PBKDF2 (no hashlib name)" error is returned. Not claimed by
-  the README; unchanged.
-- `ethscan/cli.py:4318` remains the documented unreachable completion guard.
+## Known limitation (demonstrated, in scope for next session)
+- `hash --algorithm md4 --salt saltvalue --iterations 1000` returns
+  `hash: null` + `"Algorithm 'md4' does not support PBKDF2 (no hashlib name)."`
+  even though the response notes still claim the iterations were applied.
+  Cause: `_compute_pbkdf2_hash` in `ethscan/hash.py` requires a native
+  hashlib name for MD4, which this OpenSSL build does not provide.
+- PBKDF2 + NTLM must stay unsupported (not a byte-oriented hash); keep that
+  error path and its existing tests.
 
 ## Next task
-- Add `tests/test_cli.py` regression tests for successful `hash --algorithm md4`
-  and `--algorithm ntlm` output (JSON digest and CSV digest assertions).
-  Existing CLI tests cover only NTLM pepper/PBKDF2 error paths, so this locks
-  the fix at the integration boundary. Then rerun:
-  focused tests, `pytest -q`, `mypy ethscan/ tests/`,
+- Add a pure-Python PBKDF2-HMAC-MD4 fallback in `_compute_pbkdf2_hash`
+  (RFC 2898, block index 1, dklen 16 for MD4), reusing `_md4_hmac_hex`.
+- Independent vectors (PHP CLI, already verified working here):
+  - PBKDF2-HMAC-MD4("password", "saltvalue", 1000, 16)
+    = `1a87747a9ec8f83f194a7b279d89e593`
+  - HMAC-MD4("secretpepper", that digest)
+    = `5743922682e1ee76099abd2680f076bd`
+- Cover both in `tests/test_hash.py` and in a real CLI test in
+  `tests/test_cli.py`; keep MD4 `hash.py` coverage at 100%; update the README
+  only if PBKDF2-MD4 becomes a claimed capability.
+- Then rerun: focused tests, `pytest -q`, `mypy ethscan/ tests/`,
   `ruff check ethscan/ tests/ check_readme.py`, `python check_readme.py`.
 
 ## Constraints / notes
 - Keep architecture stable; do not weaken validation/exit-code contracts.
+- `ethscan/cli.py:4318` is a documented unreachable completion guard; leave it.
 - Do not commit manually; the workflow controller commits and verifies pushes.

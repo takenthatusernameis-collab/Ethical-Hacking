@@ -2,73 +2,61 @@
 Date: Wed Nov 18 2026
 
 ## This session
-- No prior assignment was pending (previous handoff said "None pending"). Inspected the repo and reproduced a real, documented defect:
-  `ethscan hash --algorithm ntlm` and `--algorithm md4` returned `"hash": null` with
-  "MD4 is not available on this platform (OpenSSL build)." on this environment
-  (Python 3.14.4, OpenSSL 3.5.5, `hashlib.algorithms_available` has no `md4`).
-  The README documents NTLM and MD4 as supported, so the platform dependency
-  contradicted the documented contract.
-- Baseline before changes: `pytest -q` -> 39781 passed, 149 skipped; mypy/ruff/check_readme clean.
+- Executed the prior assignment: CLI-boundary regression coverage for the
+  built-in NTLM/MD4 hashing added in the previous session.
 
 ## What changed
-- `ethscan/hash.py`:
-  - Added a self-contained RFC 1320 MD4 implementation (`_md4_digest`, `_rol32`)
-    and `_md4_hmac_hex` (RFC 2104 HMAC-MD4, including key > block-size hashing).
-  - `MD4_AVAILABLE` is now always `True`; `hashlib`'s native MD4 is only used to
-    register the name for PBKDF2/HMAC when the OpenSSL build exposes it.
-  - `_compute_md4`/`_compute_ntlm` always compute (UTF-8 / UTF-16LE respectively).
-  - Extracted `_hmac_hex`; peppered MD4 now uses the pure HMAC-MD4 fallback.
-    NTLM HMAC remains unsupported (no hash function of its own), unchanged.
-  - Removed the now-impossible "MD4/NTLM unavailable" notes in `run_hash`;
-    `_supported_algorithms` always includes `md4`.
-- `tests/test_hash.py`: replaced platform-conditional MD4/NTLM tests with
-  deterministic RFC 1320 vectors, NTLM("password") = 8846f7..., MD4("password")
-  = 8a9d093f..., HMAC-MD4 vectors (independently verified with PHP's
-  `hash_hmac`), a `MD4_AVAILABLE is True` assertion, and a real MD4
-  `run_check` match test.
-- `README.md`: hash bullet now states MD4/NTLM work via the built-in RFC 1320
-  implementation; pepper wording lists the concrete HMAC algorithms.
+- `tests/test_cli.py` (+51 lines, only changed file):
+  - `test_hash_password_md4_json_uses_builtin_digest`: parses JSON from
+    `hash --password password --algorithm md4` and asserts
+    `results[0]["hash"] == "8a9d093f14f8701df17732b2bb182c74"` plus no error.
+  - `test_hash_password_ntlm_json_uses_builtin_digest`: same for NTLM,
+    digest `8846f7eaee8fb117ad06bdd830b7586c`.
+  - `test_hash_password_md4_and_ntlm_csv_digests`: real (non-monkeypatched)
+    CSV run via `--output-format csv --file`, asserts header row and
+    `password,<digest>,<algorithm>` for both algorithms.
 
 ## What was actually verified
-- `python -m ethscan hash --password password --algorithm ntlm` -> hash
-  `8846f7eaee8fb117ad06bdd830b7586c`, exit 0.
-- `python -m ethscan hash --password password --algorithm md4` -> hash
-  `8a9d093f14f8701df17732b2bb182c74` (JSON and CSV), exit 0.
-- `python -m ethscan hash --password password --algorithm md4 --pepper secretpepper`
-  -> `28f58ad8e71156ab54e0513bd039bbfd` (matches independent PHP HMAC-MD4).
-- `python -m coverage run --branch --source=ethscan -m pytest tests/test_hash.py -q`
-  then `coverage report --include=*/hash.py` -> 100% (327 stmts, 130 branch, 0 miss, 0 partial).
-- `python -m pytest tests/test_hash.py tests/test_cli.py -q` -> 1256 passed.
-- `python -m pytest -q` -> 39783 passed, 149 skipped, 0 failed.
+- `python -m pytest tests/test_cli.py -q -k "md4 or ntlm"` -> 5 passed.
+- `python -m pytest -q` -> 39786 passed, 149 skipped, 0 failed (was 39783).
 - `python -m mypy ethscan/ tests/` -> Success, 261 files.
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
-- `python check_readme.py` -> 54 commands, 0 drift; `git diff --check` clean.
-- Working tree contains exactly README.md, ethscan/hash.py, tests/test_hash.py.
+- `python check_readme.py` -> 54 commands, 0 drift.
+- `git diff --check` clean; `git status` shows only `tests/test_cli.py`.
 
 ## What remains unresolved
-- PBKDF2 + MD4 (`--algorithm md4 --salt ... --iterations ...`) still requires a
-  native `hashlib` MD4 name; on this platform it reports an in-band per-password
-  error ("does not support PBKDF2 (no hashlib name)"). PBKDF2-MD4 was not
-  claimed by the README and was intentionally left unchanged.
-- `ethscan/cli.py` line 4318 remains the known unreachable completion guard
-  (unrelated to this change).
+- PBKDF2 + MD4 is still rejected at the library boundary:
+  `python -m ethscan hash --password password --salt saltvalue --iterations 1000 --algorithm md4 --format json`
+  exits 0 but `results[0].hash` is null with
+  `"Algorithm 'md4' does not support PBKDF2 (no hashlib name)."`, while the
+  response `notes` still says "PBKDF2 iterations: 1000 applied with the salt."
+  The root cause is `_compute_pbkdf2_hash` (ethscan/hash.py:236-269) requiring
+  `_hashlib_name(...)`, which returns None for md4 on this platform.
+- PBKDF2 + NTLM remains intentionally unsupported (NTLM is not a hash of
+  arbitrary bytes), so that error path must stay.
+- `ethscan/cli.py:4318` remains the known unreachable completion guard.
 
 ## Approaches already tried / ruled out
-- Wrapping `hashlib.new("md4")` errors with a friendlier message only: rejected,
-  it would keep the documented NTLM/MD4 feature unusable.
-- Relying on a third-party MD4 package: rejected, the project is stdlib-only.
-- Adding `# pragma: no cover` to the platform-dependent branches: rejected,
-  the pure implementation is exercised instead.
+- Third-party crypto packages for PBKDF2-MD4: rejected, project is stdlib-only
+  (`requirements.txt` is click/pyyaml/dnspython).
+- Making `_hashlib_name("md4")` return the string "md4" unconditionally: would
+  break `hashlib.pbkdf2_hmac`/`hmac.new` at runtime on this platform.
+- Relying on native MD4 being present: this environment's OpenSSL 3.5.5 does
+  not expose it, so the pure fallback is the only active path.
 
 ## Next task
-- Add CLI-boundary regression tests for the new MD4/NTLM behavior in
-  `tests/test_cli.py`: assert `hash --algorithm md4` and `--algorithm ntlm`
-  emit the real digests in JSON and CSV (evidence: existing CLI tests cover only
-  the NTLM pepper/PBKDF2 error paths, not successful MD4/NTLM output).
-  Then rerun focused tests plus the full gates (pytest/mypy/ruff/check_readme).
+- Implement PBKDF2-HMAC-MD4 in pure Python (RFC 2898) as the fallback inside
+  `_compute_pbkdf2_hash` when `_hashlib_name("md4")` is None, reusing
+  `_md4_hmac_hex`/`_md4_digest`, with default dklen 16 (MD4 digest size).
+  Independent oracle available: PHP is installed and supports MD4:
+  - `php -r 'echo hash_pbkdf2("md4","password","saltvalue",1000,16);'`
+    -> `1a87747a9ec8f83f194a7b279d89e593`
+  - peppered layer `php -r 'echo hash_hmac("md4", hash_pbkdf2("md4","password","saltvalue",1000,16), "secretpepper");'`
+    -> `5743922682e1ee76099abd2680f076bd`
+  Add unit + CLI tests for those values, keep the NTLM error path intact, and
+  update the README hash/pepper bullet only if the new support is user-visible.
 
 ## Environment/notes
-- Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3.
-- Native MD4 is absent here (`OpenSSL 3.5.5`), so the pure fallback is the
-  active code path. Tests cross-check against native MD4 when present.
+- Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3;
+  PHP CLI available with MD4 in `hash_algos()`.
 - Do not commit manually: the workflow controller stages/commits/pushes.

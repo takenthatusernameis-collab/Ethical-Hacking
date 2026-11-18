@@ -14909,6 +14909,57 @@ def test_hash_password_sha256_json() -> None:
     assert "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8" in result.output
 
 
+def test_hash_password_md4_json_uses_builtin_digest() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["hash", "--password", "password", "--algorithm", "md4", "--format", "json"]
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["algorithm"] == "md4"
+    assert parsed["passwords_hashed"] == 1
+    assert parsed["results"][0]["hash"] == "8a9d093f14f8701df17732b2bb182c74"
+    assert parsed["results"][0]["error"] is None
+
+
+def test_hash_password_ntlm_json_uses_builtin_digest() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["hash", "--password", "password", "--algorithm", "ntlm", "--format", "json"]
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["algorithm"] == "ntlm"
+    assert parsed["results"][0]["hash"] == "8846f7eaee8fb117ad06bdd830b7586c"
+    assert parsed["results"][0]["error"] is None
+
+
+def test_hash_password_md4_and_ntlm_csv_digests(tmp_path) -> None:
+    runner = CliRunner()
+    for algorithm, digest in (
+        ("md4", "8a9d093f14f8701df17732b2bb182c74"),
+        ("ntlm", "8846f7eaee8fb117ad06bdd830b7586c"),
+    ):
+        wordlist = tmp_path / f"{algorithm}.txt"
+        wordlist.write_text("password\n", encoding="utf-8")
+        result = runner.invoke(
+            cli,
+            [
+                "hash",
+                "--algorithm",
+                algorithm,
+                "--output-format",
+                "csv",
+                "--file",
+                str(wordlist),
+            ],
+        )
+        assert result.exit_code == 0
+        lines = result.output.strip().splitlines()
+        assert lines[0] == "password,digest,algorithm,salt,pepper,iterations,computed,match,error"
+        assert lines[1].split(",")[:3] == ["password", digest, algorithm]
+
+
 def test_hash_password_md5_markdown() -> None:
     runner = CliRunner()
     result = runner.invoke(
