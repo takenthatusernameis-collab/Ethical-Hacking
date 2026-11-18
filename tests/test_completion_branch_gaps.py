@@ -10,9 +10,14 @@ gaps are defensive/edge paths that the CLI-level tests cannot hit directly:
   unsupported shell. The CLI cannot reach this because ``click.Choice``
   rejects the value first; only a direct caller can.
 * ``install_completion`` appending to an RC file that already exists but does
-  not yet contain the source line (and does not end in a newline). The
-  existing install tests either start with no RC file or with the source line
-  already present.
+    not yet contain the source line (and does not end in a newline). The
+    existing install tests either start with no RC file or with the source line
+    already present.
+* The non-install ``completion`` command's ``"Shell argument is required when
+    not using --install"`` guard (cli.py) is unreachable via the CLI because the
+    positional ``SHELL`` argument defaults to ``"bash"`` and is validated by
+    ``click.Choice``. Covered by an invariant guard test rather than by
+    reaching the branch directly.
 """
 from __future__ import annotations
 
@@ -141,3 +146,23 @@ def test_install_completion_preserves_empty_existing_rc(monkeypatch, tmp_path) -
 
     rc_text = rc_file.read_text(encoding="utf-8")
     assert info["source_line"] in rc_text
+
+
+def test_completion_non_install_shell_default_never_raises_usage_error() -> None:
+    """The positional SHELL default ("bash") makes the non-install UsageError unreachable.
+
+    The ``completion`` command's positional ``SHELL`` argument defaults to
+    ``"bash"`` and is validated by ``click.Choice``, so ``effective_shell`` is
+    never ``None`` in non-install mode. This guard test documents that
+    invariant: invoking ``completion`` with no shell must succeed and must not
+    hit the ``"Shell argument is required when not using --install"`` branch
+    (cli.py:4313). A regression that removes the default or makes the argument
+    required would surface here as either a different error or a failure.
+    """
+    from click.testing import CliRunner
+
+    from ethscan.cli import cli
+
+    result = CliRunner().invoke(cli, ["completion"])
+    assert result.exit_code == 0, result.output
+    assert "_ethscan_completion" in result.output

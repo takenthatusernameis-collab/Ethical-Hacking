@@ -545,6 +545,39 @@ def test_completion_install_with_out_file(monkeypatch, tmp_path) -> None:
     assert parsed["shell"] == "bash"
 
 
+def test_completion_install_default_output_is_human_message(monkeypatch, tmp_path) -> None:
+    """``--install`` with no format emits the human-readable message, not JSON.
+
+    Regression: previously the deprecated ``--format`` default of "json" leaked
+    into the install path, so ``ethscan completion --install`` printed a JSON
+    report instead of the documented "Completion for X installed" message.
+    """
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _monkeypatch_home(monkeypatch, fake_home)
+    monkeypatch.setenv("SHELL", "/bin/bash")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["completion", "--install"])
+    assert result.exit_code == 0, result.output
+    assert result.output.strip() == "Completion for bash installed successfully."
+
+
+def test_completion_install_explicit_format_alias_json(monkeypatch, tmp_path) -> None:
+    """``--install --format json`` (deprecated alias, explicit) still emits JSON."""
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    _monkeypatch_home(monkeypatch, fake_home)
+    monkeypatch.setenv("SHELL", "/bin/bash")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["completion", "--install", "--format", "json"])
+    assert result.exit_code == 0, result.output
+    parsed = json.loads(result.output)
+    assert parsed["shell"] == "bash"
+    assert parsed["installed"] is True
+
+
 def test_completion_install_no_shell_env(monkeypatch, tmp_path) -> None:
     """Test --install when SHELL env var is not set and no --shell given."""
     fake_home = tmp_path / "home"

@@ -4270,6 +4270,17 @@ def completion(
     # The --shell option overrides the positional SHELL argument when both are given.
     effective_shell = shell_option if shell_option is not None else shell
 
+    # Whether the deprecated --format alias was explicitly provided. When it
+    # was not, the default "json" must not override the documented default
+    # (raw script / human-readable message); only --output-format or an
+    # explicit --format selects a structured report.
+    fmt_source = ctx.get_parameter_source("fmt")
+    fmt_explicit = fmt_source in (
+        ParameterSource.COMMANDLINE,
+        ParameterSource.ENVIRONMENT,
+        ParameterSource.DEFAULT_MAP,
+    )
+
     if do_install:
         # For install, shell is optional (auto-detect if not provided)
         if effective_shell == "bash" and shell_option is None and shell == "bash":
@@ -4280,7 +4291,7 @@ def completion(
         except ValueError as exc:
             raise click.UsageError(str(exc)) from exc
 
-        chosen_format = output_fmt if output_fmt is not None else fmt
+        chosen_format = output_fmt if output_fmt is not None else (fmt if fmt_explicit else None)
         if chosen_format == "json":
             output = format_install_report_json(results)
         elif chosen_format == "csv":
@@ -4313,12 +4324,6 @@ def completion(
     # (e.g. `ethscan completion bash > ~/.ethscan_complete.bash`). A structured
     # report is produced only when a format is explicitly requested via
     # --output-format or the deprecated --format alias.
-    fmt_source = ctx.get_parameter_source("fmt")
-    fmt_explicit = fmt_source in (
-        ParameterSource.COMMANDLINE,
-        ParameterSource.ENVIRONMENT,
-        ParameterSource.DEFAULT_MAP,
-    )
     if output_fmt is not None:
         chosen_format = output_fmt
     elif fmt_explicit:
