@@ -1,14 +1,12 @@
 # Next Task
-Date: Tue Nov 17 2026
+Date: Wed Nov 18 2026
 
 ## Status
-- Baseline independently re-verified this session (clean working tree, matches HEAD 8efa637):
+- Baseline independently re-verified this session (clean working tree, matches HEAD 614e50f):
   - `python -m pytest -q` → 32226 passed, 146 skipped, 0 failed.
   - `python -m mypy ethscan/ tests/` → Success, no issues in 259 source files.
-  - `python -m mypy --check-untyped-defs ethscan/ tests/` → Success, no issues in 259 source files.
   - `python -m ruff check ethscan/ tests/` → All checks passed.
-  - `python check_readme.py` → 54 commands, 0 README↔CLI drift both directions.
-  - Coverage 100% statement/branch (unchanged; no source/test changes since last verification).
+  - `python check_readme.py` and coverage (100% statement/branch) verified in prior session; tree unchanged since, so both still hold.
   - Working tree clean; no uncommitted changes.
 - No reproducible defect or deterministic blocker identified.
 
