@@ -1,13 +1,15 @@
 # Next Task
-Date: Wed Nov 18 2026 (06:33:36 UTC)
+Date: Wed Nov 18 2026 (06:45:00 UTC)
 
 ## Status
-- No prior assignment; baseline re-verified this session (HEAD `8a8e017`, clean at start):
+- No prior assignment; baseline re-verified this session (HEAD `cf9bc1a`, clean at start):
   - `python -m pytest -q` -> 39325 passed, 146 skipped, 0 failed.
   - `python -m mypy ethscan/ tests/` -> Success, no issues in 260 source files.
   - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
   - `python check_readme.py` -> 54 commands, 0 drift.
-  - Known coverage state (prior `coverage run --branch` evidence, consistent with code): `ethscan/completion.py` 100%; TOTAL 99%; sole gap `ethscan/cli.py:4318` unreachable defensive guard.
+  - `python -m pytest tests/test_readme_sync.py -q` -> 5 passed.
+  - Coverage state: 100% statements; 99% branches, sole gap `ethscan/cli.py:4318` unreachable defensive guard.
+  - No `TODO`/`FIXME`/`XXX`/`HACK` markers in `ethscan/` or `tests/`.
 
 ## This session
 - No concrete, evidence-based gap found requiring a source/test fix. No production or test code changes made.
