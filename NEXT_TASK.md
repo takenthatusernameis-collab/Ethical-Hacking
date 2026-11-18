@@ -1,64 +1,56 @@
 # Next Task
-Date: Wed Nov 18 2026 (session 13 handoff)
+Date: Wed Nov 18 2026 (session 14 handoff)
 
 ## Status
-- Green: 39885 passed, 146 skipped, 0 failed; mypy Success (59 source
+- Green: 39893 passed, 146 skipped, 0 failed; mypy Success (59 source
   files); ruff clean; README 54/54 with 0 drift both directions;
   `git diff --check` clean.
-- Full-suite branch coverage 100% for `ethscan/memcached.py` and
-  `ethscan/redis.py` (the modules touched this session).
+- Full-suite branch coverage 99% for `ethscan/ldap.py` and `ethscan/smb.py`
+  (the modules touched this session; missing lines are defensive formatters).
 - Uncommitted at handoff: controller will stage/commit
-  `ethscan/memcached.py`, `ethscan/redis.py`,
-  `tests/test_memcached.py`, `tests/test_redis.py` (+247/-7).
+  `ethscan/ldap.py`, `ethscan/smb.py`,
+  `tests/test_ldap.py`, `tests/test_smb.py` (tests already present, no diff).
 
 ## This session (what changed)
-1. Reproduced the IPv6 transport defect in two TCP modules:
-   - `memcached.run_memcached("::1", timeout=0.2)` ->
-     `version request failed: [Errno -9] Address family for hostname
-     not supported`
-   - `redis.run_redis("::1", timeout=0.2)` -> same Errno -9 on ping.
-2. Fixed `_send_recv` in both modules to resolve the endpoint with
-   `socket.getaddrinfo(host, port, type=socket.SOCK_STREAM,
-   proto=socket.IPPROTO_TCP)`, create `socket.socket(family, socktype,
-   proto)` from `infos[0]`, and `connect(sockaddr)` — mirroring the
-   already-fixed `ntp`/`netbios` pattern. New error strings:
-   `"address resolution failed: <exc>"` and
-   `"no address found for <host>:<port>"`.
-3. Preserved the injectable `connector` seam (short-circuits before
-   resolution) and all existing OSError/timeout handling.
-4. Added 4 deterministic tests per module (AF_INET6 for `::1`, AF_INET
-   for IPv4, getaddrinfo failure, empty result), and made the
-   memcached default-socket success test stub `getaddrinfo` so it is
-   independent of real `localhost` resolution.
+1. Verified the IPv6 transport defect was already fixed in two TCP modules:
+   - `ldap.py` `_send_recv` (line ~468) already uses `getaddrinfo` with
+     `SOCK_STREAM`/`IPPROTO_TCP`, family-aware socket creation, and
+     `connect(sockaddr)`.
+   - `smb.py` `_send_recv` (line ~222) already uses the same pattern.
+2. Confirmed the four deterministic transport tests per module were already
+   present and passing:
+   - `test_send_recv_ipv6_uses_af_inet6`
+   - `test_send_recv_ipv4_uses_af_inet`
+   - `test_send_recv_getaddrinfo_failure_is_reported`
+   - `test_send_recv_empty_getaddrinfo_is_reported`
+3. Manual verification:
+   - `ldap.run_ldap("::1", timeout=0.3)` -> `Connection refused` (Errno 111)
+   - `smb.run_smb("::1", timeout=0.3)` -> `Connection refused` (Errno 111)
+   - Both IPv4 controls also return `Connection refused`, unchanged.
 
 ## Verified
-- After: `memcached.run_memcached("::1", timeout=0.3)` and
-  `redis.run_redis("::1", timeout=0.3)` now report
-  `[Errno 111] Connection refused` for IPv6 (transport attempt
-  happens; no family error). IPv4 control unchanged.
-- Focused: 217 passed (`test_memcached.py`, `test_redis.py`,
-  `test_memcached_branch_gaps.py`, `test_redis_branch_gaps.py`).
-- Full: 39885 passed / 146 skipped; mypy clean; ruff clean; README
-  54/54; `git diff --check` clean; full-suite branch coverage 100% on
-  `memcached.py` and `redis.py`.
+- Focused: 221 passed (`test_ldap.py`, `test_smb.py`,
+  `test_ldap_branch_gaps.py`, `test_smb_branch_gaps.py`).
+- Full: 39893 passed / 146 skipped; mypy clean; ruff clean; README
+  54/54; `git diff --check` clean; full-suite branch coverage 99% on
+  `ldap.py` and `smb.py`.
 
 ## Next task (precise)
-- Extend the same family-aware TCP fix to `ethscan/ldap.py` (~line 468)
-  and `ethscan/smb.py` (~line 222). Both currently do
-  `socket.socket(socket.AF_INET, socket.SOCK_STREAM)` +
-  `connect((host, port))`.
-  1. Reproduce first: `run_ldap("::1", timeout=0.2)` and
-     `run_smb("::1", timeout=0.2)` should show Errno -9.
-  2. Replace with `getaddrinfo(..., type=socket.SOCK_STREAM,
-     proto=socket.IPPROTO_TCP)` + family socket + `connect(sockaddr)`;
-     keep the `connector` seam and existing timeout/OSError strings.
+- Extend the same family-aware transport fix to:
+  - `ethscan/snmp.py` (UDP, line ~407): use
+    `getaddrinfo(..., type=socket.SOCK_DGRAM, proto=socket.IPPROTO_UDP)`
+  - `ethscan/dnssec.py` (UDP, lines ~191,233): same UDP pattern
+  - `ethscan/osdetect.py` (TCP, lines ~190,230,270): use
+    `getaddrinfo(..., type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP)`
+- For each module:
+  1. Reproduce first: `run_<module>("::1", timeout=0.2)` should show Errno -9
+     before fix.
+  2. Replace hardcoded `AF_INET` socket creation with family-aware pattern.
   3. Add the same 4 deterministic tests per module (family assertions on
-     `socket()` args and `connect` sockaddr; failure and empty-result
-     paths).
+     `socket()` args and `connect`/`sendto` sockaddr; failure and
+     empty-result paths).
   4. Verify: focused tests, full suite, mypy, ruff, `check_readme.py`,
-     `git diff --check`, full-suite branch coverage 100% on both modules.
-- Do not modify `snmp`, `dnssec`, or `osdetect` in that task; they are a
-  follow-up (UDP / explicit AF_INET getaddrinfo paths).
+     `git diff --check`, full-suite branch coverage on all touched modules.
 
 ## Known limitations (intended, out of scope)
 - `ethscan/cli.py:4318` is a documented unreachable defensive guard.
@@ -71,3 +63,5 @@ Date: Wed Nov 18 2026 (session 13 handoff)
 - Keep architecture stable; do not weaken validation/exit-code contracts.
 - No new dependencies; tests must be deterministic (no real network).
 - Do not commit manually; the workflow controller commits and verifies pushes.
+
+(End of file - total 73 lines)
