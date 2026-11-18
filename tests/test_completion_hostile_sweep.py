@@ -76,3 +76,14 @@ def test_install_report_formatters_never_raise_on_hostile_fields() -> None:
             assert isinstance(md, str), f"{field}={bad!r} markdown not str"
             assert isinstance(csv_text, str), f"{field}={bad!r} csv not str"
             assert "ethscan Completion Installation" in md
+
+
+def test_install_formatters_never_raise_on_hostile_top_level() -> None:
+    for bad in HOSTILE_TOP_LEVEL:
+        bad_any: Any = bad
+        json.loads(completion.format_install_report_json(cast(Any, bad_any)))
+        md = completion.format_install_report_markdown(cast(Any, bad_any))
+        csv_text = completion.format_install_report_csv(cast(Any, bad_any))
+        assert isinstance(md, str)
+        assert isinstance(csv_text, str)
+        assert "ethscan Completion Installation" in md

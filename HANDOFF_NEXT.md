@@ -2,46 +2,37 @@
 Date: Wed Nov 18 2026
 
 ## This session
-- The stale handoff claimed the repo was "fully green," but the committed contract test `tests/test_all_assessors_hostile_contract.py` (part of the single initial commit fab48fd) was actually failing: 114 failed / 417 passed. Inspected the repo and selected a bounded, high-value task: make that contract test pass correctly, fixing the real hostile-field crashes it exposed.
-- Discovered via empirical probing that two `_assess_*` functions crashed on hostile *field* values (same class as the session-8 mysql/mongodb bugs), plus the test over-asserted on type-contract noise (which the prior session explicitly ruled out as non-reachable):
-  - `ethscan.postgresql._assess_startup`: `for err in startup.get("errors", []) or []` crashed `TypeError: 'int' object is not iterable` on hostile `errors: 123`.
-  - `ethscan.redis._assess_dangerous`: `"0.0.0.0" in bind` crashed `TypeError` on hostile `bind: 123`.
-  - `ethscan.memcached._coerce_int`: `int(float("inf"))` raised uncaught `OverflowError` on hostile stats fields (pid/uptime/etc.).
-  - `ethscan.ntp._assess_ntp_version`: `int(version)` raised uncaught `OverflowError` on hostile `version: inf/-inf`.
-- Str-typed assessors crashing on non-str *top-level* input (ftp/smtp/snmp/web/ssh) and dict/list assessors crashing on non-dict/non-list top-level input are type-contract noise (internal assessors always receive parser-produced typed values) — deliberately NOT hardened, per prior-session ruling. Corrected the test to not assert on those out-of-contract inputs instead.
+- Inspected the repository state and confirmed the true baseline from a clean tree at HEAD `1d71553`: `pytest -q` -> 39780 passed, 149 skipped, 0 failed; `mypy ethscan/ tests/` clean (261 files); `ruff` clean; `check_readme.py` 54/54, 0 drift.
+- Found a coverage gap in `ethscan/completion.py`: was at 93% (5 missed statements / 5 partial branches) instead of the repo's 100% coverage standard.
+- The missing coverage was in defensive `isinstance(result, dict)` guards in the completion and install report formatters (lines 147, 188, 199, 298, 319).
+- The existing hostile-sweep test `test_completion_formatters_never_raise_on_hostile_top_level` covered non-dict top-level input for the completion formatters but not for the install formatters.
+- Added `test_install_formatters_never_raise_on_hostile_top_level` to `tests/test_completion_hostile_sweep.py` to cover non-dict top-level input for `format_install_report_json`, `format_install_report_markdown`, and `format_install_report_csv`.
 
 ## What changed
-- `ethscan/postgresql.py` (`_assess_startup`): guard `errors` — coerce non-list/non-truthy to `[]` before iterating.
-- `ethscan/redis.py` (`_assess_dangerous`): `if bind and isinstance(bind, str) and "0.0.0.0" in bind`.
-- `ethscan/memcached.py` (`_coerce_int`): `except (TypeError, ValueError, OverflowError)`.
-- `ethscan/ntp.py` (`_assess_ntp_version`): `except (ValueError, TypeError, OverflowError)`.
-- `tests/test_all_assessors_hostile_contract.py`: removed the dict-input top-level hostile sweep (type-contract noise); narrowed list-assessor and ssh-assessor top-level sweeps to type-appropriate inputs; reused `HOSTILE_VALUES` for the field-hostile loop (was an inline duplicate). Hostile-*field* validation (the real contract) is fully retained.
+- `tests/test_completion_hostile_sweep.py`: added one test function `test_install_formatters_never_raise_on_hostile_top_level` that passes the same hostile top-level values (None, [], "x", 123, 1.5, True, b"bytes") to all three install report formatters.
+- No production code changed. No behavior change for valid input.
 
 ## What was actually verified
-- Repro before fix: `postgresql._assess_startup({"errors": 123})` → TypeError; `redis._assess_dangerous({"bind": 123})` → TypeError; memcached stats with `pid: inf` → OverflowError; ntp with `version: inf` → OverflowError. All fixed.
-- `python -m pytest tests/test_all_assessors_hostile_contract.py -q` → 446 passed (was 114 failed).
-- `python -m pytest tests/test_memcached.py tests/test_ntp.py tests/test_postgresql.py tests/test_redis.py tests/test_mysql.py tests/test_mongodb.py tests/test_all_formatters_hostile_contract.py -q` → 26658 passed, 0 failed.
-- `python -m mypy ethscan/ tests/` → Success, no issues in 261 source files.
-- `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed.
-- `python check_readme.py` → 54 commands, 0 drift both directions.
-- `python -m coverage run --branch --source=ethscan` on changed modules → postgresql/redis/mongodb/mysql 0 statement misses; memcached/ntp 98%; new `OverflowError`/`isinstance` branches exercised by hostile-field tests (`inf`, `123`).
-- `git diff --check` clean; working tree has exactly the 5 intended files modified, nothing else.
+- `python -m pytest tests/test_completion_hostile_sweep.py -q` -> 4 passed (was 3).
+- `python -m coverage run --branch --source=ethscan -m pytest tests/test_completion.py tests/test_completion_branch_gaps.py tests/test_completion_hostile_sweep.py -q` -> 71 passed.
+- `python -m coverage report --include=*/completion.py` -> 100% (115 stmts, 0 miss, 36 branch, 0 partial) — was 93%.
+- `python -m pytest tests/test_completion.py tests/test_completion_branch_gaps.py tests/test_completion_hostile_sweep.py tests/test_all_formatters_hostile_contract.py -q` -> 25833 passed.
+- `python -m mypy ethscan/ tests/` -> Success: no issues in 261 source files.
+- `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
+- `python check_readme.py` -> 54 commands, 0 drift both directions.
+- `git diff --check` clean; working tree has exactly the 1 intended file modified, nothing else.
 
 ## What remains unresolved
-- `ethscan/cli.py:4318` defensive `UsageError("Shell argument is required when not using --install")` remains the sole branch-coverage gap — unreachable via the CLI (positional `shell` defaults to "bash" and is choice-validated). Intentionally out of scope.
-- `oracle`/`postgresql` empty-target handling remains intentionally out of scope (exit 0, in-band error) per documented contract.
-- Full repo `pytest -q` was not run to completion (network-dependent tests time out in this sandbox); targeted module + contract tests all pass.
+- `ethscan/cli.py` is at 99% (2 statements: 4318, 4302), both inside the `completion` command and both UNREACHABLE via the CLI: line 4318 is the install-mode `else` "human-readable message" branch, but `--format` defaults to `"json"` so `chosen_format` is always a valid format and bare `--install` emits JSON (verified empirically); line 4302 is the non-install `shell is None` guard, but the positional `shell` defaults to `"bash"` so `effective_shell` is never `None`. These are defensive branches from the completion feature. Intentionally left as documented known limitation.
+- `oracle`/`postgresql` empty-target handling remains intentionally out of scope (exit 0, in-band error) per their documented contract.
 
 ## Approaches already tried / ruled out
-- Hardening assessors against wrong-typed *top-level* args (non-dict to dict assessors, non-str to str assessors, non-list to list assessor): rejected — type-contract noise, not reachable bugs; explicitly not fixed per prior session. Corrected the test assertions instead.
-- Speculative broadening of every `_assess_*` field with `str()`: only the four genuine crashes above were found by empirical probing; the rest already coerce or try/except.
+- Rejected adding `# pragma: no cover` to `cli.py` 4318/4302: would game the coverage metric and hide a real (if benign) gap.
+- Rejected deleting the defensive branches at 4318/4302: they are validation guards; removing them would weaken safety.
+- Rejected changing the `--format` default/`--output-format` precedence to make 4318 reachable: speculative, user-visible behavior change with no reproduced defect.
 
 ## Next task
-- None pending from current evidence. Repo is green for the contract test and touched modules. If future work is needed, pick one bounded, verifiable improvement, reproduce the gap first, apply the smallest safe fix, rerun focused then broader gates (pytest/mypy/ruff/check_readme/coverage), and preserve safety/validation.
-- Concrete evidence-backed lead for a future session: extend the permanent hostile-field coverage to `format_install_report_*`/`format_completion_report_*` (the assessor contract now covers `_assess_*`; formatters are covered by `test_all_formatters_hostile_contract.py` but the install/completion formatters have dedicated sweeps in tests/test_completion_hostile_sweep.py).
-- Do not speculate on a green baseline; do not commit unless explicitly asked.
+- None pending from current evidence. Repository green (39780+ passed; mypy/ruff/README clean; completion.py 100%; only the documented cli.py:4318 unreachable defensive guard uncovered). If future work is needed: reproduce a concrete gap first (failing check/test or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then broader gates (pytest/mypy/ruff/check_readme/coverage), and preserve safety/validation. `oracle`/`postgresql` empty-target handling remains intentionally out of scope (exit 0, in-band error).
 
 ## Environment/notes
-- Python 3.14.4, pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3 (installed this session; pytest/mypy/ruff/coverage were not present in the base image). `rg` not installed; use Grep tool or `grep`. Working tree has 5 intended file changes (not committed). No commit/push performed.
-
-(End of file)
+- Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3. Working tree has uncommitted changes (only `tests/test_completion_hostile_sweep.py`). Do not commit unless explicitly asked.
