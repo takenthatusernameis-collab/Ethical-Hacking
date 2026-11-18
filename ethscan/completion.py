@@ -305,7 +305,7 @@ def format_install_report_markdown(result: dict[str, Any]) -> str:
         f"- **Installed:** {'Yes' if result.get('installed') else 'No'}",
         f"- **Already Installed:** {'Yes' if result.get('already_installed') else 'No'}",
         "",
-        f"## Message",
+        "## Message",
         "",
         result.get("message", ""),
         "",

@@ -183,7 +183,6 @@ def test_format_completion_report_json() -> None:
     cli_obj = _make_cli()
     result = run_completion(cli_obj, "bash")
     output = format_completion_report_json(result)
-    import json
 
     parsed = json.loads(output)
     assert parsed["shell"] == "bash"
@@ -195,7 +194,6 @@ def test_format_completion_report_json_custom_prog() -> None:
     cli_obj = _make_cli()
     result = run_completion(cli_obj, "bash", prog_name="mytool")
     output = format_completion_report_json(result)
-    import json
 
     parsed = json.loads(output)
     assert parsed["prog_name"] == "mytool"
@@ -370,7 +368,6 @@ def test_completion_cli_out_with_output_format_writes_report(tmp_path) -> None:
     out = tmp_path / "comp.json"
     result = _run_completion_cli(["bash", "--output-format", "json", "--out", str(out)])
     assert result.exit_code == 0, result.output
-    import json
 
     parsed = json.loads(out.read_text(encoding="utf-8"))
     assert parsed["shell"] == "bash"
@@ -415,7 +412,6 @@ def test_completion_install_auto_detect_json(monkeypatch, tmp_path) -> None:
     result = runner.invoke(cli, ["completion", "--install", "--output-format", "json"])
     assert result.exit_code == 0, result.output
 
-    import json
 
     parsed = json.loads(result.output)
     assert parsed["shell"] == "bash"
@@ -438,7 +434,6 @@ def test_completion_install_explicit_shell_json(monkeypatch, tmp_path) -> None:
     result = runner.invoke(cli, ["completion", "--install", "--shell", "zsh", "--output-format", "json"])
     assert result.exit_code == 0, result.output
 
-    import json
 
     parsed = json.loads(result.output)
     assert parsed["shell"] == "zsh"
@@ -461,7 +456,6 @@ def test_completion_install_fish(monkeypatch, tmp_path) -> None:
     result = runner.invoke(cli, ["completion", "--install", "--shell", "fish", "--output-format", "json"])
     assert result.exit_code == 0, result.output
 
-    import json
 
     parsed = json.loads(result.output)
     assert parsed["shell"] == "fish"
@@ -481,7 +475,6 @@ def test_completion_install_already_installed(monkeypatch, tmp_path) -> None:
     # First install
     result1 = runner.invoke(cli, ["completion", "--install", "--output-format", "json"])
     assert result1.exit_code == 0, result1.output
-    import json
 
     parsed1 = json.loads(result1.output)
     assert parsed1["installed"] is True
@@ -547,7 +540,6 @@ def test_completion_install_with_out_file(monkeypatch, tmp_path) -> None:
     result = runner.invoke(cli, ["completion", "--install", "--output-format", "json", "--out", str(out_file)])
     assert result.exit_code == 0, result.output
     assert "Completion for bash" in result.output or "Report written to" in result.output
-    import json
 
     parsed = json.loads(out_file.read_text())
     assert parsed["shell"] == "bash"

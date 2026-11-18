@@ -4274,7 +4274,7 @@ def completion(
         # For install, shell is optional (auto-detect if not provided)
         if effective_shell == "bash" and shell_option is None and shell == "bash":
             # User didn't specify a shell explicitly; let install_completion auto-detect
-            effective_shell = None
+            effective_shell = None  # type: ignore[assignment]
         try:
             results = install_completion(cli, shell=effective_shell, prog_name=prog_name)
         except ValueError as exc:
@@ -4320,11 +4320,11 @@ def completion(
         ParameterSource.DEFAULT_MAP,
     )
     if output_fmt is not None:
-        chosen_format: str | None = output_fmt
+        chosen_format = output_fmt
     elif fmt_explicit:
         chosen_format = fmt
     else:
-        chosen_format = None
+        chosen_format = None  # type: ignore[assignment]
 
     if chosen_format == "json":
         output = format_completion_report_json(results)
