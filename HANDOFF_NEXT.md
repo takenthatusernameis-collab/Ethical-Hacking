@@ -3,19 +3,18 @@ Date: Thu Nov 19 2026 (session 20)
 
 ## State at HEAD (working tree clean except for the fix below; controller will stage/commit)
 - Single control-marker commit `5ca0fc8` (empty message — not project progress per rules).
-- `pytest -q` -> **46653 passed, 146 skipped, 0 failed** (baseline was NOT green at session start: one real failure reproduced and fixed — see "What changed").
-- `python -m mypy ethscan/ tests/` -> Success: no issues in 262 source files (`--check-untyped-defs` also clean per prior sessions).
+- `pytest -q` -> **46670 passed, 146 skipped, 0 failed** (baseline green; added 17 tests in `tests/test_fileio_hostile_sweep.py` — see "What changed").
+- `python -m mypy ethscan/ tests/` -> Success: no issues in 263 source files (`--check-untyped-defs` also clean per prior sessions).
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> all checks passed.
 - `python3 check_readme.py` -> 54 commands, 0 drift both directions; `git diff --check` clean.
 
 ## What changed
-- Fixed `tests/test_ping.py::test_ping_tcp_fallback_ipv6_family_sets_hop_limit`:
-  - The test body called `probe_icmp` directly (returns a single probe dict) but then referenced the undefined name `results` (`results["probes"]`, `results["failed"]`), raising `NameError`.
-  - Replaced the undefined-`results` assertions with an assertion that the IPv6 TCP-fallback path sets `IPV6_UNICAST_HOPS` to the TTL (via `_FakeSocket.instances[-1].setsockopt_calls`), plus `type(self).instances.append(self)` tracking on `_FakeSocket`. No behavior change to source; purely a test fix.
+- Added `tests/test_fileio_hostile_sweep.py` (17 tests): hostile-shape sweep for the shared file helpers of `ethscan.fileio` (`read_text`, `read_lines`, `load_json`, `is_utf8`, `write_text`, `write_json`). Covers non-UTF-8 bytes (replaced, not raised), blank/comment/hostile lines, valid JSON, broken JSON, deeply nested JSON (>1000 brackets -> ValueError), unreadable files (OSError), and atomic writes with auto-created parent dirs (unwritable parent -> OSError).
+- Fixed `tests/test_ping.py::test_ping_tcp_fallback_ipv6_family_sets_hop_limit` (prior session): replaced undefined `results`-based assertions with an assertion that the IPv6 TCP-fallback path sets `IPV6_UNICAST_HOPS` to the TTL, plus `_FakeSocket` instance tracking. No source (`ethscan/`) changes; purely a test fix, fully reversible.
 
 ## What was actually verified
-- Reproduced `NameError: name 'results' is not defined` before the fix.
-- After fix: the targeted test passes; full suite `46653 passed, 146 skipped, 0 failed`; mypy/ruff/check_readme all clean.
+- Reproduced `NameError: name 'results' is not defined` before the prior fix (see git history).
+- After this session's changes: the 17 new `test_fileio_hostile_sweep.py` tests pass; full suite `46670 passed, 146 skipped, 0 failed`; mypy/ruff/check_readme all clean.
 
 ## Unresolved / known limitations (all explicitly out of scope)
 - `ethscan/cli.py:4318` unreachable defensive guard (`raise click.UsageError("Shell argument is required when not using --install")`): deliberately left uncovered — unreachable via the CLI; prior sessions rejected removing it or gaming coverage with `# pragma: no cover`.
