@@ -94,6 +94,17 @@ def test_resolve_host_invalid() -> None:
     assert result is None
 
 
+def test_resolve_host_empty_getaddrinfo_result(monkeypatch) -> None:
+    """A host that resolves to no addresses returns None.
+
+    getaddrinfo can legitimately return an empty list (e.g. a name with no
+    A/AAAA records); _resolve_host must report the same failure shape as an
+    exception, not index into the empty list.
+    """
+    monkeypatch.setattr("ethscan.geo.socket.getaddrinfo", lambda *a, **k: [])
+    assert _resolve_host("example.com") is None
+
+
 # ---------------------------------------------------------------------------
 # Cache operations
 # ---------------------------------------------------------------------------
