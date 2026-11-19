@@ -14956,7 +14956,7 @@ def test_hash_password_md4_and_ntlm_csv_digests(tmp_path) -> None:
         )
         assert result.exit_code == 0
         lines = result.output.strip().splitlines()
-        assert lines[0] == "password,digest,algorithm,salt,pepper,iterations,computed,match,error"
+        assert lines[0] == "password,hash,algorithm,salt,pepper,iterations,error"
         assert lines[1].split(",")[:3] == ["password", digest, algorithm]
 
 
@@ -15042,7 +15042,7 @@ def test_hash_password_md4_pbkdf2_csv(tmp_path) -> None:
     )
     assert result.exit_code == 0
     lines = result.output.strip().splitlines()
-    assert lines[0] == "password,digest,algorithm,salt,pepper,iterations,computed,match,error"
+    assert lines[0] == "password,hash,algorithm,salt,pepper,iterations,error"
     assert lines[1].split(",")[:3] == ["password", "1a87747a9ec8f83f194a7b279d89e593", "md4"]
     assert "1000" in lines[1]
 
@@ -20355,7 +20355,7 @@ def test_hash_output_format_csv_with_passwords(tmp_path, monkeypatch) -> None:
     wordlist.write_text("password\n", encoding="utf-8")
     result = runner.invoke(cli, ["hash", "--algorithm", "md5", "--output-format", "csv", "--file", str(wordlist)])
     assert result.exit_code == 0
-    assert "password,digest,algorithm,salt,pepper,iterations,computed,match,error" in result.output
+    assert "password,hash,algorithm,salt,pepper,iterations,error" in result.output
     assert "password,5f4dcc3b5aa765d61d8327deb882cf99,md5" in result.output
 
 
@@ -20376,7 +20376,7 @@ def test_hash_output_format_csv_out(tmp_path, monkeypatch) -> None:
     assert result.exit_code == 0
     assert "Report written" in result.output
     content = out_file.read_text()
-    assert "password,digest,algorithm,salt,pepper,iterations,computed,match,error" in content
+    assert "password,hash,algorithm,salt,pepper,iterations,error" in content
 
 
 def test_hash_format_csv_alias(tmp_path, monkeypatch) -> None:
@@ -20393,7 +20393,7 @@ def test_hash_format_csv_alias(tmp_path, monkeypatch) -> None:
     wordlist.write_text("password\n", encoding="utf-8")
     result = runner.invoke(cli, ["hash", "--algorithm", "md5", "--format", "csv", "--file", str(wordlist)])
     assert result.exit_code == 0
-    assert "password,digest,algorithm,salt,pepper,iterations,computed,match,error" in result.output
+    assert "password,hash,algorithm,salt,pepper,iterations,error" in result.output
 
 
 def test_hash_check_output_format_csv(tmp_path, monkeypatch) -> None:
@@ -22983,7 +22983,7 @@ def test_hash_stdin_with_out_csv(tmp_path) -> None:
     assert result.exit_code == 0
     assert out_file.exists()
     content = out_file.read_text()
-    assert "digest,algorithm" in content
+    assert "hash,algorithm" in content
 
 def test_hash_stdin_with_out_markdown(tmp_path) -> None:
     out_file = tmp_path / "hash.md"

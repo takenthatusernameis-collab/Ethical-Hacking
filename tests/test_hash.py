@@ -1205,7 +1205,7 @@ def test_format_hash_report_csv_basic() -> None:
     output = format_hash_report_csv(data)
 
     lines = [line.rstrip("\r") for line in output.strip().split("\n")]
-    assert lines[0] == "password,digest,algorithm,salt,pepper,iterations,computed,match,error"
+    assert lines[0] == "password,hash,algorithm,salt,pepper,iterations,error"
     assert "password" in lines[1]
     assert "5f4dcc3b5aa765d61d8327deb882cf99" in lines[1]
     assert "md5" in lines[1]
@@ -1227,7 +1227,7 @@ def test_format_hash_report_csv_empty() -> None:
     output = format_hash_report_csv(data)
 
     lines = [line.rstrip("\r") for line in output.strip().split("\n")]
-    assert lines[0] == "password,digest,algorithm,salt,pepper,iterations,computed,match,error"
+    assert lines[0] == "password,hash,algorithm,salt,pepper,iterations,error"
 
 
 def test_format_hash_report_csv_with_salt_pepper() -> None:
@@ -1315,7 +1315,7 @@ def test_format_check_report_csv_pipe_escaping() -> None:
 def test_format_hash_report_csv_non_dict_data() -> None:
     output = format_hash_report_csv(cast(Any, None))
     lines = output.strip().split("\n")
-    assert lines[0] == "password,digest,algorithm,salt,pepper,iterations,computed,match,error"
+    assert lines[0] == "password,hash,algorithm,salt,pepper,iterations,error"
     assert len(lines) == 1  # only header
 
 

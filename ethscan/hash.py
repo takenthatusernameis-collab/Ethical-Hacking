@@ -777,13 +777,11 @@ def format_hash_report_csv(data: Mapping[str, object]) -> str:
     writer = csv.writer(output)
     writer.writerow([
         "password",
-        "digest",
+        "hash",
         "algorithm",
         "salt",
         "pepper",
         "iterations",
-        "computed",
-        "match",
         "error",
     ])
     if not isinstance(data, dict):
@@ -794,16 +792,13 @@ def format_hash_report_csv(data: Mapping[str, object]) -> str:
     for entry in results:
         if not isinstance(entry, dict):
             continue
-        match_val = entry.get("match")
         writer.writerow([
             entry.get("password", ""),
-            entry.get("hash") or entry.get("digest") or "",
+            entry.get("hash") or "",
             entry.get("algorithm") or algorithm,
             "true" if entry.get("salt") else "false",
             "true" if entry.get("pepper") else "false",
             entry.get("iterations") if entry.get("iterations") is not None else "",
-            entry.get("computed") or "",
-            "true" if match_val is True else ("false" if match_val is False else ""),
             entry.get("error") or "",
         ])
     return output.getvalue().rstrip("\r\n")
