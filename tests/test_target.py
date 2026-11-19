@@ -533,7 +533,12 @@ RESOLVE_HOST_MODULES = ("cert", "geo", "mac", "ping")
 def test_the_resolve_host_helpers_report_a_malformed_host(module_name: str, host: str) -> None:
     """A host that cannot be encoded is reported as an unresolvable host."""
     module = importlib.import_module(f"ethscan.{module_name}")
-    assert module._resolve_host(host) is None
+    result = module._resolve_host(host)
+    # ping returns (None, None, None) tuple; others return None
+    if isinstance(result, tuple):
+        assert result == (None, None, None)
+    else:
+        assert result is None
 
 
 def test_the_connection_helpers_report_a_malformed_host() -> None:

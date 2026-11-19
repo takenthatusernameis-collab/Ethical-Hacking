@@ -162,15 +162,25 @@ def _try_create_raw_socket() -> Any:
         return sock
 
 
-def _resolve_host(host: str) -> str | None:
-    """Resolve a hostname to an IPv4 address, returning ``None`` on failure."""
+def _resolve_host(host: str) -> tuple[str, int, tuple[Any, ...]] | tuple[None, None, None]:
+    """Resolve a hostname to an IP address with family and sockaddr.
+
+    Returns a tuple of (ip, family, sockaddr) on success, or (None, None, None)
+    on failure. The sockaddr is a tuple suitable for socket.connect().
+    """
     try:
-        return socket.gethostbyname(host)
-    # A host that is not a valid host name ("....") raises a UnicodeError,
-    # which is a ValueError, when the resolver encodes it. A resolver that
-    # fails with any other error type is a failed lookup as well.
+        infos = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP)
     except Exception:  # noqa: BLE001 - resolver can raise any type
-        return None
+        return None, None, None
+
+    if not infos:
+        return None, None, None
+
+    info = infos[0]
+    family = info[0]
+    sockaddr = info[4]
+    ip = sockaddr[0]
+    return ip, family, sockaddr  # type: ignore[return-value]
 
 
 def probe_icmp(
@@ -182,6 +192,8 @@ def probe_icmp(
     sequence: int = 0,
     payload: bytes = b"",
     resolved_ip: str | None = None,
+    resolved_family: int | None = None,
+    resolved_sockaddr: tuple | None = None,
     port: int = DEFAULT_PORT,
 ) -> _ProbeResult:
     """Send an ICMP Echo Request and wait for a reply.
@@ -201,6 +213,8 @@ def probe_icmp(
         sequence: ICMP sequence number.
         payload: Optional payload bytes.
         resolved_ip: Pre-resolved IP of *host* (used in fallback mode).
+        resolved_family: Address family of the resolved IP (AF_INET or AF_INET6).
+        resolved_sockaddr: Resolved sockaddr tuple for direct connection.
         port: Target TCP port for connect-based fallback (default 80).
 
     Returns:
@@ -282,9 +296,17 @@ def probe_icmp(
                 }
 
     # Fallback mode: TCP connect-based ping
+    # Use resolved family and sockaddr if available, otherwise fall back to host string
+    family = resolved_family if resolved_family is not None else socket.AF_INET
+    sockaddr = resolved_sockaddr
     try:
-        send_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        send_sock.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, ttl)
+        send_sock = socket.socket(family, socket.SOCK_STREAM)
+        if family == socket.AF_INET6:
+            hop_limit_opt = getattr(socket, "IPV6_UNICAST_HOPS", None)
+            if hop_limit_opt is not None:
+                send_sock.setsockopt(socket.IPPROTO_IPV6, hop_limit_opt, ttl)
+        else:
+            send_sock.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, ttl)
         send_sock.settimeout(timeout)
     except Exception as exc:  # noqa: BLE001 - transport can raise any type
         # A socket that cannot be created is a transport failure: report it as
@@ -299,7 +321,16 @@ def probe_icmp(
             "error": str(exc),
         }
     try:
-        err = send_sock.connect_ex((host, port))
+        if sockaddr is not None:
+            # For IPv6, sockaddr may be a 4-tuple (ip, port, flowinfo, scopeid)
+            # We need to replace the port with our target port
+            if family == socket.AF_INET6 and len(sockaddr) >= 4:
+                connect_sockaddr: tuple[Any, ...] = (sockaddr[0], port, sockaddr[2], sockaddr[3])
+            else:
+                connect_sockaddr = (sockaddr[0], port)
+            err = send_sock.connect_ex(connect_sockaddr)
+        else:
+            err = send_sock.connect_ex((host, port))
     except Exception as exc:  # noqa: BLE001 - transport can raise any type
         # The name itself cannot be resolved (connect_ex only swallows errors
         # from connect(), not from getaddrinfo()) and a transport that fails
@@ -369,7 +400,7 @@ def run_ping(
         Structured results dict with per-probe data, summary fields, and notes.
     """
     host = _normalize_host(target)
-    ip = _resolve_host(host)
+    ip, family, sockaddr = _resolve_host(host)
 
     count = max(count, 1)
     timeout = max(timeout, 0.1)
@@ -389,7 +420,11 @@ def run_ping(
     notes: list[str] = []
 
     if ip is None:
-        notes.append(f"Could not resolve host {host!r} to an IPv4 address")
+        notes.append(f"Could not resolve host {host!r} to an IP address")
+    else:
+        # Note the address family for clarity
+        family_name = "IPv6" if family == socket.AF_INET6 else "IPv4"
+        notes.append(f"Resolved {host!r} to {ip} ({family_name})")
     if raw_socket is None:
         notes.append(
             "Raw ICMP socket unavailable; running in TCP connect fallback "
@@ -406,6 +441,8 @@ def run_ping(
                 identifier=identifier,
                 sequence=seq,
                 resolved_ip=ip,
+                resolved_family=family,
+                resolved_sockaddr=sockaddr,
                 port=port,
             )
         except Exception as exc:  # noqa: BLE001 - transport can raise any type

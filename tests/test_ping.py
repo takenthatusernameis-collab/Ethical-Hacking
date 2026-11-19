@@ -282,12 +282,19 @@ def test_parse_icmp_reply_icmp_header_truncated() -> None:
 
 def test_resolve_host_localhost() -> None:
     result = _resolve_host("127.0.0.1")
-    assert result == "127.0.0.1"
+    assert result[0] == "127.0.0.1"
+    assert result[1] == socket.AF_INET
+
+
+def test_resolve_host_localhost_ipv6() -> None:
+    result = _resolve_host("::1")
+    assert result[0] == "::1"
+    assert result[1] == socket.AF_INET6
 
 
 def test_resolve_host_invalid() -> None:
     result = _resolve_host("nonexistent.invalid.domain.tld")
-    assert result is None
+    assert result == (None, None, None)
 
 
 # ---------------------------------------------------------------------------
@@ -676,7 +683,7 @@ def test_probe_icmp_raw_sendto_oserror(monkeypatch) -> None:
 def test_run_ping_offline_target(monkeypatch) -> None:
     """run_ping with monkeypatched probe_icmp returns structured results."""
 
-    def mock_probe_icmp(host, timeout=2.0, ttl=64, raw_socket=None, identifier=0, sequence=0, payload=b"", resolved_ip=None, port=80):
+    def mock_probe_icmp(host, timeout=2.0, ttl=64, raw_socket=None, identifier=0, sequence=0, payload=b"", resolved_ip=None, resolved_family=None, resolved_sockaddr=None, port=80):
         return {
             "ip": None,
             "rtt_ms": 1.5,
@@ -688,7 +695,7 @@ def test_run_ping_offline_target(monkeypatch) -> None:
 
     monkeypatch.setattr("ethscan.ping._try_create_raw_socket", lambda: None)
     monkeypatch.setattr("ethscan.ping.probe_icmp", mock_probe_icmp)
-    monkeypatch.setattr("ethscan.ping._resolve_host", lambda host: "10.0.0.1")
+    monkeypatch.setattr("ethscan.ping._resolve_host", lambda host: ("10.0.0.1", socket.AF_INET, ("10.0.0.1", 0)))
 
     result = run_ping("example.com", count=3, timeout=1.0, ttl=64)
     assert result["target"] == "example.com"
@@ -710,7 +717,7 @@ def test_run_ping_defaults() -> None:
 
     called = []
 
-    def mock_probe(host, timeout=2.0, ttl=64, raw_socket=None, identifier=0, sequence=0, payload=b"", resolved_ip=None, port=80):
+    def mock_probe(host, timeout=2.0, ttl=64, raw_socket=None, identifier=0, sequence=0, payload=b"", resolved_ip=None, resolved_family=None, resolved_sockaddr=None, port=80):
         called.append((host, timeout, ttl, identifier, sequence))
         return {
             "ip": "10.0.0.1",
@@ -745,7 +752,7 @@ def test_run_ping_custom_params_passed() -> None:
 
     called = []
 
-    def mock_probe(host, timeout=2.0, ttl=64, raw_socket=None, identifier=0, sequence=0, payload=b"", resolved_ip=None, port=80):
+    def mock_probe(host, timeout=2.0, ttl=64, raw_socket=None, identifier=0, sequence=0, payload=b"", resolved_ip=None, resolved_family=None, resolved_sockaddr=None, port=80):
         called.append((timeout, ttl, sequence))
         return {
             "ip": "10.0.0.1",
@@ -773,7 +780,7 @@ def test_run_ping_custom_params_passed() -> None:
 def test_run_ping_successful_probes_rtt_stats() -> None:
     import ethscan.ping as ping_mod
 
-    def mock_probe(host, timeout=2.0, ttl=64, raw_socket=None, identifier=0, sequence=0, payload=b"", resolved_ip=None, port=80):
+    def mock_probe(host, timeout=2.0, ttl=64, raw_socket=None, identifier=0, sequence=0, payload=b"", resolved_ip=None, resolved_family=None, resolved_sockaddr=None, port=80):
         return {
             "ip": "10.0.0.1",
             "rtt_ms": float(sequence * 10),  # 10, 20, 30
@@ -802,7 +809,7 @@ def test_run_ping_successful_probes_rtt_stats() -> None:
 def test_run_ping_mixed_results() -> None:
     import ethscan.ping as ping_mod
 
-    def mock_probe(host, timeout=2.0, ttl=64, raw_socket=None, identifier=0, sequence=0, payload=b"", resolved_ip=None, port=80):
+    def mock_probe(host, timeout=2.0, ttl=64, raw_socket=None, identifier=0, sequence=0, payload=b"", resolved_ip=None, resolved_family=None, resolved_sockaddr=None, port=80):
         if sequence % 2 == 1:
             return {
                 "ip": "10.0.0.1",
@@ -840,7 +847,7 @@ def test_run_ping_mixed_results() -> None:
 def test_run_ping_unresolvable_host() -> None:
     import ethscan.ping as ping_mod
 
-    def mock_probe(host, timeout=2.0, ttl=64, raw_socket=None, identifier=0, sequence=0, payload=b"", resolved_ip=None, port=80):
+    def mock_probe(host, timeout=2.0, ttl=64, raw_socket=None, identifier=0, sequence=0, payload=b"", resolved_ip=None, resolved_family=None, resolved_sockaddr=None, port=80):
         return {
             "ip": None,
             "rtt_ms": 1.0,
@@ -855,7 +862,7 @@ def test_run_ping_unresolvable_host() -> None:
     orig_resolve = ping_mod._resolve_host
     ping_mod.probe_icmp = mock_probe
     ping_mod._try_create_raw_socket = lambda: None
-    ping_mod._resolve_host = cast(Any, lambda h: None)
+    ping_mod._resolve_host = lambda h: (None, None, None)  # type: ignore[assignment]
     try:
         result = run_ping("nonexistent.invalid.domain.tld", count=1, timeout=1.0)
         assert result["ip"] is None
@@ -919,7 +926,7 @@ def test_run_ping_raw_socket_available(monkeypatch) -> None:
 
     fake_raw = _TrueRawSocket()
 
-    def mock_probe(host, timeout=2.0, ttl=64, raw_socket=None, identifier=0, sequence=0, payload=b"", resolved_ip=None, port=80):
+    def mock_probe(host, timeout=2.0, ttl=64, raw_socket=None, identifier=0, sequence=0, payload=b"", resolved_ip=None, resolved_family=None, resolved_sockaddr=None, port=80):
         return {
             "ip": "10.0.0.1",
             "rtt_ms": 1.0,
@@ -929,7 +936,7 @@ def test_run_ping_raw_socket_available(monkeypatch) -> None:
             "error": None,
         }
 
-    monkeypatch.setattr("ethscan.ping._resolve_host", lambda h: "10.0.0.1")
+    monkeypatch.setattr("ethscan.ping._resolve_host", lambda h: ("10.0.0.1", socket.AF_INET, ("10.0.0.1", 0)))
     monkeypatch.setattr("ethscan.ping.probe_icmp", mock_probe)
     monkeypatch.setattr("ethscan.ping._try_create_raw_socket", lambda: fake_raw)
 
@@ -942,7 +949,7 @@ def test_run_ping_raw_socket_available(monkeypatch) -> None:
 def test_run_ping_url_target() -> None:
     import ethscan.ping as ping_mod
 
-    def mock_probe(host, timeout=2.0, ttl=64, raw_socket=None, identifier=0, sequence=0, payload=b"", resolved_ip=None, port=80):
+    def mock_probe(host, timeout=2.0, ttl=64, raw_socket=None, identifier=0, sequence=0, payload=b"", resolved_ip=None, resolved_family=None, resolved_sockaddr=None, port=80):
         return {
             "ip": "10.0.0.1",
             "rtt_ms": 1.0,
@@ -1164,7 +1171,7 @@ def test_ping_resolver_failure_of_an_unknown_type_is_reported(monkeypatch) -> No
     def boom(*args, **kwargs):
         raise RuntimeError("hostile resolver")
 
-    monkeypatch.setattr("ethscan.ping.socket.gethostbyname", boom)
+    monkeypatch.setattr("ethscan.ping.socket.getaddrinfo", boom)
 
     results = ethscan.ping.run_ping("127.0.0.1", count=1, timeout=1.0)
 
@@ -1194,7 +1201,7 @@ def test_run_ping_raw_socket_creation_exception_sets_none(monkeypatch) -> None:
     """run_ping catches exception from _try_create_raw_socket."""
     import ethscan.ping as ping_mod
 
-    def mock_probe_icmp(host, timeout=2.0, ttl=64, raw_socket=None, identifier=0, sequence=0, payload=b"", resolved_ip=None, port=80):
+    def mock_probe_icmp(host, timeout=2.0, ttl=64, raw_socket=None, identifier=0, sequence=0, payload=b"", resolved_ip=None, resolved_family=None, resolved_sockaddr=None, port=80):
         return {
             "ip": resolved_ip,
             "rtt_ms": 1.0,
@@ -1356,6 +1363,8 @@ def test_run_ping_supplied_raw_socket_skips_creation(monkeypatch) -> None:
         sequence=0,
         payload=b"",
         resolved_ip=None,
+        resolved_family=None,
+        resolved_sockaddr=None,
         port=80,
     ):
         assert raw_socket is supplied
@@ -1372,7 +1381,7 @@ def test_run_ping_supplied_raw_socket_skips_creation(monkeypatch) -> None:
         created.append(True)
         raise AssertionError("raw socket must not be created when one is supplied")
 
-    monkeypatch.setattr("ethscan.ping._resolve_host", lambda h: "10.0.0.1")
+    monkeypatch.setattr("ethscan.ping._resolve_host", lambda h: ("10.0.0.1", socket.AF_INET, ("10.0.0.1", 0)))
     monkeypatch.setattr("ethscan.ping.probe_icmp", mock_probe)
     monkeypatch.setattr("ethscan.ping._try_create_raw_socket", fail_create)
 
@@ -1396,6 +1405,8 @@ def test_run_ping_successful_probe_with_non_numeric_rtt_excluded_from_stats(monk
         sequence=0,
         payload=b"",
         resolved_ip=None,
+        resolved_family=None,
+        resolved_sockaddr=None,
         port=80,
     ):
         return {
