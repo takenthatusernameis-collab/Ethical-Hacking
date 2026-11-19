@@ -1,54 +1,30 @@
 # Next Task
-Date: Thu Nov 19 2026 (session 17)
+Date: Thu Nov 19 2026 (session 19)
 
 ## Status
-- Green: 39925 passed, 146 skipped, 0 failed; mypy Success (262 source
-  files); `ruff check ethscan tests` clean; README 54/54 with 0 drift both
-  directions; `git diff --check` clean.
-- Uncommitted at handoff: controller will stage/commit
-  `ethscan/trace.py`, `ethscan/mac.py`, `tests/test_trace.py`,
-  `tests/test_trace_branch_gaps.py`,
-  `tests/test_cli_trace_brute_unreachable_sweep.py`,
-  `HANDOFF_NEXT.md`, `NEXT_TASK.md`.
+- Green: **39931 passed, 146 skipped, 0 failed**; mypy Success (262 source files; `--check-untyped-defs` clean); `ruff check ethscan tests` clean; `check_readme.py` 54 commands, 0 drift both directions; `git diff --check` clean; working tree clean.
+- Formatter fuzzer (this session): 160 `format_*_report_{json,markdown,csv}` functions x 18 hostile shapes = 2,880 calls, 0 crashes (all formats).
+- No uncommitted changes. No pending task.
 
 ## This session (what changed)
-1. Confirmed the prior handoff's requested work (family-aware IPv6 TCP
-   transport in `ethscan/trace.py`) was complete and tested at HEAD; no
-   changes needed there.
-2. Doc-accuracy fix on `ethscan/mac.py:_extract_oui`: the docstring said
-   "24-bit OUI" but the code returns `cleaned[:8]` = 8 hex chars = a 32-bit
-   prefix (first 4 octets), and every test codifies `"001a2b3c"`. Corrected the
-   docstring to "Extract the first 8 hex characters (32-bit prefix, first 4
-   octets) from a MAC address." No output or test change — behavior unchanged.
+- Verification only: re-verified the green baseline from a clean tree; extended the hostile-shape fuzzer to JSON formatters; audited all `socket.AF_INET`/`gethostbyname`/`getaddrinfo` usages; confirmed `hash._infer_algorithm` non-hex rejection. No source or test files modified; no speculative changes made (no demonstrated problem exists).
 
-## Verified
-- Focused: `tests/test_trace.py` + branch-gaps + CLI sweep -> 73 passed;
-  `tests/test_mac.py` + hostile sweeps -> 169 passed (_extract_oui output
-  unchanged).
-- Full: `python -m pytest -q` -> 39925 passed, 146 skipped, 0 failed
-  (baseline unchanged).
-- `python -m mypy ethscan/ tests/` -> Success: no issues found in 262 source
-  files; `python -m ruff check ethscan/ tests/` -> all checks passed;
-  `python3 check_readme.py` -> 54/54, 0 drift both directions.
-- Note: `pytest-cov`/`coverage` are NOT installed in this environment; do not
-  rely on `--cov`.
+## Verified (this session)
+- `python -m pytest -q` -> 39931 passed, 146 skipped, 0 failed.
+- `python -m mypy ethscan/ tests/` -> Success, no issues in 262 source files.
+- `python -m ruff check ethscan/ tests/ check_readme.py` -> all checks passed.
+- `python3 check_readme.py` -> 54/54, 0 drift both directions.
+- Fuzzer probe: 0 crashes across 2,880 formatter calls.
+- `git status` -> clean.
 
 ## Next task (precise)
-- None pending. Repository is fully green with all known limitations resolved
-  or explicitly out of scope. If future work is needed, pick a single bounded,
-  high-value, verifiable improvement and reproduce it first — do not speculate
-  or weaken safety controls. `oracle`/`postgresql` empty-target handling
-  remains intentionally out of scope per their documented contract (exit 0,
-  in-band error).
+- **None pending.** Repository fully green with all known limitations resolved or explicitly out of scope. If future work is needed, pick one bounded, high-value improvement, reproduce a concrete gap first (failing check/test or contract deviation), fix minimally, rerun pytest/mypy/ruff/check_readme, and do not weaken safety/validation.
 
 ## Known limitations (not in scope)
-- `ethscan/ping.py` raw IPv4 ICMP/stream sockets need ICMPv6/checksum support
-  (privileged, larger change) — do not touch in this task.
-- `ethscan/dns.py`, `resolve.py`, `stale.py`, `subtake.py` use
-  `getaddrinfo(..., AF_INET)` for A-record/canonical-name lookups; treat as
-  intentional unless evidence says otherwise.
-- `ethscan/cli.py:4318` documented unreachable guard.
+- `ethscan/cli.py:4318` documented unreachable defensive guard (coverage intentionally not gamed).
 - `oracle`/`postgresql` report unusable targets in-band (exit 0) by contract.
+- `ethscan/ping.py` raw IPv4 ICMP/stream sockets need ICMPv6/checksum support (privileged, larger change).
+- `ethscan/dns.py`/`resolve.py`/`stale.py`/`subtake.py` A-record `getaddrinfo(..., AF_INET)` treated as intentional IPv4-only semantics.
 - PBKDF2 + NTLM intentionally unsupported.
 
 ## Constraints / notes
