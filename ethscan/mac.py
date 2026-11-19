@@ -172,7 +172,7 @@ def _get_cached_or_fetch(
 
 
 def _extract_oui(mac: str) -> str:
-    """Extract the 24-bit OUI prefix (first 8 hex chars) from a MAC address."""
+    """Extract the first 8 hex characters (32-bit prefix, first 4 octets) from a MAC address."""
     cleaned = mac.replace(":", "").replace("-", "").replace(".", "").lower()
     return cleaned[:8]
 

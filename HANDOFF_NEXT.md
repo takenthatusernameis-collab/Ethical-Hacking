@@ -1,13 +1,14 @@
 # Handoff
-Date: Thu Nov 19 2026 (session 16)
+Date: Thu Nov 19 2026 (session 17)
 
 ## State at HEAD (working tree, controller will stage/commit)
 - `pytest -q` -> 39925 passed, 146 skipped, 0 failed.
 - mypy: `Success: no issues found in 262 source files`; `ruff check ethscan tests`:
   all checks passed; `check_readme.py`: 54 commands, 0 drift both directions;
   `git diff --check` clean.
-- Files changed: `ethscan/trace.py`, `tests/test_trace.py`,
-  `tests/test_trace_branch_gaps.py`, `tests/test_cli_trace_brute_unreachable_sweep.py`.
+- Files changed: `ethscan/trace.py`, `ethscan/mac.py`,
+  `tests/test_trace.py`, `tests/test_trace_branch_gaps.py`,
+  `tests/test_cli_trace_brute_unreachable_sweep.py`.
 
 ## Done this session
 1. Read `HANDOFF_NEXT.md`/`NEXT_TASK.md` from session 15. Their requested next
@@ -42,6 +43,11 @@ Date: Thu Nov 19 2026 (session 16)
    - Added 4 tests: IPv6 uses `AF_INET6` + IPv6 sockaddr passed to
      `_probe_once`, IPv4 uses `AF_INET` control, getaddrinfo failure reported
      in-band, empty getaddrinfo result reported in-band.
+5. Doc-accuracy fix on `ethscan/mac.py:_extract_oui`: the docstring said
+   "24-bit OUI" but the code returns `cleaned[:8]` = 8 hex chars = a 32-bit
+   prefix (first 4 octets), and every test codifies `"001a2b3c"`. Corrected the
+   docstring to "Extract the first 8 hex characters (32-bit prefix, first 4
+   octets) from a MAC address." No output or test change — behavior unchanged.
 
 ## Verified
 - Repro before fix: `_trace_single("::1", ...)` -> `[Errno -9] ... not supported`.
@@ -50,7 +56,9 @@ Date: Thu Nov 19 2026 (session 16)
   unchanged.
 - Focused: `tests/test_trace.py tests/test_trace_branch_gaps.py
   tests/test_trace_cli.py tests/test_cli_trace_brute_unreachable_sweep.py` ->
-  73 passed.
+  73 passed; `tests/test_mac.py tests/test_mac_hostile_sweep.py
+  tests/test_mac_formatter_hostile_sweep.py` -> 169 passed (_extract_oui
+  output unchanged).
 - Full: 39925 passed, 146 skipped, 0 failed (baseline 39921; +4 new tests).
 - mypy `ethscan/ tests/` -> Success: no issues found in 262 source files.
 - `ruff check ethscan/ tests` -> all checks passed.
@@ -69,8 +77,6 @@ Date: Thu Nov 19 2026 (session 16)
 - `ethscan/cli.py:4318` unreachable defensive guard (documented).
 - `oracle`/`postgresql` in-band empty-target handling by contract.
 - PBKDF2+NTLM intentionally unsupported.
-- `mac._extract_oui` docstring/contract mismatch (returns 8 hex chars);
-  do not change output without evidence.
 
 ## Approaches already tried / ruled out
 - Interpreting a bare `IPv6:port` as host+port: rejected as ambiguous.
@@ -78,11 +84,12 @@ Date: Thu Nov 19 2026 (session 16)
 - Do not add network-dependent tests: always stub `getaddrinfo`/`socket`.
 
 ## Next task
-- None pending. Repository is fully green. If future work is needed, pick a
-  single bounded, high-value, verifiable improvement and reproduce it first —
-  do not speculate or weaken safety controls. `oracle`/`postgresql`
-  empty-target handling remains intentionally out of scope per their documented
-  contract (exit 0, in-band error).
+- None pending. Repository is fully green with all known limitations resolved
+  or explicitly out of scope. If future work is needed, pick a single bounded,
+  high-value, verifiable improvement and reproduce it first — do not speculate
+  or weaken safety controls. `oracle`/`postgresql` empty-target handling
+  remains intentionally out of scope per their documented contract (exit 0,
+  in-band error).
 
 ## Environment/notes
 - Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.5.
