@@ -7,18 +7,14 @@ Date: Thu Nov 19 2026 (session 22)
 - No pending task.
 
 ## This session (what changed)
-- Added `tests/test_ping_branch_gaps.py` (1 test): closed the last reachable partial branch in `ethscan/ping.py`.
-  - `test_probe_icmp_ipv4_resolved_sockaddr_open` (covers 329->330): passes an IPv4 `resolved_sockaddr=("127.0.0.1", port)` to `probe_icmp` against a local TCP listener and asserts `RESP_CONNECTED`. Prior suites either passed `resolved_sockaddr=None` (hitting the `else` at line 332) or an IPv6 4-tuple (hitting line 328), so the IPv4 `connect_sockaddr = (sockaddr[0], port)` line at 330 was never reached.
-- No source (`ethscan/`) changes; purely test addition, fully reversible.
+- No source or test changes; verification-only session. Re-confirmed baseline green (`pytest -q` → 46676 passed, 146 skipped, 0 failed; mypy/ruff/check_readme all clean; coverage 100% except the out-of-scope `cli.py:4318` guard). Investigated the session-117 flagged modules (ftp, ntp, oracle, smtp, snmp) for wrong-typed list-field formatter crashes — all guarded, no crash reproduces.
 
 ## Verified (this session)
-- Reproduced the gap first: `coverage run --branch --source=ethscan.ping` on the three existing ping suites reported `ethscan/ping.py 286 stmts, 1 miss, 78 branch, 1 BrPart, 99%` with missing line `330` and missing branch `[[329, 330]]`.
-- After the new test: `ethscan/ping.py` is `286 stmts, 0 miss, 78 branch, 0 BrPart (100%)`.
-- Full suite `46676 passed, 146 skipped, 0 failed` (includes the 1 new test; +1 from prior session's 46675).
-- `python -m mypy ethscan/ tests/` -> Success, no issues in 266 source files (was 265; +1 new test file).
-- `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
-- `python3 check_readme.py` -> 54/54, 0 drift both directions.
-- `git status` -> only `tests/test_ping_branch_gaps.py` added (plus handoff doc updates).
+- `pytest -q` → 46676 passed, 146 skipped, 0 failed.
+- `python -m mypy ethscan/ tests/` → Success, no issues in 266 source files.
+- `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed.
+- `python3 check_readme.py` → 54/54, 0 drift both directions.
+- `git status` → working tree clean.
 
 ## Next task (precise)
 - **None pending.** Repository fully green with all known limitations resolved or explicitly out of scope. If future work is needed, pick one bounded, high-value improvement, reproduce a concrete gap first (failing check/test or contract deviation), fix minimally, rerun pytest/mypy/ruff/check_readme, and do not weaken safety/validation.
