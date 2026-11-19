@@ -324,8 +324,8 @@ def test_trace_single_invalid_target():
 
 
 def test_trace_single_dns_failure():
-    with patch("ethscan.trace.socket.gethostbyname") as mock_gethost:
-        mock_gethost.side_effect = Exception("DNS fail")
+    with patch("ethscan.trace.socket.getaddrinfo") as mock_getaddr:
+        mock_getaddr.side_effect = Exception("DNS fail")
         res = trace._trace_single("bad.example", 80, 3, 1.0, 1)
         assert res.get("error") is not None
         assert "DNS fail" in res.get("error", "")
@@ -333,9 +333,12 @@ def test_trace_single_dns_failure():
 
 
 def test_trace_single_with_reach():
-    with patch("ethscan.trace.socket.gethostbyname") as mock_gethost, \
+    with patch("ethscan.trace.socket.getaddrinfo") as mock_getaddr, \
          patch.object(trace, "_probe_once") as mock_probe:
-        mock_gethost.return_value = "93.184.215.14"
+        mock_getaddr.return_value = [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "",
+             ("93.184.215.14", 80)),
+        ]
         # Simulate reaching target at hop 2
         mock_probe.side_effect = [
             {"hop_ip": "1.1.1.1", "rtt_ms": 1.0, "reached": False, "error": None},
@@ -348,18 +351,24 @@ def test_trace_single_with_reach():
 
 
 def test_trace_single_with_errors():
-    with patch("ethscan.trace.socket.gethostbyname") as mock_gethost, \
+    with patch("ethscan.trace.socket.getaddrinfo") as mock_getaddr, \
          patch.object(trace, "_probe_once") as mock_probe:
-        mock_gethost.return_value = "93.184.215.14"
+        mock_getaddr.return_value = [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "",
+             ("93.184.215.14", 80)),
+        ]
         mock_probe.return_value = {"error": "some error"}
         res = trace._trace_single("example.com", 80, 3, 1.0, 1)
         assert isinstance(res.get("hops"), list)
 
 
 def test_trace_single_multiple_probes():
-    with patch("ethscan.trace.socket.gethostbyname") as mock_gethost, \
+    with patch("ethscan.trace.socket.getaddrinfo") as mock_getaddr, \
          patch.object(trace, "_probe_once") as mock_probe:
-        mock_gethost.return_value = "93.184.215.14"
+        mock_getaddr.return_value = [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "",
+             ("93.184.215.14", 80)),
+        ]
         mock_probe.side_effect = [
             {"hop_ip": "1.1.1.1", "rtt_ms": 1.0, "reached": False, "error": None},
             {"hop_ip": "1.1.1.1", "rtt_ms": 2.0, "reached": False, "error": None},
@@ -369,9 +378,67 @@ def test_trace_single_multiple_probes():
         assert isinstance(res.get("hops"), list)
 
 
+def test_trace_single_ipv6_uses_af_inet6():
+    """An IPv6 literal resolves to AF_INET6 and the IPv6 sockaddr is probed."""
+    with patch("ethscan.trace.socket.getaddrinfo") as mock_getaddr, \
+         patch.object(trace, "_probe_once") as mock_probe:
+        mock_getaddr.return_value = [
+            (socket.AF_INET6, socket.SOCK_STREAM, socket.IPPROTO_TCP, "",
+             ("::1", 80, 0, 0)),
+        ]
+        mock_probe.return_value = {
+            "hop_ip": "::1", "rtt_ms": 1.0, "reached": True, "error": None,
+        }
+        res = trace._trace_single("::1", 80, 1, 0.1, 1)
+        assert res["dst_ip"] == "::1"
+        assert res.get("error") is None
+        mock_probe.assert_called_once_with(("::1", 80, 0, 0), 80, 1, 0.1,
+                                           socket.AF_INET6)
+
+
+def test_trace_single_ipv4_uses_af_inet():
+    """An IPv4 literal resolves to AF_INET and the IPv4 sockaddr is probed."""
+    with patch("ethscan.trace.socket.getaddrinfo") as mock_getaddr, \
+         patch.object(trace, "_probe_once") as mock_probe:
+        mock_getaddr.return_value = [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "",
+             ("1.2.3.4", 80)),
+        ]
+        mock_probe.return_value = {
+            "hop_ip": "1.2.3.4", "rtt_ms": 1.0, "reached": True, "error": None,
+        }
+        res = trace._trace_single("1.2.3.4", 80, 1, 0.1, 1)
+        assert res["dst_ip"] == "1.2.3.4"
+        assert res.get("error") is None
+        mock_probe.assert_called_once_with(("1.2.3.4", 80), 80, 1, 0.1,
+                                           socket.AF_INET)
+
+
+def test_trace_single_getaddrinfo_failure_is_reported():
+    """A getaddrinfo failure is reported as an in-band error result."""
+    with patch("ethscan.trace.socket.getaddrinfo") as mock_getaddr:
+        mock_getaddr.side_effect = OSError("no address found for host:port")
+        res = trace._trace_single("bad.example", 80, 3, 1.0, 1)
+        assert res.get("error") is not None
+        assert "no address found for host:port" in res.get("error", "")
+        assert res["dst_ip"] is None
+        assert isinstance(res.get("hops"), list)
+
+
+def test_trace_single_empty_getaddrinfo_is_reported():
+    """An empty getaddrinfo result is reported as an in-band error result."""
+    with patch("ethscan.trace.socket.getaddrinfo") as mock_getaddr:
+        mock_getaddr.return_value = []
+        res = trace._trace_single("bad.example", 80, 3, 1.0, 1)
+        assert res.get("error") is not None
+        assert "no address found for bad.example:80" in res.get("error", "")
+        assert res["dst_ip"] is None
+        assert isinstance(res.get("hops"), list)
+
+
 def test_run_trace_dns_error():
-    with patch("ethscan.trace.socket.gethostbyname") as mock_gethost:
-        mock_gethost.side_effect = Exception("DNS")
+    with patch("ethscan.trace.socket.getaddrinfo") as mock_getaddr:
+        mock_getaddr.side_effect = Exception("DNS")
         res = trace.run_trace("bad", port=80, max_hops=1, timeout=1.0, probes_per_hop=1)
         assert res.get("error") is not None
         assert isinstance(res.get("hops"), list)
@@ -542,8 +609,11 @@ def test_probe_once_close_exception():
 
 
 def test_trace_single_raw_socket_unavailable_note():
-    with patch("ethscan.trace.socket.gethostbyname") as mock_gethost:
-        mock_gethost.return_value = "1.1.1.1"
+    with patch("ethscan.trace.socket.getaddrinfo") as mock_getaddr:
+        mock_getaddr.return_value = [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "",
+             ("1.1.1.1", 80)),
+        ]
         with patch.object(trace, "_probe_once") as mock_probe:
             mock_probe.side_effect = Exception("raw")
             with contextlib.suppress(Exception):
@@ -576,19 +646,22 @@ def test_run_trace_error_is_still_a_value_error():
 
 
 @patch("ethscan.trace._probe_once")
-@patch("ethscan.trace.socket.gethostbyname")
-def test_run_trace_does_not_resolve_an_unusable_target(mock_gethost, mock_probe):
+@patch("ethscan.trace.socket.getaddrinfo")
+def test_run_trace_does_not_resolve_an_unusable_target(mock_getaddr, mock_probe):
     """No name lookup and no probe happen for an unusable target."""
     with pytest.raises(ValueError):
         trace.run_trace("")
-    mock_gethost.assert_not_called()
+    mock_getaddr.assert_not_called()
     mock_probe.assert_not_called()
 
 
 def test_run_trace_accepts_the_working_target_forms():
     """The valid target forms keep behaving exactly as before."""
-    with patch("ethscan.trace.socket.gethostbyname") as mock_gethost:
-        mock_gethost.return_value = "1.1.1.1"
+    with patch("ethscan.trace.socket.getaddrinfo") as mock_getaddr:
+        mock_getaddr.return_value = [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "",
+             ("1.1.1.1", 80)),
+        ]
         with patch.object(trace, "_probe_once") as mock_probe:
             mock_probe.return_value = {
                 "hop_ip": None,

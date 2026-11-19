@@ -1,65 +1,56 @@
 # Next Task
-Date: Thu Nov 19 2026 (session 15 handoff)
+Date: Thu Nov 19 2026 (session 16)
 
 ## Status
-- Green: 39921 passed, 146 skipped, 0 failed; mypy Success (59 source
+- Green: 39925 passed, 146 skipped, 0 failed; mypy Success (262 source
   files); `ruff check ethscan tests` clean; README 54/54 with 0 drift both
   directions; `git diff --check` clean.
 - Uncommitted at handoff: controller will stage/commit
-  `ethscan/whois.py`, `tests/test_whois.py`, `HANDOFF_NEXT.md`,
-  `NEXT_TASK.md`.
+  `ethscan/trace.py`, `tests/test_trace.py`,
+  `tests/test_trace_branch_gaps.py`,
+  `tests/test_cli_trace_brute_unreachable_sweep.py`,
+  `HANDOFF_NEXT.md`, `NEXT_TASK.md`.
 
 ## This session (what changed)
-1. Confirmed the prior handoff's requested work (family-aware IPv6
-   transports in `ethscan/snmp.py`, `ethscan/dnssec.py`,
-   `ethscan/osdetect.py`) was already present and tested at HEAD; 350
-   focused tests passed with no edits.
-2. Made the WHOIS TCP transport family-aware in `ethscan/whois.py`
-   (`query_whois`):
-   - `socket.getaddrinfo(server, port, type=SOCK_STREAM,
-     proto=IPPROTO_TCP)`
-   - socket created from the resolved `family, socktype, proto`
-   - `sock.connect(sockaddr)` instead of `connect((server, port))`
-   - empty resolution -> `OSError("no address found for host:port")`
-   - existing raise-on-transport-error contract preserved.
-3. Made the three existing `tests/test_whois.py` socket tests
-   deterministic by stubbing `ethscan.whois.socket.getaddrinfo`, and added:
-   - `test_query_whois_ipv6_uses_af_inet6`
-   - `test_query_whois_ipv4_uses_af_inet`
-   - `test_query_whois_getaddrinfo_failure_is_reported`
-   - `test_query_whois_empty_getaddrinfo_is_reported`
+1. Confirmed the prior handoff's requested work (family-aware IPv6 transports
+   in `ethscan/snmp.py`, `ethscan/dnssec.py`, `ethscan/osdetect.py`) was
+   already present and tested at HEAD; no changes needed there.
+2. Made the `trace` TCP transport family-aware in `ethscan/trace.py`
+   (`_probe_once` + `_trace_single`), following the established whois.py
+   pattern:
+   - `socket.getaddrinfo(host, port, type=SOCK_STREAM, proto=IPPROTO_TCP)`
+     replaces `socket.gethostbyname(host)` in `_trace_single`.
+   - Socket created from the resolved `family, socktype, proto`; `connect` to
+     the resolved `sockaddr` (existing failure result dict shape preserved,
+     `error` populated; empty resolution ->
+     `OSError("no address found for host:port")`).
+   - `IP_TTL` for AF_INET and `IPV6_UNICAST_HOPS` for AF_INET6 (guarded with
+     `getattr(..., None)` so platforms without it still work).
+   - Existing raise-on-transport-error and `TargetSpecError` contracts
+     preserved.
+3. Migrated tests pinning the old seam (`gethostbyname`/`_probe_once`) to
+   `getaddrinfo` in `tests/test_trace.py`,
+   `tests/test_trace_branch_gaps.py`,
+   `tests/test_cli_trace_brute_unreachable_sweep.py` (deterministic stubs, no
+   real network), and added 4 family-assertion tests:
+   - `test_trace_single_ipv6_uses_af_inet6`
+   - `test_trace_single_ipv4_uses_af_inet`
+   - `test_trace_single_getaddrinfo_failure_is_reported`
+   - `test_trace_single_empty_getaddrinfo_is_reported`
 
 ## Verified
-- Manual: IPv6 target `::1` -> Connection refused (Errno 111), no family
-  error; IPv4 control `127.0.0.1` -> Connection refused, unchanged.
-- Focused: 50 passed (`tests/test_whois.py`).
-- Full: 39921 passed / 146 skipped; mypy clean; ruff clean; README
-  54/54 with no drift; `git diff --check` clean.
+- Repro before fix: `trace._trace_single("::1", 80, 1, 0.2, 1)` -> `[Errno -9]
+  Address family for hostname not supported`. After fix: `dst_ip == "::1"`,
+  no family error, connect-only fallback; IPv4 control unchanged.
+- Focused: 73 passed across the four trace test files.
+- Full: 39925 passed / 146 skipped; mypy clean; ruff clean; README 54/54 with
+  no drift; `git diff --check` clean.
 - Note: `pytest-cov`/`coverage` are not installed in this environment.
 
 ## Next task (precise)
-- Extend the same family-aware TCP transport to `ethscan/trace.py`:
-  - Replace `socket.gethostbyname(host)` in `_trace_single` with
-    `getaddrinfo(host, port, type=socket.SOCK_STREAM,
-    proto=socket.IPPROTO_TCP)`; keep the existing failure result dict shape
-    (all documented keys preserved, `error` populated).
-  - Thread the resolved `family`/`sockaddr` into `_probe_once` (keep a
-    backward-compatible signature or update call sites/tests together).
-  - Use `IPPROTO_IP`/`IP_TTL` for AF_INET and
-    `IPPROTO_IPV6`/`IPV6_UNICAST_HOPS` for AF_INET6, guarded with
-    `hasattr`/try-except so unsupported platforms still work.
-  - Keep `normalize_host`/`TargetSpecError` behavior unchanged.
-- Test migration + additions:
-  1. Reproduce first: IPv6 literal should fail resolution/family before
-     the fix.
-  2. Update `tests/test_trace.py` cases that patch
-     `ethscan.trace.socket.gethostbyname` or `_probe_once` so they stub
-     `getaddrinfo` deterministically (no real DNS).
-  3. Add family assertion tests: AF_INET6 sockaddr passed to
-     `connect`/`_probe_once`, AF_INET control, resolution failure, empty
-     getaddrinfo.
-- Verify: focused trace tests, full suite, mypy, ruff, `check_readme.py`,
-  `git diff --check`.
+- None pending. Repository is fully green. If future work is needed, pick a
+  single bounded, high-value, verifiable improvement and reproduce it first —
+  do not speculate or weaken safety controls.
 
 ## Known limitations (not in scope)
 - `ethscan/ping.py` raw IPv4 ICMP sockets need ICMPv6/checksum support

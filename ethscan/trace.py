@@ -49,17 +49,35 @@ def _fmt_rtt(rtt_ms: float | None) -> str:
     return "N/A"
 
 
-def _probe_once(dst_ip: str, port: int, ttl: int, timeout: float) -> dict[str, Any]:
+def _probe_once(dst: str | tuple, port: int, ttl: int, timeout: float,
+                family: int = socket.AF_INET) -> dict[str, Any]:
+    """Probe a single hop with a TTL-limited TCP connect.
+
+    ``dst`` may be a host string (connected as ``(dst, port)``) or a resolved
+    sockaddr tuple from :func:`socket.getaddrinfo` (connected directly). The
+    resolved address family selects the socket family and the hop-limit socket
+    option (``IP_TTL`` for IPv4, ``IPV6_UNICAST_HOPS`` for IPv6).
+    """
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock = socket.socket(family, socket.SOCK_STREAM)
     except Exception as e:  # noqa: BLE001 - socket() can raise any OSError subclass
         return {"hop_ip": None, "rtt_ms": None, "reached": False, "error": str(e)}
 
     try:
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, ttl)
+        if family == socket.AF_INET6:
+            hop_limit_opt = getattr(socket, "IPV6_UNICAST_HOPS", None)
+            if hop_limit_opt is not None:
+                sock.setsockopt(socket.IPPROTO_IPV6, hop_limit_opt, ttl)
+        else:
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, ttl)
         sock.settimeout(timeout)
         start = time.time()
-        sock.connect((dst_ip, port))
+        if isinstance(dst, tuple):
+            sock.connect(dst)
+            hop_ip = dst[0]
+        else:
+            sock.connect((dst, port))
+            hop_ip = dst
         end = time.time()
         rtt_ms = (end - start) * 1000.0
     except socket.timeout:
@@ -67,7 +85,7 @@ def _probe_once(dst_ip: str, port: int, ttl: int, timeout: float) -> dict[str, A
     except OSError:
         return {"hop_ip": None, "rtt_ms": None, "reached": False, "error": None}
     else:
-        return {"hop_ip": dst_ip, "rtt_ms": rtt_ms, "reached": True, "error": None}
+        return {"hop_ip": hop_ip, "rtt_ms": rtt_ms, "reached": True, "error": None}
     finally:
         with contextlib.suppress(Exception):
             sock.close()
@@ -90,8 +108,9 @@ def _trace_single(
     host = normalize_host(target)
 
     try:
-        dst_ip = socket.gethostbyname(host)
-    except Exception as e:  # noqa: BLE001 - gethostbyname can raise any OSError subclass
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM,
+                                   proto=socket.IPPROTO_TCP)
+    except Exception as e:  # noqa: BLE001 - getaddrinfo can raise any OSError subclass
         return {
             "target": host,
             "host": host,
@@ -111,6 +130,30 @@ def _trace_single(
             "notes": ["Raw ICMP socket unavailable; connect-only fallback mode"],
         }
 
+    if not infos:
+        err = OSError(f"no address found for {host}:{port}")
+        return {
+            "target": host,
+            "host": host,
+            "ip": None,
+            "dst_ip": None,
+            "port": port,
+            "max_hops": max_hops,
+            "timeout": timeout,
+            "probes_per_hop": probes_per_hop,
+            "raw_socket_available": False,
+            "hops": [],
+            "hop_count": 0,
+            "destination_reached": False,
+            "reached_destination": False,
+            "reached": False,
+            "error": str(err),
+            "notes": ["Raw ICMP socket unavailable; connect-only fallback mode"],
+        }
+
+    family, _socktype, _proto, _canonname, sockaddr = infos[0]
+    dst_ip = sockaddr[0]
+
     hops: list[dict[str, Any]] = []
     reached = False
     for ttl in range(1, max_hops + 1):
@@ -119,7 +162,7 @@ def _trace_single(
         reached_hop = False
         probe_results: list[dict[str, Any]] = []
         for _probes_done in range(1, max(1, probes_per_hop) + 1):
-            res = _probe_once(dst_ip, port, ttl, timeout)
+            res = _probe_once(sockaddr, port, ttl, timeout, family)
             if res.get("error"):
                 hop_obj = {
                     "hop": ttl,

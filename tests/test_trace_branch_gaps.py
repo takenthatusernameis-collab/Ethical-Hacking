@@ -1,3 +1,5 @@
+import socket
+
 from typing import Any, cast
 from unittest.mock import patch
 
@@ -19,10 +21,12 @@ def test_fmt_rtt_branch_gaps():
 
 def test_trace_single_reached_with_none_rtt_covers_170_172():
     # Force a "reached" probe that carries no RTT so the 170->172 false branch is taken.
-    def fake_probe_once(dst_ip, port, ttl, timeout):
+    def fake_probe_once(dst, port, ttl, timeout, family=socket.AF_INET):
         return {"hop_ip": "1.2.3.4", "rtt_ms": None, "reached": True, "error": None}
 
-    with patch("ethscan.trace.socket.gethostbyname", return_value="1.2.3.4"), \
+    with patch("ethscan.trace.socket.getaddrinfo",
+               return_value=[(socket.AF_INET, socket.SOCK_STREAM,
+                              socket.IPPROTO_TCP, "", ("1.2.3.4", 80))]), \
          patch("ethscan.trace._probe_once", side_effect=fake_probe_once):
         res = trace._trace_single("example.com", port=80, max_hops=2, timeout=1.0, probes_per_hop=1)
 

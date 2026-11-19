@@ -94,7 +94,7 @@ def _brute_args(user_file: Path, pass_file: Path, protocol: str = "ftp") -> list
 
 def test_trace_cli_reports_a_failed_name_lookup(monkeypatch) -> None:
     """The trace command reports a failed name lookup and exits 0."""
-    _hostile_transport(monkeypatch, "ethscan.trace.socket.gethostbyname")
+    _hostile_transport(monkeypatch, "ethscan.trace.socket.getaddrinfo")
 
     report = _run_cli(["trace", "--target", "example.com", "--timeout", "1.0"])
 
