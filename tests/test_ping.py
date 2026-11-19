@@ -1209,12 +1209,15 @@ def test_ping_tcp_fallback_ipv6_family_sets_hop_limit(monkeypatch) -> None:
     import ethscan.ping
 
     class _FakeSocket:
+        instances: list[_FakeSocket] = []
+
         def __init__(self, family, type_, proto=0):
             self.family = family
             self.type_ = type_
             self.proto = proto
             self.setsockopt_calls = []
             self.timeout = None
+            type(self).instances.append(self)
 
         def setsockopt(self, level, opt, value):
             self.setsockopt_calls.append((level, opt, value))
@@ -1244,10 +1247,17 @@ def test_ping_tcp_fallback_ipv6_family_sets_hop_limit(monkeypatch) -> None:
     assert cast(str, probe["response_type"]) == ethscan.ping.RESP_RST
     assert probe["error"] is None
     assert probe["ip"] == "::1"
-    probe = cast(list[dict[str, object]], results["probes"])[0]
-    assert cast(str, probe["response_type"]) == ethscan.ping.RESP_NO_RESPONSE
-    assert "hostile transport" in (cast(str | None, probe.get("error")) or "")
-    assert results["failed"] == 1
+
+    # The TCP fallback path (AF_INET6) must set IPV6_UNICAST_HOPS to the TTL.
+    hop_limit_opt = getattr(socket, "IPV6_UNICAST_HOPS", None)
+    assert hop_limit_opt is not None
+    hop_calls = [
+        call
+        for call in _FakeSocket.instances[-1].setsockopt_calls
+        if call[0] == socket.IPPROTO_IPV6 and call[1] == hop_limit_opt
+    ]
+    assert hop_calls, "IPV6_UNICAST_HOPS was not set on the IPv6 fallback socket"
+    assert hop_calls[0][2] == 64
 
 
 def test_run_ping_raw_socket_creation_exception_sets_none(monkeypatch) -> None:
