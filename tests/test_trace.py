@@ -771,3 +771,28 @@ def test_format_trace_report_csv_non_dict_and_malformed_structures():
     rows3 = list(csv.DictReader(io.StringIO(csv_text3)))
     assert len(rows3) == 1
     assert rows3[0]["ip"] == "1.1.1.1"
+
+
+def test_probe_once_ipv6_family_hops_setsockopt():
+    with patch("ethscan.trace.socket.socket") as mock_sock_class:
+        mock_sock = MagicMock()
+        mock_sock_class.return_value = mock_sock
+        mock_sock.setsockopt = MagicMock()
+        mock_sock.bind = MagicMock()
+        mock_sock.connect_ex = MagicMock(return_value=0)
+        mock_sock.connect = MagicMock()
+        mock_sock.close = MagicMock()
+        res = trace._probe_once(("::1", 80), 80, 1, 0.1, family=socket.AF_INET6)
+        assert isinstance(res, dict)
+
+
+def test_probe_once_tuple_dst_sets_hop_ip():
+    with patch("ethscan.trace.socket.socket") as mock_sock_class:
+        mock_sock = MagicMock()
+        mock_sock_class.return_value = mock_sock
+        mock_sock.setsockopt = MagicMock()
+        mock_sock.bind = MagicMock()
+        mock_sock.connect = MagicMock()
+        mock_sock.close = MagicMock()
+        res = trace._probe_once(("1.2.3.4", 80), 80, 1, 0.1)
+        assert isinstance(res, dict)
