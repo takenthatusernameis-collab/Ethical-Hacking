@@ -386,6 +386,27 @@ def run_brute(*args, **kwargs):
     return importlib.import_module("ethscan.brute").run_brute(*args, **kwargs)
 
 
+class _TargetCommand(click.Command):
+    """A command that reports an unusable ``--target`` as a click usage error.
+
+    The library raises :class:`~ethscan.target.TargetSpecError` from inside a
+    command callback. Translating it here, in the command's own ``invoke``,
+    means the resulting :class:`click.BadParameter` carries this command's
+    context, so click prints the command's usage and ``--help`` hint exactly
+    like it does for a value that click itself rejects. A translation one
+    level up (in the group) would lose the sub-command context and print only
+    the bare ``Error:`` line.
+    """
+
+    def invoke(self, ctx: click.Context) -> Any:
+        try:
+            return super().invoke(ctx)
+        except TargetSpecError as exc:
+            error = _invalid_target(exc)
+            error.ctx = ctx
+            raise error from exc
+
+
 class _TargetGroup(click.Group):
     """A group that reports an unusable ``--target`` as a click usage error.
 
@@ -396,16 +417,19 @@ class _TargetGroup(click.Group):
     raw traceback, so the error becomes a click usage error (exit code 2) at
     the CLI boundary.
 
-    The translation happens in the group, so every command is covered without
-    having to opt in, and a command that is added later cannot leak the
-    error. The library modules stay free of click: this is the only place
-    where the translation happens.
+    The translation happens in each command (``_TargetCommand``), so the
+    error carries the sub-command context and click prints its usage line.
+    The ``command_class`` hook covers every command, including one added
+    later, without having to opt in. The library modules stay free of click:
+    this is the only place where the translation happens.
 
     Invoking the tool without a subcommand is also a usage error (exit code 2)
     rather than a silent help print: the help is still shown, so the user
     learns what to run, but the exit code says the tool was not asked to do
     anything.
     """
+
+    command_class = _TargetCommand
 
     def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
         # Click prints the group help and exits 0 when no subcommand is given
@@ -419,12 +443,6 @@ class _TargetGroup(click.Group):
             click.echo(ctx.get_help(), color=ctx.color)
             ctx.exit(2)
         return super().parse_args(ctx, args)
-
-    def invoke(self, ctx: click.Context) -> Any:
-        try:
-            return super().invoke(ctx)
-        except TargetSpecError as exc:
-            raise _invalid_target(exc) from exc
 
 
 @click.group(cls=_TargetGroup)

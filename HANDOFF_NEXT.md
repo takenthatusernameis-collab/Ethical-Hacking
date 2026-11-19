@@ -1,44 +1,49 @@
 # Handoff
-Date: Thu Nov 19 2026 (session 22)
+Date: Thu Nov 19 2026 (session 23)
 
-## State at HEAD (working tree clean except for the fix below; controller will stage/commit)
-- Single control-marker commit `53ae9da` (empty message — not project progress per rules).
-- `pytest -q` -> **46676 passed, 146 skipped, 0 failed** (baseline green; added 1 test in `tests/test_ping_branch_gaps.py` — see "What changed").
-- `python -m mypy ethscan/ tests/` -> Success: no issues in 266 source files (was 265; +1 new test file).
+## State at HEAD (working tree has the fix below; controller will stage/commit)
+- `pytest -q` -> **46677 passed, 146 skipped, 0 failed** (session-22 baseline 46676; +1 test).
+- `python -m mypy ethscan/ tests/` -> Success: no issues in 266 source files.
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> all checks passed.
 - `python3 check_readme.py` -> 54 commands, 0 drift both directions; `git diff --check` clean.
+- Full-suite branch coverage (`coverage run --branch --source=ethscan -m pytest -q`): `ethscan/cli.py` 1856 stmts, 1 miss, 624 branch, 1 BrPart — the single miss is the same known unreachable defensive guard, now at line `4336` (was 4318; the +18 shift is this session's added class). No new coverage gap.
 
 ## What changed
-- Added `tests/test_ping_branch_gaps.py` (1 test): closed the last reachable partial branch in `ethscan/ping.py`.
-  - `test_probe_icmp_ipv4_resolved_sockaddr_open` (covers 329->330): passes an IPv4 `resolved_sockaddr=("127.0.0.1", port)` to `probe_icmp` against a local TCP listener and asserts `RESP_CONNECTED`. Prior suites either passed `resolved_sockaddr=None` (hitting the `else` at line 332) or an IPv6 4-tuple (hitting line 328), so the IPv4 `connect_sockaddr = (sockaddr[0], port)` line at 330 was never reached.
-- No source (`ethscan/`) changes; purely test addition, fully reversible.
+- `ethscan/cli.py`: target usage errors now carry the sub-command context.
+  - Added `_TargetCommand(click.Command)`: its `invoke` catches `TargetSpecError`, builds `_invalid_target(exc)`, sets `error.ctx = ctx`, and re-raises. Click's `UsageError.show()` prints `Usage:` and the `Try '<prog> <cmd> --help'` hint only when `ctx` is set, so this restores the documented output.
+  - Set `command_class = _TargetCommand` on `_TargetGroup`; this automatically covers every command created by the group, including any added later.
+  - Removed the old `_TargetGroup.invoke` catch: `TargetSpecError` is only raised from command callbacks (`_validate_enum_target` or module helpers), so the group-level catch was redundant after the command-level fix and would have left an uncovered line. Updated the class docstring accordingly.
+- `tests/test_cli.py` (+1 test): `test_invalid_target_usage_error_includes_usage_and_help_hint` asserts exit 2 plus the `Usage: cli <cmd> [OPTIONS]`, `Try 'cli <cmd> --help' for help.` and `Error: Invalid value for '--target':` lines for `redis`, `web`, `trace`, `s3`.
 
 ## What was actually verified
-- Reproduced the gap first: `coverage run --branch --source=ethscan.ping` on the three existing ping suites reported `ethscan/ping.py 286 stmts, 1 miss, 78 branch, 1 BrPart, 99%` with missing line `330` and missing branch `[[329, 330]]`.
-- After this session's changes: the new test passes; `ethscan/ping.py` is now `286 stmts, 0 miss, 78 branch, 0 BrPart (100%)`.
-- Full suite `46676 passed, 146 skipped, 0 failed`; mypy/ruff/check_readme all clean.
+- Reproduced the defect first (README docs vs real output). README lines 150-280 document full click usage errors for an unusable `--target`, e.g.:
+  - Before: `python -m ethscan redis --target ""` -> stderr was only
+    `Error: Invalid value for '--target': Could not parse host from target ''` (no `Usage:` / `Try:` lines), while `scan --ports abc` did show them.
+  - Root cause: the `TargetSpecError -> BadParameter` translation happened in `_TargetGroup.invoke`, after the sub-command's `augment_usage_errors` scope had exited, so `BadParameter.ctx` stayed `None`.
+- After: `redis`/`web`/`trace`/`s3` (and the other target commands) print
+  `Usage: python -m ethscan <cmd> [OPTIONS]`, `Try 'python -m ethscan <cmd> --help' for help.`, blank line, then the `Error:` line, exactly as documented.
+- Focused: `pytest tests/test_cli.py -k "invalid_target or target"` -> 146 passed.
+- Full suite -> 46677 passed, 146 skipped, 0 failed; mypy/ruff/check_readme/git-diff-check clean; cli.py coverage unchanged apart from the known guard.
 
 ## Unresolved / known limitations (all explicitly out of scope)
-- `ethscan/cli.py:4318` unreachable defensive guard (`raise click.UsageError("Shell argument is required when not using --install")`): deliberately left uncovered — unreachable via the CLI; prior sessions rejected removing it or gaming coverage with `# pragma: no cover`.
-- `oracle` / `postgresql` empty-target handling: in-band "probe failed" (exit 0) by documented contract; not to be changed unless a task explicitly asks.
+- `ethscan/cli.py:4336` unreachable defensive guard (`raise click.UsageError("Shell argument is required when not using --install")`): deliberately left uncovered; do not remove or game coverage.
+- `oracle` / `postgresql` empty-target handling: in-band "probe failed" (exit 0) by documented contract.
 - PBKDF2 + NTLM: intentionally unsupported.
-- `ping.py` IPv6: raw AF_INET ICMP sockets; ICMPv6/checksum support is a larger privileged change — do not touch in a small task.
+- `ping.py` IPv6: raw AF_INET ICMP sockets; ICMPv6/checksum support is a larger privileged change.
 - `ethscan/dns.py`/`resolve.py`/`stale.py`/`subtake.py` A-record `getaddrinfo(..., AF_INET)` treated as intentional IPv4-only semantics.
 
-## Session (Thu Nov 19 2026)
-- No prior agent assignment; NEXT_TASK.md stated "None pending — repository is fully green." Inspected the repo and re-verified the baseline rather than waiting passively: `pytest -q` → 46676 passed, 146 skipped, 0 failed; `python -m mypy ethscan/ tests/` → Success: no issues in 266 source files; `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed; `python3 check_readme.py` → 54 CLI commands, 0 drift both directions; `git status` clean.
-- Coverage re-checked: every module under `ethscan/` is at 100% statements/branches except `ethscan/cli.py:4318` (unreachable defensive guard, explicitly out of scope per prior sessions — do not game coverage there).
-- Investigated the session-117 flagged modules (ftp, ntp, oracle, smtp, snmp) for wrong-typed list-field formatter crashes: all guarded (`_normalize_findings`/`_normalize_valid_communities`/`_normalize_communities`/`isinstance` checks); no crash reproduces. No source or test changes made; verification-only session, fully reversible.
-
-## Approaches already tried / ruled out (this session)
-- None needed — no reproducible gap exists; the only remaining coverage gap is the explicitly out-of-scope `cli.py:4318` guard.
+## Approaches already tried / ruled out
+- Attaching the group context instead of the sub-command context: rejected — it would print the group usage (`python -m ethscan [OPTIONS] COMMAND ...`), not the documented per-command usage.
+- Re-implementing `MultiCommand.invoke` to capture `sub_ctx`: rejected as duplicating click internals; `command_class` is the intended extension point.
+- Keeping the group-level catch as a fallback: rejected — no in-scope path can raise `TargetSpecError` before a command callback, and it would leave an uncovered line (the repo keeps coverage exact except the known guard).
 
 ## Next task (for the next agent)
-- **None pending — repository is fully green.** Every module under `ethscan/` is at 100% branch coverage except the known unreachable `cli.py:4318` guard. If future work is needed, pick a single bounded, high-value improvement, **reproduce a concrete gap first** (failing test/check or behavioral deviation from the documented contract), apply the smallest safe fix, rerun focused then broader gates (pytest/mypy/ruff/check_readme), and do not weaken safety or validation.
-- Suggested bounded next task (if desired): hunt for behavioral contract deviations rather than coverage — e.g. audit a module's documented exit codes / error messages against CLI behavior, or extend a hostile-sweep for a module that lacks one. Do not touch `ethscan/cli.py:4318` (unreachable defensive guard), `oracle`/`postgresql` empty-target handling, or the IPv6 ICMP work.
+- Encode the remaining README `console` examples as offline `CliRunner` regression tests so documented error text cannot drift again. Evidence: this session found one such drift by running the examples by hand (`README.md` lines 115-285); the other documented offline cases were spot-checked and currently match.
+  - Add `tests/test_readme_examples.py` asserting exact stderr/output and exit code 2 for: `scan --target 127.0.0.1 --ports abc`, `cidr --cidr bogus`, `radix --cidrs 192.168.1.0/24,2001:db8::/32`, `vuln --target example.com --services-file broken.json` (create the broken file with `tmp_path`), `redis --target example.com:99999`, and `audit --file passwords.txt` with a non-UTF-8 file (create with `tmp_path`). Keep `s3 --target "[::1]:443"` out unless its probe can be made deterministic/offline (it may resolve DNS).
+  - Constraints: no network/DNS; no source changes unless a test reveals a real mismatch (then make the smallest fix and document it); rerun pytest/mypy/ruff/check_readme and full-suite branch coverage; keep all modules 100% except `cli.py:4336`.
 
 ## Environment/notes
-- Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.6; coverage 7.17.3 installed (use `coverage run --branch` then `coverage report --show-missing`).
+- Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.6; coverage 7.17.3 (`python -m coverage run --branch --source=ethscan -m pytest -q`, then `python -m coverage report --show-missing`).
 - Do not commit manually: the workflow controller stages/commits/pushes.
 
-(End of file - total 50 lines)
+(End of file)

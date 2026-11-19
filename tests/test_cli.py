@@ -23968,6 +23968,31 @@ def test_invalid_target_usage_error_is_a_single_line() -> None:
     )
 
 
+def test_invalid_target_usage_error_includes_usage_and_help_hint() -> None:
+    """A translated ``--target`` error still shows usage and the help hint.
+
+    The README documents the full click usage error (``Usage:`` and
+    ``Try ... --help``) for an unusable target. The error is raised by the
+    library and translated at the CLI boundary, so it must carry the
+    sub-command context explicitly; otherwise click prints only the bare
+    ``Error:`` line.
+    """
+    runner = CliRunner()
+    for command, target in (
+        ("redis", ""),
+        ("web", "host:notaport"),
+        ("trace", ""),
+        ("s3", ""),
+    ):
+        result = runner.invoke(cli, [command, "--target", target])
+        assert result.exit_code == 2, result.output
+        assert f"Usage: cli {command} [OPTIONS]" in result.output, result.output
+        assert (
+            f"Try 'cli {command} --help' for help." in result.output
+        ), result.output
+        assert "Error: Invalid value for '--target':" in result.output, result.output
+
+
 def test_invalid_target_names_the_offending_value() -> None:
     """The usage error must quote the value that could not be parsed."""
     runner = CliRunner()
