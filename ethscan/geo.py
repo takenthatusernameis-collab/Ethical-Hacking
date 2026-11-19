@@ -51,14 +51,21 @@ def _normalize_target(target: str) -> str:
 
 
 def _resolve_host(host: str) -> str | None:
-    """Resolve a hostname to an IPv4 address, returning None on failure."""
+    """Resolve a hostname to an IP address (IPv4 or IPv6), returning None on failure."""
     try:
-        return socket.gethostbyname(host)
-    # A host that is not a valid host name ("....") raises a UnicodeError,
-    # which is a ValueError, when the resolver encodes it. A resolver that
-    # fails with any other error type is a failed lookup as well.
+        infos = socket.getaddrinfo(
+            host, None, type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP
+        )
     except Exception:  # noqa: BLE001 - resolver can raise any type
         return None
+
+    if not infos:
+        return None
+
+    info = infos[0]
+    sockaddr: tuple[str, ...] = info[4]  # type: ignore[assignment]
+    ip = sockaddr[0]
+    return ip
 
 
 def _load_cache() -> dict[str, dict]:
@@ -198,7 +205,7 @@ def run_geo(
         notes: list[str] = []
 
         if ip is None:
-            notes.append(f"Could not resolve host {host!r} to an IPv4 address")
+            notes.append(f"Could not resolve host {host!r} to an IP address")
             return {
                 "target": target,
                 "host": host,
