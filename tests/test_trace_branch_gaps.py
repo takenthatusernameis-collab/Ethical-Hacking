@@ -89,3 +89,18 @@ def test_format_markdown_empty_or_noniterable_notes_covers_310_313_and_364_367()
     md2 = format_trace_report_markdown(result2)
     assert "Recursive Trace 1: child2" in md2
     assert "**Note:**" not in md2
+
+
+def test_probe_once_ipv6_without_unicast_hops_option_covers_69_73():
+    # 69->73: some platforms expose AF_INET6 without IPV6_UNICAST_HOPS; the
+    # getattr guard must skip the IPv6 setsockopt and still configure timeout.
+    with patch("ethscan.trace.socket.socket") as mock_sock_class, \
+         patch("ethscan.trace.socket.IPV6_UNICAST_HOPS", None, create=True):
+        mock_sock = mock_sock_class.return_value
+        mock_sock.connect.return_value = None
+        res = trace._probe_once(("::1", 80), 80, 1, 0.1, family=socket.AF_INET6)
+
+    assert isinstance(res, dict)
+    for call in mock_sock.setsockopt.call_args_list:
+        assert call.args[0] != socket.IPPROTO_IPV6
+    mock_sock.settimeout.assert_called_once_with(0.1)

@@ -1260,6 +1260,53 @@ def test_ping_tcp_fallback_ipv6_family_sets_hop_limit(monkeypatch) -> None:
     assert hop_calls[0][2] == 64
 
 
+def test_ping_tcp_fallback_ipv6_without_unicast_hops_option(monkeypatch) -> None:
+    """306->310: platforms exposing AF_INET6 without IPV6_UNICAST_HOPS skip the option."""
+    import ethscan.ping
+
+    class _FakeSocket:
+        instances: list[_FakeSocket] = []
+
+        def __init__(self, family, type_, proto=0):
+            self.family = family
+            self.type_ = type_
+            self.proto = proto
+            self.setsockopt_calls = []
+            self.timeout = None
+            type(self).instances.append(self)
+
+        def setsockopt(self, level, opt, value):
+            self.setsockopt_calls.append((level, opt, value))
+
+        def settimeout(self, value):
+            self.timeout = value
+
+        def connect_ex(self, sockaddr):
+            return 111  # ECONNREFUSED
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("ethscan.ping.socket.socket", _FakeSocket)
+    monkeypatch.setattr("ethscan.ping.socket.IPV6_UNICAST_HOPS", None)
+    monkeypatch.setattr(
+        "ethscan.ping.socket.getaddrinfo",
+        lambda *a, **k: [
+            (socket.AF_INET6, socket.SOCK_STREAM, 0, "", ("::1", 80, 0, 0))
+        ],
+    )
+
+    probe = ethscan.ping.probe_icmp(
+        "::1", timeout=1.0, ttl=64, raw_socket=None, resolved_ip="::1",
+        resolved_family=socket.AF_INET6, resolved_sockaddr=("::1", 80, 0, 0),
+    )
+
+    assert cast(str, probe["response_type"]) == ethscan.ping.RESP_RST
+    sock = _FakeSocket.instances[-1]
+    assert not [c for c in sock.setsockopt_calls if c[0] == socket.IPPROTO_IPV6]
+    assert sock.timeout == 1.0
+
+
 def test_run_ping_raw_socket_creation_exception_sets_none(monkeypatch) -> None:
     """run_ping catches exception from _try_create_raw_socket."""
     import ethscan.ping as ping_mod
