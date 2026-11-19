@@ -9,8 +9,9 @@ Covers the remaining partial branches:
 - ``run_osdetect`` dedup: a duplicate OS name hits the ``name in seen`` guard
   and is skipped (470->469).
 """
-
 from __future__ import annotations
+
+import socket
 
 from ethscan.osdetect import probe_ack, probe_fin, probe_rst, run_osdetect
 
@@ -21,6 +22,12 @@ def test_probe_rst_socket_creation_failure_covers_213_215(monkeypatch) -> None:
     def boom(*args, **kwargs):
         raise OSError("no socket")
 
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
     monkeypatch.setattr("ethscan.osdetect.socket.socket", boom)
 
     res = probe_rst("h", 80, 1.0)
@@ -33,6 +40,12 @@ def test_probe_fin_socket_creation_failure_covers_253_255(monkeypatch) -> None:
     def boom(*args, **kwargs):
         raise OSError("no socket")
 
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
     monkeypatch.setattr("ethscan.osdetect.socket.socket", boom)
 
     res = probe_fin("h", 80, 1.0)
@@ -45,6 +58,12 @@ def test_probe_ack_socket_creation_failure_covers_292_294(monkeypatch) -> None:
     def boom(*args, **kwargs):
         raise OSError("no socket")
 
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
     monkeypatch.setattr("ethscan.osdetect.socket.socket", boom)
 
     res = probe_ack("h", 80, 1.0)

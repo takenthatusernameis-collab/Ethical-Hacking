@@ -557,242 +557,1040 @@ def test_probe_syn_noresp() -> None:
         assert res["response"] == "NO-RESPONSE"
 
 
-def test_probe_rst_open() -> None:
-    from unittest.mock import MagicMock, patch
+def test_probe_rst_open(monkeypatch) -> None:
+    import socket
 
     from ethscan import osdetect
-    mock_sock = MagicMock()
-    mock_sock.connect_ex.return_value = 0
-    with patch("socket.socket", return_value=mock_sock):
-        res = osdetect.probe_rst("h", 80, 1.0)
-        assert res["connected"] is True
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            return 0
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    res = osdetect.probe_rst("h", 80, 1.0)
+    assert res["connected"] is True
 
 
-def test_probe_rst_refused_111() -> None:
-    from unittest.mock import MagicMock, patch
-
-    from ethscan import osdetect
-    mock_sock = MagicMock()
-    mock_sock.connect_ex.return_value = 111
-    with patch("socket.socket", return_value=mock_sock):
-        assert osdetect.probe_rst("h", 80, 1.0)["response"] == "RST"
-
-
-def test_probe_rst_refused_10061() -> None:
-    from unittest.mock import MagicMock, patch
-
-    from ethscan import osdetect
-    mock_sock = MagicMock()
-    mock_sock.connect_ex.return_value = 10061
-    with patch("socket.socket", return_value=mock_sock):
-        assert osdetect.probe_rst("h", 80, 1.0)["response"] == "RST"
-
-
-def test_probe_rst_refused_10013() -> None:
-    from unittest.mock import MagicMock, patch
-
-    from ethscan import osdetect
-    mock_sock = MagicMock()
-    mock_sock.connect_ex.return_value = 10013
-    with patch("socket.socket", return_value=mock_sock):
-        assert osdetect.probe_rst("h", 80, 1.0)["response"] == "RST"
-
-
-def test_probe_rst_other() -> None:
-    from unittest.mock import MagicMock, patch
+def test_probe_rst_refused_111(monkeypatch) -> None:
+    import socket
 
     from ethscan import osdetect
-    mock_sock = MagicMock()
-    mock_sock.connect_ex.return_value = 1
-    with patch("os.strerror", return_value="other"), patch("socket.socket", return_value=mock_sock):
-        assert osdetect.probe_rst("h", 80, 1.0)["response"] == "NO-RESPONSE"
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            return 111
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    assert osdetect.probe_rst("h", 80, 1.0)["response"] == "RST"
 
 
-def test_probe_rst_timeout() -> None:
-    import socket as sockmod
-    from unittest.mock import MagicMock, patch
-
-    from ethscan import osdetect
-    mock_sock = MagicMock()
-    mock_sock.connect_ex.side_effect = sockmod.timeout
-    with patch("socket.socket", return_value=mock_sock):
-        res = osdetect.probe_rst("h", 80, 1.0)
-        assert res["error"] == "connection timed out"
-
-
-def test_probe_rst_oserror() -> None:
-    from unittest.mock import MagicMock, patch
-
-    from ethscan import osdetect
-    mock_sock = MagicMock()
-    mock_sock.connect_ex.side_effect = OSError("bad")
-    with patch("socket.socket", return_value=mock_sock):
-        assert osdetect.probe_rst("h", 80, 1.0)["error"] == "bad"
-
-
-def test_probe_rst_oserror_truncate() -> None:
-    from unittest.mock import MagicMock, patch
+def test_probe_rst_refused_10061(monkeypatch) -> None:
+    import socket
 
     from ethscan import osdetect
-    mock_sock = MagicMock()
-    mock_sock.connect_ex.side_effect = OSError("y" * 300)
-    with patch("socket.socket", return_value=mock_sock):
-        assert cast(str, osdetect.probe_rst("h", 80, 1.0)["error"]).endswith("...")
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            return 10061
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    assert osdetect.probe_rst("h", 80, 1.0)["response"] == "RST"
 
 
-def test_probe_rst_close_err() -> None:
-    from unittest.mock import MagicMock, patch
-
-    from ethscan import osdetect
-    mock_sock = MagicMock()
-    mock_sock.connect_ex.return_value = 1
-    mock_sock.close.side_effect = Exception
-    with patch("os.strerror", return_value="other"), patch("socket.socket", return_value=mock_sock):
-        assert osdetect.probe_rst("h", 80, 1.0)["response"] == "NO-RESPONSE"
-
-
-def test_probe_fin_open() -> None:
-    from unittest.mock import MagicMock, patch
-
-    from ethscan import osdetect
-    mock_sock = MagicMock()
-    mock_sock.connect_ex.return_value = 0
-    with patch("socket.socket", return_value=mock_sock):
-        assert osdetect.probe_fin("h", 80, 1.0)["connected"] is True
-
-
-def test_probe_fin_refused() -> None:
-    from unittest.mock import MagicMock, patch
+def test_probe_rst_refused_10013(monkeypatch) -> None:
+    import socket
 
     from ethscan import osdetect
-    mock_sock = MagicMock()
-    mock_sock.connect_ex.return_value = 111
-    with patch("socket.socket", return_value=mock_sock):
-        assert osdetect.probe_fin("h", 80, 1.0)["response"] == "RST"
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            return 10013
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    assert osdetect.probe_rst("h", 80, 1.0)["response"] == "RST"
 
 
-def test_probe_fin_other() -> None:
-    from unittest.mock import MagicMock, patch
-
-    from ethscan import osdetect
-    mock_sock = MagicMock()
-    mock_sock.connect_ex.return_value = 2
-    with patch("os.strerror", return_value="e"), patch("socket.socket", return_value=mock_sock):
-        assert osdetect.probe_fin("h", 80, 1.0)["response"] == "NO-RESPONSE"
-
-
-def test_probe_fin_timeout() -> None:
-    import socket as sockmod
-    from unittest.mock import MagicMock, patch
-
-    from ethscan import osdetect
-    mock_sock = MagicMock()
-    mock_sock.connect_ex.side_effect = sockmod.timeout
-    with patch("socket.socket", return_value=mock_sock):
-        assert osdetect.probe_fin("h", 80, 1.0)["error"] == "connection timed out"
-
-
-def test_probe_fin_oserror() -> None:
-    from unittest.mock import MagicMock, patch
+def test_probe_rst_other(monkeypatch) -> None:
+    import socket
 
     from ethscan import osdetect
-    mock_sock = MagicMock()
-    mock_sock.connect_ex.side_effect = OSError("bad")
-    with patch("socket.socket", return_value=mock_sock):
-        assert osdetect.probe_fin("h", 80, 1.0)["error"] == "bad"
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            return 1
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+    monkeypatch.setattr("os.strerror", lambda *a: "other")
+
+    assert osdetect.probe_rst("h", 80, 1.0)["response"] == "NO-RESPONSE"
 
 
-def test_probe_fin_oserror_truncate() -> None:
-    from unittest.mock import MagicMock, patch
-
-    from ethscan import osdetect
-    mock_sock = MagicMock()
-    mock_sock.connect_ex.side_effect = OSError("z" * 300)
-    with patch("socket.socket", return_value=mock_sock):
-        assert cast(str, osdetect.probe_fin("h", 80, 1.0)["error"]).endswith("...")
-
-
-def test_probe_fin_close_err() -> None:
-    from unittest.mock import MagicMock, patch
-
-    from ethscan import osdetect
-    mock_sock = MagicMock()
-    mock_sock.connect_ex.return_value = 0
-    mock_sock.close.side_effect = Exception
-    with patch("socket.socket", return_value=mock_sock):
-        assert osdetect.probe_fin("h", 80, 1.0)["connected"] is True
-
-
-def test_probe_ack_open() -> None:
-    from unittest.mock import MagicMock, patch
-
-    from ethscan import osdetect
-    mock_sock = MagicMock()
-    mock_sock.connect_ex.return_value = 0
-    with patch("socket.socket", return_value=mock_sock):
-        assert osdetect.probe_ack("h", 80, 1.0)["connected"] is True
-
-
-def test_probe_ack_refused() -> None:
-    from unittest.mock import MagicMock, patch
+def test_probe_rst_timeout(monkeypatch) -> None:
+    import socket
 
     from ethscan import osdetect
-    mock_sock = MagicMock()
-    mock_sock.connect_ex.return_value = 111
-    with patch("socket.socket", return_value=mock_sock):
-        assert osdetect.probe_ack("h", 80, 1.0)["response"] == "RST"
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            raise socket.timeout()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    res = osdetect.probe_rst("h", 80, 1.0)
+    assert res["error"] == "connection timed out"
 
 
-def test_probe_ack_other() -> None:
-    from unittest.mock import MagicMock, patch
-
-    from ethscan import osdetect
-    mock_sock = MagicMock()
-    mock_sock.connect_ex.return_value = 3
-    with patch("os.strerror", return_value="e"), patch("socket.socket", return_value=mock_sock):
-        assert osdetect.probe_ack("h", 80, 1.0)["error"] == "e"
-
-
-def test_probe_ack_timeout() -> None:
-    import socket as sockmod
-    from unittest.mock import MagicMock, patch
-
-    from ethscan import osdetect
-    mock_sock = MagicMock()
-    mock_sock.connect_ex.side_effect = sockmod.timeout
-    with patch("socket.socket", return_value=mock_sock):
-        assert osdetect.probe_ack("h", 80, 1.0)["response"] == "NO-RESPONSE"
-
-
-def test_probe_ack_oserror() -> None:
-    from unittest.mock import MagicMock, patch
-
-    from ethscan import osdetect
-    mock_sock = MagicMock()
-    mock_sock.connect_ex.side_effect = OSError("x")
-    with patch("socket.socket", return_value=mock_sock):
-        assert osdetect.probe_ack("h", 80, 1.0)["error"] == "x"
-
-
-def test_probe_ack_oserror_truncate() -> None:
-    from unittest.mock import MagicMock, patch
+def test_probe_rst_oserror(monkeypatch) -> None:
+    import socket
 
     from ethscan import osdetect
-    mock_sock = MagicMock()
-    mock_sock.connect_ex.side_effect = OSError("w" * 300)
-    with patch("socket.socket", return_value=mock_sock):
-        assert cast(str, osdetect.probe_ack("h", 80, 1.0)["error"]).endswith("...")
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            raise OSError("bad")
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    assert osdetect.probe_rst("h", 80, 1.0)["error"] == "bad"
 
 
-def test_probe_ack_close_err() -> None:
-    from unittest.mock import MagicMock, patch
+def test_probe_rst_oserror_truncate(monkeypatch) -> None:
+    import socket
 
     from ethscan import osdetect
-    mock_sock = MagicMock()
-    mock_sock.connect_ex.return_value = 0
-    mock_sock.close.side_effect = Exception
-    with patch("socket.socket", return_value=mock_sock):
-        assert osdetect.probe_ack("h", 80, 1.0)["connected"] is True
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            raise OSError("y" * 300)
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    assert cast(str, osdetect.probe_rst("h", 80, 1.0)["error"]).endswith("...")
+
+
+def test_probe_rst_close_err(monkeypatch) -> None:
+    import socket
+
+    from ethscan import osdetect
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            return 1
+
+        def close(self):
+            raise Exception("bad")
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+    monkeypatch.setattr("os.strerror", lambda *a: "other")
+
+    assert osdetect.probe_rst("h", 80, 1.0)["response"] == "NO-RESPONSE"
+
+
+def test_probe_fin_open(monkeypatch) -> None:
+    import socket
+
+    from ethscan import osdetect
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            return 0
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    assert osdetect.probe_fin("h", 80, 1.0)["connected"] is True
+
+
+def test_probe_fin_refused(monkeypatch) -> None:
+    import socket
+
+    from ethscan import osdetect
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            return 111
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    assert osdetect.probe_fin("h", 80, 1.0)["response"] == "RST"
+
+
+def test_probe_fin_other(monkeypatch) -> None:
+    import socket
+
+    from ethscan import osdetect
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            return 2
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+    monkeypatch.setattr("os.strerror", lambda *a: "e")
+
+    assert osdetect.probe_fin("h", 80, 1.0)["response"] == "NO-RESPONSE"
+
+
+def test_probe_fin_timeout(monkeypatch) -> None:
+    import socket
+
+    from ethscan import osdetect
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            raise socket.timeout()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    assert osdetect.probe_fin("h", 80, 1.0)["error"] == "connection timed out"
+
+
+def test_probe_fin_oserror(monkeypatch) -> None:
+    import socket
+
+    from ethscan import osdetect
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            raise OSError("bad")
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    assert osdetect.probe_fin("h", 80, 1.0)["error"] == "bad"
+
+
+def test_probe_fin_oserror_truncate(monkeypatch) -> None:
+    import socket
+
+    from ethscan import osdetect
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            raise OSError("z" * 300)
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    assert cast(str, osdetect.probe_fin("h", 80, 1.0)["error"]).endswith("...")
+
+
+def test_probe_fin_close_err(monkeypatch) -> None:
+    import socket
+
+    from ethscan import osdetect
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            return 0
+
+        def close(self):
+            raise Exception("bad")
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    assert osdetect.probe_fin("h", 80, 1.0)["connected"] is True
+
+
+def test_probe_ack_open(monkeypatch) -> None:
+    import socket
+
+    from ethscan import osdetect
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            return 0
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    assert osdetect.probe_ack("h", 80, 1.0)["connected"] is True
+
+
+def test_probe_ack_refused(monkeypatch) -> None:
+    import socket
+
+    from ethscan import osdetect
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            return 111
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    assert osdetect.probe_ack("h", 80, 1.0)["response"] == "RST"
+
+
+def test_probe_ack_other(monkeypatch) -> None:
+    import socket
+
+    from ethscan import osdetect
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            return 3
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+    monkeypatch.setattr("os.strerror", lambda *a: "e")
+
+    assert osdetect.probe_ack("h", 80, 1.0)["error"] == "e"
+
+
+def test_probe_ack_timeout(monkeypatch) -> None:
+    import socket
+
+    from ethscan import osdetect
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            raise socket.timeout()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    assert osdetect.probe_ack("h", 80, 1.0)["response"] == "NO-RESPONSE"
+
+
+def test_probe_ack_oserror(monkeypatch) -> None:
+    import socket
+
+    from ethscan import osdetect
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            raise OSError("x")
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    assert osdetect.probe_ack("h", 80, 1.0)["error"] == "x"
+
+
+def test_probe_ack_oserror_truncate(monkeypatch) -> None:
+    import socket
+
+    from ethscan import osdetect
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            raise OSError("w" * 300)
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    assert cast(str, osdetect.probe_ack("h", 80, 1.0)["error"]).endswith("...")
+
+
+def test_probe_ack_close_err(monkeypatch) -> None:
+    import socket
+
+    from ethscan import osdetect
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            return 0
+
+        def close(self):
+            raise Exception("bad")
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 80))
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    assert osdetect.probe_ack("h", 80, 1.0)["connected"] is True
+
+
+# --- Family-aware transport tests for probe_rst ---
+
+
+def test_probe_rst_ipv6_uses_af_inet6(monkeypatch) -> None:
+    """An IPv6 target resolves to an AF_INET6 TCP socket."""
+    import socket
+
+    from ethscan import osdetect
+
+    captured: dict[str, object] = {}
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            captured["family"] = family
+            captured["socktype"] = socktype
+            captured["proto"] = proto
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            captured["sockaddr"] = sockaddr
+            return 111  # Connection refused
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (
+                socket.AF_INET6,
+                socket.SOCK_STREAM,
+                socket.IPPROTO_TCP,
+                "",
+                ("::1", 80, 0, 0),
+            )
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    res = osdetect.probe_rst("::1", 80, 1.0)
+    assert res["response"] == "RST"
+    assert captured["family"] == socket.AF_INET6
+    assert captured["sockaddr"] == ("::1", 80, 0, 0)
+
+
+def test_probe_rst_ipv4_uses_af_inet(monkeypatch) -> None:
+    """An IPv4 target resolves to an AF_INET TCP socket."""
+    import socket
+
+    from ethscan import osdetect
+
+    captured: dict[str, object] = {}
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            captured["family"] = family
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            captured["sockaddr"] = sockaddr
+            return 111  # Connection refused
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (
+                socket.AF_INET,
+                socket.SOCK_STREAM,
+                socket.IPPROTO_TCP,
+                "",
+                ("127.0.0.1", 80),
+            )
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    res = osdetect.probe_rst("127.0.0.1", 80, 1.0)
+    assert res["response"] == "RST"
+    assert captured["family"] == socket.AF_INET
+    assert captured["sockaddr"] == ("127.0.0.1", 80)
+
+
+def test_probe_rst_getaddrinfo_failure_is_reported(monkeypatch) -> None:
+    """getaddrinfo OSError is reported as NO-RESPONSE with error."""
+    import socket
+
+    from ethscan import osdetect
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: (_ for _ in ()).throw(socket.gaierror("name resolution failed")),
+    )
+
+    res = osdetect.probe_rst("bad.host", 80, 1.0)
+    assert res["response"] == "NO-RESPONSE"
+    assert res["error"] is not None
+    assert "name resolution failed" in str(res["error"])
+
+
+def test_probe_rst_empty_getaddrinfo_is_reported(monkeypatch) -> None:
+    """Empty getaddrinfo result is reported as NO-RESPONSE with error."""
+    from ethscan import osdetect
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [],
+    )
+
+    res = osdetect.probe_rst("bad.host", 80, 1.0)
+    assert res["response"] == "NO-RESPONSE"
+    assert res["error"] is not None
+    assert "no address found" in str(res["error"])
+
+
+# --- Family-aware transport tests for probe_fin ---
+
+
+def test_probe_fin_ipv6_uses_af_inet6(monkeypatch) -> None:
+    """An IPv6 target resolves to an AF_INET6 TCP socket."""
+    import socket
+
+    from ethscan import osdetect
+
+    captured: dict[str, object] = {}
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            captured["family"] = family
+            captured["socktype"] = socktype
+            captured["proto"] = proto
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            captured["sockaddr"] = sockaddr
+            return 111  # Connection refused
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (
+                socket.AF_INET6,
+                socket.SOCK_STREAM,
+                socket.IPPROTO_TCP,
+                "",
+                ("::1", 80, 0, 0),
+            )
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    res = osdetect.probe_fin("::1", 80, 1.0)
+    assert res["response"] == "RST"
+    assert captured["family"] == socket.AF_INET6
+    assert captured["sockaddr"] == ("::1", 80, 0, 0)
+
+
+def test_probe_fin_ipv4_uses_af_inet(monkeypatch) -> None:
+    """An IPv4 target resolves to an AF_INET TCP socket."""
+    import socket
+
+    from ethscan import osdetect
+
+    captured: dict[str, object] = {}
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            captured["family"] = family
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            captured["sockaddr"] = sockaddr
+            return 111  # Connection refused
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (
+                socket.AF_INET,
+                socket.SOCK_STREAM,
+                socket.IPPROTO_TCP,
+                "",
+                ("127.0.0.1", 80),
+            )
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    res = osdetect.probe_fin("127.0.0.1", 80, 1.0)
+    assert res["response"] == "RST"
+    assert captured["family"] == socket.AF_INET
+    assert captured["sockaddr"] == ("127.0.0.1", 80)
+
+
+def test_probe_fin_getaddrinfo_failure_is_reported(monkeypatch) -> None:
+    """getaddrinfo OSError is reported as NO-RESPONSE with error."""
+    import socket
+
+    from ethscan import osdetect
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: (_ for _ in ()).throw(socket.gaierror("name resolution failed")),
+    )
+
+    res = osdetect.probe_fin("bad.host", 80, 1.0)
+    assert res["response"] == "NO-RESPONSE"
+    assert res["error"] is not None
+    assert "name resolution failed" in str(res["error"])
+
+
+def test_probe_fin_empty_getaddrinfo_is_reported(monkeypatch) -> None:
+    """Empty getaddrinfo result is reported as NO-RESPONSE with error."""
+    from ethscan import osdetect
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [],
+    )
+
+    res = osdetect.probe_fin("bad.host", 80, 1.0)
+    assert res["response"] == "NO-RESPONSE"
+    assert res["error"] is not None
+    assert "no address found" in str(res["error"])
+
+
+# --- Family-aware transport tests for probe_ack ---
+
+
+def test_probe_ack_ipv6_uses_af_inet6(monkeypatch) -> None:
+    """An IPv6 target resolves to an AF_INET6 TCP socket."""
+    import socket
+
+    from ethscan import osdetect
+
+    captured: dict[str, object] = {}
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            captured["family"] = family
+            captured["socktype"] = socktype
+            captured["proto"] = proto
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            captured["sockaddr"] = sockaddr
+            return 111  # Connection refused
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (
+                socket.AF_INET6,
+                socket.SOCK_STREAM,
+                socket.IPPROTO_TCP,
+                "",
+                ("::1", 80, 0, 0),
+            )
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    res = osdetect.probe_ack("::1", 80, 1.0)
+    assert res["response"] == "RST"
+    assert captured["family"] == socket.AF_INET6
+    assert captured["sockaddr"] == ("::1", 80, 0, 0)
+
+
+def test_probe_ack_ipv4_uses_af_inet(monkeypatch) -> None:
+    """An IPv4 target resolves to an AF_INET TCP socket."""
+    import socket
+
+    from ethscan import osdetect
+
+    captured: dict[str, object] = {}
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            captured["family"] = family
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect_ex(self, sockaddr):
+            captured["sockaddr"] = sockaddr
+            return 111  # Connection refused
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (
+                socket.AF_INET,
+                socket.SOCK_STREAM,
+                socket.IPPROTO_TCP,
+                "",
+                ("127.0.0.1", 80),
+            )
+        ],
+    )
+    monkeypatch.setattr("ethscan.osdetect.socket.socket", FakeSock)
+
+    res = osdetect.probe_ack("127.0.0.1", 80, 1.0)
+    assert res["response"] == "RST"
+    assert captured["family"] == socket.AF_INET
+    assert captured["sockaddr"] == ("127.0.0.1", 80)
+
+
+def test_probe_ack_getaddrinfo_failure_is_reported(monkeypatch) -> None:
+    """getaddrinfo OSError is reported as NO-RESPONSE with error."""
+    import socket
+
+    from ethscan import osdetect
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: (_ for _ in ()).throw(socket.gaierror("name resolution failed")),
+    )
+
+    res = osdetect.probe_ack("bad.host", 80, 1.0)
+    assert res["response"] == "NO-RESPONSE"
+    assert res["error"] is not None
+    assert "name resolution failed" in str(res["error"])
+
+
+def test_probe_ack_empty_getaddrinfo_is_reported(monkeypatch) -> None:
+    """Empty getaddrinfo result is reported as NO-RESPONSE with error."""
+    from ethscan import osdetect
+
+    monkeypatch.setattr(
+        "ethscan.osdetect.socket.getaddrinfo",
+        lambda *a, **kw: [],
+    )
+
+    res = osdetect.probe_ack("bad.host", 80, 1.0)
+    assert res["response"] == "NO-RESPONSE"
+    assert res["error"] is not None
+    assert "no address found" in str(res["error"])
 
 
 def test_run_osdetect_connected_infers_linux() -> None:

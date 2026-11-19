@@ -1207,6 +1207,165 @@ def test_send_recv_timeout_and_oserror(monkeypatch) -> None:
         socket.socket = orig  # type: ignore[misc,assignment]
 
 
+def test_send_recv_ipv6_uses_af_inet6(monkeypatch) -> None:
+    """An IPv6 literal resolves to an AF_INET6 UDP socket."""
+    import socket
+
+    from ethscan import snmp
+
+    captured: dict[str, object] = {}
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            captured["family"] = family
+            captured["socktype"] = socktype
+            captured["proto"] = proto
+
+        def settimeout(self, timeout):
+            pass
+
+        def sendto(self, data, addr):
+            captured["sent"] = data
+            captured["sockaddr"] = addr
+
+        def recvfrom(self, n):
+            return b"resp", ("::1", 161, 0, 0)
+
+        def close(self):
+            captured["closed"] = True
+
+    monkeypatch.setattr(
+        "ethscan.snmp.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (
+                socket.AF_INET6,
+                socket.SOCK_DGRAM,
+                socket.IPPROTO_UDP,
+                "",
+                ("::1", 161, 0, 0),
+            )
+        ],
+    )
+    monkeypatch.setattr("ethscan.snmp.socket.socket", FakeSock)
+
+    data, err = snmp._send_recv("::1", 161, b"req", 1.0)
+    assert err is None
+    assert data == b"resp"
+    assert captured["family"] == socket.AF_INET6
+    assert captured["sockaddr"] == ("::1", 161, 0, 0)
+    assert captured["closed"] is True
+
+
+def test_send_recv_ipv4_uses_af_inet(monkeypatch) -> None:
+    """An IPv4 literal resolves to an AF_INET UDP socket."""
+    import socket
+
+    from ethscan import snmp
+
+    captured: dict[str, object] = {}
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            captured["family"] = family
+
+        def settimeout(self, timeout):
+            pass
+
+        def sendto(self, data, addr):
+            captured["sockaddr"] = addr
+
+        def recvfrom(self, n):
+            return b"resp", ("127.0.0.1", 161)
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.snmp.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (
+                socket.AF_INET,
+                socket.SOCK_DGRAM,
+                socket.IPPROTO_UDP,
+                "",
+                ("127.0.0.1", 161),
+            )
+        ],
+    )
+    monkeypatch.setattr("ethscan.snmp.socket.socket", FakeSock)
+
+    data, err = snmp._send_recv("127.0.0.1", 161, b"req", 1.0)
+    assert err is None
+    assert data == b"resp"
+    assert captured["family"] == socket.AF_INET
+    assert captured["sockaddr"] == ("127.0.0.1", 161)
+
+
+def test_send_recv_getaddrinfo_failure_is_reported(monkeypatch) -> None:
+    """getaddrinfo OSError is reported as address resolution failed."""
+    import socket
+
+    from ethscan import snmp
+
+    monkeypatch.setattr(
+        "ethscan.snmp.socket.getaddrinfo",
+        lambda *a, **kw: (_ for _ in ()).throw(socket.gaierror("name resolution failed")),
+    )
+
+    data, err = snmp._send_recv("bad.host", 161, b"req", 1.0)
+    assert data is None
+    assert err is not None
+    assert "address resolution failed" in err
+
+
+def test_send_recv_empty_getaddrinfo_is_reported(monkeypatch) -> None:
+    """Empty getaddrinfo result is reported as no address found."""
+    from ethscan import snmp
+
+    monkeypatch.setattr(
+        "ethscan.snmp.socket.getaddrinfo",
+        lambda *a, **kw: [],
+    )
+
+    data, err = snmp._send_recv("bad.host", 161, b"req", 1.0)
+    assert data is None
+    assert err is not None
+    assert "no address found" in err
+
+
+def test_send_recv_real_socket_path_closes_socket(monkeypatch) -> None:
+    import socket as _socket
+
+    class _FakeSock:
+        def __init__(self):
+            self.closed = False
+
+        def settimeout(self, timeout):
+            pass
+
+        def sendto(self, data, addr):
+            pass
+
+        def recvfrom(self, n):
+            return b"resp", ("h", 161)
+
+        def close(self):
+            self.closed = True
+
+    fake = _FakeSock()
+    monkeypatch.setattr(
+        "ethscan.snmp.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP, "", ("127.0.0.1", 161))
+        ],
+    )
+    monkeypatch.setattr(_socket, "socket", lambda *a, **k: fake)
+    data, err = snmp._send_recv("h", 161, b"req", 1.0)
+    assert data == b"resp"
+    assert err is None
+    assert fake.closed is True
+
+
 def test_assign_varbind_timeticks() -> None:
     from ethscan import snmp
 
@@ -1348,6 +1507,7 @@ def test_parse_snmp_message_bad_varbind_tag_raises() -> None:
 
 
 def test_send_recv_real_socket_path_closes_socket(monkeypatch) -> None:
+    import socket
     import socket as _socket
 
     class _FakeSock:
@@ -1367,6 +1527,12 @@ def test_send_recv_real_socket_path_closes_socket(monkeypatch) -> None:
             self.closed = True
 
     fake = _FakeSock()
+    monkeypatch.setattr(
+        "ethscan.snmp.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP, "", ("127.0.0.1", 161))
+        ],
+    )
     monkeypatch.setattr(_socket, "socket", lambda *a, **k: fake)
     data, err = _send_recv("h", 161, b"req", 1.0)
     assert data == b"resp"

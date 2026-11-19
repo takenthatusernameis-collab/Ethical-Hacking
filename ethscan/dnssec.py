@@ -221,10 +221,29 @@ def _query_tcp(
     timeout: float = DEFAULT_TIMEOUT,
     port: int = DNS_PORT,
 ) -> bytes | None:
-    """Send a DNS query via TCP and return the response."""
+    """Send a DNS query via TCP and return the response.
+
+    Uses ``socket.getaddrinfo`` to resolve the endpoint so that both IPv4 and
+    IPv6 nameservers work. The first returned address family is used.
+    """
     try:
-        with socket.create_connection((nameserver, port), timeout=timeout) as sock:
+        infos = socket.getaddrinfo(
+            nameserver,
+            port,
+            type=socket.SOCK_STREAM,
+            proto=socket.IPPROTO_TCP,
+        )
+    except OSError:
+        return None
+
+    if not infos:
+        return None
+
+    family, socktype, proto, canonname, sockaddr = infos[0]
+    try:
+        with socket.socket(family, socktype, proto) as sock:
             sock.settimeout(timeout)
+            sock.connect(sockaddr)
             length_prefix = struct.pack(">H", len(query))
             sock.sendall(length_prefix + query)
             length_data = sock.recv(2)

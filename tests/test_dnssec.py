@@ -26,7 +26,6 @@ from ethscan.dnssec import (
     _query_dnskey_raw,
     _query_ds_dnspython,
     _query_ds_raw,
-    _query_tcp,
     _query_udp,
     _resolve_nameservers,
     format_dnssec_report_csv,
@@ -835,46 +834,503 @@ def _mock_tcp_sock(recv_side_effect):
     return inst
 
 
-def test_query_tcp_success():
-    with patch("ethscan.dnssec.socket.create_connection") as mconn:
-        inst = _mock_tcp_sock([struct.pack(">H", 5), b"hello"])
-        mconn.return_value = inst
-        r = _query_tcp("1.2.3.4", b"q", 1.0)
-        assert r == b"hello"
-        inst.sendall.assert_called_once_with(struct.pack(">H", 1) + b"q")
-        inst.settimeout.assert_called_once_with(1.0)
+def test_query_tcp_success(monkeypatch):
+    import socket
+
+    import ethscan.dnssec as dnssec_mod
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect(self, addr):
+            pass
+
+        def sendall(self, data):
+            pass
+
+        def recv(self, n):
+            if n == 2:
+                return struct.pack(">H", 5)
+            return b"hello"
+
+    monkeypatch.setattr(
+        "ethscan.dnssec.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("1.2.3.4", 53))
+        ],
+    )
+    monkeypatch.setattr("ethscan.dnssec.socket.socket", FakeSock)
+
+    r = dnssec_mod._query_tcp("1.2.3.4", b"q", 1.0)
+    assert r == b"hello"
 
 
-def test_query_tcp_short_length_prefix():
-    with patch("ethscan.dnssec.socket.create_connection") as mconn:
-        inst = _mock_tcp_sock([b"\x00"])
-        mconn.return_value = inst
-        assert _query_tcp("1.2.3.4", b"q", 1.0) is None
+def test_query_tcp_short_length_prefix(monkeypatch):
+    import socket
+
+    import ethscan.dnssec as dnssec_mod
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect(self, addr):
+            pass
+
+        def sendall(self, data):
+            pass
+
+        def recv(self, n):
+            return b"\x00"
+
+    monkeypatch.setattr(
+        "ethscan.dnssec.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("1.2.3.4", 53))
+        ],
+    )
+    monkeypatch.setattr("ethscan.dnssec.socket.socket", FakeSock)
+
+    assert dnssec_mod._query_tcp("1.2.3.4", b"q", 1.0) is None
 
 
-def test_query_tcp_truncated_data():
-    with patch("ethscan.dnssec.socket.create_connection") as mconn:
-        inst = _mock_tcp_sock([struct.pack(">H", 10), b"ab", b""])
-        mconn.return_value = inst
-        assert _query_tcp("1.2.3.4", b"q", 1.0) == b"ab"
+def test_query_tcp_truncated_data(monkeypatch):
+    import socket
+
+    import ethscan.dnssec as dnssec_mod
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect(self, addr):
+            pass
+
+        def sendall(self, data):
+            pass
+
+        def recv(self, n):
+            if n == 2:
+                return struct.pack(">H", 10)
+            if not hasattr(self, "_recv_called"):
+                self._recv_called = True
+                return b"ab"
+            return b""
+
+    monkeypatch.setattr(
+        "ethscan.dnssec.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("1.2.3.4", 53))
+        ],
+    )
+    monkeypatch.setattr("ethscan.dnssec.socket.socket", FakeSock)
+
+    assert dnssec_mod._query_tcp("1.2.3.4", b"q", 1.0) == b"ab"
 
 
-def test_query_tcp_connection_refused():
-    with patch("ethscan.dnssec.socket.create_connection") as mconn:
-        mconn.side_effect = ConnectionRefusedError()
-        assert _query_tcp("1.2.3.4", b"q", 1.0) is None
+def test_query_tcp_connection_refused(monkeypatch):
+    import socket
+
+    import ethscan.dnssec as dnssec_mod
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect(self, addr):
+            raise ConnectionRefusedError()
+
+        def sendall(self, data):
+            pass
+
+        def recv(self, n):
+            return b""
+
+    monkeypatch.setattr(
+        "ethscan.dnssec.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("1.2.3.4", 53))
+        ],
+    )
+    monkeypatch.setattr("ethscan.dnssec.socket.socket", FakeSock)
+
+    assert dnssec_mod._query_tcp("1.2.3.4", b"q", 1.0) is None
 
 
-def test_query_tcp_timeout():
-    with patch("ethscan.dnssec.socket.create_connection") as mconn:
-        mconn.side_effect = socket.timeout()
-        assert _query_tcp("1.2.3.4", b"q", 1.0) is None
+def test_query_tcp_timeout(monkeypatch):
+    import socket
+
+    import ethscan.dnssec as dnssec_mod
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect(self, addr):
+            raise socket.timeout()
+
+        def sendall(self, data):
+            pass
+
+        def recv(self, n):
+            return b""
+
+    monkeypatch.setattr(
+        "ethscan.dnssec.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("1.2.3.4", 53))
+        ],
+    )
+    monkeypatch.setattr("ethscan.dnssec.socket.socket", FakeSock)
+
+    assert dnssec_mod._query_tcp("1.2.3.4", b"q", 1.0) is None
 
 
-def test_query_tcp_oserror():
-    with patch("ethscan.dnssec.socket.create_connection") as mconn:
-        mconn.side_effect = OSError("unreachable")
-        assert _query_tcp("1.2.3.4", b"q", 1.0) is None
+def test_query_tcp_oserror(monkeypatch):
+    import socket
+
+    import ethscan.dnssec as dnssec_mod
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect(self, addr):
+            raise OSError("unreachable")
+
+        def sendall(self, data):
+            pass
+
+        def recv(self, n):
+            return b""
+
+    monkeypatch.setattr(
+        "ethscan.dnssec.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("1.2.3.4", 53))
+        ],
+    )
+    monkeypatch.setattr("ethscan.dnssec.socket.socket", FakeSock)
+
+    assert dnssec_mod._query_tcp("1.2.3.4", b"q", 1.0) is None
+
+
+# --- Family-aware transport tests for _query_udp ---
+
+
+def test_query_udp_ipv6_uses_af_inet6(monkeypatch):
+    """An IPv6 nameserver resolves to an AF_INET6 UDP socket."""
+    import socket
+
+    import ethscan.dnssec as dnssec_mod
+
+    captured: dict[str, object] = {}
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            captured["family"] = family
+            captured["socktype"] = socktype
+            captured["proto"] = proto
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def sendto(self, data, addr):
+            captured["sent"] = data
+            captured["sockaddr"] = addr
+
+        def recvfrom(self, n):
+            return b"resp", ("::1", 53, 0, 0)
+
+    monkeypatch.setattr(
+        "ethscan.dnssec.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (
+                socket.AF_INET6,
+                socket.SOCK_DGRAM,
+                socket.IPPROTO_UDP,
+                "",
+                ("::1", 53, 0, 0),
+            )
+        ],
+    )
+    monkeypatch.setattr("ethscan.dnssec.socket.socket", FakeSock)
+
+    r = dnssec_mod._query_udp("::1", b"q", 1.0)
+    assert r == b"resp"
+    assert captured["family"] == socket.AF_INET6
+    assert captured["sockaddr"] == ("::1", 53, 0, 0)
+
+
+def test_query_udp_ipv4_uses_af_inet(monkeypatch):
+    """An IPv4 nameserver resolves to an AF_INET UDP socket."""
+    import socket
+
+    import ethscan.dnssec as dnssec_mod
+
+    captured: dict[str, object] = {}
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            captured["family"] = family
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def sendto(self, data, addr):
+            captured["sockaddr"] = addr
+
+        def recvfrom(self, n):
+            return b"resp", ("1.2.3.4", 53)
+
+    monkeypatch.setattr(
+        "ethscan.dnssec.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (
+                socket.AF_INET,
+                socket.SOCK_DGRAM,
+                socket.IPPROTO_UDP,
+                "",
+                ("1.2.3.4", 53),
+            )
+        ],
+    )
+    monkeypatch.setattr("ethscan.dnssec.socket.socket", FakeSock)
+
+    r = dnssec_mod._query_udp("1.2.3.4", b"q", 1.0)
+    assert r == b"resp"
+    assert captured["family"] == socket.AF_INET
+    assert captured["sockaddr"] == ("1.2.3.4", 53)
+
+
+def test_query_udp_getaddrinfo_failure_is_reported(monkeypatch):
+    """getaddrinfo OSError is reported as None."""
+    import socket
+
+    import ethscan.dnssec as dnssec_mod
+
+    monkeypatch.setattr(
+        "ethscan.dnssec.socket.getaddrinfo",
+        lambda *a, **kw: (_ for _ in ()).throw(socket.gaierror("name resolution failed")),
+    )
+
+    r = dnssec_mod._query_udp("bad.host", b"q", 1.0)
+    assert r is None
+
+
+def test_query_udp_empty_getaddrinfo_is_reported(monkeypatch):
+    """Empty getaddrinfo result is reported as None."""
+    import ethscan.dnssec as dnssec_mod
+
+    monkeypatch.setattr(
+        "ethscan.dnssec.socket.getaddrinfo",
+        lambda *a, **kw: [],
+    )
+
+    r = dnssec_mod._query_udp("bad.host", b"q", 1.0)
+    assert r is None
+
+
+# --- Family-aware transport tests for _query_tcp ---
+
+
+def test_query_tcp_ipv6_uses_af_inet6(monkeypatch):
+    """An IPv6 nameserver resolves to an AF_INET6 TCP socket via getaddrinfo."""
+    import socket
+
+    import ethscan.dnssec as dnssec_mod
+
+    captured: dict[str, object] = {}
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            captured["family"] = family
+            captured["socktype"] = socktype
+            captured["proto"] = proto
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect(self, addr):
+            captured["sockaddr"] = addr
+
+        def sendall(self, data):
+            captured["sent"] = data
+
+        def recv(self, n):
+            if n == 2:
+                return struct.pack(">H", 5)
+            return b"hello"
+
+    monkeypatch.setattr(
+        "ethscan.dnssec.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (
+                socket.AF_INET6,
+                socket.SOCK_STREAM,
+                socket.IPPROTO_TCP,
+                "",
+                ("::1", 53, 0, 0),
+            )
+        ],
+    )
+    monkeypatch.setattr("ethscan.dnssec.socket.socket", FakeSock)
+
+    r = dnssec_mod._query_tcp("::1", b"q", 1.0)
+    assert r == b"hello"
+    assert captured["family"] == socket.AF_INET6
+
+
+def test_query_tcp_ipv4_uses_af_inet(monkeypatch):
+    """An IPv4 nameserver resolves to an AF_INET TCP socket via getaddrinfo."""
+    import socket
+
+    import ethscan.dnssec as dnssec_mod
+
+    captured: dict[str, object] = {}
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            captured["family"] = family
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect(self, addr):
+            pass
+
+        def sendall(self, data):
+            pass
+
+        def recv(self, n):
+            if n == 2:
+                return struct.pack(">H", 5)
+            return b"hello"
+
+    monkeypatch.setattr(
+        "ethscan.dnssec.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (
+                socket.AF_INET,
+                socket.SOCK_STREAM,
+                socket.IPPROTO_TCP,
+                "",
+                ("1.2.3.4", 53),
+            )
+        ],
+    )
+    monkeypatch.setattr("ethscan.dnssec.socket.socket", FakeSock)
+
+    r = dnssec_mod._query_tcp("1.2.3.4", b"q", 1.0)
+    assert r == b"hello"
+    assert captured["family"] == socket.AF_INET
+
+
+def test_query_tcp_getaddrinfo_failure_is_reported(monkeypatch):
+    """getaddrinfo OSError is reported as None."""
+    import socket
+
+    import ethscan.dnssec as dnssec_mod
+
+    monkeypatch.setattr(
+        "ethscan.dnssec.socket.getaddrinfo",
+        lambda *a, **kw: (_ for _ in ()).throw(socket.gaierror("name resolution failed")),
+    )
+
+    r = dnssec_mod._query_tcp("bad.host", b"q", 1.0)
+    assert r is None
+
+
+def test_query_tcp_empty_getaddrinfo_is_reported(monkeypatch):
+    """Empty getaddrinfo result is reported as None."""
+    import ethscan.dnssec as dnssec_mod
+
+    monkeypatch.setattr(
+        "ethscan.dnssec.socket.getaddrinfo",
+        lambda *a, **kw: [],
+    )
+
+    r = dnssec_mod._query_tcp("bad.host", b"q", 1.0)
+    assert r is None
 
 
 def test_resolve_nameservers_success():
