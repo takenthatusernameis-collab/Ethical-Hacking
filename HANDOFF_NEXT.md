@@ -1,5 +1,5 @@
 # Handoff
-Date: Thu Nov 19 2026 (session 19)
+Date: Thu Nov 19 2026 (session 20)
 
 ## State at HEAD (working tree clean; controller will stage/commit)
 - Single control-marker commit `5ca0fc8` (empty message — not project progress per rules).
@@ -10,9 +10,7 @@ Date: Thu Nov 19 2026 (session 19)
 
 ## Done this session (verification only, no source/test changes)
 1. Independently re-verified the green baseline from a clean tree (pytest/mypy/ruff/check_readme all above).
-2. Extended the hostile-shape fuzzer probe to **all three formatter formats** (prior probes covered Markdown/CSV only): 160 `format_*_report_{json,markdown,csv}` functions x 18 hostile shapes = 2,880 calls, **0 crashes**. Confirms the formatter-hardening campaign (sessions 117-119) plus the `completion` `message` fix (session 8) holds across JSON too.
-3. Audited every `socket.AF_INET` / `gethostbyname` / `getaddrinfo` usage in `ethscan/`. All changeable transports are family-aware (`getaddrinfo` without `AF_INET`, `sendto(request, sockaddr)`): geo, cert, s3, ntp, netbios, memcached, redis, smb, snmp, ldap, dnssec, osdetect, whois, trace. Remaining hardcoded uses are intentional and explicitly out of scope: `ping.py` raw ICMP sockets (privileged, ICMPv6 checksum work), `dns.py`/`resolve.py`/`stale.py` A-record and `subtake.py` A-record `getaddrinfo(..., AF_INET)` (IPv4-only A-record semantics by design), `subtake.py:389` AAAA (AF_INET6 by design), `mac.py:52`/`cve.py:45` `gethostbyname` (intentional/dead code).
-4. Confirmed `ethscan/hash.py::_infer_algorithm("z"*32)` already returns `None` (non-hex rejection fix present); `run_check` reports the "Could not infer algorithm" error.
+2. Confirmed no bounded, high-value task exists that can be implemented without weakening safety/validation or making speculative changes.
 
 ## What changed
 - Nothing. No source or test files modified; no speculative changes made (no demonstrated problem exists; rules forbid speculative changes).
@@ -33,5 +31,5 @@ Date: Thu Nov 19 2026 (session 19)
 - **None pending.** Repository is fully green with all known limitations resolved or explicitly out of scope. If future work is needed, pick a single bounded, high-value improvement, **reproduce a concrete gap first** (failing test/check or behavioral deviation from the documented contract), apply the smallest safe fix, rerun focused then broader gates (pytest/mypy/ruff/check_readme), and do not weaken safety or validation. `oracle`/`postgresql` empty-target handling remains out of scope per their documented contract (exit 0, in-band error).
 
 ## Environment/notes
-- Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.5. `pytest-cov`/`coverage` NOT installed; do not rely on `--cov`.
+- Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.6. `pytest-cov`/`coverage` NOT installed; do not rely on `--cov`.
 - Do not commit manually: the workflow controller stages/commits/pushes.
