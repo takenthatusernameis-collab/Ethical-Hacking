@@ -106,6 +106,15 @@ _VALID_REPORT: dict[str, Any] = {
     "items": [],
     "data": {},
     "error": None,
+    # MAC report fields (ethscan.mac.format_mac_report_*). Added so the
+    # generic single-field hostile sweep also covers the mac formatters,
+    # which read mac/oui/timeout/use_cache/offline_fallback/mac_data.
+    "mac": "00:1a:2b:3c:4d:5e",
+    "oui": "001a2b3c",
+    "timeout": 5.0,
+    "use_cache": True,
+    "offline_fallback": True,
+    "mac_data": {"vendor": "Cisco Systems", "cached": False, "offline_fallback": False, "error": None},
     # Install report fields (ethscan.completion.format_install_report_*).
     # Added so the generic single-field hostile sweep also covers the install
     # formatters; without them the install formatters were only exercised by
