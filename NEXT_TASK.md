@@ -1,67 +1,78 @@
 # Next Task
-Date: Wed Nov 18 2026 (session 14 handoff)
+Date: Thu Nov 19 2026 (session 15 handoff)
 
 ## Status
-- Green: 39893 passed, 146 skipped, 0 failed; mypy Success (59 source
-  files); ruff clean; README 54/54 with 0 drift both directions;
-  `git diff --check` clean.
-- Full-suite branch coverage 99% for `ethscan/ldap.py` and `ethscan/smb.py`
-  (the modules touched this session; missing lines are defensive formatters).
+- Green: 39921 passed, 146 skipped, 0 failed; mypy Success (59 source
+  files); `ruff check ethscan tests` clean; README 54/54 with 0 drift both
+  directions; `git diff --check` clean.
 - Uncommitted at handoff: controller will stage/commit
-  `ethscan/ldap.py`, `ethscan/smb.py`,
-  `tests/test_ldap.py`, `tests/test_smb.py` (tests already present, no diff).
+  `ethscan/whois.py`, `tests/test_whois.py`, `HANDOFF_NEXT.md`,
+  `NEXT_TASK.md`.
 
 ## This session (what changed)
-1. Verified the IPv6 transport defect was already fixed in two TCP modules:
-   - `ldap.py` `_send_recv` (line ~468) already uses `getaddrinfo` with
-     `SOCK_STREAM`/`IPPROTO_TCP`, family-aware socket creation, and
-     `connect(sockaddr)`.
-   - `smb.py` `_send_recv` (line ~222) already uses the same pattern.
-2. Confirmed the four deterministic transport tests per module were already
-   present and passing:
-   - `test_send_recv_ipv6_uses_af_inet6`
-   - `test_send_recv_ipv4_uses_af_inet`
-   - `test_send_recv_getaddrinfo_failure_is_reported`
-   - `test_send_recv_empty_getaddrinfo_is_reported`
-3. Manual verification:
-   - `ldap.run_ldap("::1", timeout=0.3)` -> `Connection refused` (Errno 111)
-   - `smb.run_smb("::1", timeout=0.3)` -> `Connection refused` (Errno 111)
-   - Both IPv4 controls also return `Connection refused`, unchanged.
+1. Confirmed the prior handoff's requested work (family-aware IPv6
+   transports in `ethscan/snmp.py`, `ethscan/dnssec.py`,
+   `ethscan/osdetect.py`) was already present and tested at HEAD; 350
+   focused tests passed with no edits.
+2. Made the WHOIS TCP transport family-aware in `ethscan/whois.py`
+   (`query_whois`):
+   - `socket.getaddrinfo(server, port, type=SOCK_STREAM,
+     proto=IPPROTO_TCP)`
+   - socket created from the resolved `family, socktype, proto`
+   - `sock.connect(sockaddr)` instead of `connect((server, port))`
+   - empty resolution -> `OSError("no address found for host:port")`
+   - existing raise-on-transport-error contract preserved.
+3. Made the three existing `tests/test_whois.py` socket tests
+   deterministic by stubbing `ethscan.whois.socket.getaddrinfo`, and added:
+   - `test_query_whois_ipv6_uses_af_inet6`
+   - `test_query_whois_ipv4_uses_af_inet`
+   - `test_query_whois_getaddrinfo_failure_is_reported`
+   - `test_query_whois_empty_getaddrinfo_is_reported`
 
 ## Verified
-- Focused: 221 passed (`test_ldap.py`, `test_smb.py`,
-  `test_ldap_branch_gaps.py`, `test_smb_branch_gaps.py`).
-- Full: 39893 passed / 146 skipped; mypy clean; ruff clean; README
-  54/54; `git diff --check` clean; full-suite branch coverage 99% on
-  `ldap.py` and `smb.py`.
+- Manual: IPv6 target `::1` -> Connection refused (Errno 111), no family
+  error; IPv4 control `127.0.0.1` -> Connection refused, unchanged.
+- Focused: 50 passed (`tests/test_whois.py`).
+- Full: 39921 passed / 146 skipped; mypy clean; ruff clean; README
+  54/54 with no drift; `git diff --check` clean.
+- Note: `pytest-cov`/`coverage` are not installed in this environment.
 
 ## Next task (precise)
-- Extend the same family-aware transport fix to:
-  - `ethscan/snmp.py` (UDP, line ~407): use
-    `getaddrinfo(..., type=socket.SOCK_DGRAM, proto=socket.IPPROTO_UDP)`
-  - `ethscan/dnssec.py` (UDP, lines ~191,233): same UDP pattern
-  - `ethscan/osdetect.py` (TCP, lines ~190,230,270): use
-    `getaddrinfo(..., type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP)`
-- For each module:
-  1. Reproduce first: `run_<module>("::1", timeout=0.2)` should show Errno -9
-     before fix.
-  2. Replace hardcoded `AF_INET` socket creation with family-aware pattern.
-  3. Add the same 4 deterministic tests per module (family assertions on
-     `socket()` args and `connect`/`sendto` sockaddr; failure and
-     empty-result paths).
-  4. Verify: focused tests, full suite, mypy, ruff, `check_readme.py`,
-     `git diff --check`, full-suite branch coverage on all touched modules.
+- Extend the same family-aware TCP transport to `ethscan/trace.py`:
+  - Replace `socket.gethostbyname(host)` in `_trace_single` with
+    `getaddrinfo(host, port, type=socket.SOCK_STREAM,
+    proto=socket.IPPROTO_TCP)`; keep the existing failure result dict shape
+    (all documented keys preserved, `error` populated).
+  - Thread the resolved `family`/`sockaddr` into `_probe_once` (keep a
+    backward-compatible signature or update call sites/tests together).
+  - Use `IPPROTO_IP`/`IP_TTL` for AF_INET and
+    `IPPROTO_IPV6`/`IPV6_UNICAST_HOPS` for AF_INET6, guarded with
+    `hasattr`/try-except so unsupported platforms still work.
+  - Keep `normalize_host`/`TargetSpecError` behavior unchanged.
+- Test migration + additions:
+  1. Reproduce first: IPv6 literal should fail resolution/family before
+     the fix.
+  2. Update `tests/test_trace.py` cases that patch
+     `ethscan.trace.socket.gethostbyname` or `_probe_once` so they stub
+     `getaddrinfo` deterministically (no real DNS).
+  3. Add family assertion tests: AF_INET6 sockaddr passed to
+     `connect`/`_probe_once`, AF_INET control, resolution failure, empty
+     getaddrinfo.
+- Verify: focused trace tests, full suite, mypy, ruff, `check_readme.py`,
+  `git diff --check`.
 
-## Known limitations (intended, out of scope)
-- `ethscan/cli.py:4318` is a documented unreachable defensive guard.
-- `oracle`/`postgresql` report an unusable target in-band (exit 0) by contract.
-- PBKDF2 + NTLM remains intentionally unsupported.
-- `mac._extract_oui` docstring says 24-bit but returns 8 hex chars; tests
-  codify current output — do not change without evidence.
+## Known limitations (not in scope)
+- `ethscan/ping.py` raw IPv4 ICMP sockets need ICMPv6/checksum support
+  (privileged, larger change) — do not touch in this task.
+- `ethscan/dns.py`, `resolve.py`, `stale.py`, `subtake.py` use
+  `getaddrinfo(..., AF_INET)` for A-record/canonical-name lookups; treat as
+  intentional unless evidence says otherwise.
+- `ethscan/cli.py:4318` documented unreachable guard.
+- `oracle`/`postgresql` report unusable targets in-band (exit 0) by contract.
+- PBKDF2 + NTLM intentionally unsupported.
+- `mac._extract_oui` returns 8 hex chars despite docstring; tests codify it.
 
 ## Constraints / notes
 - Keep architecture stable; do not weaken validation/exit-code contracts.
-- No new dependencies; tests must be deterministic (no real network).
+- No new dependencies; tests must be deterministic (no real network/DNS).
 - Do not commit manually; the workflow controller commits and verifies pushes.
-
-(End of file - total 73 lines)

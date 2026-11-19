@@ -264,6 +264,12 @@ def test_query_whois_success(monkeypatch) -> None:
             pass
 
     monkeypatch.setattr("socket.socket", MockSocket)
+    monkeypatch.setattr(
+        "ethscan.whois.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 43))
+        ],
+    )
     result = query_whois("example.com")
     assert "Registrar: Test Registrar" in result
 
@@ -290,6 +296,12 @@ def test_query_whois_timeout(monkeypatch) -> None:
             pass
 
     monkeypatch.setattr("socket.socket", MockSocket)
+    monkeypatch.setattr(
+        "ethscan.whois.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 43))
+        ],
+    )
     with pytest.raises(socket.timeout):
         query_whois("example.com", timeout=0.1)
 
@@ -316,8 +328,122 @@ def test_query_whois_connection_refused(monkeypatch) -> None:
             pass
 
     monkeypatch.setattr("socket.socket", MockSocket)
+    monkeypatch.setattr(
+        "ethscan.whois.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", 43))
+        ],
+    )
     with pytest.raises(ConnectionRefusedError):
         query_whois("example.com")
+
+
+def test_query_whois_ipv6_uses_af_inet6(monkeypatch) -> None:
+    """An IPv6 WHOIS server resolves to an AF_INET6 TCP socket."""
+    captured: dict[str, object] = {}
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            captured["family"] = family
+            captured["socktype"] = socktype
+            captured["proto"] = proto
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect(self, sockaddr):
+            captured["sockaddr"] = sockaddr
+
+        def sendall(self, data):
+            pass
+
+        def recv(self, size):
+            return b""
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.whois.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (
+                socket.AF_INET6,
+                socket.SOCK_STREAM,
+                socket.IPPROTO_TCP,
+                "",
+                ("::1", 43, 0, 0),
+            )
+        ],
+    )
+    monkeypatch.setattr("ethscan.whois.socket.socket", FakeSock)
+
+    assert query_whois("example.com") == ""
+    assert captured["family"] == socket.AF_INET6
+    assert captured["socktype"] == socket.SOCK_STREAM
+    assert captured["proto"] == socket.IPPROTO_TCP
+    assert captured["sockaddr"] == ("::1", 43, 0, 0)
+
+
+def test_query_whois_ipv4_uses_af_inet(monkeypatch) -> None:
+    """An IPv4 WHOIS server resolves to an AF_INET TCP socket."""
+    captured: dict[str, object] = {}
+
+    class FakeSock:
+        def __init__(self, family, socktype, proto):
+            captured["family"] = family
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect(self, sockaddr):
+            captured["sockaddr"] = sockaddr
+
+        def sendall(self, data):
+            pass
+
+        def recv(self, size):
+            return b""
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "ethscan.whois.socket.getaddrinfo",
+        lambda *a, **kw: [
+            (
+                socket.AF_INET,
+                socket.SOCK_STREAM,
+                socket.IPPROTO_TCP,
+                "",
+                ("127.0.0.1", 43),
+            )
+        ],
+    )
+    monkeypatch.setattr("ethscan.whois.socket.socket", FakeSock)
+
+    assert query_whois("example.com") == ""
+    assert captured["family"] == socket.AF_INET
+    assert captured["sockaddr"] == ("127.0.0.1", 43)
+
+
+def test_query_whois_getaddrinfo_failure_is_reported(monkeypatch) -> None:
+    """A resolution failure propagates before any socket is created."""
+
+    def boom(*args, **kwargs):
+        raise OSError("name resolution failed")
+
+    monkeypatch.setattr("ethscan.whois.socket.getaddrinfo", boom)
+
+    with pytest.raises(OSError, match="name resolution failed"):
+        query_whois("invalid-host")
+
+
+def test_query_whois_empty_getaddrinfo_is_reported(monkeypatch) -> None:
+    """An empty resolution result is reported instead of dereferencing it."""
+    monkeypatch.setattr("ethscan.whois.socket.getaddrinfo", lambda *a, **kw: [])
+
+    with pytest.raises(OSError, match="no address found"):
+        query_whois("invalid-host")
 
 
 def test_extract_referral_server() -> None:

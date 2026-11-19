@@ -37,10 +37,20 @@ def query_whois(
     Returns:
         Raw WHOIS response as a string.
     """
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    infos = socket.getaddrinfo(
+        server,
+        port,
+        type=socket.SOCK_STREAM,
+        proto=socket.IPPROTO_TCP,
+    )
+    if not infos:
+        raise OSError(f"no address found for {server}:{port}")
+
+    family, socktype, proto, canonname, sockaddr = infos[0]
+    sock = socket.socket(family, socktype, proto)
     sock.settimeout(timeout)
     try:
-        sock.connect((server, port))
+        sock.connect(sockaddr)
         request = f"{target}\r\n"
         sock.sendall(request.encode("utf-8"))
 
