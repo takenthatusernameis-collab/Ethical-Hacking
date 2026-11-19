@@ -84,12 +84,19 @@ def test_resolve_host_ip() -> None:
 
 def test_resolve_host_localhost() -> None:
     result = _resolve_host("localhost")
-    assert result == "127.0.0.1"
+    assert result in ("127.0.0.1", "::1")
 
 
 def test_resolve_host_invalid() -> None:
     result = _resolve_host("nonexistent.invalid.domain.tld")
     assert result is None
+
+
+def test_resolve_host_empty_infos_returns_none(monkeypatch) -> None:
+    """An empty getaddrinfo result (no addresses) is a failed lookup, not a crash."""
+    monkeypatch.setattr("ethscan.cert.socket.getaddrinfo", lambda *args, **kwargs: [])
+
+    assert _resolve_host("example.com") is None
 
 
 # ---------------------------------------------------------------------------
@@ -767,7 +774,7 @@ def test_resolver_failure_of_an_unknown_type_is_reported(monkeypatch) -> None:
     def boom(*args, **kwargs):
         raise RuntimeError("hostile resolver")
 
-    monkeypatch.setattr("ethscan.cert.socket.gethostbyname", boom)
+    monkeypatch.setattr("ethscan.cert.socket.getaddrinfo", boom)
 
     assert _resolve_host("example.com") is None
 
@@ -780,14 +787,14 @@ def test_resolver_failure_of_an_unknown_type_is_reported(monkeypatch) -> None:
 def test_resolver_failure_of_unnamed_type_is_reported(monkeypatch) -> None:
     """A resolver that fails with an unnamed error type is reported, not raised.
 
-    A TypeError from gethostbyname used to escape _resolve_host's narrow except
+    A TypeError from getaddrinfo used to escape _resolve_host's narrow except
     tuple and crash run_cert; it is now reported as a failed lookup.
     """
 
     def boom(*args, **kwargs):
         raise TypeError("hostile resolver")
 
-    monkeypatch.setattr("ethscan.cert.socket.gethostbyname", boom)
+    monkeypatch.setattr("ethscan.cert.socket.getaddrinfo", boom)
 
     assert _resolve_host("example.com") is None
 

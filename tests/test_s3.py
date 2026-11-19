@@ -170,18 +170,29 @@ def test_build_candidates_default_names_present() -> None:
 
 
 def test_resolve_s3_endpoint_success(monkeypatch) -> None:
-    monkeypatch.setattr("ethscan.s3.socket.gethostbyname", lambda host: "9.9.9.9")
+    def fake_getaddrinfo(*args, **kwargs):
+        return [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("9.9.9.9", 0))
+        ]
+
+    monkeypatch.setattr("ethscan.s3.socket.getaddrinfo", fake_getaddrinfo)
     result = _resolve_s3_endpoint("mybucket", "us-east-1", timeout=1.0)
     assert result == "9.9.9.9"
 
 
 def test_resolve_s3_endpoint_failure(monkeypatch) -> None:
-    def _raise(host):
+    def _raise(*args, **kwargs):
         raise socket.gaierror("resolution failed")
 
-    monkeypatch.setattr("ethscan.s3.socket.gethostbyname", _raise)
+    monkeypatch.setattr("ethscan.s3.socket.getaddrinfo", _raise)
     result = _resolve_s3_endpoint("mybucket", "us-east-1", timeout=1.0)
     assert result is None
+
+
+def test_resolve_s3_endpoint_empty_infos_returns_none(monkeypatch) -> None:
+    """An empty getaddrinfo result (no addresses) is a failed lookup, not a crash."""
+    monkeypatch.setattr("ethscan.s3.socket.getaddrinfo", lambda *args, **kwargs: [])
+    assert _resolve_s3_endpoint("mybucket", "us-east-1", timeout=1.0) is None
 
 
 # ---------------------------------------------------------------------------
@@ -984,6 +995,9 @@ def test_resolve_s3_endpoint_hostname_falsy_returns_none(monkeypatch) -> None:
 
 def test_resolve_s3_endpoint_setdefaulttimeout_none_oserror(monkeypatch) -> None:
     class _FakeSocket:
+        AF_INET = socket.AF_INET
+        SOCK_STREAM = socket.SOCK_STREAM
+        IPPROTO_TCP = socket.IPPROTO_TCP
         gaierror = OSError
         herror = OSError
 
@@ -994,8 +1008,10 @@ def test_resolve_s3_endpoint_setdefaulttimeout_none_oserror(monkeypatch) -> None
         def getdefaulttimeout(self) -> float | None:
             return None
 
-        def gethostbyname(self, host: str) -> str:
-            return "1.2.3.4"
+        def getaddrinfo(self, *args, **kwargs):
+            return [
+                (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("1.2.3.4", 0))
+            ]
 
     monkeypatch.setattr("ethscan.s3.socket", _FakeSocket())
     assert _resolve_s3_endpoint("bucket", "us-east-1") == "1.2.3.4"
@@ -1010,6 +1026,9 @@ def test_resolve_s3_endpoint_restores_default_socket_timeout(monkeypatch) -> Non
     """
 
     class _RecordingSocket:
+        AF_INET = socket.AF_INET
+        SOCK_STREAM = socket.SOCK_STREAM
+        IPPROTO_TCP = socket.IPPROTO_TCP
         gaierror = OSError
         herror = OSError
 
@@ -1022,8 +1041,10 @@ def test_resolve_s3_endpoint_restores_default_socket_timeout(monkeypatch) -> Non
         def getdefaulttimeout(self) -> float | None:
             return 42.0
 
-        def gethostbyname(self, host: str) -> str:
-            return "1.2.3.4"
+        def getaddrinfo(self, *args, **kwargs):
+            return [
+                (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("1.2.3.4", 0))
+            ]
 
     fake = _RecordingSocket()
     monkeypatch.setattr("ethscan.s3.socket", fake)

@@ -164,11 +164,10 @@ def _build_s3_url(bucket_name: str, region: str) -> str:
         return f"https://{bucket_name}.s3.amazonaws.com/"
     return f"https://{bucket_name}.s3.{region}.amazonaws.com/"
 
-
 def _resolve_s3_endpoint(
     bucket_name: str, region: str, timeout: float = DEFAULT_TIMEOUT
 ) -> str | None:
-    """Resolve the S3 endpoint hostname to an IPv4 address (informational).
+    """Resolve the S3 endpoint hostname to an IP address (informational).
 
     Args:
         bucket_name: The S3 bucket name.
@@ -176,21 +175,31 @@ def _resolve_s3_endpoint(
         timeout: DNS resolution timeout in seconds.
 
     Returns:
-        Resolved IPv4 address string, or ``None`` if it could not resolve.
+        Resolved IP address string (IPv4 or IPv6), or ``None`` if it could not resolve.
     """
     url = _build_s3_url(bucket_name, region)
     hostname = parse_url(url).hostname
     if not hostname:
         return None
+
     previous = socket.getdefaulttimeout()
     try:
         socket.setdefaulttimeout(timeout)
-        return socket.gethostbyname(hostname)
+        infos = socket.getaddrinfo(
+            hostname, None, type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP
+        )
     except Exception:  # noqa: BLE001 - resolver can raise any type
         return None
     finally:
         with contextlib.suppress(OSError):
             socket.setdefaulttimeout(previous)
+
+    if not infos:
+        return None
+
+    info = infos[0]
+    sockaddr: tuple[str, ...] = info[4]  # type: ignore[assignment]
+    return sockaddr[0]
 
 
 def _build_bucket_candidates(
