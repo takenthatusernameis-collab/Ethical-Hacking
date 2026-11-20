@@ -2,26 +2,23 @@
 Date: Fri Nov 20 2026
 
 ## State
-- HEAD: c365d7c (main, up to date with origin/main).
-- Working tree has ONE uncommitted change: `tests/test_cli.py` (auto-discovery of `TARGET_USAGE_ERROR_COMMANDS`, see below). Not committed (user did not ask to commit).
+- HEAD: 8d7667b (main, up to date with origin/main).
+- Working tree clean — no uncommitted changes. (The prior session's `tests/test_cli.py` auto-discovery change was committed in 0dd8af2/8d7667b.)
 - All gates green this session:
   - `python -m pytest -q` → 46710 passed, 146 skipped, 0 failed.
   - `python -m mypy ethscan/ tests/` → Success: no issues found in 267 source files.
   - `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed.
   - `python3 check_readme.py` → 54 CLI commands; 0 drift both directions.
-- `tests/test_readme_sync.py` (command + option presence both directions): 5 passed.
+  - `tests/test_readme_sync.py`: 5 passed.
 
 ## What changed this session
-- Replaced the manually-maintained `TARGET_USAGE_ERROR_COMMANDS` tuple (34 commands) in `tests/test_cli.py` with auto-discovery: every top-level Click command whose parameters declare a `--target` option is now included, minus intentional in-band contracts.
-- Exclusions (documented in code): `mac` (in-band unresolvable-host contract), `oracle`/`postgresql` (in-band "probe failed" contract), `web`/`headers` (parse `:6379` as host=":6379", port=6379 → exit 0 in-band; verified empirically — normalize_host would reject it but these use parse_url/netloc fallback).
-- Auto-discovered list = 38 commands; adds the previously-missing `dns`, `dnssec`, `recon`, `trace` (each verified to reject all 5 `UNUSABLE_TARGETS` as exit 2 with "Could not parse host from target"). `web`/`headers` were already absent from the manual list.
-- No source (`ethscan/`) changes; purely a test-guard improvement, fully reversible.
+- No source or test changes. Conducted an evidence-based investigation of the pending candidate task (formatter hostile-shape hardening beyond `findings`/`dangerous_findings` for ftp/ntp/oracle/smtp/snmp + `ldap` `root_dse`).
+- Wrote and ran a reproduction fuzzer over every `format_*_report_markdown`/`_csv` function plus per-field hostile injection on every list-ish field of ftp/ntp/oracle/smtp/snmp/ldap: **0 crashes** across all formatters.
+- Conclusion: the candidate task is **not reproducible** — those modules are already guarded (`_normalize_findings`/`_normalize_peers`/`_normalize_users`/`_normalize_communities`/`_normalize_valid_communities`/`_normalize_root_dse` coerce hostile shapes; f-strings and the csv writer stringify remaining elements). Per the rule "do not fix speculatively without a reproduced crash," no guards were added and no tests were written for it.
 
 ## What was verified (this session)
-- `tests/test_cli.py -k "target or invalid_target or usage_error"` → 181 passed.
 - Full gate above green.
-- Reproduction before change confirmed: `web`/`headers --target ":6379"` exit 0 (in-band), so they are correctly excluded; `dns`/`dnssec`/`recon`/`trace` reject all 5 unusable targets (previously unguarded gaps now closed).
-- Hostile-shape formatter fuzzer (single-key hostile data over single-required-param `format_*_report_*` functions) → 0 real crashes (fuzzer scope limited; see next task).
+- Fuzzer: 0 crashes on all formatters with hostile top-level data (None/int/str/dict/bytes/list) and hostile per-field values, including ftp/ntp/oracle/smtp/snmp/ldap list fields.
 
 ## Remaining / known limitations (intentional, out of scope)
 - `ethscan/cli.py` unreachable defensive guard (coverage intentionally not gamed).
@@ -29,6 +26,10 @@ Date: Fri Nov 20 2026
 - `mac` reports unresolvable/non-MAC targets in-band (exit 0) by design.
 - `web`/`headers` accept `:6379` as host:port (exit 0, in-band) — pre-existing, excluded from guard.
 
-## Next task (candidate for next agent — reproduce first)
-- Extend formatter hostile-shape hardening beyond `findings`/`dangerous_findings`. Session 117 evidence: ~12 modules iterate a wrong-typed list field beyond findings in both Markdown and CSV (ftp, ntp, oracle, smtp, snmp, plus memcached/mongodb/mssql/mysql/postgresql/redis already fixed for findings), plus `ldap` `root_dse` non-dict. Reproduce one bounded module/family at a time (call its `format_*_report_markdown`/`_csv` with a hostile list field), confirm the crash, guard the list extraction (coerce non-list/tuple to `[]` / stringify elements), add a hostile-sweep test, then run the full gate (pytest/mypy/ruff/check_readme). Do not batch; do not fix speculatively without a reproduced crash.
-- Constraint: keep architecture stable; no new dependencies; tests deterministic (no real network/DNS).
+## Next task (candidate for next agent — do NOT repeat the fuzzed batch)
+- **No pending assigned task.** The formatter-hostile-shape candidate (ftp/ntp/oracle/smtp/snmp/ldap list fields beyond findings) has been reproduced and found clean (0 crashes); do not re-fuzz or re-guard those modules.
+- If future work is needed, the next agent should inspect this handoff and select ONE fresh bounded, high-value, verifiable task after their own investigation — do not repeat the failed formatter-fuzzing approach for the same modules.
+- Constraint: keep architecture stable; no new dependencies; tests deterministic (no real network/DNS); `mac`/`oracle`/`postgresql`/`web`/`headers` contracts remain out of scope.
+
+## Environment/notes
+- Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3.
