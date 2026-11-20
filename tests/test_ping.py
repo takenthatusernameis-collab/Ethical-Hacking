@@ -686,6 +686,173 @@ def test_probe_icmp_raw_sendto_oserror(monkeypatch) -> None:
     assert fake_send.closed is True
 
 
+def test_probe_icmp_ipv6_uses_tcp_fallback_with_raw_socket(monkeypatch) -> None:
+    """An IPv6 target must not use a raw IPv4 ICMP socket.
+
+    ``socket.socket(AF_INET, SOCK_RAW, IPPROTO_ICMP)`` cannot send to an IPv6
+    literal, so even when a raw socket is available the probe must use the
+    family-aware TCP fallback instead of failing with "Address family for
+    hostname not supported".
+    """
+    fake_raw = _FakeRawSocket(data=b"")
+    seen: dict[str, object] = {}
+
+    class _FakeStreamSocket:
+        def setsockopt(self, level, opt, value):
+            seen["setsockopt"] = (level, opt, value)
+
+        def settimeout(self, timeout):
+            seen["timeout"] = timeout
+
+        def connect_ex(self, addr):
+            seen["addr"] = addr
+            return 111
+
+        def close(self):
+            seen["closed"] = True
+
+    fake_stream = _FakeStreamSocket()
+
+    def mock_socket(family, type_, proto=0):
+        # The raw path would ask for (AF_INET, SOCK_RAW, IPPROTO_ICMP).
+        assert family == socket.AF_INET6
+        assert type_ == socket.SOCK_STREAM
+        return fake_stream
+
+    monkeypatch.setattr(socket, "socket", mock_socket)
+
+    result = probe_icmp(
+        "::1",
+        timeout=1.0,
+        ttl=64,
+        raw_socket=fake_raw,
+        identifier=12345,
+        sequence=1,
+        resolved_ip="::1",
+        resolved_family=socket.AF_INET6,
+        resolved_sockaddr=("::1", 0, 0, 0),
+        port=80,
+    )
+
+    assert result["response_type"] == RESP_RST
+    assert result["error"] is None
+    assert seen["addr"] == ("::1", 80, 0, 0)
+    assert seen["closed"] is True
+    # The raw ICMPv4 socket was never used for an IPv6 probe.
+    assert fake_raw.closed is False
+
+
+def test_probe_icmp_ipv4_still_uses_raw_socket(monkeypatch) -> None:
+    """The IPv6 guard must not disable raw ICMP for IPv4 targets."""
+    reply_packet = _make_icmp_reply_packet(12345, 1, "192.168.1.1", b"test")
+    fake_raw = _FakeRawSocket(data=reply_packet)
+
+    class _FakeSendSocket:
+        def __init__(self):
+            self.sent = False
+
+        def setsockopt(self, *args, **kwargs):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def sendto(self, data, addr):
+            self.sent = True
+
+        def close(self):
+            pass
+
+    fake_send = _FakeSendSocket()
+
+    def mock_socket(family, type_, proto=0):
+        if type_ == socket.SOCK_RAW and proto == socket.IPPROTO_ICMP:
+            return fake_send
+        return socket.socket(family, type_, proto)
+
+    monkeypatch.setattr(socket, "socket", mock_socket)
+
+    result = probe_icmp(
+        "10.0.0.1",
+        timeout=1.0,
+        ttl=64,
+        raw_socket=fake_raw,
+        identifier=12345,
+        sequence=1,
+        resolved_ip="10.0.0.1",
+        resolved_family=socket.AF_INET,
+    )
+
+    assert result["response_type"] == RESP_ECHO_REPLY
+    assert fake_send.sent is True
+
+
+def test_run_ping_ipv6_drops_owned_raw_socket(monkeypatch) -> None:
+    """run_ping must close and ignore its own raw socket for an IPv6 target."""
+    import ethscan.ping as ping_mod
+
+    fake_raw = _FakeRawSocket()
+
+    monkeypatch.setattr(
+        ping_mod,
+        "_resolve_host",
+        lambda host: ("::1", socket.AF_INET6, ("::1", 0, 0, 0)),
+    )
+    monkeypatch.setattr(ping_mod, "_try_create_raw_socket", lambda: fake_raw)
+
+    calls: list[dict[str, object]] = []
+
+    def mock_probe(host, **kwargs):
+        calls.append(kwargs)
+        return {
+            "ip": "::1",
+            "rtt_ms": 0.1,
+            "ttl": 64,
+            "sequence": kwargs.get("sequence", 1),
+            "response_type": RESP_RST,
+            "error": None,
+        }
+
+    monkeypatch.setattr(ping_mod, "probe_icmp", mock_probe)
+
+    result = run_ping("::1", count=1, timeout=0.5)
+
+    assert result["raw_socket_available"] is False
+    assert fake_raw.closed is True
+    assert calls[0]["raw_socket"] is None
+    assert any("IPv4-only" in note for note in result["notes"])
+
+
+def test_run_ping_ipv6_does_not_close_caller_raw_socket(monkeypatch) -> None:
+    """A caller-owned raw socket is dropped for IPv6 but not closed by run_ping."""
+    import ethscan.ping as ping_mod
+
+    fake_raw = _FakeRawSocket()
+
+    monkeypatch.setattr(
+        ping_mod,
+        "_resolve_host",
+        lambda host: ("::1", socket.AF_INET6, ("::1", 0, 0, 0)),
+    )
+
+    def mock_probe(host, **kwargs):
+        return {
+            "ip": "::1",
+            "rtt_ms": 0.1,
+            "ttl": 64,
+            "sequence": kwargs.get("sequence", 1),
+            "response_type": RESP_RST,
+            "error": None,
+        }
+
+    monkeypatch.setattr(ping_mod, "probe_icmp", mock_probe)
+
+    result = run_ping("::1", count=1, timeout=0.5, raw_socket=fake_raw)
+
+    assert result["raw_socket_available"] is False
+    assert fake_raw.closed is False
+
+
 # ---------------------------------------------------------------------------
 # run_ping
 # ---------------------------------------------------------------------------

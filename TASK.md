@@ -959,3 +959,28 @@ Date: Sun Nov 08 2026 (session 7)
 
 ## Next task
 - None pending. Repository is fully green with all documented error examples now covered by regression tests. If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
+
+# Session (Fri Nov 20 2026, session 28)
+## This session
+- No prior agent assignment was pending (HANDOFF_NEXT/NEXT_TASK both said "None pending; repo fully green"), so I audited for an evidenced defect and found one: raw ICMP ping is IPv4-only, so when a raw socket is available (root) an IPv6 target fails every probe with `[Errno -9] Address family for hostname not supported` instead of using the family-aware TCP fallback that non-root users already get.
+- Reproduced deterministically (emulating a successful raw-socket creation and an `AF_INET` `sendto` to `::1`): `run_ping("::1")` -> `raw_socket_available: True`, `response_type: NO-RESPONSE`, `error: [Errno -9] Address family for hostname not supported`.
+- Fixed `ethscan/ping.py` minimally:
+  - `probe_icmp`: raw ICMP path is used only when `resolved_family != socket.AF_INET6`; IPv6 targets use the existing TCP connect fallback (`resolved_sockaddr` already carries the IPv6 4-tuple and hop-limit handling).
+  - `run_ping`: for an IPv6 target it closes its own raw socket (does not close a caller-injected one), sets `raw_socket = None`, reports `raw_socket_available: False`, and emits an explicit note that raw ICMP is IPv4-only and the TCP fallback is used.
+- No contract changes to IPv4 ping, TTL/socket options, JSON/Markdown/CSV formatting, or exit codes.
+- Added 4 deterministic tests in `tests/test_ping.py`: IPv6 probe uses TCP fallback even with a raw socket, IPv4 raw path still used with `resolved_family=AF_INET`, `run_ping` closes an owned raw socket for IPv6, and `run_ping` does not close a caller-owned raw socket.
+
+## Verification
+- `python -m pytest tests/test_ping.py -q` -> 68 passed.
+- `python -m pytest -q` -> **46693 passed, 146 skipped, 0 failed** (baseline 46689 + 4 new).
+- `python -m mypy ethscan/ tests/` -> Success: no issues found in 267 source files.
+- `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
+- `python3 check_readme.py` -> 54 commands, 0 drift both directions; `git diff --check` clean.
+- Full-suite branch coverage: `ethscan/ping.py` **100%** (0 missing / 0 partial); project total 99% with only the documented `ethscan/cli.py:4336` unreachable guard uncovered.
+- CLI smoke: `python -m ethscan ping --target ::1 --count 1 --timeout 0.3 --format json` -> `raw_socket_available: false`, `response_type: RST`, exit 0.
+
+## Blockers
+- None.
+
+## Next task
+- `ethscan/ping.py` now degrades IPv6 to TCP fallback by design. A bounded follow-up, if desired, is real ICMPv6: create `socket.AF_INET6`/`IPPROTO_ICMPV6` raw sockets, build/parse Echo Request/Reply (type 128/129) with the IPv6 pseudo-header checksum, and keep the TCP fallback for unprivileged users. Reproduce first with a fake raw socket; keep `raw_socket_available` accurate for both families and `ping.py` at 100% branch coverage. Do not remove the IPv4 raw path or change exit-code contracts.

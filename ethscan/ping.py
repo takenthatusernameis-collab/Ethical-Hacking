@@ -222,7 +222,15 @@ def probe_icmp(
     """
     start = time.monotonic()
 
-    if raw_socket is not None:
+    # A raw ICMP socket created for ``IPPROTO_ICMP`` is an IPv4 socket; it
+    # cannot carry an Echo Request to an IPv6 literal, and the send would fail
+    # with "Address family for hostname not supported". An IPv6 target
+    # therefore always uses the TCP connect-based fallback, which is
+    # family-aware. ICMPv6 (``IPPROTO_ICMPV6``) would be a different probe and
+    # is intentionally not attempted here.
+    raw_socket_usable = raw_socket is not None and resolved_family != socket.AF_INET6
+
+    if raw_socket_usable:
         try:
             send_sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
         except Exception:  # noqa: BLE001 - transport can raise any type
@@ -414,6 +422,17 @@ def run_ping(
             raw_socket = None
         own_raw_socket = raw_socket is not None
 
+    # A raw ICMP socket created for ``IPPROTO_ICMP`` is IPv4-only, so it cannot
+    # probe an IPv6 target. Drop it here (closing it when this function made
+    # it) and let the family-aware TCP fallback handle the probes, instead of
+    # failing every probe with "Address family for hostname not supported".
+    ipv6_tcp_fallback = family == socket.AF_INET6 and raw_socket is not None
+    if ipv6_tcp_fallback:
+        if own_raw_socket:
+            raw_socket.close()
+        raw_socket = None
+        own_raw_socket = False
+
     identifier = 0xFFFF & int(time.time() * 1000)
 
     probes: list[_ProbeResult] = []
@@ -425,7 +444,12 @@ def run_ping(
         # Note the address family for clarity
         family_name = "IPv6" if family == socket.AF_INET6 else "IPv4"
         notes.append(f"Resolved {host!r} to {ip} ({family_name})")
-    if raw_socket is None:
+    if ipv6_tcp_fallback:
+        notes.append(
+            "Raw ICMP sockets are IPv4-only; IPv6 target uses TCP connect "
+            f"fallback on port {port} (ICMPv6 ping not available)"
+        )
+    elif raw_socket is None:
         notes.append(
             "Raw ICMP socket unavailable; running in TCP connect fallback "
             f"mode on port {port} (ICMP ping not available)"
