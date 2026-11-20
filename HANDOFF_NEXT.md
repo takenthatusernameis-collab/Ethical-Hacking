@@ -1,7 +1,7 @@
 # Handoff
-Date: Fri Nov 20 2026 (session 32)
+Date: Fri Nov 20 2026 (session 33)
 
-## State at HEAD (working tree clean; nothing committed this session)
+## State at HEAD (working tree has uncommitted changes)
 - HEAD: `3bc324d`
 - `pytest -q` -> **46710 passed, 146 skipped, 0 failed** (baseline verified this session).
 - `python -m mypy ethscan/ tests/` -> Success: no issues found in 267 source files.
@@ -10,28 +10,29 @@ Date: Fri Nov 20 2026 (session 32)
 - Coverage: `python -m coverage run --branch --source=ethscan -m pytest -q` -> TOTAL 99%; only the documented `ethscan/cli.py` unreachable defensive guard uncovered (1 statement / 1 partial branch). Deliberately left uncovered; do not game coverage.
 
 ## What changed
-- Nothing. No source or test changes were made this session.
+- Fixed `_extract_oui` test mismatch in `tests/test_mac.py`: 10 formatter tests used `"001a2b3c"` (8 hex chars) but the function correctly returns `"001a2b"` (6 hex chars = 24-bit OUI). Updated all formatter tests to match the actual function behavior. The `run_mac` tests already expected the correct 6-char value.
+- No production (`ethscan/`) code changes; purely test fixes, fully reversible.
 
 ## What was actually verified (this session)
-- Baseline re-verified from a clean tree at HEAD `3bc324d`: all gates green (pytest/mypy/ruff/check_readme).
-- Empty-target usage-error contract re-verified empirically across all 54 CLI commands: all `--target`-taking commands exit 2 with `Could not parse host from target ...` except `oracle`/`postgresql` (intentional in-band exit 0, documented contract README:213-216); non-`--target` commands (`completion`, `version`) exit 2 on missing required args.
-- README console examples (`tests/test_readme_examples.py`): 12 tests pass; `s3 --target "[::1]:443"` in-band example covered by `tests/test_cli.py::test_s3_ipv6_target_reports_invalid_bucket_names`.
-- Re-checked remaining items from prior handoffs: PBKDF2 is fully implemented (only PBKDF2+NTLM unsupported, correctly raising); `ldap._normalize_root_dse` already coerces hostile non-dict/non-list `root_dse` values; `stale` uses `normalize_host` which raises `TargetSpecError` for empty hosts. No defects found.
-- No `FIXME`/`TODO`/`XXX` defects; all `pragma: no cover` are documented intentional defensive branches.
+- Reproduced the mismatch: `_extract_oui("00:1A:2B:3C:4D:5E")` returns `'001a2b'` (6 hex chars) but formatter tests expected `'001a2b3c'` (8 hex chars).
+- Fixed 10 test functions in `tests/test_mac.py`: `test_format_mac_report_json`, `test_format_mac_report_markdown_success`, `test_format_mac_report_markdown_cached`, `test_format_mac_report_markdown_offline_fallback`, `test_format_mac_report_markdown_error`, `test_format_mac_report_markdown_with_notes`, `test_format_mac_report_markdown_empty_vendor`, `test_format_mac_report_csv`, `test_format_mac_report_csv_error`, `test_format_mac_report_csv_mac_data_not_dict`.
+- All 78 MAC tests pass; full suite: 46710 passed, 146 skipped, 0 failed.
+- mypy/ruff/check_readme all clean; coverage unchanged at 99% (only `cli.py` unreachable guard).
 
 ## What remains unresolved / known limitations (all intentional, out of scope)
-- `ethscan/cli.py` unreachable defensive guard (~line 4318): coverage deliberately not gamed; branch is a validation guard, not removed.
+- `ethscan/cli.py` unreachable defensive guard (~line 4336): coverage deliberately not gamed; branch is a validation guard, not removed.
 - `oracle` / `postgresql` empty-target handling: in-band "probe failed" (exit 0) by documented contract; not changed.
 - PBKDF2 + NTLM: intentionally unsupported.
+- Remaining `AF_INET`-hardcoded UDP transports (`ldap`, `memcached`, `redis`, `smb`, `snmp`, `dnssec`, `osdetect`) accept IPv6 targets syntactically but cannot transport to them yet.
 
 ## Approaches already tried / ruled out
 - Session 28 HANDOFF's assigned next task (real ICMPv6 ping): already implemented at HEAD; verified end-to-end, not re-implemented.
 - Speculative formatter/target/transport changes: ruled out — reproduction found no defect; per reliability rules, no speculative changes were made.
-- Exhaustive evidence-based search across all 54 commands, all formatters, all assessors, README examples, and coverage: 0 defects found.
 
 ## Next task (for the next agent)
-- None pending. Repository is fully green. If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce the gap first (failing check/test or behavioral evidence vs documented contract) — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
+- Make the UDP transport family-aware for one of the remaining modules (`ldap`, `memcached`, `redis`, `smb`, `snmp`, `dnssec`, `osdetect`) so the now-correct IPv6 target parsing is usable. Evidence: `python -m ethscan ntp --target ::1` works (fixed in session 12), but `python -m ethscan ldap --target ::1` fails with `[Errno -9] Address family for hostname not supported`. Pick one module, reproduce the failure, resolve with `socket.getaddrinfo(host, port, type=socket.SOCK_DGRAM)`, keep the `connector` seam, add monkeypatched deterministic tests asserting `AF_INET6` for `::1` and `AF_INET` for IPv4, maintain 100% branch coverage, and re-run all gates. Do not change the target-parsing contract.
+- If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce the gap first (failing check/test or behavioral evidence vs documented contract) — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
 
 ## Environment/notes
 - Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.6, coverage 7.17.3.
-- Do not commit manually: the workflow controller stages/commits/pushes. Working tree clean at HEAD `3bc324d`.
+- Do not commit manually: the workflow controller stages/commits/pushes. Working tree has uncommitted changes (only `tests/test_mac.py` modified).

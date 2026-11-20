@@ -754,7 +754,7 @@ def test_format_mac_report_json() -> None:
     data = {
         "target": "00:1A:2B:3C:4D:5E",
         "mac": "00:1a:2b:3c:4d:5e",
-        "oui": "001a2b3c",
+        "oui": "001a2b",
         "timeout": 5.0,
         "use_cache": True,
         "offline_fallback": True,
@@ -775,7 +775,7 @@ def test_format_mac_report_markdown_success() -> None:
     data = {
         "target": "00:1A:2B:3C:4D:5E",
         "mac": "00:1a:2b:3c:4d:5e",
-        "oui": "001a2b3c",
+        "oui": "001a2b",
         "timeout": 5.0,
         "use_cache": True,
         "offline_fallback": True,
@@ -790,7 +790,7 @@ def test_format_mac_report_markdown_success() -> None:
     assert "# ethscan MAC Vendor Lookup Report" in output
     assert "00:1a:2b:3c:4d:5e" in output
     assert "Cisco Systems" in output
-    assert "001a2b3c" in output
+    assert "001a2b" in output
 
 
 def test_format_mac_report_markdown_offline_target() -> None:
@@ -814,7 +814,7 @@ def test_format_mac_report_markdown_cached() -> None:
     data = {
         "target": "00:1A:2B:3C:4D:5E",
         "mac": "00:1a:2b:3c:4d:5e",
-        "oui": "001a2b3c",
+        "oui": "001a2b",
         "timeout": 5.0,
         "use_cache": True,
         "offline_fallback": True,
@@ -833,7 +833,7 @@ def test_format_mac_report_markdown_offline_fallback() -> None:
     data = {
         "target": "00:1A:2B:3C:4D:5E",
         "mac": "00:1a:2b:3c:4d:5e",
-        "oui": "001a2b3c",
+        "oui": "001a2b",
         "timeout": 5.0,
         "use_cache": True,
         "offline_fallback": True,
@@ -853,7 +853,7 @@ def test_format_mac_report_markdown_error() -> None:
     data = {
         "target": "00:1A:2B:3C:4D:5E",
         "mac": "00:1a:2b:3c:4d:5e",
-        "oui": "001a2b3c",
+        "oui": "001a2b",
         "timeout": 5.0,
         "use_cache": False,
         "offline_fallback": False,
@@ -874,7 +874,7 @@ def test_format_mac_report_markdown_with_notes() -> None:
     data = {
         "target": "00:1A:2B:3C:4D:5E",
         "mac": "00:1a:2b:3c:4d:5e",
-        "oui": "001a2b3c",
+        "oui": "001a2b",
         "timeout": 5.0,
         "use_cache": True,
         "offline_fallback": True,
@@ -894,7 +894,7 @@ def test_format_mac_report_markdown_empty_vendor() -> None:
     data = {
         "target": "00:1A:2B:3C:4D:5E",
         "mac": "00:1a:2b:3c:4d:5e",
-        "oui": "001a2b3c",
+        "oui": "001a2b",
         "timeout": 5.0,
         "use_cache": True,
         "offline_fallback": True,
@@ -914,7 +914,7 @@ def test_format_mac_report_csv() -> None:
     data = {
         "target": "00:1A:2B:3C:4D:5E",
         "mac": "00:1a:2b:3c:4d:5e",
-        "oui": "001a2b3c",
+        "oui": "001a2b",
         "mac_data": {
             "mac": "00:1a:2b:3c:4d:5e",
             "vendor": "Ayecom Technology Co., Ltd.",
@@ -926,14 +926,14 @@ def test_format_mac_report_csv() -> None:
     output = format_mac_report_csv(data)
     reader = list(csv.reader(io.StringIO(output)))
     assert reader[0] == ["target", "mac", "oui", "vendor", "cached", "offline_fallback", "error"]
-    assert reader[1] == ["00:1A:2B:3C:4D:5E", "00:1a:2b:3c:4d:5e", "001a2b3c", "Ayecom Technology Co., Ltd.", "true", "false", ""]
+    assert reader[1] == ["00:1A:2B:3C:4D:5E", "00:1a:2b:3c:4d:5e", "001a2b", "Ayecom Technology Co., Ltd.", "true", "false", ""]
 
 
 def test_format_mac_report_csv_error() -> None:
     data = {
         "target": "00:1A:2B:3C:4D:5E",
         "mac": "00:1a:2b:3c:4d:5e",
-        "oui": "001a2b3c",
+        "oui": "001a2b",
         "mac_data": {
             "mac": "00:1a:2b:3c:4d:5e",
             "vendor": None,
@@ -953,13 +953,13 @@ def test_format_mac_report_csv_mac_data_not_dict() -> None:
     data = {
         "target": "00:1A:2B:3C:4D:5E",
         "mac": "00:1a:2b:3c:4d:5e",
-        "oui": "001a2b3c",
+        "oui": "001a2b",
         "mac_data": "not-a-dict",
     }
     output = format_mac_report_csv(data)
     reader = list(csv.reader(io.StringIO(output)))
     assert reader[0] == ["target", "mac", "oui", "vendor", "cached", "offline_fallback", "error"]
-    assert reader[1] == ["00:1A:2B:3C:4D:5E", "00:1a:2b:3c:4d:5e", "001a2b3c", "", "false", "false", ""]
+    assert reader[1] == ["00:1A:2B:3C:4D:5E", "00:1a:2b:3c:4d:5e", "001a2b", "", "false", "false", ""]
 
 
 def test_format_mac_report_markdown_non_dict() -> None:
