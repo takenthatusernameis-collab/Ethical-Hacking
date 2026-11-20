@@ -1,5 +1,5 @@
 # Handoff
-Date: Fri Nov 20 2026 (session 30)
+Date: Fri Nov 20 2026 (session 31)
 
 ## State at HEAD (working tree clean; nothing committed this session)
 - `pytest -q` -> **46710 passed, 146 skipped, 0 failed** (baseline verified this session).

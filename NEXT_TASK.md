@@ -1,11 +1,11 @@
 # Next Task
-Date: Fri Nov 20 2026 (session 30) — repository fully green; nothing pending.
+Date: Fri Nov 20 2026 (session 31) — repository fully green; nothing pending.
 
 ## Status
 - Green: **46710 passed, 146 skipped, 0 failed**; mypy Success (267 source files); ruff clean; `check_readme.py` 54 commands, 0 drift both directions; `git diff --check` clean; coverage 99% with only the documented `ethscan/cli.py` unreachable defensive guard uncovered.
 
 ## This session (what changed)
-- No source or test changes. The prior session's assigned task (real ICMPv6 ping in `ethscan/ping.py`) was already implemented and committed at HEAD `061c9c2`/`aac9d6d` (session 29); the handoff files were stale. Independently re-verified the true baseline from clean tree HEAD `b16086a` instead of re-implementing.
+- No source or test changes. Re-verified the true baseline from clean tree HEAD `b16086a`; all quality gates pass.
 
 ## Verified (this session)
 - `python -m pytest -q` -> 46710 passed, 146 skipped, 0 failed.
