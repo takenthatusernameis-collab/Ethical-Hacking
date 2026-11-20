@@ -657,7 +657,7 @@ def test_run_mac_success(monkeypatch) -> None:
 
     assert result["target"] == "00:1A:2B:3C:4D:5E"
     assert result["mac"] == "00:1a:2b:3c:4d:5e"
-    assert result["oui"] == "001a2b3c"
+    assert result["oui"] == "001a2b"
     assert result["mac_data"]["vendor"] == "Cisco Systems"
     assert result["mac_data"]["cached"] is False
     assert result["use_cache"] is False
@@ -684,7 +684,7 @@ def test_run_mac_url_target(monkeypatch) -> None:
 
     assert result["target"] == "https://example.com/00:1A:2B:3C:4D:5E"
     assert result["mac"] == "00:1a:2b:3c:4d:5e"
-    assert result["oui"] == "001a2b3c"
+    assert result["oui"] == "001a2b"
     assert len(called_url) == 1
     assert called_url[0].startswith("https://custom.example.com/")
 
