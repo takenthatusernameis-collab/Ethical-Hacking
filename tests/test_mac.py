@@ -390,19 +390,19 @@ def test_get_cached_or_fetch_no_cache_disabled_fetch_fails() -> None:
 
 
 def test_extract_oui_colon_format() -> None:
-    assert _extract_oui("00:1A:2B:3C:4D:5e") == "001a2b3c"
+    assert _extract_oui("00:1A:2B:3C:4D:5e") == "001a2b"
 
 
 def test_extract_oui_dash_format() -> None:
-    assert _extract_oui("00-1A-2B-3C-4D-5E") == "001a2b3c"
+    assert _extract_oui("00-1A-2B-3C-4D-5E") == "001a2b"
 
 
 def test_extract_oui_dot_format() -> None:
-    assert _extract_oui("001A.2B3C.4D5E") == "001a2b3c"
+    assert _extract_oui("001A.2B3C.4D5E") == "001a2b"
 
 
 def test_extract_oui_plain() -> None:
-    assert _extract_oui("001A2B3C4D5E") == "001a2b3c"
+    assert _extract_oui("001A2B3C4D5E") == "001a2b"
 
 
 def test_is_mac_address_true() -> None:
@@ -451,7 +451,7 @@ def test_run_mac_offline_target(monkeypatch) -> None:
 
     assert result["target"] == "00:1A:2B:3C:4D:5E"
     assert result["mac"] == "00:1a:2b:3c:4d:5e"
-    assert result["oui"] == "001a2b3c"
+    assert result["oui"] == "001a2b"
     assert result["timeout"] == 1.0
     assert result["use_cache"] is True
     assert result["offline_fallback"] is True
