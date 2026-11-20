@@ -85,3 +85,69 @@ def test_readme_example_audit_non_utf8_file(tmp_path) -> None:
         "Error: Invalid value for '--file': the file is not valid UTF-8"
         in result.output
     )
+
+
+def test_readme_example_web_invalid_port() -> None:
+    result = _invoke(["web", "--target", "host:notaport"])
+    assert result.exit_code == 2
+    assert "Usage: cli web [OPTIONS]" in result.output
+    assert "Try 'cli web --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Port could not be cast to integer value as 'notaport'"
+        in result.output
+    )
+
+
+def test_readme_example_web_host_with_space() -> None:
+    result = _invoke(["web", "--target", "host name"])
+    assert result.exit_code == 2
+    assert "Usage: cli web [OPTIONS]" in result.output
+    assert "Try 'cli web --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Target host contains a space or control character"
+        in result.output
+    )
+
+
+def test_readme_example_web_path_with_space() -> None:
+    result = _invoke(["web", "--target", "https://example.com/a b"])
+    assert result.exit_code == 2
+    assert "Usage: cli web [OPTIONS]" in result.output
+    assert "Try 'cli web --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Target path contains a space or control character"
+        in result.output
+    )
+
+
+def test_readme_example_trace_empty_target() -> None:
+    result = _invoke(["trace", "--target", ""])
+    assert result.exit_code == 2
+    assert "Usage: cli trace [OPTIONS]" in result.output
+    assert "Try 'cli trace --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Could not parse host from target ''"
+        in result.output
+    )
+
+
+def test_readme_example_s3_empty_target() -> None:
+    result = _invoke(["s3", "--target", ""])
+    assert result.exit_code == 2
+    assert "Usage: cli s3 [OPTIONS]" in result.output
+    assert "Try 'cli s3 --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Could not parse host from target ''"
+        in result.output
+    )
+
+
+def test_readme_example_redis_empty_target() -> None:
+    result = _invoke(["redis", "--target", ""])
+    assert result.exit_code == 2
+    assert "Usage: cli redis [OPTIONS]" in result.output
+    assert "Try 'cli redis --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Could not parse host from target ''"
+        in result.output
+    )

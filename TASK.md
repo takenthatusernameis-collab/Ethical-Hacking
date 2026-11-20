@@ -932,3 +932,30 @@ Date: Sun Nov 08 2026 (session 7)
 
 ## Environment/notes
 - Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3. Do not commit manually; the workflow controller stages and commits.
+
+# Session (Fri Nov 20 2026, session 24)
+## This session
+- No prior agent assignment existed; repository was fully green at start: `pytest -q` → 46683 passed, 146 skipped, 0 failed; `mypy ethscan/ tests/` → Success (267 source files); `ruff check ethscan/ tests/` → All checks passed; `check_readme.py` → 54 commands, 0 drift.
+- Identified 6 documented README console examples (lines 179-240, 264-285) that lacked dedicated regression tests in `tests/test_readme_examples.py`:
+  1. `web --target "host:notaport"` (invalid port)
+  2. `web --target "host name"` (host with space)
+  3. `web --target "https://example.com/a b"` (path with space)
+  4. `trace --target ""` (empty target)
+  5. `s3 --target ""` (empty target)
+  6. `redis --target ""` (empty target)
+- Each example was first reproduced against the live CLI to confirm exact error messages matched README.md.
+- Added 6 new tests to `tests/test_readme_examples.py` following the established pattern (CliRunner, exit code 2, Usage/Try/Error text assertions with `cli` program name).
+- No production code changes; purely test additions, fully reversible.
+
+## Verification
+- `python -m pytest tests/test_readme_examples.py -q` → 12 passed (6 original + 6 new).
+- `python -m mypy ethscan/ tests/test_readme_examples.py` → Success: no issues found.
+- `python -m ruff check ethscan/ tests/test_readme_examples.py` → All checks passed.
+- `python3 check_readme.py` → 54 commands, 0 drift.
+- Related CLI tests (`test_a_non_numeric_port_usage_error_is_a_single_line`, `test_a_target_with_a_hostile_host_is_a_usage_error`, `test_a_target_with_a_hostile_path_is_a_usage_error`, `test_trace_invalid_target_is_usage_error`, `test_s3_invalid_target_is_usage_error`) all pass.
+
+## Blockers
+- None.
+
+## Next task
+- None pending. Repository is fully green with all documented error examples now covered by regression tests. If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).

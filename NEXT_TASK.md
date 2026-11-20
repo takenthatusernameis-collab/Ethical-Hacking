@@ -1,25 +1,24 @@
 # Next Task
-Date: Thu Nov 19 2026 (session 23) — COMPLETED this session.
+Date: Fri Nov 20 2026 (session 24) — COMPLETED this session.
 
 ## Status
-- Green: **46683 passed, 146 skipped, 0 failed** (baseline 46677; +6 new tests); mypy Success (267 source files); ruff clean; `check_readme.py` 54 commands, 0 drift both directions; `git diff --check` clean; working tree has only `tests/test_readme_examples.py` untracked (controller stages/commits).
+- Green: **46689 passed, 146 skipped, 0 failed** (baseline 46683; +6 new tests); mypy Success (267 source files); ruff clean; `check_readme.py` 54 commands, 0 drift both directions; `git diff --check` clean; working tree has only `tests/test_readme_examples.py` modified (controller stages/commits).
 - Full-suite branch coverage (`coverage run --branch --source=ethscan -m pytest -q`): every module 100% except the known unreachable `ethscan/cli.py:4336` guard (`raise click.UsageError("Shell argument is required when not using --install")`); TOTAL 15942 stmts, 1 miss, 6020 branch, 1 BrPart. No new coverage gap.
 
 ## This session (what changed)
-- Executed the pending assignment: added `tests/test_readme_examples.py` (6 offline `CliRunner` regression tests) encoding the documented README console examples so documented error text cannot drift:
-  - `scan --target 127.0.0.1 --ports abc`
-  - `cidr --cidr bogus`
-  - `radix --cidrs 192.168.1.0/24,2001:db8::/32`
-  - `vuln --target example.com --services-file <tmp_path>/broken.json` (broken JSON)
-  - `redis --target example.com:99999`
-  - `audit --file <tmp_path>/passwords.txt` (non-UTF-8)
-  - Each asserts exit code 2 plus the `Usage: cli <cmd> [OPTIONS]`, `Try 'cli <cmd> --help' for help.` and exact `Error:` text from README.md lines 115-285. (`s3 --target "[::1]:443"` left out per the constraint — its probe may resolve DNS and is not deterministic/offline.)
+- Executed a bounded documentation-test sync task: added 6 new tests to `tests/test_readme_examples.py` for the remaining documented README console examples (lines 179-240, 264-285) so documented error text cannot drift:
+  1. `web --target "host:notaport"` (invalid port)
+  2. `web --target "host name"` (host with space)
+  3. `web --target "https://example.com/a b"` (path with space)
+  4. `trace --target ""` (empty target)
+  5. `s3 --target ""` (empty target)
+  6. `redis --target ""` (empty target)
 - Each example was reproduced by hand against the live CLI before writing the assertions; all matched README exactly. CliRunner uses prog name `cli`, so Usage/Try lines carry `cli` while Error text matches README verbatim.
-- No source (`ethscan/`) changes; purely a test addition, fully reversible.
+- No source (`ethscan/`) changes; purely a test addition, fully reversible. Total tests in `test_readme_examples.py`: 12 (covering all 12 error examples in README.md lines 115-285).
 
 ## Verified (this session)
-- `pytest tests/test_readme_examples.py -q` -> 6 passed.
-- `pytest -q` -> 46683 passed, 146 skipped, 0 failed.
+- `pytest tests/test_readme_examples.py -q` -> 12 passed.
+- `pytest -q` -> 46689 passed, 146 skipped, 0 failed.
 - `python -m mypy ethscan/ tests/` -> Success: no issues found in 267 source files.
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
 - `python3 check_readme.py` -> 54 commands, 0 drift both directions.
@@ -38,4 +37,4 @@ Date: Thu Nov 19 2026 (session 23) — COMPLETED this session.
 - Do not commit manually; the workflow controller commits and verifies pushes.
 
 ## Next task (for the next agent)
-- None pending. Repository is fully green. If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
+- None pending. Repository is fully green with all documented error examples now covered by regression tests. If future work is needed, pick a single bounded, high-value, verifiable improvement and reproduce it first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
