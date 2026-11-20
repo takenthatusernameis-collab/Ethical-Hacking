@@ -26,6 +26,11 @@ Date: Fri Nov 20 2026
 - `mac` reports unresolvable/non-MAC targets in-band (exit 0) by design.
 - `web`/`headers` accept `:6379` as host:port (exit 0, in-band) — pre-existing, excluded from guard.
 
+## This session (Fri Nov 20 2026) — inspection only
+- Independently re-verified the true baseline from a clean tree: `pytest -q` → 46710 passed, 146 skipped, 0 failed; `mypy --check-untyped-defs ethscan/ tests/` → Success (267 source files); `ruff check ethscan/ tests/ check_readme.py` → clean; `check_readme.py` → 54 commands, 0 drift both directions.
+- Reviewed `ethscan/target.py`, `config.py`, `fileio.py`, `mac.py`, `scanner.py`, `validate.py`, `passwords.py`, `report.py`, plus CLI `scan`/`report` handlers and `tests/test_cli_cov_gaps.py` for real bugs/gaps. None found: all target-taking commands validate via `normalize_host`/`_validate_enum_target`, all formatters hardened, all 12 README console examples have regression tests, 100% coverage (except the documented unreachable `cli.py` guard).
+- Per the reliability rules ("if no evidenced gap is found after inspection, document what was checked and leave the baseline intact") and the prohibition on speculative changes, no source or test changes were made. Baseline left intact.
+
 ## Next task (candidate for next agent — do NOT repeat the fuzzed batch)
 - **No pending assigned task.** The formatter-hostile-shape candidate (ftp/ntp/oracle/smtp/snmp/ldap list fields beyond findings) has been reproduced and found clean (0 crashes); do not re-fuzz or re-guard those modules.
 - If future work is needed, the next agent should inspect this handoff and select ONE fresh bounded, high-value, verifiable task after their own investigation — do not repeat the failed formatter-fuzzing approach for the same modules.

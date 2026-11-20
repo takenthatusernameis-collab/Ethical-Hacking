@@ -15,9 +15,11 @@ Date: Fri Nov 20 2026
 ## Verification
 - `python -m pytest -q` → 46710 passed, 146 skipped, 0 failed.
 - `python -m mypy ethscan/ tests/` → Success: no issues found in 267 source files.
+- `python -m mypy --check-untyped-defs ethscan/ tests/` → Success: no issues found in 267 source files.
 - `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed.
 - `python3 check_readme.py` → 54/54, 0 drift both directions.
 - Fuzzer: 0 crashes across all formatters / hostile field shapes.
+- Module review (target.py, config.py, fileio.py, mac.py, scanner.py, validate.py, passwords.py, report.py; CLI scan/report handlers; test_cli_cov_gaps.py): no bugs or gaps found. All targets validated, all formatters hardened, all README examples tested, 100% coverage except documented unreachable `cli.py` guard. No source or test changes made (baseline left intact).
 
 ## Candidate next task (for the next agent — reproduce first)
 - None pending. The formatter-hostile-shape candidate is **not reproducible** (0 crashes) for ftp/ntp/oracle/smtp/snmp/ldap; do not batch, re-fuzz, or add unneeded guards for those modules.
