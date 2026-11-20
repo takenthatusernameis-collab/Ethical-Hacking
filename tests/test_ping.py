@@ -20,6 +20,7 @@ from ethscan.ping import (
     ICMP_ECHO_REQUEST,
     ICMPV6_ECHO_REQUEST,
     ICMPV6_ECHO_REPLY,
+    ICMPV6_NEXT_HEADER,
     RESP_CONNECTED,
     RESP_ECHO_REPLY,
     RESP_NO_RESPONSE,
@@ -1011,6 +1012,223 @@ def test_probe_icmp_ipv6_send_socket_creation_fails_tcp_fallback(monkeypatch) ->
     assert result["ip"] == "127.0.0.1"
 
 
+def test_probe_icmp_ipv6_without_unicast_hops_option(monkeypatch) -> None:
+    """The ICMPv6 path skips IPV6_UNICAST_HOPS when the option is absent."""
+    reply_packet = _make_icmpv6_reply_packet(12345, 1, b"test")
+    fake_raw = _FakeRawSocket(data=reply_packet)
+
+    class _FakeSendSocket:
+        def __init__(self) -> None:
+            self.sent = False
+            self.closed = False
+
+        def setsockopt(self, *args, **kwargs) -> None:
+            pass
+
+        def settimeout(self, t) -> None:
+            pass
+
+        def sendto(self, data, addr) -> None:
+            self.sent = True
+
+        def close(self) -> None:
+            self.closed = True
+
+    fake_send = _FakeSendSocket()
+
+    def mock_socket(family, type_, proto=0):
+        if type_ == socket.SOCK_RAW and proto == socket.IPPROTO_ICMPV6:
+            return fake_send
+        return socket.socket(family, type_, proto)
+
+    monkeypatch.setattr(socket, "socket", mock_socket)
+    monkeypatch.setattr(socket, "IPV6_UNICAST_HOPS", None)
+
+    result = probe_icmp(
+        "::1",
+        timeout=1.0,
+        ttl=64,
+        raw_socket=fake_raw,
+        identifier=12345,
+        sequence=1,
+        resolved_ip="::1",
+        resolved_family=socket.AF_INET6,
+    )
+    assert result["response_type"] == RESP_ECHO_REPLY
+    assert fake_send.sent is True
+    assert fake_send.closed is True
+
+
+def test_probe_icmp_ipv6_sendto_oserror(monkeypatch) -> None:
+    """An ICMPv6 sendto failure reports NO-RESPONSE instead of raising."""
+    fake_raw = _FakeRawSocket(data=b"")
+
+    class _FakeSendSocket:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def setsockopt(self, *args, **kwargs) -> None:
+            pass
+
+        def settimeout(self, t) -> None:
+            pass
+
+        def sendto(self, data, addr) -> None:
+            raise OSError("send failed")
+
+        def close(self) -> None:
+            self.closed = True
+
+    fake_send = _FakeSendSocket()
+
+    def mock_socket(family, type_, proto=0):
+        if type_ == socket.SOCK_RAW and proto == socket.IPPROTO_ICMPV6:
+            return fake_send
+        return socket.socket(family, type_, proto)
+
+    monkeypatch.setattr(socket, "socket", mock_socket)
+
+    result = probe_icmp(
+        "::1",
+        timeout=1.0,
+        ttl=64,
+        raw_socket=fake_raw,
+        identifier=12345,
+        sequence=1,
+        resolved_ip="::1",
+        resolved_family=socket.AF_INET6,
+    )
+    assert result["response_type"] == RESP_NO_RESPONSE
+    assert result["error"] is not None
+    assert "send failed" in cast(str, result["error"])
+    assert fake_send.closed is True
+
+
+def test_probe_icmp_ipv6_reply_parse_error(monkeypatch) -> None:
+    """An ICMPv6 packet that is not an Echo Reply reports NO-RESPONSE."""
+    message = struct.pack("!BBHHH", ICMPV6_ECHO_REQUEST, 0, 0, 12345, 1)
+    pseudo = (
+        socket.inet_pton(socket.AF_INET6, "2001:db8::2")
+        + socket.inet_pton(socket.AF_INET6, "2001:db8::1")
+        + struct.pack("!I", len(message))
+        + b"\x00\x00\x00"
+        + struct.pack("!B", ICMPV6_NEXT_HEADER)
+    )
+    packet = struct.pack(
+        "!BBHHH", ICMPV6_ECHO_REQUEST, 0, _checksum(pseudo + message), 12345, 1
+    )
+    fake_raw = _FakeRawSocket(data=packet)
+
+    class _FakeSendSocket:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def setsockopt(self, *args, **kwargs) -> None:
+            pass
+
+        def settimeout(self, t) -> None:
+            pass
+
+        def sendto(self, data, addr) -> None:
+            pass
+
+        def close(self) -> None:
+            self.closed = True
+
+    fake_send = _FakeSendSocket()
+
+    def mock_socket(family, type_, proto=0):
+        if type_ == socket.SOCK_RAW and proto == socket.IPPROTO_ICMPV6:
+            return fake_send
+        return socket.socket(family, type_, proto)
+
+    monkeypatch.setattr(socket, "socket", mock_socket)
+
+    result = probe_icmp(
+        "::1",
+        timeout=1.0,
+        ttl=64,
+        raw_socket=fake_raw,
+        identifier=12345,
+        sequence=1,
+        resolved_ip="::1",
+        resolved_family=socket.AF_INET6,
+    )
+    assert result["response_type"] == RESP_NO_RESPONSE
+    assert result["error"] is not None
+    assert "not echo reply" in cast(str, result["error"])
+    assert fake_send.closed is True
+
+
+def test_probe_icmp_ipv6_recv_generic_exception(monkeypatch) -> None:
+    """A non-timeout receive error in the ICMPv6 path is reported, not raised."""
+    fake_raw = _FakeRawSocket(recv_error=ValueError("hostile receive"))
+
+    class _FakeSendSocket:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def setsockopt(self, *args, **kwargs) -> None:
+            pass
+
+        def settimeout(self, t) -> None:
+            pass
+
+        def sendto(self, data, addr) -> None:
+            pass
+
+        def close(self) -> None:
+            self.closed = True
+
+    fake_send = _FakeSendSocket()
+
+    def mock_socket(family, type_, proto=0):
+        if type_ == socket.SOCK_RAW and proto == socket.IPPROTO_ICMPV6:
+            return fake_send
+        return socket.socket(family, type_, proto)
+
+    monkeypatch.setattr(socket, "socket", mock_socket)
+
+    result = probe_icmp(
+        "::1",
+        timeout=1.0,
+        ttl=64,
+        raw_socket=fake_raw,
+        identifier=12345,
+        sequence=1,
+        resolved_ip="::1",
+        resolved_family=socket.AF_INET6,
+    )
+    assert result["response_type"] == RESP_NO_RESPONSE
+    assert result["error"] is not None
+    assert "hostile receive" in cast(str, result["error"])
+    assert fake_send.closed is True
+
+
+def test_probe_icmp_ipv4_tcp_fallback_with_resolved_sockaddr() -> None:
+    """IPv4 TCP fallback honors a caller-supplied resolved sockaddr."""
+    test_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    test_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    test_sock.bind(("127.0.0.1", 0))
+    port = test_sock.getsockname()[1]
+    test_sock.close()
+
+    result = probe_icmp(
+        "127.0.0.1",
+        timeout=2.0,
+        ttl=64,
+        raw_socket=None,
+        identifier=12345,
+        sequence=1,
+        resolved_ip="127.0.0.1",
+        resolved_family=socket.AF_INET,
+        resolved_sockaddr=("127.0.0.1", port),
+        port=port,
+    )
+    assert result["response_type"] == RESP_RST
+    assert result["ip"] == "127.0.0.1"
+
+
 def test_run_ping_ipv6_uses_owned_raw_socket(monkeypatch) -> None:
     """run_ping uses its own ICMPv6 raw socket for an IPv6 target (no TCP fallback)."""
     import ethscan.ping as ping_mod
@@ -1519,6 +1737,19 @@ def test_format_ping_report_csv_empty() -> None:
     reader = list(csv.reader(io.StringIO(output)))
     assert len(reader) == 1
     assert reader[0][0] == "target"
+
+
+def test_format_ping_report_markdown_non_dict_data() -> None:
+    out = format_ping_report_markdown(cast(Any, "not-a-dict"))
+    assert "# ethscan Ping Report" in out
+    assert "Raw ICMP Socket" in out
+
+
+def test_format_ping_report_csv_non_dict_data() -> None:
+    out = format_ping_report_csv(cast(Any, None))
+    lines = out.splitlines()
+    assert lines[0] == "target,ip,sequence,rtt_ms,ttl,response_type,error"
+    assert len(lines) == 1
 
 
 def test_ping_transport_failure_is_reported_not_raised(monkeypatch) -> None:
