@@ -1,16 +1,16 @@
 # Handoff
-Date: Fri Nov 20 2026 (session 26)
+Date: Fri Nov 20 2026 (session 27)
 
 ## State at HEAD (working tree clean; controller will stage/commit)
-- `pytest -q` -> **46689 passed, 146 skipped, 0 failed** (baseline unchanged vs session 25).
-- `python -m mypy ethscan/ tests/` -> Success: no issues in 267 source files.
-- `python -m ruff check ethscan/ tests/ check_readme.py` -> all checks passed.
-- `python3 check_readme.py` -> 54 commands, 0 drift both directions; `git diff --check` clean.
+- `pytest -q` -> **46689 passed, 146 skipped, 0 failed** (baseline unchanged vs session 26; re-verified this session).
+- `python -m mypy ethscan/ tests/` -> Success: no issues in 267 source files (re-verified this session).
+- `python -m ruff check ethscan/ tests/ check_readme.py` -> all checks passed (re-verified this session).
+- `python3 check_readme.py` -> 54 commands, 0 drift both directions; `git diff --check` clean (re-verified this session).
 - Coverage: 99% (1 missing statement / 1 partial branch in `ethscan/cli.py:4336` — the documented unreachable defensive guard in the `completion` command).
 
 ## What changed
 - No source or test changes made this session. The repository was fully green at start and remains so.
-- Inspected the repository per instructions: verified all gates, audited for evidenced gaps, found none requiring action.
+- Re-inspected the repository per instructions: verified all gates, audited for evidenced gaps (IPv6 transport on all modules, `mac._extract_oui` doc/code contract, coverage, README command+option sync, typing hygiene) and found none requiring action. No speculative changes were made.
 
 ## What was actually verified
 - Full test suite: 46689 passed, 146 skipped, 0 failed.
