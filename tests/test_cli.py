@@ -23865,48 +23865,48 @@ def test_invalid_cidr_does_not_run_the_calculation(monkeypatch) -> None:
 # usage error (exit code 2, one-line message) instead of an unhandled
 # ValueError traceback.
 
-TARGET_USAGE_ERROR_COMMANDS = (
-    "redis",
-    "memcached",
-    "mysql",
-    "ntp",
-    "snmp",
-    "ftp",
-    "ldap",
-    "netbios",
-    "smb",
-    "smtp",
-    "mongodb",
-    "mssql",
-    "scan",
-    "report",
-    # Commands that reject an unusable --target as a click usage error but were
-    # not yet covered by this list. Verified empirically against every value in
-    # UNUSABLE_TARGETS ("", "   ", "://no-host", "redis://", ":6379").
-    "brute",
-    "cert",
-    "cve",
-    "dnsbrute",
-    "fuzz",
-    "geo",
-    "osdetect",
-    "ping",
-    "resolve",
-    "s3",
-    "service",
-    "ssh",
-    "ssl",
-    "stale",
-    "subdomains",
-    "subtake",
-    "tls",
-    "urlcheck",
-    "vuln",
-    "whois",
-)
+# Commands that accept a ``--target`` Click option but do not reject every
+# unusable target as a usage error, so they are excluded from the usage-error
+# guard:
+#   * mac: reports unresolvable/non-MAC targets in-band (exit 0) by design
+#     (documented contract; see README line 38).
+#   * oracle / postgresql: keep the in-band "probe failed" contract (exit 0)
+#     for unusable targets (documented contract).
+#   * web / headers: parse ":6379" as host=":6379", port=6379 and report the
+#     connection failure in-band (exit 0) instead of "Could not parse host from
+#     target" (verified empirically; normalize_host would reject it, but these
+#     two formatters use parse_url and fall back to netloc).
+_TARGET_USAGE_ERROR_EXCLUSIONS = {"mac", "oracle", "postgresql", "web", "headers"}
+
+
+def _target_usage_error_commands() -> tuple[str, ...]:
+    """Auto-discover CLI commands whose unusable ``--target`` is a usage error.
+
+    Discovers every top-level command whose Click parameters declare a
+    ``--target`` option, then removes the intentional in-band contracts above.
+    This keeps the guard future-proof: a new ``--target`` command that rejects
+    unusable targets is covered automatically; one that does not must be added
+    to ``_TARGET_USAGE_ERROR_EXCLUSIONS`` with justification.
+    """
+    commands = []
+    for name, cmd in cli.commands.items():
+        if name in _TARGET_USAGE_ERROR_EXCLUSIONS:
+            continue
+        opts = [
+            o
+            for p in cmd.params
+            for o in (getattr(p, "opts", []) or []) + (getattr(p, "secondary_opts", []) or [])
+        ]
+        if "--target" in opts:
+            commands.append(name)
+    return tuple(sorted(commands))
+
+
+TARGET_USAGE_ERROR_COMMANDS = _target_usage_error_commands()
 
 # These commands treat an unparsable target as a failed probe and report it
-# inside their own output (exit code 0). Their contract is left alone.
+# inside their own output (exit code 0). Their contract is left alone and they
+# are excluded from the guard above.
 TARGET_PROBE_FAILURE_COMMANDS = (
     "oracle",
     "postgresql",
