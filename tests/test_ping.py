@@ -18,15 +18,19 @@ from ethscan.ping import (
     DEFAULT_TTL,
     ICMP_ECHO_REPLY,
     ICMP_ECHO_REQUEST,
+    ICMPV6_ECHO_REQUEST,
+    ICMPV6_ECHO_REPLY,
     RESP_CONNECTED,
     RESP_ECHO_REPLY,
     RESP_NO_RESPONSE,
     RESP_RST,
     RESP_TIMEOUT,
     _build_icmp_echo_request,
+    _build_icmpv6_echo_request,
     _checksum,
     _normalize_host,
     _parse_icmp_reply,
+    _parse_icmpv6_reply,
     _resolve_host,
     _try_create_raw_socket,
     format_ping_report_csv,
@@ -275,6 +279,85 @@ def test_parse_icmp_reply_icmp_header_truncated() -> None:
     assert result["error"] == "ICMP header truncated"
 
 
+def _make_icmpv6_reply_packet(identifier: int, sequence: int, payload: bytes = b"") -> bytes:
+    """Build a synthetic ICMPv6 Echo Reply (no IP header) with a valid checksum."""
+    message = struct.pack("!BBHHH", ICMPV6_ECHO_REPLY, 0, 0, identifier, sequence) + payload
+    pseudo = (
+        socket.inet_pton(socket.AF_INET6, "2001:db8::2")
+        + socket.inet_pton(socket.AF_INET6, "2001:db8::1")
+        + struct.pack("!I", len(message))
+        + b"\x00\x00\x00"
+        + struct.pack("!B", 58)
+    )
+    checksum = _checksum(pseudo + message)
+    return struct.pack("!BBHHH", ICMPV6_ECHO_REPLY, 0, checksum, identifier, sequence) + payload
+
+
+def test_build_icmpv6_echo_request_structure() -> None:
+    req = _build_icmpv6_echo_request(12345, 1, b"test", "2001:db8::1", "2001:db8::2")
+    assert req[0] == ICMPV6_ECHO_REQUEST
+    icmp_type, _, _, ident, seq = struct.unpack("!BBHHH", req[:8])
+    assert icmp_type == ICMPV6_ECHO_REQUEST
+    assert ident == 12345
+    assert seq == 1
+    assert req[8:] == b"test"
+    # A valid checksum makes the pseudo-header + message sum to zero.
+    pseudo = (
+        socket.inet_pton(socket.AF_INET6, "2001:db8::1")
+        + socket.inet_pton(socket.AF_INET6, "2001:db8::2")
+        + struct.pack("!I", len(req))
+        + b"\x00\x00\x00"
+        + struct.pack("!B", 58)
+    )
+    assert _checksum(pseudo + req) == 0
+
+
+def test_build_icmpv6_echo_request_empty_payload() -> None:
+    req = _build_icmpv6_echo_request(12345, 1)
+    icmp_type, _, _, ident, seq = struct.unpack("!BBHHH", req[:8])
+    assert icmp_type == ICMPV6_ECHO_REQUEST
+    assert ident == 12345
+    assert seq == 1
+    assert len(req) == 8
+
+
+def test_parse_icmpv6_reply_valid() -> None:
+    packet = _make_icmpv6_reply_packet(12345, 1, b"test")
+    result = _parse_icmpv6_reply(packet, 12345)
+    assert result["type"] == ICMPV6_ECHO_REPLY
+    assert result["code"] == 0
+    assert result["identifier"] == 12345
+    assert result["sequence"] == 1
+    assert result["payload"] == b"test"
+    assert result["error"] is None
+
+
+def test_parse_icmpv6_reply_wrong_identifier() -> None:
+    result = _parse_icmpv6_reply(_make_icmpv6_reply_packet(12345, 1), 54321)
+    assert result["error"] == "identifier mismatch: expected 54321, got 12345"
+
+
+def test_parse_icmpv6_reply_wrong_type() -> None:
+    # An Echo Request (type 128) is not an Echo Reply.
+    packet = struct.pack("!BBHHH", ICMPV6_ECHO_REQUEST, 0, 0, 12345, 1) + b"test"
+    pseudo = (
+        socket.inet_pton(socket.AF_INET6, "2001:db8::2")
+        + socket.inet_pton(socket.AF_INET6, "2001:db8::1")
+        + struct.pack("!I", len(packet))
+        + b"\x00\x00\x00"
+        + struct.pack("!B", 58)
+    )
+    packet = struct.pack("!BBHHH", ICMPV6_ECHO_REQUEST, 0, _checksum(pseudo + packet), 12345, 1) + b"test"
+    result = _parse_icmpv6_reply(packet, 12345)
+    assert result["error"] is not None
+    assert "not echo reply" in result["error"]
+
+
+def test_parse_icmpv6_reply_too_short() -> None:
+    result = _parse_icmpv6_reply(b"\x00" * 4, 12345)
+    assert result["error"] == "ICMPv6 header truncated"
+
+
 # ---------------------------------------------------------------------------
 # _resolve_host
 # ---------------------------------------------------------------------------
@@ -330,6 +413,21 @@ def test_try_create_raw_socket_success(monkeypatch) -> None:
 
     monkeypatch.setattr(socket, "socket", mock_socket)
     result = _try_create_raw_socket()
+    assert result is fake_sock
+
+
+def test_try_create_raw_socket_ipv6(monkeypatch) -> None:
+    """_try_create_raw_socket(AF_INET6) creates an ICMPv6 raw socket."""
+    fake_sock = object()
+
+    def mock_socket(family, type_, proto=0):
+        assert family == socket.AF_INET6
+        assert type_ == socket.SOCK_RAW
+        assert proto == socket.IPPROTO_ICMPV6
+        return fake_sock
+
+    monkeypatch.setattr(socket, "socket", mock_socket)
+    result = _try_create_raw_socket(socket.AF_INET6)
     assert result is fake_sock
 
 
@@ -787,18 +885,144 @@ def test_probe_icmp_ipv4_still_uses_raw_socket(monkeypatch) -> None:
     assert fake_send.sent is True
 
 
-def test_run_ping_ipv6_drops_owned_raw_socket(monkeypatch) -> None:
-    """run_ping must close and ignore its own raw socket for an IPv6 target."""
+def test_probe_icmp_ipv6_echo_reply(monkeypatch) -> None:
+    """An IPv6 target with a raw socket gets an ICMPv6 Echo Reply."""
+    reply_packet = _make_icmpv6_reply_packet(12345, 1, b"test")
+    fake_raw = _FakeRawSocket(data=reply_packet)
+
+    class _FakeSendSocket:
+        def __init__(self):
+            self.sent = False
+            self.closed = False
+            self.sent_to = None
+
+        def setsockopt(self, *args, **kwargs):
+            pass
+
+        def settimeout(self, t):
+            pass
+
+        def sendto(self, data, addr):
+            self.sent = True
+            self.sent_to = addr
+
+        def close(self):
+            self.closed = True
+
+    fake_send = _FakeSendSocket()
+
+    def mock_socket(family, type_, proto=0):
+        if type_ == socket.SOCK_RAW and proto == socket.IPPROTO_ICMPV6:
+            return fake_send
+        return socket.socket(family, type_, proto)
+
+    monkeypatch.setattr(socket, "socket", mock_socket)
+
+    result = probe_icmp(
+        "::1",
+        timeout=1.0,
+        ttl=64,
+        raw_socket=fake_raw,
+        identifier=12345,
+        sequence=1,
+        resolved_ip="::1",
+        resolved_family=socket.AF_INET6,
+    )
+    assert result["sequence"] == 1
+    assert result["ttl"] == 64
+    assert result["ip"] == "::1"
+    assert result["response_type"] == RESP_ECHO_REPLY
+    assert result["error"] is None
+    assert fake_send.sent is True
+    assert fake_send.sent_to == ("::1", 0)
+    assert fake_send.closed is True
+
+
+def test_probe_icmp_ipv6_timeout(monkeypatch) -> None:
+    """An IPv6 target whose raw socket times out reports TIMEOUT."""
+    fake_raw = _FakeRawSocket(data=b"")
+
+    class _FakeSendSocket:
+        def setsockopt(self, *args, **kwargs):
+            pass
+
+        def settimeout(self, t):
+            pass
+
+        def sendto(self, data, addr):
+            pass
+
+        def close(self):
+            pass
+
+    fake_send = _FakeSendSocket()
+
+    def mock_socket(family, type_, proto=0):
+        if type_ == socket.SOCK_RAW and proto == socket.IPPROTO_ICMPV6:
+            return fake_send
+        return socket.socket(family, type_, proto)
+
+    monkeypatch.setattr(socket, "socket", mock_socket)
+
+    result = probe_icmp(
+        "::1",
+        timeout=1.0,
+        ttl=64,
+        raw_socket=fake_raw,
+        identifier=12345,
+        sequence=1,
+        resolved_ip="::1",
+        resolved_family=socket.AF_INET6,
+    )
+    assert result["response_type"] == RESP_TIMEOUT
+    assert result["ip"] is None
+
+
+def test_probe_icmp_ipv6_send_socket_creation_fails_tcp_fallback(monkeypatch) -> None:
+    """If the ICMPv6 send socket cannot be created, fall back to TCP connect."""
+    fake_raw = _FakeRawSocket(data=b"")
+    original_socket = socket.socket
+
+    def mock_socket(family, type_, proto=0):
+        if type_ == socket.SOCK_RAW and proto == socket.IPPROTO_ICMPV6:
+            raise OSError("no raw socket")
+        return original_socket(family, type_, proto)
+
+    monkeypatch.setattr(socket, "socket", mock_socket)
+
+    test_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    test_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    test_sock.bind(("127.0.0.1", 0))
+    port = test_sock.getsockname()[1]
+    test_sock.close()
+
+    result = probe_icmp(
+        "127.0.0.1",
+        timeout=2.0,
+        ttl=64,
+        raw_socket=fake_raw,
+        identifier=12345,
+        sequence=1,
+        resolved_ip="127.0.0.1",
+        resolved_family=socket.AF_INET,
+        port=port,
+    )
+    assert result["response_type"] == RESP_RST
+    assert result["ip"] == "127.0.0.1"
+
+
+def test_run_ping_ipv6_uses_owned_raw_socket(monkeypatch) -> None:
+    """run_ping uses its own ICMPv6 raw socket for an IPv6 target (no TCP fallback)."""
     import ethscan.ping as ping_mod
 
-    fake_raw = _FakeRawSocket()
+    fake_raw = _FakeRawSocket(data=b"")
 
     monkeypatch.setattr(
         ping_mod,
         "_resolve_host",
         lambda host: ("::1", socket.AF_INET6, ("::1", 0, 0, 0)),
     )
-    monkeypatch.setattr(ping_mod, "_try_create_raw_socket", lambda: fake_raw)
+    monkeypatch.setattr(ping_mod, "_try_create_raw_socket", lambda family=None: fake_raw)
 
     calls: list[dict[str, object]] = []
 
@@ -809,7 +1033,7 @@ def test_run_ping_ipv6_drops_owned_raw_socket(monkeypatch) -> None:
             "rtt_ms": 0.1,
             "ttl": 64,
             "sequence": kwargs.get("sequence", 1),
-            "response_type": RESP_RST,
+            "response_type": RESP_ECHO_REPLY,
             "error": None,
         }
 
@@ -817,17 +1041,17 @@ def test_run_ping_ipv6_drops_owned_raw_socket(monkeypatch) -> None:
 
     result = run_ping("::1", count=1, timeout=0.5)
 
-    assert result["raw_socket_available"] is False
-    assert fake_raw.closed is True
-    assert calls[0]["raw_socket"] is None
-    assert any("IPv4-only" in note for note in result["notes"])
+    assert result["raw_socket_available"] is True
+    assert fake_raw.closed is True  # run_ping closes the socket it created
+    assert calls[0]["raw_socket"] is fake_raw
+    assert any("ICMPv6" in note for note in result["notes"])
 
 
 def test_run_ping_ipv6_does_not_close_caller_raw_socket(monkeypatch) -> None:
-    """A caller-owned raw socket is dropped for IPv6 but not closed by run_ping."""
+    """A caller-owned raw socket is used for IPv6 ICMPv6 but not closed by run_ping."""
     import ethscan.ping as ping_mod
 
-    fake_raw = _FakeRawSocket()
+    fake_raw = _FakeRawSocket(data=b"")
 
     monkeypatch.setattr(
         ping_mod,
@@ -841,7 +1065,7 @@ def test_run_ping_ipv6_does_not_close_caller_raw_socket(monkeypatch) -> None:
             "rtt_ms": 0.1,
             "ttl": 64,
             "sequence": kwargs.get("sequence", 1),
-            "response_type": RESP_RST,
+            "response_type": RESP_ECHO_REPLY,
             "error": None,
         }
 
@@ -849,8 +1073,9 @@ def test_run_ping_ipv6_does_not_close_caller_raw_socket(monkeypatch) -> None:
 
     result = run_ping("::1", count=1, timeout=0.5, raw_socket=fake_raw)
 
-    assert result["raw_socket_available"] is False
+    assert result["raw_socket_available"] is True
     assert fake_raw.closed is False
+    assert any("ICMPv6" in note for note in result["notes"])
 
 
 # ---------------------------------------------------------------------------
@@ -871,7 +1096,7 @@ def test_run_ping_offline_target(monkeypatch) -> None:
             "error": "timeout",
         }
 
-    monkeypatch.setattr("ethscan.ping._try_create_raw_socket", lambda: None)
+    monkeypatch.setattr("ethscan.ping._try_create_raw_socket", lambda family=None: None)
     monkeypatch.setattr("ethscan.ping.probe_icmp", mock_probe_icmp)
     monkeypatch.setattr("ethscan.ping._resolve_host", lambda host: ("10.0.0.1", socket.AF_INET, ("10.0.0.1", 0)))
 
@@ -909,7 +1134,7 @@ def test_run_ping_defaults() -> None:
     orig_probe = ping_mod.probe_icmp
     orig_raw = ping_mod._try_create_raw_socket
     ping_mod.probe_icmp = mock_probe
-    ping_mod._try_create_raw_socket = lambda: None
+    ping_mod._try_create_raw_socket = lambda family=None: None
     try:
         result = run_ping("example.com")
         assert result["count"] == DEFAULT_COUNT
@@ -944,7 +1169,7 @@ def test_run_ping_custom_params_passed() -> None:
     orig_probe = ping_mod.probe_icmp
     orig_raw = ping_mod._try_create_raw_socket
     ping_mod.probe_icmp = mock_probe
-    ping_mod._try_create_raw_socket = lambda: None
+    ping_mod._try_create_raw_socket = lambda family=None: None
     try:
         run_ping("example.com", count=2, timeout=5.0, ttl=128, port=443)
         assert called[0][0] == 5.0
@@ -971,7 +1196,7 @@ def test_run_ping_successful_probes_rtt_stats() -> None:
     orig_probe = ping_mod.probe_icmp
     orig_raw = ping_mod._try_create_raw_socket
     ping_mod.probe_icmp = mock_probe
-    ping_mod._try_create_raw_socket = lambda: None
+    ping_mod._try_create_raw_socket = lambda family=None: None
     try:
         result = run_ping("example.com", count=3, timeout=1.0)
         assert result["successful"] == 3
@@ -1009,7 +1234,7 @@ def test_run_ping_mixed_results() -> None:
     orig_probe = ping_mod.probe_icmp
     orig_raw = ping_mod._try_create_raw_socket
     ping_mod.probe_icmp = mock_probe
-    ping_mod._try_create_raw_socket = lambda: None
+    ping_mod._try_create_raw_socket = lambda family=None: None
     try:
         result = run_ping("example.com", count=4, timeout=1.0)
         assert result["successful"] == 2
@@ -1039,7 +1264,7 @@ def test_run_ping_unresolvable_host() -> None:
     orig_raw = ping_mod._try_create_raw_socket
     orig_resolve = ping_mod._resolve_host
     ping_mod.probe_icmp = mock_probe
-    ping_mod._try_create_raw_socket = lambda: None
+    ping_mod._try_create_raw_socket = lambda family=None: None
     ping_mod._resolve_host = lambda h: (None, None, None)  # type: ignore[assignment]
     try:
         result = run_ping("nonexistent.invalid.domain.tld", count=1, timeout=1.0)
@@ -1074,7 +1299,7 @@ def test_run_ping_unresolvable_host_reports_failure() -> None:
     import ethscan.ping as ping_mod
 
     orig_raw = ping_mod._try_create_raw_socket
-    ping_mod._try_create_raw_socket = lambda: None
+    ping_mod._try_create_raw_socket = lambda family=None: None
     try:
         result = run_ping("no-such-host.invalid.example.tld", count=2, timeout=1.0)
     finally:
@@ -1116,7 +1341,7 @@ def test_run_ping_raw_socket_available(monkeypatch) -> None:
 
     monkeypatch.setattr("ethscan.ping._resolve_host", lambda h: ("10.0.0.1", socket.AF_INET, ("10.0.0.1", 0)))
     monkeypatch.setattr("ethscan.ping.probe_icmp", mock_probe)
-    monkeypatch.setattr("ethscan.ping._try_create_raw_socket", lambda: fake_raw)
+    monkeypatch.setattr("ethscan.ping._try_create_raw_socket", lambda family=None: fake_raw)
 
     result = run_ping("example.com", count=2, timeout=1.0)
     assert result["raw_socket_available"] is True
@@ -1140,7 +1365,7 @@ def test_run_ping_url_target() -> None:
     orig_probe = ping_mod.probe_icmp
     orig_raw = ping_mod._try_create_raw_socket
     ping_mod.probe_icmp = mock_probe
-    ping_mod._try_create_raw_socket = lambda: None
+    ping_mod._try_create_raw_socket = lambda family=None: None
     try:
         result = run_ping("https://example.com", count=1)
         assert result["host"] == "example.com"
@@ -1488,7 +1713,7 @@ def test_run_ping_raw_socket_creation_exception_sets_none(monkeypatch) -> None:
             "error": None,
         }
 
-    def raise_exc():
+    def raise_exc(family=None):
         raise OSError("permission denied")
 
     orig_probe = ping_mod.probe_icmp
@@ -1514,7 +1739,7 @@ def test_run_ping_probe_icmp_exception_caught(monkeypatch) -> None:
     orig_probe = ping_mod.probe_icmp
     orig_raw = ping_mod._try_create_raw_socket
     ping_mod.probe_icmp = raise_exc
-    ping_mod._try_create_raw_socket = lambda: None
+    ping_mod._try_create_raw_socket = lambda family=None: None
     try:
         result = run_ping("example.com", count=2, timeout=1.0, ttl=64)
         assert len(result["probes"]) == 2
@@ -1698,7 +1923,7 @@ def test_run_ping_successful_probe_with_non_numeric_rtt_excluded_from_stats(monk
     orig_probe = ping_mod.probe_icmp
     orig_raw = ping_mod._try_create_raw_socket
     ping_mod.probe_icmp = mock_probe
-    ping_mod._try_create_raw_socket = lambda: None
+    ping_mod._try_create_raw_socket = lambda family=None: None
     try:
         result = run_ping("example.com", count=2, timeout=1.0)
         assert result["successful"] == 2

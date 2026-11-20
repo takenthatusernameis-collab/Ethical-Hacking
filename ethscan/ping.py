@@ -25,6 +25,10 @@ DEFAULT_PORT = 80
 ICMP_ECHO_REQUEST = 8
 ICMP_ECHO_REPLY = 0
 
+ICMPV6_ECHO_REQUEST = 128
+ICMPV6_ECHO_REPLY = 129
+ICMPV6_NEXT_HEADER = 58
+
 CONN_REFUSED_CODES = (111, 10061, 10013)
 
 RESP_ECHO_REPLY = "ECHO_REPLY"
@@ -42,6 +46,16 @@ class _IcmpReply(TypedDict):
     payload: bytes
     src_ip: str
     protocol: int
+    error: str | None
+
+
+class _Icmpv6Reply(TypedDict):
+    type: int
+    code: int
+    checksum: int
+    identifier: int
+    sequence: int
+    payload: bytes
     error: str | None
 
 
@@ -148,14 +162,83 @@ def _parse_icmp_reply(data: bytes, expected_id: int) -> _IcmpReply | None:
     }
 
 
-def _try_create_raw_socket() -> Any:
+def _build_icmpv6_echo_request(
+    identifier: int,
+    sequence: int,
+    payload: bytes = b"",
+    src_ip: str = "::",
+    dst_ip: str = "::1",
+) -> bytes:
+    """Build an ICMPv6 Echo Request (type 128) with a pseudo-header checksum.
+
+    The checksum covers the IPv6 pseudo-header (source, destination, upper-layer
+    packet length, zeroes, next header) followed by the ICMPv6 message, per
+    RFC 2460 / RFC 4443. Returns the complete ICMPv6 message ready to send.
+    """
+    message = struct.pack("!BBHHH", ICMPV6_ECHO_REQUEST, 0, 0, identifier, sequence) + payload
+    pseudo = (
+        socket.inet_pton(socket.AF_INET6, src_ip)
+        + socket.inet_pton(socket.AF_INET6, dst_ip)
+        + struct.pack("!I", len(message))
+        + b"\x00\x00\x00"
+        + struct.pack("!B", ICMPV6_NEXT_HEADER)
+    )
+    checksum = _checksum(pseudo + message)
+    return struct.pack("!BBHHH", ICMPV6_ECHO_REQUEST, 0, checksum, identifier, sequence) + payload
+
+
+def _parse_icmpv6_reply(data: bytes, expected_id: int) -> _Icmpv6Reply:
+    """Parse an ICMPv6 Echo Reply (type 129).
+
+    ``data`` is expected to begin at the ICMPv6 header (raw ICMPv6 sockets do
+    not prepend the IPv6 header). Returns a dict with an ``error`` key set on
+    any validation failure.
+    """
+    if len(data) < 8:
+        return cast(_Icmpv6Reply, {"error": "ICMPv6 header truncated"})
+
+    icmp_type = data[0]
+    icmp_code = data[1]
+    # checksum = struct.unpack("!H", data[2:4])[0]  # not validated without the IP header
+    icmp_identifier = struct.unpack("!H", data[4:6])[0]
+    icmp_sequence = struct.unpack("!H", data[6:8])[0]
+
+    if icmp_type != ICMPV6_ECHO_REPLY or icmp_code != 0:
+        return cast(
+            _Icmpv6Reply,
+            {"error": f"not echo reply: type={icmp_type}, code={icmp_code}"},
+        )
+
+    if icmp_identifier != expected_id:
+        return cast(
+            _Icmpv6Reply,
+            {"error": f"identifier mismatch: expected {expected_id}, got {icmp_identifier}"},
+        )
+
+    return {
+        "type": icmp_type,
+        "code": icmp_code,
+        "checksum": struct.unpack("!H", data[2:4])[0],
+        "identifier": icmp_identifier,
+        "sequence": icmp_sequence,
+        "payload": data[8:],
+        "error": None,
+    }
+
+
+def _try_create_raw_socket(family: int = socket.AF_INET) -> Any:
     """Attempt to create a raw ICMP socket for sending/receiving echo requests.
 
-    Returns the socket if available, or ``None`` if raw sockets are not
-    permitted (e.g. running without root privileges).
+    The socket family is chosen by *family*: ``AF_INET``/``IPPROTO_ICMP`` for
+    IPv4 and ``AF_INET6``/``IPPROTO_ICMPV6`` for IPv6. Returns the socket if
+    available, or ``None`` if raw sockets are not permitted (e.g. running
+    without root privileges).
     """
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
+        if family == socket.AF_INET6:
+            sock = socket.socket(socket.AF_INET6, socket.SOCK_RAW, socket.IPPROTO_ICMPV6)
+        else:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
     except Exception:  # noqa: BLE001 - transport can raise any type
         return None
     else:
@@ -222,12 +305,85 @@ def probe_icmp(
     """
     start = time.monotonic()
 
-    # A raw ICMP socket created for ``IPPROTO_ICMP`` is an IPv4 socket; it
-    # cannot carry an Echo Request to an IPv6 literal, and the send would fail
-    # with "Address family for hostname not supported". An IPv6 target
-    # therefore always uses the TCP connect-based fallback, which is
-    # family-aware. ICMPv6 (``IPPROTO_ICMPV6``) would be a different probe and
-    # is intentionally not attempted here.
+    # --- ICMPv6 path: raw ICMPv6 socket for an IPv6 target -------------------
+    if raw_socket is not None and resolved_family == socket.AF_INET6:
+        send_sock = None
+        try:
+            send_sock = socket.socket(socket.AF_INET6, socket.SOCK_RAW, socket.IPPROTO_ICMPV6)
+        except Exception:  # noqa: BLE001 - transport can raise any type
+            send_sock = None
+        if send_sock is not None:
+            try:
+                hop_limit_opt = getattr(socket, "IPV6_UNICAST_HOPS", None)
+                if hop_limit_opt is not None:
+                    send_sock.setsockopt(socket.IPPROTO_IPV6, hop_limit_opt, ttl)
+                send_sock.settimeout(timeout)
+
+                dst = resolved_ip or host
+                request = _build_icmpv6_echo_request(
+                    identifier, sequence, payload, resolved_ip or host, dst
+                )
+                try:
+                    send_sock.sendto(request, (dst, 0))
+                except Exception as exc:  # noqa: BLE001
+                    rtt = (time.monotonic() - start) * 1000
+                    return {
+                        "ip": resolved_ip or host,
+                        "rtt_ms": round(rtt, 2),
+                        "ttl": ttl,
+                        "sequence": sequence,
+                        "response_type": RESP_NO_RESPONSE,
+                        "error": str(exc),
+                    }
+
+                try:
+                    raw_socket.settimeout(timeout)
+                    data, _addr = raw_socket.recvfrom(512)
+                    rtt = (time.monotonic() - start) * 1000
+                    v6_reply = _parse_icmpv6_reply(data, identifier)
+
+                    if v6_reply.get("error"):
+                        return {
+                            "ip": resolved_ip or host,
+                            "rtt_ms": round(rtt, 2),
+                            "ttl": ttl,
+                            "sequence": sequence,
+                            "response_type": RESP_NO_RESPONSE,
+                            "error": v6_reply.get("error") or "parse failed",
+                        }
+
+                    return {
+                        "ip": resolved_ip or host,
+                        "rtt_ms": round(rtt, 2),
+                        "ttl": ttl,
+                        "sequence": sequence,
+                        "response_type": RESP_ECHO_REPLY,
+                        "error": None,
+                    }
+                except socket.timeout:
+                    rtt = (time.monotonic() - start) * 1000
+                    return {
+                        "ip": None,
+                        "rtt_ms": round(rtt, 2),
+                        "ttl": ttl,
+                        "sequence": sequence,
+                        "response_type": RESP_TIMEOUT,
+                        "error": "timeout",
+                    }
+                except Exception as exc:  # noqa: BLE001
+                    rtt = (time.monotonic() - start) * 1000
+                    return {
+                        "ip": None,
+                        "rtt_ms": round(rtt, 2),
+                        "ttl": ttl,
+                        "sequence": sequence,
+                        "response_type": RESP_NO_RESPONSE,
+                        "error": str(exc),
+                    }
+            finally:
+                send_sock.close()
+
+    # --- ICMPv4 path: raw ICMP socket for an IPv4 target ---------------------
     raw_socket_usable = raw_socket is not None and resolved_family != socket.AF_INET6
 
     if raw_socket_usable:
@@ -417,21 +573,10 @@ def run_ping(
     own_raw_socket = False
     if raw_socket is None:
         try:
-            raw_socket = _try_create_raw_socket()
+            raw_socket = _try_create_raw_socket(family if family is not None else socket.AF_INET)
         except Exception:  # noqa: BLE001 - transport can raise any type
             raw_socket = None
         own_raw_socket = raw_socket is not None
-
-    # A raw ICMP socket created for ``IPPROTO_ICMP`` is IPv4-only, so it cannot
-    # probe an IPv6 target. Drop it here (closing it when this function made
-    # it) and let the family-aware TCP fallback handle the probes, instead of
-    # failing every probe with "Address family for hostname not supported".
-    ipv6_tcp_fallback = family == socket.AF_INET6 and raw_socket is not None
-    if ipv6_tcp_fallback:
-        if own_raw_socket:
-            raw_socket.close()
-        raw_socket = None
-        own_raw_socket = False
 
     identifier = 0xFFFF & int(time.time() * 1000)
 
@@ -444,10 +589,11 @@ def run_ping(
         # Note the address family for clarity
         family_name = "IPv6" if family == socket.AF_INET6 else "IPv4"
         notes.append(f"Resolved {host!r} to {ip} ({family_name})")
-    if ipv6_tcp_fallback:
+    ipv6_icmp = family == socket.AF_INET6 and raw_socket is not None
+    if ipv6_icmp:
         notes.append(
-            "Raw ICMP sockets are IPv4-only; IPv6 target uses TCP connect "
-            f"fallback on port {port} (ICMPv6 ping not available)"
+            "Raw ICMPv6 socket available; sending ICMPv6 Echo Request "
+            f"(type 128) on {ip} (ICMPv6 ping)"
         )
     elif raw_socket is None:
         notes.append(
