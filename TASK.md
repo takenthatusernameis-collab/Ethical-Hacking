@@ -984,3 +984,33 @@ Date: Sun Nov 08 2026 (session 7)
 
 ## Next task
 - `ethscan/ping.py` now degrades IPv6 to TCP fallback by design. A bounded follow-up, if desired, is real ICMPv6: create `socket.AF_INET6`/`IPPROTO_ICMPV6` raw sockets, build/parse Echo Request/Reply (type 128/129) with the IPv6 pseudo-header checksum, and keep the TCP fallback for unprivileged users. Reproduce first with a fake raw socket; keep `raw_socket_available` accurate for both families and `ping.py` at 100% branch coverage. Do not remove the IPv4 raw path or change exit-code contracts.
+
+# Session (Sat Nov 21 2026, session 1)
+## This session
+- No prior agent assignment existed (HANDOFF_NEXT/NEXT_TASK said "none pending; repo fully green"). Independently re-verified the baseline before selecting work: `pytest -q` → 46725 passed, 146 skipped, 0 failed; `mypy ethscan/ tests/` clean (267 source files); `ruff` clean; `check_readme.py` 54/54, 0 drift; `git diff --check` clean.
+- Audited the documented known limitations for a reproduced defect. The `mac._extract_oui` docstring/contract mismatch (says "24-bit OUI" but returns 8 hex chars) was confirmed to be documentation-only — `_extract_oui` returns `cleaned[:6]` (6 hex chars = 24 bits), so the docstring is accurate and the "8 hex chars" claim in the handoff was wrong. No fix needed.
+- Probed the IPv6-transport backlog named in the handoff (`ldap`, `memcached`, `redis`, `smb`, `snmp`, `dnssec`, `osdetect`): all seven already resolve the endpoint with `socket.getaddrinfo(host, port, type=..., proto=...)` and create `socket.socket(family, socktype, proto)` from the returned family, so IPv6 literals work. Reproduced empirically: `ldap/redis/smb/snmp/memcached/osdetect --target ::1 --timeout 0.2 --format json` all exit 0 with a real transport error (connection refused/timeout), not `Address family for hostname not supported`. The handoff's "next task" was stale — no fix needed.
+- Selected a real, reproduced defect after probing URL-shaped MAC targets: `ethscan/mac.py:_normalize_target` truncates a colon-separated MAC in a URL authority.
+- Reproduction: `_normalize_target("https://00:1A:2B:3C:4D:5E/") == "00"` (should be `"00:1a:2b:3c:4d:5e"`); `python -m ethscan mac --target "https://00:1A:2B:3C:4D:5E/" --format json` → `mac: null`, `notes: ["Resolved host '00' to 0.0.0.0, which is an IP address, not a MAC address"]`, exit 0.
+- Root cause: `urllib.parse.urlparse` splits the authority at the first colon, so `https://00:1A:2B:3C:4D:5E/` parses with `hostname == "00"` and a bogus port. `_normalize_target` returned `parsed.hostname`, discarding the rest of the MAC.
+- Fixed `ethscan/mac.py:_normalize_target`: when the parsed hostname is not itself a MAC address but the full `parsed.netloc` is, use the netloc instead. No behavior change for bare hosts, dash/dot/plain MACs, hostnames, IPs, or bracketed IPv6 URLs.
+- Added tests: `tests/test_mac.py::test_normalize_target_url_with_colon_mac` (4 cases), `tests/test_mac.py::test_run_mac_url_with_colon_mac` (run-level regression), `tests/test_cli.py::test_mac_url_with_colon_mac_preserves_mac` (CLI-level regression).
+
+## Verification
+- `python -m pytest -q` → 46728 passed, 146 skipped, 0 failed (baseline 46725; +3 new tests).
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 267 source files.
+- `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed.
+- `python3 check_readme.py` → 54 commands, 0 drift both directions.
+- `git diff --check` → clean.
+- `python -m coverage run --branch --source=ethscan.mac -m pytest tests/test_mac.py tests/test_mac_formatter_hostile_sweep.py` → `ethscan/mac.py` 100% (189 stmts, 64 branches, 0 miss).
+- Reproduction after fix: `mac --target "https://00:1A:2B:3C:4D:5E/" --format json` → `mac: "00:1a:2b:3c:4d:5e"`, vendor lookup proceeds, exit 0.
+
+## Blockers
+- None.
+
+## Approaches already tried / ruled out
+- Fixing `ethscan.target.parse_url`/`normalize_host` to preserve colon-separated MAC authorities: rejected — those helpers are shared by 15+ modules that treat a colon as a host:port separator, and changing them would break the host:port contract for ftp/ldap/fuzz/headers. The defect is specific to `mac`, whose target is a MAC address (not a host:port), so the fix belongs in `_normalize_target`.
+- Using `parsed.netloc` unconditionally: rejected — it would re-introduce the port for normal URL targets (e.g. `https://example.com:8080/` → `example.com:8080`). The MAC check gates the fallback correctly.
+
+## Next task
+- None pending. Repository is fully green. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error). If future work is needed, pick one bounded, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls.

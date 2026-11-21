@@ -14184,6 +14184,46 @@ def test_mac_invalid_target_is_usage_error() -> None:
     assert "Could not parse host from target" in result.output
 
 
+def test_mac_url_with_colon_mac_preserves_mac(monkeypatch) -> None:
+    """A colon-separated MAC in a URL authority is normalized by run_mac.
+
+    ``urllib.parse`` splits the authority at the first colon, so
+    ``https://00:1A:2B:3C:4D:5E/`` would otherwise parse as host ``00``;
+    the CLI passes the raw target to ``run_mac``, which normalizes it to
+    the full MAC before the lookup.
+    """
+    captured: dict[str, object] = {}
+
+    def mock_run_mac(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
+        captured["target"] = target
+        return {
+            "target": target,
+            "mac": "00:1a:2b:3c:4d:5e",
+            "oui": "001a2b3c",
+            "timeout": timeout,
+            "use_cache": use_cache,
+            "offline_fallback": offline_fallback,
+            "mac_data": {
+                "mac": "00:1a:2b:3c:4d:5e",
+                "vendor": "Cisco Systems",
+                "cached": False,
+            },
+            "notes": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_mac", mock_run_mac)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["mac", "--target", "https://00:1A:2B:3C:4D:5E/", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    assert captured["target"] == "https://00:1A:2B:3C:4D:5E/"
+    assert "00:1a:2b:3c:4d:5e" in result.output
+    assert "Cisco Systems" in result.output
+
+
 def test_mac_out_option_json(tmp_path, monkeypatch) -> None:
     def mock_run_mac(target, timeout=5.0, use_cache=True, offline_fallback=True, api_url=None):
         return {

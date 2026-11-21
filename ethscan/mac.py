@@ -36,7 +36,15 @@ def _normalize_target(target: str) -> str:
     normalized = target.strip().lower()
     if "://" in normalized:
         parsed = parse_url(normalized)
-        normalized = (parsed.hostname or parsed.netloc or "").lower()
+        # ``urllib.parse`` splits the authority at the first colon, so a
+        # colon-separated MAC address in a URL authority (e.g.
+        # ``https://00:1A:2B:3C:4D:5E/``) yields ``hostname == "00"`` and a
+        # bogus port. When the parsed hostname is not itself a MAC address
+        # but the full authority is, use the authority instead.
+        host = parsed.hostname or ""
+        if not _is_mac_address(host) and _is_mac_address(parsed.netloc):
+            host = parsed.netloc
+        normalized = host
     # Strip any surrounding whitespace again after URL parsing
     normalized = normalized.strip()
     if not normalized:

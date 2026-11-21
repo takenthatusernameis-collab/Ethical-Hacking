@@ -69,6 +69,34 @@ def test_normalize_target_rejects_empty_target() -> None:
         _normalize_target("https://")
 
 
+def test_normalize_target_url_with_colon_mac() -> None:
+    """A colon-separated MAC in a URL authority is kept whole.
+
+    ``urllib.parse`` splits the authority at the first colon, so
+    ``https://00:1A:2B:3C:4D:5E/`` parses with ``hostname == "00"`` and a
+    bogus port. When the parsed hostname is not a MAC but the full authority
+    is, the authority is used instead, so the MAC is preserved.
+    """
+    assert _normalize_target("https://00:1A:2B:3C:4D:5E/") == "00:1a:2b:3c:4d:5e"
+    assert _normalize_target("https://00-1A-2B-3C-4D-5E/") == "00-1a-2b-3c-4d-5e"
+    assert _normalize_target("https://00.1A.2B.3C.4D.5E/") == "00.1a.2b.3c.4d.5e"
+    assert _normalize_target("https://001A2B3C4D5E/") == "001a2b3c4d5e"
+
+
+def test_run_mac_url_with_colon_mac(monkeypatch) -> None:
+    """run_mac normalizes a URL whose authority is a colon-separated MAC."""
+    monkeypatch.setattr("ethscan.mac._resolve_host", lambda h: pytest.fail("hostname must not be resolved"))
+    monkeypatch.setattr("ethscan.mac._get_cached_or_fetch",
+                        lambda *a, **kw: {"mac": "00:1a:2b:3c:4d:5e", "vendor": "Cisco", "cached": False})
+
+    result = run_mac("https://00:1A:2B:3C:4D:5E/", timeout=1.0, use_cache=False)
+
+    assert result["target"] == "https://00:1A:2B:3C:4D:5E/"
+    assert result["mac"] == "00:1a:2b:3c:4d:5e"
+    assert result["oui"] == "001a2b"
+    assert result["mac_data"]["vendor"] == "Cisco"
+
+
 # ---------------------------------------------------------------------------
 # Host resolution
 # ---------------------------------------------------------------------------
