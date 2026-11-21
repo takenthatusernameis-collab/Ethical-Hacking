@@ -30,3 +30,5 @@ Date: Sat Nov 21 2026
 
 ## Environment/notes
 - Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.6, coverage 7.17.3. Do not commit manually unless explicitly asked; the workflow controller stages and commits.
+
+(End of file - total 32 lines)

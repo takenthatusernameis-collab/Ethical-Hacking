@@ -26,3 +26,5 @@ Date: Sat Nov 21 2026
 
 ## Environment/notes
 - Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.6, coverage 7.17.3. No pytest-cov plugin; coverage via `python -m coverage run --branch --source=ethscan -m pytest`. Do not commit unless explicitly asked.
+
+(End of file - total 28 lines)
