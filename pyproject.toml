@@ -46,3 +46,10 @@ line-length = 88
 
 [tool.ruff.lint]
 select = ["F", "BLE001", "S110", "B"]
+
+[tool.coverage]
+fail_under = 100
+source = ["ethscan"]
+exclude_lines = [
+    "pragma: no cover",
+]

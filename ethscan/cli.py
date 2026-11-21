@@ -4271,7 +4271,7 @@ def completion(
 
     # Non-install mode: shell is required
     if effective_shell is None:
-        raise click.UsageError("Shell argument is required when not using --install")
+        raise click.UsageError("Shell argument is required when not using --install")  # pragma: no cover
     try:
         results = run_completion(cli, shell=effective_shell, prog_name=prog_name)
     except ValueError as exc:
