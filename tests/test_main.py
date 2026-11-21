@@ -184,6 +184,7 @@ def test_cli_module_as_main_runs_the_brute_command(monkeypatch, tmp_path, capsys
     pass_file.write_text("admin\n", encoding="utf-8")
 
     saved_argv = sys.argv
+    saved_cli_mod = sys.modules.get("ethscan.cli")
     sys.argv = [
         "ethscan.cli",
         "brute",
@@ -202,6 +203,20 @@ def test_cli_module_as_main_runs_the_brute_command(monkeypatch, tmp_path, capsys
             runpy.run_module("ethscan.cli", run_name="__main__")
     finally:
         sys.argv = saved_argv
+        # runpy executes the module without re-registering it, so the pop above
+        # would otherwise leak: a later test that imports ethscan.cli would get a
+        # *new* module object while still holding the original cli group, so a
+        # string-form monkeypatch of "ethscan.cli.<name>" would miss and the
+        # real code path (e.g. a live network call) would run. Restore the
+        # original module object to keep test order irrelevant.
+        if saved_cli_mod is not None:
+            sys.modules["ethscan.cli"] = saved_cli_mod
+
+    # Guard the isolation invariant: this test must not leak a popped module.
+    assert sys.modules.get("ethscan.cli") is saved_cli_mod, (
+        "ethscan.cli must survive this test unchanged so later tests patch the "
+        "same module object the captured cli group uses"
+    )
 
     report = json.loads(capsys.readouterr().out)
     assert report["attempts"] == 1
