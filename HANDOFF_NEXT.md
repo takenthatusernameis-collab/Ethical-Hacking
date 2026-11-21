@@ -2,8 +2,8 @@
 Date: Sat Nov 21 2026
 
 ## State
-- HEAD: `46a6afa` (main, working tree clean, no uncommitted changes). Two commits ahead of `e199a2e`; both are handoff-file HEAD-reference corrections only, no source/test change.
-- All gates green (independently re-verified this session):
+- HEAD: `46a6afa` (main, working tree clean, no uncommitted changes).
+- All gates green (re-verified this session):
   - `python -m pytest -q` -> 46729 passed, 146 skipped, 0 failed
   - `python -m coverage report --fail-under=100 --include='ethscan/*'` -> 100% (ethscan/ 16024 statements, 0 missed, 6046 branches, 0 partial)
   - `python -m mypy ethscan/ tests/` -> Success: no issues found in 267 source files
@@ -31,4 +31,4 @@ Date: Sat Nov 21 2026
 ## Environment/notes
 - Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.6, coverage 7.17.3. Do not commit manually unless explicitly asked; the workflow controller stages and commits.
 
-(End of file - total 32 lines)
+(End of file)
