@@ -6,14 +6,14 @@ Date: Sat Nov 21 2026 (independent steady-state re-verification; all gates confi
 - Note: the three most recent commits (`148fe1a`, `fa745d8`, `d385115`) touched only `NEXT_TASK.md` / `HANDOFF_NEXT.md` (control-marker-only). They are NOT project progress. The last substantive state is the full project at `ad9ab30`.
 
 ## What changed this session
-- None. Verification-only session. I independently re-ran the full gate suite at HEAD `d385115`; no source or test changes.
+- None. Verification-only session. I independently re-ran the fast gates at HEAD `d385115`; no source or test changes.
 
 ## What was verified (this session, with evidence)
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed
 - `python check_readme.py` -> 54 CLI commands; 0 drift both directions (In README but not CLI: none; In CLI but not README: none)
 - `python -m mypy ethscan/ tests/` -> Success: no issues found in 267 source files
-- `python -m pytest -q --no-header -p no:cacheprovider` -> 46744 passed, 146 skipped, 0 failed (127.72s)
-- `python -m coverage report --fail-under=100 --include='ethscan/*'` -> 100% (16024 statements, 0 missed, all modules 100%)
+- `python -m pytest -q --no-header -p no:cacheprovider` -> 46744 passed, 146 skipped, 0 failed (127.72s) [recorded at last full run; fast gates re-confirmed green this session with no tree changes]
+- `python -m coverage report --fail-under=100 --include='ethscan/*'` -> 100% (16024 statements, 0 missed, all modules 100%) [recorded at last full run]
 - Tools: Python 3.14.4; pytest 9.2.0; mypy 2.4.1; ruff 0.17.6; coverage 7.17.3.
 
 ## Gap investigation (evidence-based, no fabrication)

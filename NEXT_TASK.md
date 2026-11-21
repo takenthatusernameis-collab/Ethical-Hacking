@@ -5,8 +5,8 @@ No genuine pending task. Repository independently re-verified green this session
 - `ruff check ethscan/ tests/ check_readme.py` -> All checks passed
 - `check_readme.py` -> 54 commands, 0 drift
 - `mypy ethscan/ tests/` -> Success (267 source files)
-- `pytest -q` -> 46744 passed, 146 skipped, 0 failed (127.72s)
-- `coverage --fail-under=100 --include='ethscan/*'` -> 100% statement/branch on every module (16024 statements, 0 missed)
+- `pytest -q` -> 46744 passed, 146 skipped, 0 failed (127.72s) [recorded at last full run; fast gates re-confirmed green this session with no tree changes]
+- `coverage --fail-under=100 --include='ethscan/*'` -> 100% statement/branch on every module (16024 statements, 0 missed) [recorded at last full run]
 
 ## Do not re-implement (already done / verified)
 - ICMPv6 raw ping in `ethscan/ping.py` — fully implemented and tested at 100% branch coverage.
