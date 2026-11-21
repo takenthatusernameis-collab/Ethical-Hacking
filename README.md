@@ -240,20 +240,51 @@ Error: Invalid value for '--target': Could not parse host from target ''
 ```
 
 A valid host whose name cannot be an S3 bucket is still reported as a failed
-probe inside its own output (the probe fails, not the target parsing); other
-candidates are unaffected:
+probe inside its own output (the probe fails, not the target parsing); all 77
+derived candidates fail with the same error:
 
 ```console
 $ python -m ethscan s3 --target "[::1]:443"
 {
-  "bucket": "::1",
+  "target": "[::1]:443",
+  "domain": "::1",
   "region": "us-east-1",
-  "url": "https://::1.s3.amazonaws.com/",
-  "dns_resolved": null,
-  "status_code": null,
-  "exists": false,
-  "public": false,
-  "error": "Invalid bucket name: contains characters that are not allowed in a bucket name"
+  "timeout": 5.0,
+  "workers": 20,
+  "wordlist_used": false,
+  "candidates_tested": 77,
+  "regions_checked": [
+    "us-east-1"
+  ],
+  "results": [
+    {
+      "bucket": "::1",
+      "region": "us-east-1",
+      "url": "https://::1.s3.amazonaws.com/",
+      "dns_resolved": null,
+      "status_code": null,
+      "exists": false,
+      "public": false,
+      "error": "Invalid bucket name: contains characters that are not allowed in a bucket name"
+    },
+    {
+      "bucket": "::1-admin",
+      "region": "us-east-1",
+      "url": "https://::1-admin.s3.amazonaws.com/",
+      "dns_resolved": null,
+      "status_code": null,
+      "exists": false,
+      "public": false,
+      "error": "Invalid bucket name: contains characters that are not allowed in a bucket name"
+    },
+    "... 75 more results with the same error ..."
+  ],
+  "public_buckets": [],
+  "private_buckets": [],
+  "existing_buckets": [],
+  "notes": [
+    "None of the 77 derived bucket names is a valid S3 bucket name."
+  ]
 }
 ```
 
