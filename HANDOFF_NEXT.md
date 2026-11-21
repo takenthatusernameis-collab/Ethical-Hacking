@@ -2,8 +2,8 @@
 Date: Sat Nov 21 2026 (independent re-verification, gates confirmed green)
 
 ## State
-- HEAD: `3acf89d` (main, working tree clean, `git diff --check` clean).
-- All gates green (re-verified this session by the new agent, no source/test changes):
+- HEAD: `ad9ab30` (main, working tree clean, `git diff --check` clean). Handoff previously recorded `3acf89d`; state re-confirmed at current HEAD.
+- All gates green (independently re-verified this session, no source/test changes):
   - `python -m pytest -q --no-header -p no:cacheprovider` -> 46744 passed, 146 skipped, 0 failed (105s)
   - `python -m mypy ethscan/ tests/` -> Success: no issues found in 267 source files
   - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed
@@ -11,7 +11,7 @@ Date: Sat Nov 21 2026 (independent re-verification, gates confirmed green)
   - `python -m coverage report --fail-under=100 --include='ethscan/*'` -> 100% (ethscan/ 16024 statements, 0 missed, 6046 branches, 0 partial)
 
 ## What changed this session
-- None (verification-only session). Independently re-ran the full gate suite at HEAD `3acf89d`; no source or test changes; working tree clean.
+- None (verification-only session). Independently re-ran the full gate suite at HEAD `ad9ab30`; no source or test changes; working tree clean.
 
 ## Gap investigation (evidence-based, no fabrication)
 - Grepped `ethscan/` and `tests/` for TODO/FIXME/XXX/HACK: none found.

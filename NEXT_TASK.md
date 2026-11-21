@@ -1,6 +1,6 @@
 # Next Task
 
-No genuine pending task. Repository independently re-verified green this session:
+No genuine pending task. Repository independently re-verified green this session at HEAD `ad9ab30`:
 
 - `pytest -q` -> 46744 passed, 146 skipped, 0 failed
 - `mypy ethscan/ tests/` -> Success (267 source files)
