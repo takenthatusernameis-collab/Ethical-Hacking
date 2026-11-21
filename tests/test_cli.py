@@ -23557,6 +23557,31 @@ def test_config_markdown_command_no_overrides(tmp_path) -> None:
     assert result.exit_code == 0
     assert 'No overrides' in result.output
 
+def test_config_markdown_includes_notes_section(tmp_path) -> None:
+    """The markdown config report ends with a Notes section explaining precedence.
+
+    Regression guard: the refactor that moved formatting into
+    ``config.format_config_report_markdown`` initially dropped the Notes
+    section that the inline CLI code emitted. Every other formatter in the
+    codebase renders a Notes section, so the config report must too.
+    """
+    cfg = tmp_path / 'ethscan.yaml'
+    cfg.write_text('defaults:\n  timeout: 5\n')
+    runner = CliRunner()
+    result = runner.invoke(cli, ['config', '--config', str(cfg), '--format', 'markdown'])
+    assert result.exit_code == 0
+    assert '## Notes' in result.output
+    assert 'CLI arguments always take precedence over config values.' in result.output
+    assert 'ethscan config --init PATH' in result.output
+
+def test_config_markdown_notes_present_without_file() -> None:
+    """Notes render even when no config file is found (built-in defaults)."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ['config', '--format', 'markdown'])
+    assert result.exit_code == 0
+    assert '## Notes' in result.output
+    assert 'CLI arguments always take precedence over config values.' in result.output
+
 def test_completion_run_raises_value_error(monkeypatch) -> None:
     def mock_run(*args, **kwargs):
         raise ValueError("bad shell")

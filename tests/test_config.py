@@ -2,6 +2,8 @@
 
 from typing import Any
 
+import json
+
 import pytest
 import yaml
 from click.testing import CliRunner
@@ -18,6 +20,8 @@ from ethscan.config import (
     dump_default_config,
     find_config_file,
     format_config_report_csv,
+    format_config_report_json,
+    format_config_report_markdown,
     load_config,
     save_config,
     validate_config,
@@ -421,6 +425,51 @@ def test_format_config_report_csv_escaping() -> None:
     }
     output = format_config_report_csv(config)
     assert '"Hello, World"' in output
+
+def test_format_config_report_json_basic() -> None:
+    config = {
+        "_path": "/etc/ethscan.yaml",
+        "defaults": {"timeout": 3.0},
+        "commands": {"scan": {"ports": "common"}},
+    }
+    output = format_config_report_json(config)
+    parsed = json.loads(output)
+    assert parsed["config_file"] == "/etc/ethscan.yaml"
+    assert parsed["defaults"] == {"timeout": 3.0}
+    assert parsed["commands"] == {"scan": {"ports": "common"}}
+    assert "parse_error" not in parsed
+
+def test_format_config_report_json_with_parse_error() -> None:
+    config = {"_parse_error": "Failed to parse"}
+    parsed = json.loads(format_config_report_json(config))
+    assert parsed["parse_error"] == "Failed to parse"
+
+def test_format_config_report_markdown_includes_notes() -> None:
+    """The markdown report ends with a Notes section explaining precedence.
+
+    Regression guard: the refactor that extracted formatting into
+    ``format_config_report_markdown`` initially dropped the Notes section that
+    the inline CLI code emitted.
+    """
+    config = {
+        "_path": "/etc/ethscan.yaml",
+        "defaults": {"timeout": 3.0},
+        "commands": {"scan": {"ports": "common"}},
+    }
+    output = format_config_report_markdown(config)
+    assert "# ethscan Configuration" in output
+    assert "## Global Defaults" in output
+    assert "## Per-Command Overrides" in output
+    assert "## Notes" in output
+    assert "CLI arguments always take precedence over config values." in output
+    assert "ethscan config --init PATH" in output
+
+def test_format_config_report_markdown_no_file_includes_notes() -> None:
+    """Notes render even when no config file is found (built-in defaults)."""
+    output = format_config_report_markdown({})
+    assert "No config file found" in output
+    assert "## Notes" in output
+    assert "CLI arguments always take precedence over config values." in output
 
 def test_find_config_file_oserror_on_is_file(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)

@@ -1,29 +1,28 @@
 # Next Task
-Date: Fri Nov 20 2026
+Date: Sat Nov 21 2026
 
 ## Status
-- Green: **46710 passed, 146 skipped, 0 failed**; mypy Success (267 source files); ruff clean; `check_readme.py` 54 commands, 0 drift both directions; `git diff --check` clean.
-- Working tree clean.
-- The prior assigned task (`TARGET_USAGE_ERROR_COMMANDS` auto-discovery) is COMPLETE and committed (8d7667b).
-- **No pending assigned task.**
+- Green: **46725 passed, 146 skipped, 0 failed**; mypy Success (267 source files); ruff clean; `check_readme.py` 54 commands, 0 drift both directions; `git diff --check` clean.
+- Working tree clean after this session's commit.
+- This session's assigned task (restore the config markdown "## Notes" section dropped by commit `8581370`) is COMPLETE and committed.
 
 ## This session (what changed)
-- No source or test changes. Investigated the candidate next task from the prior handoff — extend formatter hostile-shape hardening beyond `findings`/`dangerous_findings` for ftp/ntp/oracle/smtp/snmp plus `ldap` `root_dse`.
-- Ran a reproduction fuzzer over all `format_*_report_markdown`/`_csv` functions plus per-field hostile injection on the named modules' list fields: **0 crashes**. Those formatters are already guarded via their `_normalize_*` helpers and f-string/csv stringification.
-- Per "do not fix speculatively without a reproduced crash," no changes were made. The candidate task is exhausted and must not be repeated.
+- **Task: restore the "## Notes" section in `format_config_report_markdown` (`ethscan/config.py`).**
+- Evidence: commit `8581370` extracted config formatting from `ethscan/cli.py` into `ethscan/config.py`. The inline CLI markdown code emitted a trailing `## Notes` section (CLI-args-precedence + `--init` hint bullets); the extracted `format_config_report_markdown` silently dropped it. Every other formatter in the codebase renders `## Notes` (and many tests assert it), so the config report was the lone outlier.
+- Fix: appended the `## Notes` section (same wording) to `format_config_report_markdown`. No other behavior changed.
+- Tests: 4 new unit tests in `tests/test_config.py` (json + markdown incl. Notes) and 2 new CLI regression tests in `tests/test_cli.py`.
 
 ## Verification
-- `python -m pytest -q` → 46710 passed, 146 skipped, 0 failed.
+- `python -m pytest -q` → 46725 passed, 146 skipped, 0 failed.
 - `python -m mypy ethscan/ tests/` → Success: no issues found in 267 source files.
-- `python -m mypy --check-untyped-defs ethscan/ tests/` → Success: no issues found in 267 source files.
 - `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed.
 - `python3 check_readme.py` → 54/54, 0 drift both directions.
-- Fuzzer: 0 crashes across all formatters / hostile field shapes.
-- Module review (target.py, config.py, fileio.py, mac.py, scanner.py, validate.py, passwords.py, report.py; CLI scan/report handlers; test_cli_cov_gaps.py): no bugs or gaps found. All targets validated, all formatters hardened, all README examples tested, 100% coverage except documented unreachable `cli.py` guard. No source or test changes made (baseline left intact).
+- Focused: config tests 151 passed/3 skipped; `test_cli.py -k config` 55 passed.
 
 ## Candidate next task (for the next agent — reproduce first)
-- None pending. The formatter-hostile-shape candidate is **not reproducible** (0 crashes) for ftp/ntp/oracle/smtp/snmp/ldap; do not batch, re-fuzz, or add unneeded guards for those modules.
-- If future work is needed, pick ONE bounded, high-value, verifiable improvement after your own investigation. Do not repeat the failed formatter-fuzzing approach for the same modules.
+- None pending. This session's Notes-restoration task is COMPLETE.
+- Do NOT repeat: (a) formatter-hostile-shape fuzzing for ftp/ntp/oracle/smtp/snmp/ldap (exhausted, 0 crashes across all formatters), or (b) speculative changes without a reproduced defect.
+- If future work is needed, pick ONE bounded, high-value, verifiable improvement after your own investigation (reproduce a concrete defect first).
 - Constraint: keep architecture stable; no new dependencies; tests deterministic (no real network/DNS); `mac`/`oracle`/`postgresql`/`web`/`headers` contracts remain out of scope.
 
 ## Environment/notes

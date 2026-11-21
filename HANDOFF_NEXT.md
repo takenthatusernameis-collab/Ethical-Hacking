@@ -1,39 +1,40 @@
 # Handoff
-Date: Fri Nov 20 2026
+Date: Sat Nov 21 2026
 
 ## State
-- HEAD: 8d7667b (main, up to date with origin/main).
-- Working tree clean — no uncommitted changes. (The prior session's `tests/test_cli.py` auto-discovery change was committed in 0dd8af2/8d7667b.)
+- HEAD: (this session's commit, on top of 5196241) — main, up to date with origin/main at session start.
+- Working tree clean before this session's commit; this session made one focused source fix + tests.
 - All gates green this session:
-  - `python -m pytest -q` → 46710 passed, 146 skipped, 0 failed.
+  - `python -m pytest -q` → 46725 passed, 146 skipped, 0 failed (was 46719 before; +6 new tests).
   - `python -m mypy ethscan/ tests/` → Success: no issues found in 267 source files.
   - `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed.
   - `python3 check_readme.py` → 54 CLI commands; 0 drift both directions.
-  - `tests/test_readme_sync.py`: 5 passed.
+  - `git diff --check` → clean (no whitespace errors).
 
-## What changed this session
-- No source or test changes. Conducted an evidence-based investigation of the pending candidate task (formatter hostile-shape hardening beyond `findings`/`dangerous_findings` for ftp/ntp/oracle/smtp/snmp + `ldap` `root_dse`).
-- Wrote and ran a reproduction fuzzer over every `format_*_report_markdown`/`_csv` function plus per-field hostile injection on every list-ish field of ftp/ntp/oracle/smtp/snmp/ldap: **0 crashes** across all formatters.
-- Conclusion: the candidate task is **not reproducible** — those modules are already guarded (`_normalize_findings`/`_normalize_peers`/`_normalize_users`/`_normalize_communities`/`_normalize_valid_communities`/`_normalize_root_dse` coerce hostile shapes; f-strings and the csv writer stringify remaining elements). Per the rule "do not fix speculatively without a reproduced crash," no guards were added and no tests were written for it.
+## What changed this session (the assigned task)
+- **Task: restore the dropped "## Notes" section in the config markdown report.**
+  - Evidence: commit `8581370` refactored config formatting out of `ethscan/cli.py` into `ethscan/config.py` (`format_config_report_json`/`format_config_report_markdown`). The inline CLI markdown code previously ended with a `## Notes` section (two bullets: CLI-args-precedence + `--init` hint). The extracted `format_config_report_markdown` silently dropped it. Every other formatter in the codebase (`hash`, `geo`, `cve`, `vuln`, `wifi`, `web`, `s3`, `validate`, `dnssec`, `cert`, `mac`, `ping`, `recon`, `nmap`, `osdetect`, `ldap`, ...) renders a `## Notes` section and many tests assert its presence — so the config report was the lone outlier.
+  - Fix (`ethscan/config.py`): appended the `## Notes` section (same two bullets, same wording) at the end of `format_config_report_markdown`, matching the original inline output. No other behavior changed.
+  - Tests added:
+    - `tests/test_config.py`: `test_format_config_report_json_basic`, `test_format_config_report_json_with_parse_error`, `test_format_config_report_markdown_includes_notes`, `test_format_config_report_markdown_no_file_includes_notes` (+ `json` import + `format_config_report_json`/`_markdown` imports).
+    - `tests/test_cli.py`: `test_config_markdown_includes_notes_section`, `test_config_markdown_notes_present_without_file` (CLI-level regression guards).
 
 ## What was verified (this session)
-- Full gate above green.
-- Fuzzer: 0 crashes on all formatters with hostile top-level data (None/int/str/dict/bytes/list) and hostile per-field values, including ftp/ntp/oracle/smtp/snmp/ldap list fields.
+- Full gate above green (46725 passed, 0 failed).
+- Focused: `tests/test_config.py`, `tests/test_config_hostile_sweep.py`, `tests/test_config_value_sweep.py` → 151 passed, 3 skipped.
+- `tests/test_cli.py -k config` → 55 passed.
+- mypy + ruff clean on changed files and whole tree.
 
 ## Remaining / known limitations (intentional, out of scope)
 - `ethscan/cli.py` unreachable defensive guard (coverage intentionally not gamed).
 - `oracle`/`postgresql` empty/invalid-target handling in-band (exit 0) by documented contract.
 - `mac` reports unresolvable/non-MAC targets in-band (exit 0) by design.
 - `web`/`headers` accept `:6379` as host:port (exit 0, in-band) — pre-existing, excluded from guard.
+- Pre-existing whitespace normalization differences in `format_config_report_markdown` (e.g. blank line before `## Warnings`) introduced by the `8581370` refactor are intentionally NOT reverted here — out of scope for the Notes-restoration task; the Notes section itself matches the original wording/placement.
 
-## This session (Fri Nov 20 2026) — inspection only
-- Independently re-verified the true baseline from a clean tree: `pytest -q` → 46710 passed, 146 skipped, 0 failed; `mypy --check-untyped-defs ethscan/ tests/` → Success (267 source files); `ruff check ethscan/ tests/ check_readme.py` → clean; `check_readme.py` → 54 commands, 0 drift both directions.
-- Reviewed `ethscan/target.py`, `config.py`, `fileio.py`, `mac.py`, `scanner.py`, `validate.py`, `passwords.py`, `report.py`, plus CLI `scan`/`report` handlers and `tests/test_cli_cov_gaps.py` for real bugs/gaps. None found: all target-taking commands validate via `normalize_host`/`_validate_enum_target`, all formatters hardened, all 12 README console examples have regression tests, 100% coverage (except the documented unreachable `cli.py` guard).
-- Per the reliability rules ("if no evidenced gap is found after inspection, document what was checked and leave the baseline intact") and the prohibition on speculative changes, no source or test changes were made. Baseline left intact.
-
-## Next task (candidate for next agent — do NOT repeat the fuzzed batch)
-- **No pending assigned task.** The formatter-hostile-shape candidate (ftp/ntp/oracle/smtp/snmp/ldap list fields beyond findings) has been reproduced and found clean (0 crashes); do not re-fuzz or re-guard those modules.
-- If future work is needed, the next agent should inspect this handoff and select ONE fresh bounded, high-value, verifiable task after their own investigation — do not repeat the failed formatter-fuzzing approach for the same modules.
+## Next task (candidate for next agent)
+- **No pending assigned task.** This session's task (restore config markdown Notes) is COMPLETE.
+- If future work is needed, select ONE fresh bounded, high-value, verifiable improvement after your own investigation. Do NOT repeat: (a) the formatter-hostile-shape fuzzing for ftp/ntp/oracle/smtp/snmp/ldap (exhausted, 0 crashes), or (b) speculative changes without a reproduced defect.
 - Constraint: keep architecture stable; no new dependencies; tests deterministic (no real network/DNS); `mac`/`oracle`/`postgresql`/`web`/`headers` contracts remain out of scope.
 
 ## Environment/notes

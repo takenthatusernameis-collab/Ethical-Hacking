@@ -440,6 +440,11 @@ def format_config_report_markdown(config: dict[str, Any], warnings: list[str] | 
         lines.append("*No per-command overrides configured.*")
         lines.append("")
 
+    lines.append("## Notes")
+    lines.append("- CLI arguments always take precedence over config values.")
+    lines.append("- Use `ethscan config --init PATH` to create a sample config file.")
+    lines.append("")
+
     return "\n".join(lines)
 
 
