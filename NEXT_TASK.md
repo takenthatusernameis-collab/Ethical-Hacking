@@ -1,27 +1,24 @@
 # Next Task
 
-## Status: service-detection coverage gap CLOSED this session
+## Status: no genuine pending task; repo verified green (this session)
 
-The scanner service-detection feature (`scanner.grab_banner`, `scanner.scan_ports_with_service`, CLI `--service-detect`, and the markdown/CSV `service_detect` formatter branches) added in `f9487f9` had **zero tests**. Fresh coverage before this session was 99.73% (44 missing lines: scanner.py 70-92, 115-126, 328, 337-338, 347-350, 367, 377-378; cli.py 996-998). The prior "100%" claim came from a stale committed `coverage.json` (initial import `ad9ab30`).
-
-This session added `tests/test_scanner_service_detect.py` (14 tests) and regenerated `coverage.json`. Fresh evidence:
+This session was verification-only. Fast gates + full suite re-run independently confirmed the baseline is unchanged:
 
 - `ruff check ethscan/ tests/ check_readme.py` -> All checks passed
-- `check_readme.py` -> 54 commands, 0 drift
+- `check_readme.py` -> 54 commands, 0 drift both directions
 - `mypy ethscan/ tests/` -> Success (268 source files)
-- `pytest -q` -> **46758 passed, 146 skipped, 0 failed**
-- `coverage report` -> **100% (16081 stmts, 0 miss)**; `--fail-under=100` exits 0
+- `pytest -q` -> **46758 passed, 146 skipped, 0 failed** (baseline unchanged)
+- `coverage report --fail-under=100` -> exit 0 (100%)
 
-## Test-pollution trap (read before writing more CLI tests)
-- `tests/test_main.py` pops `ethscan.cli` from `sys.modules` (and doesn't restore it). Test files ordered after `test_main.py` that import `cli` at module load and then use a **string** monkeypatch target on `ethscan.cli.*` will patch the wrong module and hit the **real network**. Use object-form: `import ethscan.cli as cli_module` + `monkeypatch.setattr(cli_module, "attr", ...)`.
+The scanner service-detection feature (`scanner.grab_banner`, `scanner.scan_ports_with_service`, CLI `--service-detect`, markdown/CSV `service_detect` branches) added in `f9487f9` is fully implemented AND tested at 100% coverage.
 
 ## Do not re-implement / do not "fix" (already done / intended)
-- Service detection (`grab_banner`, `scan_ports_with_service`, `--service-detect`, formatter branches) — now fully implemented AND tested at 100%.
+- Service detection — now fully implemented AND tested at 100%.
 - All 146 skips are intentional structural skips; none indicate a coverage gap.
 - `hash --check` 32-char ambiguity (md5 preferred; use `--algorithm` for ntlm/md4) — DOCUMENTED + TESTED design, not a bug.
 - `oracle`/`postgresql` empty-target in-band handling — documented contract (exit 0).
 - `ethscan/cli.py` completion non-install unreachable guard (`# pragma: no cover`) — documented limitation.
-- `coverage.json` is now current (100%); do not treat a stale value as ground truth — regenerate with `python -m coverage run --source=ethscan -m pytest` then `python -m coverage json`.
+- `coverage.json` is current (100%); do not treat a stale value as ground truth — regenerate with `python -m coverage run --source=ethscan -m pytest` then `python -m coverage json`.
 
 ## Next session guidance
 1. Run the fast gates first: `ruff`, `mypy`, `check_readme.py`. If all green, run `python -m pytest -q` once and `coverage report` to confirm; if green, stop.
