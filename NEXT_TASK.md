@@ -26,4 +26,4 @@ Date: Sat Nov 21 2026
 - `ethscan/cli.py` unreachable defensive guard (~cli.py:4318); `oracle`/`postgresql` empty-target handling (exit 0, in-band error); PBKDF2+NTLM intentionally unsupported.
 
 ## Environment/notes
-- Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.6, coverage 7.17.3. Do not commit manually unless explicitly asked; the workflow controller stages and commits.
+- Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.5, coverage 7.17.3. No pytest-cov plugin; coverage via `python -m coverage run --branch --source=ethscan -m pytest`. Do not commit unless explicitly asked.
