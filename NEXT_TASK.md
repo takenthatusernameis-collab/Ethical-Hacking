@@ -3,7 +3,7 @@ Date: Sat Nov 21 2026
 
 ## Status
 - Green: **46729 passed, 146 skipped, 0 failed** (`pytest -q`); mypy Success (267 source files); ruff clean; `check_readme.py` 54 commands, 0 drift both directions; `git diff --check` clean; working tree clean.
-- HEAD `e199a2e` (main); all prior session work committed; no uncommitted changes. Two commits ahead of `81c65ca`; both handoff-file HEAD-reference corrections only.
+- HEAD `46a6afa` (main); all prior session work committed; no uncommitted changes. Two commits ahead of `e199a2e`; both handoff-file HEAD-reference corrections only.
 - Coverage gate enforced: `coverage report --fail-under=100 --include='ethscan/*'` -> 100% (ethscan/ 16024 statements, 0 missed, 6046 branches, 0 partial).
 
 ## This session (what changed)
