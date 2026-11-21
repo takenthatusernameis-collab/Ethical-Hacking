@@ -1,9 +1,9 @@
 # Handoff
-Date: Sat Nov 21 2026 (independent re-verification, gates confirmed green)
+Date: Sat Nov 21 2026 (steady-state re-verification, gates confirmed green)
 
 ## State
-- HEAD: `ad9ab30` (main, working tree clean, `git diff --check` clean). Handoff previously recorded `3acf89d`; state re-confirmed at current HEAD.
-- All gates green (independently re-verified this session, no source/test changes):
+- HEAD: `ad9ab30` (main, working tree clean, `git diff --check` clean). No source/test changes this session; state re-confirmed at current HEAD.
+- All gates green (re-verified this session):
   - `python -m pytest -q --no-header -p no:cacheprovider` -> 46744 passed, 146 skipped, 0 failed (105s)
   - `python -m mypy ethscan/ tests/` -> Success: no issues found in 267 source files
   - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed
