@@ -261,6 +261,7 @@ from ethscan.scanner import (
     get_profile_ports,
     resolve_port_list,
     scan_ports,
+    scan_ports_with_service,
 )
 from ethscan.service import (
     format_service_report_csv,
@@ -942,6 +943,12 @@ def _check_config_path(path: str) -> None:
 @click.option("--timeout", default=1.0, type=click.FloatRange(min=0.001), help="Connection timeout in seconds")
 @click.option("--workers", default=100, type=click.IntRange(min=1), help="Maximum concurrent workers")
 @click.option(
+    "--service-detect/--no-service-detect",
+    "service_detect",
+    default=False,
+    help="Attempt to grab service banners for open ports.",
+)
+@click.option(
     "--output-format",
     "output_fmt",
     type=click.Choice(["json", "markdown", "csv"]),
@@ -968,7 +975,7 @@ def _check_config_path(path: str) -> None:
     help="Filter scan results to open ports only (JSON, Markdown, and CSV output).",
 )
 @click.pass_context
-def scan(ctx: click.Context, target: str, ports: str, profile: str | None, timeout: float, workers: int, output_fmt: str | None, fmt: str, out_path: str | None, open_only: bool) -> None:
+def scan(ctx: click.Context, target: str, ports: str, profile: str | None, timeout: float, workers: int, service_detect: bool, output_fmt: str | None, fmt: str, out_path: str | None, open_only: bool) -> None:
     """Run a port scan against TARGET."""
     host = normalize_host(target)
     if profile:
@@ -985,11 +992,15 @@ def scan(ctx: click.Context, target: str, ports: str, profile: str | None, timeo
     else:
         port_list = _resolve_ports(ports)
 
-    results = scan_ports(host, port_list, timeout=timeout, max_workers=workers)
+    if service_detect:
+        results = scan_ports_with_service(host, port_list, timeout=timeout, max_workers=workers, service_detect=True)
+        open_ports = [port for port, is_open, _ in results if is_open]
+        scan_details = [{"port": port, "open": is_open, "banner": banner} for port, is_open, banner in results]
+    else:
+        simple_results = scan_ports(host, port_list, timeout=timeout, max_workers=workers)
+        open_ports = [port for port, is_open in simple_results if is_open]
+        scan_details = [{"port": port, "open": is_open} for port, is_open in simple_results]
 
-    open_ports = [port for port, is_open in results if is_open]
-
-    scan_details = [{"port": port, "open": is_open} for port, is_open in results]
     if open_only:
         scan_details = [d for d in scan_details if d["open"]]
 
@@ -1002,6 +1013,7 @@ def scan(ctx: click.Context, target: str, ports: str, profile: str | None, timeo
         "open_ports": open_ports,
         "details": scan_details,
         "open_only": open_only,
+        "service_detect": service_detect,
     }
 
     # --output-format takes precedence over the deprecated --format alias

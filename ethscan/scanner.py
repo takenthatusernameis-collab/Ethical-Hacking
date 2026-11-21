@@ -56,6 +56,76 @@ def scan_ports(
     return sorted(results, key=lambda x: x[0])
 
 
+def grab_banner(host: str, port: int, timeout: float) -> str | None:
+    """Attempt to grab a banner from an open port.
+
+    Args:
+        host: Target hostname or IP address.
+        port: Port number to connect to.
+        timeout: Connection timeout in seconds.
+
+    Returns:
+        Banner string if successful, None otherwise.
+    """
+    try:
+        with socket.create_connection((host, port), timeout=timeout) as sock:
+            sock.settimeout(timeout)
+            try:
+                data = sock.recv(1024)
+                if data:
+                    return data.decode("utf-8", errors="ignore").strip()
+            except Exception:  # noqa: BLE001, S110 - transport can raise any type
+                pass
+
+            # For HTTP/HTTPS ports, send a HEAD request to elicit a response
+            if port in (80, 443, 8080, 8443, 8888):
+                try:
+                    request = f"HEAD / HTTP/1.0\r\nHost: {host}\r\n\r\n"
+                    sock.sendall(request.encode())
+                    data = sock.recv(1024)
+                    if data:
+                        return data.decode("utf-8", errors="ignore").strip()
+                except Exception:  # noqa: BLE001, S110 - transport can raise any type
+                    pass
+    except Exception:  # noqa: BLE001, S110 - transport can raise any type
+        pass
+    return None
+
+
+def scan_ports_with_service(
+    host: str,
+    ports: list[int],
+    timeout: float = 1.0,
+    max_workers: int = 100,
+    service_detect: bool = False,
+) -> list[tuple[int, bool, str | None]]:
+    """Scan multiple ports on the target host concurrently, optionally with service detection.
+
+    Args:
+        host: Target hostname or IP address.
+        ports: List of port numbers to scan.
+        timeout: Connection timeout in seconds.
+        max_workers: Maximum number of concurrent threads.
+        service_detect: If True, attempt to grab banners for open ports.
+
+    Returns:
+        List of (port, is_open, banner) tuples. banner is None if service_detect is False
+        or if banner grabbing failed.
+    """
+    results = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_port = {
+            executor.submit(scan_port, host, port, timeout): port for port in ports
+        }
+        for future in as_completed(future_to_port):
+            port, is_open = future.result()
+            banner = None
+            if service_detect and is_open:
+                banner = grab_banner(host, port, timeout)
+            results.append((port, is_open, banner))
+    return sorted(results, key=lambda x: x[0])
+
+
 MAX_PORT = 65535
 
 
@@ -236,6 +306,8 @@ def get_profile_defaults(profile: str) -> dict[str, Any]:
 
 def format_scan_report_json(data: dict[str, object]) -> str:
     """Format scan results as JSON."""
+    if not isinstance(data, dict):
+        data = {}
     return json.dumps(data, indent=2, default=str)
 
 
@@ -251,6 +323,9 @@ def format_scan_report_markdown(data: dict[str, object]) -> str:
     if not isinstance(open_ports, list):
         open_ports = []
     lines.append(f"- **Open Ports:** {', '.join(map(str, open_ports)) if open_ports else 'None'}")
+    service_detect = data.get('service_detect', False)
+    if service_detect:
+        lines.append("- **Service Detection:** Enabled")
     lines.append("")
 
     details = data.get("details") or []
@@ -258,13 +333,23 @@ def format_scan_report_markdown(data: dict[str, object]) -> str:
         details = []
     if details:
         lines.append("## Port Details")
-        lines.append("| Port | Status |")
-        lines.append("|------|--------|")
+        if service_detect:
+            lines.append("| Port | Status | Service / Banner |")
+            lines.append("|------|--------|------------------|")
+        else:
+            lines.append("| Port | Status |")
+            lines.append("|------|--------|")
         for detail in details:
             if not isinstance(detail, dict):
                 continue
             status = "Open" if detail.get("open") else "Closed"
-            lines.append(f"| {detail.get('port')} | {status} |")
+            if service_detect and detail.get("banner"):
+                banner = str(detail.get("banner")).replace("|", "\\|")
+                if len(banner) > 80:
+                    banner = banner[:77] + "..."
+                lines.append(f"| {detail.get('port')} | {status} | {banner} |")
+            else:
+                lines.append(f"| {detail.get('port')} | {status} |")
     else:
         lines.append("*No ports scanned.*")
 
@@ -273,16 +358,24 @@ def format_scan_report_markdown(data: dict[str, object]) -> str:
 
 def format_scan_report_csv(data: dict[str, object]) -> str:
     """Format scan results as CSV."""
+    if not isinstance(data, dict):
+        data = {}
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["port", "open"])
-    if not isinstance(data, dict):
-        return output.getvalue().rstrip("\r\n")
+    service_detect = data.get('service_detect', False)
+    if service_detect:
+        writer.writerow(["port", "open", "banner"])
+    else:
+        writer.writerow(["port", "open"])
     details = data.get("details") or []
     if not isinstance(details, list):
         details = []
     for detail in details:
         if not isinstance(detail, dict):
             continue
-        writer.writerow([detail.get("port"), "true" if detail.get("open") else "false"])
+        if service_detect:
+            banner = detail.get("banner", "") or ""
+            writer.writerow([detail.get("port"), "true" if detail.get("open") else "false", banner])
+        else:
+            writer.writerow([detail.get("port"), "true" if detail.get("open") else "false"])
     return output.getvalue().rstrip("\r\n")
