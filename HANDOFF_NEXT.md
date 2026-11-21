@@ -13,7 +13,7 @@ Date: Sat Nov 21 2026
   - `git diff --check` -> clean
 
 ## What changed this session
-- None (verification-only session). Independently re-ran the full gate suite at HEAD `e8f2c0f`; no source or test changes made; working tree clean. HANDOFF_NEXT.md/NEXT_TASK.md state confirmed accurate.
+- None (verification-only session). Independently re-ran the full gate suite at HEAD `a5a8f0a`; no source or test changes made; working tree clean. HANDOFF_NEXT.md/NEXT_TASK.md state confirmed accurate.
 
 ## What was verified (this session)
 - `python -m pytest -q` -> 46744 passed, 146 skipped, 0 failed
@@ -30,6 +30,7 @@ Date: Sat Nov 21 2026
 ## Next task (candidate for next agent)
 - Re-run the full gate suite (pytest + coverage --fail-under=100 --include='ethscan/*' + mypy + ruff + check_readme) to confirm steady state is still green.
 - Otherwise select a new bounded durability task only if a genuine gap is demonstrated (reproduce first); do not fabricate work — the repo is at a steady state with all gates green and 100% ethscan/ coverage.
+- Suggested bounded follow-up (only if new work is requested): Implement real ICMPv6 raw ping in `ethscan/ping.py`: create `socket.AF_INET6`/`IPPROTO_ICMPV6` raw sockets, build/parse Echo Request/Reply (type 128/129) with the IPv6 pseudo-header checksum, and keep the existing TCP fallback for unprivileged users. Reproduce first with a fake raw socket; keep `raw_socket_available` accurate for both families and `ping.py` at 100% branch coverage. Do not remove the IPv4 raw path or change exit-code contracts.
 
 ## Environment/notes
 - Python 3.14.4; pytest 9.2.0, mypy 2.4.1, ruff 0.17.6, coverage 7.17.3. Do not commit manually unless explicitly asked; the workflow controller stages and commits.
