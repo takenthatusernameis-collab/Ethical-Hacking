@@ -2,20 +2,21 @@
 Date: Sat Nov 21 2026
 
 ## Status
-- Green: **46729 passed, 146 skipped, 0 failed** (`pytest -q`); mypy Success (267 source files); ruff clean; `check_readme.py` 54 commands, 0 drift both directions; `git diff --check` clean; working tree clean.
-- HEAD `46a6afa` (main); all prior session work committed; no uncommitted changes. Two commits ahead of `e199a2e`; both handoff-file HEAD-reference corrections only.
-- Coverage gate enforced: `coverage report --fail-under=100 --include='ethscan/*'` -> 100% (ethscan/ 16024 statements, 0 missed, 6046 branches, 0 partial).
+- Green: **46729 passed, 146 skipped, 0 failed** (`pytest -q`); mypy Success (267 source files, also clean with `--check-untyped-defs`); ruff clean; `check_readme.py` 54 commands, 0 drift both directions; `git diff --check` clean; working tree clean.
+- HEAD `46a6afa` (main); all prior session work committed; no uncommitted changes. Coverage gate enforced: `coverage report --fail-under=100 --include='ethscan/*'` -> 100% (ethscan/ 16024 statements, 0 missed, 6046 branches, 0 partial).
 
 ## This session (what changed)
-- Executed the assigned task: ran the full gate suite (pytest + coverage --fail-under=100 --include='ethscan/*' + mypy + ruff + check_readme) to confirm steady state.
-- No source or test changes made; verification-only session. All gates pass.
+- Executed a verification-only session: re-ran the full gate suite and independently probed for genuine gaps (empty/whitespace/URL-only targets across all target-taking commands; hash `--check` non-hex digest).
+- No source or test changes made; no genuine defect or coverage gap reproduced. Baseline left intact.
 
 ## Verification
 - `python -m pytest -q` -> 46729 passed, 146 skipped, 0 failed.
 - `python -m coverage report --fail-under=100 --include='ethscan/*'` -> 100% (gate passes; would fail on any future uncovered ethscan line).
 - `python -m mypy ethscan/ tests/` -> Success: no issues found in 267 source files.
+- `python -m mypy --check-untyped-defs ethscan/ tests/` -> Success: no issues found.
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
 - `python3 check_readme.py` -> 54 CLI commands; 0 drift both directions.
+- `git diff --check` -> clean; `git status` -> clean working tree.
 
 ## Candidate next task (for the next agent)
 - Re-run the full gate suite (pytest + coverage --fail-under=100 --include='ethscan/*' + mypy + ruff + check_readme) to confirm steady state is still green.
