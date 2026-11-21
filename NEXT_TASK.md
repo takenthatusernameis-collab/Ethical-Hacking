@@ -4,12 +4,12 @@ Date: Sat Nov 21 2026
 ## Status
 - Green: **46729 passed, 146 skipped, 0 failed** (`pytest -q`); mypy Success (267 source files); ruff clean; `check_readme.py` 54 commands, 0 drift both directions; `git diff --check` clean; working tree clean.
 - Coverage gate enforced: `coverage report --fail-under=100 --include='ethscan/*'` -> 100% (ethscan/ 16024 statements, 0 missed, 6046 branches, 0 partial).
-- HEAD `7f9f4e1` (main); all prior session work committed; no uncommitted changes.
+- HEAD `81c65ca` (main); all prior session work committed; no uncommitted changes.
 
 ## This session (what changed)
 - Executed the assigned task: ran the full gate suite (pytest + coverage --fail-under=100 --include='ethscan/*' + mypy + ruff + check_readme) to confirm steady state.
 - No source or test changes made; verification-only session. All gates pass.
-- Noted HANDOFF_NEXT.md was stale (referenced HEAD `9134b48`; actual HEAD `7f9f4e1`); handoff files updated to the verified state.
+- Corrected HANDOFF_NEXT.md/NEXT_TASK.md HEAD references from `7f9f4e1` to `81c65ca`.
 
 ## Verification
 - `python -m pytest -q` -> 46729 passed, 146 skipped, 0 failed.
