@@ -182,3 +182,168 @@ def test_readme_example_s3_invalid_bucket_name() -> None:
         first["error"]
         == "Invalid bucket name: contains characters that are not allowed in a bucket name"
     )
+
+
+def test_readme_example_headers_invalid_port() -> None:
+    result = _invoke(["headers", "--target", "host:notaport"])
+    assert result.exit_code == 2
+    assert "Usage: cli headers [OPTIONS]" in result.output
+    assert "Try 'cli headers --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Port could not be cast to integer value as 'notaport'"
+        in result.output
+    )
+
+
+def test_readme_example_urlcheck_invalid_port() -> None:
+    result = _invoke(["urlcheck", "--target", "host:notaport"])
+    assert result.exit_code == 2
+    assert "Usage: cli urlcheck [OPTIONS]" in result.output
+    assert "Try 'cli urlcheck --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Port could not be cast to integer value as 'notaport'"
+        in result.output
+    )
+
+
+def test_readme_example_ssh_invalid_port() -> None:
+    result = _invoke(["ssh", "--target", "host:notaport"])
+    assert result.exit_code == 2
+    assert "Usage: cli ssh [OPTIONS]" in result.output
+    assert "Try 'cli ssh --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Port could not be cast to integer value as 'notaport'"
+        in result.output
+    )
+
+
+def test_readme_example_fuzz_invalid_port() -> None:
+    result = _invoke(["fuzz", "--target", "host:notaport"])
+    assert result.exit_code == 2
+    assert "Usage: cli fuzz [OPTIONS]" in result.output
+    assert "Try 'cli fuzz --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Port could not be cast to integer value as 'notaport'"
+        in result.output
+    )
+
+
+def test_readme_example_headers_host_with_space() -> None:
+    result = _invoke(["headers", "--target", "host name"])
+    assert result.exit_code == 2
+    assert "Usage: cli headers [OPTIONS]" in result.output
+    assert "Try 'cli headers --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Target host contains a space or control character"
+        in result.output
+    )
+
+
+def test_readme_example_urlcheck_host_with_space() -> None:
+    result = _invoke(["urlcheck", "--target", "host name"])
+    assert result.exit_code == 2
+    assert "Usage: cli urlcheck [OPTIONS]" in result.output
+    assert "Try 'cli urlcheck --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Target host contains a space or control character"
+        in result.output
+    )
+
+
+def test_readme_example_fuzz_host_with_space() -> None:
+    result = _invoke(["fuzz", "--target", "host name"])
+    assert result.exit_code == 2
+    assert "Usage: cli fuzz [OPTIONS]" in result.output
+    assert "Try 'cli fuzz --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Target host contains a space or control character"
+        in result.output
+    )
+
+
+def test_readme_example_s3_host_with_space() -> None:
+    result = _invoke(["s3", "--target", "host name"])
+    assert result.exit_code == 2
+    assert "Usage: cli s3 [OPTIONS]" in result.output
+    assert "Try 'cli s3 --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Target host contains a space or control character"
+        in result.output
+    )
+
+
+def test_readme_example_headers_path_with_space() -> None:
+    result = _invoke(["headers", "--target", "https://example.com/a b"])
+    assert result.exit_code == 2
+    assert "Usage: cli headers [OPTIONS]" in result.output
+    assert "Try 'cli headers --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Target path contains a space or control character"
+        in result.output
+    )
+
+
+def test_readme_example_urlcheck_path_with_space() -> None:
+    result = _invoke(["urlcheck", "--target", "https://example.com/a b"])
+    assert result.exit_code == 2
+    assert "Usage: cli urlcheck [OPTIONS]" in result.output
+    assert "Try 'cli urlcheck --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Target path contains a space or control character"
+        in result.output
+    )
+
+
+def test_readme_example_recon_empty_target() -> None:
+    result = _invoke(["recon", "--target", ""])
+    assert result.exit_code == 2
+    assert "Usage: cli recon [OPTIONS]" in result.output
+    assert "Try 'cli recon --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Could not parse host from target ''"
+        in result.output
+    )
+
+
+def test_readme_example_geo_empty_target() -> None:
+    result = _invoke(["geo", "--target", ""])
+    assert result.exit_code == 2
+    assert "Usage: cli geo [OPTIONS]" in result.output
+    assert "Try 'cli geo --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Could not parse host from target ''"
+        in result.output
+    )
+
+
+def test_readme_example_mysql_empty_target() -> None:
+    result = _invoke(["mysql", "--target", ""])
+    assert result.exit_code == 2
+    assert "Usage: cli mysql [OPTIONS]" in result.output
+    assert "Try 'cli mysql --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Could not parse host from target ''"
+        in result.output
+    )
+
+
+def test_readme_example_mongodb_empty_target() -> None:
+    result = _invoke(["mongodb", "--target", ""])
+    assert result.exit_code == 2
+    assert "Usage: cli mongodb [OPTIONS]" in result.output
+    assert "Try 'cli mongodb --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Could not parse host from target ''"
+        in result.output
+    )
+
+
+def test_readme_example_mssql_empty_target() -> None:
+    result = _invoke(["mssql", "--target", ""])
+    assert result.exit_code == 2
+    assert "Usage: cli mssql [OPTIONS]" in result.output
+    assert "Try 'cli mssql --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Could not parse host from target ''"
+        in result.output
+    )
