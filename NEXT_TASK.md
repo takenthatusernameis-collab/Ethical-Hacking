@@ -2,13 +2,15 @@
 
 ## Status: none pending; repository independently re-verified green (this session)
 
-This session re-verified the green state with FRESH coverage measurement (not the stale committed `coverage.json`), per the prior handoff's own warning. No new code work was required or fabricated.
+This session re-verified the green state with FRESH coverage measurement (not the stale committed `coverage.json`). No new code work was required or fabricated.
 
 ## Verification (fresh evidence, this session)
-- `python -m coverage erase && coverage run --branch --source=ethscan -m pytest -q` + `coverage report --fail-under=100` -> **100%** (16081 stmts, 0 miss; 6072 branches, 0 partial). Tests: 46759 passed, 146 skipped, 0 failed.
-- `python -m mypy ethscan/ tests/` -> clean (268 files); `python -m ruff check ethscan/ tests/ check_readme.py` -> all passed; `python check_readme.py` -> 54 commands, 0 drift.
+- `python -m ruff check ethscan/ tests/ check_readme.py` -> all checks passed.
+- `python -m mypy ethscan/ tests/` -> clean (268 files; only informational `--check-untyped-defs` notes).
+- `python check_readme.py` -> 54 commands, 0 drift both directions.
+- `python -m coverage erase && coverage run --branch --source=ethscan -m pytest -q` + `coverage report --fail-under=100` -> **100%** (16081 stmts, 0 miss; 6072 branches, 0 partial). Tests: **46759 passed, 146 skipped, 0 failed**.
 - `python -c "import ethscan"` -> ok; `python -m ethscan --help` -> CLI works.
-- Working tree: clean.
+- `git status --short` -> clean; working tree clean at HEAD `8c22cba` (code state matches `97149dd`; `8c22cba`/`83ad669` are control-marker handoff commits).
 
 ## Do not re-implement / do not "fix" (already done / intended)
 - Coverage gap in `scanner.py` — closed and committed; do not add speculative guards.
