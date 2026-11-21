@@ -2,16 +2,16 @@
 Date: Sat Nov 21 2026 (steady-state re-verification, gates confirmed green)
 
 ## State
-- HEAD: `ad9ab30` (main, working tree clean, `git diff --check` clean). No source/test changes this session; state re-confirmed at current HEAD.
+- HEAD: `fa745d8` (main, working tree clean, `git diff --check` clean). No source/test changes this session; state re-confirmed at current HEAD.
 - All gates green (re-verified this session):
-  - `python -m pytest -q --no-header -p no:cacheprovider` -> 46744 passed, 146 skipped, 0 failed (105s)
+  - `python -m pytest -q --no-header -p no:cacheprovider` -> 46744 passed, 146 skipped, 0 failed (127s)
   - `python -m mypy ethscan/ tests/` -> Success: no issues found in 267 source files
   - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed
   - `python check_readme.py` -> 54 CLI commands; 0 drift both directions
   - `python -m coverage report --fail-under=100 --include='ethscan/*'` -> 100% (ethscan/ 16024 statements, 0 missed, 6046 branches, 0 partial)
 
 ## What changed this session
-- None (verification-only session). Independently re-ran the full gate suite at HEAD `ad9ab30`; no source or test changes; working tree clean.
+- None (verification-only session). Independently re-ran the full gate suite at HEAD `fa745d8`; no source or test changes; working tree clean.
 
 ## Gap investigation (evidence-based, no fabrication)
 - Grepped `ethscan/` and `tests/` for TODO/FIXME/XXX/HACK: none found.
@@ -36,7 +36,7 @@ Date: Sat Nov 21 2026 (steady-state re-verification, gates confirmed green)
 - PBKDF2/NTLM/MD4 are all supported (no gap here); do not re-add or re-flag.
 
 ## Next task (candidate for next agent)
-- Do NOT repeat a blind full gate re-run as the primary activity; the suite takes ~105s and is stable. If re-verification is required, run the focused commands above (all fast except pytest).
+- Do NOT repeat a blind full gate re-run as the primary activity; the suite takes ~127s and is stable. If re-verification is required, run the focused commands above (all fast except pytest).
 - Only select new work if a genuine gap is reproduced first. Concrete reproduction-first candidates if new work is requested:
   - Re-run `python -m pytest -q` and `python -m coverage report --fail-under=100 --include='ethscan/*'` once to confirm steady state; stop if green.
   - If green, there is no evidenced gap; do not fabricate work. The repository is at a verified steady state with all gates green and 100% ethscan/ coverage.
