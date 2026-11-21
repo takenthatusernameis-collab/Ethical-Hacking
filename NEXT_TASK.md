@@ -8,8 +8,12 @@ None pending from current evidence. Repository is fully green:
 - `check_readme.py` -> 54 commands, 0 drift
 - `coverage` -> 100% statement/branch on every module (including cli.py)
 
-## Suggested bounded follow-up (only if new work is requested)
+## Investigated and found already done (do not re-implement)
+- ICMPv6 raw ping in `ethscan/ping.py` (`_build_icmpv6_echo_request`, `_parse_icmpv6_reply`, `_try_create_raw_socket(AF_INET6/IPPROTO_ICMPV6)`, ICMPv6 probe path) — fully implemented and tested at 100% branch coverage (`tests/test_ping.py` has 70 ICMPv6 references). The prior suggested follow-up is stale.
 
-Implement real ICMPv6 raw ping in `ethscan/ping.py`: create `socket.AF_INET6`/`IPPROTO_ICMPV6` raw sockets, build/parse Echo Request/Reply (type 128/129) with the IPv6 pseudo-header checksum, and keep the existing TCP fallback for unprivileged users. Reproduce first with a fake raw socket; keep `raw_socket_available` accurate for both families and `ping.py` at 100% branch coverage. Do not remove the IPv4 raw path or change exit-code contracts.
+## Remaining / known limitations (intentional, out of scope)
+- `oracle`/`postgresql` empty-target handling remains intentionally out of scope (exit 0, in-band error) per their documented contract.
+- PBKDF2+NTLM intentionally unsupported.
 
-`oracle`/`postgresql` empty-target handling remains intentionally out of scope (exit 0, in-band error) per their documented contract.
+## Next session guidance
+Re-run the full gate suite to confirm steady state is still green; only then select a new bounded task if a genuine evidenced gap is reproduced. Do not fabricate work.
