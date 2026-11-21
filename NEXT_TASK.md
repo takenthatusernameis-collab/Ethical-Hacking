@@ -2,19 +2,19 @@
 
 ## Status: none pending; repository independently re-verified green (this session)
 
-This session re-verified the green state with FRESH coverage measurement (not the stale committed `coverage.json`), per the prior handoff's own warning. No new code work was required or fabricated: the prior real fix (the coverage-gap test for `grab_banner`'s empty HTTP HEAD branch, `scanner.py:86->92`) is already committed at HEAD `97149dd`.
+This session re-verified the green state with FRESH coverage measurement (not the stale committed `coverage.json`), per the prior handoff's own warning. No new code work was required or fabricated.
 
 ## Verification (fresh evidence, this session)
 - `python -m coverage erase && coverage run --branch --source=ethscan -m pytest -q` + `coverage report --fail-under=100` -> **100%** (16081 stmts, 0 miss; 6072 branches, 0 partial). Tests: 46759 passed, 146 skipped, 0 failed.
 - `python -m mypy ethscan/ tests/` -> clean (268 files); `python -m ruff check ethscan/ tests/ check_readme.py` -> all passed; `python check_readme.py` -> 54 commands, 0 drift.
 - `python -c "import ethscan"` -> ok; `python -m ethscan --help` -> CLI works.
-- Working tree: only handoff/doc files modified (controller commits).
+- Working tree: clean.
 
 ## Do not re-implement / do not "fix" (already done / intended)
 - Coverage gap in `scanner.py` — closed and committed; do not add speculative guards.
-- `ethscan/cli.py:4336` unreachable defensive guard — leave; making it reachable is a speculative behavior change.
+- `ethscan/cli.py:4318` unreachable defensive guard — leave; making it reachable is a speculative behavior change.
 - `oracle`/`postgresql` empty-target handling — intentionally in-band (exit 0) per documented contract; out of scope.
-- Do not count control-marker-only (handoff-doc) commits as progress.
+- Do not count control-marker-only (handoff-doc) commits as project progress.
 
 ## Next session guidance
 1. Run fast gates first: `ruff`, `mypy ethscan/ tests/`, `check_readme.py`. If green, run `python -m pytest -q` once and `coverage report --fail-under=100`; if green, stop.
