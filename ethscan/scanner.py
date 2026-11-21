@@ -9,7 +9,7 @@ from typing import Any
 
 
 def scan_port(host: str, port: int, timeout: float = 1.0) -> tuple[int, bool]:
-    """Scan a single port on the target host.
+    """Scan a single TCP port on the target host.
 
     Args:
         host: Target hostname or IP address.
@@ -29,13 +29,44 @@ def scan_port(host: str, port: int, timeout: float = 1.0) -> tuple[int, bool]:
         return port, False
 
 
+def scan_udp_port(host: str, port: int, timeout: float = 1.0) -> tuple[int, bool]:
+    """Scan a single UDP port on the target host.
+
+    UDP scanning is inherently less reliable than TCP: a lack of response
+    typically means "open|filtered" (the port may be open but the service
+    doesn't respond to empty probes), while an ICMP Port Unreachable
+    response indicates the port is closed. This function returns True when
+    a response is received (open or open|filtered), and False when an
+    ICMP error indicates the port is closed.
+
+    Args:
+        host: Target hostname or IP address.
+        port: Port number to scan.
+        timeout: Response timeout in seconds.
+
+    Returns:
+        Tuple of (port, is_open_or_filtered).
+    """
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.settimeout(timeout)
+            sock.sendto(b"", (host, port))
+            try:
+                sock.recvfrom(1024)
+                return port, True
+            except socket.timeout:
+                return port, True
+    except Exception:  # noqa: BLE001 - transport can raise any type
+        return port, False
+
+
 def scan_ports(
     host: str,
     ports: list[int],
     timeout: float = 1.0,
     max_workers: int = 100,
 ) -> list[tuple[int, bool]]:
-    """Scan multiple ports on the target host concurrently.
+    """Scan multiple TCP ports on the target host concurrently.
 
     Args:
         host: Target hostname or IP address.
@@ -50,6 +81,33 @@ def scan_ports(
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_port = {
             executor.submit(scan_port, host, port, timeout): port for port in ports
+        }
+        for future in as_completed(future_to_port):
+            results.append(future.result())
+    return sorted(results, key=lambda x: x[0])
+
+
+def scan_udp_ports(
+    host: str,
+    ports: list[int],
+    timeout: float = 1.0,
+    max_workers: int = 100,
+) -> list[tuple[int, bool]]:
+    """Scan multiple UDP ports on the target host concurrently.
+
+    Args:
+        host: Target hostname or IP address.
+        ports: List of port numbers to scan.
+        timeout: Response timeout in seconds.
+        max_workers: Maximum number of concurrent threads.
+
+    Returns:
+        List of (port, is_open_or_filtered) tuples.
+    """
+    results = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_port = {
+            executor.submit(scan_udp_port, host, port, timeout): port for port in ports
         }
         for future in as_completed(future_to_port):
             results.append(future.result())
@@ -323,6 +381,9 @@ def format_scan_report_markdown(data: dict[str, object]) -> str:
     if not isinstance(open_ports, list):
         open_ports = []
     lines.append(f"- **Open Ports:** {', '.join(map(str, open_ports)) if open_ports else 'None'}")
+    protocol = data.get('protocol', 'tcp')
+    if protocol != 'tcp':
+        lines.append(f"- **Protocol:** {protocol.upper()}")
     service_detect = data.get('service_detect', False)
     if service_detect:
         lines.append("- **Service Detection:** Enabled")
@@ -334,22 +395,23 @@ def format_scan_report_markdown(data: dict[str, object]) -> str:
     if details:
         lines.append("## Port Details")
         if service_detect:
-            lines.append("| Port | Status | Service / Banner |")
-            lines.append("|------|--------|------------------|")
+            lines.append("| Port | Protocol | Status | Service / Banner |")
+            lines.append("|------|----------|--------|------------------|")
         else:
-            lines.append("| Port | Status |")
-            lines.append("|------|--------|")
+            lines.append("| Port | Protocol | Status |")
+            lines.append("|------|----------|--------|")
         for detail in details:
             if not isinstance(detail, dict):
                 continue
             status = "Open" if detail.get("open") else "Closed"
+            proto = detail.get("protocol", "tcp").upper()
             if service_detect and detail.get("banner"):
                 banner = str(detail.get("banner")).replace("|", "\\|")
                 if len(banner) > 80:
                     banner = banner[:77] + "..."
-                lines.append(f"| {detail.get('port')} | {status} | {banner} |")
+                lines.append(f"| {detail.get('port')} | {proto} | {status} | {banner} |")
             else:
-                lines.append(f"| {detail.get('port')} | {status} |")
+                lines.append(f"| {detail.get('port')} | {proto} | {status} |")
     else:
         lines.append("*No ports scanned.*")
 
@@ -363,19 +425,21 @@ def format_scan_report_csv(data: dict[str, object]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     service_detect = data.get('service_detect', False)
+    protocol = data.get('protocol', 'tcp')
     if service_detect:
-        writer.writerow(["port", "open", "banner"])
+        writer.writerow(["port", "protocol", "open", "banner"])
     else:
-        writer.writerow(["port", "open"])
+        writer.writerow(["port", "protocol", "open"])
     details = data.get("details") or []
     if not isinstance(details, list):
         details = []
     for detail in details:
         if not isinstance(detail, dict):
             continue
+        proto = detail.get("protocol", "tcp")
         if service_detect:
             banner = detail.get("banner", "") or ""
-            writer.writerow([detail.get("port"), "true" if detail.get("open") else "false", banner])
+            writer.writerow([detail.get("port"), proto, "true" if detail.get("open") else "false", banner])
         else:
-            writer.writerow([detail.get("port"), "true" if detail.get("open") else "false"])
+            writer.writerow([detail.get("port"), proto, "true" if detail.get("open") else "false"])
     return output.getvalue().rstrip("\r\n")

@@ -262,6 +262,8 @@ from ethscan.scanner import (
     resolve_port_list,
     scan_ports,
     scan_ports_with_service,
+    scan_udp_port,
+    scan_udp_ports,
 )
 from ethscan.service import (
     format_service_report_csv,
@@ -936,6 +938,13 @@ def _check_config_path(path: str) -> None:
     help="Ports to scan: 'common', 'all', or comma-separated list/ranges (e.g., '80,443,8000-9000')",
 )
 @click.option(
+    "--protocol",
+    "protocol",
+    type=click.Choice(["tcp", "udp", "both"]),
+    default="tcp",
+    help="Protocol to scan: tcp, udp, or both (default: tcp).",
+)
+@click.option(
     "--profile",
     type=click.Choice(["fast", "normal", "full"]),
     help="Scan profile: fast (top ~18 ports), normal (common ports), full (1-1024 + common). Overrides --ports, --timeout, --workers unless explicitly set.",
@@ -946,7 +955,7 @@ def _check_config_path(path: str) -> None:
     "--service-detect/--no-service-detect",
     "service_detect",
     default=False,
-    help="Attempt to grab service banners for open ports.",
+    help="Attempt to grab service banners for open ports (TCP only).",
 )
 @click.option(
     "--output-format",
@@ -975,7 +984,7 @@ def _check_config_path(path: str) -> None:
     help="Filter scan results to open ports only (JSON, Markdown, and CSV output).",
 )
 @click.pass_context
-def scan(ctx: click.Context, target: str, ports: str, profile: str | None, timeout: float, workers: int, service_detect: bool, output_fmt: str | None, fmt: str, out_path: str | None, open_only: bool) -> None:
+def scan(ctx: click.Context, target: str, ports: str, protocol: str, profile: str | None, timeout: float, workers: int, service_detect: bool, output_fmt: str | None, fmt: str, out_path: str | None, open_only: bool) -> None:
     """Run a port scan against TARGET."""
     host = normalize_host(target)
     if profile:
@@ -992,28 +1001,44 @@ def scan(ctx: click.Context, target: str, ports: str, profile: str | None, timeo
     else:
         port_list = _resolve_ports(ports)
 
-    if service_detect:
-        results = scan_ports_with_service(host, port_list, timeout=timeout, max_workers=workers, service_detect=True)
-        open_ports = [port for port, is_open, _ in results if is_open]
-        scan_details = [{"port": port, "open": is_open, "banner": banner} for port, is_open, banner in results]
-    else:
-        simple_results = scan_ports(host, port_list, timeout=timeout, max_workers=workers)
-        open_ports = [port for port, is_open in simple_results if is_open]
-        scan_details = [{"port": port, "open": is_open} for port, is_open in simple_results]
+    scan_details = []
+    open_ports = []
+    udp_details = []
+    udp_open_ports = []
+
+    if protocol in ("tcp", "both"):
+        if service_detect:
+            results = scan_ports_with_service(host, port_list, timeout=timeout, max_workers=workers, service_detect=True)
+            open_ports = [port for port, is_open, _ in results if is_open]
+            scan_details = [{"port": port, "open": is_open, "banner": banner} for port, is_open, banner in results]
+        else:
+            simple_results = scan_ports(host, port_list, timeout=timeout, max_workers=workers)
+            open_ports = [port for port, is_open in simple_results if is_open]
+            scan_details = [{"port": port, "open": is_open, "protocol": "tcp"} for port, is_open in simple_results]
+
+    if protocol in ("udp", "both"):
+        udp_results = scan_udp_ports(host, port_list, timeout=timeout, max_workers=workers)
+        udp_open_ports = [port for port, is_open in udp_results if is_open]
+        udp_details = [{"port": port, "open": is_open, "protocol": "udp"} for port, is_open in udp_results]
+
+    # Merge results
+    all_details = scan_details + udp_details
+    all_open_ports = open_ports + udp_open_ports
 
     if open_only:
-        scan_details = [d for d in scan_details if d["open"]]
+        all_details = [d for d in all_details if d["open"]]
 
     # Prepare structured output for formatters
     scan_data = {
         "target": target,
         "host": host,
         "timeout": timeout,
-        "ports_scanned": len(port_list),
-        "open_ports": open_ports,
-        "details": scan_details,
+        "ports_scanned": len(port_list) * (2 if protocol == "both" else 1),
+        "open_ports": all_open_ports,
+        "details": all_details,
         "open_only": open_only,
         "service_detect": service_detect,
+        "protocol": protocol,
     }
 
     # --output-format takes precedence over the deprecated --format alias

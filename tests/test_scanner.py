@@ -20,6 +20,8 @@ from ethscan.scanner import (
     resolve_port_list,
     scan_port,
     scan_ports,
+    scan_udp_port,
+    scan_udp_ports,
 )
 
 
@@ -419,3 +421,89 @@ def test_format_scan_report_csv_detail_not_dict() -> None:
     data: dict[str, Any] = {"details": ["x"]}
     out = format_scan_report_csv(data)
     assert out == "port,open"
+
+
+def test_scan_udp_port_localhost_closed() -> None:
+    # UDP port 1 is typically closed on localhost (ICMP Port Unreachable)
+    port, is_open = scan_udp_port("127.0.0.1", 1, timeout=0.1)
+    assert port == 1
+    assert is_open is False
+
+
+def test_scan_udp_ports_localhost() -> None:
+    results = scan_udp_ports("127.0.0.1", [1, 2, 3], timeout=0.1, max_workers=10)
+    assert len(results) == 3
+    for port, is_open in results:
+        assert port in [1, 2, 3]
+        assert isinstance(is_open, bool)
+
+
+def test_scan_udp_port_transport_failure_is_reported(monkeypatch) -> None:
+    """A transport failure of an unnamed type is reported as a closed port."""
+    from ethscan import scanner as scanner_mod
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.scanner.socket.socket", boom)
+
+    assert scanner_mod.scan_udp_port("127.0.0.1", 53) == (53, False)
+
+
+def test_scan_udp_ports_transport_failure_is_reported(monkeypatch) -> None:
+    """A failing transport does not escape the concurrent scan either."""
+    from ethscan import scanner as scanner_mod
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("hostile transport")
+
+    monkeypatch.setattr("ethscan.scanner.socket.socket", boom)
+
+    assert scanner_mod.scan_udp_ports("127.0.0.1", [53, 123]) == [(53, False), (123, False)]
+
+
+def test_format_scan_report_markdown_with_protocol() -> None:
+    data = {
+        "target": "127.0.0.1",
+        "host": "127.0.0.1",
+        "timeout": 1.0,
+        "ports_scanned": 4,
+        "open_ports": [22, 53],
+        "details": [
+            {"port": 22, "open": True, "protocol": "tcp"},
+            {"port": 53, "open": True, "protocol": "udp"},
+            {"port": 80, "open": False, "protocol": "tcp"},
+            {"port": 123, "open": False, "protocol": "udp"},
+        ],
+        "protocol": "both",
+    }
+    output = format_scan_report_markdown(data)
+    assert "# ethscan Port Scan Report" in output
+    assert "**Protocol:** BOTH" in output
+    assert "| Port | Protocol | Status |" in output
+    assert "| 22 | TCP | Open |" in output
+    assert "| 53 | UDP | Open |" in output
+
+
+def test_format_scan_report_csv_with_protocol() -> None:
+    data = {
+        "target": "127.0.0.1",
+        "host": "127.0.0.1",
+        "timeout": 1.0,
+        "ports_scanned": 4,
+        "open_ports": [22, 53],
+        "details": [
+            {"port": 22, "open": True, "protocol": "tcp"},
+            {"port": 53, "open": True, "protocol": "udp"},
+            {"port": 80, "open": False, "protocol": "tcp"},
+            {"port": 123, "open": False, "protocol": "udp"},
+        ],
+        "protocol": "both",
+    }
+    output = format_scan_report_csv(data)
+    lines = [line.rstrip("\r") for line in output.strip().split("\n")]
+    assert lines[0] == "port,protocol,open"
+    assert "22,tcp,true" in lines
+    assert "53,udp,true" in lines
+    assert "80,tcp,false" in lines
+    assert "123,udp,false" in lines
