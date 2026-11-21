@@ -2,7 +2,7 @@
 Date: Sat Nov 21 2026 (verification-only; no code work needed)
 
 ## State
-- HEAD: `8c22cba` (main). Working tree: clean (`git status --short` empty). Code state matches `97149dd`; `8c22cba`/`83ad669` are control-marker handoff-doc commits.
+- HEAD: `264a06a` (main, empty subject/control-marker commit after `8c22cba`). Working tree: clean (`git status --short` empty). Code state matches `97149dd`; `264a06a`/`8c22cba`/`83ad669` are control-marker handoff-doc commits.
 - No production or test code changed this session. No new code was needed.
 
 ## What changed this session
@@ -12,7 +12,7 @@ Date: Sat Nov 21 2026 (verification-only; no code work needed)
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
 - `python -m mypy ethscan/ tests/` -> Success: no issues found in 268 source files (only informational `--check-untyped-defs` notes, no errors).
 - `python check_readme.py` -> 54 commands, 0 drift both directions.
-- `python -m coverage erase && python -m coverage run --branch --source=ethscan -m pytest -q` + `coverage report --fail-under=100` -> **100%** (TOTAL 16081 stmts, 0 miss, 6072 branches, 0 partial). Tests: **46759 passed, 146 skipped, 0 failed** in 130.60s.
+- `python -m coverage erase && python -m coverage run --branch --source=ethscan -m pytest -q` + `coverage report --fail-under=100` -> **100%** (TOTAL 16081 stmts, 0 miss, 6072 branches, 0 partial). Tests: **46759 passed, 146 skipped, 0 failed** in 129.51s.
 - `python -c "import ethscan"` -> ok (0.1.0); `python -m ethscan --help` -> CLI entry point works.
 - `git status --short` -> clean; no stray files (`.coverage` gitignored).
 
@@ -25,10 +25,8 @@ Date: Sat Nov 21 2026 (verification-only; no code work needed)
 - None this session. Standing note from prior sessions: never trust the committed `coverage.json` / a prior "100%" claim without regenerating via `coverage run`; this session's fresh run = 100%, consistent with the prior fresh measurement.
 
 ## Next task
-- None pending. Repository fully green at HEAD `8c22cba`. If orchestration invokes another session here: run fast gates first (`ruff`, `mypy ethscan/ tests/`, `check_readme.py`); only if those pass run `pytest -q` + `coverage report --fail-under=100` once. Do not fabricate work; if no genuine gap reproduces, leave the tree clean and produce an honest "verified green, no gap" handoff.
+- None pending. Repository fully green at HEAD `264a06a`. If orchestration invokes another session here: run fast gates first (`ruff`, `mypy ethscan/ tests/`, `check_readme.py`); only if those pass run `pytest -q` + `coverage report --fail-under=100` once. Do not fabricate work; if no genuine gap reproduces, leave the tree clean and produce an honest "verified green, no gap" handoff.
 
 ## Environment/notes
 - Python 3.14.4; pytest 9.2.0; mypy 2.4.1; ruff 0.17.6; coverage 7.17.4 via `python -m coverage`.
 - Do not commit manually unless explicitly asked; the workflow controller stages and commits.
-
-(End of file)
