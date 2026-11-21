@@ -1,41 +1,40 @@
 # Handoff
-Date: Sat Nov 21 2026 (independent steady-state re-verification; all gates confirmed green with fresh evidence)
+Date: Sat Nov 21 2026 (verification-only session; fresh full-suite evidence captured this session)
 
 ## State
-- HEAD: `d385115` (main). Working tree clean; `git diff --check` clean. No source/test changes this session.
-- Note: the three most recent commits (`148fe1a`, `fa745d8`, `d385115`) touched only `NEXT_TASK.md` / `HANDOFF_NEXT.md` (control-marker-only). They are NOT project progress. The last substantive state is the full project at `ad9ab30`.
+- HEAD: `408415d` (main). Working tree clean. No source/test changes this session.
+- Last substantive project state: `ad9ab30` (initial import). Every commit after it (`148fe1a`, `d385115`, `d7a1066`, `408415d`) touched only `HANDOFF_NEXT.md` / `NEXT_TASK.md` (control-marker-only) — NOT project progress.
 
 ## What changed this session
-- None. Verification-only session. I independently re-ran the fast gates at HEAD `d385115`; no source or test changes.
+- Nothing in `ethscan/` or `tests/`. Verification-only. I ran the fast gates AND the full suite fresh, and exercised the deterministic/offline tools directly. No genuine defect reproduced.
 
-## What was verified (this session, with evidence)
+## What was verified this session (fresh evidence)
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed
-- `python check_readme.py` -> 54 CLI commands; 0 drift both directions (In README but not CLI: none; In CLI but not README: none)
-- `python -m mypy ethscan/ tests/` -> Success: no issues found in 267 source files
-- `python -m pytest -q --no-header -p no:cacheprovider` -> 46744 passed, 146 skipped, 0 failed (127.72s) [recorded at last full run; fast gates re-confirmed green this session with no tree changes]
-- `python -m coverage report --fail-under=100 --include='ethscan/*'` -> 100% (16024 statements, 0 missed, all modules 100%) [recorded at last full run]
-- Tools: Python 3.14.4; pytest 9.2.0; mypy 2.4.1; ruff 0.17.6; coverage 7.17.3.
+- `python check_readme.py` -> 54 commands; 0 drift both directions
+- `python -m mypy ethscan/ tests/` -> Success: no issues in 267 source files
+- `python -m pytest -q --no-header -p no:cacheprovider` -> 46744 passed, 146 skipped, 0 failed (126.60s) [FRESH run this session, not "recorded"]
+- Direct tool spot-checks (deterministic/offline), all correct:
+  - `hash`: md5/sha1/sha256/sha512/ntlm/md4; salt, pepper, PBKDF2, `--check` all correct. ntlm+pepper cleanly rejected ("does not support HMAC"); salt+pepper+pbkdf2 = `HMAC(pepper, PBKDF2(...))` per docstring.
+  - `cidr`: IPv4/IPv6, `/0`,`/31`,`/32`,`/128`, IPv4-mapped IPv6 (`::ffff:192.168.1.0/120`), `--contains`, `--diff` all correct.
+  - `radix`: adjacent `/24`+`/24` merge to `/23`; `--no-merge` keeps separate; `--diff` of 192.168.0.0/16 minus 192.168.1.0/24 -> 8 correct blocks / 65280 addrs; `--contains` in/out correct.
+  - `jwt`: malformed token -> 2 findings; valid HS256 token -> alg/type/claims/exp all correct.
+  - `mac`: offline fallback returns vendor from cache, exit 0.
+  - `nmap`: XML parse -> hosts/ports/open-closed/services/banners all correct.
 
-## Gap investigation (evidence-based, no fabrication)
-- `grep -rn -E "TODO|FIXME|XXX|HACK" ethscan/ tests/` -> no matches.
-- All 146 skips are intentional structural skips (commands with no input-file options, no secondary container, no string options, or explicit sweep exclusions); none indicate a coverage gap.
-- Three documented "known limitations" are genuinely user-documented, not defects:
-  - `oracle`/`postgresql` empty/unusable-target in-band "probe failed" (exit 0) is documented in README (line ~215) as their contract. Confirmed present.
-  - `ethscan/cli.py` completion non-install path has an unreachable `effective_shell is None` guard (`# pragma: no cover`) because `shell` defaults to `"bash"`. Leave as-is unless a task explicitly asks to refactor completion format handling.
-  - PBKDF2, NTLM, and MD4 are all supported in `ethscan/hash.py` (including a pure-Python MD4 fallback); no unsupported gap exists.
-- No evidenced defect or coverage gap was reproduced.
+## Known-intentional behavior (do NOT "fix" blindly)
+- `hash --check` with a 32-char digest and no `--algorithm` prefers md5; ntlm/md4 32-char digests report `match:false` unless `--algorithm` is given. DOCUMENTED (`hash.py` comment) and TESTED (`tests/test_hash.py`). This is a design decision, not a bug — changing it breaks the documented contract and tests.
+- `oracle` / `postgresql` empty/unusable-target in-band "probe failed" (exit 0) per documented contract (README ~line 215).
+- `ethscan/cli.py` completion non-install path: unreachable `effective_shell is None` guard (`# pragma: no cover`) because `shell` defaults to `"bash"`. Leave unless a task explicitly asks to refactor completion format handling.
+- `ethscan/hash.py` `_normalize_passwords` strips whitespace and drops empty passwords (documented; `--password ""` -> 0 hashed).
 
-## Remaining / known limitations (intentional, out of scope — do NOT "fix" blindly)
-- `ethscan/cli.py` unreachable defensive guard (completion non-install path) — documented known limitation; leave unless a task explicitly asks to refactor completion format handling.
-- `oracle`/`postgresql` empty-target handling is intentionally out of scope per their documented contract (exit 0, in-band error).
-- PBKDF2/NTLM/MD4 are all supported; do not re-add or re-flag.
-
-## Next task (candidate for next agent)
-- Do NOT repeat a blind full gate re-run as the primary activity; the suite is stable (~127s). If re-verification is required, run the focused fast commands first (ruff, mypy, check_readme), and only run pytest + coverage once if those pass.
-- Only select new work if a genuine gap is reproduced first (reproduce before changing). Do not fabricate work; the repo is at a verified steady state with all gates green and 100% ethscan/ coverage.
-- If a future task touches `ethscan/cli.py` completion handling, the unreachable guard at the non-install path is the known spot to reconsider (currently `# pragma: no cover`).
+## Next task
+- No genuine pending task. Repo independently verified green this session with FRESH full-suite evidence.
+- Do NOT blindly re-run the full suite as the primary activity (stable, ~127s). If re-verification is required, run the fast gates first (`ruff`, `mypy`, `check_readme.py`); only run `pytest` + `coverage` once if those pass.
+- Only select new work if a genuine gap is REPRODUCED first (reproduce before changing). Do not fabricate work; do not count handoff-doc-only commits as progress.
+- If the orchestration keeps invoking sessions on this repo, the correct outcome is a clean tree with an honest "verified green, no gap" handoff — not invented changes.
 
 ## Environment/notes
+- Python 3.14.4; pytest 9.2.0; mypy 2.4.1; ruff 0.17.6.
 - Do not commit manually unless explicitly asked; the workflow controller stages and commits.
 - Do not introduce unrelated modifications; handoff docs are the designated communication channel.
 
