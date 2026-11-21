@@ -36,6 +36,8 @@ Formatter = Callable[[Any], str]
 # accuracy test fails if a new non-standard formatter appears or one disappears.
 NON_STANDARD_ALLOWLIST: frozenset[str] = frozenset(
     {
+        "ethscan.config.format_config_report_json",
+        "ethscan.config.format_config_report_markdown",
         "ethscan.passwords.format_audit_report_json",
         "ethscan.passwords.format_audit_report_markdown",
         "ethscan.passwords.format_audit_report_csv",

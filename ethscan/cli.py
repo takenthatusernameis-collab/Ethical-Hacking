@@ -1,7 +1,6 @@
 """Command-line interface for ethscan."""
 from __future__ import annotations
 
-import json
 import os
 from typing import Any, cast
 from urllib.parse import urlparse
@@ -45,6 +44,8 @@ from ethscan.config import (
     build_default_map,
     config_path_string,
     format_config_report_csv,
+    format_config_report_json,
+    format_config_report_markdown,
     load_config,
     validate_config,
 )
@@ -3989,7 +3990,7 @@ def config(
         _check_config_path(config_path)
     loaded = load_config(config_path)
     path = loaded.get("_path")
-    parse_error = loaded.get("_parse_error")
+    loaded.get("_parse_error")
 
     # Handle --set: update config values and write back to file
     if set_values:
@@ -4046,7 +4047,7 @@ def config(
         loaded = load_config(path)
         # The file was just rewritten, so refresh the parse error: any error
         # captured before the write no longer describes the newly written file.
-        parse_error = loaded.get("_parse_error")
+        loaded.get("_parse_error")
         # path is already set correctly
 
     known_commands = sorted(cli.commands.keys())
@@ -4064,20 +4065,11 @@ def config(
             click.echo(f"Validation warning: {w}", err=True)
         ctx.exit(1)
 
-    # --output-format takes precedence over the deprecated --format alias
+# --output-format takes precedence over the deprecated --format alias
     chosen_format = output_fmt if output_fmt is not None else fmt
 
     if chosen_format == "json":
-        payload: dict[str, Any] = {
-            "config_file": path,
-            "defaults": loaded.get("defaults") or {},
-            "commands": loaded.get("commands") or {},
-        }
-        if isinstance(parse_error, str):
-            payload["parse_error"] = parse_error
-        if warnings:
-            payload["warnings"] = warnings
-        output = json.dumps(payload, indent=2, default=str)
+        output = format_config_report_json(loaded, warnings)
     elif chosen_format == "csv":
         output = format_config_report_csv(loaded)
         if warnings:
@@ -4089,61 +4081,7 @@ def config(
             ]
             output = output + "\n" + "\n".join(warning_lines) if output else "\n".join(warning_lines)
     else:
-        lines = ["# ethscan Configuration", ""]
-        if path:
-            lines.append(f"- **Config file:** {path}")
-        else:
-            lines.append("*No config file found; using built-in defaults.*")
-        if isinstance(parse_error, str):
-            lines.append("")
-            lines.append("## Parse Error")
-            lines.append(f"```\n{parse_error}\n```")
-            lines.append("")
-        if warnings:
-            lines.append("")
-            lines.append("## Warnings")
-            for w in warnings:
-                lines.append(f"- {w}")
-            lines.append("")
-        lines.append("")
-
-        defaults = loaded.get("defaults") or {}
-        lines.append("## Global Defaults")
-        if defaults:
-            lines.append("| Option | Value |")
-            lines.append("|--------|-------|")
-            for key, value in defaults.items():
-                lines.append(f"| {key} | {value} |")
-        else:
-            lines.append("*No global defaults configured.*")
-        lines.append("")
-
-        commands = loaded.get("commands") or {}
-        lines.append("## Per-Command Overrides")
-        if commands:
-            for cmd, opts in commands.items():
-                lines.append(f"### {cmd}")
-                if isinstance(opts, dict) and opts:
-                    lines.append("| Option | Value |")
-                    lines.append("|--------|-------|")
-                    for key, value in opts.items():
-                        lines.append(f"| {key} | {value} |")
-                else:
-                    lines.append("*No overrides.*")
-                lines.append("")
-        else:
-            lines.append("*No per-command overrides configured.*")
-        lines.append("")
-
-        lines.append("## Notes")
-        lines.append(
-            "- CLI arguments always take precedence over config values."
-        )
-        lines.append(
-            "- Use `ethscan config --init PATH` to create a sample config file."
-        )
-        lines.append("")
-        output = "\n".join(lines)
+        output = format_config_report_markdown(loaded, warnings)
 
     if out_path:
         # Delegate to ``_write_output`` the same way every other command does,

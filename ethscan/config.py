@@ -370,6 +370,79 @@ commands:
     return sample
 
 
+def format_config_report_json(config: dict[str, Any], warnings: list[str] | None = None) -> str:
+    """Format config as JSON."""
+    if not isinstance(config, dict):
+        config = {}
+    payload: dict[str, Any] = {
+        "config_file": config.get("_path"),
+        "defaults": config.get("defaults") or {},
+        "commands": config.get("commands") or {},
+    }
+    parse_error = config.get("_parse_error")
+    if isinstance(parse_error, str):
+        payload["parse_error"] = parse_error
+    if warnings:
+        payload["warnings"] = warnings
+    return json.dumps(payload, indent=2, default=str)
+
+
+def format_config_report_markdown(config: dict[str, Any], warnings: list[str] | None = None) -> str:
+    """Format config as Markdown."""
+    if not isinstance(config, dict):
+        config = {}
+    lines = ["# ethscan Configuration", ""]
+    path = config.get("_path")
+    if path:
+        lines.append(f"- **Config file:** {path}")
+    else:
+        lines.append("*No config file found; using built-in defaults.*")
+    parse_error = config.get("_parse_error")
+    if isinstance(parse_error, str):
+        lines.append("")
+        lines.append("## Parse Error")
+        lines.append(f"```\n{parse_error}\n```")
+        lines.append("")
+    if warnings:
+        lines.append("## Warnings")
+        for w in warnings:
+            lines.append(f"- {w}")
+        lines.append("")
+    defaults = config.get("defaults") or {}
+    if not isinstance(defaults, dict):
+        defaults = {}
+    lines.append("## Global Defaults")
+    if defaults:
+        lines.append("| Option | Value |")
+        lines.append("|--------|-------|")
+        for key, value in defaults.items():
+            lines.append(f"| {key} | {value} |")
+    else:
+        lines.append("*No global defaults configured.*")
+    lines.append("")
+
+    commands = config.get("commands") or {}
+    if not isinstance(commands, dict):
+        commands = {}
+    lines.append("## Per-Command Overrides")
+    if commands:
+        for cmd, opts in commands.items():
+            lines.append(f"### {cmd}")
+            if isinstance(opts, dict) and opts:
+                lines.append("| Option | Value |")
+                lines.append("|--------|-------|")
+                for key, value in opts.items():
+                    lines.append(f"| {key} | {value} |")
+            else:
+                lines.append("*No overrides.*")
+            lines.append("")
+    else:
+        lines.append("*No per-command overrides configured.*")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def format_config_report_csv(config: dict[str, Any]) -> str:
     """Format config as CSV."""
     if not isinstance(config, dict):
