@@ -3,7 +3,7 @@ Date: Sat Nov 21 2026
 
 ## State
 - HEAD: `e199a2e` (main, working tree clean, no uncommitted changes). Two commits ahead of `81c65ca`; both are handoff-file HEAD-reference corrections only, no source/test change.
-- All gates green:
+- All gates green (independently re-verified this session):
   - `python -m pytest -q` -> 46729 passed, 146 skipped, 0 failed
   - `python -m coverage report --fail-under=100 --include='ethscan/*'` -> 100% (ethscan/ 16024 statements, 0 missed, 6046 branches, 0 partial)
   - `python -m mypy ethscan/ tests/` -> Success: no issues found in 267 source files
@@ -12,7 +12,7 @@ Date: Sat Nov 21 2026
   - `git diff --check` -> clean
 
 ## What changed this session
-- None (verification-only session). Re-ran the full gate suite against HEAD `e199a2e` to confirm steady state is still green. No source or test changes made; HANDOFF_NEXT.md/NEXT_TASK.md HEAD references corrected from `81c65ca` to `e199a2e`.
+- None (verification-only session). Re-ran the full gate suite against HEAD `e199a2e` to confirm steady state is still green. No source or test changes made.
 
 ## What was verified (this session)
 - Full suite green: 46729 passed, 146 skipped, 0 failed.
