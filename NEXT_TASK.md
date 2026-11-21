@@ -1,11 +1,11 @@
 # Next Task
 
-No genuine pending task. Repository independently re-verified green this session at HEAD `6288cc7` with FRESH evidence:
+No genuine pending task. Repository independently re-verified green this session at HEAD `f9487f9` with FRESH evidence:
 
 - `ruff check ethscan/ tests/ check_readme.py` -> All checks passed
 - `check_readme.py` -> 54 commands, 0 drift
 - `mypy ethscan/ tests/` -> Success (267 source files)
-- `pytest -q --no-header -p no:cacheprovider` -> 46744 passed, 146 skipped, 0 failed (132.09s) [fresh run this session]
+- `pytest -q --no-header -p no:cacheprovider` -> 46744 passed, 146 skipped, 0 failed (127.28s) [fresh run this session]
 
 ## Do not re-implement / do not "fix" (already done / intended)
 - ICMPv6 raw ping in `ethscan/ping.py` — fully implemented and tested.
