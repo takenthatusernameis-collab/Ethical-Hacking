@@ -6,7 +6,14 @@ Error text. Tests invoke through CliRunner, so no network, DNS, or
 filesystem access beyond tmp_path is required. The CliRunner program name
 is "cli", so the Usage/Try lines carry that name while the Error text
 matches README.md exactly.
+
+The ``s3 --target "[::1]:443`` example (README.md lines 247-258) is the one
+documented example that reports an in-band probe failure (exit 0) instead of
+a usage error: a valid host whose name cannot be an S3 bucket is still
+reported as a failed probe inside its own output.
 """
+
+import json
 
 from click.testing import CliRunner
 
@@ -150,4 +157,28 @@ def test_readme_example_redis_empty_target() -> None:
     assert (
         "Error: Invalid value for '--target': Could not parse host from target ''"
         in result.output
+    )
+
+
+def test_readme_example_s3_invalid_bucket_name() -> None:
+    result = _invoke(["s3", "--target", "[::1]:443"])
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["target"] == "[::1]:443"
+    assert data["domain"] == "::1"
+    assert data["region"] == "us-east-1"
+    assert data["candidates_tested"] == 77
+    results = data["results"]
+    assert isinstance(results, list) and len(results) == 77
+    first = results[0]
+    assert first["bucket"] == "::1"
+    assert first["region"] == "us-east-1"
+    assert first["url"] == "https://::1.s3.amazonaws.com/"
+    assert first["dns_resolved"] is None
+    assert first["status_code"] is None
+    assert first["exists"] is False
+    assert first["public"] is False
+    assert (
+        first["error"]
+        == "Invalid bucket name: contains characters that are not allowed in a bucket name"
     )
