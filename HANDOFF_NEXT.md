@@ -1,30 +1,32 @@
 # Handoff
-Date: Sat Nov 21 2026 (fixed a real coverage gap found by fresh measurement)
+Date: Sat Nov 21 2026 (independent re-verification; no new code work needed)
 
 ## State
-- HEAD: `792b705` (main). Working tree: 1 uncommitted test file modified (`tests/test_scanner_service_detect.py`); controller commits, do not commit manually.
-- Previous HANDOFF_NEXT.md claimed `coverage report --fail-under=100` passed at 100% from a stale `coverage.json`. A **fresh** `coverage run --branch --source=ethscan -m pytest` measured **99%** (16081 stmts, 0 miss, 1 partial branch: `ethscan/scanner.py:86->92`). That was a real, reproduced gap, not a stale-doc artifact.
+- HEAD: `97149dd` (main). Working tree: only this handoff/doc file modified (controller commits; do not commit manually).
+- The prior real fix (the coverage-gap test `test_grab_banner_http_head_empty_data_returns_none`) is committed at `97149dd`. No new production or test code was needed this session.
 
 ## What changed this session
-- `tests/test_scanner_service_detect.py`: added `test_grab_banner_http_head_empty_data_returns_none` (1 test). `grab_banner("127.0.0.1", 80, 1.0)` with a fake socket returning `b""` after the HTTP HEAD probe exercises the uncovered `if data:` false branch at `ethscan/scanner.py:86` (falls through to `return None` at line 92). Follows the established `_FakeSock`/`_patch_connection` pattern and the `test_main.py` pollution guidance (patches `ethscan.scanner`, which is never popped from `sys.modules`, so string targets are safe). No production code changed.
+- No production/test code changes. This session independently re-verified the green state with FRESH evidence (not the stale committed `coverage.json`), per the prior handoff's own warning to never trust the stale number.
 
-## What was verified this session (fresh evidence)
-- `python -m pytest tests/test_scanner_service_detect.py -q` -> 15 passed (was 14; +1 new).
-- `python -m coverage erase && coverage run --branch --source=ethscan -m pytest -q` + `coverage report --fail-under=100` -> **100%**, TOTAL 16081 stmts, 0 miss, 6072 branches, 0 partial. Gate passes.
-- Full suite under coverage ran clean (no failures); baseline was 46758 passed / 146 skipped / 0 failed before this change, so expected 46759 passed / 146 skipped / 0 failed after.
-- `python -m mypy tests/test_scanner_service_detect.py` -> Success: no issues found.
-- `python -m ruff check tests/test_scanner_service_detect.py` -> All checks passed.
-- `python check_readme.py` -> 54 commands; 0 drift both directions.
-- `git status --short` -> only `tests/test_scanner_service_detect.py` modified; no stray files.
+## What was verified this session (fresh evidence, this session)
+- `python -m coverage erase && python -m coverage run --branch --source=ethscan -m pytest -q` + `coverage report --fail-under=100` -> **100%** (TOTAL 16081 stmts, 0 miss, 6072 branches, 0 partial). Tests: **46759 passed, 146 skipped, 0 failed** in 133.71s.
+- `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
+- `python -m mypy ethscan/ tests/` -> Success: no issues found in 268 source files.
+- `python check_readme.py` -> 54 commands, 0 drift both directions.
+- `python -c "import ethscan"` -> ok (0.1.0); `python -m ethscan --help` -> CLI entry point works.
+- No `TODO`/`FIXME`/`HACK`/`XXX` in `ethscan/`; all 146 skips are intentional (skip-comments-disabled + hostile-sweep contract cases).
+- `git status --short` -> only this doc file modified; no stray files.
 
 ## What remains unresolved
-- Nothing functional. Coverage gate now passes at 100%. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error). `ethscan/cli.py:4336` unreachable defensive guard remains the only documented known limitation (never made reachable; deliberately left).
+- Nothing functional. Coverage gate passes at 100%; mypy/ruff clean; README in sync; package imports and CLI runs.
+- `ethscan/cli.py:4336` unreachable defensive guard (`raise click.UsageError("Shell argument is required...")`) remains a documented known limitation; deliberately left (making it reachable is a speculative behavior change).
+- `oracle`/`postgresql` empty-target handling is intentionally in-band (exit 0) per documented contract; out of scope.
 
 ## Approaches that already failed / why
-- Trusting the committed `coverage.json` / prior handoff "100%" claim -> fresh measurement showed 99%; always regenerate with `coverage run` before trusting the number (documented trap in prior handoff).
+- Trusting the committed `coverage.json` / a prior handoff "100%" claim -> a prior fresh measurement showed 99% from one real branch gap. Always regenerate with `coverage run` before trusting the number. (Re-confirmed this session: fresh run = 100%.)
 
 ## Next task
-- None pending. Repository fully green: coverage 100%, mypy/ruff clean, README in sync. If the orchestration invokes another session here: run the fast gates first (`ruff`, `mypy ethscan/ tests/`, `check_readme.py`); only run the full `pytest` + `coverage` once if those pass. Do not fabricate work; leave the tree clean if no genuine gap is reproduced.
+- None pending. Repository fully green at HEAD `97149dd`. If orchestration invokes another session here: run fast gates first (`ruff`, `mypy ethscan/ tests/`, `check_readme.py`); only if those pass run `pytest -q` + `coverage report --fail-under=100` once. Do not fabricate work; if no genuine gap reproduces, leave the tree clean and produce an honest "verified green, no gap" handoff.
 
 ## Environment/notes
 - Python 3.14.4; pytest 9.2.0; mypy 2.4.1; ruff 0.17.6; coverage 7.17.4 via `python -m coverage`.
