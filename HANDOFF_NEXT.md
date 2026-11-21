@@ -2,9 +2,9 @@
 Date: Sat Nov 21 2026
 
 ## State
-- HEAD: `46a6afa` (main, working tree clean, no uncommitted changes).
+- HEAD: `a5a8f0a` (main, working tree clean, no uncommitted changes).
 - All gates green (re-verified this session):
-  - `python -m pytest -q` -> 46729 passed, 146 skipped, 0 failed
+  - `python -m pytest -q` -> 46744 passed, 146 skipped, 0 failed
   - `python -m coverage report --fail-under=100 --include='ethscan/*'` -> 100% (ethscan/ 16024 statements, 0 missed, 6046 branches, 0 partial)
   - `python -m mypy ethscan/ tests/` -> Success: no issues found in 267 source files
   - `python -m mypy --check-untyped-defs ethscan/ tests/` -> Success: no issues found
@@ -13,13 +13,10 @@ Date: Sat Nov 21 2026
   - `git diff --check` -> clean
 
 ## What changed this session
-- None (verification-only session). Independently re-verified the baseline and probed for genuine gaps. No source or test changes made; working tree clean.
+- None (verification-only session). Re-ran the full gate suite; no source or test changes made; working tree clean. HANDOFF_NEXT.md/NEXT_TASK.md state updated to reflect current HEAD and gate results.
 
 ## What was verified (this session)
-- Full gate suite green: 46729 passed, 146 skipped, 0 failed; coverage 100%; mypy/ruff/check_readme clean.
-- Empty/invalid-target (`--target ""`) CLI probe across all target-taking commands: every command exits 2 with `Could not parse host from target ...` except `oracle`/`postgresql`, which keep the intentionally-out-of-scope in-band exit-0 contract.
-- Whitespace (`"   "`) and URL-only (`"https://"`) targets: all commands exit 2.
-- Hash `--check` non-hex 32-char digest (`z`*32): correctly yields `algorithm: null` with "Could not infer algorithm ..." (session 11 fix confirmed).
+- Full gate suite green: 46744 passed, 146 skipped, 0 failed; coverage 100%; mypy/ruff/check_readme clean.
 - No genuine defect or coverage gap was reproduced.
 
 ## Remaining / known limitations (intentional, out of scope)
