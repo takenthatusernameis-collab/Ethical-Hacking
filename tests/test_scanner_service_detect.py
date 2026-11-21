@@ -79,6 +79,15 @@ def test_grab_banner_http_head_fallback(monkeypatch) -> None:
     assert b"HEAD / HTTP/1.0" in sock.sent
 
 
+def test_grab_banner_http_head_empty_data_returns_none(monkeypatch) -> None:
+    """An HTTP port that answers the HEAD probe with empty data yields None."""
+    sock = _FakeSock([b"", b""])
+    _patch_connection(monkeypatch, sock)
+
+    assert grab_banner("127.0.0.1", 80, 1.0) is None
+    assert b"HEAD / HTTP/1.0" in sock.sent
+
+
 def test_grab_banner_non_http_port_no_data_returns_none(monkeypatch) -> None:
     """A non-HTTP port that sends nothing yields None."""
     sock = _FakeSock([b""])
