@@ -3886,6 +3886,107 @@ def test_brute_port_option(monkeypatch) -> None:
     assert called_args["port"] == 2121
 
 
+def test_brute_workers_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_brute(
+        target,
+        protocol="ftp",
+        usernames=None,
+        passwords=None,
+        port=None,
+        timeout=5.0,
+        max_workers=10,
+    ):
+        called_args["max_workers"] = max_workers
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": "example.com",
+            "protocol": protocol,
+            "port": 21,
+            "timeout": timeout,
+            "usernames_tested": 0,
+            "passwords_tested": 0,
+            "attempts": 0,
+            "successful_count": 0,
+            "successful": [],
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_brute", mock_run_brute)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "brute",
+            "--target",
+            "example.com",
+            "--workers",
+            "20",
+            "--timeout",
+            "1.0",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["max_workers"] == 20
+
+
+def test_brute_timeout_option(monkeypatch) -> None:
+    called_args = {}
+
+    def mock_run_brute(
+        target,
+        protocol="ftp",
+        usernames=None,
+        passwords=None,
+        port=None,
+        timeout=5.0,
+        max_workers=10,
+    ):
+        called_args["timeout"] = timeout
+        called_args["target"] = target
+        return {
+            "target": target,
+            "host": "example.com",
+            "protocol": protocol,
+            "port": 21,
+            "timeout": timeout,
+            "usernames_tested": 0,
+            "passwords_tested": 0,
+            "attempts": 0,
+            "successful_count": 0,
+            "successful": [],
+            "results": [],
+        }
+
+    monkeypatch.setattr("ethscan.cli.run_brute", mock_run_brute)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "brute",
+            "--target",
+            "example.com",
+            "--timeout",
+            "2.5",
+        ],
+    )
+    assert result.exit_code == 0
+    assert called_args["timeout"] == 2.5
+
+
+def test_brute_invalid_port_is_usage_error() -> None:
+    """Port values outside 0-65535 are rejected as a usage error."""
+    runner = CliRunner()
+    for bad in ("-1", "65536", "99999"):
+        result = runner.invoke(cli, ["brute", "--target", "example.com", "--port", bad])
+        assert result.exit_code == 2, f"Expected exit code 2 for port {bad!r}, got {result.exit_code}: {result.output}"
+        assert "Invalid value for '--port'" in result.output
+
+
 def test_brute_wordlist_options(tmp_path, monkeypatch) -> None:
     user_file = tmp_path / "users.txt"
     user_file.write_text("admin\nroot\n")
