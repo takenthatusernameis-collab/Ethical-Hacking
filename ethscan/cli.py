@@ -5757,91 +5757,22 @@ def version(
     out_path: str | None,
 ) -> None:
     """Show ethscan version information."""
-    from ethscan import __version__
-    import platform
-    import sys
-    from pathlib import Path
+    from ethscan.version import (
+        format_version_report_csv,
+        format_version_report_json,
+        format_version_report_markdown,
+        get_version_data,
+    )
 
-    try:
-        import click as click_module
-        click_version = str(click_module.__version__)
-    except (ImportError, AttributeError):
-        click_version = "unknown"
-
-    try:
-        import yaml
-        yaml_version = str(yaml.__version__)
-    except (ImportError, AttributeError):
-        yaml_version = "unknown"
-
-    try:
-        import dns
-        dns_version = str(dns.__version__)
-    except (ImportError, AttributeError):
-        dns_version = "not installed"
-
-    from ethscan.config import find_config_file
-
-    config_path = find_config_file(None)
-    cache_path = Path.home() / ".cache" / "ethscan"
-
-    dependencies: dict[str, str] = {
-        "click": click_version,
-        "pyyaml": yaml_version,
-        "dnspython": dns_version,
-    }
-    data = {
-        "version": __version__,
-        "python": sys.version.split()[0],
-        "platform": platform.platform(),
-        "architecture": platform.machine(),
-        "dependencies": dependencies,
-        "config_file": str(config_path) if config_path else "not found",
-        "cache_directory": str(cache_path),
-    }
+    data = get_version_data()
     chosen_format = output_fmt if output_fmt is not None else fmt
 
     if chosen_format == "json":
-        import json
-
-        output = json.dumps(data, indent=2) + "\n"
+        output = format_version_report_json(data)
     elif chosen_format == "csv":
-        import csv
-        import io
-
-        output_io = io.StringIO()
-        writer = csv.writer(output_io)
-        writer.writerow(["key", "value"])
-        writer.writerow(["version", data["version"]])
-        writer.writerow(["python", data["python"]])
-        writer.writerow(["platform", data["platform"]])
-        writer.writerow(["architecture", data["architecture"]])
-        for dep, ver in dependencies.items():
-            writer.writerow([f"dep.{dep}", ver])
-        writer.writerow(["config_file", data["config_file"]])
-        writer.writerow(["cache_directory", data["cache_directory"]])
-        output = output_io.getvalue()
+        output = format_version_report_csv(data)
     else:
-        lines = [
-            "# ethscan Version Report",
-            "",
-            f"- **Version:** {data['version']}",
-            f"- **Python:** {data['python']} ({data['platform']}, {data['architecture']})",
-            "",
-            "## Dependencies",
-            "",
-            "| Dependency | Version |",
-            "|------------|---------|",
-            f"| click | {dependencies['click']} |",
-            f"| pyyaml | {dependencies['pyyaml']} |",
-            f"| dnspython | {dependencies['dnspython']} |",
-            "",
-            "## Configuration",
-            "",
-            f"- **Config file:** {data['config_file']}",
-            f"- **Cache directory:** {data['cache_directory']}",
-        ]
-        output = "\n".join(lines) + "\n"
+        output = format_version_report_markdown(data)
 
     if out_path:
         _write_output(out_path, output)
