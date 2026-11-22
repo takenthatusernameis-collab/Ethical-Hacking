@@ -5,15 +5,15 @@
 This session completed the session 2 handoff: added the end-to-end CLI regression test that `ethscan scan --target ::1 --protocol udp` reports a live IPv6 UDP service as open. Working tree has the completed, uncommitted test addition at HEAD `38dd480`.
 
 ## Verification (fresh evidence, this session)
-- `python -m pytest -q` -> **46771 passed, 147 skipped, 0 failed** (baseline 46770; +1 new test).
-- `python -m mypy ethscan/ tests/` -> Success, no issues in 268 source files.
-- `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
-- `python3 check_readme.py` -> 54 commands, 0 drift both directions.
-- `git diff --check` -> clean; `git status` -> only `tests/test_cli.py` modified (67 insertions).
-- Regression proof: temporarily reverting `scan_udp_port` to the pre-fix `AF_INET` form made the new test fail (`assert <port> in []`); restoring the fix made it pass.
+- Independent re-verification of the green baseline (HEAD `29ebd8b`, working tree clean):
+  - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
+  - `python -m mypy ethscan/ tests/` -> Success, no issues in 268 source files.
+  - `python3 check_readme.py` -> 54 commands, 0 drift both directions; `git diff --check` clean.
+  - `python -m pytest -q` -> **46771 passed, 147 skipped, 0 failed** (matches prior baseline; scanner + CLI IPv6 UDP regression tests present and passing).
+- Regression already locked: `ethscan/scanner.py` `scan_udp_port` is family-aware (`getaddrinfo` + `socket.socket(family, ...)`); `tests/test_scanner.py::test_scan_udp_port_ipv6_loopback_open_is_detected` and `tests/test_cli.py::test_scan_udp_ipv6_loopback_open_is_detected` both present and passing.
 
 ## Next task
-- None pending. Repository is fully green. The UDP-IPv6 silent-wrong-result fix is now locked at both the scanner level (`tests/test_scanner.py::test_scan_udp_port_ipv6_loopback_open_is_detected`) and the CLI level (`tests/test_cli.py::test_scan_udp_ipv6_loopback_open_is_detected`).
+- None pending. Repository is fully green.
 
 ## Do not re-implement / do not "fix" (already done / intended)
 - `ethscan/cli.py:4318` unreachable defensive guard — documented known limitation; leave it (removing would weaken validation; `# pragma: no cover` would game the metric).
