@@ -56,6 +56,8 @@ def test_passwords_formatters_hostile_nested_results_never_raise() -> None:
         {"passwords": None, "results": [GOOD_RESULT]},
         {"passwords": "single", "results": [GOOD_RESULT]},
         {"passwords": 123, "results": [GOOD_RESULT]},
+        {"results": [("pwd", {"entropy": {1, 2, 3}})]},
+        {"results": [("pwd", {"length": object()})]},
     ]
     for data in cases:
         passwords_arg = cast(Any, data.get("passwords", []))

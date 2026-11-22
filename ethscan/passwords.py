@@ -373,7 +373,7 @@ def format_audit_report_json(
             for pwd, eval_data in results
         ],
     }
-    return json.dumps(report, indent=2)
+    return json.dumps(report, indent=2, default=str)
 
 
 def format_audit_report_markdown(
