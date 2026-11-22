@@ -3,13 +3,13 @@
 ## Status: no pending task; repo green and complete.
 
 ## What this session did
-- Verified HEAD hash: `95d45d6c9ef5311fae05d00717f9aec5b1b99b76` == origin/main; working tree clean.
+- Verified HEAD hash: `02b144ec9a2c25f6dac9c658c6b0c656d9c89b68` == origin/main; working tree clean.
 - Confirmed prior green baseline intact with fresh evidence:
   - ruff: All checks passed
   - mypy ethscan/ tests/: Success: no issues in 269 source files
   - check_readme.py: 54 commands, 0 drift both directions
   - pytest: 47395 passed, 147 skipped, 0 failed in 105.09s
-- No genuine gap reproduced; no changes made (verification-only session). Updated HEAD hash from `ed0e4c8` to `95d45d6`.
+- No genuine gap reproduced; no source changes made (verification-only session). Updated HEAD hash from `95d45d6` to `02b144e` in both handoff docs.
 
 ## Do not re-implement / do not "fix" (already done / intended)
 - `ethscan/cli.py` unreachable defensive guard in the `completion` command — documented known limitation; leave it.

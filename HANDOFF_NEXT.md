@@ -2,8 +2,8 @@
 Date: Sun Nov 22 2026 (this session)
 
 ## State
-- HEAD: `95d45d6c9ef5311fae05d00717f9aec5b1b99b76` (main). origin/main == HEAD (no divergence). Working tree: clean. Verified via `git rev-parse HEAD` == `git rev-parse origin/main` and `git status --short` (empty).
-- Prior handoff referenced HEAD `ed0e4c8`; updated below with fresh evidence. No source or test changes were made this session (verification only).
+- HEAD: `02b144ec9a2c25f6dac9c658c6b0c656d9c89b68` (main). origin/main == HEAD (no divergence). Baseline source is clean at `02b144e`; this session left uncommitted doc-only updates (HEAD reference correction) in `HANDOFF_NEXT.md`/`NEXT_TASK.md`. Verified via `git rev-parse HEAD` == `git rev-parse origin/main`.
+- Prior handoff referenced HEAD `95d45d6`; this session re-verified the green baseline on actual HEAD `02b144e` (source unchanged since `95d45d6`; only doc files changed in `02b144e`).
 
 ## What was verified this session (fresh evidence)
 - `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed
@@ -26,7 +26,7 @@ Date: Sun Nov 22 2026 (this session)
 - This repository has 54 fully implemented commands, 47k+ passing tests, comprehensive coverage, and 0 README/CLI drift. Inventing tasks would introduce unnecessary risk.
 
 ## Guidance for next session
-1. Verify HEAD hash: `git rev-parse HEAD` should match `ed0e4c839f5313947daf7521f602cf171332160c` or later; confirm `git status` is clean.
+1. Verify HEAD hash: `git rev-parse HEAD` should match `02b144ec9a2c25f6dac9c658c6b0c656d9c89b68` or later; confirm `git status` is clean.
 2. Run fast gates first if needed: `ruff`, `mypy ethscan/ tests/`, `check_readme.py`. If green, optionally run `python -m pytest -q` once.
 3. Only select new work if a **genuine gap is reproduced first** (reproduce before changing). Do not fabricate work.
 4. If probing turns up nothing, leave the baseline intact and record findings.
