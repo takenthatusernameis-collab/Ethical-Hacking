@@ -39,6 +39,10 @@ def scan_udp_port(host: str, port: int, timeout: float = 1.0) -> tuple[int, bool
     a response is received (open or open|filtered), and False when an
     ICMP error indicates the port is closed.
 
+    The endpoint is resolved with :func:`socket.getaddrinfo` so that both
+    IPv4 and IPv6 targets are probed with a socket of the matching address
+    family; the first returned address is used.
+
     Args:
         host: Target hostname or IP address.
         port: Port number to scan.
@@ -48,9 +52,16 @@ def scan_udp_port(host: str, port: int, timeout: float = 1.0) -> tuple[int, bool
         Tuple of (port, is_open_or_filtered).
     """
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        infos = socket.getaddrinfo(
+            host,
+            port,
+            type=socket.SOCK_DGRAM,
+            proto=socket.IPPROTO_UDP,
+        )
+        family, socktype, proto, _canonname, sockaddr = infos[0]
+        with socket.socket(family, socktype, proto) as sock:
             sock.settimeout(timeout)
-            sock.sendto(b"", (host, port))
+            sock.sendto(b"", sockaddr)
             try:
                 sock.recvfrom(1024)
                 return port, True

@@ -1,5 +1,7 @@
 """Tests for the ethscan scanner module."""
 
+import socket
+import threading
 from typing import Any
 
 import pytest
@@ -543,3 +545,120 @@ def test_format_scan_report_csv_with_protocol() -> None:
     assert "53,udp,true" in lines
     assert "80,tcp,false" in lines
     assert "123,udp,false" in lines
+
+
+def test_scan_udp_port_ipv6_uses_matching_family(monkeypatch) -> None:
+    """An IPv6 target is probed with an AF_INET6 socket and its resolved sockaddr."""
+    from ethscan import scanner as scanner_mod
+
+    captured: dict[str, Any] = {}
+
+    def fake_getaddrinfo(host: str, port: int, *args: Any, **kwargs: Any) -> list[Any]:
+        return [
+            (socket.AF_INET6, socket.SOCK_DGRAM, socket.IPPROTO_UDP, "", ("::1", port, 0, 0))
+        ]
+
+    class FakeSock:
+        def __init__(self, family: int, socktype: int, proto: int) -> None:
+            captured["family"] = family
+
+        def __enter__(self) -> "FakeSock":
+            return self
+
+        def __exit__(self, *args: Any) -> None:
+            return None
+
+        def settimeout(self, timeout: float) -> None:
+            captured["timeout"] = timeout
+
+        def sendto(self, data: bytes, addr: Any) -> None:
+            captured["addr"] = addr
+
+        def recvfrom(self, bufsize: int) -> tuple[bytes, Any]:
+            return b"response", captured["addr"]
+
+    monkeypatch.setattr("ethscan.scanner.socket.getaddrinfo", fake_getaddrinfo)
+    monkeypatch.setattr("ethscan.scanner.socket.socket", FakeSock)
+
+    assert scanner_mod.scan_udp_port("::1", 53, timeout=1.0) == (53, True)
+    assert captured["family"] == socket.AF_INET6
+    assert captured["addr"] == ("::1", 53, 0, 0)
+
+
+def test_scan_udp_port_ipv4_uses_matching_family(monkeypatch) -> None:
+    """An IPv4 target is probed with an AF_INET socket and its resolved sockaddr."""
+    from ethscan import scanner as scanner_mod
+
+    captured: dict[str, Any] = {}
+
+    def fake_getaddrinfo(host: str, port: int, *args: Any, **kwargs: Any) -> list[Any]:
+        return [(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP, "", ("127.0.0.1", port))]
+
+    class FakeSock:
+        def __init__(self, family: int, socktype: int, proto: int) -> None:
+            captured["family"] = family
+
+        def __enter__(self) -> "FakeSock":
+            return self
+
+        def __exit__(self, *args: Any) -> None:
+            return None
+
+        def settimeout(self, timeout: float) -> None:
+            captured["timeout"] = timeout
+
+        def sendto(self, data: bytes, addr: Any) -> None:
+            captured["addr"] = addr
+
+        def recvfrom(self, bufsize: int) -> tuple[bytes, Any]:
+            return b"response", captured["addr"]
+
+    monkeypatch.setattr("ethscan.scanner.socket.getaddrinfo", fake_getaddrinfo)
+    monkeypatch.setattr("ethscan.scanner.socket.socket", FakeSock)
+
+    assert scanner_mod.scan_udp_port("127.0.0.1", 53, timeout=1.0) == (53, True)
+    assert captured["family"] == socket.AF_INET
+    assert captured["addr"] == ("127.0.0.1", 53)
+
+
+def test_scan_udp_port_ipv6_loopback_open_is_detected() -> None:
+    """A live IPv6 UDP service on loopback is detected as open (regression).
+
+    Before the family-aware fix, ``scan_udp_port`` opened an ``AF_INET`` socket
+    and ``sendto`` to an IPv6 literal raised ``gaierror`` (address family not
+    supported), so every IPv6 UDP port was silently reported as closed.
+    """
+    if not socket.has_ipv6:
+        pytest.skip("IPv6 is not available in this environment")
+    try:
+        server = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind(("::1", 0))
+    except OSError:
+        pytest.skip("IPv6 loopback is not available in this environment")
+
+    port = server.getsockname()[1]
+    stop = threading.Event()
+
+    def serve() -> None:
+        server.settimeout(0.2)
+        while not stop.is_set():
+            try:
+                _data, addr = server.recvfrom(1024)
+                server.sendto(b"PONG", addr)
+            except socket.timeout:
+                continue
+            except OSError:
+                break
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    try:
+        result_port, is_open = scan_udp_port("::1", port, timeout=1.0)
+    finally:
+        stop.set()
+        server.close()
+        thread.join(timeout=1.0)
+
+    assert result_port == port
+    assert is_open is True

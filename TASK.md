@@ -1014,3 +1014,38 @@ Date: Sun Nov 08 2026 (session 7)
 
 ## Next task
 - None pending. Repository is fully green. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error). If future work is needed, pick one bounded, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls.
+
+# Session (Sun Nov 22 2026, session 2)
+## This session
+- No actionable prior assignment existed: the recent `HANDOFF_NEXT.md`/`NEXT_TASK.md` said "none pending; repo fully green", and commits `9daf1ca`..`683d33e` were control-marker-only (handoff-doc edits only, no source/test changes). Per the operating rules I did NOT repeat verification-only work; I inspected the repo, reproduced a concrete defect, fixed it, and verified the full gate.
+- Independently re-verified the true baseline first (not trusted): `pytest -q` → 46767 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/` clean (268 files); `ruff` clean; `check_readme.py` 54/54, 0 drift; `git diff --check` clean.
+- Found a real silent-wrong-result (false negative) in UDP port scanning of IPv6 targets: `ethscan/scanner.py:scan_udp_port` opened a hardcoded `socket.AF_INET` UDP socket and `sendto(b"", (host, port))`. For an IPv6 literal this raises `gaierror [Errno -9] Address family for hostname not supported`, which the broad `except Exception` swallowed and reported as a CLOSED port.
+- Reproduction (before fix): with a live IPv6 UDP echo server bound to `::1:54321`, `scan_udp_port("::1", 54321)` → `(54321, False)`; CLI `python -m ethscan scan --target ::1 --ports 54321 --protocol udp --format json` → `"open_ports": []`, `"open": false`, exit 0. (IPv4 control `scan_udp_port("127.0.0.1", <live>)` → `(port, True)` confirmed the AF_INET path itself was fine.)
+
+## What changed
+- `ethscan/scanner.py` (`scan_udp_port` only): resolve the endpoint with `socket.getaddrinfo(host, port, type=socket.SOCK_DGRAM, proto=socket.IPPROTO_UDP)`, take `infos[0]`, and open `socket.socket(family, socktype, proto)` from the returned family; `sendto(b"", sockaddr)`. This mirrors the established family-aware pattern already used by `ntp`/`netbios` (and verified in `ldap`/`memcached`/`redis`/`smb`/`snmp`/`dnssec`/`osdetect`). Docstring updated. Error-as-closed-field contract and the `socket.timeout` → open|filtered semantics are unchanged; valid IPv4 behavior is byte-identical. `scanner.py` was the last hardcoded-`AF_INET` UDP socket in the codebase (grep-verified; other `AF_INET` hits are `getaddrinfo` name-resolution hints, not sockets).
+- `tests/test_scanner.py` (+3 tests, no behavior change): `test_scan_udp_port_ipv6_uses_matching_family` and `test_scan_udp_port_ipv4_uses_matching_family` (deterministic monkeypatched `getaddrinfo`+`socket.socket` recorders asserting `AF_INET6`/`AF_INET` and the resolved sockaddr), and `test_scan_udp_port_ipv6_loopback_open_is_detected` (real loopback IPv6 UDP echo server; skips if `not socket.has_ipv6` or bind raises `OSError`).
+
+## What was actually verified
+- Reproduction after fix: `scan_udp_port("::1", 54321)` → `(54321, True)`; CLI `scan --target ::1 --ports 54321 --protocol udp` → `"open_ports": [54321]`, `"open": true`, exit 0.
+- `scan --protocol both` over IPv6 with a live UDP service → `details: [(54322, 'tcp', False), (54322, 'udp', True)]` (TCP closed, UDP open correctly).
+- `python -m pytest tests/test_scanner.py -q` → 62 passed, 1 skipped.
+- `python -m pytest -q` (full suite) → **46770 passed, 147 skipped, 0 failed** (baseline 46767; +3 new tests).
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 268 source files.
+- `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed.
+- `python3 check_readme.py` → 54 commands, 0 drift both directions; `git diff --check` clean.
+- Full-suite branch coverage (`coverage run --branch --source=ethscan`): `ethscan/scanner.py` 100% (205 stmts, 80 branches, 0 miss); TOTAL 100% (16119 stmts, 6080 branches, 0 missing).
+- `git status` → only `ethscan/scanner.py` + `tests/test_scanner.py` modified (132 insertions, 2 deletions); no stray files. Not committed (not requested).
+
+## Blockers
+- None.
+
+## Approaches already tried / ruled out
+- Adding an `if not infos: return port, False` guard after `getaddrinfo` (mirroring `ntp._send_recv`): rejected — `getaddrinfo` either returns a non-empty list or raises, so the branch is unreachable and would drop `scanner.py` below 100% branch coverage without a contrived test. `infos[0]` on an empty list would raise `IndexError`, already caught by the outer `except Exception` → closed, so behavior is safe either way.
+- Iterating all `getaddrinfo` results / trying each family: rejected — the first result is the canonical choice used by the sibling modules; multi-family fallback is unnecessary complexity for a bounded fix.
+
+## Next task
+- Add an end-to-end CLI regression test that `ethscan scan --target ::1 --protocol udp` reports a live IPv6 UDP service as open (mirrors `test_scan_udp_port_ipv6_loopback_open_is_detected` but through the CLI, with a skip guard when IPv6 loopback is unavailable). This locks the fix at the user-facing layer; today only `scan_udp_port` is covered directly. Evidence: pre-fix CLI `open_ports: []` vs post-fix `[54321]`; `tests/test_cli.py` UDP tests monkeypatch `scan_udp_ports` and never exercise a real IPv6 transport. Constraints: skip when `not socket.has_ipv6` or bind raises; keep it deterministic; re-run the full gate (pytest/mypy/ruff/check_readme/coverage). `oracle`/`postgresql` empty-target handling remains intentionally out of scope.
+
+## Environment/notes
+- Python 3.14.4; pytest 9.2.0; mypy 2.4.1; ruff 0.17.6; coverage 7.17.4. Do not commit manually; the workflow controller stages and commits.
