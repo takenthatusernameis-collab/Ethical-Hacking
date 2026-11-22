@@ -61,7 +61,7 @@ def _as_dict(value: object) -> dict[str, Any]:
 def format_version_report_json(data: object) -> str:
     """Render version information as a JSON string."""
     data = _as_dict(data)
-    return json.dumps(data, indent=2) + "\n"
+    return json.dumps(data, indent=2, default=str) + "\n"
 
 
 def format_version_report_csv(data: object) -> str:
