@@ -12,6 +12,7 @@ Date: Sun Nov 22 2026
 - `python -m mypy ethscan/ tests/` -> Success: no issues found in 268 source files.
 - `python check_readme.py` -> 54 commands, 0 drift both directions.
 - `python -m pytest -q` -> **46767 passed, 147 skipped, 0 failed**.
+- `python -m coverage run --branch --source=ethscan -m pytest -q` -> **100% statement and branch coverage** (16117 stmts, 6080 branches, 0 missing).
 - `git status --short` -> clean working tree.
 
 ## What remains unresolved
@@ -28,3 +29,5 @@ Date: Sun Nov 22 2026
 ## Environment/notes
 - Python 3.14.4; pytest 9.2.0; mypy 2.4.1; ruff 0.17.6; coverage 7.17.4 via `python -m coverage`.
 - Do not commit manually unless explicitly asked; the workflow controller stages and commits.
+
+(End of file - total 30 lines)
