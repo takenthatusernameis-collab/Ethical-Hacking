@@ -193,14 +193,14 @@ def test_scanner_formatters_render_well_formed(
         assert "**Ports Scanned:** 3" in output
         assert "**Open Ports:** 80, 443" in output
         assert "## Port Details" in output
-        assert "| 80 | Open |" in output
-        assert "| 443 | Open |" in output
-        assert "| 22 | Closed |" in output
+        assert "| 80 | TCP | Open |" in output
+        assert "| 443 | TCP | Open |" in output
+        assert "| 22 | TCP | Closed |" in output
     elif formatter is format_scan_report_csv:
-        assert "port,open" in output
-        assert "80,true" in output
-        assert "443,true" in output
-        assert "22,false" in output
+        assert "port,protocol,open" in output
+        assert "80,tcp,true" in output
+        assert "443,tcp,true" in output
+        assert "22,tcp,false" in output
     else:
         parsed = json.loads(output)
         assert parsed["target"] == "example.com"
@@ -228,7 +228,7 @@ def test_scanner_formatters_render_well_formed_minimal(
         assert "**Open Ports:** None" in output
         assert "*No ports scanned.*" in output
     elif formatter is format_scan_report_csv:
-        assert "port,open" in output
+        assert "port,protocol,open" in output
         lines = output.strip().split("\n")
         assert len(lines) == 1
     else:

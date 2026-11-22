@@ -184,7 +184,7 @@ def test_scan_report_markdown_service_detect_banner_column() -> None:
     }
     md = format_scan_report_markdown(data)
     assert "- **Service Detection:** Enabled" in md
-    assert "| Port | Status | Service / Banner |" in md
+    assert "| Port | Protocol | Status | Service / Banner |" in md
     assert "a\\|b" in md
 
 
@@ -212,9 +212,9 @@ def test_scan_report_csv_service_detect_banner_column() -> None:
     }
     csv_text = format_scan_report_csv(data)
     lines = csv_text.splitlines()
-    assert lines[0] == "port,open,banner"
-    assert lines[1] == "80,true,nginx"
-    assert lines[2] == "81,false,"
+    assert lines[0] == "port,protocol,open,banner"
+    assert lines[1] == "80,tcp,true,nginx"
+    assert lines[2] == "81,tcp,false,"
 
 
 def test_cli_scan_service_detect_json(monkeypatch) -> None:

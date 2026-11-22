@@ -381,7 +381,7 @@ def format_scan_report_markdown(data: dict[str, object]) -> str:
     if not isinstance(open_ports, list):
         open_ports = []
     lines.append(f"- **Open Ports:** {', '.join(map(str, open_ports)) if open_ports else 'None'}")
-    protocol = data.get('protocol', 'tcp')
+    protocol = str(data.get('protocol', 'tcp'))
     if protocol != 'tcp':
         lines.append(f"- **Protocol:** {protocol.upper()}")
     service_detect = data.get('service_detect', False)
@@ -425,7 +425,6 @@ def format_scan_report_csv(data: dict[str, object]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     service_detect = data.get('service_detect', False)
-    protocol = data.get('protocol', 'tcp')
     if service_detect:
         writer.writerow(["port", "protocol", "open", "banner"])
     else:

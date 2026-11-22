@@ -4963,9 +4963,9 @@ def test_scan_markdown_output(monkeypatch, tmp_path) -> None:
     assert "# ethscan Port Scan Report" in result.output
     assert "**Target:** example.com" in result.output
     assert "**Open Ports:** 22, 80" in result.output
-    assert "| Port | Status |" in result.output
-    assert "| 22 | Open |" in result.output
-    assert "| 443 | Closed |" in result.output
+    assert "| Port | Protocol | Status |" in result.output
+    assert "| 22 | TCP | Open |" in result.output
+    assert "| 443 | TCP | Closed |" in result.output
 
 
 def test_scan_out_json(monkeypatch, tmp_path) -> None:
@@ -5015,10 +5015,10 @@ def test_scan_csv_output(monkeypatch) -> None:
     result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "22,80,443", "--output-format", "csv"])
     assert result.exit_code == 0
     lines = result.output.strip().split("\n")
-    assert lines[0] == "port,open"
-    assert "22,true" in lines
-    assert "80,true" in lines
-    assert "443,false" in lines
+    assert lines[0] == "port,protocol,open"
+    assert "22,tcp,true" in lines
+    assert "80,tcp,true" in lines
+    assert "443,tcp,false" in lines
 
 
 def test_scan_csv_out(monkeypatch, tmp_path) -> None:
@@ -5036,9 +5036,9 @@ def test_scan_csv_out(monkeypatch, tmp_path) -> None:
     assert out_file.exists()
     content = out_file.read_text()
     lines = content.strip().split("\n")
-    assert lines[0] == "port,open"
-    assert "22,true" in lines
-    assert "80,false" in lines
+    assert lines[0] == "port,protocol,open"
+    assert "22,tcp,true" in lines
+    assert "80,tcp,false" in lines
 
 
 def test_scan_open_only_json(monkeypatch) -> None:
@@ -5071,8 +5071,8 @@ def test_scan_open_only_markdown(monkeypatch) -> None:
     result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "22,80,443", "--output-format", "markdown", "--open-only"])
     assert result.exit_code == 0
     assert "Open Ports:** 22, 443" in result.output
-    assert "| 22 | Open |" in result.output
-    assert "| 443 | Open |" in result.output
+    assert "| 22 | TCP | Open |" in result.output
+    assert "| 443 | TCP | Open |" in result.output
     assert "| 80 | Closed |" not in result.output
 
 
@@ -5087,10 +5087,10 @@ def test_scan_open_only_csv(monkeypatch) -> None:
     result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "22,80,443", "--output-format", "csv", "--open-only"])
     assert result.exit_code == 0
     lines = result.output.strip().split("\n")
-    assert lines[0] == "port,open"
-    assert "22,true" in lines
-    assert "443,true" in lines
-    assert "80,false" not in lines
+    assert lines[0] == "port,protocol,open"
+    assert "22,tcp,true" in lines
+    assert "443,tcp,true" in lines
+    assert "80,tcp,false" not in lines
     assert len(lines) == 3  # header + 2 open ports
 
 
@@ -5212,6 +5212,62 @@ def test_scan_help_shows_output_format() -> None:
     assert "json" in result.output
     assert "markdown" in result.output
     assert "csv" in result.output
+
+
+def test_scan_protocol_udp(monkeypatch) -> None:
+    """--protocol udp routes to scan_udp_ports."""
+    called_args = {}
+
+    def mock_scan_udp_ports(host, ports, timeout=1.0, max_workers=100):
+        called_args["host"] = host
+        called_args["ports"] = ports
+        called_args["timeout"] = timeout
+        called_args["max_workers"] = max_workers
+        return [(p, True) for p in ports]
+
+    monkeypatch.setattr("ethscan.cli.scan_udp_ports", mock_scan_udp_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "53,67,68", "--protocol", "udp"])
+    assert result.exit_code == 0
+    assert called_args["ports"] == [53, 67, 68]
+
+
+def test_scan_protocol_both(monkeypatch) -> None:
+    """--protocol both runs both TCP and UDP scans."""
+    tcp_called = {}
+    udp_called = {}
+
+    def mock_scan_ports(host, ports, timeout=1.0, max_workers=100):
+        tcp_called["host"] = host
+        tcp_called["ports"] = ports
+        tcp_called["timeout"] = timeout
+        tcp_called["max_workers"] = max_workers
+        return [(p, True) for p in ports]
+
+    def mock_scan_udp_ports(host, ports, timeout=1.0, max_workers=100):
+        udp_called["host"] = host
+        udp_called["ports"] = ports
+        udp_called["timeout"] = timeout
+        udp_called["max_workers"] = max_workers
+        return [(p, True) for p in ports]
+
+    monkeypatch.setattr("ethscan.cli.scan_ports", mock_scan_ports)
+    monkeypatch.setattr("ethscan.cli.scan_udp_ports", mock_scan_udp_ports)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["scan", "--target", "example.com", "--ports", "53,80", "--protocol", "both"])
+    assert result.exit_code == 0
+    assert tcp_called["ports"] == [53, 80]
+    assert udp_called["ports"] == [53, 80]
+    # Both TCP and UDP results should be in output
+    import json
+    data = json.loads(result.output)
+    assert set(data["open_ports"]) == {53, 80}
+    # Details should have both protocols
+    protocols = {d["protocol"] for d in data["details"]}
+    assert "tcp" in protocols
+    assert "udp" in protocols
 
 
 def test_port_aware_commands_document_common_and_all_keywords() -> None:
@@ -26318,7 +26374,7 @@ def test_every_choice_option_of_the_cli_is_enumerated() -> None:
     assert checked == len(_choice_option_cases()), (
         f"{checked} Choice options in the CLI, {len(_choice_option_cases())} in the sweep"
     )
-    assert checked == 126, f"expected 126 Choice options, found {checked}"
+    assert checked == 127, f"expected 127 Choice options, found {checked}"
 
 
 def _assert_choice_usage_error(result, label: str) -> None:

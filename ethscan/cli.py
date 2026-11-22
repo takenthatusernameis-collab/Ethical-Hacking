@@ -262,7 +262,6 @@ from ethscan.scanner import (
     resolve_port_list,
     scan_ports,
     scan_ports_with_service,
-    scan_udp_port,
     scan_udp_ports,
 )
 from ethscan.service import (
