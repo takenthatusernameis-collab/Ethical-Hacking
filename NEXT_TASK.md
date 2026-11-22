@@ -3,16 +3,16 @@
 ## Status: no pending task; repo green and complete.
 
 ## What this session did
-- Verified HEAD hash: `c6701bf` == origin/main; working tree clean.
-- Confirmed prior green baseline intact:
+- Verified HEAD hash: `ed0e4c839f5313947daf7521f602cf171332160c` == origin/main; working tree clean.
+- Confirmed prior green baseline intact with fresh evidence:
   - ruff: All checks passed
   - mypy ethscan/ tests/: Success: no issues in 269 source files
   - check_readme.py: 54 commands, 0 drift both directions
-  - pytest: 47395 passed, 147 skipped, 0 failed in 104.22s
-- No genuine gap reproduced; no changes made.
+  - pytest: 47395 passed, 147 skipped, 0 failed in 106.47s
+- No genuine gap reproduced; no changes made (verification-only session). Corrected stale HEAD hash (`c6701bf`) in handoff files to `ed0e4c8`.
 
 ## Do not re-implement / do not "fix" (already done / intended)
-- `ethscan/cli.py:4318` unreachable defensive guard — documented known limitation; leave it.
+- `ethscan/cli.py` unreachable defensive guard in the `completion` command — documented known limitation; leave it.
 - `oracle`/`postgresql` empty-target handling — intentionally in-band (exit 0); out of scope.
 - PBKDF2+NTLM intentionally unsupported.
 
