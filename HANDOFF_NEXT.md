@@ -2,13 +2,13 @@
 Date: Sun Nov 22 2026 (this session)
 
 ## State
-- HEAD: `50dad1c1e0e483d040bf71e0c7b975cef4a31536` (main). origin/main == HEAD (no divergence); working tree clean (`git status --short` empty). Source unchanged since `23a9d02`; `50dad1c` touched only HANDOFF_NEXT.md/NEXT_TASK.md. Verified via `git rev-parse HEAD` == `git rev-parse origin/main`.
+- HEAD: `f1db7c56dabde6317e53a88d03353be4cf358b1a` (main). origin/main == HEAD (no divergence); working tree clean (`git status --short` empty). Source unchanged since `23a9d02`; `f1db7c5` touched only HANDOFF_NEXT.md/NEXT_TASK.md (control-marker-only commit, not project progress). Verified via `git rev-parse HEAD` == `git rev-parse origin/main`.
 
 ## What was verified this session (fresh evidence)
 - `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed
 - `python -m mypy ethscan/ tests/` → Success: no issues found in 269 source files (only `annotation-unchecked` notes on untyped test helpers; no errors)
 - `python3 check_readme.py` → 54 commands found, 0 drift both directions; exit 0
-- `python -m pytest -q` → 47395 passed, 147 skipped, 0 failed in ~107s
+- Full pytest (`python -m pytest -q`) was green in the prior session (47395 passed, 147 skipped, 0 failed); source unchanged since, so result still holds
 
 ## What remains unresolved
 - Nothing functional. Repository is mature, complete, and production-ready.
@@ -18,14 +18,14 @@ Date: Sun Nov 22 2026 (this session)
   - PBKDF2+NTLM intentionally unsupported
 
 ## Approaches already failed / why
-- None this session. Baseline reproduced green; no changes made. No speculative work was fabricated. Probed for coverage gaps, README/CLI drift, mypy/ruff issues, and the ping socket-timeout blocker — none reproduce.
+- None this session. Baseline reproduced green; no changes made. No speculative work was fabricated. Probed for coverage gaps, README/CLI drift, mypy/ruff issues — none reproduce.
 
 ## Next task
 - **None pending; repository is green and complete.**
 - This repository has 54 fully implemented commands, 47k+ passing tests, comprehensive coverage, and 0 README/CLI drift. Inventing tasks would introduce unnecessary risk.
 
 ## Guidance for next session
-1. Verify HEAD hash: `git rev-parse HEAD` should match `50dad1c1e0e483d040bf71e0c7b975cef4a31536` or later; confirm `git status` is clean.
+1. Verify HEAD hash: `git rev-parse HEAD` should match `f1db7c56dabde6317e53a88d03353be4cf358b1a` or later; confirm `git status` is clean.
 2. Run fast gates first if needed: `ruff`, `mypy ethscan/ tests/`, `check_readme.py`. If green, optionally run `python -m pytest -q` once.
 3. Only select new work if a **genuine gap is reproduced first** (reproduce before changing). Do not fabricate work.
 4. If probing turns up nothing, leave the baseline intact and record findings.
