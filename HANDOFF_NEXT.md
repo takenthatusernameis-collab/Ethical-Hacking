@@ -2,8 +2,8 @@
 Date: Sun Nov 22 2026 (this session)
 
 ## State
-- HEAD: `45b42e5f868b221271f3f125cb900859d375210d` (main). origin/main == HEAD (no divergence). Baseline source is clean at `45b42e5`; this session left uncommitted doc-only updates (HEAD reference correction) in `HANDOFF_NEXT.md`/`NEXT_TASK.md`. Verified via `git rev-parse HEAD` == `git rev-parse origin/main`.
-- Prior handoff referenced HEAD `95d45d6`; this session re-verified the green baseline on actual HEAD `45b42e5` (source unchanged since `95d45d6`; only doc files changed in `45b42e5`).
+- HEAD: `07f0baa90af0959b36e3cdde62240580c2969dd2` (main). origin/main == HEAD (no divergence); HEAD is one commit ahead of the previously documented `45b42e5`, and the diff vs `45b42e5` is only these two handoff doc files themselves — source unchanged since `45b42e5`. Verified via `git rev-parse HEAD` == `git rev-parse origin/main` and clean `git status`.
+- Prior handoff referenced HEAD `95d45d6`; this session re-verified the green baseline on actual HEAD `07f0baa` (source unchanged since `45b42e5`; only `HANDOFF_NEXT.md`/`NEXT_TASK.md` changed between `45b42e5` and `07f0baa`).
 
 ## What was verified this session (fresh evidence)
 - `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed
