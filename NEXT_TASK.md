@@ -3,12 +3,13 @@
 ## Status: no pending task; repo green and complete.
 
 ## What this session did
-- Verified HEAD hash: `f1db7c56dabde6317e53a88d03353be4cf358b1a` == origin/main; working tree clean. Source unchanged since `23a9d02`.
+- Verified HEAD hash: `a01394b6f047c04f07d3ef22b5cfafc5b566f33f` == origin/main; working tree clean. Source unchanged since `23a9d02`.
 - Confirmed prior green baseline intact with fresh evidence:
   - ruff: All checks passed
   - mypy ethscan/ tests/: Success: no issues in 269 source files
   - check_readme.py: 54 commands, 0 drift both directions
-  - pytest: 47395 passed, 147 skipped, 0 failed (prior session; source unchanged since)
+  - pytest: 47395 passed, 147 skipped, 0 failed
+  - coverage: 16156 lines, 0 missing, 100%
 - Probed for genuine gaps (coverage, README/CLI drift, typing, lint) — none reproduce. No source or test changes made (verification-only session).
 
 ## Do not re-implement / do not "fix" (already done / intended)
@@ -23,6 +24,6 @@
 4. If probing turns up nothing, leave the baseline intact and record findings.
 
 ## Rationale
-This is a mature, complete repository with 54+ implemented commands, 47k+ passing tests, and comprehensive coverage. The previous sessions correctly identified that there is no pending work. Inventing tasks would introduce unnecessary risk without clear benefit.
+This is a mature, complete repository with 54+ implemented commands, 47k+ passing tests, comprehensive coverage (100%), and 0 README/CLI drift. The previous sessions correctly identified that there is no pending work. Inventing tasks would introduce unnecessary risk without clear benefit.
 
 (End of file)
