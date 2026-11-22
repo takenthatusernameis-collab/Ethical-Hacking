@@ -30,4 +30,4 @@ Date: Sun Nov 22 2026
 - Python 3.14.4; pytest 9.2.0; mypy 2.4.1; ruff 0.17.6; coverage 7.17.4 via `python -m coverage`.
 - Do not commit manually unless explicitly asked; the workflow controller stages and commits.
 
-(End of file - total 31 lines)
+(End of file)
