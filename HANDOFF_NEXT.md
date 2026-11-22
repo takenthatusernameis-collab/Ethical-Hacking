@@ -11,13 +11,13 @@ Date: Sun Nov 22 2026
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
 - `python -m mypy ethscan/ tests/` -> Success: no issues found in 268 source files (only informational `--check-untyped-defs` notes).
 - `python check_readme.py` -> 54 commands, 0 drift both directions.
-- `python -m coverage erase && python -m coverage run --branch --source=ethscan -m pytest -q` + `python -m coverage report --fail-under=100` -> **100%** (TOTAL 16117 stmts, 0 miss, 6080 branches, 0 partial). Tests: **46767 passed, 147 skipped, 0 failed** in 127s.
+- `python -m coverage erase && python -m coverage run --branch --source=ethscan -m pytest -q` + `python -m coverage report --fail-under=100` -> **100%** (TOTAL 16117 stmts, 0 miss, 6080 branches, 0 partial). Tests: **46767 passed, 147 skipped, 0 failed**.
 - `git status --short` -> clean working tree.
 
 ## What remains unresolved
 - Nothing functional. Coverage gate passes at 100%; mypy/ruff clean; README in sync.
 - `oracle`/`postgresql` empty-target handling remains intentionally in-band (exit 0) per documented contract; out of scope.
-- `ethscan/cli.py:4318` unreachable defensive guard remains a documented known limitation; deliberately left.
+- `ethscan/cli.py` unreachable defensive guard remains a documented known limitation; deliberately left.
 
 ## Approaches that already failed / why
 - None this session.
