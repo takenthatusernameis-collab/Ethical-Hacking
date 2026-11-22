@@ -3,10 +3,8 @@
 ## Status: no pending task; repo green.
 
 ## What this session did
-- Verified HEAD hash against `git log`/`git status`: HEAD `3b3a763` == origin/main; working tree clean. Prior handoff's claimed HEAD `0e00780` is stale and does not exist in this repo.
-- Ran fast gates: `ruff` passed, `mypy ethscan/ tests/` passed (269 source files), `check_readme.py` passed (54 commands, 0 drift).
-- Ran `python -m pytest -q`: **47393 passed, 147 skipped, 0 failed**.
-- No changes made; no genuine gap reproduced.
+- Verified HEAD hash against `git log`/`git status`: HEAD `3f22e80` == origin/main; working tree clean. No changes made.
+- Confirmed prior green baseline intact (ruff, mypy ethscan/ tests/, check_readme.py, pytest 47393 passed / 147 skipped / 0 failed). No genuine gap reproduced.
 
 ## Do not re-implement / do not "fix" (already done / intended)
 - `ethscan/cli.py:4318` unreachable defensive guard — documented known limitation; leave it.
