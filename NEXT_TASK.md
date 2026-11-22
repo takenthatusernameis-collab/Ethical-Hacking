@@ -2,7 +2,7 @@
 
 ## Status: none pending; repository verified green this session (fresh evidence)
 
-This session ran the full fast-gate + test verification and confirmed everything is green. No changes were made; no gap was found to fix. Working tree left clean at HEAD `9daf1ca`.
+This session ran the full fast-gate + test verification and confirmed everything is green. No changes were made; no gap was found to fix. Working tree left clean at HEAD `d0e68b4`.
 
 ## Verification (fresh evidence, this session)
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> all checks passed.

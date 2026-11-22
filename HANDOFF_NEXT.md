@@ -2,7 +2,8 @@
 Date: Sun Nov 22 2026
 
 ## State
-- HEAD: `9daf1ca` (main). Working tree: clean. All quality gates pass with fresh evidence from this session.
+- HEAD: `d0e68b4` (main). Working tree: clean. All quality gates pass with fresh evidence from this session.
+- The commits `7c15dee`/`d0e68b4` ahead of the prior `9daf1ca` are control-marker-only (HANDOFF_NEXT.md/NEXT_TASK.md only); no source or test changes since session 1.
 
 ## What changed this session
 - Nothing. Verification-only session; no source, test, or doc changes made.
