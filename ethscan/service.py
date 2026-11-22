@@ -9,7 +9,7 @@ import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from re import Pattern
 
-from ethscan.target import normalize_host
+from ethscan.target import format_host_header, normalize_host
 
 DEFAULT_PORTS = [
     21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445,
@@ -144,7 +144,7 @@ def grab_banner(host: str, port: int, timeout: float) -> tuple[int, str | None, 
 
             if not banner and service_name in {"http", "https"}:
                 try:
-                    request = f"HEAD / HTTP/1.0\r\nHost: {host}\r\n\r\n"
+                    request = f"HEAD / HTTP/1.0\r\nHost: {format_host_header(host)}\r\n\r\n"
                     sock.sendall(request.encode())
                     data = sock.recv(BANNER_MAX_LENGTH)
                     if data:

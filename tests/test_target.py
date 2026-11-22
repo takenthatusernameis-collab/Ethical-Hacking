@@ -32,6 +32,7 @@ from ethscan.target import (
     TargetSpecError,
     check_port,
     check_target_host,
+    format_host_header,
     normalize_host,
     parse_url,
     strip_userinfo,
@@ -844,3 +845,28 @@ def test_normalize_host_error_is_still_a_value_error() -> None:
     """Existing ``except ValueError`` handlers keep working."""
     with pytest.raises(ValueError):
         normalize_host("")
+
+
+@pytest.mark.parametrize(
+    ("host", "expected"),
+    [
+        ("::1", "[::1]"),
+        ("2001:db8::1", "[2001:db8::1]"),
+        ("fe80::1", "[fe80::1]"),
+        ("[::1]", "[::1]"),
+        ("127.0.0.1", "127.0.0.1"),
+        ("example.com", "example.com"),
+        ("sub.example.co.uk", "sub.example.co.uk"),
+        ("", ""),
+        ("   ", ""),
+    ],
+)
+def test_format_host_header_brackets_ipv6_literals(host: str, expected: str) -> None:
+    """An unbracketed IPv6 literal is bracketed for a Host header, others unchanged."""
+    assert format_host_header(host) == expected
+
+
+def test_format_host_header_leaves_ipv4_and_names_alone() -> None:
+    """IPv4 literals and DNS names are never bracketed."""
+    assert format_host_header("10.0.0.1") == "10.0.0.1"
+    assert format_host_header("localhost") == "localhost"

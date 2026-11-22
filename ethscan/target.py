@@ -365,3 +365,37 @@ def normalize_host(target: str, default_scheme: str = "https://") -> str:
     if not host:
         raise TargetSpecError(f"Could not parse host from target {target!r}")
     return host
+
+
+def format_host_header(host: str) -> str:
+    """Return ``host`` formatted for use in an HTTP ``Host`` header.
+
+    A bare IPv6 literal such as ``::1`` or ``2001:db8::1`` is wrapped in
+    square brackets (``[::1]``), because :rfc:`3986` section 3.2.2 requires an
+    IPv6 literal in a URI authority to be bracketed and :rfc:`7230` section
+    5.4 carries that form into the ``Host`` header. A server or proxy that
+    parses ``Host`` strictly rejects or misroutes the unbracketed form, so a
+    banner grab that sends ``Host: ::1`` would fail against such a target.
+
+    A host that is already bracketed (``[::1]``), an IPv4 literal
+    (``127.0.0.1``), or a DNS name (``example.com``) is returned unchanged.
+
+    Args:
+        host: A bare hostname or IP literal, as produced by
+            :func:`normalize_host` (brackets already stripped).
+
+    Returns:
+        The host, bracketed when it is an unbracketed IPv6 literal.
+    """
+    candidate = host.strip()
+    if not candidate or candidate.startswith("["):
+        return candidate
+    # A zone id (``fe80::1%eth0``) is not accepted by ``ipaddress``; only a
+    # plain IPv6 literal is bracketed here, everything else is left as-is.
+    try:
+        ip = ipaddress.ip_address(candidate)
+    except ValueError:
+        return candidate
+    if isinstance(ip, ipaddress.IPv6Address):
+        return f"[{candidate}]"
+    return candidate

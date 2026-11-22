@@ -7,6 +7,8 @@ import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
+from ethscan.target import format_host_header
+
 
 def scan_port(host: str, port: int, timeout: float = 1.0) -> tuple[int, bool]:
     """Scan a single TCP port on the target host.
@@ -149,7 +151,7 @@ def grab_banner(host: str, port: int, timeout: float) -> str | None:
             # For HTTP/HTTPS ports, send a HEAD request to elicit a response
             if port in (80, 443, 8080, 8443, 8888):
                 try:
-                    request = f"HEAD / HTTP/1.0\r\nHost: {host}\r\n\r\n"
+                    request = f"HEAD / HTTP/1.0\r\nHost: {format_host_header(host)}\r\n\r\n"
                     sock.sendall(request.encode())
                     data = sock.recv(1024)
                     if data:

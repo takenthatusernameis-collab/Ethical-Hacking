@@ -18,6 +18,7 @@ from ethscan.scanner import (
     get_common_ports,
     get_profile_defaults,
     get_profile_ports,
+    grab_banner,
     parse_port_range,
     resolve_port_list,
     scan_port,
