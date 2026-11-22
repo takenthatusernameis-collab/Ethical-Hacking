@@ -3,13 +3,15 @@
 ## Status: no pending task; repo green and complete.
 
 ## What this session did
-- Verified handoff claims against evidence: HEAD `219dc2a5732dc81d8034a33887a7a60392520961` == origin/main; working tree clean; commit `219dc2a` is control-marker-only (HANDOFF_NEXT.md/NEXT_TASK.md); last real source change is `06177e0` (ethscan/vuln.py version-range padding fix + tests).
+- Verified handoff claims against evidence: HEAD `f9064d8d0e16853dd9b8be34c9079b8c0f2a3220` == origin/main; working tree clean; no source/test changes made (verification-only + probing session).
 - Re-ran all gates with fresh evidence:
   - ruff: All checks passed
-  - mypy ethscan/ tests/: Success, 269 source files
+  - mypy ethscan/ tests/: Success, no issues in 269 source files
   - check_readme.py: 54 commands, 0 drift both directions
-  - pytest: 47395 passed, 147 skipped, 0 failed (106s)
-- No source or test changes made (verification-only session).
+  - pytest: 47395 passed, 147 skipped, 0 failed
+  - coverage: TOTAL 100% (16156 stmts, 6084 branches, 0 missing)
+  - Hostile-input robustness probe: 1304 probes across all target-taking commands → 0 uncaught crashes
+- No source or test changes made.
 
 ## Do not re-implement / do not "fix" (already done / intended)
 - `ethscan/cli.py` unreachable defensive guard in the `completion` command — documented known limitation; leave it.
@@ -25,6 +27,6 @@
 4. If probing turns up nothing, leave the baseline intact and record findings.
 
 ## Rationale
-This is a mature, complete repository with 54 implemented commands, 47k+ passing tests, 100% line+branch coverage, 0 README/CLI drift, verified runtime CLI behavior, and no reproduced defects across verification sessions. Inventing tasks would introduce unnecessary risk without clear benefit.
+This is a mature, complete repository with 54 implemented commands, 47k+ passing tests, 100% line+branch coverage, 0 README/CLI drift, verified runtime CLI behavior, 0 uncaught crashes across 1304 hostile-input probes, and no reproduced defects across verification sessions. Inventing tasks would introduce unnecessary risk without clear benefit.
 
 (End of file)

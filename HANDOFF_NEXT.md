@@ -2,15 +2,16 @@
 Date: Sun Nov 22 2026 (this session)
 
 ## State
-- HEAD: `219dc2a5732dc81d8034a33887a7a60392520961` (main). origin/main == HEAD (no divergence); working tree clean (`git status --short` empty). Source unchanged since `06177e0` (ethscan/vuln.py); commits after `f2d0937` (including `219dc2a`) touched only HANDOFF_NEXT.md/NEXT_TASK.md (control-marker-only commits, not project progress).
+- HEAD: `f9064d8d0e16853dd9b8be34c9079b8c0f2a3220` (main). origin/main == HEAD (no divergence); working tree clean (`git status --short` empty). Source unchanged since last real source commit; commits after the last source change touched only HANDOFF_NEXT.md/NEXT_TASK.md (control-marker-only commits, not project progress).
 
 ## What was verified this session (fresh evidence)
-- HEAD `219dc2a` == origin/main; working tree clean; commit `219dc2a` is control-marker-only (HANDOFF_NEXT.md/NEXT_TASK.md).
+- HEAD `f9064d8` == origin/main; working tree clean; no source/test changes made (verification + probing session).
 - `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed
 - `python -m mypy ethscan/ tests/` → Success: no issues found in 269 source files
 - `python3 check_readme.py` → 54 commands found, 0 drift both directions; exit 0
-- Full pytest (`python -m pytest -q`) → 47395 passed, 147 skipped, 0 failed (103.62s)
-- All 147 skips are structural (sweep exclusions for commands lacking features); no dependency-missing skips
+- Full pytest (`python -m pytest -q`) → 47395 passed, 147 skipped, 0 failed (104.25s)
+- `python -m coverage run --branch --source=ethscan -m pytest -q` → TOTAL 100% (16156 stmts, 6084 branches, 0 missing); every module 100%
+- Hostile-input robustness probe: 1304 probes across all 32 target-taking commands × 30 hostile targets + 11 non-target hostile inputs → 989 clean (exit 0), 315 expected usage errors (exit 2), **0 real crashes** (exit 1 / uncaught traceback)
 - No TODO/FIXME/stub markers; only intentional ssl.py:231 verify=False fallback for cert inspection
 - dnspython: hard in requirements.txt, optional `dns` extra in pyproject.toml — deliberate graceful degradation via DNS_AVAILABLE guards; not a bug
 
@@ -23,14 +24,14 @@ Date: Sun Nov 22 2026 (this session)
   - `ssl.py` verify=False fallback for cert inspection — intentional
 
 ## Approaches already failed / why
-- None this session. Baseline reproduced green; no changes made. No speculative work was fabricated.
+- None this session. Baseline reproduced green; no changes made. Hostile-input probe (1304 cases) found 0 uncaught crashes, so no fix is warranted. No speculative work was fabricated.
 
 ## Next task
 - **None pending; repository is green and complete.**
-- This repository has 54 fully implemented commands, 47k+ passing tests, 100% line+branch coverage (per prior coverage run), 0 README/CLI drift, and verified runtime CLI behavior. Inventing tasks would introduce unnecessary risk.
+- This repository has 54 fully implemented commands, 47k+ passing tests, 100% line+branch coverage, 0 README/CLI drift, verified runtime CLI behavior, and 0 uncaught crashes across 1304 hostile-input probes. Inventing tasks would introduce unnecessary risk.
 
 ## Guidance for next session
-1. Verify HEAD hash: `git rev-parse HEAD` should match `219dc2a5732dc81d8034a33887a7a60392520961` or later; confirm `git status` is clean.
+1. Verify HEAD hash: `git rev-parse HEAD` should match `f9064d8d0e16853dd9b8be34c9079b8c0f2a3220` or later; confirm `git status` is clean.
 2. Run fast gates first if needed: `ruff`, `mypy ethscan/ tests/`, `check_readme.py`. If green, optionally `python -m pytest -q` once.
 3. Only select new work if a **genuine gap is reproduced first** (reproduce before changing). A fresh-venv install test could settle the dnspython packaging question only if it demonstrates breakage; absent that, leave it.
 4. If probing turns up nothing, leave the baseline intact and record findings.
