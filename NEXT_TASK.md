@@ -8,7 +8,7 @@
 - `python3 check_readme.py` -> 54 commands, 0 drift both directions; `git diff --check` clean.
 - `python -m pytest -q` -> **46771 passed, 147 skipped, 0 failed**.
 - `python -m ethscan <cmd> --help` subprocess probe for all 54 CLI commands -> all exit 0, no crashes.
-- HEAD: `f615b0b` (main). Working tree clean.
+- HEAD: `0c4014a` (main). Working tree clean. (Prior handoff referenced `f615b0b`; HEAD is 3 control-marker-only commits ahead, not counted as progress.)
 
 ## Next task
 - None pending. Repository is fully green.

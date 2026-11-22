@@ -2,11 +2,11 @@
 Date: Sun Nov 22 2026
 
 ## State
-- HEAD: `f615b0b` (main). Working tree: clean.
-- Repo fully green; no pending task. This session was baseline re-verification plus a bounded --help probe (no source/test changes).
+- HEAD: `0c4014a` (main). Working tree: clean. (Handoff previously referenced `f615b0b`; HEAD is 3 control-marker-only commits ahead, not counted as progress.)
+- Repo fully green; no pending task. This session re-verified the baseline and probed for gaps; no source/test changes made.
 
 ## What changed this session
-- Nothing. No source or test changes made.
+- Nothing. No source or test changes made. Handoff docs updated only (HEAD hash + fresh evidence).
 
 ## What was actually verified this session (fresh evidence)
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
@@ -14,10 +14,12 @@ Date: Sun Nov 22 2026
 - `python3 check_readme.py` -> 54 commands, 0 drift both directions; `git diff --check` clean.
 - `python -m pytest -q` -> **46771 passed, 147 skipped, 0 failed**.
 - `python -m ethscan <cmd> --help` subprocess probe for all 54 CLI commands -> all exit 0, no crashes/tracebacks.
-- (Prior session coverage gate: `python -m coverage run --branch --source=ethscan -m pytest -q` -> TOTAL 16119 stmts, 6080 branches, 0 missing (100% coverage). Only the documented `ethscan/cli.py:4318` unreachable defensive guard remains uncovered.)
+- Empty-target probe on 29 target-taking commands (`--target ""`) -> all exit 2 with `Could not parse host from target`.
+- Coverage gate (prior session, unchanged): `python -m coverage run --branch --source=ethscan -m pytest -q` -> TOTAL 16119 stmts, 6080 branches, 0 missing (100%). Only the documented `ethscan/cli.py:4318` unreachable defensive guard remains uncovered.
 
 ## Gap-probing performed (no genuine gap found — do not repeat)
 - Empty-target rejection across all target-taking commands (exit 2 usage error; `oracle`/`postgresql` intentional in-band, out of scope).
+- `--help` for all 54 CLI commands (all exit 0).
 - IPv6 transport: no hardcoded `AF_INET` sockets; remaining hits are `getaddrinfo` hints or IPv4-only raw ICMP.
 - All formatters/assessors covered by `tests/test_all_formatters_hostile_contract.py` / `tests/test_all_assessors_hostile_contract.py`; per-key hostile sweep on the 13-module batch (session 137): 212 formatter calls, 0 crashes.
 - All documented README console examples covered by `tests/test_readme_examples.py`.
