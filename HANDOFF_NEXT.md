@@ -2,9 +2,9 @@
 Date: Sun Nov 22 2026
 
 ## State
-- HEAD: `384c651` (main). The single commit between the prior HANDOFF's `a10e18d` and `384c651` is control-marker-only (touches `HANDOFF_NEXT.md`/`NEXT_TASK.md` only, no source/test changes) — not counted as progress.
+- HEAD: `f615b0b` (main). The commits between the prior HANDOFF's `a10e18d` and `384c651`, plus `ec916d5`/`f615b0b`, are control-marker-only (touches `HANDOFF_NEXT.md`/`NEXT_TASK.md` only, no source/test changes) — not counted as progress.
 - Working tree: clean.
-- Repo fully green; no pending task. This session was inspection + gap-probing (no source/test changes).
+- Repo fully green; no pending task. This session was baseline re-verification (no source/test changes).
 
 ## What changed this session
 - Nothing. No source or test changes made.
@@ -13,18 +13,17 @@ Date: Sun Nov 22 2026
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
 - `python -m mypy ethscan/ tests/` -> Success: no issues in 268 source files.
 - `python3 check_readme.py` -> 54 commands, 0 drift both directions; `git diff --check` clean.
-- `python -m pytest -q` -> **46771 passed, 147 skipped, 0 failed** (matches baseline).
-- `python -m pytest tests/test_readme_sync.py -q` -> 5 passed (bidirectional command + option sync).
-- `python -m pytest tests/test_all_formatters_hostile_contract.py tests/test_all_assessors_hostile_contract.py -q` -> all pass.
+- `python -m pytest -q` -> **46771 passed, 147 skipped, 0 failed** (matches session-4 baseline exactly).
 
 ## Gap-probing performed (no genuine gap found — do not repeat)
-Probed and confirmed correct, so these are NOT candidates for new work:
-- Empty-target rejection across all 22 target-taking commands (`redis`, `memcached`, `ntp`, `snmp`, `ftp`, `ldap`, `netbios`, `smb`, `smtp`, `service`, `dnssec`, `ssl`, `tls`, `web`, `fuzz`, `trace`, `s3`, `mysql`, `mongodb`, `mssql`, `recon`, `geo`) — all exit 2 usage error.
+All confirmed correct in prior sessions (session 4), not candidates for new work:
+- Empty-target rejection across all 22 target-taking commands (`redis`, `memcached`, `ntp`, `snmp`, `ftp`, `ldap`, `netbios`, `smb`, `smtp`, `service`, `dnssec`, `ssl`, `tls`, `web`, `fuzz`, `trace`, `s3`, `mysql`, `mongodb`, `mssql`, `recon`, `geo`) — all exit 2 usage error (`oracle`/`postgresql` intentional in-band, out of scope).
 - IPv6 transport: every `socket.socket(...)` call uses a `family` resolved via `socket.getaddrinfo`; no hardcoded `AF_INET` sockets remain (the `AF_INET` hits in `resolve.py`/`dns.py`/`stale.py`/`subtake.py` are `getaddrinfo` name-resolution hints, not sockets).
 - `hash --check` with non-hex digest -> `algorithm: null` + "Could not infer algorithm ..." error (correct).
 - `mac --target "https://00:1A:2B:3C:4D:5E/"` -> `mac: "00:1a:2b:3c:4d:5e"` (correct).
-- `radix --cidrs 192.168.1.0/24,2001:db8::/32` -> exit 2 "Cannot mix IPv4 and IPv6" (correct).
+- `radix --cidrs 192.168.1.0/24,2001:db8::/32` -> exit 2 "Cannot mix IPv4 and IPv6 networks" (correct).
 - All documented README console examples covered by `tests/test_readme_examples.py`.
+- All formatters/assessors covered by `tests/test_all_formatters_hostile_contract.py`/`tests/test_all_assessors_hostile_contract.py`; `tests/test_readme_sync.py` covers bidirectional command+option sync.
 
 ## What remains unresolved
 - Nothing functional. Known limitations unchanged (documented, intentional):

@@ -7,7 +7,7 @@
 - `python -m mypy ethscan/ tests/` -> Success, no issues in 268 source files.
 - `python3 check_readme.py` -> 54 commands, 0 drift both directions; `git diff --check` clean.
 - `python -m pytest -q` -> **46771 passed, 147 skipped, 0 failed**.
-- HEAD: `384c651` (main). Working tree clean.
+- HEAD: `f615b0b` (main). Working tree clean.
 
 ## Next task
 - None pending. Repository is fully green.
