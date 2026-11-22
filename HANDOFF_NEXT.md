@@ -2,7 +2,7 @@
 Date: Sun Nov 22 2026
 
 ## State
-- HEAD: `7f90fd8` (main). Working tree: clean. All quality gates pass with fresh evidence.
+- HEAD: `6357aec` (main). Working tree: clean. All quality gates pass with fresh evidence.
 
 ## What changed this session
 - Nothing. Verification-only session; no source, test, or doc changes made.
@@ -11,7 +11,8 @@ Date: Sun Nov 22 2026
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
 - `python -m mypy ethscan/ tests/` -> Success: no issues found in 268 source files (only informational `--check-untyped-defs` notes).
 - `python check_readme.py` -> 54 commands, 0 drift both directions.
-- `python -m coverage erase && python -m coverage run --branch --source=ethscan -m pytest -q` + `python -m coverage report --fail-under=100` -> **100%** (TOTAL 16117 stmts, 0 miss, 6080 branches, 0 partial). Tests: **46767 passed, 147 skipped, 0 failed**.
+- `python -m pytest -q` -> **46767 passed, 147 skipped, 0 failed**.
+- `python -m coverage erase && python -m coverage run --branch --source=ethscan -m pytest -q` + `python -m coverage report --fail-under=100` -> **100%** (TOTAL 16117 stmts, 0 miss, 6080 branches, 0 partial).
 - `git status --short` -> clean working tree.
 
 ## What remains unresolved
@@ -28,5 +29,3 @@ Date: Sun Nov 22 2026
 ## Environment/notes
 - Python 3.14.4; pytest 9.2.0; mypy 2.4.1; ruff 0.17.6; coverage 7.17.4 via `python -m coverage`.
 - Do not commit manually unless explicitly asked; the workflow controller stages and commits.
-
-(End of file)
