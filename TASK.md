@@ -1074,3 +1074,35 @@ Date: Sun Nov 08 2026 (session 7)
 
 ## Next task
 - None pending. Repository is fully green. The UDP-IPv6 fix is now locked at the scanner level (`tests/test_scanner.py`) and the CLI level (`tests/test_cli.py`). `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error). If future work is needed, pick one bounded, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls.
+
+# Session (Sun Nov 22 2026, session 4)
+## This session
+- No prior agent assignment existed; HANDOFF_NEXT.md/NEXT_TASK.md both said "none pending; repo fully green". Independently re-verified the baseline before selecting work: `pytest -q` -> 46771 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/` clean (268 files); `ruff` clean; `check_readme.py` 54/54, 0 drift; `git diff --check` clean; working tree clean.
+- Confirmed HEAD `384c651` is ahead of the prior HANDOFF's `a10e18d` by a single control-marker-only commit (handoff docs only, no source/test changes) — not counted as progress.
+- Performed thorough gap-probing across the repository; no genuine gap was reproduced, so no source or test changes were made (per the rule: do not fabricate work; reproduce before changing).
+- Probed and confirmed correct (not candidates for new work):
+  - Empty-target rejection across all 22 target-taking commands -> exit 2 usage error (oracle/postgresql intentional in-band, out of scope).
+  - IPv6 transport: every `socket.socket(...)` uses a `family` resolved via `socket.getaddrinfo`; no hardcoded `AF_INET` sockets remain (the `AF_INET` hits in resolve.py/dns.py/stale.py/subtake.py are getaddrinfo name-resolution hints, not sockets).
+  - `hash --check` with non-hex digest -> `algorithm: null` + "Could not infer algorithm ..." error (correct).
+  - `mac --target "https://00:1A:2B:3C:4D:5E/"` -> `mac: "00:1a:2b:3c:4d:5e"` (correct).
+  - `radix --cidrs 192.168.1.0/24,2001:db8::/32` -> exit 2 "Cannot mix IPv4 and IPv6 networks" (correct).
+  - All documented README console examples covered by tests/test_readme_examples.py.
+  - All formatters/assessors covered by the repo-wide hostile contract tests; test_readme_sync.py covers bidirectional command+option option sync.
+- Updated HANDOFF_NEXT.md and NEXT_TASK.md to record the verified baseline, the gaps probed and ruled out, and the "none pending" status.
+
+## Verification
+- `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
+- `python -m mypy ethscan/ tests/` -> Success: no issues in 268 source files.
+- `python3 check_readme.py` -> 54 commands, 0 drift both directions; `git diff --check` clean.
+- `python -m pytest -q` -> 46771 passed, 147 skipped, 0 failed (baseline unchanged).
+- `python -m pytest tests/test_readme_sync.py tests/test_all_formatters_hostile_contract.py tests/test_all_assessors_hostile_contract.py -q` -> all pass.
+- `git status` -> clean working tree; only HANDOFF_NEXT.md and NEXT_TASK.md updated (handoff docs). Not committed (controller commits).
+
+## Blockers
+- None.
+
+## Approaches already tried / ruled out
+- No fix was attempted because no gap was reproduced. Do not fabricate work or repeat verification-only sessions.
+
+## Next task
+- None pending. Repository is fully green. If future work is needed, pick one bounded, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
