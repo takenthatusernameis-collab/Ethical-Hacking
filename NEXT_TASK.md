@@ -3,13 +3,12 @@
 ## Status: no pending task; repo green and complete.
 
 ## What this session did
-- Verified HEAD hash: `23a9d02071f35931f1fded4454f36a02abb33e26` == origin/main; working tree clean. Source unchanged since `45b42e5`; only handoff docs changed since then.
+- Verified HEAD hash: `50dad1c1e0e483d040bf71e0c7b975cef4a31536` == origin/main; working tree clean. Source unchanged since `23a9d02`.
 - Confirmed prior green baseline intact with fresh evidence:
   - ruff: All checks passed
   - mypy ethscan/ tests/: Success: no issues in 269 source files
   - check_readme.py: 54 commands, 0 drift both directions
-  - coverage: 100% on every module in `ethscan/` (ping.py 100% — all 85 tests pass)
-  - pytest: 47395 passed, 147 skipped, 0 failed in ~104s
+  - pytest: 47395 passed, 147 skipped, 0 failed in ~107s
 - Probed for genuine gaps (coverage, README/CLI drift, typing, lint, ping socket-timeout blocker) — none reproduce. No source or test changes made (verification-only session).
 
 ## Do not re-implement / do not "fix" (already done / intended)

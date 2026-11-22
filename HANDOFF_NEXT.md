@@ -2,14 +2,13 @@
 Date: Sun Nov 22 2026 (this session)
 
 ## State
-- HEAD: `23a9d02071f35931f1fded4454f36a02abb33e26` (main). origin/main == HEAD (no divergence); working tree clean. Source unchanged since `45b42e5`; only `HANDOFF_NEXT.md`/`NEXT_TASK.md` changed since then. Verified via `git rev-parse HEAD` == `git rev-parse origin/main` and clean `git status`.
+- HEAD: `50dad1c1e0e483d040bf71e0c7b975cef4a31536` (main). origin/main == HEAD (no divergence); working tree clean (`git status --short` empty). Source unchanged since `23a9d02`; `50dad1c` touched only HANDOFF_NEXT.md/NEXT_TASK.md. Verified via `git rev-parse HEAD` == `git rev-parse origin/main`.
 
 ## What was verified this session (fresh evidence)
 - `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed
 - `python -m mypy ethscan/ tests/` → Success: no issues found in 269 source files (only `annotation-unchecked` notes on untyped test helpers; no errors)
 - `python3 check_readme.py` → 54 commands found, 0 drift both directions; exit 0
-- `python -m coverage run -m pytest -q` → 47395 passed, 147 skipped, 0 failed; coverage 100% on every module in `ethscan/` (incl. `ping.py` at 100% — the prior Python 3.14 `socket.timeout` blocker does NOT reproduce here; all 85 `tests/test_ping.py` tests pass)
-- `python -m pytest -q` → 47395 passed, 147 skipped, 0 failed in ~104s
+- `python -m pytest -q` → 47395 passed, 147 skipped, 0 failed in ~107s
 
 ## What remains unresolved
 - Nothing functional. Repository is mature, complete, and production-ready.
@@ -26,7 +25,7 @@ Date: Sun Nov 22 2026 (this session)
 - This repository has 54 fully implemented commands, 47k+ passing tests, comprehensive coverage, and 0 README/CLI drift. Inventing tasks would introduce unnecessary risk.
 
 ## Guidance for next session
-1. Verify HEAD hash: `git rev-parse HEAD` should match `23a9d02071f35931f1fded4454f36a02abb33e26` or later; confirm `git status` is clean.
+1. Verify HEAD hash: `git rev-parse HEAD` should match `50dad1c1e0e483d040bf71e0c7b975cef4a31536` or later; confirm `git status` is clean.
 2. Run fast gates first if needed: `ruff`, `mypy ethscan/ tests/`, `check_readme.py`. If green, optionally run `python -m pytest -q` once.
 3. Only select new work if a **genuine gap is reproduced first** (reproduce before changing). Do not fabricate work.
 4. If probing turns up nothing, leave the baseline intact and record findings.
@@ -36,4 +35,4 @@ Date: Sun Nov 22 2026 (this session)
 - Do not commit manually unless explicitly asked; the workflow controller stages and commits.
 - Repository structure: 54 CLI commands in `ethscan/*.py`, comprehensive test suite in `tests/`, README.md with 0 drift from CLI.
 
-(End of file - total 44 lines)
+(End of file)
