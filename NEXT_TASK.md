@@ -7,6 +7,7 @@
 - `python -m mypy ethscan/ tests/` -> Success, no issues in 268 source files.
 - `python3 check_readme.py` -> 54 commands, 0 drift both directions; `git diff --check` clean.
 - `python -m pytest -q` -> **46771 passed, 147 skipped, 0 failed**.
+- `python -m coverage run --branch --source=ethscan -m pytest -q` -> TOTAL 16119 stmts, 6080 branches, 0 missing (100% coverage).
 - HEAD: `f615b0b` (main). Working tree clean.
 
 ## Next task
@@ -21,3 +22,5 @@
 ## Next session guidance
 1. Run fast gates first: `ruff`, `mypy ethscan/ tests/`, `check_readme.py`. If green, run `python -m pytest -q` once; if green, proceed.
 2. Only select new work if a genuine gap is REPRODUCED first (reproduce before changing). Do not fabricate work. Do not repeat verification-only sessions. If probing turns up nothing, leave the baseline intact and record the findings.
+
+(End of file - total 23 lines)

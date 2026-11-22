@@ -14,6 +14,7 @@ Date: Sun Nov 22 2026
 - `python -m mypy ethscan/ tests/` -> Success: no issues in 268 source files.
 - `python3 check_readme.py` -> 54 commands, 0 drift both directions; `git diff --check` clean.
 - `python -m pytest -q` -> **46771 passed, 147 skipped, 0 failed** (matches session-4 baseline exactly).
+- `python -m coverage run --branch --source=ethscan -m pytest -q` -> TOTAL 16119 stmts, 6080 branches, 0 missing (100% coverage). Only the documented `ethscan/cli.py:4318` unreachable defensive guard remains uncovered.
 
 ## Gap-probing performed (no genuine gap found — do not repeat)
 All confirmed correct in prior sessions (session 4), not candidates for new work:
@@ -41,3 +42,5 @@ All confirmed correct in prior sessions (session 4), not candidates for new work
 ## Environment/notes
 - Python 3.14.4; pytest 9.2.0; mypy 2.4.1; ruff 0.17.6; coverage 7.17.4 via `python -m coverage`.
 - Do not commit manually unless explicitly asked; the workflow controller stages and commits.
+
+(End of file - total 43 lines)
