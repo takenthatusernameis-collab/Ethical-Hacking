@@ -20,5 +20,3 @@ This session ran the full fast-gate + test verification and confirmed everything
 1. Run fast gates first: `ruff`, `mypy ethscan/ tests/`, `check_readme.py`. If green, run `python -m pytest -q` once and (optionally) `coverage report --fail-under=100`; if green, stop.
 2. Only select new work if a genuine gap is REPRODUCED first (reproduce before changing). Do not fabricate work.
 3. If no gap exists, the correct outcome is the tree left clean plus an honest "verified green, no gap" handoff.
-
-(End of file)
