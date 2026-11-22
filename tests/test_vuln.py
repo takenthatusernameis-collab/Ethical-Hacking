@@ -130,6 +130,51 @@ def test_version_in_range_a_number_that_is_too_long_to_be_one() -> None:
     assert match_service_vulns("OpenSSH", huge) == []
 
 
+def test_version_in_range_pads_component_count() -> None:
+    """Versions compare by numeric value, not by how many parts they have.
+
+    ``1.3`` and ``1.3.0`` are the same version, so a spec written with a
+    different number of components than the banner must compare equal. Python
+    compares tuples element by element and treats a shorter tuple as smaller
+    when it is a prefix of the longer one, so without zero-padding a
+    two-component banner version falls below a three-component minimum (or
+    above a three-component maximum).
+    """
+    # A shorter version equal to the minimum is inside an inclusive range.
+    assert version_in_range("1.3", {"version_min": "1.3.0", "min_inclusive": True})
+    # A shorter version still below the minimum is excluded.
+    assert not version_in_range("1.2", {"version_min": "1.3.0", "min_inclusive": True})
+    # A longer version with trailing zeros equal to the maximum is inside an
+    # inclusive range (previously compared as greater than the maximum).
+    assert version_in_range("1.3.5.0", {"version_max": "1.3.5", "max_inclusive": True})
+    assert version_in_range("7.2.0", {"version_max": "7.2", "max_inclusive": True})
+    # Trailing zeros do not change an exclusive comparison either.
+    assert not version_in_range(
+        "7.2.0", {"version_max": "7.2", "max_inclusive": False}
+    )
+    # A genuinely larger version is still excluded.
+    assert not version_in_range("1.3.6", {"version_max": "1.3.5", "max_inclusive": True})
+    # Equal value padded on both sides matches an exact range.
+    assert version_in_range(
+        "1.3.5.0",
+        {"version_min": "1.3.5", "version_max": "1.3.5", "max_inclusive": True},
+    )
+
+
+def test_match_service_vulns_pads_component_count() -> None:
+    """A two-component banner version matches a three-component spec bound.
+
+    CVE-2015-3306 affects ProFTPD ``1.3.0`` through ``1.3.5``. A banner that
+    reports ``1.3`` is that same version and must be flagged, not silently
+    dropped because ``(1, 3)`` sorted below ``(1, 3, 0)``.
+    """
+    assert [f["id"] for f in match_service_vulns("ProFTPD", "1.3")] == [
+        "CVE-2015-3306"
+    ]
+    assert match_service_vulns("ProFTPD", "1.2") == []
+    assert match_service_vulns("ProFTPD", "1.3.6") == []
+
+
 def test_match_service_vulns_openssh_old() -> None:
     findings = match_service_vulns("OpenSSH", "7.2p2", port=22)
     ids = {finding["id"] for finding in findings}

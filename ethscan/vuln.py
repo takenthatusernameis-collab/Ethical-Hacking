@@ -561,6 +561,24 @@ def _version_tuple(version: str) -> tuple[int, ...]:
     return tuple(values)
 
 
+def _pad_versions(
+    left: tuple[int, ...], right: tuple[int, ...]
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Zero-extend the shorter version tuple so both have the same length.
+
+    Versions compare by numeric value, not by tuple length: ``1.3`` and
+    ``1.3.0`` are the same version. Python compares tuples element by element
+    and treats a shorter tuple as smaller when it is a prefix of the longer
+    one, so ``(1, 3) < (1, 3, 0)``. Padding the shorter tuple with zeros makes
+    the comparison numeric instead of length-sensitive.
+    """
+    length = max(len(left), len(right))
+    return (
+        left + (0,) * (length - len(left)),
+        right + (0,) * (length - len(right)),
+    )
+
+
 def version_in_range(version: str, spec: dict[str, object]) -> bool:
     """Check whether a version string falls within a range specification.
 
@@ -578,18 +596,20 @@ def version_in_range(version: str, spec: dict[str, object]) -> bool:
 
     if "version_min" in spec:
         minimum = _version_tuple(str(spec["version_min"]))
+        parsed_cmp, minimum_cmp = _pad_versions(parsed, minimum)
         if spec.get("min_inclusive", True):
-            if parsed < minimum:
+            if parsed_cmp < minimum_cmp:
                 return False
-        elif parsed <= minimum:
+        elif parsed_cmp <= minimum_cmp:
             return False
 
     if "version_max" in spec:
         maximum = _version_tuple(str(spec["version_max"]))
+        parsed_cmp, maximum_cmp = _pad_versions(parsed, maximum)
         if spec.get("max_inclusive", True):
-            if parsed > maximum:
+            if parsed_cmp > maximum_cmp:
                 return False
-        elif parsed >= maximum:
+        elif parsed_cmp >= maximum_cmp:
             return False
 
     return True
