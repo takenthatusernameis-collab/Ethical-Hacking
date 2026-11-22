@@ -3,7 +3,7 @@
 ## Status: no pending task; repo green and complete.
 
 ## What this session did
-- Verified HEAD hash: `a01394b6f047c04f07d3ef22b5cfafc5b566f33f` == origin/main; working tree clean. Source unchanged since `23a9d02`.
+- Verified HEAD hash: `d5791111701c714363c65c8ab27f92a9dacff30b` == origin/main; working tree clean. Source unchanged since `23a9d02`.
 - Confirmed prior green baseline intact with fresh evidence:
   - ruff: All checks passed
   - mypy ethscan/ tests/: Success: no issues in 269 source files
