@@ -2,29 +2,22 @@
 Date: Sun Nov 22 2026
 
 ## State
-- HEAD: `0c4014a` (main). Working tree: clean. (Handoff previously referenced `f615b0b`; HEAD is 3 control-marker-only commits ahead, not counted as progress.)
-- Repo fully green; no pending task. This session re-verified the baseline and probed for gaps; no source/test changes made.
+- HEAD: `0e00780` (main). Working tree: clean except one uncommitted fix (see below).
+- The previous handoff (HEAD `0c4014a`) was stale: commits `e40fda8`, `50e5ae0`, `0e00780` landed AFTER it and did real feature work, and `0e00780` re-introduced a lint failure the earlier handoff had already fixed. That regression is now fixed (uncommitted; controller stages/commits).
 
 ## What changed this session
-- Nothing. No source or test changes made. Handoff docs updated only (HEAD hash + fresh evidence).
+- `tests/test_scanner.py`: removed the unused `grab_banner` import (was dead — tests reference `scanner_mod.grab_banner`, not the direct name). This is the same line commit `50e5ae0` removed, which `0e00780` re-added. Single-line deletion; no behavior change.
+
+## Real work already on HEAD (context for reviewers)
+- `e40fda8`: added `ethscan.target.format_host_header()` (brackets bare IPv6 literals per RFC 3986 3.2.2 / RFC 7230 5.4); wired it into `scanner.grab_banner` and `service.grab_banner` HTTP `Host` headers. Covered by `tests/test_target.py` (`test_format_host_header_*`), `tests/test_scanner.py` (`test_grab_banner_http_ipv{6,4}_host_header_*`), `tests/test_service.py`.
 
 ## What was actually verified this session (fresh evidence)
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
 - `python -m mypy ethscan/ tests/` -> Success: no issues in 268 source files.
-- `python3 check_readme.py` -> 54 commands, 0 drift both directions; `git diff --check` clean.
-- `python -m pytest -q` -> **46771 passed, 147 skipped, 0 failed**.
-- `python -m ethscan <cmd> --help` subprocess probe for all 54 CLI commands -> all exit 0, no crashes/tracebacks.
-- Empty-target probe on 29 target-taking commands (`--target ""`) -> all exit 2 with `Could not parse host from target`.
-- Coverage gate (prior session, unchanged): `python -m coverage run --branch --source=ethscan -m pytest -q` -> TOTAL 16119 stmts, 6080 branches, 0 missing (100%). Only the documented `ethscan/cli.py:4318` unreachable defensive guard remains uncovered.
-
-## Gap-probing performed (no genuine gap found — do not repeat)
-- Empty-target rejection across all target-taking commands (exit 2 usage error; `oracle`/`postgresql` intentional in-band, out of scope).
-- `--help` for all 54 CLI commands (all exit 0).
-- IPv6 transport: no hardcoded `AF_INET` sockets; remaining hits are `getaddrinfo` hints or IPv4-only raw ICMP.
-- All formatters/assessors covered by `tests/test_all_formatters_hostile_contract.py` / `tests/test_all_assessors_hostile_contract.py`; per-key hostile sweep on the 13-module batch (session 137): 212 formatter calls, 0 crashes.
-- All documented README console examples covered by `tests/test_readme_examples.py`.
-- `tests/test_readme_sync.py` covers bidirectional command sync; `tests/test_cli.py:83` covers working `--help` for every command.
-- `--target` port/host/path/query validation, file-option validation, `validate` command in-band contract all confirmed correct in prior sessions.
+- `python -m pytest -q` -> **46784 passed, 147 skipped, 0 failed** (101s).
+- Targeted re-run `tests/test_scanner.py tests/test_service.py tests/test_target.py` -> 359 passed, 1 skipped.
+- `python3 check_readme.py` -> 54 commands, 0 drift both directions.
+- `git diff --check` -> clean.
 
 ## What remains unresolved
 - Nothing functional. Known limitations unchanged (documented, intentional):
@@ -33,11 +26,11 @@ Date: Sun Nov 22 2026
   - PBKDF2+NTLM intentionally unsupported.
 
 ## Approaches already failed / why
-- None this session. No line of work was started; no gap was reproduced, so no fix was attempted. Do not fabricate work or repeat verification-only sessions.
+- No failed line of work this session. The only issue was a stale handoff plus one lint regression, both resolved by reproducing (ruff) and removing the dead import.
 
 ## Next task
-- None pending. Repository is fully green.
-- Next session: run fast gates first (`ruff`, `mypy ethscan/ tests/`, `check_readme.py`); if green run `python -m pytest -q` once; if green, proceed. Only select new work if a genuine gap is REPRODUCED first (reproduce before changing). Do not fabricate work; do not repeat verification-only sessions. If probing turns up nothing, leave the baseline intact and record the findings.
+- None pending; repository is green after the uncommitted one-line fix.
+- Next session: run fast gates first (`ruff`, `mypy ethscan/ tests/`, `check_readme.py`); if green run `python -m pytest -q` once. Only select new work if a genuine gap is REPRODUCED first (reproduce before changing). Do not fabricate work; do not repeat verification-only sessions. Verify HEAD/handoff hashes against reality before trusting stale handoff claims.
 
 ## Environment/notes
 - Python 3.14.4; pytest 9.2.0; mypy 2.4.1; ruff 0.17.6; coverage 7.17.4 via `python -m coverage`.
