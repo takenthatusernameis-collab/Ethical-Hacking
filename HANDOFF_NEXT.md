@@ -2,14 +2,14 @@
 Date: Sun Nov 22 2026 (this session)
 
 ## State
-- HEAD: `ed0e4c839f5313947daf7521f602cf171332160c` (main). origin/main == HEAD (no divergence). Working tree: clean. Verified via `git rev-parse HEAD` == `git rev-parse origin/main` and `git status --short` (empty).
-- Prior handoff files referenced stale HEAD `c6701bf`; corrected below with fresh evidence. No source or test changes were made this session (verification only).
+- HEAD: `95d45d6c9ef5311fae05d00717f9aec5b1b99b76` (main). origin/main == HEAD (no divergence). Working tree: clean. Verified via `git rev-parse HEAD` == `git rev-parse origin/main` and `git status --short` (empty).
+- Prior handoff referenced HEAD `ed0e4c8`; updated below with fresh evidence. No source or test changes were made this session (verification only).
 
 ## What was verified this session (fresh evidence)
 - `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed
 - `python -m mypy ethscan/ tests/` → Success: no issues found in 269 source files (only `annotation-unchecked` notes on untyped test helpers; no errors)
 - `python3 check_readme.py` → 54 commands found, 0 drift both directions; exit 0
-- `python -m pytest -q` → **47395 passed, 147 skipped, 0 failed** in 106.47s
+- `python -m pytest -q` → **47395 passed, 147 skipped, 0 failed** in 105.09s
 
 ## What remains unresolved
 - Nothing functional. Repository is mature, complete, and production-ready.
