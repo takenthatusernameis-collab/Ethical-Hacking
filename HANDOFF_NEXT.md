@@ -9,7 +9,7 @@ Date: Sun Nov 22 2026 (this session)
 - `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed
 - `python -m mypy ethscan/ tests/` → Success: no issues found in 269 source files
 - `python3 check_readme.py` → 54 commands found, 0 drift both directions; exit 0
-- Full pytest (`python -m pytest -q`) → 47395 passed, 147 skipped, 0 failed (106.17s)
+- Full pytest (`python -m pytest -q`) → 47395 passed, 147 skipped, 0 failed (103.62s)
 - All 147 skips are structural (sweep exclusions for commands lacking features); no dependency-missing skips
 - No TODO/FIXME/stub markers; only intentional ssl.py:231 verify=False fallback for cert inspection
 - dnspython: hard in requirements.txt, optional `dns` extra in pyproject.toml — deliberate graceful degradation via DNS_AVAILABLE guards; not a bug
