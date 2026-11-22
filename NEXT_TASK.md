@@ -2,14 +2,13 @@
 
 ## Status: none pending; repository verified green this session (fresh evidence)
 
-This session ran the full fast-gate + test verification and confirmed everything is green. No changes were made; no gap was found to fix. Working tree left clean at HEAD `cc88257`.
+This session ran the full fast-gate + test verification and confirmed everything is green. No changes were made; no gap was found to fix. Working tree left clean at HEAD `9daf1ca`.
 
 ## Verification (fresh evidence, this session)
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> all checks passed.
 - `python -m mypy ethscan/ tests/` -> clean (268 source files; only informational `--check-untyped-defs` notes).
 - `python check_readme.py` -> 54 commands, 0 drift both directions.
 - `python -m pytest -q` -> **46767 passed, 147 skipped, 0 failed**.
-- `python -m coverage run --branch --source=ethscan -m pytest -q` -> **100% statement/branch coverage** (16117 stmts, 6080 branches, 0 missing).
 - `git status --short` -> clean working tree.
 
 ## Do not re-implement / do not "fix" (already done / intended)
@@ -22,4 +21,4 @@ This session ran the full fast-gate + test verification and confirmed everything
 2. Only select new work if a genuine gap is REPRODUCED first (reproduce before changing). Do not fabricate work.
 3. If no gap exists, the correct outcome is the tree left clean plus an honest "verified green, no gap" handoff.
 
-(End of file - total 22 lines)
+(End of file)
