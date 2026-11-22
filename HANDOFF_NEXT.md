@@ -2,7 +2,7 @@
 Date: Sun Nov 22 2026
 
 ## State
-- HEAD: `6357aec` (main). Working tree: clean. All quality gates pass with fresh evidence.
+- HEAD: `e6ac484` (main). Working tree: clean. All quality gates pass with fresh evidence from this session.
 
 ## What changed this session
 - Nothing. Verification-only session; no source, test, or doc changes made.
@@ -17,10 +17,10 @@ Date: Sun Nov 22 2026
 
 ## What remains unresolved
 - Nothing functional. Coverage gate passes at 100%; mypy/ruff clean; README in sync.
+- `cli.py` unreachable defensive guard (line ~4318) remains a documented known limitation; deliberately left (unreachable via CLI; removing it would weaken validation).
 - `oracle`/`postgresql` empty-target handling remains intentionally in-band (exit 0) per documented contract; out of scope.
-- `ethscan/cli.py` unreachable defensive guard remains a documented known limitation; deliberately left.
 
-## Approaches that already failed / why
+## Approaches already failed / why
 - None this session.
 
 ## Next task
