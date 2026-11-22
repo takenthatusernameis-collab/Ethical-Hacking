@@ -1049,3 +1049,28 @@ Date: Sun Nov 08 2026 (session 7)
 
 ## Environment/notes
 - Python 3.14.4; pytest 9.2.0; mypy 2.4.1; ruff 0.17.6; coverage 7.17.4. Do not commit manually; the workflow controller stages and commits.
+
+# Session (Sun Nov 22 2026, session 3)
+## This session
+- Executed the pending next task from `NEXT_TASK.md` (session 2 handoff): added an end-to-end CLI regression test that `ethscan scan --target ::1 --protocol udp` reports a live IPv6 UDP service as open.
+- Why: session 2 fixed a silent-wrong-result bug in `ethscan/scanner.py:scan_udp_port` (hardcoded `socket.AF_INET` → `gaierror` on IPv6 literals → every IPv6 UDP port reported closed). `tests/test_scanner.py` covered `scan_udp_port` directly (unit + loopback), but `tests/test_cli.py` UDP tests monkeypatched `scan_udp_ports` and never exercised a real IPv6 transport. This locks the fix at the user-facing CLI layer.
+- Added `tests/test_cli.py::test_scan_udp_ipv6_loopback_open_is_detected`: binds a `::1` UDP echo server on an ephemeral port, runs the `scan` command via `CliRunner` with `--protocol udp --ports <port> --format json --timeout 1.0`, asserts exit 0 and the port listed in `open_ports` / `details` with `"open": true` / `"protocol": "udp"`. Skip-guarded when `not socket.has_ipv6` or bind raises `OSError` (mirrors `tests/test_scanner.py::test_scan_udp_port_ipv6_loopback_open_is_detected`).
+
+## Verification
+- Negative test (regression proof): temporarily reverted `scan_udp_port` to the pre-fix hardcoded `socket.AF_INET` form → `test_scan_udp_ipv6_loopback_open_is_detected` FAILED with `assert 44895 in []` (open_ports empty); restored the fix → PASS. The test genuinely guards the fix.
+- `python -m pytest tests/test_cli.py -q -k ipv6_loopback_open_is_detected` → 1 passed.
+- `python -m pytest -q` (full suite) → 46771 passed, 147 skipped, 0 failed (baseline 46770; +1 new test).
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 268 source files.
+- `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed.
+- `python3 check_readme.py` → 54 commands, 0 drift both directions.
+- `git diff --check` → clean; `git status` → only `tests/test_cli.py` modified (67 insertions); no stray files.
+
+## Blockers
+- None.
+
+## Approaches already tried / ruled out
+- Using `subprocess` to invoke `python -m ethscan scan` instead of `CliRunner`: rejected — `CliRunner` is the established pattern across `tests/test_cli.py` (all 1100+ scan/udp tests use it), avoids interpreter startup overhead, and keeps output capture in-process. The real IPv6 transport is still exercised because the actual `scan_udp_port` runs.
+- Asserting only `open_ports` without `details`: rejected — asserting `details == [{"port": port, "open": True, "protocol": "udp"}]` also locks the UDP protocol tagging in the merged details list, catching a future regression where udp results are dropped or mislabeled.
+
+## Next task
+- None pending. Repository is fully green. The UDP-IPv6 fix is now locked at the scanner level (`tests/test_scanner.py`) and the CLI level (`tests/test_cli.py`). `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error). If future work is needed, pick one bounded, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls.

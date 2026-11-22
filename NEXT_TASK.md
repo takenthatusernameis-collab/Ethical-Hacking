@@ -1,22 +1,19 @@
 # Next Task
 
-## Status: one bounded follow-up available; repo otherwise green with fresh evidence.
+## Status: no pending task; repo fully green with fresh evidence.
 
-This session fixed a real silent-wrong-result bug (UDP scan of IPv6 targets reported live services as closed) and verified the full gate green. Working tree has the completed, uncommitted fix at HEAD `683d33e`.
+This session completed the session 2 handoff: added the end-to-end CLI regression test that `ethscan scan --target ::1 --protocol udp` reports a live IPv6 UDP service as open. Working tree has the completed, uncommitted test addition at HEAD `38dd480`.
 
 ## Verification (fresh evidence, this session)
-- `python -m pytest -q` -> **46770 passed, 147 skipped, 0 failed** (baseline 46767; +3 new tests).
+- `python -m pytest -q` -> **46771 passed, 147 skipped, 0 failed** (baseline 46770; +1 new test).
 - `python -m mypy ethscan/ tests/` -> Success, no issues in 268 source files.
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
 - `python3 check_readme.py` -> 54 commands, 0 drift both directions.
-- Full-suite branch coverage -> `ethscan/scanner.py` 100%; TOTAL 100% (16119 stmts, 6080 branches, 0 miss).
-- `git diff --check` -> clean; `git status` -> only `ethscan/scanner.py` + `tests/test_scanner.py` modified.
+- `git diff --check` -> clean; `git status` -> only `tests/test_cli.py` modified (67 insertions).
+- Regression proof: temporarily reverting `scan_udp_port` to the pre-fix `AF_INET` form made the new test fail (`assert <port> in []`); restoring the fix made it pass.
 
-## Next task (precise, evidence-based)
-Add an end-to-end CLI regression test that `ethscan scan --target ::1 --protocol udp` reports a live IPv6 UDP service as open.
-- Why: this session's reproduction showed CLI `open_ports: []` before the fix and `open_ports: [<port>]` after; `tests/test_scanner.py` covers `scan_udp_port` directly (unit + loopback), but `tests/test_cli.py`'s UDP tests monkeypatch `scan_udp_ports` and never exercise a real IPv6 transport. A CLI-level test locks the fix at the user-facing layer.
-- How: mirror `tests/test_scanner.py::test_scan_udp_port_ipv6_loopback_open_is_detected` through the CLI (bind a `::1` UDP echo server on an ephemeral port, run the `scan` command via `CliRunner` or `subprocess` with `--protocol udp --ports <port>`, assert exit 0 and the port listed in `open_ports`/`details` with `"open": true`). Skip when `not socket.has_ipv6` or when bind raises `OSError`.
-- Constraints: keep it deterministic and skip-guarded; no new dependencies; re-run the full gate (pytest/mypy/ruff/check_readme/coverage) afterwards and record results.
+## Next task
+- None pending. Repository is fully green. The UDP-IPv6 silent-wrong-result fix is now locked at both the scanner level (`tests/test_scanner.py::test_scan_udp_port_ipv6_loopback_open_is_detected`) and the CLI level (`tests/test_cli.py::test_scan_udp_ipv6_loopback_open_is_detected`).
 
 ## Do not re-implement / do not "fix" (already done / intended)
 - `ethscan/cli.py:4318` unreachable defensive guard — documented known limitation; leave it (removing would weaken validation; `# pragma: no cover` would game the metric).
@@ -25,5 +22,5 @@ Add an end-to-end CLI regression test that `ethscan scan --target ::1 --protocol
 - Do not count control-marker-only (handoff-doc) commits as project progress.
 
 ## Next session guidance
-1. Run fast gates first: `ruff`, `mypy ethscan/ tests/`, `check_readme.py`. If green, run `python -m pytest -q` once, then coverage; if green, proceed with the CLI regression test above.
-2. Only select new work if a genuine gap is REPRODUCED first (reproduce before changing). Do not fabricate work.
+1. Run fast gates first: `ruff`, `mypy ethscan/ tests/`, `check_readme.py`. If green, run `python -m pytest -q` once; if green, proceed.
+2. Only select new work if a genuine gap is REPRODUCED first (reproduce before changing). Do not fabricate work. Do not repeat verification-only sessions.

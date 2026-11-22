@@ -5270,6 +5270,73 @@ def test_scan_protocol_both(monkeypatch) -> None:
     assert "udp" in protocols
 
 
+def test_scan_udp_ipv6_loopback_open_is_detected() -> None:
+    """End-to-end: ``scan --target ::1 --protocol udp`` reports a live
+    IPv6 UDP service as open through the CLI.
+
+    Before the family-aware fix in ``scan_udp_port`` this returned
+    ``open_ports: []`` because an ``AF_INET`` socket was used to ``sendto``
+    an IPv6 literal. ``tests/test_scanner.py`` covers ``scan_udp_port``
+    directly; this locks the fix at the user-facing CLI layer.
+    """
+    import socket as socket_mod
+    import threading
+
+    if not socket_mod.has_ipv6:
+        pytest.skip("IPv6 is not available in this environment")
+    try:
+        server = socket_mod.socket(socket_mod.AF_INET6, socket_mod.SOCK_DGRAM)
+        server.setsockopt(socket_mod.SOL_SOCKET, socket_mod.SO_REUSEADDR, 1)
+        server.bind(("::1", 0))
+    except OSError:
+        pytest.skip("IPv6 loopback is not available in this environment")
+
+    port = server.getsockname()[1]
+    stop = threading.Event()
+
+    def serve() -> None:
+        server.settimeout(0.2)
+        while not stop.is_set():
+            try:
+                _data, addr = server.recvfrom(1024)
+                server.sendto(b"PONG", addr)
+            except socket_mod.timeout:
+                continue
+            except OSError:
+                break
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    try:
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "scan",
+                "--target",
+                "::1",
+                "--ports",
+                str(port),
+                "--protocol",
+                "udp",
+                "--format",
+                "json",
+                "--timeout",
+                "1.0",
+            ],
+        )
+    finally:
+        stop.set()
+        server.close()
+        thread.join(timeout=1.0)
+
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert port in data["open_ports"]
+    udp_details = [d for d in data["details"] if d["protocol"] == "udp"]
+    assert udp_details == [{"port": port, "open": True, "protocol": "udp"}]
+
+
 def test_port_aware_commands_document_common_and_all_keywords() -> None:
     """Every scanning command must advertise the port keywords it accepts.
 
