@@ -18,6 +18,7 @@ from ethscan.scanner import (
     get_common_ports,
     get_profile_defaults,
     get_profile_ports,
+    grab_banner,
     parse_port_range,
     resolve_port_list,
     scan_port,
@@ -662,3 +663,73 @@ def test_scan_udp_port_ipv6_loopback_open_is_detected() -> None:
 
     assert result_port == port
     assert is_open is True
+
+
+class _RecordingHTTPMock:
+    """A fake socket that records bytes sent and answers a HEAD request.
+
+    The first ``recv`` returns no banner (so ``grab_banner`` falls through to
+    the HTTP HEAD branch); the second returns a minimal HTTP response so the
+    banner is non-None and the request was actually sent.
+    """
+
+    def __init__(self) -> None:
+        self._initial = True
+        self.sent = b""
+
+    def settimeout(self, timeout: float) -> None:
+        pass
+
+    def recv(self, n: int) -> bytes:
+        if self._initial:
+            self._initial = False
+            return b""
+        return b"HTTP/1.1 200 OK\r\nServer: nginx\r\n\r\n"
+
+    def sendall(self, data: bytes) -> None:
+        self.sent += data
+
+    def __enter__(self) -> "_RecordingHTTPMock":
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        pass
+
+
+def test_grab_banner_http_ipv6_host_header_is_bracketed(monkeypatch) -> None:
+    """An IPv6 host is bracketed in the HEAD request's ``Host`` header (regression).
+
+    A bare IPv6 literal in a ``Host`` header (``Host: ::1``) is invalid per
+    RFC 7230 5.4 and is rejected or misrouted by strict servers and proxies, so
+    ``grab_banner`` must send the bracketed form (``Host: [::1]``).
+    """
+    from ethscan import scanner as scanner_mod
+
+    fake = _RecordingHTTPMock()
+    monkeypatch.setattr(
+        "ethscan.scanner.socket.create_connection",
+        lambda addr, timeout=None: fake,
+    )
+
+    banner = scanner_mod.grab_banner("::1", 80, 2.0)
+
+    assert banner is not None
+    assert b"Host: [::1]\r\n" in fake.sent
+    assert b"Host: ::1\r\n" not in fake.sent
+
+
+def test_grab_banner_http_ipv4_host_header_is_not_bracketed(monkeypatch) -> None:
+    """An IPv4 host is sent unbracketed in the ``Host`` header (regression)."""
+    from ethscan import scanner as scanner_mod
+
+    fake = _RecordingHTTPMock()
+    monkeypatch.setattr(
+        "ethscan.scanner.socket.create_connection",
+        lambda addr, timeout=None: fake,
+    )
+
+    banner = scanner_mod.grab_banner("127.0.0.1", 80, 2.0)
+
+    assert banner is not None
+    assert b"Host: 127.0.0.1\r\n" in fake.sent
+    assert b"Host: [127.0.0.1]" not in fake.sent
