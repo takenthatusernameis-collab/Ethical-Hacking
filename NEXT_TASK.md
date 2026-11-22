@@ -3,20 +3,12 @@
 ## Status: no pending task; repo green and complete.
 
 ## What this session did
-- Verified handoff claims against evidence: HEAD `f2d0937f3a2285de2dbef27579b54873c15e8f2d` == origin/main; working tree clean; 14 most recent commits (23a9d02..f2d0937) are control-marker-only (HANDOFF_NEXT.md/NEXT_TASK.md); last real source change is `06177e0` (ethscan/vuln.py version-range padding fix + tests).
+- Verified handoff claims against evidence: HEAD `219dc2a5732dc81d8034a33887a7a60392520961` == origin/main; working tree clean; commit `219dc2a` is control-marker-only (HANDOFF_NEXT.md/NEXT_TASK.md); last real source change is `06177e0` (ethscan/vuln.py version-range padding fix + tests).
 - Re-ran all gates with fresh evidence:
   - ruff: All checks passed
   - mypy ethscan/ tests/: Success, 269 source files
   - check_readme.py: 54 commands, 0 drift both directions
-  - pytest: 47395 passed, 147 skipped, 0 failed (105s)
-  - coverage: 16156 lines, 0 missing, 100% line AND branch (explicit `--branch` run: no row below 100%)
-- New probes this session (prior sessions did not do these):
-  - Skip reasons: all 147 skips are structural (sweep tests excluding commands lacking the swept feature). No dependency-missing skips.
-  - TODO/FIXME/stub scan: none; "placeholder" mentions are legitimate protocol details (mssql/mongodb/osdetect banners).
-  - Dangerous-pattern scan: only intentional `ssl.py:231 verify=False` fallback to still inspect a cert when verification fails.
-  - Packaging: `dnspython` is hard in requirements.txt but optional `dns` extra in pyproject.toml — deliberate graceful degradation via `DNS_AVAILABLE` guards in ethscan/dns*.py, not a bug.
-  - Version-comparison bug class (from fix 06177e0): runtime probes of `version_in_range` all correct (1.3 vs >=1.3.0 both directions, 1.3-beta, empty, "1..3"). memcached/ssh/ftp major-version parsing is exception-guarded.
-  - Runtime CLI smoke tests (new): `ethscan version` (valid JSON), `--help`, `completion bash` (generates script), `mac --target` (OUI lookup), `hash --password` all work end-to-end outside pytest.
+  - pytest: 47395 passed, 147 skipped, 0 failed (106s)
 - No source or test changes made (verification-only session).
 
 ## Do not re-implement / do not "fix" (already done / intended)
@@ -33,6 +25,6 @@
 4. If probing turns up nothing, leave the baseline intact and record findings.
 
 ## Rationale
-This is a mature, complete repository with 54 implemented commands, 47k+ passing tests, 100% line+branch coverage, 0 README/CLI drift, verified runtime CLI behavior, and no reproduced defects across two independent verification sessions. Inventing tasks would introduce unnecessary risk without clear benefit.
+This is a mature, complete repository with 54 implemented commands, 47k+ passing tests, 100% line+branch coverage, 0 README/CLI drift, verified runtime CLI behavior, and no reproduced defects across verification sessions. Inventing tasks would introduce unnecessary risk without clear benefit.
 
 (End of file)
