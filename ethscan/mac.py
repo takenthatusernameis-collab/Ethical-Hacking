@@ -36,17 +36,23 @@ def _normalize_target(target: str) -> str:
     normalized = target.strip().lower()
     if "://" in normalized:
         parsed = parse_url(normalized)
-        # ``urllib.parse`` splits the authority at the first colon, so a
-        # colon-separated MAC address in a URL authority (e.g.
-        # ``https://00:1A:2B:3C:4D:5E/``) yields ``hostname == "00"`` and a
-        # bogus port. When the parsed hostname is not itself a MAC address
-        # but the full authority is, use the authority instead.
         host = parsed.hostname or ""
-        if not _is_mac_address(host) and _is_mac_address(parsed.netloc):
-            host = parsed.netloc
+        if not _is_mac_address(host):
+            # The authority may be a colon-separated MAC, possibly with a
+            # trailing ``:port`` (``urllib.parse`` keeps the port in the
+            # netloc), e.g. ``https://00:1A:2B:3C:4D:5E:8080/``. The netloc
+            # with the port stripped is a valid MAC exactly when the authority
+            # is a MAC with an appended port; ``parsed.hostname`` is always a
+            # MAC when the netloc itself is one, so the port-stripped form is
+            # the only candidate that can differ from the hostname.
+            candidate = _strip_mac_port(parsed.netloc)
+            if _is_mac_address(candidate):
+                host = candidate
         normalized = host
-    # Strip any surrounding whitespace again after URL parsing
-    normalized = normalized.strip()
+    # A MAC may carry a trailing ``:port`` (e.g. from a URL authority or a
+    # bare ``MAC:port`` target); drop the port so the MAC itself is preserved
+    # instead of being truncated to its first octet.
+    normalized = _strip_mac_port(normalized.strip())
     if not normalized:
         raise TargetSpecError(f"Could not parse host from target {target!r}")
     return normalized
@@ -302,6 +308,25 @@ def _is_mac_address(value: str) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _strip_mac_port(value: str) -> str:
+    """Strip a trailing ``:port`` from a MAC address string.
+
+    A MAC address has six groups, while a ``host:port`` authority has exactly
+    one colon. When the value is a MAC with an appended port (e.g.
+    ``00:1A:2B:3C:4D:5E:8080``), drop the last group so the MAC itself is
+    preserved. Values that are not MACs are returned unchanged, so bare hosts,
+    IPs, and bracketed IPv6 URLs keep their form.
+    """
+    if not value:
+        return value
+    # ``urllib.parse`` preserves the original case of the netloc, so the MAC
+    # check below normalizes separators itself.
+    head, sep, tail = value.rpartition(":")
+    if sep and _is_mac_address(head):
+        return head
+    return value
 
 
 def _is_ip_address(value: str) -> bool:

@@ -19,6 +19,7 @@ from ethscan.mac import (
     _normalize_target,
     _resolve_host,
     _save_cache,
+    _strip_mac_port,
     format_mac_report_csv,
     format_mac_report_json,
     format_mac_report_markdown,
@@ -95,6 +96,72 @@ def test_run_mac_url_with_colon_mac(monkeypatch) -> None:
     assert result["mac"] == "00:1a:2b:3c:4d:5e"
     assert result["oui"] == "001a2b"
     assert result["mac_data"]["vendor"] == "Cisco"
+
+
+def test_normalize_target_url_with_colon_mac_and_port() -> None:
+    """A colon-separated MAC in a URL authority with a trailing port is preserved.
+
+    ``urllib.parse`` keeps the port in the netloc, so
+    ``https://00:1A:2B:3C:4D:5E:8080/`` must yield the MAC itself, not the
+    first octet ``00`` that ``parsed.hostname`` would give.
+    """
+    assert _normalize_target("https://00:1A:2B:3C:4D:5E:8080/") == "00:1a:2b:3c:4d:5e"
+    assert _normalize_target("https://00-1A-2B-3C-4D-5E:8080/") == "00-1a-2b-3c-4d-5e"
+    assert _normalize_target("https://00.1A.2B.3C.4D.5E:8080/") == "00.1a.2b.3c.4d.5e"
+    assert _normalize_target("https://001A2B3C4D5E:8080/") == "001a2b3c4d5e"
+    # A bare MAC:port target is normalized the same way.
+    assert _normalize_target("00:1A:2B:3C:4D:5E:8080") == "00:1a:2b:3c:4d:5e"
+
+
+def test_run_mac_url_with_colon_mac_and_port(monkeypatch) -> None:
+    """run_mac normalizes a URL whose authority is a colon-separated MAC + port."""
+    monkeypatch.setattr("ethscan.mac._resolve_host", lambda h: pytest.fail("hostname must not be resolved"))
+    monkeypatch.setattr("ethscan.mac._get_cached_or_fetch",
+                        lambda *a, **kw: {"mac": "00:1a:2b:3c:4d:5e", "vendor": "Cisco", "cached": False})
+
+    result = run_mac("https://00:1A:2B:3C:4D:5E:8080/", timeout=1.0, use_cache=False)
+
+    assert result["target"] == "https://00:1A:2B:3C:4D:5E:8080/"
+    assert result["mac"] == "00:1a:2b:3c:4d:5e"
+    assert result["oui"] == "001a2b"
+    assert result["mac_data"]["vendor"] == "Cisco"
+
+
+def test_strip_mac_port() -> None:
+    """_strip_mac_port drops a trailing port from a MAC and leaves non-MACs alone."""
+    assert _strip_mac_port("00:1A:2B:3C:4D:5E:8080") == "00:1A:2B:3C:4D:5E"
+    assert _strip_mac_port("00:1a:2b:3c:4d:5e:1") == "00:1a:2b:3c:4d:5e"
+    assert _strip_mac_port("00-1A-2B-3C-4D-5E:8080") == "00-1A-2B-3C-4D-5E"
+    assert _strip_mac_port("00.1A.2B.3C.4D.5E:8080") == "00.1A.2B.3C.4D.5E"
+    assert _strip_mac_port("001A2B3C4D5E:8080") == "001A2B3C4D5E"
+    # Non-MAC values are returned unchanged.
+    assert _strip_mac_port("example.com:8080") == "example.com:8080"
+    assert _strip_mac_port("8.8.8.8:53") == "8.8.8.8:53"
+    assert _strip_mac_port("[fd00::1]:8443") == "[fd00::1]:8443"
+    assert _strip_mac_port("") == ""
+    assert _strip_mac_port("00:1a:2b:3c:4d:5e") == "00:1a:2b:3c:4d:5e"
+
+
+def test_normalize_target_url_with_colon_mac_and_no_port_falls_back_to_netloc() -> None:
+    """A URL whose authority is a MAC without a port uses the raw netloc.
+
+    This exercises the ``elif _is_mac_address(parsed.netloc)`` branch, which
+    is reached when the netloc is already a valid MAC (no port to strip).
+    """
+    assert _normalize_target("https://00-1A-2B-3C-4D-5E/") == "00-1a-2b-3c-4d-5e"
+    assert _normalize_target("https://00.1A.2B.3C.4D.5E/") == "00.1a.2b.3c.4d.5e"
+    assert _normalize_target("https://001A2B3C4D5E/") == "001a2b3c4d5e"
+
+
+def test_normalize_target_url_with_colon_mac_and_no_port_falls_back_to_netloc() -> None:
+    """A URL whose authority is a MAC without a port uses the raw netloc.
+
+    This exercises the ``elif _is_mac_address(parsed.netloc)`` branch, which
+    is reached when the netloc is already a valid MAC (no port to strip).
+    """
+    assert _normalize_target("https://00-1A-2B-3C-4D-5E/") == "00-1a-2b-3c-4d-5e"
+    assert _normalize_target("https://00.1A.2B.3C.4D.5E/") == "00.1a.2b.3c.4d.5e"
+    assert _normalize_target("https://001A2B3C4D5E/") == "001a2b3c4d5e"
 
 
 # ---------------------------------------------------------------------------
