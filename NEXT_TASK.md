@@ -3,14 +3,15 @@
 ## Status: no pending task; repo green and complete.
 
 ## What this session did
-- Verified handoff claims against evidence: HEAD `aee23302b5d9e93500d2e48da60723a173b00217` (main); working tree clean (`git status --short` empty). Prior docs recorded parent `e70aa8b`; baseline advanced by one committed commit since last session, no uncommitted changes.
+- Verified handoff claims against evidence: HEAD `be25018dd5d96d2cdfefb221ce9a443e8569ff8c` (main); working tree clean (`git status --short` empty).
 - Re-ran all gates with fresh evidence:
   - ruff: All checks passed
-  - mypy ethscan/ tests/: Success, no issues in 269 source files (notes only for untyped test defs)
+  - mypy ethscan/ tests/: Success, no issues in 269 source files
+  - mypy --check-untyped-defs ethscan/ tests/: Success, no issues in 269 source files
   - check_readme.py: 54 commands found, 0 drift both directions; exit 0
-  - pytest: 47395 passed, 147 skipped, 0 failed (133.68s)
+  - pytest: 47395 passed, 147 skipped, 0 failed (131.01s)
+  - Grep for TODO/FIXME/XXX/HACK/BUG in ethscan/ and tests/: no matches
 - No source or test changes made; baseline left intact.
-- Corrected stale HEAD hash in HANDOFF_NEXT.md/NEXT_TASK.md (recorded `e70aa8b`; current HEAD `aee2330` is one commit later on main).
 
 ## Do not re-implement / do not "fix" (already done / intended)
 - `ethscan/cli.py` unreachable defensive guard in the `completion` command — documented known limitation; leave it.
@@ -19,7 +20,7 @@
 - `ssl.py` verify=False fallback — intentional for cert inspection.
 
 ## Next session guidance
-1. Verify HEAD hash against `git log`/`git status` before trusting stale docs (`git rev-parse HEAD` should be `aee23302b5d9e93500d2e48da60723a173b00217` or later; `git status` clean).
+1. Verify HEAD hash against `git log`/`git status` before trusting stale docs (`git rev-parse HEAD` should be `be25018dd5d96d2cdfefb221ce9a443e8569ff8c` or later; `git status` clean).
 2. Run fast gates first: `ruff`, `mypy ethscan/ tests/`, `check_readme.py`. If green, optionally `python -m pytest -q` once.
 3. Only select new work if a genuine gap is **reproduced first** (reproduce before changing). Do not fabricate work.
 4. If probing turns up nothing, leave the baseline intact and record findings.
