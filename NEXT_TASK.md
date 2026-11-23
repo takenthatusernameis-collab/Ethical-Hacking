@@ -3,14 +3,14 @@
 ## Status: no pending task; repo green and complete.
 
 ## What this session did
-- Verified handoff claims against evidence: HEAD `71db40aeadd80c76d98de4146074649aa5a07eda` (main); working tree clean; no source/test changes made (verification-only session).
+- Verified handoff claims against evidence: HEAD `e70aa8b6c1c7a1b92b4b8fd0944ec4cb28a76605` (main); working tree clean; no source/test changes made (verification-only session).
 - Re-ran all gates with fresh evidence:
   - ruff: All checks passed
   - mypy ethscan/ tests/: Success, no issues in 269 source files
   - check_readme.py: 54 commands, 0 drift both directions
   - pytest: 47395 passed, 147 skipped, 0 failed
 - No source or test changes made.
-- Corrected stale HANDOFF_NEXT.md/NEXT_TASK.md (had recorded HEAD `e8d5c18`; current HEAD is `71db40a`, which is a later commit on main).
+- Corrected stale HANDOFF_NEXT.md/NEXT_TASK.md (had recorded HEAD `71db40a`; current HEAD is `e70aa8b`, which is a later commit on main).
 
 ## Do not re-implement / do not "fix" (already done / intended)
 - `ethscan/cli.py` unreachable defensive guard in the `completion` command — documented known limitation; leave it.
