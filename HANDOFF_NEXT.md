@@ -32,7 +32,16 @@
 - Patching `builtins.__import__` directly was replaced with `sys.modules` injection (`None` entry raises `ImportError`), which is more robust and idiomatic for import-error simulation.
 - Do not repeat the handoff's stale claim that real ICMPv6 is missing.
 
+## Independent verification (this session)
+No prior agent assignment existed; inspected the repository and independently verified the baseline from a clean tree:
+- `python -m pytest -q` -> 47428 passed, 147 skipped, 0 failed.
+- `python -m mypy ethscan/ tests/` -> Success: no issues found in 270 source files.
+- `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
+- `python check_readme.py` -> 54 commands, 0 drift both directions.
+- `git status` -> clean working tree; `git diff --check` -> clean.
+No source or test changes were made; no gap was reproduced.
+
 ## Next Task
-No further task is pending within the previously agreed scope. `ethscan/version.py` is fully covered, `ethscan/ping.py` is 100%, and the remaining `oracle`/`postgresql` empty-target handling is intentionally out of scope. If a new task is assigned, it should be recorded in `NEXT_TASK.md`.
+No further task is pending. Repository is fully green. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error). If future work is needed, reproduce a concrete gap first (failing check/test or behavioral evidence vs documented contract) before implementing — do not speculate or weaken safety/validation.
 
 (End of file - total 37 lines)
