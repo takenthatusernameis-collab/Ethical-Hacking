@@ -3,8 +3,7 @@
 None pending. Repository independently verified fully green at the start of this session:
 
 - `python -m pytest -q` -> 47428 passed, 147 skipped, 0 failed
-- `python -m coverage run -m pytest -q` + `coverage report` -> all `ethscan/*` modules 100% (TOTAL 16183 stmts, 0 missing)
-- `python -m mypy ethscan/ tests/` -> Success: no issues in 270 source files
+- `python -m mypy ethscan/ tests/` -> Success: no issues found in 270 source files
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed
 - `python check_readme.py` -> 54 commands, 0 drift both directions
 - `git status` -> clean working tree; `git diff --check` -> clean

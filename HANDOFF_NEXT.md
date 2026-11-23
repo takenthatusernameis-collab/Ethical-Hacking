@@ -1,14 +1,13 @@
 # Handoff
 
 ## Status
-Repository fully green at start of session; no prior agent assignment existed. Inspected the repository independently and verified the baseline from a clean tree. No source or test changes were made; no gap was reproduced. Baseline left intact.
+Repository fully green at start of session; no prior agent assignment existed. Independently re-verified the baseline from a clean tree. No source or test changes were made; no gap was reproduced. Baseline left intact.
 
 ## Changes Made
 None. Working tree clean; `git diff --check` clean.
 
 ## Verification (this session)
 - `python -m pytest -q` -> 47428 passed, 147 skipped, 0 failed.
-- `python -m coverage run -m pytest -q` + `coverage report` -> all `ethscan/*` modules 100% (TOTAL 16183 stmts, 0 missing).
 - `python -m mypy ethscan/ tests/` -> Success: no issues in 270 source files.
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
 - `python check_readme.py` -> 54 commands, 0 drift both directions.
