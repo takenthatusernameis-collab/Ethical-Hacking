@@ -2,15 +2,15 @@
 Date: Mon Nov 23 2026 (this session)
 
 ## State
-- HEAD: `79cc3eae42806118cf70d18098de87c308b45501` (main). Working tree clean (`git status --short` empty).
-- Prior HANDOFF_NEXT.md/NEXT_TASK.md claimed HEAD `47fd278` which does not exist locally; those docs were stale. Source baseline is unchanged — verification-only session, no source or test changes made.
+- HEAD: `e8d5c180477172fe40d46970a37f7f468a223752` (main). Working tree clean (`git status --short` empty).
+- Prior HANDOFF_NEXT.md/NEXT_TASK.md recorded HEAD `79cc3ea`; that commit is an ancestor of current HEAD (`e8d5c18`), so the baseline has advanced only via committed work — no uncommitted changes. Source baseline unchanged this session; verification-only session, no source or test changes made.
 
 ## What was verified this session (fresh evidence)
-- `git rev-parse HEAD` = `79cc3ea`; `git status` clean.
+- `git rev-parse HEAD` = `e8d5c180477172fe40d46970a37f7f468a223752`; `git status` clean.
 - `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed
-- `python -m mypy ethscan/ tests/` → Success: no issues found in 269 source files
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 269 source files (notes only for untyped test defs)
 - `python3 check_readme.py` → 54 commands found, 0 drift both directions; exit 0
-- Full pytest (`python -m pytest -q`) → 47395 passed, 147 skipped, 0 failed (137.79s)
+- Full pytest (`python -m pytest -q`) → 47395 passed, 147 skipped, 0 failed (130.49s)
 
 ## What remains unresolved
 - Nothing functional. Repository is mature, complete, and production-ready.
@@ -28,7 +28,7 @@ Date: Mon Nov 23 2026 (this session)
 - This repository has 54 fully implemented commands, 47k+ passing tests, mypy/ruff clean, 0 README/CLI drift, verified runtime CLI behavior, and no reproduced defects. Inventing tasks would introduce unnecessary risk without clear benefit.
 
 ## Guidance for next session
-1. Verify HEAD hash: `git rev-parse HEAD` should match `79cc3eae42806118cf70d18098de87c308b45501` or later; confirm `git status` is clean.
+1. Verify HEAD hash: `git rev-parse HEAD` should match `e8d5c180477172fe40d46970a37f7f468a223752` or later; confirm `git status` is clean.
 2. Run fast gates first if needed: `ruff`, `mypy ethscan/ tests/`, `check_readme.py`. If green, optionally `python -m pytest -q` once.
 3. Only select new work if a **genuine gap is reproduced first** (reproduce before changing). Do not fabricate work.
 4. If probing turns up nothing, leave the baseline intact and record findings.
