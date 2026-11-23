@@ -3,7 +3,7 @@
 ## Status: no pending task; repo green and complete.
 
 ## What this session did
-- Verified handoff claims against evidence: HEAD `73adb08da199668443d599494f1996c3c1dab3ed` == origin/main; working tree clean; no source/test changes made (verification-only session).
+- Verified handoff claims against evidence: HEAD `47fd278b9c539d2d20f58f00e81dd92697420cd9` == origin/main; working tree clean; no source/test changes made (verification-only session; the commit ahead of `73adb08` is control-marker-only, not project progress).
 - Re-ran all gates with fresh evidence:
   - ruff: All checks passed
   - mypy ethscan/ tests/: Success, no issues in 269 source files

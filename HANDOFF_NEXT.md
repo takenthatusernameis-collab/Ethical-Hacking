@@ -2,14 +2,15 @@
 Date: Mon Nov 23 2026 (this session)
 
 ## State
-- HEAD: `73adb08da199668443d599494f1996c3c1dab3ed` (main). origin/main == HEAD; working tree clean (`git status --short` empty). Source unchanged since last real source change; commits after the last source change touched only HANDOFF_NEXT.md/NEXT_TASK.md (control-marker-only commits, not project progress).
+- HEAD: `47fd278b9c539d2d20f58f00e81dd92697420cd9` (main). origin/main == HEAD; working tree clean (`git status --short` empty).
+- The commit ahead of the prior recorded HEAD (`73adb08`) is control-marker-only (HANDOFF_NEXT.md/NEXT_TASK.md); no source or test changes. Source baseline is unchanged from `73adb08`.
 
 ## What was verified this session (fresh evidence)
-- HEAD `73adb08` == origin/main; working tree clean; no source/test changes made (verification-only session).
+- `git rev-parse HEAD` = `47fd278`; `git status` clean.
 - `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed
 - `python -m mypy ethscan/ tests/` → Success: no issues found in 269 source files
 - `python3 check_readme.py` → 54 commands found, 0 drift both directions; exit 0
-- Full pytest (`python -m pytest -q`) → 47395 passed, 147 skipped, 0 failed (103.17s)
+- Full pytest (`python -m pytest -q`) → 47395 passed, 147 skipped, 0 failed (106.22s)
 - `oracle`/`postgresql` empty-target handling remains intentionally in-band (exit 0), out of scope per documented contract.
 
 ## What remains unresolved
@@ -28,7 +29,7 @@ Date: Mon Nov 23 2026 (this session)
 - This repository has 54 fully implemented commands, 47k+ passing tests, mypy/ruff clean, 0 README/CLI drift, verified runtime CLI behavior, and no reproduced defects. Inventing tasks would introduce unnecessary risk without clear benefit.
 
 ## Guidance for next session
-1. Verify HEAD hash: `git rev-parse HEAD` should match `73adb08da199668443d599494f1996c3c1dab3ed` or later; confirm `git status` is clean.
+1. Verify HEAD hash: `git rev-parse HEAD` should match `47fd278b9c539d2d20f58f00e81dd92697420cd9` or later; confirm `git status` is clean.
 2. Run fast gates first if needed: `ruff`, `mypy ethscan/ tests/`, `check_readme.py`. If green, optionally `python -m pytest -q` once.
 3. Only select new work if a **genuine gap is reproduced first** (reproduce before changing). Do not fabricate work.
 4. If probing turns up nothing, leave the baseline intact and record findings.
