@@ -153,17 +153,6 @@ def test_normalize_target_url_with_colon_mac_and_no_port_falls_back_to_netloc() 
     assert _normalize_target("https://001A2B3C4D5E/") == "001a2b3c4d5e"
 
 
-def test_normalize_target_url_with_colon_mac_and_no_port_falls_back_to_netloc() -> None:
-    """A URL whose authority is a MAC without a port uses the raw netloc.
-
-    This exercises the ``elif _is_mac_address(parsed.netloc)`` branch, which
-    is reached when the netloc is already a valid MAC (no port to strip).
-    """
-    assert _normalize_target("https://00-1A-2B-3C-4D-5E/") == "00-1a-2b-3c-4d-5e"
-    assert _normalize_target("https://00.1A.2B.3C.4D.5E/") == "00.1a.2b.3c.4d.5e"
-    assert _normalize_target("https://001A2B3C4D5E/") == "001a2b3c4d5e"
-
-
 # ---------------------------------------------------------------------------
 # Host resolution
 # ---------------------------------------------------------------------------
