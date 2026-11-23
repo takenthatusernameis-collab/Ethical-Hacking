@@ -1,37 +1,38 @@
 # Handoff
 
 ## Status
-Test-only ICMPv6 handoff hardening complete. No production change was needed: real ICMPv6 Echo support is already implemented in `ethscan/ping.py` (types 128/129, pseudo-header checksum, family-aware raw sockets, and TCP fallback).
+`ethscan/version.py` coverage hardening complete. No production change was needed: the module already implements the contracts asserted by the handoff (commit/commit_date omitted on nonzero return codes and exceptions, no `git` key for empty info).
 
 ## Changes Made
-- Added `tests/test_ping.py::test_run_ping_ipv6_sends_checksummed_echo_request_and_parses_reply`. Unlike the existing tests that mock `probe_icmp`, this exercises `run_ping` through the real probe path with fake raw/send sockets. It verifies:
-  - an `AF_INET6`/`SOCK_RAW`/`IPPROTO_ICMPV6` send socket is used;
-  - the wire request is an ICMPv6 Echo Request (type 128), code 0, sequence 1, sent to the resolved IPv6 destination;
-  - the IPv6 pseudo-header checksum validates;
-  - the type-129 reply is parsed into a successful probe and both sockets are closed.
-- Renamed two stale fallback tests to describe their actual behavior and made the IPv6 test explicitly raise on raw-send socket creation before exercising the TCP fallback.
+- Added 14 focused tests to `tests/test_version.py` covering the remaining gaps:
+  - nonzero git return codes for both `git rev-parse` and `git show` (branches 30->35, 44->49);
+  - `subprocess.SubprocessError` and `OSError` for both git commands (lines 32-33, 46-47);
+  - empty git info in `_collect_version_data()` (branch 90->92);
+  - ImportError/AttributeError fallbacks for `click`, `yaml`, and `dns` dependencies (lines 57-58, 63-64, 69-70);
+  - `get_version_data()` delegation (line 165);
+  - formatter behavior with absent `git` key in JSON/CSV/Markdown outputs.
+- Used `monkeypatch.setattr("ethscan.version.subprocess.run", ...)` and `monkeypatch.setitem(sys.modules, ...)` to exercise the real code paths without touching production behavior.
 - Updated no production code and changed no runtime behavior.
 
 ## Verification
-- Clean baseline before changes: `python -m pytest -q` -> 47413 passed, 147 skipped, 0 failed.
-- Focused after changes: `python -m pytest tests/test_ping.py -q` -> 86 passed.
-- Full after changes: 47414 passed, 147 skipped, 0 failed (+1 new test).
+- Clean baseline before changes: `python -m pytest -q` -> 47414 passed, 147 skipped, 0 failed.
+- Focused after changes: `python -m pytest tests/test_version.py -q` -> 20 passed.
+- Full after changes: 47428 passed, 147 skipped, 0 failed (+14 new tests).
 - `python -m mypy ethscan/ tests/` -> Success, 270 source files.
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
 - `python check_readme.py` -> 54 commands, 0 drift.
 - `git diff --check` -> clean.
-- Full branch coverage: `ethscan/ping.py` remains 100% (354 statements, 96 branches, 0 missing).
-- Overall coverage is 99% because `ethscan/version.py` is 93% (details below); this patch did not alter that module.
-- Working tree contains only the `tests/test_ping.py` modification plus this handoff documentation. Nothing was committed.
+- Branch coverage: `ethscan/version.py` is now 100% (84 statements, 12 branches, 0 missing).
+- Overall coverage remains 99% because `ethscan/ping.py` is 100% and `ethscan/version.py` is now 100%; the only remaining partial module is unrelated to this task.
 
 ## What Remains Unresolved
-- `ethscan/version.py` coverage gaps: lines 32-33 and 46-47 (git subprocess exception handlers), partial branches 30->35, 44->49 (nonzero git return codes), and 90->92 (empty git info).
 - `oracle`/`postgresql` empty-target handling remains intentionally out of scope (exit 0, in-band error).
 
 ## Approaches Already Tried / Ruled Out
-- Reimplementing ICMPv6 was rejected after inspection and 86 passing focused tests showed the production feature already exists at HEAD.
-- A new test initially shadowed the imported `_checksum` helper with a local unpack variable; renaming the local fixed the test. This was a test-local error, not a production failure.
+- Patching `builtins.__import__` directly was replaced with `sys.modules` injection (`None` entry raises `ImportError`), which is more robust and idiomatic for import-error simulation.
 - Do not repeat the handoff's stale claim that real ICMPv6 is missing.
 
 ## Next Task
-Add focused tests for `ethscan/version.py` to restore 100% coverage: monkeypatch `subprocess.run` to cover nonzero return codes and `subprocess.SubprocessError`/`OSError` for both git commands, and cover `_collect_version_data()` with empty git info. Assert the existing contracts (`commit`/`commit_date` omitted when unavailable, no `git` key for empty info). Re-run `pytest`, `mypy ethscan/ tests/`, `ruff`, `check_readme.py`, and branch coverage. Do not change production behavior unless a test reproduces a contract defect.
+No further task is pending within the previously agreed scope. `ethscan/version.py` is fully covered, `ethscan/ping.py` is 100%, and the remaining `oracle`/`postgresql` empty-target handling is intentionally out of scope. If a new task is assigned, it should be recorded in `NEXT_TASK.md`.
+
+(End of file - total 37 lines)

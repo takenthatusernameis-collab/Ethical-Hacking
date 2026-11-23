@@ -2,7 +2,18 @@
 
 from __future__ import annotations
 
-from ethscan.version import _collect_version_data, format_version_report_json, format_version_report_markdown, format_version_report_csv
+import subprocess
+import sys
+from unittest.mock import MagicMock
+
+from ethscan.version import (
+    _collect_version_data,
+    _get_git_info,
+    format_version_report_csv,
+    format_version_report_json,
+    format_version_report_markdown,
+    get_version_data,
+)
 
 
 def test_collect_version_data_structure():
@@ -95,3 +106,125 @@ def test_formatters_handle_hostile_input():
     result = formatter([1, 2, 3])
     assert isinstance(result, str)
     assert result != ""
+
+
+def test_get_version_data_returns_collect_result():
+    """Test that get_version_data delegates to _collect_version_data."""
+    data = get_version_data()
+    assert isinstance(data, dict)
+    assert "version" in data
+
+
+def test_get_git_info_nonzero_returncode_omits_commit(monkeypatch):
+    """Nonzero git return code omits the commit key."""
+    mock_result = MagicMock()
+    mock_result.returncode = 1
+    mock_result.stdout = "deadbeef"
+    monkeypatch.setattr("ethscan.version.subprocess.run", lambda *a, **k: mock_result)
+    info = _get_git_info()
+    assert "commit" not in info
+
+
+def test_get_git_info_nonzero_returncode_omits_commit_date(monkeypatch):
+    """Nonzero git return code omits the commit_date key."""
+    mock_result = MagicMock()
+    mock_result.returncode = 2
+    mock_result.stdout = "2024-01-01"
+    monkeypatch.setattr("ethscan.version.subprocess.run", lambda *a, **k: mock_result)
+    info = _get_git_info()
+    assert "commit_date" not in info
+
+
+def test_get_git_info_subprocess_error_omits_commit(monkeypatch):
+    """subprocess.SubprocessError is swallowed and commit is omitted."""
+    def _raise(*a, **k):
+        raise subprocess.SubprocessError("boom")
+    monkeypatch.setattr("ethscan.version.subprocess.run", _raise)
+    info = _get_git_info()
+    assert "commit" not in info
+    assert "commit_date" not in info
+
+
+def test_get_git_info_oserror_omits_commit(monkeypatch):
+    """OSError is swallowed and commit is omitted."""
+    def _raise(*a, **k):
+        raise OSError("no git")
+    monkeypatch.setattr("ethscan.version.subprocess.run", _raise)
+    info = _get_git_info()
+    assert "commit" not in info
+    assert "commit_date" not in info
+
+
+def test_collect_version_data_omits_git_key_when_empty(monkeypatch):
+    """Empty git info omits the git key from version data."""
+    monkeypatch.setattr("ethscan.version._get_git_info", lambda: {})
+    data = _collect_version_data()
+    assert "git" not in data
+
+
+def test_collect_version_data_includes_git_when_present(monkeypatch):
+    """Non-empty git info includes the git key."""
+    monkeypatch.setattr(
+        "ethscan.version._get_git_info",
+        lambda: {"commit": "abc", "commit_date": "2024"},
+    )
+    data = _collect_version_data()
+    assert data["git"] == {"commit": "abc", "commit_date": "2024"}
+
+
+def test_collect_version_data_click_import_error(monkeypatch):
+    """click ImportError falls back to 'unknown'."""
+    monkeypatch.setitem(sys.modules, "click", None)
+    monkeypatch.setattr("ethscan.version._get_git_info", lambda: {})
+    data = _collect_version_data()
+    assert data["dependencies"]["click"] == "unknown"
+
+
+def test_collect_version_data_yaml_import_error(monkeypatch):
+    """yaml ImportError falls back to 'unknown'."""
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    monkeypatch.setattr("ethscan.version._get_git_info", lambda: {})
+    data = _collect_version_data()
+    assert data["dependencies"]["pyyaml"] == "unknown"
+
+
+def test_collect_version_data_dns_not_installed(monkeypatch):
+    """dns ImportError falls back to 'not installed'."""
+    monkeypatch.setitem(sys.modules, "dns", None)
+    monkeypatch.setattr("ethscan.version._get_git_info", lambda: {})
+    data = _collect_version_data()
+    assert data["dependencies"]["dnspython"] == "not installed"
+
+
+def test_collect_version_data_dns_attribute_error(monkeypatch):
+    """dns without __version__ falls back to 'not installed'."""
+    module = MagicMock(spec=[])  # no __version__ attribute
+    monkeypatch.setitem(sys.modules, "dns", module)
+    monkeypatch.setattr("ethscan.version._get_git_info", lambda: {})
+    data = _collect_version_data()
+    assert data["dependencies"]["dnspython"] == "not installed"
+
+
+def test_format_version_report_json_handles_empty_git():
+    """JSON formatter omits git when absent."""
+    data = _collect_version_data()
+    data.pop("git", None)
+    output = format_version_report_json(data)
+    assert '"git"' not in output
+
+
+def test_format_version_report_csv_handles_empty_git():
+    """CSV formatter omits git rows when absent."""
+    data = _collect_version_data()
+    data.pop("git", None)
+    output = format_version_report_csv(data)
+    assert "git.commit" not in output
+    assert "git.commit_date" not in output
+
+
+def test_format_version_report_markdown_handles_empty_git():
+    """Markdown formatter omits Git section when absent."""
+    data = _collect_version_data()
+    data.pop("git", None)
+    output = format_version_report_markdown(data)
+    assert "## Git" not in output
