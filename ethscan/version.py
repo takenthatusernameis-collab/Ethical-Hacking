@@ -6,12 +6,47 @@ import csv
 import io
 import json
 import platform
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
 from ethscan import __version__
 from ethscan.config import find_config_file
+
+
+def _get_git_info() -> dict[str, str]:
+    """Get git commit hash and date if available."""
+    git_info: dict[str, str] = {}
+    try:
+        # Get the full commit hash
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=1.0,
+            cwd=Path(__file__).parent.parent,
+        )
+        if result.returncode == 0:
+            git_info["commit"] = result.stdout.strip()
+    except (subprocess.SubprocessError, FileNotFoundError, OSError):
+        pass
+
+    try:
+        # Get the commit date
+        result = subprocess.run(
+            ["git", "show", "-s", "--format=%ci", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=1.0,
+            cwd=Path(__file__).parent.parent,
+        )
+        if result.returncode == 0:
+            git_info["commit_date"] = result.stdout.strip()
+    except (subprocess.SubprocessError, FileNotFoundError, OSError):
+        pass
+
+    return git_info
 
 
 def _collect_version_data() -> dict[str, Any]:
@@ -42,7 +77,8 @@ def _collect_version_data() -> dict[str, Any]:
         "pyyaml": yaml_version,
         "dnspython": dns_version,
     }
-    return {
+    git_info = _get_git_info()
+    result: dict[str, Any] = {
         "version": __version__,
         "python": sys.version.split()[0],
         "platform": platform.platform(),
@@ -51,6 +87,9 @@ def _collect_version_data() -> dict[str, Any]:
         "config_file": str(config_path) if config_path else "not found",
         "cache_directory": str(cache_path),
     }
+    if git_info:
+        result["git"] = git_info
+    return result
 
 
 def _as_dict(value: object) -> dict[str, Any]:
@@ -79,6 +118,10 @@ def format_version_report_csv(data: object) -> str:
         writer.writerow([f"dep.{dep}", ver])
     writer.writerow(["config_file", data.get("config_file", "")])
     writer.writerow(["cache_directory", data.get("cache_directory", "")])
+    git_info = data.get("git", {})
+    if git_info:
+        writer.writerow(["git.commit", git_info.get("commit", "")])
+        writer.writerow(["git.commit_date", git_info.get("commit_date", "")])
     return output_io.getvalue()
 
 
@@ -105,6 +148,15 @@ def format_version_report_markdown(data: object) -> str:
         f"- **Config file:** {data.get('config_file', '')}",
         f"- **Cache directory:** {data.get('cache_directory', '')}",
     ]
+    git_info = data.get("git", {})
+    if git_info:
+        lines.extend([
+            "",
+            "## Git",
+            "",
+            f"- **Commit:** {git_info.get('commit', '')}",
+            f"- **Commit Date:** {git_info.get('commit_date', '')}",
+        ])
     return "\n".join(lines) + "\n"
 
 
