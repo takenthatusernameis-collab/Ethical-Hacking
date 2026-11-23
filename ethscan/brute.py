@@ -241,7 +241,7 @@ def run_brute(
     }
 
 
-def format_brute_report_csv(data: dict[str, object]) -> str:
+def format_brute_report_csv(data: object) -> str:
     """Format brute-force results as CSV (credential dump).
 
     Produces one row per attempt with columns: username, password, success, error.
@@ -271,12 +271,12 @@ def format_brute_report_csv(data: dict[str, object]) -> str:
     return output.getvalue().rstrip("\r\n")
 
 
-def format_brute_report_json(data: dict[str, object]) -> str:
+def format_brute_report_json(data: object) -> str:
     """Format brute-force results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_brute_report_markdown(data: dict[str, object]) -> str:
+def format_brute_report_markdown(data: object) -> str:
     """Format brute-force results as Markdown."""
     if not isinstance(data, dict):
         data = {}

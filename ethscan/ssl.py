@@ -7,7 +7,6 @@ import io
 import json
 import socket
 import ssl
-from collections.abc import Mapping
 
 from ethscan.target import normalize_host
 
@@ -285,12 +284,12 @@ def run_ssl(
     return data
 
 
-def format_ssl_report_json(data: Mapping[str, object]) -> str:
+def format_ssl_report_json(data: object) -> str:
     """Format SSL results as JSON."""
     return json.dumps(data, indent=2, default=str)
 
 
-def format_ssl_report_markdown(data: Mapping[str, object]) -> str:
+def format_ssl_report_markdown(data: object) -> str:
     """Format SSL results as Markdown."""
     if not isinstance(data, dict):
         data = {}
@@ -337,7 +336,7 @@ def format_ssl_report_markdown(data: Mapping[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_ssl_report_csv(data: Mapping[str, object]) -> str:
+def format_ssl_report_csv(data: object) -> str:
     """Format SSL results as CSV."""
     if not isinstance(data, dict):
         data = {}

@@ -555,3 +555,77 @@ def test_paramiko_import_success(monkeypatch):
             sys.modules.pop("paramiko", None)
         sys.modules.pop("ethscan.brute", None)
         import ethscan.brute  # noqa: F401 - restore module cache
+
+
+def test_format_brute_report_json_non_dict() -> None:
+    """Test format_brute_report_json handles non-dict input."""
+    output = format_brute_report_json("not a dict")
+    assert '"not a dict"' in output
+
+
+def test_format_brute_report_markdown_non_dict() -> None:
+    """Test format_brute_report_markdown handles non-dict input."""
+    output = format_brute_report_markdown("not a dict")
+    assert "# ethscan Brute Force Report" in output
+    assert "**Target:**" in output
+
+
+def test_format_brute_report_csv_non_dict() -> None:
+    """Test format_brute_report_csv handles non-dict input."""
+    output = format_brute_report_csv("not a dict")
+    assert output == "username,password,success,error"
+
+
+def test_format_brute_report_csv_non_dict_results() -> None:
+    """Test format_brute_report_csv handles non-dict results list items."""
+    data = {
+        "results": [
+            {"username": "admin", "password": "secret", "success": True, "error": None},
+            "not a dict",
+            123,
+        ]
+    }
+    output = format_brute_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "username,password,success,error"
+    assert "admin,secret,true," in lines[1]
+
+
+def test_format_brute_report_markdown_non_dict_successful() -> None:
+    """Test format_brute_report_markdown handles non-dict successful list items."""
+    data = {
+        "target": "ftp.example.com",
+        "host": "ftp.example.com",
+        "protocol": "ftp",
+        "port": 21,
+        "attempts": 1,
+        "successful_count": 1,
+        "successful": [
+            {"username": "admin", "password": "secret", "success": True, "error": None},
+            "not a dict",
+        ],
+        "results": [],
+    }
+    output = format_brute_report_markdown(data)
+    assert "# ethscan Brute Force Report" in output
+    assert "| admin | secret |" in output
+
+
+def test_format_brute_report_markdown_non_dict_results() -> None:
+    """Test format_brute_report_markdown handles non-dict results list items."""
+    data = {
+        "target": "ftp.example.com",
+        "host": "ftp.example.com",
+        "protocol": "ftp",
+        "port": 21,
+        "attempts": 1,
+        "successful_count": 0,
+        "successful": [],
+        "results": [
+            {"username": "admin", "password": "secret", "success": True, "error": None},
+            "not a dict",
+        ],
+    }
+    output = format_brute_report_markdown(data)
+    assert "# ethscan Brute Force Report" in output
+    assert "## All Attempts" in output

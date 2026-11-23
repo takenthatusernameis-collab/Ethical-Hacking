@@ -755,3 +755,48 @@ def test_decode_cert_fallback_private_api(monkeypatch, tmp_path) -> None:
     from ethscan import ssl as sslmod
     out = sslmod._decode_cert(sock)
     assert isinstance(out, dict)
+
+
+def test_format_ssl_report_json_non_dict() -> None:
+    """Test format_ssl_report_json handles non-dict input."""
+    output = format_ssl_report_json("not a dict")
+    assert '"not a dict"' in output
+
+
+def test_format_ssl_report_markdown_non_dict() -> None:
+    """Test format_ssl_report_markdown handles non-dict input."""
+    output = format_ssl_report_markdown("not a dict")
+    assert "# ethscan SSL/TLS Certificate Report" in output
+
+
+def test_format_ssl_report_markdown_non_dict_cert() -> None:
+    """Test format_ssl_report_markdown handles non-dict cert."""
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "cert": "not a dict",
+    }
+    output = format_ssl_report_markdown(data)
+    assert "# ethscan SSL/TLS Certificate Report" in output
+
+
+def test_format_ssl_report_csv_non_dict() -> None:
+    """Test format_ssl_report_csv handles non-dict input."""
+    output = format_ssl_report_csv("not a dict")
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+
+
+def test_format_ssl_report_csv_non_dict_cert() -> None:
+    """Test format_ssl_report_csv handles non-dict cert."""
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "cert": "not a dict",
+    }
+    output = format_ssl_report_csv(data)
+    lines = output.splitlines()
+    assert lines[0] == "field,value"
+    assert "target,example.com" in lines
