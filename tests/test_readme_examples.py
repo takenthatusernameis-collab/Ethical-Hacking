@@ -347,3 +347,135 @@ def test_readme_example_mssql_empty_target() -> None:
         "Error: Invalid value for '--target': Could not parse host from target ''"
         in result.output
     )
+
+
+def test_readme_example_memcached_empty_target() -> None:
+    result = _invoke(["memcached", "--target", ""])
+    assert result.exit_code == 2
+    assert "Usage: cli memcached [OPTIONS]" in result.output
+    assert "Try 'cli memcached --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Could not parse host from target ''"
+        in result.output
+    )
+
+
+def test_readme_example_ntp_empty_target() -> None:
+    result = _invoke(["ntp", "--target", ""])
+    assert result.exit_code == 2
+    assert "Usage: cli ntp [OPTIONS]" in result.output
+    assert "Try 'cli ntp --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Could not parse host from target ''"
+        in result.output
+    )
+
+
+def test_readme_example_snmp_empty_target() -> None:
+    result = _invoke(["snmp", "--target", ""])
+    assert result.exit_code == 2
+    assert "Usage: cli snmp [OPTIONS]" in result.output
+    assert "Try 'cli snmp --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Could not parse host from target ''"
+        in result.output
+    )
+
+
+def test_readme_example_ftp_empty_target() -> None:
+    result = _invoke(["ftp", "--target", ""])
+    assert result.exit_code == 2
+    assert "Usage: cli ftp [OPTIONS]" in result.output
+    assert "Try 'cli ftp --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Could not parse host from target ''"
+        in result.output
+    )
+
+
+def test_readme_example_ldap_empty_target() -> None:
+    result = _invoke(["ldap", "--target", ""])
+    assert result.exit_code == 2
+    assert "Usage: cli ldap [OPTIONS]" in result.output
+    assert "Try 'cli ldap --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Could not parse host from target ''"
+        in result.output
+    )
+
+
+def test_readme_example_netbios_empty_target() -> None:
+    result = _invoke(["netbios", "--target", ""])
+    assert result.exit_code == 2
+    assert "Usage: cli netbios [OPTIONS]" in result.output
+    assert "Try 'cli netbios --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Could not parse host from target ''"
+        in result.output
+    )
+
+
+def test_readme_example_smb_empty_target() -> None:
+    result = _invoke(["smb", "--target", ""])
+    assert result.exit_code == 2
+    assert "Usage: cli smb [OPTIONS]" in result.output
+    assert "Try 'cli smb --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Could not parse host from target ''"
+        in result.output
+    )
+
+
+def test_readme_example_smtp_empty_target() -> None:
+    result = _invoke(["smtp", "--target", ""])
+    assert result.exit_code == 2
+    assert "Usage: cli smtp [OPTIONS]" in result.output
+    assert "Try 'cli smtp --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Could not parse host from target ''"
+        in result.output
+    )
+
+
+def test_readme_example_service_empty_target() -> None:
+    result = _invoke(["service", "--target", ""])
+    assert result.exit_code == 2
+    assert "Usage: cli service [OPTIONS]" in result.output
+    assert "Try 'cli service --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Could not parse host from target ''"
+        in result.output
+    )
+
+
+def test_readme_example_dnssec_empty_target() -> None:
+    result = _invoke(["dnssec", "--target", ""])
+    assert result.exit_code == 2
+    assert "Usage: cli dnssec [OPTIONS]" in result.output
+    assert "Try 'cli dnssec --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Could not parse host from target ''"
+        in result.output
+    )
+
+
+def test_readme_example_ssl_empty_target() -> None:
+    result = _invoke(["ssl", "--target", ""])
+    assert result.exit_code == 2
+    assert "Usage: cli ssl [OPTIONS]" in result.output
+    assert "Try 'cli ssl --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Could not parse host from target ''"
+        in result.output
+    )
+
+
+def test_readme_example_tls_empty_target() -> None:
+    result = _invoke(["tls", "--target", ""])
+    assert result.exit_code == 2
+    assert "Usage: cli tls [OPTIONS]" in result.output
+    assert "Try 'cli tls --help' for help." in result.output
+    assert (
+        "Error: Invalid value for '--target': Could not parse host from target ''"
+        in result.output
+    )

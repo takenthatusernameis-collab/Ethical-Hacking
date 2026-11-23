@@ -1,2 +1,2 @@
 ## Next task
-None pending. Repository is fully green with git commit information added to the version command. If future work is needed, reproduce a concrete gap first.
+None pending. Repository is fully green with 12 new README example regression tests for empty-target rejection (memcached, ntp, snmp, ftp, ldap, netbios, smb, smtp, service, dnssec, ssl, tls) added to `tests/test_readme_examples.py`. Full gate: `pytest -q` 47413 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/` clean (270 source files); `ruff` clean; `check_readme.py` 54/54, 0 drift; `git status` only `tests/test_readme_examples.py` modified. If future work is needed, reproduce a concrete gap first. `oracle`/`postgresql` empty-target handling remains intentionally out of scope.
