@@ -11,3 +11,5 @@ Next: if future work is needed, reproduce a concrete gap first
 (fresh-install failure, focused failing check, or behavioral evidence vs
 documented contract), apply the smallest safe fix, rerun focused then broader
 gates (pytest/coverage/mypy/ruff/check_readme), preserve safety.
+
+(End of file - total 13 lines)
