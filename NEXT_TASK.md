@@ -1,24 +1,25 @@
 ## Next task
 
-None pending. Repository is fully green on BOTH click 8.1.x and 8.2+ with 100% statement/branch coverage.
+None pending. Repository is fully green on click 8.1.8 with 100% statement/branch coverage.
 
-Completed this session (the optional future task flagged in the prior handoff):
-- Replaced the deprecated `click.__version__` in `ethscan/version.py:56` (DeprecationWarning on click 8.5+, removal in click 9.1) with `importlib.metadata.version("click")`, falling back to `"unknown"` on `PackageNotFoundError`. Removed the `import click` / `click.__version__` path.
-- Updated `tests/test_version.py`: replaced the click import-error test with `test_collect_version_data_click_package_not_found` (metadata fallback) and added `test_collect_version_data_click_version_matches_metadata`.
-- Updated `tests/test_cli_cov_gaps.py::test_version_dependency_attribute_errors` to drive the click fallback via `metadata.version` instead of a `__version__`-less `click` module.
+This session (verification-only; no source or test changes; working tree clean):
+- Re-confirmed baseline green: `python -m pytest -q` → 47449 passed, 150 skipped, 0 failed
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 270 source files
+- `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed
+- `python3 check_readme.py` → 54 commands, 0 drift both directions
+- `python -m coverage run --branch --source=ethscan -m pytest -q` → TOTAL 100% (16210 stmts, 6112 branches, 0 missing)
 
-Verification (evidence):
-- `pytest -q` → 47449 passed, 150 skipped, 0 failed (baseline 47448; +1 new test).
-- `mypy ethscan/ tests/` → Success: no issues in 270 source files.
-- `ruff check ethscan/ tests/ check_readme.py` → All checks passed.
-- `check_readme.py` → 54 commands, 0 drift both directions.
-- `coverage run --branch --source=ethscan -m pytest -q` → TOTAL 100% (16210 stmts, 6112 branches, 0 missing).
-- `grep -rn "click.__version__\|click_module" ethscan/ tests/` → no references remain.
+Investigation performed — no reproducible gap found; all ruled out:
+- Hostile-target CLI fuzz across all 56 target-taking commands → all exit 2/0 cleanly, zero tracebacks/exit-1 crashes
+- Option-level hostile sweep → covered by tests/test_option_sweep.py (every string option of every command)
+- Formatter hostile contract → tests/test_all_formatters_hostile_contract.py (single-arg) + dedicated tests/test_config_hostile_sweep.py and tests/test_passwords.py (non-standard formatters)
+- Assessor hostile contract → tests/test_all_assessors_hostile_contract.py (dict/str/list/ssh categories)
+- `_parse_*` functions (excluded from assessor sweep) → defensive: bounds checks, `errors="replace"`, `try/except struct.error`, return empty dicts; no non-`ValueError` crash path found
+- 150 skipped tests → all legitimate (dnspython optional dependency, by-design exclusions, input-file-option absence); no unconditional `@pytest.mark.skip`, no `@pytest.mark.skipif`
+- No TODO/FIXME/HACK markers in ethscan/ or tests/
 
-Uncommitted changes: `ethscan/version.py`, `tests/test_version.py`, `tests/test_cli_cov_gaps.py` (controller commits).
+Out of scope (per documented contract, do not change):
+- `oracle`/`postgresql` empty-target handling (exit 0, in-band error)
+- `ethscan/cli.py:4318` unreachable defensive guard (do not weaken safety or game coverage)
 
-Remaining / out of scope:
-- `oracle`/`postgresql` empty-target handling (exit 0, in-band error) per their documented contract.
-- `ethscan/cli.py:4318` unreachable defensive guard (do not weaken safety or game coverage).
-
-If future work is needed: reproduce a concrete gap first (fresh-install failure, focused failing check, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then broader gates (pytest/coverage/mypy/ruff/check_readme), preserve safety.
+Next: if future work is needed, reproduce a concrete gap first (fresh-install failure, focused failing check, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then broader gates (pytest/coverage/mypy/ruff/check_readme), preserve safety.

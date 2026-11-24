@@ -1215,3 +1215,26 @@ Date: Sun Nov 08 2026 (session 7)
 - None; one-line reversible replacement matching the click 8.2+ support session's precedent of avoiding the deprecated attribute.
 ## Next task
 - None pending. Repository fully green on both click lines with 100% coverage. If future work is needed, pick one bounded, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error). `ethscan/cli.py:4318` unreachable defensive guard remains a documented known limitation.
+
+# Session (Tue Nov 24 2026, verification session)
+## This session
+- No prior agent assignment; HANDOFF_NEXT.md/NEXT_TASK.md reported "None pending" and repo fully green. Inspected the repository and ran an evidence-based search for a bounded, high-value task rather than waiting passively.
+- Re-confirmed baseline green at start: `python -m pytest -q` → 47449 passed, 150 skipped, 0 failed; `mypy ethscan/ tests/` → clean (270 source files); `ruff check ethscan/ tests/ check_readme.py` → all checks passed; `python3 check_readme.py` → 54 commands, 0 drift both directions; `coverage run --branch --source=ethscan -m pytest -q` → TOTAL 100% (16210 stmts, 6112 branches, 0 missing).
+- Investigated candidate gaps and found no reproducible gap; all ruled out:
+  - Hostile-target CLI fuzz across all 56 target-taking commands → all exit 2/0 cleanly, zero tracebacks/exit-1 crashes.
+  - Option-level hostile sweep → covered by tests/test_option_sweep.py (every string option of every command).
+  - Formatter hostile contract → tests/test_all_formatters_hostile_contract.py (single-arg) + dedicated tests/test_config_hostile_sweep.py and tests/test_passwords.py (non-standard formatters).
+  - Assessor hostile contract → tests/test_all_assessors_hostile_contract.py (dict/str/list/ssh categories).
+  - `_parse_*` functions (excluded from assessor sweep) → defensive (bounds checks, `errors="replace"`, `try/except struct.error`, return empty dicts); no non-`ValueError` crash path found.
+  - 150 skipped tests → all legitimate (dnspython optional dependency, by-design exclusions, input-file-option absence); no unconditional `@pytest.mark.skip`, no `@pytest.mark.skipif`.
+  - No TODO/FIXME/HACK markers in ethscan/ or tests/.
+- No source or test changes made; working tree clean. Updated HANDOFF_NEXT.md and NEXT_TASK.md to document the verified state and investigation so the next agent does not repeat it blindly.
+
+## Verification
+- All gates above green; `git status --short` shows only the handoff files modified (this session's documentation).
+
+## Blockers
+- None.
+
+## Next task
+- None pending. Repository is fully green with no reproducible gap. If future work is needed, reproduce a concrete gap first (fresh-install failure, focused failing check, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then broader gates (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
