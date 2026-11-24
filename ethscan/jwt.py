@@ -200,7 +200,7 @@ def run_jwt(token: str, now: float | None = None) -> dict[str, object]:
         if alg == "none":
             result["algorithm_type"] = "none"
             findings.append("Unsigned token (alg=none): signature verification is impossible")
-        elif alg in KNOWN_ALGORITHMS:
+        elif isinstance(alg, str) and alg in KNOWN_ALGORITHMS:
             result["algorithm_type"] = KNOWN_ALGORITHMS[cast(str, alg)]
         elif alg is None:
             findings.append("Header has no alg claim")
