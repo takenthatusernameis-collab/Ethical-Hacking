@@ -1,27 +1,33 @@
 ## Next task
 
 Repository is green (re-verified this session):
-- `pytest -q` -> 47460 passed, 147 skipped, 0 failed
+- `pytest -q` -> 47464 passed, 147 skipped, 0 failed
 - `mypy ethscan/ tests/` -> clean (270 source files)
 - `ruff check ethscan/ tests/ check_readme.py` -> all checks passed
 - `check_readme.py` -> 54 commands, 0 drift both directions
 - `coverage run -m pytest` + `coverage report` -> 100%, exit 0
 
-This session fixed an inert coverage gate: `pyproject.toml` had `fail_under`,
-`source`, and `exclude_lines` under `[tool.coverage]`, which coverage.py ignores
-(it only reads `[tool.coverage.run]` / `[tool.coverage.report]`). Moved them to
-the correct subsections, added the standard `if TYPE_CHECKING:` exclusion for two
-statically-unreachable imports (cidr.py:18, radix.py:17), and declared
-`coverage>=7.0` in dev extras. The 100% gate is now genuinely enforced (verified:
-fails at 99% before the exclusion, passes at 100% after).
+This session added `tests/test_coverage_config_gate.py`: a deterministic guard
+that fails if the 100% coverage gate ever reverts to the inert top-level
+`[tool.coverage]` form. It reads coverage's *resolved* config via
+`coverage debug config` and asserts `source` includes `ethscan`, `fail_under`
+is 100, and the `if TYPE_CHECKING:` exclusion is present. Verified meaningful:
+the inert config resolves to `source: None` / `fail_under: 0.0` and is
+rejected; the real config is accepted.
+
+Important: the previous handoff's "wire coverage into CI via main.yml" task is
+NOT persistable. The controller reverts `.github/workflows/**` before every
+checkpoint and excludes it from staging, so agent workflow edits are discarded.
+Do not attempt it.
 
 Out of scope (per documented contract, do not change):
 - `oracle`/`postgresql` empty-target handling (exit 0, in-band error)
 - `ethscan/cli.py:4318` unreachable defensive guard (documented known limitation)
 
-Next: optionally wire coverage into CI (`.github/workflows/main.yml`) via
-`python -m coverage run -m pytest -q && python -m coverage report`, so the now-real
-100% gate is enforced on every run. Keep it minimal; do not change source/test
-behavior. Reproduce any future gap concretely before fixing.
+Next: pick a bounded, persistable improvement in `ethscan/` or `tests/` (NOT
+`.github/workflows/**`). Concrete candidate: audit a pure-logic module
+(`cidr.py`, `mac.py`, `jwt.py`, `radix.py`) for a reproducible edge case that is
+mis-handled, reproduce with a failing test first, then apply the smallest fix.
+Reproduce any gap concretely before fixing; do not delete tests to go green.
 
 (End of file)
