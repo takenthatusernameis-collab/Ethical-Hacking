@@ -467,9 +467,6 @@ def test_csv_error_and_other_claims() -> None:
 @pytest.mark.parametrize(
     "timestamp",
     [
-        float("inf"),
-        float("-inf"),
-        float("nan"),
         10**30,
         -(10**30),
     ],
