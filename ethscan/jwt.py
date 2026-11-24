@@ -9,6 +9,7 @@ import base64
 import csv
 import io
 import json
+import math
 import time
 from collections.abc import Mapping
 from typing import TypeGuard, cast
@@ -91,8 +92,21 @@ def _is_numeric_claim(value: object) -> TypeGuard[int | float]:
     token could be reported as expired (or not-yet-valid) on the basis of a
     boolean. RFC 7519 defines ``exp``/``nbf``/``iat`` as NumericDate (a JSON
     number); booleans are not numbers and must not be interpreted as one.
+
+    Non-finite floats (``NaN``, ``+Infinity``, ``-Infinity``) are also
+    rejected: Python's ``json`` module accepts these non-standard tokens, but
+    they are not valid NumericDate values. A ``NaN`` timestamp compares False
+    against every bound, so accepting it would silently report a malformed
+    ``exp``/``nbf``/``iat`` as ``valid`` with no finding. Such a claim is
+    treated the same way as a non-numeric value and flagged by ``run_jwt``.
     """
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return True
+    if isinstance(value, float):
+        return math.isfinite(value)
+    return False
 
 
 def _format_timestamp(timestamp: float) -> str:
