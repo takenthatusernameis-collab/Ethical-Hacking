@@ -4095,13 +4095,7 @@ def config(
         loaded, known_commands=known_commands, known_options=known_options
     )
 
-    # --validate: exit with code 1 if there are any validation warnings
-    if validate_mode and warnings:
-        for w in warnings:
-            click.echo(f"Validation warning: {w}", err=True)
-        ctx.exit(1)
-
-# --output-format takes precedence over the deprecated --format alias
+    # --output-format takes precedence over the deprecated --format alias
     chosen_format = output_fmt if output_fmt is not None else fmt
 
     if chosen_format == "json":
@@ -4129,6 +4123,18 @@ def config(
         _write_output(out_path, output)
     else:
         click.echo(output)
+
+    # --validate: exit with code 1 if there are any validation warnings.
+    # Must come AFTER the report is written: the documented contract is that
+    # ``--validate`` reports warnings and exits 1, but ``--out`` still writes
+    # the report (with the warnings embedded) so the user has a record. Placing
+    # the exit before the write silently dropped the requested file whenever
+    # the config had a warning, which contradicts the ``--out`` contract used
+    # by every other command.
+    if validate_mode and warnings:
+        for w in warnings:
+            click.echo(f"Validation warning: {w}", err=True)
+        ctx.exit(1)
 
 
 @cli.command()

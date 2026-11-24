@@ -14189,6 +14189,119 @@ def test_config_validate_no_file_exits_zero(tmp_path, monkeypatch) -> None:
     assert result.exit_code == 0, result.output
 
 
+def test_config_validate_with_out_writes_report_and_exits_one(tmp_path) -> None:
+    """`config --validate --out` writes the report (with warnings embedded) and exits 1.
+
+    ``--validate`` reports validation warnings and exits 1, but ``--out`` still
+    writes the report so the user has a record. The exit must come AFTER the
+    write: an earlier ordering exited before writing, silently dropping the
+    requested file whenever the config had a warning.
+    """
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("commands:\n  scan:\n    bogus: 1\n")
+    out_md = tmp_path / "report.md"
+    runner = _make_runner()
+    result = runner.invoke(
+        cli,
+        [
+            "--config",
+            str(cfg),
+            "config",
+            "--validate",
+            "--out",
+            str(out_md),
+            "--format",
+            "markdown",
+        ],
+    )
+    assert result.exit_code == 1, result.output
+    assert "Validation warning: Unknown option 'bogus' for command 'scan'" in result.stderr
+    assert out_md.is_file(), "config --validate --out must still write the report"
+    content = out_md.read_text()
+    assert "Unknown option 'bogus' for command 'scan'" in content
+    assert "## Warnings" in content
+
+
+def test_config_validate_with_out_json_writes_report_and_exits_one(tmp_path) -> None:
+    """`config --validate --out --format json` writes the JSON report and exits 1."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("commands:\n  scan:\n    bogus: 1\n")
+    out_json = tmp_path / "report.json"
+    runner = _make_runner()
+    result = runner.invoke(
+        cli,
+        [
+            "--config",
+            str(cfg),
+            "config",
+            "--validate",
+            "--out",
+            str(out_json),
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 1, result.output
+    assert "Validation warning: Unknown option 'bogus' for command 'scan'" in result.stderr
+    assert out_json.is_file(), "config --validate --out must still write the report"
+    import json
+
+    payload = json.loads(out_json.read_text())
+    assert "warnings" in payload
+    assert any("bogus" in w for w in payload["warnings"])
+
+
+def test_config_validate_with_out_csv_writes_report_and_exits_one(tmp_path) -> None:
+    """`config --validate --out --format csv` writes the CSV report and exits 1."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("commands:\n  scan:\n    bogus: 1\n")
+    out_csv = tmp_path / "report.csv"
+    runner = _make_runner()
+    result = runner.invoke(
+        cli,
+        [
+            "--config",
+            str(cfg),
+            "config",
+            "--validate",
+            "--out",
+            str(out_csv),
+            "--format",
+            "csv",
+        ],
+    )
+    assert result.exit_code == 1, result.output
+    assert "Validation warning: Unknown option 'bogus' for command 'scan'" in result.stderr
+    assert out_csv.is_file(), "config --validate --out must still write the report"
+    content = out_csv.read_text()
+    assert "bogus" in content
+    assert "# Warning: Unknown option 'bogus' for command 'scan'" in content
+
+
+def test_config_validate_with_out_clean_config_writes_report_and_exits_zero(tmp_path) -> None:
+    """`config --validate --out` on a clean config writes the report and exits 0."""
+    cfg = tmp_path / "ethscan.yaml"
+    cfg.write_text("defaults:\n  timeout: 5.0\n")
+    out_md = tmp_path / "report.md"
+    runner = _make_runner()
+    result = runner.invoke(
+        cli,
+        [
+            "--config",
+            str(cfg),
+            "config",
+            "--validate",
+            "--out",
+            str(out_md),
+            "--format",
+            "markdown",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert out_md.is_file()
+    assert "## Global Defaults" in out_md.read_text()
+
+
 # ---------------------------------------------------------------------------
 # mac command CLI tests
 # ---------------------------------------------------------------------------
