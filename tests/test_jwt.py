@@ -486,6 +486,43 @@ def test_format_jwt_report_markdown_handles_unrepresentable_timestamps(
     assert "<out-of-range" in md
 
 
+@pytest.mark.parametrize(
+    "timestamp",
+    [
+        float("inf"),
+        float("-inf"),
+        float("nan"),
+    ],
+)
+def test_run_jwt_non_finite_time_claim_is_not_a_timestamp(timestamp: float) -> None:
+    """Non-finite exp/iat/nbf values must be rejected, not silently accepted.
+
+    Python's ``json`` module emits/reads the non-standard ``Infinity`` and
+    ``NaN`` tokens, but RFC 7519 NumericDate values are finite JSON numbers.
+    A ``NaN`` compares False against every bound, so accepting it would report
+    a malformed ``exp``/``nbf``/``iat`` as ``valid`` with no finding. These
+    claims must be flagged as "not a number" and must not crash the Markdown
+    formatter.
+    """
+    token = _make_token(
+        {"alg": "HS256"},
+        {"exp": timestamp, "iat": timestamp, "nbf": timestamp},
+    )
+    data = run_jwt(token, now=NOW)
+    assert data["exp_status"] is None
+    assert data["iat_status"] is None
+    assert data["nbf_status"] is None
+    findings = cast(list[str], data["findings"])
+    assert any("expiration (exp) claim is not a number" in f.lower() for f in findings)
+    assert any("issued-at (iat) claim is not a number" in f.lower() for f in findings)
+    assert any("not-before (nbf) claim is not a number" in f.lower() for f in findings)
+    assert not any("expired" in f.lower() for f in findings)
+    assert not any("not yet valid" in f.lower() for f in findings)
+    md = format_jwt_report_markdown(data)
+    assert "JWT Inspection Report" in md
+    assert "<out-of-range" not in md
+
+
 def test_format_jwt_report_markdown_finite_timestamp_still_iso() -> None:
     token = _make_token({"alg": "HS256"}, {"exp": NOW})
     md = format_jwt_report_markdown(run_jwt(token, now=NOW))
