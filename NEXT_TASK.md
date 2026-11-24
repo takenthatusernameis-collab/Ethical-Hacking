@@ -1,19 +1,31 @@
 ## Next task
 
-None pending. Repository verified fully green this session:
+Repository verified green this session after a real fix; gates all pass.
 
-- `python -m pytest -q` -> 47448 passed, 150 skipped, 0 failed
-- `python -m mypy ethscan/ tests/` -> Success: no issues found in 270 source files
-- `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed
-- `python3 check_readme.py` -> 54 commands, 0 drift both directions
-- `python -m coverage run --branch --source=ethscan -m pytest -q` -> TOTAL 100%, 0 missing
+Fixed this session (reproducible defect, not speculation):
+- A fresh `pip install -e .[dev]` resolved click >=8.2, which removed
+  `CliRunner(mix_stderr=...)`. The test suite uses `CliRunner(mix_stderr=False)` 22x in
+  `tests/test_cli.py`, so fresh installs produced 23 test failures + 22 mypy errors.
+- Fix: pinned the declared click range to the tested line in `pyproject.toml` and
+  `requirements.txt` (`click>=8.1,<8.2`). Declarative only; no source/test behavior change.
 
-Two bounded defects were found and fixed this session:
-- Removed unused import `get_all_ports` from `ethscan/validate.py` (ruff F401).
-- Documented missing `--profile [fast|normal|full]` on the README `validate` bullet (README drift caught by `test_readme_documents_every_cli_option`).
+Verification (evidence):
+- Clean venv + `pip install -e .[dev]` on patched pyproject -> click 8.1.8:
+  `pytest -q` -> 47451 passed, 147 skipped, 0 failed; mypy -> Success (270 files);
+  ruff -> All checks passed; `check_readme.py` -> 54 commands, 0 drift.
+- Working env (unchanged packages) re-run -> 47448 passed, 150 skipped, 0 failed;
+  mypy Success; ruff clean; readme 0 drift; `pip check` no ethscan/click conflicts.
 
-No source or test behavior changes were made beyond those fixes; no speculative changes introduced. Working tree has uncommitted changes (ethscan/validate.py + README.md) — not committed (controller commits).
+Uncommitted changes: `pyproject.toml`, `requirements.txt` (controller commits).
 
-If future work is needed: reproduce a concrete gap first (focused failing check, behavioral evidence vs documented contract, or reproduced crash), apply the smallest safe fix, rerun focused then broader gates (pytest/coverage/mypy/ruff/check_readme), and preserve safety/validation. Do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error). `ethscan/cli.py:4318` unreachable defensive guard is a documented known limitation, left unchanged.
+Remaining / out of scope:
+- Full click 8.2+ support (migrate the 22 `CliRunner(mix_stderr=False)` call sites) is the
+  precise optional next task — reproduce a fresh-install failure on newest click first.
+- `oracle`/`postgresql` empty-target handling and `cli.py:4318` guard are intentionally
+  out of scope; do not weaken safety controls or game coverage.
+
+If future work is needed: reproduce a concrete gap first (fresh-install failure, focused
+failing check, or behavioral evidence vs documented contract), apply the smallest safe fix,
+rerun focused then broader gates (pytest/coverage/mypy/ruff/check_readme), preserve safety.
 
 (End of file)
