@@ -126,3 +126,15 @@ def test_parse_oid_arc2_branch() -> None:
     """OID starting with arc0=2, arc1>=40 exercises first_subidentifier >= 80 (line 298).
     2.100.3 -> first_subidentifier = 180 (>= 80) -> [2, 100]."""
     assert _parse_oid(bytes([0x81, 0x34, 3])) == "2.100.3"
+
+
+# --- _parse_oid while-loop condition branch (315->321) ---
+
+
+def test_parse_oid_all_continuation_bytes_exits_via_loop_condition() -> None:
+    """Every byte has the continuation bit set, so the loop consumes all of
+    them and exits through the ``while index < len(value)`` condition
+    (315->321) rather than the terminator break (319->320). A malformed
+    all-continuation OID payload decodes to the degenerate ``0.0`` instead of
+    crashing."""
+    assert _parse_oid(b"\x80\x80\x80") == "0.0"
