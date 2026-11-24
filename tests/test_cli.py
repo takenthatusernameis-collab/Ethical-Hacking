@@ -26485,7 +26485,7 @@ def test_every_choice_option_of_the_cli_is_enumerated() -> None:
     assert checked == len(_choice_option_cases()), (
         f"{checked} Choice options in the CLI, {len(_choice_option_cases())} in the sweep"
     )
-    assert checked == 127, f"expected 127 Choice options, found {checked}"
+    assert checked == 128, f"expected 128 Choice options, found {checked}"
 
 
 def _assert_choice_usage_error(result, label: str) -> None:

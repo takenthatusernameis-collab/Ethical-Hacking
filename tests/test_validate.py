@@ -17,6 +17,99 @@ from ethscan.validate import (
 )
 
 # ---------------------------------------------------------------------------
+# Test profile validation
+# ---------------------------------------------------------------------------
+
+
+def test_run_validate_profile_fast() -> None:
+    result = run_validate(profile="fast")
+    assert len(result["ports"]) == 1
+    assert result["ports"][0]["valid"] is True
+    assert result["ports"][0]["spec"] == "fast"
+    assert result["ports"][0]["ports"] == [21, 22, 23, 25, 53, 80, 110, 139, 143, 443, 445, 993, 995, 3306, 3389, 5432, 8080, 8443]
+    assert result["ports"][0]["count"] == 18
+    assert result["summary"]["ports_specified"] == 1
+    assert result["summary"]["ports_valid"] == 1
+    assert result["summary"]["ports_total"] == 18
+    assert result["summary"]["all_valid"] is True
+
+
+def test_run_validate_profile_normal() -> None:
+    result = run_validate(profile="normal")
+    assert len(result["ports"]) == 1
+    assert result["ports"][0]["valid"] is True
+    assert result["ports"][0]["spec"] == "normal"
+    assert result["ports"][0]["count"] == 24
+    assert result["summary"]["ports_specified"] == 1
+    assert result["summary"]["ports_valid"] == 1
+    assert result["summary"]["ports_total"] == 24
+    assert result["summary"]["all_valid"] is True
+
+
+def test_run_validate_profile_full() -> None:
+    result = run_validate(profile="full")
+    assert len(result["ports"]) == 1
+    assert result["ports"][0]["valid"] is True
+    assert result["ports"][0]["spec"] == "full"
+    # Full profile includes 1-1024 + common ports
+    assert 1 in result["ports"][0]["ports"]
+    assert 1024 in result["ports"][0]["ports"]
+    assert 80 in result["ports"][0]["ports"]
+    assert 443 in result["ports"][0]["ports"]
+    assert result["ports"][0]["count"] > 1024
+    assert result["summary"]["ports_specified"] == 1
+    assert result["summary"]["ports_valid"] == 1
+    assert result["summary"]["all_valid"] is True
+
+
+def test_run_validate_profile_case_insensitive() -> None:
+    result = run_validate(profile="FAST")
+    assert result["ports"][0]["valid"] is True
+    assert result["ports"][0]["spec"] == "fast"
+
+    result = run_validate(profile="Normal")
+    assert result["ports"][0]["valid"] is True
+    assert result["ports"][0]["spec"] == "normal"
+
+    result = run_validate(profile="FULL")
+    assert result["ports"][0]["valid"] is True
+    assert result["ports"][0]["spec"] == "full"
+
+
+def test_run_validate_profile_unknown() -> None:
+    result = run_validate(profile="unknown")
+    assert len(result["ports"]) == 1
+    assert result["ports"][0]["valid"] is False
+    assert result["ports"][0]["spec"] == "unknown"
+    assert result["ports"][0]["error"] is not None
+    assert "unknown" in result["ports"][0]["error"].lower()
+    assert result["summary"]["ports_specified"] == 1
+    assert result["summary"]["ports_valid"] == 0
+    assert result["summary"]["all_valid"] is False
+
+
+def test_run_validate_ports_takes_precedence_over_profile() -> None:
+    result = run_validate(ports="80,443", profile="fast")
+    assert len(result["ports"]) == 1
+    assert result["ports"][0]["spec"] == "80,443"
+    assert result["ports"][0]["ports"] == [80, 443]
+    assert result["ports"][0]["count"] == 2
+    # Profile should not be included when ports is provided
+    assert "fast" not in result["ports"][0]["spec"]
+
+
+def test_run_validate_profile_with_cidr() -> None:
+    result = run_validate(profile="fast", cidrs="192.168.1.0/24")
+    assert len(result["ports"]) == 1
+    assert len(result["cidrs"]) == 1
+    assert result["ports"][0]["spec"] == "fast"
+    assert result["cidrs"][0]["spec"] == "192.168.1.0/24"
+    assert result["summary"]["ports_specified"] == 1
+    assert result["summary"]["cidrs_specified"] == 1
+    assert result["summary"]["all_valid"] is True
+
+
+# ---------------------------------------------------------------------------
 # _validate_port_spec
 # ---------------------------------------------------------------------------
 

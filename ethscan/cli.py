@@ -4644,6 +4644,11 @@ def postgresql(
     "(e.g. '80,443,8000-9000').",
 )
 @click.option(
+    "--profile",
+    type=click.Choice(["fast", "normal", "full"]),
+    help="Scan profile to validate (fast, normal, full). Shows the ports that would be scanned.",
+)
+@click.option(
     "--cidr",
     "cidrs",
     help="Comma-separated CIDR/network specifications to validate "
@@ -4671,6 +4676,7 @@ def postgresql(
 )
 def validate(
     ports: str | None,
+    profile: str | None,
     cidrs: str | None,
     fmt: str,
     output_fmt: str | None,
@@ -4678,7 +4684,7 @@ def validate(
 ) -> None:
     """Validate and expand port specifications and CIDR inputs (offline)."""
     chosen_format = output_fmt if output_fmt is not None else fmt
-    results = run_validate(ports=ports, cidrs=cidrs)
+    results = run_validate(ports=ports, cidrs=cidrs, profile=profile)
 
     if chosen_format == "csv":
         output = format_validate_report_csv(results)

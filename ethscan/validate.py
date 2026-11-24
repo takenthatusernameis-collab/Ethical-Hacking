@@ -19,6 +19,13 @@ import ipaddress
 import json
 from typing import Any
 
+from ethscan.scanner import (
+    COMMON_PORTS,
+    FAST_PORTS,
+    FULL_PORTS,
+    get_all_ports,
+)
+
 MAX_PORT = 65535
 MAX_EXPANDED_IPS = 256
 
@@ -237,6 +244,7 @@ def _validate_cidr(spec: str) -> dict[str, Any]:
 def run_validate(
     ports: str | None = None,
     cidrs: str | None = None,
+    profile: str | None = None,
 ) -> dict[str, Any]:
     """Validate and expand port specifications and CIDR inputs.
 
@@ -246,14 +254,50 @@ def run_validate(
             as a single specification.
         cidrs: Comma-separated CIDR/network specifications
             (e.g. ``"192.168.1.0/24,10.0.0.0/8"``).
+        profile: Optional scan profile ('fast', 'normal', 'full'). When
+            provided without a ports specification, validates the profile's
+            port set instead.
 
     Returns:
         Structured results with per-spec validation, expanded values, a
         summary, and notes.
     """
     port_results: list[dict[str, object]] = []
+    profile_result: dict[str, object] | None = None
+
+    # Handle profile validation
+    if profile:
+        profile_key = profile.lower()
+        if profile_key == "fast":
+            profile_ports = FAST_PORTS
+            profile_name = "fast"
+        elif profile_key == "normal":
+            profile_ports = COMMON_PORTS
+            profile_name = "normal"
+        elif profile_key == "full":
+            profile_ports = FULL_PORTS
+            profile_name = "full"
+        else:
+            profile_result = {
+                "spec": profile,
+                "valid": False,
+                "ports": [],
+                "count": 0,
+                "error": f"Unknown profile: {profile}. Valid profiles: fast, normal, full",
+            }
+        if profile_result is None:
+            profile_result = {
+                "spec": profile_name,
+                "valid": True,
+                "ports": list(profile_ports),
+                "count": len(profile_ports),
+                "error": None,
+            }
+
     if ports:
         port_results.append(_validate_port_spec(ports))
+    elif profile_result is not None:
+        port_results.append(profile_result)
 
     cidr_results: list[dict[str, object]] = []
     cidr_specs: list[str] = []
