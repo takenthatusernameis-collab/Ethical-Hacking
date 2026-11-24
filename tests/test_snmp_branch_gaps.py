@@ -17,6 +17,7 @@ from ethscan.snmp import (
     _encode_oid_value,
     _encode_tlv,
     _normalize_target,
+    _parse_oid,
     run_snmp,
 )
 
@@ -110,3 +111,18 @@ def test_run_snmp_preserves_existing_sys_fields_on_second_valid_community() -> N
     assert results["sysName"] == "router-01"
     # v2c probe succeeds on first try for each community -> 2 calls total
     assert len(calls) == 2
+
+
+# --- _split_first_subidentifier branches (lines 295, 298) ---
+
+
+def test_parse_oid_arc0_branch() -> None:
+    """OID starting with arc0=0 exercises first_subidentifier < 40 (line 295).
+    0.1.1 -> first_subidentifier = 1 (< 40) -> [0, 1]."""
+    assert _parse_oid(bytes([1, 1])) == "0.1.1"
+
+
+def test_parse_oid_arc2_branch() -> None:
+    """OID starting with arc0=2, arc1>=40 exercises first_subidentifier >= 80 (line 298).
+    2.100.3 -> first_subidentifier = 180 (>= 80) -> [2, 100]."""
+    assert _parse_oid(bytes([0x81, 0x34, 3])) == "2.100.3"
