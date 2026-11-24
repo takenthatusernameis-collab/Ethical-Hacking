@@ -1126,3 +1126,27 @@ Date: Sun Nov 08 2026 (session 7)
 - Did not fabricate work or make speculative changes to a fully green repository.
 ## Next task
 - None pending. Repository is fully green. If future work is needed, pick one bounded, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
+
+# Session (Tue Nov 24 2026)
+## This session
+- No prior agent assignment existed (HANDOFF_NEXT.md/NEXT_TASK.md both said "none pending; repo fully green", but both were stale). Independently re-verified the true baseline before selecting work: `pytest -q` -> 47444 passed, 147 skipped, 0 failed (trusted only as a starting reference); `mypy` clean; `check_readme.py` 54/54, 0 drift.
+- Independent re-verification found two real, reproducible defects the stale handoff missed:
+  1. `ethscan/validate.py:26` — unused import `get_all_ports` (ruff F401: "imported but unused"). `get_all_ports` appears only on its own import line; verified via grep that it is not referenced anywhere in the module.
+  2. README drift — `test_readme_documents_every_cli_option` failing with `{'validate': ['--profile']}`: `ethscan validate --help` exposes a real `--profile [fast|normal|full]` option, but the README `validate` bullet documented only `--ports`, `--cidr`, `--output-format`/`--format`/`--out`. Confirmed empirically that `validate --profile` exists and is undocumented.
+- Fixed both (minimal, reversible; no behavior change):
+  - `ethscan/validate.py`: removed the unused `get_all_ports` import.
+  - `README.md` `validate` bullet: added `--profile [fast|normal|full]` (shows the ports that would be scanned).
+## Verification
+- `python -m pytest -q` -> 47448 passed, 150 skipped, 0 failed (full suite; previously-failing `test_readme_sync.py::test_readme_documents_every_cli_option` now passes).
+- `python -m mypy ethscan/ tests/` -> Success: no issues found in 270 source files.
+- `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed (0 errors; previously 1 F401).
+- `python3 check_readme.py` -> 54 commands; 0 drift both directions; exit 0.
+- `python -m coverage run --branch --source=ethscan -m pytest -q` -> TOTAL 100% (0 missing statements/branches).
+- `git diff --stat` -> ethscan/validate.py (1 deletion), README.md (1 insertion, 1 deletion). Changes NOT committed (controller commits); working tree otherwise clean.
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- Did not fabricate additional work: after fixing the two reproduced defects, the repo is fully green with no remaining gaps. Per the reliability rules, no speculative changes were introduced to a green repository.
+- `cli.py:4318` unreachable defensive guard and `oracle`/`postgresql` empty-target handling remain documented known limitations; left unchanged (do not weaken safety controls or game the coverage metric).
+## Next task
+- None pending. Repository fully green. If future work is needed, pick one bounded, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract.

@@ -23,7 +23,6 @@ from ethscan.scanner import (
     COMMON_PORTS,
     FAST_PORTS,
     FULL_PORTS,
-    get_all_ports,
 )
 
 MAX_PORT = 65535
