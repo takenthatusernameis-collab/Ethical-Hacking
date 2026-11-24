@@ -1,7 +1,7 @@
 ## Next task
 
 None pending. Repository is fully green (independently re-verified this session):
-- `pytest -q` -> 47460 passed, 147 skipped, 0 failed
+- `pytest -q` -> 47457 passed, 147 skipped, 0 failed
 - `mypy ethscan/ tests/` -> clean (270 source files)
 - `ruff check ethscan/ tests/ check_readme.py` -> all checks passed
 - `check_readme.py` -> 54 commands, 0 drift both directions

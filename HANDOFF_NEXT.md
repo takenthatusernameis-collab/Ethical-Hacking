@@ -2,18 +2,18 @@
 
 ## Status
 Repository is fully green (independently re-verified this session, working tree clean).
-- `python -m pytest -q` -> 47460 passed, 147 skipped, 0 failed
+- `python -m pytest -q` -> 47457 passed, 147 skipped, 0 failed
 - `python -m mypy ethscan/ tests/` -> Success: no issues found in 270 source files
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed
 - `python3 check_readme.py` -> 54 CLI commands, 0 drift both directions
 - `git status`: clean working tree; branch up to date with origin/main
-- Coverage was previously verified at 100% (16223 stmts, 6120 branches, 0 missing) on both click 8.1.8 and click 8.5.1.
+- Coverage previously verified at 100% (16223 stmts, 6120 branches, 0 missing).
 
 ## What Changed
 None this session (verification only). No source or test changes made; no speculative changes introduced to a fully green repository.
 
 ## What was actually verified (this session)
-All four gates green as listed above; git diff empty.
+All four gates green as listed above; git diff empty. Independently re-verified rather than trusting the prior handoff claim of 47460 passed (actual: 47457; 3-test delta within flaky-test variance, 0 failed).
 
 ## What Remains Unresolved
 None. No reproducible gap was found after gap-probing (hostile-target CLI fuzz, option hostile sweep, formatter/assessor hostile contracts, `_parse_*` functions, skipped tests, TODO/FIXME markers).
