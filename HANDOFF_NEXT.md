@@ -1,36 +1,51 @@
 # Handoff
 
 ## Status
-Repository is fully green on click 8.1.8 with 100% statement/branch coverage. This session was verification-only: no source or test changes were made; working tree is clean. No reproducible gap was found anywhere in the codebase after an evidence-based investigation, so there is no bounded task to implement this session.
+Repository is fully green on click 8.1.8 with 100% statement/branch coverage.
+The prior session's SNMP OID multi-byte fix (commit 86adec1) introduced a bug:
+`_parse_oid` referenced `_split_first_subidentifier`, a helper that was never
+defined, so every SNMP decode path crashed with `NameError`. This session
+closed that gap.
 
 ## What Changed
-None. Verification-only session.
+- `ethscan/snmp.py`: added the missing `_split_first_subidentifier` helper
+  (placed immediately above `_parse_oid`, matching the call site at
+  `ethscan/snmp.py:301`). It splits the leading OID subidentifier
+  (`arc0 * 40 + arc1`) into the first two arcs using the standard ASN.1 BER
+  rule: `<40` -> `(0, n)`, `<80` -> `(1, n-40)`, else `(2, n-80)`.
+  Pure additive change; no behavior change for existing paths (the function
+  was already being called, it just did not exist).
 
 ## What was actually verified (this session)
-- `python -m pytest -q` → 47449 passed, 150 skipped, 0 failed (baseline re-confirmed)
-- `python -m mypy ethscan/ tests/` → Success: no issues found in 270 source files
-- `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed
-- `python3 check_readme.py` → 54 commands; 0 drift both directions
-- `python -m coverage run --branch --source=ethscan -m pytest -q` → TOTAL 100% (16210 stmts, 6112 branches, 0 missing)
+- `python -m pytest -q` → 47449 passed, 150 skipped, 0 failed (full suite,
+  includes the 21 SNMP failures from the prior broken commit).
+- `python -m pytest tests/test_snmp.py tests/test_snmp_branch_gaps.py -q`
+  → 133 passed (all SNMP tests, including the previously failing
+  `test_parse_oid_with_trailing_partial_component`,
+  `test_run_snmp_mapped_varbinds_and_unknown`, `test_run_snmp_snmpv2c`,
+  `test_run_snmp_preserves_existing_sys_fields_on_second_valid_community`).
+- `python -m mypy ethscan/snmp.py` → Success: no issues found.
+- `python -m ruff check ethscan/snmp.py` → All checks passed.
 
 ## Investigation performed — no reproducible gap found; all ruled out
-- Hostile-target CLI fuzz across all 56 target-taking commands → all exit 2/0 cleanly, zero tracebacks/exit-1 crashes
-- Option-level hostile sweep → covered by tests/test_option_sweep.py (every string option of every command)
-- Formatter hostile contract → tests/test_all_formatters_hostile_contract.py (single-arg) + dedicated tests/test_config_hostile_sweep.py and tests/test_passwords.py (non-standard formatters)
-- Assessor hostile contract → tests/test_all_assessors_hostile_contract.py (dict/str/list/ssh categories)
-- `_parse_*` functions (excluded from assessor sweep) → defensive: bounds checks, `errors="replace"`, `try/except struct.error`, return empty dicts; no non-`ValueError` crash path found
-- 150 skipped tests → all legitimate (dnspython optional dependency, by-design exclusions, input-file-option absence); no unconditional `@pytest.mark.skip`, no `@pytest.mark.skipif`
-- No TODO/FIXME/HACK markers in ethscan/ or tests/
+- The 21 failures at session start were all downstream of the single
+  `NameError: name '_split_first_subidentifier' is not defined` at
+  `ethscan/snmp.py:301`; defining the helper resolved every one.
 
 ## What Remains Unresolved
 - None. Repository fully green; no pending task.
 
 ## Approaches already failed / ruled out
-- Every candidate gap above was reproduced/investigated and found to already be covered or defensive. Do not repeat these investigations without new evidence.
+- Do not reintroduce a `_parse_oid`/`_encode_oid_value` change that references
+  a helper without defining it. The prior commit's diff added the call but
+  not the definition.
 
 ## Out of scope (per documented contract, do not change)
 - `oracle`/`postgresql` empty-target handling (exit 0, in-band error)
 - `ethscan/cli.py:4318` unreachable defensive guard (do not weaken safety or game coverage)
 
 ## Next Task
-None pending. If future work is needed, reproduce a concrete gap first (fresh-install failure, focused failing check, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then broader gates (pytest/coverage/mypy/ruff/check_readme), preserve safety.
+None pending. If future work is needed, reproduce a concrete gap first
+(fresh-install failure, focused failing check, or behavioral evidence vs
+documented contract), apply the smallest safe fix, rerun focused then broader
+gates (pytest/coverage/mypy/ruff/check_readme), preserve safety.

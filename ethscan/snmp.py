@@ -278,6 +278,26 @@ def _parse_tlv(data: bytes, offset: int) -> tuple[int, bytes, int]:
     return tag, data[offset:offset + length], offset + length
 
 
+def _split_first_subidentifier(first_subidentifier: int) -> list[int]:
+    """Split the leading OID subidentifier (arc0 * 40 + arc1) into two arcs.
+
+    The first two OID arcs are combined into a single base-128 subidentifier
+    per ASN.1 BER. Recovering the original arcs:
+    - ``first < 40``  -> ``(0, first)``
+    - ``first < 80``  -> ``(1, first - 40)``
+    - otherwise      -> ``(2, first - 80)``
+
+    The third branch (arc0 == 2) can carry an unbounded second arc, which is
+    exactly the case the multi-byte first-subidentifier support was added
+    for (e.g. ``2.999`` -> ``1079`` -> ``0x88 0x37``).
+    """
+    if first_subidentifier < 40:
+        return [0, first_subidentifier]
+    if first_subidentifier < 80:
+        return [1, first_subidentifier - 40]
+    return [2, first_subidentifier - 80]
+
+
 def _parse_oid(value: bytes) -> str:
     """Decode an OID value payload into dotted notation.
 
