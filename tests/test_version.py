@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from importlib import metadata
+
 from unittest.mock import MagicMock
 
 from ethscan.version import (
@@ -172,12 +174,21 @@ def test_collect_version_data_includes_git_when_present(monkeypatch):
     assert data["git"] == {"commit": "abc", "commit_date": "2024"}
 
 
-def test_collect_version_data_click_import_error(monkeypatch):
-    """click ImportError falls back to 'unknown'."""
-    monkeypatch.setitem(sys.modules, "click", None)
+def test_collect_version_data_click_package_not_found(monkeypatch):
+    """click package metadata missing falls back to 'unknown'."""
+    def _raise(*a, **k):
+        raise metadata.PackageNotFoundError("click")
+    monkeypatch.setattr("ethscan.version.metadata.version", _raise)
     monkeypatch.setattr("ethscan.version._get_git_info", lambda: {})
     data = _collect_version_data()
     assert data["dependencies"]["click"] == "unknown"
+
+
+def test_collect_version_data_click_version_matches_metadata(monkeypatch):
+    """click version is read from package metadata, not the deprecated __version__."""
+    monkeypatch.setattr("ethscan.version._get_git_info", lambda: {})
+    data = _collect_version_data()
+    assert data["dependencies"]["click"] == metadata.version("click")
 
 
 def test_collect_version_data_yaml_import_error(monkeypatch):

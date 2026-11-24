@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import runpy
 import sys
+import types
+from importlib import metadata
 from typing import Any
 
 import click
@@ -153,15 +155,15 @@ def test_version_command_json_and_out(tmp_path) -> None:
 
 
 def test_version_dependency_attribute_errors(monkeypatch) -> None:
-    """Cover dependency version fallbacks when modules lack __version__."""
-    import types
-
-    bad_click = types.ModuleType("click")
+    """Cover dependency version fallbacks when versions cannot be read."""
     bad_yaml = types.ModuleType("yaml")
     bad_dns = types.ModuleType("dns")
-    monkeypatch.setitem(sys.modules, "click", bad_click)
     monkeypatch.setitem(sys.modules, "yaml", bad_yaml)
     monkeypatch.setitem(sys.modules, "dns", bad_dns)
+
+    def _raise(*a, **k):
+        raise metadata.PackageNotFoundError("click")
+    monkeypatch.setattr("ethscan.version.metadata.version", _raise)
 
     runner = CliRunner()
     result = runner.invoke(cli, ["version", "--output-format", "json"])

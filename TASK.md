@@ -1194,3 +1194,24 @@ Date: Sun Nov 08 2026 (session 7)
 - Did NOT touch `oracle`/`postgresql` empty-target handling or the `cli.py:4318` guard (intentionally out of scope).
 ## Next task
 - None pending. Repository is fully green on BOTH click 8.1.x and 8.2+. If future work is needed, pick one bounded, verifiable improvement and reproduce it first. Note: `ethscan/version.py:56` uses the deprecated `click.__version__` (DeprecationWarning on click 8.5+, removal in 9.1) — a possible small future task (switch to `importlib.metadata.version("click")`), but not required for current support. `oracle`/`postgresql` empty-target handling remains intentionally out of scope.
+
+# Session (Tue Nov 24 2026, click.__version__ migration)
+## This session
+- Executed the optional future task flagged in the prior handoff: replaced the deprecated `click.__version__` in `ethscan/version.py:56` (DeprecationWarning on click 8.5+, removal in click 9.1) with `importlib.metadata.version("click")`, falling back to `"unknown"` on `metadata.PackageNotFoundError`. Removed the `import click as click_module` / `str(click_module.__version__)` path. No runtime behavior change for installed click; the version string is identical (e.g. "8.1.8").
+- `tests/test_version.py`: replaced `test_collect_version_data_click_import_error` (monkeypatched `sys.modules["click"]` to a `__version__`-less module — no longer applicable) with `test_collect_version_data_click_package_not_found` (patches `ethscan.version.metadata.version` to raise `PackageNotFoundError` → `"unknown"`); added `test_collect_version_data_click_version_matches_metadata` asserting the reported click version equals `metadata.version("click")`.
+- `tests/test_cli_cov_gaps.py::test_version_dependency_attribute_errors`: click fallback now driven by patching `ethscan.version.metadata.version` to raise `PackageNotFoundError` instead of installing a `__version__`-less `click` module; yaml/dns `__version__`-less fallbacks unchanged.
+## What was actually verified
+- `python -m pytest tests/test_version.py tests/test_cli_cov_gaps.py::test_version_dependency_attribute_errors -q` → 22 passed.
+- `python -m pytest -q` (full suite) → 47449 passed, 150 skipped, 0 failed (baseline 47448; +1 new test).
+- `python -m coverage run --branch --source=ethscan -m pytest -q` → TOTAL 100% (16210 stmts, 6112 branches, 0 missing).
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 270 source files.
+- `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed.
+- `python3 check_readme.py` → 54 commands; 0 drift both directions; exit 0.
+- `grep -rn "click.__version__\|click_module" ethscan/ tests/` → no references remain.
+- `git diff --stat` → ethscan/version.py, tests/test_version.py, tests/test_cli_cov_gaps.py. Changes NOT committed (controller commits).
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- None; one-line reversible replacement matching the click 8.2+ support session's precedent of avoiding the deprecated attribute.
+## Next task
+- None pending. Repository fully green on both click lines with 100% coverage. If future work is needed, pick one bounded, verifiable improvement and reproduce the gap first — do not speculate or weaken safety controls. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error). `ethscan/cli.py:4318` unreachable defensive guard remains a documented known limitation.

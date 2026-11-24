@@ -1,37 +1,24 @@
 ## Next task
 
-Repository verified green on BOTH click 8.1.x and 8.2+ this session; gates all pass.
+None pending. Repository is fully green on BOTH click 8.1.x and 8.2+ with 100% statement/branch coverage.
 
-Completed this session (executed the prior pending task — full click 8.2+ support):
-- Replaced the 22 `CliRunner(mix_stderr=False)` usages in `tests/test_cli.py` with a
-  version-tolerant `_make_runner()` helper (try `mix_stderr=False`, fall back to
-  `CliRunner()` on click>=8.2).
-- Fixed 4 config tests to parse `json.loads(result.stdout)` (click 8.2+ `Result.output`
-  is a stdout+stderr mix; stdout is stdout-only on both lines).
-- Fixed `ethscan/completion.py:install_completion` to validate the shell against
-  `_SHELL_RC_INFO` (bash/zsh/fish) instead of click's `_available_shells()` (which
-  gained `powershell` in 8.2+ and caused `KeyError`).
-- Widened the pin back to `click>=8.1` in `pyproject.toml` and `requirements.txt`.
+Completed this session (the optional future task flagged in the prior handoff):
+- Replaced the deprecated `click.__version__` in `ethscan/version.py:56` (DeprecationWarning on click 8.5+, removal in click 9.1) with `importlib.metadata.version("click")`, falling back to `"unknown"` on `PackageNotFoundError`. Removed the `import click` / `click.__version__` path.
+- Updated `tests/test_version.py`: replaced the click import-error test with `test_collect_version_data_click_package_not_found` (metadata fallback) and added `test_collect_version_data_click_version_matches_metadata`.
+- Updated `tests/test_cli_cov_gaps.py::test_version_dependency_attribute_errors` to drive the click fallback via `metadata.version` instead of a `__version__`-less `click` module.
 
 Verification (evidence):
-- click 8.5.1, clean-room `pip install -e ".[dev]"` -> click 8.5.1:
-  `pytest -q` -> 47451 passed, 147 skipped, 0 failed; mypy -> Success (270 files);
-  ruff -> All checks passed.
-- click 8.1.8 (working env): `pytest -q` -> 47448 passed, 150 skipped, 0 failed;
-  mypy Success (270 files); ruff clean; `check_readme.py` 0 drift; coverage 100%.
+- `pytest -q` → 47449 passed, 150 skipped, 0 failed (baseline 47448; +1 new test).
+- `mypy ethscan/ tests/` → Success: no issues in 270 source files.
+- `ruff check ethscan/ tests/ check_readme.py` → All checks passed.
+- `check_readme.py` → 54 commands, 0 drift both directions.
+- `coverage run --branch --source=ethscan -m pytest -q` → TOTAL 100% (16210 stmts, 6112 branches, 0 missing).
+- `grep -rn "click.__version__\|click_module" ethscan/ tests/` → no references remain.
 
-Uncommitted changes: `pyproject.toml`, `requirements.txt`, `ethscan/completion.py`,
-`tests/test_cli.py` (controller commits).
+Uncommitted changes: `ethscan/version.py`, `tests/test_version.py`, `tests/test_cli_cov_gaps.py` (controller commits).
 
 Remaining / out of scope:
-- Optional: `ethscan/version.py:56` uses deprecated `click.__version__` (removal in
-  click 9.1) — switch to `importlib.metadata.version("click")`.
-- `oracle`/`postgresql` empty-target handling and `cli.py:4318` guard are intentionally
-  out of scope; do not weaken safety controls or game coverage.
+- `oracle`/`postgresql` empty-target handling (exit 0, in-band error) per their documented contract.
+- `ethscan/cli.py:4318` unreachable defensive guard (do not weaken safety or game coverage).
 
-If future work is needed: reproduce a concrete gap first (fresh-install failure, focused
-failing check, or behavioral evidence vs documented contract), apply the smallest safe
-fix, rerun focused then broader gates (pytest/coverage/mypy/ruff/check_readme), preserve
-safety.
-
-(End of file)
+If future work is needed: reproduce a concrete gap first (fresh-install failure, focused failing check, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then broader gates (pytest/coverage/mypy/ruff/check_readme), preserve safety.

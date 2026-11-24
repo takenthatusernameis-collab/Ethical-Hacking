@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+from importlib import metadata
 import io
 import json
 import platform
@@ -52,9 +53,8 @@ def _get_git_info() -> dict[str, str]:
 def _collect_version_data() -> dict[str, Any]:
     """Collect version and dependency information."""
     try:
-        import click as click_module
-        click_version = str(click_module.__version__)
-    except (ImportError, AttributeError):
+        click_version = metadata.version("click")
+    except metadata.PackageNotFoundError:
         click_version = "unknown"
 
     try:
