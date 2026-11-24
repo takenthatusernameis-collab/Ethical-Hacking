@@ -204,7 +204,12 @@ def _encode_oid_value(oid: str) -> bytes:
     components = [int(part) for part in oid.strip().strip(".").split(".") if part]
     if len(components) < 2:
         components.append(0)
-    encoded = bytes([components[0] * 40 + components[1]])
+    # The first two arcs are combined into a single subidentifier
+    # (arc0 * 40 + arc1) that is base-128 encoded like any other component,
+    # not a single raw byte. It fits in one byte only when the value is
+    # below 128 (e.g. 1.3 -> 43); an arc-2 OID such as 2.999 -> 1079 needs
+    # two bytes (0x88 0x37), which a single-byte form cannot represent.
+    encoded = _encode_base128(components[0] * 40 + components[1])
     for component in components[2:]:
         encoded += _encode_base128(component)
     return encoded
@@ -274,13 +279,28 @@ def _parse_tlv(data: bytes, offset: int) -> tuple[int, bytes, int]:
 
 
 def _parse_oid(value: bytes) -> str:
-    """Decode an OID value payload into dotted notation."""
+    """Decode an OID value payload into dotted notation.
+
+    The first subidentifier (arc0 * 40 + arc1) is base-128 encoded and may
+    span multiple bytes (any arc-2 OID whose second arc is 40 or greater,
+    e.g. 2.999 -> 1079 -> 0x88 0x37). Reading only the first byte would
+    decode such an OID incorrectly, so the leading continuation bytes are
+    consumed to recover the full first subidentifier before splitting it
+    into the first two arcs.
+    """
     if not value:
         return ""
-    first = value[0]
-    components = [first // 40, first % 40]
+    first_subidentifier = 0
+    index = 0
+    while index < len(value):
+        byte = value[index]
+        index += 1
+        first_subidentifier = (first_subidentifier << 7) | (byte & 0x7F)
+        if not (byte & 0x80):
+            break
+    components = _split_first_subidentifier(first_subidentifier)
     component = 0
-    for byte in value[1:]:
+    for byte in value[index:]:
         component = (component << 7) | (byte & 0x7F)
         if not (byte & 0x80):
             components.append(component)
