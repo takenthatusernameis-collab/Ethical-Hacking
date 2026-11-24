@@ -31,6 +31,16 @@ def test_checked_default_map_getitem_missing_and_present() -> None:
     assert checked["workers"] == 1
 
 
+def test_checked_default_map_get_absent_and_checked() -> None:
+    """Cover ``_CheckedDefaultMap.get``: absent/None values return None early;
+    present scalars are checked against the option and returned as text."""
+    scan = cli.commands["scan"]
+    checked = _CheckedDefaultMap(scan, "scan", {"workers": 1})
+    assert checked.get("missing") is None
+    assert _CheckedDefaultMap(scan, "scan", {"workers": None}).get("workers") is None
+    assert checked.get("workers") == "1"
+
+
 def test_validate_s3_region_none_and_blank_return_none() -> None:
     assert _validate_s3_region(None) is None
     assert _validate_s3_region("   ") is None

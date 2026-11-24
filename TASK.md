@@ -1238,3 +1238,21 @@ Date: Sun Nov 08 2026 (session 7)
 
 ## Next task
 - None pending. Repository is fully green with no reproducible gap. If future work is needed, reproduce a concrete gap first (fresh-install failure, focused failing check, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then broader gates (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error).
+
+# Session (Tue Nov 24 2026, coverage gap on click 8.2+)
+## This session
+- HANDOFF_NEXT.md/NEXT_TASK.md reported "None pending" and repo fully green on click 8.1.8. Inspected the repository and ran an evidence-based search for a bounded, high-value task rather than waiting passively.
+- Re-confirmed baseline green at start on the working env (click 8.1.8): `pytest -q` green; mypy/ruff/check_readme clean; coverage `--fail-under=100` at 100%.
+- Reproduced a genuine defect on click 8.5.1 (what a fresh `pip install -e .` resolves): clean venv + `pip install -e .` resolved click 8.5.1; coverage `run --branch --source=ethscan --fail-under=100` -> TOTAL 99% (16223 stmts, 6120 branches, 1 missing at `ethscan/cli.py:576`), so the `fail_under=100` gate FAILED on click 8.5.1. Root cause: click 8.2+ changed default-map lookup so `_CheckedDefaultMap.get` is no longer invoked with a missing key, leaving the `value is None` early return uncovered.
+- Fix (minimal, reversible; no production code change): added `tests/test_cli_cov_gaps.py::test_checked_default_map_get_absent_and_checked` exercising the absent-key, explicit-None, and present-scalar paths of `_CheckedDefaultMap.get`.
+- Did NOT touch `oracle`/`postgresql` empty-target handling or the `cli.py:4318` unreachable defensive guard (intentionally out of scope).
+## Verification
+- click 8.5.1 (clean-room fresh venv): `pytest -q` -> 47459 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/` -> Success (270 files); `ruff check` -> All checks passed; `check_readme.py` -> 54 commands, 0 drift; coverage `--fail-under=100` -> TOTAL 100% (16223 stmts, 6120 branches, 0 missing), exit 0.
+- click 8.1.8 (working env): `pytest -q` -> 47460 passed, 147 skipped, 0 failed; `mypy` -> Success (270 files); `ruff` -> All checks passed; `check_readme.py` -> 54 commands, 0 drift; coverage `--fail-under=100` -> TOTAL 100%, exit 0.
+- `git diff --stat` -> tests/test_cli_cov_gaps.py only. Changes NOT committed (controller commits).
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- Adding `# pragma: no cover` to cli.py:576 would game coverage and contradict the contract (defensive guards out of scope); a real behavioral test is the correct fix.
+## Next task
+- None pending. Repository fully green on both click lines with 100% coverage.
