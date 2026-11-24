@@ -1171,3 +1171,26 @@ Date: Sun Nov 08 2026 (session 7)
 - Did not add CI: the controller already runs the full gate locally each session; adding an untested GitHub Actions workflow I cannot execute locally would violate "never claim a check passed without evidence." Left as a possible future task.
 ## Next task
 - Full click 8.2+ support (optional, bounded): replace the 22 `CliRunner(mix_stderr=False)` usages in `tests/test_cli.py` with a version-tolerant helper (e.g. try `CliRunner(mix_stderr=False)` / fall back to `CliRunner()` on click>=8.2), then widen the pin to `click>=8.1` and verify against both click 8.1.x and 8.2+ in clean venvs. Reproduce first (fresh `pip install -e .[dev]` must be green on the newest click) before changing. `oracle`/`postgresql` empty-target handling and `cli.py:4318` remain intentionally out of scope.
+
+# Session (Tue Nov 24 2026, click 8.2+ support)
+## This session
+- Executed the pending next task from HANDOFF_NEXT.md / NEXT_TASK.md: full click 8.2+ support.
+- Baseline re-verified at start (not trusted): working env click 8.1.8 -> `pytest -q` green; mypy/ruff/check_readme clean; coverage 100% (16210 stmts).
+- Reproduced the defect first (evidence): clean venv + `pip install "click>=8.2"` + `pip install -e . --no-deps` resolved click 8.5.1; `pytest tests/test_cli.py -k "config_hash_passwords_non_scalar_item_rejected or config_scan_workers_non_scalar_rejected"` -> `TypeError: CliRunner.__init__() got an unexpected keyword argument 'mix_stderr'`. Root cause: click 8.2 removed `CliRunner(mix_stderr=...)`; 22 call sites in `tests/test_cli.py` used `CliRunner(mix_stderr=False)`.
+- Fix (minimal, reversible; no runtime behavior change for valid targets):
+  - `tests/test_cli.py`: added `_make_runner()` helper (try `CliRunner(mix_stderr=False)` with `# type: ignore[call-arg]`, fall back to `CliRunner()` on `TypeError`). Replaced all 22 `CliRunner(mix_stderr=False)` with `_make_runner()`.
+  - `tests/test_cli.py`: 4 config tests parsed `json.loads(result.output)`. click 8.2+ changed `Result.output` to a stdout+stderr *mix* (8.1 `mix_stderr=False` gave stdout-only), so the stderr warning prefix broke JSON parsing. Switched those 4 to `json.loads(result.stdout)` (stdout-only on both click lines).
+  - `ethscan/completion.py`: `install_completion` validated the shell against click's `_available_shells()`, which gained `powershell` in click 8.2+, then indexed `_SHELL_RC_INFO[shell]` -> `KeyError: 'powershell'`. Changed the guard to `_SHELL_RC_INFO` (the shells ethscan can actually install for: bash/zsh/fish). Error message now lists those.
+  - `pyproject.toml` + `requirements.txt`: `click>=8.1,<8.2` -> `click>=8.1` (widen back).
+## Verification
+- click 8.5.1 (clean-room `pip install -e ".[dev]"`): `pytest -q` -> 47451 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/` -> Success (270 files); `ruff check` -> All checks passed.
+- click 8.1.8 (working env): `pytest -q` -> 47448 passed, 150 skipped, 0 failed; `mypy` -> Success (270 files); `ruff` -> All checks passed; `check_readme.py` -> 54 commands, 0 drift; coverage `--cov=ethscan` -> TOTAL 100% (0 missing).
+- Both click lines type-check clean; `# type: ignore[call-arg]` is unused-but-not-flagged on 8.1 (warn_unused_ignores is off).
+- `git diff --stat` -> ethscan/completion.py, pyproject.toml, requirements.txt, tests/test_cli.py. Changes NOT committed (controller commits).
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- First attempt (helper only, fallback to `CliRunner()`) left 4 config JSON tests failing and 1 completion test failing on click 8.5.1 — investigated each (stdout-vs-mixed-output; powershell in click 8.2+ registry) and fixed root causes rather than pinning.
+- Did NOT touch `oracle`/`postgresql` empty-target handling or the `cli.py:4318` guard (intentionally out of scope).
+## Next task
+- None pending. Repository is fully green on BOTH click 8.1.x and 8.2+. If future work is needed, pick one bounded, verifiable improvement and reproduce it first. Note: `ethscan/version.py:56` uses the deprecated `click.__version__` (DeprecationWarning on click 8.5+, removal in 9.1) — a possible small future task (switch to `importlib.metadata.version("click")`), but not required for current support. `oracle`/`postgresql` empty-target handling remains intentionally out of scope.

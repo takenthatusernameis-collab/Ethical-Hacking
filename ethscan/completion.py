@@ -233,9 +233,10 @@ def install_completion(
             "Could not detect shell. Please specify with --shell option. "
             f"Supported: {', '.join(available_shells())}"
         )
-    if shell not in _available_shells():
+    if shell not in _SHELL_RC_INFO:
         raise ValueError(
-            f"Unsupported shell: {shell}. Supported: {', '.join(available_shells())}"
+            f"Unsupported shell: {shell}. Supported: "
+            f"{', '.join(sorted(_SHELL_RC_INFO))}"
         )
 
     info = _SHELL_RC_INFO[shell]
