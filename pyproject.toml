@@ -18,6 +18,7 @@ dev = [
     "dnspython>=2.0",
     "mypy>=1.0",
     "pytest>=8.0",
+    "coverage>=7.0",
 ]
 dns = [
     "dnspython>=2.0",
@@ -47,9 +48,12 @@ line-length = 88
 [tool.ruff.lint]
 select = ["F", "BLE001", "S110", "B"]
 
-[tool.coverage]
-fail_under = 100
+[tool.coverage.run]
 source = ["ethscan"]
+
+[tool.coverage.report]
+fail_under = 100
 exclude_lines = [
     "pragma: no cover",
+    "if TYPE_CHECKING:",
 ]
