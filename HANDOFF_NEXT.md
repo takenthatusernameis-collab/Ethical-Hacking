@@ -1,36 +1,36 @@
 # Handoff
 
 ## Status
-Repository is green (independently re-verified this session). Working tree has uncommitted changes for the report-formatter fix below (controller commits).
-- `python -m pytest -q` -> 47473 passed, 147 skipped, 0 failed
+Repository is green (independently re-verified this session, full gate). Working tree clean; controller commits own changes.
+- `python -m coverage run --branch --source=ethscan -m pytest -q` -> 47473 passed, 147 skipped, 0 failed (119s)
+- `python -m coverage report` -> TOTAL 100% (16233 stmts, 6126 branches, 0 missing)
 - `python -m mypy ethscan/ tests/` -> Success: no issues found in 271 source files
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed
 - `python3 check_readme.py` -> 54 CLI commands, 0 drift both directions; exit 0
-- `coverage run --branch --source=ethscan` -> TOTAL 100% (16233 stmts, 6126 branches, 0 missing)
 
 ## What changed (this session)
-- Fixed a real, reproduced crash in the combined-report formatters. `ethscan/report.py` `format_report_markdown`/`format_report_csv` raised `TypeError: 'int' object is not iterable` when a non-iterable scalar was nested in the `scan`/`audit` sub-dicts (e.g. `{"scan": {"details": 1}}`, `scan.open_ports`, `audit.results`). Added an `_as_list` helper and applied it to the five nested list reads. Valid-output rendering is byte-identical.
-- Added a regression test in `tests/test_report_hostile_sweep.py` (non-iterable nested scalars x the three nested fields). Mutation-checked: reverting the source fix fails 9 of these tests.
-- Updated TASK.md with the session record.
+- No source or test changes. No reproducible defect was found after genuine investigation (see below), so no speculative change was made (reliability rule 7: do not add machinery for hypothetical failures without evidence).
+- Updated HANDOFF_NEXT.md / NEXT_TASK.md / TASK.md with this session's evidence so the next agent does not repeat the same search blindly.
 
 ## What was actually verified (this session)
-- Reproduced the crash before the fix (5/5 hostile nested inputs); 0 crashes after.
-- Mutation check: `git stash` of `ethscan/report.py` -> 9 new tests fail with the original `TypeError`; fix restored intact.
-- Full gate green as listed above; `report.py` at 100% coverage.
+- Re-ran the FULL gate (not just fast checks): pytest+coverage 47473 passed / 147 skipped / 0 failed; TOTAL 100% coverage; mypy clean (271 files); ruff clean; check_readme 54/54, 0 drift; `git status` clean.
+- New investigation angle (not covered by prior sessions' formatter/assessor sweeps): a parser-focused adversarial fuzz. Discovered 126 `parse_*`/`_parse_*`/`normalize_*`/`_normalize_*` functions defined in `ethscan.*` and invoked every single-arg one with a 37-value adversarial STRING corpus (empty, huge ints, IPv4/IPv6/CIDR, 5000-char, NUL bytes, format-string, unicode, etc.). Result: the ONLY non-(ValueError/TypeError) exceptions were type-mismatch false positives from `nmap._parse_host`/`nmap._parse_port` (expect a dict XML element) and `memcached._parse_version_response` (expects bytes). No string-input parser raises an unexpected exception type -> no crash path. This corroborates the prior manual finding that `_parse_*` are defensive.
+- Reviewed by reading: `report.py` (incl. the just-added `_as_list`), `mac.py` formatters (nested `mac_data` guarded by isinstance), `cidr.py` (`_format_network_info` / `_subtract_networks` math correct, incl. /31,/32 and IPv6), `passwords.py` (entropy/pool/pattern/score logic sound, no negative scores), `config.py` (YAML load/coercion/`format`->`fmt` remap sound), `scanner.py` (`parse_port_range`/`resolve_port_list` validate ranges; port 0 allowed by documented `0-{max}` contract).
 
 ## What remains unresolved
-- None. No pending task.
+- None. No pending task; no reproducible gap.
 
 ## Approaches already tried / ruled out
-- Extending the generic contract test `_VALID_REPORT` with nested dicts: rejected to keep the change bounded.
-- Broad nested-field fuzz across all modules (10,296 real-report calls): 0 other crashes; defect is specific to `report.py`. No speculative guards added elsewhere.
-- Fabricating work / repeating verification-only sessions: ruled out.
+- (Prior sessions) top-level + single-field hostile formatter contract, assessor contract, CLI target/option hostile sweeps, nested-field fuzz (10,296 calls) -> only the report.py nested-scalar bug (already fixed).
+- (This session) parser-focused adversarial STRING fuzz -> clean (only type-mismatch false positives). Do not repeat.
+- Adding a repo-wide `_parse_*` hostile contract test: deliberately NOT done. There is no evidence of a parser defect (fuzz clean), and the maintainers intentionally excluded `_parse_*` from the assessor contract; adding it now would be speculative machinery (rule 7). Reconsider only if a concrete parser crash is reproduced.
 
 ## Out of scope (per documented contract, do not change)
 - `oracle`/`postgresql` empty-target handling (exit 0, in-band error).
 - `ethscan/cli.py:4318` unreachable defensive guard (documented known limitation; do not add `# pragma: no cover` or delete the guard).
+- Do not modify `.github/workflows/**` (reverted by the controller).
 
 ## Next task
-None pending. If future work is needed, reproduce a concrete gap first (focused failing check or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then broader gates (pytest/coverage/mypy/ruff/check_readme), and preserve safety/validation. Do not delete tests to go green, and do not modify `.github/workflows/**` (reverted by the controller).
+None pending. If future work is needed, reproduce a concrete gap FIRST (a focused failing check, a fresh-install failure, or behavioral evidence vs the documented contract), then apply the smallest safe fix, rerun focused then broader gates (pytest/coverage/mypy/ruff/check_readme), and preserve safety/validation. Do not delete tests to go green and do not fabricate work or repeat verification-only sessions as progress.
 
 (End of file)

@@ -1291,3 +1291,22 @@ Date: Sun Nov 08 2026 (session 7)
 - A broad nested-field fuzz across all modules (real-report + nested injection) found 0 other crashes (10,296 calls), so the defect is specific to `report.py`'s nested sub-dicts; no speculative guards added elsewhere.
 ## Next task
 - None pending. Repository fully green with 100% coverage. If future work is needed, reproduce a concrete gap first (focused failing check or behavioral evidence vs documented contract) before changing code. `oracle`/`postgresql` empty-target handling remains intentionally out of scope (exit 0, in-band error). `ethscan/cli.py:4318` unreachable defensive guard remains a documented known limitation.
+
+# Session (Wed Nov 25 2026, parser-focused fuzz + full-gate re-verification)
+## This session
+- No prior agent assignment existed (HANDOFF_NEXT.md/NEXT_TASK.md both said "None pending; repo fully green"). Per the task instruction, inspected the repository and ran an evidence-based search for a bounded, high-value task rather than waiting passively or fabricating work.
+- Re-verified the FULL gate (not just fast checks): `coverage run --branch --source=ethscan -m pytest -q` -> 47473 passed, 147 skipped, 0 failed (119s); `coverage report` -> TOTAL 100% (16233 stmts, 6126 branches, 0 missing); `mypy ethscan/ tests/` -> Success (271 files); `ruff check` -> All checks passed; `check_readme.py` -> 54 commands, 0 drift; `git status` clean.
+- New investigation angle (distinct from prior formatter/assessor sweeps): parser-focused adversarial fuzz. Discovered 126 `parse_*`/`_parse_*`/`normalize_*`/`_normalize_*` functions defined in `ethscan.*` and invoked every single-arg one with a 37-value adversarial STRING corpus (empty, huge ints, IPv4/IPv6/CIDR, 5000-char, NUL bytes, format-string, unicode, etc.). Only non-(ValueError/TypeError) exceptions were type-mismatch false positives: `nmap._parse_host`/`nmap._parse_port` (expect a dict XML element) and `memcached._parse_version_response` (expects bytes). No string-input parser raises an unexpected exception type -> no crash path; corroborates the prior manual "parsers are defensive" finding.
+- Read-reviewed `report.py` (incl. `_as_list`), `mac.py` (nested `mac_data` isinstance-guarded), `cidr.py` (`_format_network_info`/`_subtract_networks` math correct incl. /31,/32,IPv6), `passwords.py` (entropy/pool/pattern/score sound, no negative scores), `config.py` (YAML load/coercion/`format`->`fmt` remap sound), `scanner.py` (`parse_port_range`/`resolve_port_list` validate; port 0 allowed by documented `0-{max}` contract). No defect found.
+## What changed
+- No source or test changes (no reproducible defect; no speculative machinery per reliability rule 7). Updated HANDOFF_NEXT.md / NEXT_TASK.md / TASK.md with this session's evidence.
+## Verification
+- All gates above green; `git diff --stat` shows only the three handoff/doc files.
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- (Prior) top-level + single-field formatter contract, assessor contract, CLI target/option hostile sweeps, nested-field fuzz (10,296 calls) -> only the report.py nested-scalar bug (already fixed).
+- (This session) parser-focused adversarial STRING fuzz -> clean. Do not repeat.
+- Repo-wide `_parse_*` hostile contract test: deliberately NOT added (no evidence of a parser defect; maintainers intentionally excluded `_parse_*`; would be speculative). Reconsider only after reproducing a concrete parser crash.
+## Next task
+- None pending. Repository fully green with 100% coverage. If future work is needed, reproduce a concrete gap first (focused failing check, fresh-install failure, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then broader gates (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql` empty-target handling and `ethscan/cli.py:4318` remain intentionally out of scope. Do not modify `.github/workflows/**`. Do not fabricate work or repeat verification-only sessions as progress.
