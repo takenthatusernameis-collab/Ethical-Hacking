@@ -800,3 +800,19 @@ def test_run_dns_parallel_executor_raises(monkeypatch) -> None:
     results = cast(dict[str, Any], run_dns("example.com", record_types=["A", "MX"], timeout=1.0, workers=2))
     assert results["records"]["A"] == []
     assert results["records"]["MX"] == []
+
+
+def test_format_dns_report_csv_sanitizes_formula_record_value() -> None:
+    data: dict[str, Any] = {
+        "target": "example.com",
+        "domain": "example.com",
+        "record_types_queried": ["TXT"],
+        "records": {"TXT": ["=cmd|' /C calc'!A0", "@SUM(A1:A2)"]},
+        "dnspython_available": False,
+    }
+    output = format_dns_report_csv(data)
+    import csv as _csv
+    import io as _io
+    reader = list(_csv.reader(_io.StringIO(output)))
+    assert reader[1][3] == "'=cmd|' /C calc'!A0"
+    assert reader[2][3] == "'@SUM(A1:A2)"

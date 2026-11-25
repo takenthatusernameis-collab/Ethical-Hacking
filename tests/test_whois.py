@@ -1077,3 +1077,30 @@ def test_format_whois_report_csv_non_dict() -> None:
     for hostile in hostiles:
         out = format_whois_report_csv(hostile)  # type: ignore[arg-type]
         assert isinstance(out, str)
+
+def test_format_whois_report_csv_sanitizes_formula_fields() -> None:
+    import csv as _csv
+    import io as _io
+
+    from ethscan.whois import format_whois_report_csv
+
+    data = {
+        "target": "example.com",
+        "server": "whois.example.com",
+        "port": 43,
+        "parsed": {
+            "registrar": "=cmd|' /C calc'!A0",
+            "creation_date": "2020-01-01",
+            "expiration_date": "2030-01-01",
+            "registrant_org": "@SUM(A1:A2)",
+            "nameservers": ["ns1.example.com"],
+            "status_codes": ["ok"],
+        },
+        "error": "-1+1",
+    }
+    output = format_whois_report_csv(data)
+    reader = list(_csv.reader(_io.StringIO(output)))
+    rows = {r[0]: r[1] for r in reader if len(r) >= 2}
+    assert rows["registrar"] == "'=cmd|' /C calc'!A0"
+    assert rows["registrant_org"] == "'@SUM(A1:A2)"
+    assert rows["error"] == "'-1+1"

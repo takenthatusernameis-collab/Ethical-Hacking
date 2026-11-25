@@ -1638,3 +1638,19 @@ def test_format_smtp_report_csv_hostile_users(value):
     lines = output.splitlines()
     assert len(lines) == 2
     assert lines[0].rstrip("\r") == "target,host,port,user,found,code,description"
+
+
+def test_format_smtp_report_csv_sanitizes_formula_error() -> None:
+    data = {
+        "target": "smtp.example.com",
+        "host": "smtp.example.com",
+        "port": 25,
+        "error": "=cmd|' /C calc'!A0",
+        "findings": ["@SUM(A1:A2)"],
+    }
+    output = format_smtp_report_csv(data)
+    import csv as _csv
+    import io as _io
+    reader = list(_csv.reader(_io.StringIO(output)))
+    assert reader[1][6] == "'=cmd|' /C calc'!A0"
+    assert reader[4][0] == "'@SUM(A1:A2)"
