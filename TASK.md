@@ -1473,3 +1473,66 @@ Date: Sun Nov 08 2026 (session 7)
   generic hostile sweep covers it (how the version gap was closed).
   `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable
   guard remain out of scope. Do not modify `.github/workflows/**`.
+
+# Session (Wed Nov 25 2026, radix aggregate-prefix wrong-output defect fixed)
+## This session
+- No new external assignment; HANDOFF_NEXT.md/NEXT_TASK.md said "None pending; repo
+  fully green". Per the task instruction I did NOT repeat a verification-only
+  session; I re-verified the baseline, then used a FRESH ANGLE (property-check for
+  WRONG OUTPUT against a ground-truth oracle, not just exceptions) and reproduced
+  a concrete previously-unreported defect, fixed with the smallest safe change.
+- Re-verified baseline at start: `coverage run --branch --source=ethscan -m pytest
+  -q` -> 49772 passed, 147 skipped, 0 failed; TOTAL 100% (16258 stmts, 6148
+  branches, 0 missing); mypy clean (271 files); ruff clean; check_readme 54/54, 0
+  drift; `git status` clean.
+## The defect (reproduced)
+- `ethscan.radix._common_prefix_of_pair` computed the aggregate CIDR prefix from
+  the address SPAN (`end - start + 1`, rounded up to a power of two), which is
+  only correct when `start` is aligned to the span's block size. For an unaligned
+  range the produced block could omit `end` entirely. Repro via the public API:
+  `build_radix_tree(["10.0.0.1/32","10.0.0.2/32"])` -> root `prefix`
+  `"10.0.0.0/31"`, `start_address` `10.0.0.1`, `end_address` `10.0.0.2`, and
+  `ip_address("10.0.0.2") in ip_network("10.0.0.0/31")` is False. The smallest
+  block covering both endpoints is `10.0.0.0/30`. This is a user-visible wrong
+  `prefix` in the radix-tree visualization (`run_radix`/`build_radix_tree` ->
+  JSON/Markdown/CSV). The 3 existing `_common_prefix_of_pair` tests all used
+  ALIGNED endpoints, where both formulas agree, so the bug slipped through.
+## What changed
+- `ethscan/radix.py` (`_common_prefix_of_pair`): use the endpoints' longest common
+  prefix (`max_bits - (start ^ end).bit_length()`), the smallest block containing
+  both; always minimal. Docstring updated. ~7 lines, no API change.
+- `tests/test_radix.py`: added `test_common_prefix_of_pair_unaligned_endpoints`
+  (direct) and `test_build_radix_tree_prefix_contains_range` (end-to-end via
+  `build_radix_tree`; root prefix block contains start_address and end_address).
+## Verification
+- Repro before/after as above (wrong `/31` -> correct `/30`, both endpoints
+  contained).
+- Empirical oracle probe: 4000 merge (set-equality + non-overlap), 4000 subtract
+  (exact set difference), 20000 `_common_prefix_of_pair` (coverage + minimality)
+  cases vs Python `ipaddress`. BEFORE: ~27k prefix failures; AFTER: 0 failures.
+  Merge/subtract/network_info: 0 failures (confirmed correct, not defects).
+- Mutation check: restoring the old span-based body makes BOTH new tests FAIL
+  (`assert 31 == 30`; `'10.0.0.0/31' == '10.0.0.0/30'`); restoring the fix -> pass.
+- `coverage run --branch --source=ethscan -m pytest -q` -> 49774 passed, 147
+  skipped, 0 failed; TOTAL 100% (16255 stmts, 6146 branches, 0 missing).
+- `mypy ethscan/ tests/` -> Success (271 files); `ruff` -> All checks passed;
+  `check_readme.py` -> 54 commands, 0 drift; `git diff --check` clean.
+- `git diff --stat` -> 2 files, 37 insertions(+), 7 deletions(-). Not committed
+  (controller commits).
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- CSV formula injection, parser/assessor/CLI hostile sweeps, nested-field fuzz,
+  load_json bracket-in-string (fixed earlier), version formatter hostile fields
+  (fixed earlier), MD4/PBKDF2/HMAC KATs: clean; not repeated.
+- Radix `_merge_networks`/`_subtract_networks`/`_format_network_info` math:
+  empirically verified correct this session; not defects.
+## Next task
+- None blocking. Do not fabricate work or repeat verification-only sessions. The
+  fresh angle that found this bug: property-check pure computational helpers for
+  WRONG OUTPUT against a ground-truth oracle (Python `ipaddress`), not just for
+  exceptions. Remaining candidates: `_common_prefix_length`, `_nth_bit`,
+  `_contains_in_merged`, cidr `_format_network_info` IPv6 conventions,
+  `target.py` parsers. `oracle`/`postgresql` empty-target handling and
+  `ethscan/cli.py` unreachable guard remain out of scope. Do not modify
+  `.github/workflows/**`.

@@ -162,6 +162,31 @@ def test_common_prefix_of_pair_ipv6() -> None:
     assert _common_prefix_of_pair(start, end, False) == 32
 
 
+def test_common_prefix_of_pair_unaligned_endpoints() -> None:
+    # The span is 2 (which would wrongly suggest /31), but 10.0.0.2 is not in
+    # 10.0.0.0/31; the smallest block covering both endpoints is 10.0.0.0/30.
+    start = ipaddress.ip_address("10.0.0.1")
+    end = ipaddress.ip_address("10.0.0.2")
+    prefix = _common_prefix_of_pair(start, end, True)
+    assert prefix == 30
+    block = ipaddress.ip_network((int(start), prefix), strict=False)
+    assert start in block
+    assert end in block
+
+
+def test_build_radix_tree_prefix_contains_range() -> None:
+    # The aggregate prefix of a node must be a block that actually contains the
+    # node's start and end addresses (regression: span-based prefix could omit
+    # the end address for unaligned ranges).
+    from ethscan.radix import build_radix_tree
+
+    root = build_radix_tree(["10.0.0.1/32", "10.0.0.2/32"])
+    assert root["prefix"] == "10.0.0.0/30"
+    block = ipaddress.ip_network(cast(str, root["prefix"]), strict=False)
+    assert ipaddress.ip_address(cast(str, root["start_address"])) in block
+    assert ipaddress.ip_address(cast(str, root["end_address"])) in block
+
+
 # ---------------------------------------------------------------------------
 # Network merging
 # ---------------------------------------------------------------------------

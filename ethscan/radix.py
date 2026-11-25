@@ -294,14 +294,19 @@ def _merge_networks(networks: Sequence[ipaddress._BaseNetwork]) -> list[ipaddres
 
 
 def _common_prefix_of_pair(start, end, is_v4: bool) -> int:
-    """Return the prefix length covering the range from start to end."""
+    """Return the prefix length covering the range from start to end.
+
+    The smallest CIDR block that contains both endpoints is their longest
+    common prefix, whose length is ``max_bits`` minus the bit length of the
+    XOR of the two addresses. Deriving the prefix from the span alone is only
+    correct when ``start`` is aligned to the span's block size: for an
+    unaligned range such as ``10.0.0.1``..``10.0.0.2`` the span is 2 (which
+    would suggest ``/31``), but ``10.0.0.2`` is not in ``10.0.0.0/31``; the
+    correct aggregate is ``/30``.
+    """
     max_bits = 32 if is_v4 else 128
-    span = int(end) - int(start) + 1
-    # Find smallest prefix length that covers the span.
-    needed_bits = 0
-    while (1 << needed_bits) < span:
-        needed_bits += 1
-    return max(0, max_bits - needed_bits)
+    span = int(end) ^ int(start)
+    return max(0, max_bits - span.bit_length())
 
 
 def _build_radix_node(
