@@ -732,3 +732,172 @@ def test_grab_banner_http_ipv4_host_header_is_not_bracketed(monkeypatch) -> None
     assert banner is not None
     assert b"Host: 127.0.0.1\r\n" in fake.sent
     assert b"Host: [127.0.0.1]" not in fake.sent
+
+
+# ---------------------------------------------------------------------------
+# Property checks: parse_port_range vs hand-derived oracle
+# ---------------------------------------------------------------------------
+
+
+def _parse_port_range_oracle(port_spec: str) -> list[int] | None:
+    """Oracle implementation of parse_port_range.
+
+    Returns the expected sorted list of unique ports, or None if the spec
+    should raise PortSpecError.
+    """
+    if not port_spec.strip():
+        return None
+
+    parts = [p.strip() for p in port_spec.split(",")]
+    if not any(parts):
+        return None
+
+    if any(not part for part in parts):
+        return None
+
+    ports_set: set[int] = set()
+    for part in parts:
+        if "-" in part:
+            start_str, end_str = part.split("-", 1)
+            start_str = start_str.strip()
+            end_str = end_str.strip()
+            if not start_str or not end_str:
+                return None
+            try:
+                start = int(start_str)
+                end = int(end_str)
+            except ValueError:
+                return None
+            if start > end:
+                return None
+            if not (0 <= start <= 65535 and 0 <= end <= 65535):
+                return None
+            ports_set.update(range(start, end + 1))
+        else:
+            try:
+                port = int(part)
+            except ValueError:
+                return None
+            if not (0 <= port <= 65535):
+                return None
+            ports_set.add(port)
+
+    return sorted(ports_set)
+
+
+def test_parse_port_range_property_matches_oracle() -> None:
+    """parse_port_range output matches the hand-derived oracle for valid specs."""
+    import random as _random
+
+    rng = _random.Random(20261125)
+    for _ in range(5000):
+        # Generate a random valid port spec
+        num_parts = rng.randint(1, 5)
+        parts = []
+        for _ in range(num_parts):
+            if rng.random() < 0.4:  # range
+                start = rng.randint(0, 65535)
+                end = rng.randint(start, 65535)
+                parts.append(f"{start}-{end}")
+            else:  # single port
+                port = rng.randint(0, 65535)
+                parts.append(str(port))
+        spec = ",".join(parts)
+
+        expected = _parse_port_range_oracle(spec)
+        assert expected is not None
+        result = parse_port_range(spec)
+        assert result == expected, f"spec={spec!r}, expected={expected}, got={result}"
+
+
+def test_parse_port_range_property_rejects_invalid_specs() -> None:
+    """parse_port_range raises PortSpecError exactly when the oracle returns None."""
+    import random as _random
+
+    rng = _random.Random(20261126)
+    for _ in range(3000):
+        # Generate potentially invalid specs
+        num_parts = rng.randint(1, 4)
+        parts = []
+        for _ in range(num_parts):
+            choice = rng.random()
+            if choice < 0.25:
+                # Valid single port
+                parts.append(str(rng.randint(0, 65535)))
+            elif choice < 0.5:
+                # Valid range
+                start = rng.randint(0, 65535)
+                end = rng.randint(start, 65535)
+                parts.append(f"{start}-{end}")
+            elif choice < 0.65:
+                # Out of range single port
+                parts.append(str(rng.choice([-1, -100, 65536, 70000, 99999])))
+            elif choice < 0.8:
+                # Out of range in range
+                start = rng.randint(-100, 65535)
+                end = rng.randint(start, 70000)
+                parts.append(f"{start}-{end}")
+            elif choice < 0.9:
+                # Inverted range
+                start = rng.randint(1, 65535)
+                end = rng.randint(0, start - 1)
+                parts.append(f"{start}-{end}")
+            elif choice < 0.95:
+                # Non-numeric
+                parts.append(rng.choice(["abc", "1.5", "65536", "abc-def", "80-abc"]))
+            else:
+                # Missing start/end
+                parts.append(rng.choice(["80-", "-80", "-"]))
+
+        # Add empty token sometimes
+        if rng.random() < 0.1:
+            parts.insert(rng.randint(0, len(parts)), "")
+
+        spec = ",".join(parts)
+
+        expected = _parse_port_range_oracle(spec)
+        if expected is not None:
+            # Oracle says valid - parse_port_range should succeed
+            result = parse_port_range(spec)
+            assert result == expected, f"spec={spec!r}, expected={expected}, got={result}"
+        else:
+            # Oracle says invalid - parse_port_range should raise
+            try:
+                parse_port_range(spec)
+                raise AssertionError(f"Expected PortSpecError for {spec!r}")
+            except PortSpecError:
+                pass
+
+
+def test_parse_port_range_property_whitespace_and_duplicates() -> None:
+    """parse_port_range handles whitespace and duplicates correctly."""
+    import random as _random
+
+    rng = _random.Random(20261127)
+    for _ in range(2000):
+        num_parts = rng.randint(1, 6)
+        base_parts = []
+        for _ in range(num_parts):
+            if rng.random() < 0.5:
+                base_parts.append(str(rng.randint(0, 65535)))
+            else:
+                start = rng.randint(0, 65535)
+                end = rng.randint(start, 65535)
+                base_parts.append(f"{start}-{end}")
+
+        # Add whitespace around parts
+        parts = []
+        for part in base_parts:
+            ws_before = " " * rng.randint(0, 3)
+            ws_after = " " * rng.randint(0, 3)
+            parts.append(f"{ws_before}{part}{ws_after}")
+
+        # Add some duplicates
+        if rng.random() < 0.5 and parts:
+            parts.append(rng.choice(parts))
+
+        spec = ",".join(parts)
+        expected = _parse_port_range_oracle(spec)
+        assert expected is not None
+        result = parse_port_range(spec)
+        assert result == expected
