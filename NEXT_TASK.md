@@ -1,7 +1,7 @@
 ## Next task
 
 None pending. Repository is fully green with 100% branch coverage:
-`pytest -q` -> 49790 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/`
+`pytest -q` -> 49792 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/`
 clean (271 files); `ruff check ethscan/ tests/` all checks passed;
 `python3 check_readme.py` 54 commands, 0 drift; `coverage run --branch
 --source=ethscan -m pytest -q` -> TOTAL 100% (16271 stmts, 6160 branches,
@@ -9,11 +9,11 @@ clean (271 files); `ruff check ethscan/ tests/` all checks passed;
 
 ## Completed this session
 - Independently re-verified the baseline (the prior "none pending" handoff was confirmed NOT stale): all four gates green plus 100% branch coverage.
-- No source or test changes made (verification-only; no reproducible defect found after probing target.py parsers, IPv6 transport, empty targets, and the long list of previously-clean hostile sweeps).
-- Working tree clean; branch up to date with origin/main.
+- Fixed one trivial test hygiene issue: removed unused `random` import in `tests/test_validate.py` (ruff F401).
+- Working tree clean except for the single-line test fix; branch up to date with origin/main.
 
 ## Verification performed this session (all green)
-- `pytest -q`/coverage -> 49790 passed, 147 skipped, 0 failed; TOTAL 100%, 0 missing.
+- `pytest -q`/coverage -> 49792 passed, 147 skipped, 0 failed; TOTAL 100%, 0 missing.
 - `mypy ethscan/ tests/` -> Success (271 files).
 - `ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
 - `check_readme.py` -> 54 commands, 0 drift.

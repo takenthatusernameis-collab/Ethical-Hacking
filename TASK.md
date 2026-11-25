@@ -1597,3 +1597,50 @@ exceptions. Remaining candidates: `_common_prefix_length`, `_nth_bit`,
   hand-derived/`ipaddress` oracle; `format_host_header` is now covered.
 - `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable
   guard remain out of scope. Do not modify `.github/workflows/**`.
+
+# Session (Wed Nov 25 2026, final verification + unused import cleanup)
+## This session
+- No prior agent assignment existed; HANDOFF_NEXT.md/NEXT_TASK.md both said
+  "None pending; repo fully green". Independently re-verified the baseline
+  before selecting work: `pytest -q` -> 49792 passed, 147 skipped, 0 failed;
+  `mypy ethscan/ tests/` clean (271 files); `ruff check ethscan/ tests/` had
+  one F401 (unused `random` import in `tests/test_validate.py`); `check_readme.py`
+  54/54, 0 drift; `coverage run --branch --source=ethscan -m pytest -q` ->
+  TOTAL 100% (16271 stmts, 6160 branches, 0 missing).
+- Fixed the trivial ruff F401: removed unused `random` import from
+  `tests/test_validate.py`. No behavior change; test hygiene only.
+- Re-ran full gate after fix: all gates green.
+
+## What was actually verified (evidence)
+- `python -m pytest -q` -> 49792 passed, 147 skipped, 0 failed (baseline unchanged).
+- `python -m mypy ethscan/ tests/` -> Success: no issues in 271 source files.
+- `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
+- `python3 check_readme.py` -> 54 commands, 0 drift both directions; exit 0.
+- `python -m coverage run --branch --source=ethscan -m pytest -q` ->
+  TOTAL 100% (16271 stmts, 6160 branches, 0 missing).
+- `git diff --check` clean; `git diff --stat` -> tests/test_validate.py (1 deletion).
+
+## Blockers
+- None.
+
+## Approaches already tried / ruled out
+- CSV formula injection, parser/adversarial STRING fuzz, formatter/assessor
+  hostile contracts, CLI target/option hostile sweeps, nested-field &
+  per-key hostile sweeps: clean in prior sessions; not repeated. Broad
+  `except Exception`: all intentional (`# noqa: BLE001`).
+- Radix `_merge_networks`/`_subtract_networks`/`_format_network_info` math:
+  empirically verified correct in prior session (0 failures vs `ipaddress`
+  oracle); not defects.
+
+## Next task
+- None pending. Repository fully green with 100% coverage. Do NOT fabricate
+  work or repeat verification-only sessions as progress. If future work is
+  needed, reproduce a concrete gap first (focused failing check, fresh-install
+  failure, or behavioral evidence vs documented contract), apply the smallest
+  safe fix, rerun focused then the full gate
+  (pytest/coverage/mypy/ruff/check_readme), preserve safety.
+- Evidence-based lead: property-check remaining `target.py` parsers
+  (`parse_url`, `normalize_host`, `check_port`) for wrong output against a
+  hand-derived/`ipaddress` oracle; `format_host_header` is now covered.
+- `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable
+  guard remain out of scope. Do not modify `.github/workflows/**`.

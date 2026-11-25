@@ -2,7 +2,6 @@
 
 import ipaddress
 import json
-import random
 from typing import Any, cast
 
 from ethscan.scanner import PortSpecError, parse_port_range
