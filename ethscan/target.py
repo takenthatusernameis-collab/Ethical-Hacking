@@ -379,23 +379,29 @@ def format_host_header(host: str) -> str:
 
     A host that is already bracketed (``[::1]``), an IPv4 literal
     (``127.0.0.1``), or a DNS name (``example.com``) is returned unchanged.
+    A zone ID (``fe80::1%eth0``) is stripped before bracketing, because zone
+    IDs are a local interface identifier and must not be sent in the ``Host``
+    header.
 
     Args:
         host: A bare hostname or IP literal, as produced by
             :func:`normalize_host` (brackets already stripped).
 
     Returns:
-        The host, bracketed when it is an unbracketed IPv6 literal.
+        The host, bracketed when it is an unbracketed IPv6 literal (zone ID
+        removed).
     """
     candidate = host.strip()
     if not candidate or candidate.startswith("["):
         return candidate
-    # A zone id (``fe80::1%eth0``) is not accepted by ``ipaddress``; only a
-    # plain IPv6 literal is bracketed here, everything else is left as-is.
+    # Strip zone ID (e.g., %eth0) before checking, since zone IDs are not
+    # valid in Host headers and ipaddress accepts them in the string form.
+    if "%" in candidate:
+        candidate = candidate.split("%", 1)[0]
     try:
         ip = ipaddress.ip_address(candidate)
     except ValueError:
-        return candidate
+        return host
     if isinstance(ip, ipaddress.IPv6Address):
         return f"[{candidate}]"
-    return candidate
+    return host

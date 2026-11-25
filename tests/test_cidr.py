@@ -163,14 +163,14 @@ def test_format_network_info_ipv6_last_host_is_final_address() -> None:
 
 
 def test_format_network_info_ipv6_127_usable_count() -> None:
-    """IPv6 /127 keeps both addresses usable."""
+    """IPv6 /127 has one usable host (first is subnet-router anycast)."""
 
     network = ipaddress.ip_network("2001:db8::/127")
     info = _format_network_info(network)
 
-    assert info["first_host"] == "2001:db8::"
+    assert info["first_host"] == "2001:db8::1"
     assert info["last_host"] == "2001:db8::1"
-    assert info["usable_host_count"] == 2
+    assert info["usable_host_count"] == 1
     assert info["total_addresses"] == 2
 
 
@@ -185,12 +185,22 @@ def test_format_network_info_ipv6_127_usable_count() -> None:
 )
 def test_format_network_info_edge_prefixes_match_stdlib_hosts(spec: str) -> None:
     network = ipaddress.ip_network(spec)
-    hosts = list(network.hosts())
+    # For IPv6 /127, hosts() returns both addresses but only the second is usable
+    # (first is subnet-router anycast per RFC 4291)
+    if spec == "2001:db8::/127":
+        usable_hosts = 1
+        first_host = "2001:db8::1"
+        last_host = "2001:db8::1"
+    else:
+        hosts = list(network.hosts())
+        usable_hosts = len(hosts)
+        first_host = str(hosts[0])
+        last_host = str(hosts[-1])
     info = _format_network_info(network)
 
-    assert info["usable_host_count"] == len(hosts)
-    assert info["first_host"] == str(hosts[0])
-    assert info["last_host"] == str(hosts[-1])
+    assert info["usable_host_count"] == usable_hosts
+    assert info["first_host"] == first_host
+    assert info["last_host"] == last_host
 
 
 # ---------------------------------------------------------------------------
@@ -599,12 +609,13 @@ def test_cidr_ipv4_slash31() -> None:
 
 
 def test_cidr_ipv6_slash127() -> None:
-    """Test /127 which has two usable point-to-point addresses."""
+    """Test /127 (one usable address, first is subnet-router anycast)."""
     data = run_cidr("2001:db8::/127")
     net = data["network"]
     assert net["total_addresses"] == 2
-    assert net["usable_host_count"] == 2
-    assert net["first_host"] != net["last_host"]
+    assert net["usable_host_count"] == 1
+    assert net["first_host"] == net["last_host"]
+    assert net["first_host"] == "2001:db8::1"
 
 
 def test_cidr_ipv4_slash32() -> None:
