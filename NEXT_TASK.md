@@ -8,23 +8,15 @@ Repository is green (independently re-verified this session, FULL gate):
 - `check_readme.py` -> 54 commands, 0 drift both directions
 - `git status` clean
 
-This session found NO reproducible defect. New angle tried: parser-focused adversarial
-STRING fuzz over 126 `parse_*`/`_parse_*`/`normalize_*` functions -> only type-mismatch
-false positives (nmap dict-input, memcached bytes-input); no unexpected exception type.
-No source/test change made (no speculative machinery per reliability rule 7).
+This session found NO reproducible defect. Investigation ruled out: TODOs/FIXMEs (none), modules without tests (none), hardcoded AF_INET sockets (none), parser crash path (clean fuzz).
 
-Important: there is no pending task. Do not fabricate work or repeat verification-only
-sessions as progress. Do NOT add a speculative `_parse_*` contract test without first
-reproducing a concrete parser crash.
+Important: there is no pending task. Do not fabricate work or repeat verification-only sessions as progress. Do NOT add speculative machinery without first reproducing a concrete crash.
 
 Out of scope (per documented contract, do not change):
 - `oracle`/`postgresql` empty-target handling (exit 0, in-band error)
 - `ethscan/cli.py:4318` unreachable defensive guard (documented known limitation)
 - `.github/workflows/**` (reverted by the controller)
 
-If future work is needed: reproduce a concrete gap first (focused failing check or
-behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused
-then broader gates (pytest/coverage/mypy/ruff/check_readme), preserve safety/validation.
-Do not delete tests to go green.
+If future work is needed: reproduce a concrete gap first (focused failing check or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then broader gates (pytest/coverage/mypy/ruff/check_readme), preserve safety/validation. Do not delete tests to go green.
 
 (End of file)
