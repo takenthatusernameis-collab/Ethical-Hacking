@@ -1,12 +1,11 @@
 """Combined report generation: port scan plus password audit."""
 from __future__ import annotations
 
-import csv
 import io
 import json
 from typing import Any
 
-from ethscan.fileio import read_lines
+from ethscan.fileio import read_lines, csv_writer
 from ethscan.passwords import audit_passwords
 from ethscan.scanner import (
     get_profile_defaults,
@@ -302,7 +301,7 @@ def format_report_csv(data: dict[str, Any]) -> str:
     if not isinstance(data, dict):
         data = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow(CSV_COLUMNS)
 
     scan = data.get("scan", {}) or {}

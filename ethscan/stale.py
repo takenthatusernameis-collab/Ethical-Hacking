@@ -2,14 +2,13 @@
 from __future__ import annotations
 
 import contextlib
-import csv
 import io
 import json
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
-from ethscan.fileio import read_lines
+from ethscan.fileio import read_lines, csv_writer
 from ethscan.target import normalize_host
 
 DEFAULT_TIMEOUT = 2.0
@@ -291,7 +290,7 @@ def format_stale_report_csv(data: dict[str, Any]) -> str:
     if not isinstance(data, dict):
         data = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow(["domain", "A_records", "AAAA_records", "CNAME", "stale", "stale_reasons"])
 
     results = data.get("results", []) or []

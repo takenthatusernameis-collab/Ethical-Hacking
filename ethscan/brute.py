@@ -2,13 +2,12 @@
 from __future__ import annotations
 
 import contextlib
-import csv
 import io
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from ftplib import FTP
 
-from ethscan.fileio import read_lines
+from ethscan.fileio import read_lines, csv_writer
 from ethscan.target import normalize_host
 
 try:
@@ -247,7 +246,7 @@ def format_brute_report_csv(data: object) -> str:
     Produces one row per attempt with columns: username, password, success, error.
     """
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow(["username", "password", "success", "error"])
     if not isinstance(data, dict):
         return output.getvalue().rstrip("\r\n")

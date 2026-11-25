@@ -1,14 +1,13 @@
 """Subdomain enumeration module for ethscan."""
 from __future__ import annotations
 
-import csv
 import io
 import json
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
-from ethscan.fileio import read_lines
+from ethscan.fileio import read_lines, csv_writer
 from ethscan.target import normalize_host
 
 try:
@@ -355,7 +354,7 @@ def format_subdomains_report_csv(data: dict[str, Any]) -> str:
     if not isinstance(data, dict):
         data = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow(["subdomain", "hostname", "ip", "resolved"])
     all_results = data.get("all_results") or []
     if isinstance(all_results, list):

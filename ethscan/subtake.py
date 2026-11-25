@@ -6,7 +6,7 @@ Shopify, etc.) where the target resource no longer exists.
 """
 from __future__ import annotations
 
-import csv
+from ethscan.fileio import csv_writer
 import io
 import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -583,7 +583,7 @@ def format_subtake_report_csv(data: dict[str, object]) -> str:
     fingerprint, http_confirmed.
     """
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow(
         [
             "subdomain",

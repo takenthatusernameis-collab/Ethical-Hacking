@@ -13,7 +13,7 @@ Fully stdlib-only and offline.
 """
 from __future__ import annotations
 
-import csv
+from ethscan.fileio import csv_writer
 import io
 import ipaddress
 import json
@@ -387,7 +387,7 @@ def format_validate_report_csv(data: dict[str, Any]) -> str:
     if not isinstance(data, dict):
         data = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow(["type", "spec", "valid", "detail"])
     port_results = data.get("ports", []) or []
     if isinstance(port_results, list):

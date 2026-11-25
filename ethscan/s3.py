@@ -10,7 +10,7 @@ Stdlib only.
 from __future__ import annotations
 
 import contextlib
-import csv
+from ethscan.fileio import csv_writer
 import http.client
 import io
 import re
@@ -577,7 +577,7 @@ def format_s3_report_csv(data: dict[str, object]) -> str:
       did not resolve / returned no URL) instead of collapsing them away.
     """
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow([
         "target",
         "domain",

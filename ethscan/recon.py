@@ -5,7 +5,7 @@ in sequence and produces a consolidated report.
 """
 from __future__ import annotations
 
-import csv
+from ethscan.fileio import csv_writer
 import io
 import json
 from typing import cast
@@ -351,7 +351,7 @@ def format_recon_report_markdown(data: Mapping[str, object]) -> str:
 def format_recon_report_csv(data: Mapping[str, object]) -> str:
     """Format recon results as CSV."""
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow(["module", "field", "value"])
     if not isinstance(data, dict):
         return output.getvalue().rstrip("\r\n")

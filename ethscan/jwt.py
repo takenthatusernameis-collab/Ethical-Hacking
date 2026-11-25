@@ -6,7 +6,7 @@ Stdlib only; fully offline.
 from __future__ import annotations
 
 import base64
-import csv
+from ethscan.fileio import csv_writer
 import io
 import json
 import math
@@ -348,7 +348,7 @@ def format_jwt_report_markdown(data: Mapping[str, object]) -> str:
 def format_jwt_report_csv(data: Mapping[str, object]) -> str:
     """Format JWT inspection results as CSV."""
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
 
     writer.writerow(["field", "value"])
     if not isinstance(data, dict):

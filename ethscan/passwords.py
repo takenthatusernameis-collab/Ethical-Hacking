@@ -1,7 +1,7 @@
 """Password strength auditing module for ethscan."""
 from __future__ import annotations
 
-import csv
+from ethscan.fileio import csv_writer
 import hashlib
 import hmac
 import io
@@ -435,7 +435,7 @@ def format_audit_report_csv(
     passwords = _as_passwords_list(passwords)
     results = _as_audit_rows(results)
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow(
         [
             "password",

@@ -11,7 +11,6 @@ made-up MAC, which would report a vendor for the IP's first 24 bits.
 """
 from __future__ import annotations
 
-import csv
 import io
 import json
 import math
@@ -21,7 +20,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from ethscan.fileio import load_json
+from ethscan.fileio import load_json, csv_writer
 from ethscan.target import TargetSpecError, parse_url
 
 DEFAULT_API_URL = "https://api.macvendors.com/"
@@ -401,7 +400,7 @@ def format_mac_report_csv(data: dict[str, Any]) -> str:
     if not isinstance(data, dict):
             data = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow([
         "target",
         "mac",

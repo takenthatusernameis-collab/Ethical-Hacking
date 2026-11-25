@@ -9,11 +9,12 @@ its own output instead of leaking a traceback.
 from __future__ import annotations
 
 import codecs
+import csv
 import json
 import os
 import tempfile
 from pathlib import Path
-from typing import IO, Any, Callable
+from typing import IO, Any, Callable, Iterable
 
 
 def read_text(path: str | Path) -> str:
@@ -261,3 +262,28 @@ def sanitize_csv_cell(value: Any) -> Any:
         except ValueError:
             return "'" + value
     return value
+
+
+class SanitizingCSVWriter:
+    """A ``csv.writer`` wrapper that neutralises formula injection per cell.
+
+    Each cell is passed through :func:`sanitize_csv_cell` before being handed
+    to the underlying writer, so a hostile banner or DNS record can no longer
+    execute as a spreadsheet formula when the CSV is opened. Only
+    ``writerow`` is provided because that is the sole method the codebase uses.
+    """
+
+    def __init__(self, handle: IO[str], **kwargs: Any) -> None:
+        self._writer = csv.writer(handle, **kwargs)
+
+    def writerow(self, row: Iterable[Any]) -> Any:
+        return self._writer.writerow([sanitize_csv_cell(cell) for cell in row])
+
+
+def csv_writer(handle: IO[str], **kwargs: Any) -> SanitizingCSVWriter:
+    """Return a :class:`csv.writer` that sanitizes every cell (CWE-1236).
+
+    Drop-in replacement for ``csv.writer`` used by every ``format_*_report_csv``
+    helper so formula-triggering values are prefixed with a single quote.
+    """
+    return SanitizingCSVWriter(handle, **kwargs)

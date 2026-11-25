@@ -1,7 +1,7 @@
 """Service/banner detection module for ethscan."""
 from __future__ import annotations
 
-import csv
+from ethscan.fileio import csv_writer
 import io
 import json
 import re
@@ -270,11 +270,11 @@ def format_service_report_csv(data: dict[str, object]) -> str:
     """Format service detection results as CSV."""
     if not isinstance(data, dict):
         output = io.StringIO()
-        writer = csv.writer(output)
+        writer = csv_writer(output)
         writer.writerow(["port", "service", "banner"])
         return output.getvalue().rstrip("\r\n")
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow(["port", "service", "banner"])
     results = data.get("results") or []
     if isinstance(results, (list, tuple)):

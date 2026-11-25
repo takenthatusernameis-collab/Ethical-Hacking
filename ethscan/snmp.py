@@ -17,7 +17,7 @@ defaults to a raw UDP socket so tests can substitute a local fake server.
 from __future__ import annotations
 
 import contextlib
-import csv
+from ethscan.fileio import csv_writer
 import io
 import json
 import re
@@ -812,7 +812,7 @@ def format_snmp_report_csv(data: dict[str, Any]) -> str:
     if not isinstance(data, dict):
         data = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow([
         "target", "host", "port", "snmp_version",
         "sys_descr", "sys_object_id", "sys_up_time_ms", "sys_name", "error",

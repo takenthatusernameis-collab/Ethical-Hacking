@@ -6,7 +6,6 @@ graceful fallback when tools unavailable). On other platforms, reports platform 
 """
 from __future__ import annotations
 
-import csv
 import io
 import json
 import platform
@@ -14,7 +13,7 @@ import re
 import subprocess
 from typing import Any
 
-from ethscan.fileio import read_text
+from ethscan.fileio import read_text, csv_writer
 
 
 def _is_linux() -> bool:
@@ -411,7 +410,7 @@ def format_wifi_report_csv(results: dict[str, Any]) -> str:
     if not isinstance(results, dict):
         results = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
 
     # Platform info
     writer.writerow(["field", "value"])

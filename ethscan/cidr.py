@@ -8,7 +8,7 @@ Fully stdlib-only and offline.
 """
 from __future__ import annotations
 
-import csv
+from ethscan.fileio import csv_writer
 import io
 import ipaddress
 from typing import TYPE_CHECKING, TypedDict, cast
@@ -321,7 +321,7 @@ def format_cidr_report_csv(data: Mapping[str, object]) -> str:
     if not isinstance(data, dict):
         data = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow([
         "cidr",
         "network_address",

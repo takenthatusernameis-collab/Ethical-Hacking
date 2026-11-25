@@ -6,7 +6,7 @@ CVE/weakness database and reports matches.
 """
 from __future__ import annotations
 
-import csv
+from ethscan.fileio import csv_writer
 import hashlib
 import hmac
 import io
@@ -1120,7 +1120,7 @@ def format_vuln_report_csv(data: Mapping[str, object]) -> str:
     id, type, severity, product, version, port, title, description.
     """
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow(
         [
             "id",

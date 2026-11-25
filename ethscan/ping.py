@@ -6,7 +6,7 @@ when raw ICMP sockets are unavailable (non-root).
 """
 from __future__ import annotations
 
-import csv
+from ethscan.fileio import csv_writer
 import io
 import json
 import socket
@@ -730,7 +730,7 @@ def format_ping_report_markdown(data: Mapping[str, object]) -> str:
 def format_ping_report_csv(data: Mapping[str, object]) -> str:
     """Format ping results as CSV."""
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow([
         "target",
         "ip",

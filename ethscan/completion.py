@@ -6,7 +6,7 @@ click's built-in shell completion machinery. The scripts wrap the
 names, option names, and option values.
 """
 
-import csv
+from ethscan.fileio import csv_writer
 import io
 import os
 from pathlib import Path
@@ -187,7 +187,7 @@ def format_completion_report_csv(result: dict[str, Any]) -> str:
     if not isinstance(result, dict):
         result = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
 
     writer.writerow(["field", "value"])
     writer.writerow(["shell", result.get("shell", "")])
@@ -319,7 +319,7 @@ def format_install_report_csv(result: dict[str, Any]) -> str:
     if not isinstance(result, dict):
         result = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
 
     writer.writerow(["field", "value"])
     writer.writerow(["shell", result.get("shell", "")])

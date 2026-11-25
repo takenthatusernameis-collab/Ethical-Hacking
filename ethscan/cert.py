@@ -6,7 +6,6 @@ and offline fallback.
 """
 from __future__ import annotations
 
-import csv
 import io
 import json
 import math
@@ -17,7 +16,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from ethscan.fileio import load_json
+from ethscan.fileio import load_json, csv_writer
 from ethscan.target import normalize_host
 
 DEFAULT_API_URL = "https://crt.sh/"
@@ -313,7 +312,7 @@ def format_cert_report_csv(data: dict[str, Any]) -> str:
     if not isinstance(data, dict):
         data = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow(["target", "domain", "ip", "subdomain"])
     target = data.get("target", "")
     domain = data.get("domain", "")

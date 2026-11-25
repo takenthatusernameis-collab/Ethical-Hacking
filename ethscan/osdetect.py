@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import contextlib
-import csv
+from ethscan.fileio import csv_writer
 import io
 import json
 import os
@@ -573,7 +573,7 @@ def format_osdetect_report_csv(data: Mapping[str, object]) -> str:
     """Format OS detection results as CSV."""
     data = _as_dict(data)
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow([
         "target",
         "host",

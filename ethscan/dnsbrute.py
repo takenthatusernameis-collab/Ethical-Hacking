@@ -1,7 +1,7 @@
 """DNS brute force module for ethscan (AXFR attempt + subdomain brute force)."""
 from __future__ import annotations
 
-import csv
+from ethscan.fileio import csv_writer
 import io
 import socket
 import struct
@@ -817,7 +817,7 @@ def format_dnsbrute_report_csv(data: Mapping[str, object]) -> str:
     if not isinstance(data, dict):
         data = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow(_dnsbrute_csv_header())
 
     target = str(data.get("target", "") or "")

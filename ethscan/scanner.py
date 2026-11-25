@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import csv
+from ethscan.fileio import csv_writer
 import io
 import json
 import socket
@@ -436,7 +436,7 @@ def format_scan_report_csv(data: dict[str, object]) -> str:
     if not isinstance(data, dict):
         data = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     service_detect = data.get('service_detect', False)
     if service_detect:
         writer.writerow(["port", "protocol", "open", "banner"])

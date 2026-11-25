@@ -12,7 +12,7 @@ to ``ftplib.FTP`` so tests can substitute a local fake FTP client.
 from __future__ import annotations
 
 import contextlib
-import csv
+from ethscan.fileio import csv_writer
 import ftplib
 import io
 import json
@@ -291,7 +291,7 @@ def format_ftp_report_csv(data: dict[str, Any]) -> str:
     if not isinstance(data, dict):
         data = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow(["target", "host", "port", "banner", "anonymous_login", "anonymous_message", "error"])
 
     error = data.get("error")

@@ -1,7 +1,7 @@
 """WHOIS lookup module for ethscan."""
 from __future__ import annotations
 
-import csv
+from ethscan.fileio import csv_writer
 import io
 import re
 import socket
@@ -400,7 +400,7 @@ def format_whois_report_csv(data: Mapping[str, object]) -> str:
     if not isinstance(data, dict):
         data = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     parsed = _normalize_parsed(data.get("parsed"))
     writer.writerow(["field", "value"])
     writer.writerow(["target", data.get("target", "")])

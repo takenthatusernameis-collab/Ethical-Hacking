@@ -8,7 +8,6 @@ provide it. Fully offline and stdlib-only.
 """
 from __future__ import annotations
 
-import csv
 import hashlib
 import hmac
 import io
@@ -18,7 +17,7 @@ import struct
 from collections.abc import Mapping
 from typing import TypedDict
 
-from ethscan.fileio import read_lines
+from ethscan.fileio import read_lines, csv_writer
 
 # Algorithms supported natively by hashlib on this platform.
 # Maps canonical key -> hashlib algorithm name.
@@ -742,7 +741,7 @@ def format_check_report_markdown(data: Mapping[str, object]) -> str:
 def format_check_report_csv(data: Mapping[str, object]) -> str:
     """Format a password check result as CSV."""
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow([
         "password",
         "digest",
@@ -774,7 +773,7 @@ def format_check_report_csv(data: Mapping[str, object]) -> str:
 def format_hash_report_csv(data: Mapping[str, object]) -> str:
     """Format hash results as CSV."""
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow([
         "password",
         "hash",

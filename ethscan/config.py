@@ -31,14 +31,13 @@ toolkit works unchanged when no config file is present.
 """
 from __future__ import annotations
 
-import csv
 import io
 import json
 import os
 from pathlib import Path
 from typing import Any
 
-from ethscan.fileio import read_text, write_text
+from ethscan.fileio import read_text, write_text, csv_writer
 
 try:
     import yaml
@@ -453,7 +452,7 @@ def format_config_report_csv(config: dict[str, Any]) -> str:
     if not isinstance(config, dict):
         config = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
 
     writer.writerow(["section", "option", "value"])
 

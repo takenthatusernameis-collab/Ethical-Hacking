@@ -7,7 +7,7 @@ Combines:
 """
 from __future__ import annotations
 
-import csv
+from ethscan.fileio import csv_writer
 import io
 import json
 from collections.abc import Mapping
@@ -333,7 +333,7 @@ def format_urlcheck_report_csv(data: Mapping[str, object]) -> str:
     if not isinstance(data, dict):
         data = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow(["section", "key", "value"])
 
     summary = data.get("summary")

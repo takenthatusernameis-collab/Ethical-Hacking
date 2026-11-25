@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import contextlib
-import csv
+from ethscan.fileio import csv_writer
 import io
 import json
 import socket
@@ -341,7 +341,7 @@ def format_ssl_report_csv(data: object) -> str:
     if not isinstance(data, dict):
         data = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     cert = data.get("cert") or {}
     if not isinstance(cert, dict):
         cert = {}

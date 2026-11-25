@@ -1,7 +1,6 @@
 """HTTP fuzzing module for ethscan."""
 from __future__ import annotations
 
-import csv
 import http.client
 import io
 import json
@@ -11,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import cast
 from urllib.parse import SplitResult
 
-from ethscan.fileio import read_lines
+from ethscan.fileio import read_lines, csv_writer
 from ethscan.target import TargetSpecError, check_target_host, parse_url, strip_userinfo, url_port
 
 DEFAULT_WORDLIST = [
@@ -233,7 +232,7 @@ def format_fuzz_report_markdown(data: dict[str, object]) -> str:
 def format_fuzz_report_csv(data: dict[str, object]) -> str:
     """Format fuzz results as CSV."""
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow(["target", "base_url", "path", "status_code", "error", "is_finding"])
 
     findings = data.get("findings") or [] if isinstance(data, dict) else []

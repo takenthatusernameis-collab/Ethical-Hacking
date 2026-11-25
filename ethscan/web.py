@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import contextlib
-import csv
+from ethscan.fileio import csv_writer
 import http.client
 import io
 import json
@@ -488,7 +488,7 @@ def format_web_report_csv(data: dict[str, object]) -> str:
     if not isinstance(data, dict):
         data = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow(["field", "value"])
     writer.writerow(["target", data.get("target", "")])
     writer.writerow(["host", data.get("host", "")])

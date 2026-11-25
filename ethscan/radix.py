@@ -7,7 +7,7 @@ module and the shared CIDR helpers in :mod:`ethscan.cidr`.
 """
 from __future__ import annotations
 
-import csv
+from ethscan.fileio import csv_writer
 import io
 import ipaddress
 from typing import TYPE_CHECKING, TypedDict, cast
@@ -657,7 +657,7 @@ def format_radix_report_csv(data: Mapping[str, object]) -> str:
     if not isinstance(data, dict):
         data = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
 
     has_diff = "diff" in data
     if has_diff:

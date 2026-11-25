@@ -1,7 +1,7 @@
 """DNS forward/reverse resolution module for ethscan."""
 from __future__ import annotations
 
-import csv
+from ethscan.fileio import csv_writer
 import io
 import ipaddress
 import socket
@@ -306,7 +306,7 @@ def format_resolve_report_markdown(data: Mapping[str, object]) -> str:
 def format_resolve_report_csv(data: Mapping[str, object]) -> str:
     """Format resolve results as CSV."""
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow(["target", "normalized", "record_type", "record_value"])
     if not isinstance(data, dict):
         return output.getvalue().rstrip("\r\n")

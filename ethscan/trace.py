@@ -7,7 +7,7 @@ usage error instead of letting a raw traceback escape.
 from __future__ import annotations
 
 import contextlib
-import csv
+from ethscan.fileio import csv_writer
 import io
 import json
 import socket
@@ -442,7 +442,7 @@ def format_trace_report_csv(result: dict[str, Any]) -> str:
     if not isinstance(result, dict):
         result = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow([
         "target",
         "hop",

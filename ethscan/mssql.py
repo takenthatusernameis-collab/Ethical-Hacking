@@ -14,7 +14,7 @@ defaults to a raw TCP socket so tests can substitute a local fake server.
 """
 from __future__ import annotations
 
-import csv
+from ethscan.fileio import csv_writer
 import io
 import json
 import socket
@@ -671,7 +671,7 @@ def format_mssql_report_csv(data: dict[str, Any]) -> str:
     if not isinstance(data, dict):
             data = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow([
         "target",
         "host",

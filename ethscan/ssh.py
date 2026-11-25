@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import contextlib
-import csv
+from ethscan.fileio import csv_writer
 import io
 import json
 import socket
@@ -708,7 +708,7 @@ def format_ssh_report_csv(data: Mapping[str, object]) -> str:
     if not isinstance(data, Mapping):
         data = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow([
         "type",
         "algorithm",

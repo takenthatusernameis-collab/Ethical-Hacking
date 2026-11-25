@@ -5,13 +5,12 @@ against the built-in vulnerability database.
 """
 from __future__ import annotations
 
-import csv
 import io
 import json
 import xml.etree.ElementTree as ET
 from typing import TypedDict, cast
 
-from ethscan.fileio import read_text
+from ethscan.fileio import read_text, csv_writer
 from ethscan.vuln import (
     SEVERITIES,
     match_service_vulns,
@@ -458,7 +457,7 @@ def format_nmap_report_csv(data: NmapResult) -> str:
     severity, score, title.
     """
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow(
         [
             "host",

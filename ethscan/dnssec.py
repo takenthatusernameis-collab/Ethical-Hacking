@@ -1,7 +1,7 @@
 """DNSSEC validation module for ethscan."""
 from __future__ import annotations
 
-import csv
+from ethscan.fileio import csv_writer
 import io
 import socket
 import struct
@@ -877,7 +877,7 @@ def format_dnssec_report_csv(data: dict[str, object]) -> str:
     if not isinstance(data, dict):
         data = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow(_dnssec_csv_header())
 
     target = data.get("target") or ""

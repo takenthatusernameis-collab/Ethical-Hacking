@@ -1,6 +1,6 @@
 """Security headers check for ethscan."""
 
-import csv
+from ethscan.fileio import csv_writer
 import io
 import json
 from typing import Any
@@ -113,7 +113,7 @@ def format_headers_report_csv(data: dict[str, Any]) -> str:
     if not isinstance(data, dict):
         data = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     sh = data.get("security_headers") or {}
     if not isinstance(sh, dict):
         sh = {}

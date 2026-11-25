@@ -5,7 +5,6 @@ and offline fallback. Stdlib only.
 """
 from __future__ import annotations
 
-import csv
 import io
 import json
 import math
@@ -16,7 +15,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any, cast
 
-from ethscan.fileio import load_json
+from ethscan.fileio import load_json, csv_writer
 from ethscan.target import normalize_host
 
 DEFAULT_API_URL = "http://ip-api.com/json/"
@@ -487,7 +486,7 @@ def format_geo_report_csv(data: dict[str, object]) -> str:
     if not isinstance(data, dict):
         data = {}
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
     writer.writerow(_geo_csv_header())
     target = cast(str, data.get("target", ""))
     geo = _normalize_geo(data.get("geolocation"))

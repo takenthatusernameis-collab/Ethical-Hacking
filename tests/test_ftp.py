@@ -744,6 +744,22 @@ def test_format_ftp_report_csv_comma_escaping() -> None:
     reader = list(csv.reader(io.StringIO(output)))
     assert reader[1][3] == "220 server, ready, for you"
     assert reader[1][5] == "530, no, way"
+
+
+def test_format_ftp_report_csv_sanitizes_formula_banner() -> None:
+    data = {
+        "target": "ftp.example.com",
+        "host": "ftp.example.com",
+        "port": 21,
+        "banner": "=cmd|' /C calc'!A0",
+        "anonymous_login": False,
+        "anonymous_message": "@SUM(A1:A2)",
+        "error": "",
+    }
+    output = format_ftp_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[1][3] == "'=cmd|' /C calc'!A0"
+    assert reader[1][5] == "'@SUM(A1:A2)"
     assert reader[1][6] == ""
 
 

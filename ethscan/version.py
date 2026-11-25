@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import csv
+from ethscan.fileio import csv_writer
 from importlib import metadata
 import io
 import json
@@ -107,7 +107,7 @@ def format_version_report_csv(data: object) -> str:
     """Render version information as a CSV string."""
     data = _as_dict(data)
     output_io = io.StringIO()
-    writer = csv.writer(output_io)
+    writer = csv_writer(output_io)
     writer.writerow(["key", "value"])
     writer.writerow(["version", data.get("version", "")])
     writer.writerow(["python", data.get("python", "")])

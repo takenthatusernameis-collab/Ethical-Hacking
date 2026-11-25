@@ -16,7 +16,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from ethscan.fileio import load_json
+from ethscan.fileio import load_json, csv_writer
 from ethscan.target import normalize_host
 
 DEFAULT_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
@@ -518,11 +518,10 @@ def format_cve_report_csv(data: dict[str, object]) -> str:
     """Format CVE lookup results as CSV."""
     if not isinstance(data, dict):
         data = {}
-    import csv
     import io
 
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv_writer(output)
 
     writer.writerow(["source", "port", "product", "version", "cve_id", "severity", "score", "title", "description", "references", "cached", "offline_fallback"])
 
