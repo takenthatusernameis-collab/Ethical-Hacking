@@ -32,7 +32,10 @@ Repository is fully green with 100% branch coverage. This session added property
 - Property-check pure computational helpers vs `ipaddress` oracle: **now complete** for radix (`_common_prefix_length`, `_common_prefix_of_pair`, `_nth_bit`, `_contains_in_merged`, `_subtract_networks`, `_merge_networks`, `_format_network_info`), cidr (`_subtract_networks`, `_format_network_info`), target (`parse_url`, `normalize_host`, `check_port`, `strip_userinfo`, `format_host_header`), validate (`_format_network_info`).
 
 ## Session audit trail
-- 2026-11-25 (this session): Added property test for `validate._format_network_info` (4000 seeded iterations) against documented contract oracle. Verified full gate: pytest/coverage/mypy/ruff/check_readme all green, 100% branch coverage maintained.
+- 2026-11-25 (prior): Added property test for `validate._format_network_info` (4000 seeded iterations) against documented contract oracle. Verified full gate: pytest/coverage/mypy/ruff/check_readme all green, 100% branch coverage maintained.
+- 2026-11-25 (this session): Re-verified baseline is NOT stale: `pytest -q` 49796 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/` Success (271 files); `ruff check ethscan/ tests/ check_readme.py` All checks passed; `python3 check_readme.py` 54 commands, 0 drift, exit 0; `git status` clean. `tests/test_ping.py` (86) now passes — prior Python 3.14 `socket.timeout` blocker resolved. `.coverage` untracked/ignored; working tree clean.
+- No concrete defect, failing check, fresh-install failure, or behavioral-vs-contract gap was reproduced this session. No source/test changes made (do not fabricate work or repeat verification-only sessions as progress).
+- Next: only act on a reproduced concrete gap (focused failing check, fresh-install failure, or behavioral evidence vs documented contract); apply the smallest safe fix; rerun focused then full gate; preserve safety controls.
 
 ## Next task
 - None pending. Repository fully green with 100% coverage. Do NOT fabricate work or repeat verification-only sessions as progress.
