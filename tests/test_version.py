@@ -110,6 +110,33 @@ def test_formatters_handle_hostile_input():
     assert result != ""
 
 
+def test_formatters_handle_hostile_nested_fields():
+    """A hostile ``dependencies``/``git`` value must not crash the formatters.
+
+    The version formatters read ``dependencies`` and ``git`` as nested dicts.
+    A report whose one of those fields is a non-mapping (a str, list, number,
+    bytes, None, NaN) must still render as a string, matching the repo-wide
+    formatter hostile contract enforced by
+    ``tests/test_all_formatters_hostile_contract.py``.
+    """
+    hostile_values = [None, 1, "x", [], b"bytes", float("nan")]
+    formatters = [
+        format_version_report_json,
+        format_version_report_markdown,
+        format_version_report_csv,
+    ]
+    for field in ("dependencies", "git"):
+        for hostile in hostile_values:
+            data = {"version": "0.1.0", field: hostile}
+            for formatter in formatters:
+                result = formatter(data)
+                assert isinstance(result, str), (
+                    f"{formatter.__name__} returned {type(result).__name__} "
+                    f"for {field}={hostile!r}"
+                )
+                assert result != ""
+
+
 def test_get_version_data_returns_collect_result():
     """Test that get_version_data delegates to _collect_version_data."""
     data = get_version_data()

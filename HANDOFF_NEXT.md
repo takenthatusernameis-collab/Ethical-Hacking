@@ -1,58 +1,72 @@
 # Handoff
 
 ## Status
-Repository is fully green, installs cleanly, and matches its documented contract. No
-source/test change was needed this session. The only edits made are these handoff files
-(HANDOFF_NEXT.md, NEXT_TASK.md) plus a TASK.md session entry; no source or test code
-was touched. Working tree clean.
+Repository is green with 100% branch coverage. This session found and fixed a
+GENUINE, previously-unreported defect (not a verification-only session): the
+`ethscan.version` CSV and Markdown formatters crashed with `AttributeError` on a
+report dict whose `dependencies` or `git` field was not a mapping. Working tree
+has 3 modified files, uncommitted (controller commits).
 
-Note: this session independently re-verified the baseline (did not trust the prior
-handoff) and confirmed it is accurate — the handoff was NOT stale.
+## What changed (this session)
+- `ethscan/version.py`: `format_version_report_csv` and
+  `format_version_report_markdown` now coerce a non-dict `dependencies` and a
+  non-dict `git` to `{}` before use (the same `isinstance` pattern the rest of
+  the codebase uses). 8 added lines, no deletions.
+- `tests/test_all_formatters_hostile_contract.py`: added `dependencies` and
+  `git` to `_VALID_REPORT` so the generic single-field hostile sweep now covers
+  the version formatters (and any future formatter reading those keys). This
+  closes the contract-test gap that let the crash slip: those two keys were
+  previously absent from every hostile fixture.
+- `tests/test_version.py`: added
+  `test_formatters_handle_hostile_nested_fields` (hostile `dependencies`/`git`
+  values x json/markdown/csv).
 
-## What was actually verified (this session)
-- `python -m pytest -q` -> 47489 passed, 147 skipped, 0 failed, EXIT 0.
-- `python -m coverage run --branch --source=ethscan -m pytest -q` -> TOTAL 100%
-  (16250 stmts, 6140 branches, 0 missing).
-- `python -m mypy ethscan/ tests/` -> Success: no issues found in 271 source files.
+## What was actually verified (evidence)
+- Reproduced BEFORE fix: `format_version_report_csv({"dependencies": "x"})` ->
+  `AttributeError: 'str' object has no attribute 'items'`; same for
+  `{"git": "x"}` (`.get` on str/list/int/bool) and for the Markdown formatter.
+  JSON formatter was already safe.
+- Mutation check: removing the four `isinstance` guards makes
+  `test_formatters_handle_hostile_nested_fields` FAIL (AttributeError); restoring
+  makes it pass. The test genuinely guards the fix.
+- `python -m coverage run --branch --source=ethscan -m pytest -q` -> 49772
+  passed, 147 skipped, 0 failed; TOTAL 100% (16258 stmts, 6148 branches, 0
+  missing). (Baseline 47489; +2283 from the new contract params.)
+- `python -m mypy ethscan/ tests/` -> Success: no issues in 271 source files.
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
-- `python3 check_readme.py` -> 54 CLI commands; 0 drift both directions; exit 0.
-- `git status` -> clean working tree.
+- `python3 check_readme.py` -> 54 CLI commands, 0 drift both directions.
+- `git diff --check` clean; `git diff --stat` -> 3 files, 41 insertions(+).
 
-## Fresh-angle genuine-defect probes (result: none found)
-- `format_snmp_report_csv` (ethscan/snmp.py:789, the optional snmp candidate): every
-  cell flows through `csv_writer`/`SanitizingCSVWriter.writerow` which applies
-  `sanitize_csv_cell`; summary + per-community rows + findings all sanitized. No
-  attacker-controlled free-text CSV field bypasses the guard. Not a gap; leave it.
-- Broad `except Exception` review across ethscan/: every hit carries `# noqa: BLE001`
-  and documents intentional transport/resolver/URL-open error swallowing to `None` or
-  an in-band error field (whois, mac, subtake, dns, cve, subdomains, web, etc.).
-  Deliberate by design; not defects.
-- `sanitize_csv_cell`/`csv_writer` completeness re-confirmed: all `format_*_csv` route
-  through `csv_writer`; no `writerows`/`DictWriter`/manual CSV building bypasses it.
-- `report.py` hostile nested formula values: 0 crashes. `audit --file` hostile content:
-  exit 0, safe. IPv6 TCP scan: exit 0, correct output.
-
-## False alarm (do not chase)
-- MD4("password") = `8a9d093f14f8701df17732b2bb182c74` is CORRECT (clean-room MD4 validated
-  vs canonical vectors).
+## Fresh-angle evidence (this session, before the fix)
+- Empirical fuzz of pure parsers (`parse_port_range`, `resolve_port_list`,
+  `normalize_cidr`, `parse_url`, `normalize_host`, `check_port`,
+  `format_host_header`, `parse_jwt`, `run_jwt`, `_infer_algorithm`,
+  `sanitize_csv_cell`, `run_cidr`, `run_check`, `run_hash`): 20k iterations x 16
+  funcs = 320k calls, 0 unexpected exceptions.
+- Empirical fuzz of all 168 `format_*_report_*` callables with randomized nested
+  hostile structures: only `version.format_version_report_csv` /
+  `_markdown` raised (the defect fixed here). All others clean.
+- MD4/PBKDF2-HMAC-MD4/HMAC-MD4 pure-Python paths re-confirmed against published
+  KATs already in tests/test_hash.py (no hashlib md4 on this build).
 
 ## Approaches already tried / ruled out (do not repeat)
-- CSV formula-injection sweep: DONE (all modules route through `csv_writer`; 7 end-to-end
-  mutation-checked tests).
-- Parser/adversarial STRING fuzz, formatter/assessor hostile contracts, CLI target/option
-  hostile sweeps, nested-field & per-key hostile sweeps: clean; not repeated.
-- Fresh install, cache contract, MD4 vector, load_json depth guard: all verified.
+- CSV formula-injection sweep: complete (all modules route through `csv_writer`).
+- Parser/formatter/assessor/CLI hostile sweeps, nested-field fuzz, load_json
+  bracket-in-string (fixed earlier): clean; not repeated.
+- Broad `except Exception` review: all `# noqa: BLE001`, intentional.
 
 ## Out of scope (per documented contract, do not change)
 - `oracle`/`postgresql` empty-target handling (exit 0, in-band error).
-- `ethscan/cli.py` unreachable defensive guard (documented known limitation, ~line 4318).
+- `ethscan/cli.py` unreachable defensive guard (~line 4318).
 - `.github/workflows/**` (reverted by the controller).
 
 ## Next task
-- None pending. Repository fully green with 100% coverage. Do not fabricate work or repeat
-  verification-only sessions as progress. If future work is needed, reproduce a concrete
-  gap first (focused failing check, fresh-install failure, or behavioral evidence vs the
-  documented contract), apply the smallest safe fix, rerun focused then broader gates
-  (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql`
-  empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of
-  scope.
+- None blocking. Do NOT repeat verification-only sessions or fabricate work.
+  If future work is needed, reproduce a concrete gap first (focused failing
+  check or behavioral evidence vs the documented contract), apply the smallest
+  safe fix, rerun focused then the full gate
+  (pytest/coverage/mypy/ruff/check_readme), preserve safety.
+- One evidence-based lead if desired: the contract test's `_VALID_REPORT`
+  covers the nested-dict fields formatters actually read; if a new formatter
+  reads a new nested-dict field, add that key to `_VALID_REPORT` so the generic
+  hostile sweep covers it (this is exactly how the version gap was closed).

@@ -127,6 +127,12 @@ _VALID_REPORT: dict[str, Any] = {
     "installed": True,
     "already_installed": False,
     "message": "Completion for bash installed successfully.",
+    # Version report fields (ethscan.version.format_version_report_*). Added so
+    # the generic single-field hostile sweep also covers the version formatters,
+    # which read dependencies/git as nested dicts; a hostile non-dict value for
+    # either must not crash the formatter.
+    "dependencies": {"click": "8.1", "pyyaml": "6.0", "dnspython": "2.0"},
+    "git": {"commit": "a" * 40, "commit_date": "2024-01-01 00:00:00 +0000"},
 }
 
 # Hostile values most likely to expose type-assumption crashes in formatters.

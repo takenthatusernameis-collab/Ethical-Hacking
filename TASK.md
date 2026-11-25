@@ -1418,3 +1418,58 @@ Date: Sun Nov 08 2026 (session 7)
 - CSV formula-injection sweep: complete (all modules route through `csv_writer`; 7 end-to-end mutation-checked tests). Parser/adversarial STRING fuzz, formatter/assessor hostile contracts, CLI target/option hostile sweeps, nested-field & per-key hostile sweeps: clean in prior sessions; not repeated. Fresh install, cache contract, MD4 vector, load_json depth guard: all verified.
 ## Next task
 - None pending. Repository fully green with 100% coverage. If future work is needed, reproduce a concrete gap first (focused failing check, fresh-install failure, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then broader gates (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`. Do not fabricate work or repeat verification-only sessions as progress.
+
+# Session (Wed Nov 25 2026, version formatter hostile nested-field defect fixed)
+## This session
+- No new external assignment; HANDOFF_NEXT.md/NEXT_TASK.md said "None pending; repo
+  fully green". Per the task instruction I did NOT repeat a verification-only
+  session; I ran fresh-angle empirical fuzzing, reproduced a concrete previously-
+  unreported defect, and fixed it with the smallest safe change.
+- Fresh-angle probes (evidence): (a) 20k-iteration x 16-func fuzz of the pure
+  parsers (parse_port_range, resolve_port_list, normalize_cidr, parse_url,
+  normalize_host, check_port, format_host_header, parse_jwt, run_jwt,
+  _infer_algorithm, sanitize_csv_cell, run_cidr, run_check, run_hash) -> 320k
+  calls, 0 unexpected exceptions. (b) Fuzz of all 168 `format_*_report_*`
+  callables with randomized nested hostile structures -> only
+  `version.format_version_report_csv` / `_markdown` raised.
+## The defect (reproduced)
+- `ethscan.version.format_version_report_csv` / `format_version_report_markdown`
+  assumed `data["dependencies"]` and `data["git"]` are dicts. A report dict with
+  a non-mapping value for either (e.g. `{"dependencies": "x"}` or
+  `{"git": ["y"]}`) raised `AttributeError` (`'str' object has no attribute
+  'items'` / `.get`). This violates the repo-wide formatter hostile contract
+  enforced by tests/test_all_formatters_hostile_contract.py. The contract test
+  missed it because `dependencies`/`git` were absent from every hostile fixture
+  (`_VALID_REPORT`, `ALL_HOSTILE_FIELDS`, `HOSTILE_FIELD_DICT`).
+## What changed
+- `ethscan/version.py`: coerce a non-dict `dependencies` and non-dict `git` to
+  `{}` before use in both the CSV and Markdown formatters (same `isinstance`
+  pattern used elsewhere). +8 lines, 0 deletions.
+- `tests/test_all_formatters_hostile_contract.py`: added `dependencies` and
+  `git` to `_VALID_REPORT` so the generic single-field hostile sweep covers them
+  for every formatter (closes the gap durably).
+- `tests/test_version.py`: added `test_formatters_handle_hostile_nested_fields`.
+## Verification
+- Repro before fix: AttributeError (see above). After fix: all three formatters
+  return non-empty str for every hostile `dependencies`/`git` value.
+- Mutation check: removing the four `isinstance` guards makes the new test FAIL
+  (AttributeError); restoring makes it pass.
+- `coverage run --branch --source=ethscan -m pytest -q` -> 49772 passed, 147
+  skipped, 0 failed; TOTAL 100% (16258 stmts, 6148 branches, 0 missing).
+- `mypy ethscan/ tests/` -> Success (271 files); `ruff` -> All checks passed;
+  `check_readme.py` -> 54 commands, 0 drift; `git diff --check` clean.
+- `git diff --stat` -> 3 files, 41 insertions(+). Not committed (controller commits).
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- CSV formula injection, parser/assessor/CLI hostile sweeps, nested-field fuzz,
+  load_json bracket-in-string (fixed earlier), MD4/PBKDF2/HMAC KATs: clean; not
+  repeated. Broad `except Exception`: all intentional (`# noqa: BLE001`).
+## Next task
+- None blocking. Do not fabricate work or repeat verification-only sessions. If
+  future work is needed, reproduce a concrete gap first, apply the smallest safe
+  fix, rerun focused then the full gate. Evidence-based lead: when a new
+  formatter reads a new nested-dict field, add that key to `_VALID_REPORT` so the
+  generic hostile sweep covers it (how the version gap was closed).
+  `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable
+  guard remain out of scope. Do not modify `.github/workflows/**`.

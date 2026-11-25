@@ -114,11 +114,15 @@ def format_version_report_csv(data: object) -> str:
     writer.writerow(["platform", data.get("platform", "")])
     writer.writerow(["architecture", data.get("architecture", "")])
     dependencies = data.get("dependencies", {})
+    if not isinstance(dependencies, dict):
+        dependencies = {}
     for dep, ver in dependencies.items():
         writer.writerow([f"dep.{dep}", ver])
     writer.writerow(["config_file", data.get("config_file", "")])
     writer.writerow(["cache_directory", data.get("cache_directory", "")])
     git_info = data.get("git", {})
+    if not isinstance(git_info, dict):
+        git_info = {}
     if git_info:
         writer.writerow(["git.commit", git_info.get("commit", "")])
         writer.writerow(["git.commit_date", git_info.get("commit_date", "")])
@@ -129,6 +133,8 @@ def format_version_report_markdown(data: object) -> str:
     """Render version information as a Markdown string."""
     data = _as_dict(data)
     dependencies = data.get("dependencies", {})
+    if not isinstance(dependencies, dict):
+        dependencies = {}
     lines = [
         "# ethscan Version Report",
         "",
@@ -149,6 +155,8 @@ def format_version_report_markdown(data: object) -> str:
         f"- **Cache directory:** {data.get('cache_directory', '')}",
     ]
     git_info = data.get("git", {})
+    if not isinstance(git_info, dict):
+        git_info = {}
     if git_info:
         lines.extend([
             "",
