@@ -15,10 +15,12 @@ from ethscan.radix import (
     _common_prefix_of_pair,
     _contains_in_merged,
     _contains_ip,
+    _format_network_info,
     _merge_networks,
     _normalize_cidr,
     _nth_bit,
     _parse_networks,
+    _subtract_networks,
     format_radix_report_csv,
     format_radix_report_json,
     format_radix_report_markdown,
@@ -1609,3 +1611,142 @@ def test_nth_bit_matches_direct_bit_math() -> None:
         bit = rng.randint(0, max_bits + 1)
         expected = 0 if bit >= max_bits else (int(addr) >> (max_bits - 1 - bit)) & 1
         assert _nth_bit(addr, bit, is_v4) == expected
+
+
+# ---------------------------------------------------------------------------
+# Property tests: subtract_networks (radix version) vs ipaddress ground truth
+# ---------------------------------------------------------------------------
+
+
+def _enumerate_addresses_radix(
+    networks: list[ipaddress._BaseNetwork],
+) -> set:
+    addresses: set = set()
+    for net in networks:
+        for addr in net:
+            addresses.add(addr)
+    return addresses
+
+
+def _subtract_networks_oracle(
+    minuend: list[ipaddress._BaseNetwork],
+    subtrahend: list[ipaddress._BaseNetwork],
+) -> set:
+    """Exact address-set difference computed straight from ipaddress."""
+    addresses = _enumerate_addresses_radix(minuend)
+    for net in subtrahend:
+        for addr in list(addresses):
+            if addr in net:
+                addresses.discard(addr)
+    return addresses
+
+
+def _random_network_radix(
+    rng: random.Random, version: int
+) -> ipaddress._BaseNetwork:
+    if version == 4:
+        prefixlen = rng.randint(24, 32)
+        start = rng.randint(0, 255)
+        text = f"10.0.0.{start}/{prefixlen}"
+    else:
+        prefixlen = rng.randint(108, 128)
+        start = rng.randint(0, 0xFFFF)
+        text = f"2001:db8::{start:x}/{prefixlen}"
+    return ipaddress.ip_network(text, strict=False)
+
+
+def test_subtract_networks_matches_address_set_oracle() -> None:
+    """_subtract_networks output address set equals the ipaddress ground truth."""
+    rng = random.Random(_PROPERTY_SEED + 4)
+    for _ in range(4000):
+        version = rng.choice([4, 6])
+        minuend = [_random_network_radix(rng, version) for _ in range(rng.randint(1, 3))]
+        subtrahend = [_random_network_radix(rng, version) for _ in range(rng.randint(1, 3))]
+        # Keep address enumeration cheap for the ground truth
+        if max(n.num_addresses for n in minuend + subtrahend) > 4096:
+            continue
+        expected = _subtract_networks_oracle(minuend, subtrahend)
+        result = _subtract_networks(minuend, subtrahend)
+        actual = _enumerate_addresses_radix(result)
+        assert actual == expected
+
+
+# ---------------------------------------------------------------------------
+# Property tests: merge_networks vs ipaddress.collapse_addresses (expanded)
+# ---------------------------------------------------------------------------
+
+
+def test_merge_networks_matches_collapse_addresses_expanded() -> None:
+    """_merge_networks must always produce the same minimal set as the stdlib.
+
+    Expanded to 4000 iterations across both address families with wider
+    prefix ranges to catch edge cases the 100-iteration seeded test missed.
+    """
+    rng = random.Random(_PROPERTY_SEED + 5)
+    for _ in range(4000):
+        is_v4 = rng.random() < 0.5
+        if is_v4:
+            nets: list[ipaddress.IPv4Network] = [
+                ipaddress.IPv4Network(
+                    f"10.0.0.{rng.randint(0, 255)}/{rng.randint(8, 32)}",
+                    strict=False,
+                )
+                for _ in range(rng.randint(1, 8))
+            ]
+            expected = [str(net) for net in ipaddress.collapse_addresses(nets)]
+            assert [str(net) for net in _merge_networks(nets)] == expected
+        else:
+            nets_v6: list[ipaddress.IPv6Network] = [
+                ipaddress.IPv6Network(
+                    f"2001:db8::{rng.randint(0, 0xFFFF):x}/{rng.randint(64, 128)}",
+                    strict=False,
+                )
+                for _ in range(rng.randint(1, 8))
+            ]
+            expected = [str(net) for net in ipaddress.collapse_addresses(nets_v6)]
+            assert [str(net) for net in _merge_networks(nets_v6)] == expected
+
+
+# ---------------------------------------------------------------------------
+# Property tests: format_network_info (radix) vs documented contract
+# ---------------------------------------------------------------------------
+
+
+def _format_network_info_oracle(
+    network: ipaddress._BaseNetwork,
+) -> tuple[str, str, int]:
+    """Radix's documented contract: RFC 3021 /31, RFC 4291 /127, stdlib hosts.
+
+    diffs from ipaddress.hosts() only for IPv6 /127, where the first address
+    is the subnet-router anycast and is not a usable host.
+    """
+    total = network.num_addresses
+    if total == 1:
+        first = last = str(network.network_address)
+        usable = 1
+    elif total == 2:
+        if network.version == 4:
+            first = str(network[0])
+            last = str(network[1])
+            usable = 2
+        else:
+            first = last = str(network[1])
+            usable = 1
+    else:
+        first = str(network[1])
+        last = str(network[-2] if network.version == 4 else network[-1])
+        usable = total - (2 if network.version == 4 else 1)
+    return first, last, usable
+
+
+def test_format_network_info_matches_documented_contract() -> None:
+    """_format_network_info host fields equal radix's documented contract."""
+    rng = random.Random(_PROPERTY_SEED + 6)
+    for _ in range(4000):
+        version = rng.choice([4, 6])
+        network = _random_network_radix(rng, version)
+        info = _format_network_info(network)
+        first, last, usable = _format_network_info_oracle(network)
+        assert info["first_host"] == first
+        assert info["last_host"] == last
+        assert info["usable_host_count"] == usable
