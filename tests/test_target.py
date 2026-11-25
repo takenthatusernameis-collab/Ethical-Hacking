@@ -871,3 +871,60 @@ def test_format_host_header_leaves_ipv4_and_names_alone() -> None:
     """IPv4 literals and DNS names are never bracketed."""
     assert format_host_header("10.0.0.1") == "10.0.0.1"
     assert format_host_header("localhost") == "localhost"
+
+
+# --- Property checks (deterministic, seeded) --------------------------------
+
+import ipaddress as _ipaddress
+import random as _random
+
+_PROPERTY_SEED_TARGET = 20261125
+
+
+def test_check_port_property_round_trip() -> None:
+    rng = _random.Random(_PROPERTY_SEED_TARGET)
+    for _ in range(5000):
+        value = rng.randint(-5, 65540)
+        try:
+            result = check_port(value)
+        except TargetSpecError:
+            assert not (0 <= value <= 65535)
+        else:
+            assert result == value
+            assert 0 <= result <= 65535
+
+
+def test_check_port_property_text() -> None:
+    rng = _random.Random(_PROPERTY_SEED_TARGET + 1)
+    for _ in range(2000):
+        n = rng.randint(0, 65535)
+        text = str(n)
+        assert check_port(text) == n
+        for bad in ("abc", "1.5", "", " "):
+            try:
+                check_port(bad)
+            except TargetSpecError:
+                pass
+            else:
+                raise AssertionError(f"expected TargetSpecError for {bad!r}")
+
+
+def test_normalize_host_property_lowercases() -> None:
+    rng = _random.Random(_PROPERTY_SEED_TARGET + 2)
+    hosts = ["example.com", "EXAMPLE.COM", "Sub.Example.COM", "localhost"]
+    for h in hosts:
+        assert normalize_host(h) == h.lower()
+    for _ in range(1000):
+        h = rng.choice(hosts)
+        assert normalize_host(h + "/path?q=1") == h.lower()
+
+
+def test_format_host_header_property_ipv6_roundtrip() -> None:
+    rng = _random.Random(_PROPERTY_SEED_TARGET + 3)
+    for _ in range(2000):
+        # generate IPv4
+        ip = f"{rng.randrange(256)}.{rng.randrange(256)}.{rng.randrange(256)}.{rng.randrange(256)}"
+        assert format_host_header(ip) == ip
+    # IPv6 literals bracketed
+    for ip in ("::1", "2001:db8::1", "fe80::1"):
+        assert format_host_header(ip) == f"[{ip}]"
