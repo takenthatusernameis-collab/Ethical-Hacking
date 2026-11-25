@@ -1644,3 +1644,18 @@ exceptions. Remaining candidates: `_common_prefix_length`, `_nth_bit`,
   hand-derived/`ipaddress` oracle; `format_host_header` is now covered.
 - `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable
   guard remain out of scope. Do not modify `.github/workflows/**`.
+
+# Session (Wed Nov 25 2026, independent re-verification + fresh-angle probe)
+## This session
+- No prior agent assignment existed; HANDOFF_NEXT.md/NEXT_TASK.md both said "None pending; repo fully green". Independently re-verified the baseline rather than trusting the handoff before selecting work.
+- Re-verified the FULL gate: `python -m pytest -q` -> 49799 passed, 147 skipped, 0 failed; `python -m mypy ethscan/ tests/` -> Success: no issues in 271 source files; `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed; `python3 check_readme.py` -> 54 commands, 0 drift both directions; `python -m coverage run --branch --source=ethscan -m pytest -q` -> TOTAL 100% (16271 stmts, 6160 branches, 0 missing); `git status` clean. Baseline confirmed NOT stale; handoff was accurate.
+- Ran a fresh-angle probe distinct from prior sweeps: property-checked `ethscan.target.normalize_host`/`parse_url` against an `ipaddress`/hand-derived oracle across IPv4/IPv6/host/URL targets (bracketed/unbracketed IPv6, ports, paths, empty/invalid targets, adversarial parse inputs). All 3 apparent "mismatches" were wrong expectations on my side (zone-ID strip is `format_host_header`'s job; space-in-path is `check_target_path`'s job; `::1:123` -> host `::1` is correct extraction). `parse_url` raises only `TargetSpecError` on bad input, never an unexpected exception type. No defect found; no source or test changes made (per reliability rules 6/8 — do not fabricate work or repeat verification-only sessions as progress).
+- Updated HANDOFF_NEXT.md and NEXT_TASK.md with the independently-verified state and "none pending" status.
+## Verification
+- All gates above green; `git diff --stat` shows only handoff/doc files changed; working tree clean.
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- CSV formula injection, parser/adversarial STRING fuzz, formatter/assessor hostile contracts, CLI target/option hostile sweeps, nested-field & per-key hostile sweeps: clean in prior sessions; not repeated. Broad `except Exception`: all intentional (`# noqa: BLE001`). Radix math verified correct vs `ipaddress` oracle. `target.py` parsers property-checked this session — correct, no gap.
+## Next task
+- None pending. Repository fully green with 100% coverage. Do NOT fabricate work or repeat verification-only sessions as progress. If future work is needed, reproduce a concrete gap first (focused failing check, fresh-install failure, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then the full gate (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain out of scope. Do not modify `.github/workflows/**`.
