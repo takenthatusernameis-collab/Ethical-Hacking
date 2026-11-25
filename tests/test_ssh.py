@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import socket
 import struct
 import types
@@ -486,6 +488,37 @@ def test_format_ssh_report_csv_error() -> None:
     lines = [line.rstrip("\r") for line in output.strip().split("\n")]
     assert lines[0] == "type,algorithm,severity,description"
     assert lines[1] == "error,,,boom"
+
+
+def test_format_ssh_report_csv_sanitizes_formula_finding() -> None:
+    """CWE-1236: attacker-controlled finding ``algorithm``/``description`` are CSV-sanitized."""
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 22,
+        "timeout": 10.0,
+        "banner": None,
+        "paramiko_available": False,
+        "kex_algorithms": {"supported": [], "weak": [], "strong": []},
+        "host_key_algorithms": {"supported": [], "weak": [], "strong": []},
+        "encryption_algorithms": {"supported": [], "weak": [], "strong": []},
+        "mac_algorithms": {"supported": [], "weak": [], "strong": []},
+        "host_key": None,
+        "findings": [
+            {
+                "type": "weak_kex",
+                "algorithm": "=cmd|' /C calc'!A0",
+                "severity": "medium",
+                "description": "@SUM(A1:A2)",
+            }
+        ],
+        "error": None,
+    }
+    output = format_ssh_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0] == ["type", "algorithm", "severity", "description"]
+    assert reader[1][1] == "'=cmd|' /C calc'!A0"
+    assert reader[1][3] == "'@SUM(A1:A2)"
 
 
 # ---------------------------------------------------------------------------

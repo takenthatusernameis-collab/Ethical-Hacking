@@ -1,5 +1,7 @@
 """Tests for the ethscan memcached module."""
 
+import csv
+import io
 import json
 import socket
 from typing import Any, cast
