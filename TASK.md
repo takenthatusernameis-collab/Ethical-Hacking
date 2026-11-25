@@ -1383,11 +1383,21 @@ Date: Sun Nov 08 2026 (session 7)
   not sanitized (documented in `sanitize_csv_cell`); not gaps — do not chase.
 - Parser/formatter/assessor/CLI hostile sweeps and per-key sweeps: clean in prior sessions;
   not repeated.
+# Session (Wed Nov 25 2026, independent re-verification + gap-probing)
+## This session
+- No prior agent assignment existed; HANDOFF_NEXT.md/NEXT_TASK.md both said "None pending; repo fully green". Independently re-verified the baseline rather than trusting the handoff: `python -m pytest -q` -> 47489 passed, 147 skipped, 0 failed; `python -m mypy ethscan/ tests/` -> Success: no issues found in 271 source files; `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed; `python3 check_readme.py` -> 54 commands, 0 drift both directions; `python -m coverage run --branch --source=ethscan -m pytest -q` -> TOTAL 100% (16250 stmts, 6140 branches, 0 missing); `git status` clean.
+- Probed for a genuine defect rather than repeating verification-only work as progress:
+  - `sanitize_csv_cell`/`csv_writer` completeness: all `format_*_csv` route through `csv_writer`; `SanitizingCSVWriter.writerow` applies `sanitize_csv_cell` to every cell; handles `= + - @ TAB CR` prefixes, leaves pure numerics untouched; no `writerows`/`DictWriter`/manual CSV building bypasses it. Complete, no gap.
+  - `report.py` formatters with hostile nested formula values (`=cmd|A`, `+cmd|A`, `@cmd|A`, `-cmd|A`, TAB, CR across `scan.details`/`open_ports`/`results` and `audit.results`): 0 crashes, valid Markdown/CSV.
+  - `audit --file` with hostile password content (`=cmd|A`, `+cmd|A`): exit 0, values audited safely.
+  - IPv6 TCP scan `scan --target ::1 --ports 80 --protocol tcp --format json`: exit 0, correct `host: "::1"`, `port: 80`.
+- Result: no reproducible defect found; no source or test changes made (per reliability rules 6/8 — do not fabricate work or repeat verification-only sessions as progress).
+- Updated HANDOFF_NEXT.md / NEXT_TASK.md to record the independently-verified state.
+## Verification
+- All gates above green; `git diff --stat` shows only handoff/doc files changed.
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- CSV formula-injection sweep: complete (all modules route through `csv_writer`; 7 end-to-end mutation-checked tests). Leading-whitespace/purely-numeric cells: not gaps (documented). Parser/assessor/CLI hostile sweeps, nested-field fuzz: clean prior sessions; not repeated.
 ## Next task
-- Extend end-to-end CSV sanitization coverage to 2-3 more modules with attacker-controlled
-  free text (suggested: ntp findings, redis dangerous_findings, cve title/description),
-  mirroring the 7 existing tests (hostile `=`/`+`/`-`/`@` value -> `'`-prefixed cell via
-  csv.reader). Keep test-only; re-run the FULL gate. If no value is found in more CSV tests,
-  probe for a genuine defect first rather than fabricating work. `oracle`/`postgresql`
-  empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of
-  scope. Do not modify `.github/workflows/**`.
+- None pending. Repository fully green with 100% coverage. If future work is needed, reproduce a concrete gap first (focused failing check, fresh-install failure, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then broader gates (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`. Do not fabricate work or repeat verification-only sessions as progress.
