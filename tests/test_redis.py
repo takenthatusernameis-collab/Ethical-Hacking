@@ -1159,3 +1159,11 @@ def test_format_redis_report_csv_hostile_config(value):
     # bind (index 9) and requirepass_set (index 10) are empty/false when config is not a dict.
     assert fields[9] == ""
     assert fields[10] == "false"
+
+
+def test_format_redis_report_csv_sanitizes_formula_dangerous_finding() -> None:
+    """CWE-1236: attacker-controlled ``dangerous_findings`` values are CSV-sanitized."""
+    data = {"target": "example.com", "dangerous_findings": ["=cmd|' /C calc'!A0"]}
+    output = format_redis_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[1][11] == "'=cmd|' /C calc'!A0"

@@ -1259,3 +1259,12 @@ def test_normalize_peers_list_with_non_dicts() -> None:
     from ethscan.ntp import _normalize_peers
 
     assert _normalize_peers([{"a": 1}, "not a dict", 123, None, {"b": 2}]) == [{"a": 1}, {"b": 2}]
+
+
+def test_format_ntp_report_csv_sanitizes_formula_finding() -> None:
+    """CWE-1236: attacker-controlled ``findings`` values are CSV-sanitized."""
+    data = {"target": "example.com", "findings": ["=cmd|' /C calc'!A0", "@SUM(A1:A2)"]}
+    output = format_ntp_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[4][0] == "'=cmd|' /C calc'!A0"
+    assert reader[5][0] == "'@SUM(A1:A2)"

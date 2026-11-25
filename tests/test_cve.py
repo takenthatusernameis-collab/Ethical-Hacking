@@ -1,5 +1,7 @@
 """Tests for the ethscan cve command."""
 
+import csv
+import io
 import json
 import socketserver
 import subprocess
@@ -1816,3 +1818,19 @@ def test_finding_detail_without_port_omits_port() -> None:
     )
     assert detail == "OpenSSH 7.2p2"
     assert "port" not in detail
+
+
+def test_format_cve_report_csv_sanitizes_formula_title_and_description() -> None:
+    """CWE-1236: attacker-controlled CVE ``title``/``description`` are CSV-sanitized."""
+    data: dict[str, object] = {
+        "cve_entries": [
+            {
+                "source": "builtin",
+                "finding": {"title": "=cmd|' /C calc'!A0", "description": "@SUM(A1:A2)"},
+            }
+        ]
+    }
+    output = format_cve_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[1][7] == "'=cmd|' /C calc'!A0"
+    assert reader[1][8] == "'@SUM(A1:A2)"
