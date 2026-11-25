@@ -1503,3 +1503,109 @@ class TestRadixCliFileErrors:
                 assert "--cidr-file" in r.output
         finally:
             os.unlink(name)
+
+
+# ---------------------------------------------------------------------------
+# Property tests: radix computational helpers vs the ipaddress ground truth
+# ---------------------------------------------------------------------------
+
+_PROPERTY_SEED = 20261125
+
+
+def _common_prefix_length_oracle(networks: list[ipaddress._BaseNetwork]) -> int:
+    if not networks:
+        return 0
+    if len(networks) == 1:
+        return networks[0].prefixlen
+    max_bits = 32 if networks[0].version == 4 else 128
+    ints = [int(net.network_address) for net in networks]
+    # The longest common prefix of a set is the common prefix of its min and max.
+    cp = max_bits - (max(ints) ^ min(ints)).bit_length()
+    # When every network address is bit-identical, the common prefix cannot
+    # exceed the most specific (shortest) prefix length; otherwise return the
+    # first bit at which the addresses diverge (matches the implementation).
+    if cp == max_bits:
+        return min(net.prefixlen for net in networks)
+    return cp
+
+
+def _contains_in_merged_oracle(
+    merged: list[ipaddress._BaseNetwork], ip: str
+) -> tuple[bool, str | None]:
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return False, None
+    for net in sorted(merged, key=lambda n: n.network_address):
+        if addr in net:
+            return True, str(net)
+    return False, None
+
+
+def _common_prefix_of_pair_oracle(start, end, is_v4: bool) -> int:
+    max_bits = 32 if is_v4 else 128
+    return max(0, max_bits - (int(start) ^ int(end)).bit_length())
+
+
+def test_common_prefix_length_matches_ipaddress_oracle() -> None:
+    rng = random.Random(_PROPERTY_SEED)
+    for _ in range(4000):
+        is_v4 = rng.random() < 0.5
+        max_bits = 32 if is_v4 else 128
+        nets: list[ipaddress._BaseNetwork] = []
+        for _ in range(rng.randint(1, 6)):
+            addr = ipaddress.IPv4Address(rng.getrandbits(32)) if is_v4 else ipaddress.IPv6Address(rng.getrandbits(128))
+            nets.append(ipaddress.ip_network(f"{addr}/{rng.randint(0, max_bits)}", strict=False))
+        assert _common_prefix_length(nets) == _common_prefix_length_oracle(nets)
+
+
+def test_common_prefix_length_empty_and_single() -> None:
+    assert _common_prefix_length([]) == 0
+    assert _common_prefix_length([ipaddress.ip_network("10.0.0.0/8")]) == 8
+
+
+def test_contains_in_merged_matches_oracle() -> None:
+    rng = random.Random(_PROPERTY_SEED + 1)
+    for _ in range(3000):
+        is_v4 = rng.random() < 0.5
+        max_bits = 32 if is_v4 else 128
+        merged: list[ipaddress._BaseNetwork] = []
+        for _ in range(rng.randint(0, 5)):
+            addr = ipaddress.IPv4Address(rng.getrandbits(32)) if is_v4 else ipaddress.IPv6Address(rng.getrandbits(128))
+            merged.append(ipaddress.ip_network(f"{addr}/{rng.randint(0, max_bits)}", strict=False))
+        ip = str(ipaddress.IPv4Address(rng.getrandbits(32)) if is_v4 else ipaddress.IPv6Address(rng.getrandbits(128)))
+        assert _contains_in_merged(merged, ip) == _contains_in_merged_oracle(merged, ip)
+
+
+def test_common_prefix_of_pair_matches_oracle() -> None:
+    rng = random.Random(_PROPERTY_SEED + 2)
+    for _ in range(5000):
+        is_v4 = rng.random() < 0.5
+        start: ipaddress.IPv4Address | ipaddress.IPv6Address
+        end: ipaddress.IPv4Address | ipaddress.IPv6Address
+        if is_v4:
+            start = ipaddress.IPv4Address(rng.getrandbits(32))
+            end = ipaddress.IPv4Address(rng.getrandbits(32))
+        else:
+            start = ipaddress.IPv6Address(rng.getrandbits(128))
+            end = ipaddress.IPv6Address(rng.getrandbits(128))
+        if int(start) > int(end):
+            start, end = end, start
+        assert _common_prefix_of_pair(start, end, is_v4) == _common_prefix_of_pair_oracle(
+            start, end, is_v4
+        )
+
+
+def test_nth_bit_matches_direct_bit_math() -> None:
+    rng = random.Random(_PROPERTY_SEED + 3)
+    for _ in range(3000):
+        is_v4 = rng.random() < 0.5
+        max_bits = 32 if is_v4 else 128
+        addr: ipaddress.IPv4Address | ipaddress.IPv6Address
+        if is_v4:
+            addr = ipaddress.IPv4Address(rng.getrandbits(32))
+        else:
+            addr = ipaddress.IPv6Address(rng.getrandbits(128))
+        bit = rng.randint(0, max_bits + 1)
+        expected = 0 if bit >= max_bits else (int(addr) >> (max_bits - 1 - bit)) & 1
+        assert _nth_bit(addr, bit, is_v4) == expected

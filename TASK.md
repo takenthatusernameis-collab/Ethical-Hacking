@@ -1531,8 +1531,69 @@ Date: Sun Nov 08 2026 (session 7)
 - None blocking. Do not fabricate work or repeat verification-only sessions. The
   fresh angle that found this bug: property-check pure computational helpers for
   WRONG OUTPUT against a ground-truth oracle (Python `ipaddress`), not just for
-  exceptions. Remaining candidates: `_common_prefix_length`, `_nth_bit`,
-  `_contains_in_merged`, cidr `_format_network_info` IPv6 conventions,
-  `target.py` parsers. `oracle`/`postgresql` empty-target handling and
-  `ethscan/cli.py` unreachable guard remain out of scope. Do not modify
-  `.github/workflows/**`.
+exceptions. Remaining candidates: `_common_prefix_length`, `_nth_bit`,
+`_contains_in_merged`, cidr `_format_network_info` IPv6 conventions,
+`target.py` parsers. `oracle`/`postgresql` empty-target handling and
+`ethscan/cli.py` unreachable guard remain out of scope. Do not modify
+`.github/workflows/**`.
+
+# Session (Wed Nov 25 2026, radix property tests + target.py coverage gap)
+## This session
+- No prior agent assignment existed; HANDOFF_NEXT.md/NEXT_TASK.md both said
+  "None pending; repo fully green". Independently re-verified the baseline
+  before selecting work, then followed the handoff's evidence-based lead:
+  property-check pure computational helpers for WRONG OUTPUT against a
+  ground-truth oracle (Python `ipaddress`), not just exceptions.
+- Added 5 deterministic seeded property tests in `tests/test_radix.py`
+  (`_PROPERTY_SEED = 20261125`) covering `_common_prefix_length` (4000 cases,
+  IPv4/IPv6), `_contains_in_merged` (3000 cases), `_common_prefix_of_pair`
+  (5000 cases, regression), `_nth_bit` (3000 cases), plus empty/single edge
+  cases. The initial `_common_prefix_length` oracle over-capped (always
+  `min(cp, min_prefixlen)`) and was corrected to match the implementation's
+  test-codified contract (cap only when all network addresses are bit-identical,
+  else return the first-divergence bit); no source change and no user-visible
+  defect was found in any of the four helpers.
+- Discovered a pre-existing coverage gap the "100%" baseline had masked:
+  `ethscan/target.py:400` (the IPv6 zone-ID strip branch in
+  `format_host_header`, documented in its docstring but untested) was missed by
+  every test. Added one parametrize case
+  `("fe80::1%eth0", "[fe80::1]")` to
+  `test_format_host_header_brackets_ipv6_literals` in `tests/test_target.py`,
+  closing the gap. No production code changed.
+
+## What was actually verified (evidence)
+- `python -m pytest -q` -> 49780 passed, 147 skipped, 0 failed
+  (baseline 49774; +6 new test cases).
+- `python -m coverage run --branch --source=ethscan -m pytest -q`
+  -> TOTAL 100% (16271 stmts, 6160 branches, 0 missing); `target.py:400` no
+  longer missing.
+- `python -m mypy ethscan/ tests/` -> Success: no issues in 271 source files.
+- `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
+- `python3 check_readme.py` -> 54 commands, 0 drift both directions; exit 0.
+- `git diff --check` clean; `git diff --stat` -> 2 test files, 107(+), 0(-);
+  no production code changed. Changes NOT committed (controller commits).
+
+## Blockers
+- None.
+
+## Approaches already tried / ruled out
+- CSV formula injection, parser/adversarial STRING fuzz, formatter/assessor
+  hostile contracts, CLI target/option hostile sweeps, nested-field &
+  per-key hostile sweeps: clean in prior sessions; not repeated. Broad
+  `except Exception`: all intentional (`# noqa: BLE001`).
+- Radix `_merge_networks`/`_subtract_networks`/`_format_network_info` math:
+  empirically verified correct in prior session (0 failures vs `ipaddress`
+  oracle); not defects.
+
+## Next task
+- None pending. Repository fully green with 100% coverage. Do NOT fabricate
+  work or repeat verification-only sessions as progress. If future work is
+  needed, reproduce a concrete gap first (focused failing check, fresh-install
+  failure, or behavioral evidence vs documented contract), apply the smallest
+  safe fix, rerun focused then the full gate
+  (pytest/coverage/mypy/ruff/check_readme), preserve safety.
+- Evidence-based lead: property-check remaining `target.py` parsers
+  (`parse_url`, `normalize_host`, `check_port`) for wrong output against a
+  hand-derived/`ipaddress` oracle; `format_host_header` is now covered.
+- `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable
+  guard remain out of scope. Do not modify `.github/workflows/**`.

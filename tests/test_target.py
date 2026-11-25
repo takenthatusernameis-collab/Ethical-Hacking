@@ -853,6 +853,7 @@ def test_normalize_host_error_is_still_a_value_error() -> None:
         ("::1", "[::1]"),
         ("2001:db8::1", "[2001:db8::1]"),
         ("fe80::1", "[fe80::1]"),
+        ("fe80::1%eth0", "[fe80::1]"),
         ("[::1]", "[::1]"),
         ("127.0.0.1", "127.0.0.1"),
         ("example.com", "example.com"),
