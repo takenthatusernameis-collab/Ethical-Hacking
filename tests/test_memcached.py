@@ -805,3 +805,38 @@ def test_format_memcached_report_csv_hostile_stats(value):
     # uptime/bytes/... columns are empty when stats is not a dict.
     assert row.split(",")[5] == ""  # uptime
     assert row.split(",")[6] == ""  # bytes
+
+
+def test_format_memcached_report_csv_sanitizes_formula_version_and_findings() -> None:
+    """CWE-1236: attacker-controlled ``version`` and joined ``findings`` are CSV-sanitized."""
+    data = {
+        "target": "localhost:11211",
+        "host": "localhost",
+        "port": 11211,
+        "accessible": True,
+        "version": "=cmd|' /C calc'!A0",
+        "stats": {},
+        "findings": ["@SUM(A1:A2)"],
+        "error": None,
+    }
+    output = format_memcached_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[0] == [
+        "target",
+        "host",
+        "port",
+        "accessible",
+        "version",
+        "uptime",
+        "bytes",
+        "curr_connections",
+        "cmd_get",
+        "cmd_set",
+        "get_hits",
+        "get_misses",
+        "evictions",
+        "findings",
+        "error",
+    ]
+    assert reader[1][4] == "'=cmd|' /C calc'!A0"
+    assert reader[1][13] == "'@SUM(A1:A2)"
