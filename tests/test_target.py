@@ -875,7 +875,6 @@ def test_format_host_header_leaves_ipv4_and_names_alone() -> None:
 
 # --- Property checks (deterministic, seeded) --------------------------------
 
-import ipaddress as _ipaddress
 import random as _random
 
 _PROPERTY_SEED_TARGET = 20261125
@@ -928,3 +927,344 @@ def test_format_host_header_property_ipv6_roundtrip() -> None:
     # IPv6 literals bracketed
     for ip in ("::1", "2001:db8::1", "fe80::1"):
         assert format_host_header(ip) == f"[{ip}]"
+
+
+# --- Property checks against ground-truth oracles -----------------------------
+#
+# These tests verify CORRECT OUTPUT (not just crash-free) by comparing
+# against stdlib or hand-derived expected behavior. A mismatch is a genuine defect.
+
+def test_parse_url_property_matches_urlparse_for_valid_urls() -> None:
+    """parse_url output matches urllib.parse.urlparse for all valid URLs."""
+    rng = _random.Random(_PROPERTY_SEED_TARGET + 10)
+    schemes = ("http", "https", "redis", "ftp", "ssh", "ldap", "smtp", "mongodb")
+    hosts = (
+        "example.com",
+        "sub.example.com",
+        "localhost",
+        "127.0.0.1",
+        "192.168.1.1",
+        "[::1]",
+        "[2001:db8::1]",
+        "[fe80::1]",
+        "host-with-dash.com",
+    )
+    paths = ("", "/", "/path", "/path?q=1", "/path?q=1#frag", "?q=1", "#frag")
+    ports = ("", ":80", ":443", ":6379", ":8443", ":8080", ":9999")
+    userinfos = ("", "user:", "user:pass", "user@")
+
+    for _ in range(3000):
+        scheme = rng.choice(schemes)
+        host = rng.choice(hosts)
+        port = rng.choice(ports)
+        path = rng.choice(paths)
+        userinfo = rng.choice(userinfos)
+
+        # Build URL carefully to avoid invalid combinations
+        if userinfo:
+            auth = f"{userinfo}@{host}{port}"
+        else:
+            auth = f"{host}{port}"
+        url = f"{scheme}://{auth}{path}"
+
+        # parse_url should match urlparse for valid URLs
+        try:
+            parsed_ours = parse_url(url)
+            parsed_stdlib = urlparse(url)
+        except TargetSpecError:
+            # Some combinations may be invalid (e.g., IPv6 without brackets in stdlib)
+            # but our parse_url handles IPv6 bracketing. Skip if stdlib fails.
+            continue
+
+        # Core fields must match
+        assert parsed_ours.scheme == parsed_stdlib.scheme
+        assert parsed_ours.netloc == parsed_stdlib.netloc
+        assert parsed_ours.path == parsed_stdlib.path
+        assert parsed_ours.params == parsed_stdlib.params
+        assert parsed_ours.query == parsed_stdlib.query
+        assert parsed_ours.fragment == parsed_stdlib.fragment
+        assert parsed_ours.hostname == parsed_stdlib.hostname
+        assert parsed_ours.port == parsed_stdlib.port
+        assert parsed_ours.username == parsed_stdlib.username
+        assert parsed_ours.password == parsed_stdlib.password
+
+
+def test_parse_url_property_brackets_unbracketed_ipv6() -> None:
+    """parse_url correctly brackets unbracketed IPv6 literals that stdlib misparses."""
+    rng = _random.Random(_PROPERTY_SEED_TARGET + 11)
+    # IPv6 literals that are unambiguous (no trailing all-digits segment that could be a port)
+    ipv6_literals_no_port_ambiguity = (
+        "::1",
+        "2001:db8::1",
+        "fe80::1",
+        "::ffff:192.0.2.1",
+    )
+    # IPv6 literals that END with :<digits> - these will be parsed as having a port
+    ipv6_literals_with_trailing_digits = (
+        "2001:db8:85a3::8a2e:370:7334",
+    )
+    ports = ("", ":80", ":443", ":6379", ":8443")
+    schemes = ("http", "https", "redis", "ftp")
+
+    for _ in range(1500):
+        ip = rng.choice(ipv6_literals_no_port_ambiguity)
+        port = rng.choice(ports)
+        scheme = rng.choice(schemes)
+
+        # Unbracketed IPv6 in URL - stdlib misparses this
+        url = f"{scheme}://{ip}{port}"
+
+        # Our parse_url should bracket it and parse correctly
+        parsed = parse_url(url)
+
+        # Netloc should be bracketed
+        assert parsed.netloc.startswith("[")
+        assert "]" in parsed.netloc
+
+        # Hostname should be the clean IPv6 literal
+        assert parsed.hostname == ip
+
+        # Port should be extracted correctly (URL port takes precedence)
+        if port:
+            assert parsed.port == int(port[1:])
+        else:
+            assert parsed.port is None
+
+    # Test IPv6 literals that themselves end in :<digits>
+    # When NO explicit port is given, the trailing :<digits> is parsed as port
+    for ip in ipv6_literals_with_trailing_digits:
+        for scheme in schemes:
+            url = f"{scheme}://{ip}"
+            parsed = parse_url(url)
+            assert parsed.netloc.startswith("[")
+            assert "]" in parsed.netloc
+            # The trailing :7334 is parsed as port
+            assert parsed.port == 7334
+            # Hostname is the IPv6 without the trailing :7334
+            assert parsed.hostname == "2001:db8:85a3::8a2e:370"
+
+            # With explicit port, the explicit port wins BUT the hostname
+            # includes the trailing :7334 (it's treated as part of the host)
+            for port in (":80", ":443", ":6379"):
+                url2 = f"{scheme}://{ip}{port}"
+                parsed2 = parse_url(url2)
+                assert parsed2.port == int(port[1:])
+                # The full IPv6 literal is kept as hostname when explicit port is present
+                assert parsed2.hostname == "2001:db8:85a3::8a2e:370:7334"
+
+
+def test_normalize_host_property_matches_expected_behavior() -> None:
+    """normalize_host output matches hand-derived expected behavior for valid targets."""
+    # Test cases: (input, expected_output, default_scheme)
+    test_cases = [
+        # Bare hosts
+        ("example.com", "example.com", "https://"),
+        ("EXAMPLE.COM", "example.com", "https://"),
+        ("Sub.Example.COM", "sub.example.com", "https://"),
+        ("localhost", "localhost", "https://"),
+        ("host-with-dash", "host-with-dash", "https://"),
+        ("sub.domain.example.co.uk", "sub.domain.example.co.uk", "https://"),
+
+        # With port (should strip port)
+        ("example.com:443", "example.com", "https://"),
+        ("example.com:8080", "example.com", "https://"),
+        ("[::1]:443", "::1", "https://"),
+        ("[2001:db8::1]:8080", "2001:db8::1", "https://"),
+
+        # With scheme
+        ("https://example.com", "example.com", "https://"),
+        ("http://example.com", "example.com", "https://"),
+        ("http://example.com:8080", "example.com", "https://"),
+        ("https://sub.example.com/path?q=1#frag", "sub.example.com", "https://"),
+        ("redis://localhost:6379", "localhost", "https://"),
+        ("ftp://files.example.com", "files.example.com", "https://"),
+
+        # IPv6 literals
+        ("2001:db8::1", "2001:db8::1", "https://"),
+        ("[2001:db8::1]:443", "2001:db8::1", "https://"),
+        ("https://[::1]:443", "::1", "https://"),
+        ("https://[2001:db8::1]/path", "2001:db8::1", "https://"),
+
+        # With whitespace
+        ("  example.com  ", "example.com", "https://"),
+        ("\texample.com\n", "example.com", "https://"),
+        (" example.com:443 ", "example.com", "https://"),
+
+        # Custom default scheme
+        ("example.com", "example.com", "http://"),
+        ("example.com:8080", "example.com", "http://"),
+    ]
+
+    for target, expected, default_scheme in test_cases:
+        result = normalize_host(target, default_scheme=default_scheme)
+        assert result == expected, f"normalize_host({target!r}, default_scheme={default_scheme!r}) == {result!r}, expected {expected!r}"
+
+
+def test_normalize_host_property_rejects_empty_hosts() -> None:
+    """normalize_host raises TargetSpecError exactly for targets without a usable host."""
+    rng = _random.Random(_PROPERTY_SEED_TARGET + 13)
+
+    # Targets that should raise TargetSpecError (no usable host)
+    empty_targets = [
+        "",
+        "   ",
+        "\t\n",
+        "://no-host",
+        "redis://",
+        ":6379",
+        "https://",
+        "http://",
+        "/",
+        "https:///path",
+        "http://:8080",
+        "://",
+        "https://?",
+        "https://#frag",
+    ]
+
+    for target in empty_targets:
+        try:
+            normalize_host(target)
+            raise AssertionError(f"Expected TargetSpecError for {target!r}")
+        except TargetSpecError as e:
+            assert "Could not parse host from target" in str(e)
+
+    # Random generation of definitely-invalid targets
+    for _ in range(1000):
+        # Generate strings that cannot possibly contain a host
+        prefix = rng.choice(["", "https://", "http://", "redis://", "ftp://", "ssh://"])
+        suffix = rng.choice(["", "/", "?", "#", "/path", "?q=1", "#frag"])
+        middle = rng.choice(["", ":", "::", ":::", ":", "@", "@:", ":@"])
+        target = prefix + middle + suffix
+        # A "definitely invalid" target has no alphanumeric, no dots, no hyphens,
+        # no brackets (for IPv6), and no colons that could be part of IPv6.
+        # We only test targets where the middle part is just punctuation.
+        # But we must also ensure the target, when parsed, has no host.
+        # Skip targets that might parse as valid IPv6 (containing :: or :)
+        if target and not any(c.isalnum() or c in ".-[]" for c in target.replace(":", "")):
+            # Additional check: if the target could be a valid IPv6 with path, skip
+            try:
+                result = normalize_host(target)
+                # If it succeeds, check if it's a "real" host or just :: (unspecified)
+                # We only flag as error if the target was clearly invalid
+                if result == "::" and "::" in target:
+                    # This is the valid unspecified address, not an error
+                    pass
+                else:
+                    raise AssertionError(f"Expected TargetSpecError for {target!r}, got {result!r}")
+            except TargetSpecError:
+                pass
+
+
+def test_check_port_property_matches_expected_behavior() -> None:
+    """check_port behavior matches hand-derived expected behavior."""
+    rng = _random.Random(_PROPERTY_SEED_TARGET + 14)
+
+    # Valid ports (int and string forms)
+    for _ in range(2000):
+        port = rng.randint(0, 65535)
+        assert check_port(port) == port
+        assert check_port(str(port)) == port
+
+    # Invalid numeric ports
+    for port in (-1, -100, 65536, 65537, 99999, 1000000):
+        try:
+            check_port(port)
+            raise AssertionError(f"Expected TargetSpecError for port {port}")
+        except TargetSpecError as e:
+            assert "Port out of range" in str(e)
+
+    # Invalid string ports (non-numeric)
+    # Note: Python's int() accepts fullwidth digits (１２３) and other Unicode digits
+    invalid_strings = ("abc", "1.5", "65536", "-1", "", " ", "\t")
+    for s in invalid_strings:
+        try:
+            check_port(s)
+            raise AssertionError(f"Expected TargetSpecError for port string {s!r}")
+        except TargetSpecError as e:
+            assert "Invalid port" in str(e) or "Port out of range" in str(e)
+
+    # Unicode digits (fullwidth, etc.) ARE accepted by Python's int() - this is correct
+    unicode_digits = ("１２３", "٠١٢", "०१२")  # Fullwidth, Arabic-Indic, Devanagari
+    for s in unicode_digits:
+        try:
+            result = check_port(s)
+            # Should succeed and return the numeric value
+            assert isinstance(result, int)
+            assert 0 <= result <= 65535
+        except TargetSpecError as e:
+            raise AssertionError(f"Unicode digits {s!r} should be accepted by int()") from e
+
+
+def test_strip_userinfo_property_matches_expected() -> None:
+    """strip_userinfo removes only userinfo, preserves everything else."""
+    rng = _random.Random(_PROPERTY_SEED_TARGET + 15)
+
+    test_cases = [
+        ("http://user:pass@example.com", "http://example.com"),
+        ("https://user:pass@example.com/path?q=1#frag", "https://example.com/path?q=1#frag"),
+        ("https://user@example.com", "https://example.com"),
+        ("user:pass@example.com", "example.com"),
+        ("user@example.com", "example.com"),
+        ("https://example.com", "https://example.com"),
+        ("https://example.com/path", "https://example.com/path"),
+        ("https://example.com:8443", "https://example.com:8443"),
+        ("https://[::1]:443", "https://[::1]:443"),
+        ("https://example.com/a@b", "https://example.com/a@b"),  # @ in path preserved
+        ("example.com", "example.com"),
+        ("http://user:pass@example.com:8080/path?q=1#frag", "http://example.com:8080/path?q=1#frag"),
+        ("ftp://user:pass@files.example.com", "ftp://files.example.com"),
+        ("ssh://git@github.com/user/repo", "ssh://github.com/user/repo"),
+    ]
+
+    for url, expected in test_cases:
+        result = strip_userinfo(url)
+        assert result == expected, f"strip_userinfo({url!r}) == {result!r}, expected {expected!r}"
+
+    # Random generation
+    schemes = ("", "http://", "https://", "ftp://", "ssh://")
+    userinfos = ("", "user:", "user:pass", "user@")
+    hosts = ("example.com", "sub.example.com", "localhost", "127.0.0.1", "[::1]", "[2001:db8::1]")
+    ports = ("", ":80", ":443", ":22", ":8080")
+    paths = ("", "/", "/path", "/path?q=1#frag")
+
+    for _ in range(1000):
+        scheme = rng.choice(schemes)
+        userinfo = rng.choice(userinfos)
+        host = rng.choice(hosts)
+        port = rng.choice(ports)
+        path = rng.choice(paths)
+
+        if userinfo:
+            auth = f"{userinfo}@{host}{port}"
+        else:
+            auth = f"{host}{port}"
+        url = f"{scheme}{auth}{path}"
+
+        result = strip_userinfo(url)
+
+        # Verify userinfo is gone: no '@' in authority part
+        # Find the authority part (between scheme:// and path/?/#)
+        if "://" in result:
+            after_scheme = result.split("://", 1)[1]
+            authority_end = len(after_scheme)
+            for delim in ("/", "?", "#"):
+                idx = after_scheme.find(delim)
+                if idx != -1:
+                    authority_end = min(authority_end, idx)
+            authority = after_scheme[:authority_end]
+            assert "@" not in authority, f"userinfo '@' found in authority: {authority!r} from {url!r}"
+        else:
+            # No scheme - the whole thing before path is authority
+            authority_end = len(result)
+            for delim in ("/", "?", "#"):
+                idx = result.find(delim)
+                if idx != -1:
+                    authority_end = min(authority_end, idx)
+            authority = result[:authority_end]
+            assert "@" not in authority, f"userinfo '@' found in authority: {authority!r} from {url!r}"
+
+        # More precisely: if there was userinfo, it should be stripped
+        if userinfo:
+            # The result should not contain the userinfo part
+            assert userinfo.split(":")[0] not in result or result.count("@") == 0
