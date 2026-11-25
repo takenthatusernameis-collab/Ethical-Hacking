@@ -1321,3 +1321,26 @@ Date: Sun Nov 08 2026 (session 7)
 - Same as prior session: formatter/assessor/CLI hostile sweeps, nested-field fuzz, parser STRING fuzz all clean; `_parse_*` contract test deliberately not added (speculative without a reproduced crash).
 ## Next task
 - None pending. Repository fully green with 100% coverage. If future work is needed, reproduce a concrete gap first (focused failing check, fresh-install failure, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then broader gates (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql` empty-target handling and `ethscan/cli.py:4318` remain intentionally out of scope. Do not modify `.github/workflows/**`. Do not fabricate work or repeat verification-only sessions as progress.
+
+# Session (Wed Nov 25 2026, load_json bracket-in-string false rejection)
+## This session
+- No prior agent assignment existed (HANDOFF_NEXT.md/NEXT_TASK.md both said "None pending; repo fully green"). Per the task instruction I did NOT repeat a verification-only session; I independently re-verified the baseline and then reproduced a concrete, previously-unreported defect and fixed it.
+- Re-verified baseline at start: `pytest -q` green; `mypy ethscan/ tests/` clean (271 files); `ruff` clean; `check_readme.py` 54/54, 0 drift; `git status` clean.
+- Reproduced a real correctness bug in `ethscan/fileio.py::load_json`: the manual bracket-depth pre-check counted `[`/`{` characters that appear INSIDE JSON string literals, so a VALID JSON file whose string value contained >1000 brackets (a regex, a banner, a data blob) was falsely rejected with `ValueError: the file nests too deeply to be parsed as JSON`. Reachable via every caller: config files, `--services-file`, `--banners-file`, `--tls-file`/`--ssl-file`, and the mac/cve/geo/cert caches.
+## What changed
+- `ethscan/fileio.py` (`load_json`): the depth scan now tracks whether it is inside a JSON string (honouring backslash escapes) and ignores brackets inside strings. Genuine deep nesting (e.g. 20000 nested arrays) is still rejected; the `RecursionError` -> `ValueError` conversion is unchanged.
+- `tests/test_fileio.py`: added `test_load_json_accepts_a_bracket_heavy_string` and `test_load_json_accepts_escaped_quotes_around_brackets`; moved `import json` to module top.
+## Verification
+- Repro before fix: `load_json({"pattern": "[" * 1001})` -> ValueError (valid JSON rejected); 999 -> OK. After fix: 1001/1500 brackets (and `{}`, and escaped quotes) load fine; 20000-deep genuine nesting still rejected.
+- `python -m pytest tests/test_fileio.py tests/test_fileio_hostile_sweep.py -q` -> 53 passed.
+- `python -m pytest -q` (full suite) -> 47475 passed, 147 skipped, 0 failed (baseline 47473; +2 new tests).
+- `python -m coverage run --branch --source=ethscan -m pytest -q` -> TOTAL 100% (16245 stmts, 6136 branches, 0 missing).
+- `python -m mypy ethscan/ tests/` -> Success (271 files); `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed; `python3 check_readme.py` -> 54 commands, 0 drift; `git diff --check` clean.
+- `git status` -> only `ethscan/fileio.py` + `tests/test_fileio.py` modified (46 insertions, 1 deletion). Not committed (controller commits).
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- CSV formula injection (CWE-1236) was REPRODUCED (54 modules emit hostile `=`/`+`/`@`-leading values verbatim via `csv.writer`) but NOT fixed: a correct mitigation is a cross-cutting change across 54 modules that risks the 144 exact-CSV-output test files, so it is left as a precise bounded next task with reproduction evidence rather than a speculative sweep.
+- Parser STRING fuzz / formatter / assessor / CLI hostile sweeps / nested-field fuzz: clean in prior sessions; not repeated.
+## Next task
+- CSV formula injection mitigation as ONE shared sanitizer applied across all `csv.writer` modules + a focused test, then re-run the FULL gate; if too broad to land safely, document as a known limitation. `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`. Do not fabricate work or repeat verification-only sessions as progress.

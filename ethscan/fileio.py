@@ -77,10 +77,27 @@ def load_json(path: str | Path) -> Any:
         text = handle.read()
     # Guard against inputs that nest deeper than the parser can safely handle
     # (Python's json parser may not raise RecursionError on every version).
+    # Brackets that appear inside a JSON string literal do not contribute to
+    # nesting depth, so the scan tracks whether it is inside a string (honouring
+    # backslash escapes); without this a valid file whose string merely contains
+    # many '[' or '{' characters (a regex, a banner, a data blob) would be
+    # wrongly rejected as nesting too deeply.
     depth = 0
     max_depth = 0
+    in_string = False
+    escaped = False
     for ch in text:
-        if ch in "[{":
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch in "[{":
             depth += 1
             if depth > max_depth:
                 max_depth = depth

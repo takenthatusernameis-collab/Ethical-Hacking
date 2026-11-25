@@ -1,5 +1,7 @@
 """Unit tests for the shared input-file readers and writers."""
 
+import json
+
 import pytest
 
 from ethscan.fileio import (
@@ -260,6 +262,32 @@ def test_load_json_tracks_the_shallowest_opening_bracket(tmp_path) -> None:
     path = tmp_path / "file.json"
     path.write_text('[[1], [2]]')
     assert load_json(str(path)) == [[1], [2]]
+
+
+def test_load_json_accepts_a_bracket_heavy_string(tmp_path) -> None:
+    """A string that contains many brackets is not "too deep" nesting.
+
+    The depth guard must ignore brackets inside JSON string literals: a valid
+    file whose string value is a long run of ``[``/``{`` (a regex, a banner, a
+    data blob) is shallow and must load, not be rejected as nesting too deeply.
+    """
+    path = tmp_path / "file.json"
+    payload = {"pattern": "[" * 1500 + "{" * 1500}
+    path.write_text(json.dumps(payload))
+    assert load_json(str(path)) == payload
+
+
+def test_load_json_accepts_escaped_quotes_around_brackets(tmp_path) -> None:
+    """Escaped quotes inside a string do not end the string early.
+
+    A bracket-heavy string that also contains escaped quotes (``\\"``) must
+    still be treated as a single string, so its brackets do not count toward
+    nesting depth.
+    """
+    path = tmp_path / "file.json"
+    payload = {"pattern": '\\"' + "[" * 1500 + '\\"'}
+    path.write_text(json.dumps(payload))
+    assert load_json(str(path)) == payload
 
 
 def test_load_json_ignores_a_closing_bracket_that_overflows_depth(tmp_path) -> None:
