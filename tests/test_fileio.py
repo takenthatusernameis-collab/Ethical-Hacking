@@ -341,3 +341,25 @@ def test_atomic_write_cleanup_swallows_unlink_error(tmp_path, monkeypatch) -> No
         fileio._atomic_write(path, boom)
 
     assert path.read_text() == "original\n"
+
+
+def test_sanitize_csv_cell_prefixes_formula_triggers() -> None:
+    from ethscan.fileio import sanitize_csv_cell
+
+    assert sanitize_csv_cell("=cmd|' /C calc'!A0") == "'=cmd|' /C calc'!A0"
+    assert sanitize_csv_cell("=HYPERLINK(\"http://x\")") == "'=HYPERLINK(\"http://x\")"
+    assert sanitize_csv_cell("@SUM(A1:A2)") == "'@SUM(A1:A2)"
+    assert sanitize_csv_cell("+cmd") == "'+cmd"
+    assert sanitize_csv_cell("\tfoo") == "'\tfoo"
+    assert sanitize_csv_cell("\rfoo") == "'\rfoo"
+
+
+def test_sanitize_csv_cell_keeps_numeric_and_safe_values() -> None:
+    from ethscan.fileio import sanitize_csv_cell
+
+    assert sanitize_csv_cell("-1") == "-1"
+    assert sanitize_csv_cell("+2") == "+2"
+    assert sanitize_csv_cell(42) == 42
+    assert sanitize_csv_cell(None) is None
+    assert sanitize_csv_cell("") == ""
+    assert sanitize_csv_cell("plain text") == "plain text"

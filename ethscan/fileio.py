@@ -237,3 +237,27 @@ def write_json(path: str | Path, data: Any, *, indent: int = 2) -> None:
         handle.write("\n")
 
     _atomic_write(p, _write)
+
+
+def sanitize_csv_cell(value: Any) -> Any:
+    """Neutralise CSV formula injection (CWE-1236).
+
+    Spreadsheet applications evaluate a cell whose content begins with ``=``,
+    ``+``, ``-``, ``@``, TAB or CR as a formula. A hostile value (e.g. a
+    banner or DNS record) written verbatim via ``csv.writer`` can therefore
+    execute when the resulting CSV is opened. This helper prefixes such string
+    cells with a single quote so they are treated as text, while leaving purely
+    numeric cells (including negative numbers) untouched.
+
+    Non-string values are returned unchanged.
+    """
+    if not isinstance(value, str) or not value:
+        return value
+    if value[0] in ("=", "+", "-", "@", "\t", "\r"):
+        # Keep purely numeric cells (e.g. "-1", "+2", "3.14") unsanitised.
+        try:
+            float(value)
+            return value
+        except ValueError:
+            return "'" + value
+    return value
