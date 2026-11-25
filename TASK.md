@@ -1269,3 +1269,25 @@ Date: Sun Nov 08 2026 (session 7)
 - None; no gap was reproduced, so no fix was attempted.
 ## Next task
 - None pending. Repository fully green. If future work is needed, reproduce a concrete gap first (fresh-install failure, focused failing check, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then broader gates (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql` empty-target handling remains intentionally out of scope per their documented contract (exit 0, in-band error). `ethscan/cli.py:4318` unreachable defensive guard remains a documented known limitation.
+
+# Session (Wed Nov 25 2026, report formatter nested-field hardening)
+## This session
+- No prior agent assignment existed (HANDOFF_NEXT.md/NEXT_TASK.md both said "None pending; repo fully green"). Independently re-verified the baseline before selecting work: `pytest -q` -> 47464 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/` clean (271 files); `ruff check` clean; `check_readme.py` 54/54, 0 drift.
+- Reproduced a real defect the green baseline masked: the combined-report formatters crashed on a non-iterable scalar nested inside the `scan`/`audit` sub-dicts. `report.format_report_markdown({"scan": {"details": 1}})` (and `scan.open_ports`, `audit.results`, plus the CSV variant) raised `TypeError: 'int' object is not iterable`. The repo-wide hostile contract test (`tests/test_all_formatters_hostile_contract.py`) missed it because it only fuzzes TOP-LEVEL fields; `report.py` reads list fields out of nested `scan`/`audit` dicts. The dedicated `tests/test_report_hostile_sweep.py` covered nested STRING values (iterable -> no crash) but not non-iterable scalars (int/float/bool).
+## What changed
+- `ethscan/report.py`: added a small `_as_list(value)` helper (returns the value as a list for list/tuple, else `[]`) and used it for the five nested list reads in `format_report_markdown` (`open_ports`, `details`, `results`) and `format_report_csv` (`details`, `results`). Valid-output rendering is byte-identical; only hostile non-iterable values change from crash to empty. JSON formatter was already safe (`json.dumps(default=str)`).
+- `tests/test_report_hostile_sweep.py`: added `test_report_formatters_survive_non_iterable_nested_field`, parametrized over the three nested fields x non-iterable scalars (1, 1.5, True). Mutation-checked: reverting the source fix makes 9 of these fail with the original `TypeError`.
+## Verification
+- Repro before fix: 5/5 hostile nested inputs -> TypeError; after fix: 0 crashes, valid Markdown/CSV byte-identical.
+- `python -m pytest tests/test_report.py tests/test_report_hostile_sweep.py -q` -> 75 passed.
+- `python -m pytest -q` (full suite) -> 47473 passed, 147 skipped, 0 failed (baseline 47464; +9 new tests).
+- `python -m mypy ethscan/ tests/` -> Success (271 files); `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed; `python3 check_readme.py` -> 54 commands, 0 drift.
+- `coverage run --branch --source=ethscan` -> `ethscan/report.py` 100% (125 stmts, 58 branches, 0 missing); TOTAL 100% (16233 stmts, 6126 branches, 0 missing).
+- `git diff --stat` -> ethscan/report.py, tests/test_report_hostile_sweep.py only. Changes NOT committed (controller commits).
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- Extending the generic contract test `_VALID_REPORT` with nested `scan`/`audit` dicts: rejected to keep the change bounded; the focused per-field sweep is the durable guard.
+- A broad nested-field fuzz across all modules (real-report + nested injection) found 0 other crashes (10,296 calls), so the defect is specific to `report.py`'s nested sub-dicts; no speculative guards added elsewhere.
+## Next task
+- None pending. Repository fully green with 100% coverage. If future work is needed, reproduce a concrete gap first (focused failing check or behavioral evidence vs documented contract) before changing code. `oracle`/`postgresql` empty-target handling remains intentionally out of scope (exit 0, in-band error). `ethscan/cli.py:4318` unreachable defensive guard remains a documented known limitation.

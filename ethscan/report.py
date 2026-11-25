@@ -35,6 +35,18 @@ def _parse_ports(ports: str) -> list[int]:
     return resolve_port_list(ports)
 
 
+def _as_list(value: object) -> list:
+    """Return ``value`` as a list, or ``[]`` for a hostile non-list value.
+
+    The report formatters read list fields (``details``/``open_ports``/
+    ``results``) out of the nested ``scan``/``audit`` dicts. A crafted report
+    can place a non-iterable scalar there (e.g. ``{"scan": {"details": 1}}``),
+    which would otherwise raise ``TypeError`` on iteration; coercing to ``[]``
+    keeps the formatters total without changing valid-output behaviour.
+    """
+    return list(value) if isinstance(value, (list, tuple)) else []
+
+
 def _resolve_ports_and_defaults(
     ports: str,
     timeout: float,
@@ -232,14 +244,15 @@ def format_report_markdown(data: dict[str, Any]) -> str:
     lines.append("## Port Scan")
     lines.append(f"- **Target:** {scan.get('target', '')}")
     lines.append(f"- **Ports Scanned:** {scan.get('ports_scanned', 0)}")
+    open_ports = _as_list(scan.get("open_ports"))
     lines.append(
-        f"- **Open Ports:** {', '.join(map(str, scan.get('open_ports') or [])) if scan.get('open_ports') else 'None'}"
+        f"- **Open Ports:** {', '.join(map(str, open_ports)) if open_ports else 'None'}"
     )
     lines.append(f"- **Open Only:** {'Yes' if scan.get('open_only') else 'No'}")
     lines.append("")
     lines.append("| Port | Status |")
     lines.append("|------|--------|")
-    for detail in scan.get("details", []) or []:
+    for detail in _as_list(scan.get("details")):
         if not isinstance(detail, dict):
             continue
         status = "Open" if detail.get("open") else "Closed"
@@ -261,7 +274,7 @@ def format_report_markdown(data: dict[str, Any]) -> str:
     if audit.get("results"):
         lines.append("| Password | Length | Entropy | Common | Patterns | Too Short | Score | Verdict |")
         lines.append("|----------|--------|---------|--------|----------|-----------|-------|---------|")
-        for result in audit.get("results", []) or []:
+        for result in _as_list(audit.get("results")):
             if not isinstance(result, dict):
                 continue
             too_short = "Yes" if result.get("too_short", False) else "No"
@@ -295,7 +308,7 @@ def format_report_csv(data: dict[str, Any]) -> str:
     scan = data.get("scan", {}) or {}
     if not isinstance(scan, dict):
         scan = {}
-    for detail in scan.get("details", []) or []:
+    for detail in _as_list(scan.get("details")):
         if not isinstance(detail, dict):
             continue
         writer.writerow(
@@ -319,7 +332,7 @@ def format_report_csv(data: dict[str, Any]) -> str:
     audit = data.get("audit", {}) or {}
     if not isinstance(audit, dict):
         audit = {}
-    for result in audit.get("results", []) or []:
+    for result in _as_list(audit.get("results")):
         if not isinstance(result, dict):
             continue
         writer.writerow(
