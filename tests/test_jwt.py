@@ -572,3 +572,26 @@ def test_run_jwt_numeric_time_claim_still_evaluated() -> None:
     assert data["exp_status"] == "valid"
     assert data["iat_status"] == "valid"
     assert data["nbf_status"] == "valid"
+
+
+def test_format_jwt_report_csv_sanitizes_formula_claim_value() -> None:
+    import csv as _csv
+    import io as _io
+
+    data = {
+        "valid_structure": True,
+        "segment_count": 3,
+        "has_signature": True,
+        "token_length": 100,
+        "algorithm": "HS256",
+        "algorithm_type": "HMAC",
+        "token_type": "JWT",
+        "standard_claims": {},
+        "other_claims": {"evil": "=cmd|' /C calc'!A0", "sum": "@SUM(A1:A2)"},
+        "findings": [],
+    }
+    output = format_jwt_report_csv(data)
+    reader = list(_csv.reader(_io.StringIO(output)))
+    rows = {r[0]: r[1] for r in reader if len(r) >= 2}
+    assert rows["evil"] == "'=cmd|' /C calc'!A0"
+    assert rows["sum"] == "'@SUM(A1:A2)"

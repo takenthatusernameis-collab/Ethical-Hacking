@@ -800,3 +800,25 @@ def test_format_ssl_report_csv_non_dict_cert() -> None:
     lines = output.splitlines()
     assert lines[0] == "field,value"
     assert "target,example.com" in lines
+
+
+def test_format_ssl_report_csv_sanitizes_formula_cert_fields() -> None:
+    import csv as _csv
+    import io as _io
+
+    data = {
+        "target": "example.com",
+        "host": "example.com",
+        "port": 443,
+        "cert": {
+            "subject": "=cmd|' /C calc'!A0",
+            "issuer": "@SUM(A1:A2)",
+            "sans": ["=1+1", "ok.example.com"],
+        },
+    }
+    output = format_ssl_report_csv(data)
+    reader = list(_csv.reader(_io.StringIO(output)))
+    rows = {r[0]: r[1] for r in reader if len(r) >= 2}
+    assert rows["subject"] == "'=cmd|' /C calc'!A0"
+    assert rows["issuer"] == "'@SUM(A1:A2)"
+    assert rows["sans"] == "'=1+1;ok.example.com"

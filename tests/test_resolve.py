@@ -1268,3 +1268,15 @@ def test_run_resolve_ptr_on_ip() -> None:
 
     result = resolve.run_resolve("8.8.8.8", record_types=["PTR"])
     assert isinstance(result, dict)
+
+
+def test_format_resolve_report_csv_sanitizes_formula_record_value() -> None:
+    data = {
+        "target": "example.com",
+        "normalized": "example.com",
+        "records": {"TXT": ["=cmd|' /C calc'!A0", "@SUM(A1:A2)"]},
+    }
+    output = format_resolve_report_csv(data)
+    reader = list(csv.reader(io.StringIO(output)))
+    assert reader[1][3] == "'=cmd|' /C calc'!A0"
+    assert reader[2][3] == "'@SUM(A1:A2)"

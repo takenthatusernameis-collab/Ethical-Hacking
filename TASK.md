@@ -1344,3 +1344,50 @@ Date: Sun Nov 08 2026 (session 7)
 - Parser STRING fuzz / formatter / assessor / CLI hostile sweeps / nested-field fuzz: clean in prior sessions; not repeated.
 ## Next task
 - CSV formula injection mitigation as ONE shared sanitizer applied across all `csv.writer` modules + a focused test, then re-run the FULL gate; if too broad to land safely, document as a known limitation. `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`. Do not fabricate work or repeat verification-only sessions as progress.
+
+# Session (Wed Nov 25 2026, CSV sanitization regression coverage + handoff)
+## This session
+- Executed the prior agent's assigned task (CWE-1236 CSV formula-injection end-to-end
+  regression tests). That task was ALREADY implemented in commit `cc7501b`
+  (tests/test_dns.py, tests/test_smtp.py, tests/test_whois.py); per the reliability rules I
+  independently VERIFIED it rather than trusting the handoff, then added durable progress in
+  the same theme.
+- Independently re-verified the true baseline at HEAD `cc7501b` before selecting work:
+  `coverage run --branch --source=ethscan -m pytest -q` -> 47481 passed, 147 skipped, 0
+  failed; TOTAL 100% (16250 stmts, 6140 branches, 0 missing); mypy clean (271 files); ruff
+  clean; check_readme 54/54, 0 drift; tree clean.
+## What changed
+- Verified the 3 pre-existing tests (dns/smtp/whois) pass and are ruff/mypy clean.
+- Added 3 end-to-end CSV sanitization regression tests (test-only, +57 lines, no source):
+  - tests/test_jwt.py::test_format_jwt_report_csv_sanitizes_formula_claim_value
+  - tests/test_ssl.py::test_format_ssl_report_csv_sanitizes_formula_cert_fields
+  - tests/test_resolve.py::test_format_resolve_report_csv_sanitizes_formula_record_value
+  These cover distinct attacker-controlled field shapes (other_claims value; cert
+  subject/issuer/joined sans; TXT record value) not previously covered end-to-end.
+## What was actually verified
+- Mutation check: neutralizing `sanitize_csv_cell` (`if value[0] in (...)` -> `if False:`)
+  makes ALL 7 CSV-sanitization tests (ftp/dns/smtp/whois/jwt/ssl/resolve) FAIL with the raw
+  formula; restoring makes all 7 pass. The shared `csv_writer`/`SanitizingCSVWriter` is the
+  single guard every module routes through.
+- Confirmed NO CSV path bypasses the sanitizer: every `format_*_csv` uses
+  `writer = csv_writer(output)` + `writer.writerow(...)`; no `writerows`/`DictWriter`/manual
+  CSV building in ethscan/; only fileio.py imports csv.
+- Full gate: `coverage run --branch --source=ethscan -m pytest -q` -> 47484 passed, 147
+  skipped, 0 failed; TOTAL 100% (16250 stmts, 6140 branches, 0 missing); mypy clean (271
+  files); ruff clean; check_readme 54/54, 0 drift; `git diff --check` clean.
+- `git diff --stat` -> 3 test files changed, 57 insertions(+). No production code changed.
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- Leading-whitespace formula cells and purely numeric cells (`+1`, `-1`) are intentionally
+  not sanitized (documented in `sanitize_csv_cell`); not gaps — do not chase.
+- Parser/formatter/assessor/CLI hostile sweeps and per-key sweeps: clean in prior sessions;
+  not repeated.
+## Next task
+- Extend end-to-end CSV sanitization coverage to 2-3 more modules with attacker-controlled
+  free text (suggested: ntp findings, redis dangerous_findings, cve title/description),
+  mirroring the 7 existing tests (hostile `=`/`+`/`-`/`@` value -> `'`-prefixed cell via
+  csv.reader). Keep test-only; re-run the FULL gate. If no value is found in more CSV tests,
+  probe for a genuine defect first rather than fabricating work. `oracle`/`postgresql`
+  empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of
+  scope. Do not modify `.github/workflows/**`.
