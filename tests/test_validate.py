@@ -947,3 +947,60 @@ def test_run_validate_port_result_with_non_list_ports(monkeypatch) -> None:
 # ---------------------------------------------------------------------------
 # Property checks: pure helpers vs ipaddress-derived oracle
 # ---------------------------------------------------------------------------
+
+import random as _random
+
+_PROPERTY_SEED_VALIDATE = 20261125
+
+
+def _format_network_info_validate_oracle(
+    network: ipaddress.IPv4Network | ipaddress.IPv6Network,
+) -> tuple[str, str, int]:
+    """Validate's documented contract for _format_network_info.
+
+    Diffs from cidr/radix:
+    - IPv6 /127: both addresses are usable (not just the second)
+    - IPv6 /128: single usable host
+    - IPv4 /31: both addresses usable (RFC 3021)
+    - IPv4 /32: single usable host
+    - For total > 2: IPv4 usable = total - 2, IPv6 usable = total - 1
+    """
+    total = network.num_addresses
+    if total == 1:
+        first = last = str(network.network_address)
+        usable = 1
+    elif total == 2:
+        # Both IPv4 /31 and IPv6 /127 have two usable hosts in validate
+        first = str(network[0])
+        last = str(network[1])
+        usable = 2
+    else:
+        first = str(network[1])
+        last = str(network[-2] if network.version == 4 else network[-1])
+        usable = total - (2 if network.version == 4 else 1)
+    return first, last, usable
+
+
+def _random_network_validate(rng: _random.Random, version: int) -> ipaddress.IPv4Network | ipaddress.IPv6Network:
+    if version == 4:
+        prefixlen = rng.randint(24, 32)
+        start = rng.randint(0, 255)
+        text = f"10.0.0.{start}/{prefixlen}"
+    else:
+        prefixlen = rng.randint(108, 128)
+        start = rng.randint(0, 0xFFFF)
+        text = f"2001:db8::{start:x}/{prefixlen}"
+    return ipaddress.ip_network(text, strict=False)
+
+
+def test_format_network_info_validate_matches_documented_contract() -> None:
+    """_format_network_info (validate) host fields equal validate's documented contract."""
+    rng = _random.Random(_PROPERTY_SEED_VALIDATE)
+    for _ in range(4000):
+        version = rng.choice([4, 6])
+        network = _random_network_validate(rng, version)
+        info = _format_network_info(network)
+        first, last, usable = _format_network_info_validate_oracle(network)
+        assert info["first_host"] == first
+        assert info["last_host"] == last
+        assert info["usable_host_count"] == usable
