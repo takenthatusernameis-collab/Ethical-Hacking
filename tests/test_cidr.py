@@ -2,6 +2,7 @@
 
 import ipaddress
 import json
+import random
 from unittest.mock import patch
 
 import pytest
@@ -884,3 +885,98 @@ def test_format_cidr_report_csv_malformed_network() -> None:
     assert reader[1][0] == "192.168.1.0/24"
     # network_address column is index 1; should be empty since network was not a dict.
     assert reader[1][1] == ""
+
+
+# ---------------------------------------------------------------------------
+# Property checks: pure helpers vs ipaddress-derived oracle
+# ---------------------------------------------------------------------------
+
+_MAX_ADDRS = 4096  # keep address enumeration cheap for the ground truth
+
+
+def _enumerate_addresses(networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network]) -> set:
+    addresses: set = set()
+    for net in networks:
+        for addr in net:
+            addresses.add(addr)
+    return addresses
+
+
+def _subtract_networks_oracle(
+    minuend: list[ipaddress.IPv4Network | ipaddress.IPv6Network],
+    subtrahend: list[ipaddress.IPv4Network | ipaddress.IPv6Network],
+) -> set:
+    """Exact address-set difference computed straight from ipaddress."""
+    addresses = _enumerate_addresses(minuend)
+    for net in subtrahend:
+        for addr in list(addresses):
+            if addr in net:
+                addresses.discard(addr)
+    return addresses
+
+
+def _format_network_info_oracle(
+    network: ipaddress.IPv4Network | ipaddress.IPv6Network,
+) -> tuple[str, str, int]:
+    """Cidr's documented contract: RFC 3021 /31, RFC 4291 /127, stdlib hosts.
+
+    diffs from ipaddress.hosts() only for IPv6 /127, where the first address
+    is the subnet-router anycast and is not a usable host.
+    """
+    total = network.num_addresses
+    if total == 1:
+        first = last = str(network.network_address)
+        usable = 1
+    elif total == 2:
+        if network.version == 4:
+            first = str(network[0])
+            last = str(network[1])
+            usable = 2
+        else:
+            first = last = str(network[1])
+            usable = 1
+    else:
+        first = str(network[1])
+        last = str(network[-2] if network.version == 4 else network[-1])
+        usable = total - (2 if network.version == 4 else 1)
+    return first, last, usable
+
+
+def _random_network(rng: random.Random, version: int) -> ipaddress.IPv4Network | ipaddress.IPv6Network:
+    if version == 4:
+        prefixlen = rng.randint(24, 32)
+        start = rng.randint(0, 255)
+        text = f"10.0.0.{start}/{prefixlen}"
+    else:
+        prefixlen = rng.randint(108, 128)
+        start = rng.randint(0, 0xFFFF)
+        text = f"2001:db8::{start:x}/{prefixlen}"
+    return ipaddress.ip_network(text, strict=False)
+
+
+def test_subtract_networks_matches_address_set_oracle() -> None:
+    """_subtract_networks output address set equals the ipaddress ground truth."""
+    rng = random.Random(20240101)
+    for _ in range(4000):
+        version = rng.choice([4, 6])
+        minuend = [_random_network(rng, version) for _ in range(rng.randint(1, 3))]
+        subtrahend = [_random_network(rng, version) for _ in range(rng.randint(1, 3))]
+        if max(n.num_addresses for n in minuend + subtrahend) > _MAX_ADDRS:
+            continue
+        expected = _subtract_networks_oracle(minuend, subtrahend)
+        result = _subtract_networks(minuend, subtrahend)
+        actual = _enumerate_addresses(result)
+        assert actual == expected
+
+
+def test_format_network_info_matches_documented_contract() -> None:
+    """_format_network_info host fields equal cidr's documented contract."""
+    rng = random.Random(20240102)
+    for _ in range(4000):
+        version = rng.choice([4, 6])
+        network = _random_network(rng, version)
+        info = _format_network_info(network)
+        first, last, usable = _format_network_info_oracle(network)
+        assert info["first_host"] == first
+        assert info["last_host"] == last
+        assert info["usable_host_count"] == usable

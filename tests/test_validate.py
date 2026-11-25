@@ -2,6 +2,7 @@
 
 import ipaddress
 import json
+import random
 from typing import Any, cast
 
 from ethscan.scanner import PortSpecError, parse_port_range
@@ -942,3 +943,8 @@ def test_run_validate_port_result_with_non_list_ports(monkeypatch) -> None:
     result = v.run_validate(ports="x")
     assert result["summary"]["ports_total"] == 0
     assert result["summary"]["ports_specified"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Property checks: pure helpers vs ipaddress-derived oracle
+# ---------------------------------------------------------------------------
