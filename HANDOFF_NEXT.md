@@ -1,10 +1,16 @@
 # Handoff
 
 ## Status
-Repository is fully green, independently re-verified THIS session on **Python 3.14.4**. Working tree was clean at session start and remains clean (no changes made).
+Repository is fully green. Re-verified this session (2026-11-26, Python 3.14.4); working tree clean at start and end (no changes made).
 
 ## What changed (this session)
 - **None.** No code or test changes were made. Full gate re-verified as a negative-result check (no defect reproduced).
+
+### Session re-verification evidence (2026-11-26)
+- `python -m pytest -q` -> **49839 passed, 147 skipped, 0 failed** (198s)
+- `python -m mypy ethscan/ tests/` -> **Success: no issues found in 272 source files**
+- `python -m ruff check ethscan/ tests/ check_readme.py` -> **All checks passed**
+- `python3 check_readme.py` -> **54 CLI commands, 0 drift both directions, exit 0**
 
 ## What was actually verified (evidence)
 - `python -m pytest -q` -> **49839 passed, 147 skipped, 0 failed** (199s).
