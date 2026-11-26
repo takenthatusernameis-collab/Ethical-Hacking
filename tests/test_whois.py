@@ -512,6 +512,19 @@ def test_extract_referral_server() -> None:
     assert extract_referral_server("Refer: whois://whois.iana.org") is None
 
 
+def test_extract_referral_server_empty_value_does_not_cross_lines() -> None:
+    # A label with an empty same-line value must not capture the next line's
+    # leading keyword as the referral hostname. The match is confined to the
+    # label's own line, so the real referral on a following line is found.
+    raw = "Registrar WHOIS Server: \nWHOIS Server: whois.other.com\n"
+    assert extract_referral_server(raw) == "whois.other.com"
+    raw2 = "Registrar WHOIS Server:\nRefer: whois.other.com\n"
+    assert extract_referral_server(raw2) == "whois.other.com"
+    # A bare hostname on the line after a label (no same-line value) is not a
+    # referral the patterns recognise.
+    assert extract_referral_server("Refer:\nwhois.other.com\n") is None
+
+
 def test_run_whois_non_recursive(monkeypatch) -> None:
     def mock_query(target, server="whois.iana.org", port=43, timeout=5.0):
         return "Registrar: Test Registrar\nCreation Date: 2020-01-01\n"

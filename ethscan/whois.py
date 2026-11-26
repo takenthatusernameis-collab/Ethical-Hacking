@@ -151,12 +151,16 @@ def extract_referral_server(raw: str) -> str | None:
     Returns:
         Referral server hostname, or None.
     """
+    # The value must sit on the same line as its label: ``[ \t]*`` (not ``\s*``)
+    # keeps the match from spilling across a newline and capturing the next
+    # line's leading keyword (e.g. the ``WHOIS`` of a following ``WHOIS
+    # Server:`` line) as if it were the referral hostname.
     patterns = [
-        r"Registrar WHOIS Server:\s*(\S+)",
-        r"WHOIS Server:\s*(\S+)",
-        r"Referral Server:\s*(\S+)",
-        r"Refer:\s*(\S+)",
-        r"Registrar URL:\s*whois://(\S+)",
+        r"Registrar WHOIS Server:[ \t]*(\S+)",
+        r"WHOIS Server:[ \t]*(\S+)",
+        r"Referral Server:[ \t]*(\S+)",
+        r"Refer:[ \t]*(\S+)",
+        r"Registrar URL:[ \t]*whois://(\S+)",
     ]
     for pattern in patterns:
         match = re.search(pattern, raw, re.IGNORECASE)
