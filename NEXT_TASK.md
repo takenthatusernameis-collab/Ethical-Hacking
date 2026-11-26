@@ -3,18 +3,14 @@ Extend independent-oracle verification to the remaining not-yet-oracle-checked
 PURE helpers (prior oracle set: radix/cidr/target/validate; this session added
 vuln.version_in_range — 200k cases vs `packaging`, 0 mismatches; mac — 5
 functions, 40k+ cases vs stdlib, 0 mismatches; geo — 3 functions + column
-consistency, 8M+ cases vs stdlib, 0 mismatches):
+consistency, 8M+ cases vs stdlib, 0 mismatches; hash._infer_algorithm — 1.3M+
+cases vs stdlib length oracle, 0 mismatches):
 
-1. `ethscan.hash._infer_algorithm` — stdlib-only oracle (length-based heuristic
-   matching common hash lengths: MD5=32, SHA1=40, SHA256=64, SHA512=128, etc.)
-   over a matrix of valid hex strings at each length, non-hex strings, empty
-   strings, and strings with whitespace. Verify the exact mapping logic.
-
-2. `ethscan.service._parse_banner_service` / `_parse_banner_version` — verify
+1. `ethscan.service._parse_banner_service` / `_parse_banner_version` — verify
    banner parsing is total over hostile inputs (empty, control chars, very long
    lines, non-ASCII, malformed version strings) and never raises.
 
-3. `ethscan.target` pure helpers (`normalize_host`, `parse_url`, `check_port`,
+2. `ethscan.target` pure helpers (`normalize_host`, `parse_url`, `check_port`,
    `check_target_host`, `check_target_path`, `strip_userinfo`,
    `format_host_header`) — stdlib oracle using `ipaddress`, `urllib.parse`, `re`
    over hostile matrix (URLs with userinfo, IPv6 bracketed/unbracketed, ports at
@@ -39,3 +35,5 @@ consistency, 8M+ cases vs stdlib, 0 mismatches):
   sessions without new evidence.
 - Note: `ethscan/mssql.py:591` has a duplicated `# pragma: no cover` comment
   (cosmetic only; code is correct). Not worth a commit on its own.
+
+(End of file - total 41 lines)
