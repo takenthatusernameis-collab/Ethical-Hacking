@@ -1,57 +1,45 @@
 # Handoff
 
 ## Status
-Repository fully green. No prior agent assignment with a concrete task existed; HANDOFF_NEXT.md/NEXT_TASK.md both said "None pending; repo fully green". This session (2026-11-26, Python 3.14.4) independently re-verified the full gate first-hand and probed for a fresh-angle defect. No reproducible defect was found. Verification-only re-runs without new evidence are ruled out as progress per reliability rule 38; no work was fabricated.
+Repository fully green. No prior agent assignment with a concrete defect existed; HANDOFF_NEXT.md/NEXT_TASK.md said "no queued assignment, repo fully green". This session (2026-11-26, Python 3.14.4) re-verified the full gate first-hand and ran FOUR fresh-angle wrong-output probes not listed in prior handoffs. No reproducible defect was found. No source or test changes were made (per reliability rules 6/7/8 — do not fabricate work, do not repeat verification-only sessions without new evidence, do not add speculative machinery).
 
 ## What changed (this session)
-- No source or test changes made (no reproducible defect; no speculative machinery per reliability rule 7).
+- No source or test changes. Working tree clean (`git status`: nothing to commit, up to date with origin/main).
 
 ## What was actually verified (first-hand this session)
-- `pytest -q` → 49902 passed, 147 skipped, 0 failed (exit 0).
-- `python -m mypy ethscan/ tests/` → Success: no issues found in 274 source files.
-- `ruff check ethscan/ tests/ check_readme.py` → All checks passed.
-- `python3 check_readme.py` → 54 CLI commands, 0 drift both directions, exit 0.
-- `python -m coverage run --branch --source=ethscan -m pytest -q` → TOTAL 100% (16294 stmts, 6174 branches, 0 missing).
-- Working tree clean (`git status`: nothing to commit, up to date with origin/main).
-- Oracle scripts not re-run this session (network-dependent; previously recorded as all-passed in HANDOFF_NEXT.md). Local five-gate verification is fully green.
-
-## Fresh-angle probes (negative results, evidence recorded)
-- Property fuzzer (wrong-output vs ground-truth oracles) over areas NOT previously property-checked: `hash.run_hash`/`run_check` vs hashlib/hmac/pbkdf2 (all algorithms × {plain,salt,pepper,salt+pepper,iterations,iterations+pepper}); `passwords.estimate_entropy`/`evaluate_password` invariants; `jwt.run_jwt` exp/nbf/iat status (incl. bool/NaN/Inf/string claims); `scanner.parse_port_range` vs hand oracle; `cidr._format_network_info` vs `ipaddress` (excl. intentional IPv6 anycast convention). ~22k cases total → 0 genuine defects. The only mismatches (1005) were ALL in the PBKDF2+pepper path and were the known intentional design (HMAC over hex-string digest, not raw bytes) — confirmed tested in `tests/test_hash.py`.
-- Source-reviewed `report.py`/`config.py`/`nmap.py`/`mac.py`: formatters guarded with `isinstance`/`_as_list`; parsers validate ranges; OUI is 6 hex chars matching docstring. No wrong-output gap.
-
-## Session re-verification (2026-11-26, this session)
-- `pytest -q` → 49902 passed, 147 skipped, 0 failed (exit 0).
-- `python -m mypy ethscan/ tests/` → Success: no issues found in 274 source files.
+- `python -m pytest -q` → 49902 passed, 147 skipped, 0 failed (exit 0, 141.58s).
 - `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed.
-- Working tree clean, up to date with origin/main. No source or test changes made.
+- `python3 check_readme.py` → 54 CLI commands, 0 drift both directions (In README but not CLI: set(); In CLI but not README: set()).
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 274 source files.
+- (Coverage gate not re-run this session since no source/test changed; last recorded TOTAL 100%, 16294 stmts / 6174 branches, 0 missing.)
+
+## Fresh-angle probes this session (NEW negative results, with evidence)
+1. `validate._validate_cidr`/`_format_network_info` vs `cidr._format_network_info` cross-oracle over v4/v6 nets (/32,/128,/31,/30,/127,/126,/24,/64). Only differences: (a) `addresses` field present in validate (MAX_EXPANDED_IPS=256 design) but absent in cidr — known/intended; (b) IPv6 /127 `usable_host_count` 2 vs 1 and `first_host` — INTENTIONAL and explicitly tested in `tests/test_validate.py:398` and the property test at `tests/test_validate.py:962` ("IPv6 /127: both addresses are usable (not just the second)"). NOT a defect; do not "fix".
+2. `validate._validate_port_spec` (validity + expanded port set) vs `scanner.parse_port_range` over 9,779 generated specs (exhaustive small combos + 20k random from a hostile token set incl. empty/whitespace/underscore/hex/plus/unicode-digit/inverted-range/3-part-range). 0 mismatches — the documented "validate accepts exactly what scanners accept" invariant holds.
+3. `osdetect._checksum` (Internet one's-complement checksum) vs an independent reference impl over 200,000 random byte strings (len 0..40): 0 mismatches. Plus packet property: `_checksum(pseudo + _build_syn_packet(...)) == 0` over 50,000 random SYN headers: 0 failures (earlier apparent failures were a test bug — omitted the pseudo-header).
+4. Source-reviewed `geo.py` (`_is_cache_valid` uses `math.isfinite`; formatters guard non-dict), `urlcheck._normalize_url`, `stale.resolve_domain_all` stale logic, `subdomains._normalize_domain`: network-bound or guarded; no wrong-output gap.
 
 ## What remains unresolved
 - None. No new functional defect reproduced.
 
 ## Approaches already tried / ruled out (do not repeat)
-- CSV formula injection, parser/adversarial STRING fuzz, formatter/assessor hostile contracts, CLI target/option hostile sweeps, nested-field & per-key hostile sweeps, broad `except Exception`, radix math, `target.py` parsers, and this session's hash/passwords/jwt/scanner/cidr wrong-output fuzz: all clean; not repeated.
-- Verification-only re-runs without a reproduced defect: ruled out.
-- Fabricating a change without a reproduced failing check: ruled out.
+- All prior handoff items (CSV formula injection, parser/formatter/assessor hostile sweeps, CLI target/option sweeps, radix math, target.py parsers, hash/passwords/jwt/scanner/cidr wrong-output fuzz, fileio/completion/whois/dns normalize, dnssec helpers, web_server_version property, etc.).
+- This session: validate↔cidr network info, validate↔scanner port parsing, osdetect checksum, geo/urlcheck/stale/subdomains review — all clean; not repeated.
+- Verification-only re-runs without a reproduced defect: ruled out. Fabricating a change without a reproduced failing check: ruled out.
 
 ## Next task (precise, evidence-based)
-- No queued assignment; all five gates green, coverage 100%, all four oracle scripts pass.
-- If future work is needed, use a fresh angle not yet covered (e.g. property-check `fileio`/`completion`/`headers`/`whois`/`dns` helpers for wrong output vs an oracle), reproduce a concrete defect first (focused failing check), apply the smallest safe fix, rerun focused then the full gate (pytest/coverage/mypy/ruff/check_readme), preserve safety.
-- Already property-checked / inspected clean (do not repeat): all pure helpers in ORACLE_VERIFICATION_TARGET.md + prior HANDOFFs; radix math; `target.py` parsers; hash/passwords/jwt/scanner/cidr; fileio/completion/whois/dns normalize; redis/mysql/snmp/cert/nmap/config/report/vuln parser inspection; `whois.extract_referral_server`; dnssec `_get_parent_zone`/`_parse_dns_name`/`_parse_dnskey_response`/`_parse_ds_response`; `fileio.sanitize_csv_cell` numeric-vs-formula; `completion.generate_completion_script` complete-var; `dns.run_dns` record-type filtering; `_assess_web_server_version` (test_web_server_version_property.py, 40 tests).
-- hash/passwords/jwt/scanner/cidr wrong-output fuzz (~22k cases, 0 defects).
-
-## Session re-verification (2026-11-26, this session)
-- Independently re-verified the FULL gate first-hand: `pytest -q` → 49902 passed, 147 skipped, 0 failed (exit 0); `python -m mypy ethscan/ tests/` → Success: no issues in 274 source files; `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed; `python3 check_readme.py` → 54 CLI commands, 0 drift both directions; `python -m coverage run --branch --source=ethscan -m pytest -q` → TOTAL 100% (16294 stmts, 6174 branches, 0 missing).
-- All four oracle scripts re-run locally and passed: `oracle_verify_target.py`, `oracle_verify_service.py`, `oracle_verify_dnssec.py`, `oracle_verify_whois.py` (stdlib-only oracles, no network required).
-- Independent repo inspection: every `ethscan/*.py` module has a matching `tests/test_*.py`; zero TODO/FIXME/XXX/HACK markers; no coverage gaps; working tree clean.
-- No reproducible defect found; no source or test changes made (per reliability rules 6/8 — do not fabricate work or repeat verification-only sessions without new evidence).
+- No queued assignment; all five gates green (coverage 100% last recorded), all four oracle scripts pass (not re-run this session; stdlib-only, no network).
+- If future work is needed, pick a fresh angle NOT in the lists above, reproduce a concrete defect FIRST (focused failing check), apply the smallest safe fix, add/extend a test to keep coverage 100%, then rerun the full gate (pytest/coverage/mypy/ruff/check_readme). If green and nothing reproduces, record the new negative result, preserve the green baseline, and hand off again — do not fabricate work.
+- Candidate untouched angles (only if a session is needed): property-check a pure helper with a stdlib oracle not yet covered — e.g. `cve.py` version-range comparison, `s3.py`/`recon.py` endpoint/URL builders vs `urllib.parse`, `mac.py` OUI formatting edge cases, `tls.py`/`ssl.py` cert field extraction with a generated self-signed cert. Reproduce a wrong output vs the oracle before changing anything.
 
 ## Constraints (carry forward)
 - Do NOT modify `.github/workflows/**`.
 - Keep `oracle`/`postgresql` empty-target in-band (exit 0) behavior.
-- Do not weaken the `ethscan/cli.py:4316` unreachable guard or game coverage.
-- A code change must fix a REPRODUCED defect first (focused failing check), then rerun the full gate. If nothing reproduces, record the new negative result and stop — do not fabricate work or repeat verification-only sessions without new evidence.
+- Do not weaken the `ethscan/cli.py` unreachable guard or game coverage.
+- A code change must fix a REPRODUCED defect first (focused failing check), then rerun the full gate. If nothing reproduces, record the negative result and stop.
 - PBKDF2+pepper HMACs the hex-string digest by design; do not "fix" without a reproduced functional failure.
 - `sanitize_csv_cell` leaving `-inf`/`+inf`/`nan` unsanitised is a low-severity edge; do not change without a reproduced functional failure.
 - `headers.run_headers`/`web.run_web_checks` retain surrounding whitespace in the scheme branch of URL construction; cosmetic only (urllib strips) — do not change without a reproduced functional failure.
+- `validate._format_network_info` IPv6 /127 usable_host_count=2 / first_host=network[0] is INTENTIONAL and tested; do NOT align it to cidr's RFC-3021 anycast convention without a reproduced functional failure and an explicit design decision.
 
 (End of file)
