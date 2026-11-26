@@ -46,3 +46,11 @@ Repository fully green. No prior agent assignment with a concrete defect existed
 # Session (Thu Nov 26 2026, session auto)
 - No prior concrete assignment; verified baseline first-hand: ruff clean, mypy clean (274 files). Repo fully green; no defect reproduced. No source/test changes.
 - Next task: none pending. Pick a fresh, evidence-based bounded improvement only if needed; reproduce a defect first.
+
+# Session (Thu Nov 26 2026, session kilo)
+- No prior concrete assignment; baseline re-verified first-hand: `pytest -q` → 49902 passed, 147 skipped, 0 failed; `ruff check ethscan/ tests/ check_readme.py` → clean; `python -m mypy ethscan/ tests/` → clean (274 source files); `python3 check_readme.py` → 54/54, 0 drift. No source/test changes.
+- Investigated two fresh candidate angles from the untouched list (cve.py version-range comparison, mac.py OUI formatting). Both are negative results — no defect reproduced; do not repeat.
+  1. `ethscan/vuln.py:version_in_range` vs `packaging.version` (PEP 440) oracle over ~24M version×spec combinations (well-formed numeric versions): 0 mismatches. ethscan's lenient digit-extraction of non-version strings (e.g. "7.2p2", "1..2") is intentional, not a defect.
+  2. `ethscan/mac.py` OUI formatting (`_normalize_mac_for_api`, `_extract_oui`, `_strip_mac_port`, IP-vs-MAC gating): internally consistent, clean by inspection.
+- Approaches already tried / ruled out (add to the do-not-repeat list): `cve.py` version-range comparison, `mac.py` OUI formatting.
+- Next task: none pending. Repository fully green. If future work is needed, pick a fresh angle NOT in the do-not-repeat lists, reproduce a concrete defect FIRST (focused failing check), apply the smallest safe fix, rerun the full gate. If green and nothing reproduces, record the negative result and hand off again — do not fabricate work.
