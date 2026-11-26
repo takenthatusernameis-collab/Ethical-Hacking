@@ -13,6 +13,8 @@ from ethscan.service import (
     format_service_report_markdown,
     grab_banner,
     run_service,
+    _parse_banner_service,
+    _parse_banner_version,
 )
 
 
@@ -801,3 +803,193 @@ def test_format_service_report_csv_non_list_results() -> None:
     }
     out = format_service_report_csv(data)
     assert out.strip() == "port,service,banner"
+
+
+# ---------------------------------------------------------------------------
+# Pure helper functions: _parse_banner_service, _parse_banner_version
+# ---------------------------------------------------------------------------
+
+
+def test_parse_banner_service_none_inputs() -> None:
+    """None or empty inputs return None."""
+    assert _parse_banner_service(None, "ssh") is None
+    assert _parse_banner_service("", "ssh") is None
+    assert _parse_banner_service("banner", None) is None
+    assert _parse_banner_service("banner", "") is None
+
+
+def test_parse_banner_service_unknown_service() -> None:
+    """Service not in COMMON_SERVICE_PORTS but known returns upper()."""
+    assert _parse_banner_service("some banner", "dns") == "DNS"
+    assert _parse_banner_service("some banner", "smb") == "SMB"
+
+
+def test_parse_banner_service_known_service_no_signatures_match() -> None:
+    """Service with signatures but no match returns upper()."""
+    # FTP signature requires "FTP" in banner, this won't match
+    assert _parse_banner_service("220 Welcome to my server", "ftp") == "FTP"
+
+
+def test_parse_banner_service_ftp_signatures() -> None:
+    """FTP signatures match correctly - first match wins."""
+    assert _parse_banner_service("220 FTP Server ready", "ftp") == "FTP"
+    # "FileZilla" does not contain "FTP" so first pattern doesn't match, second does
+    assert _parse_banner_service("220 FileZilla Server", "ftp") == "FileZilla FTP"
+    # "ProFTPD" contains "FTP" (in ProFTP) so first pattern matches
+    assert _parse_banner_service("220 ProFTPD 1.3.5", "ftp") == "FTP"
+    # "vsftpd" contains "FTP" (in vsftp) so first pattern matches
+    assert _parse_banner_service("220 vsftpd 3.0.3", "ftp") == "FTP"
+    # "Pure-FTPd" contains "FTP" so first pattern matches
+    assert _parse_banner_service("220 Pure-FTPd", "ftp") == "FTP"
+
+
+def test_parse_banner_service_ssh_signatures() -> None:
+    """SSH signatures match correctly."""
+    assert _parse_banner_service("SSH-2.0-OpenSSH_8.9", "ssh") == "OpenSSH"
+    assert _parse_banner_service("SSH-2.0-Dropbear_2022.82", "ssh") == "Dropbear SSH"
+    assert _parse_banner_service("SSH-2.0-libssh_0.9.6", "ssh") == "libssh"
+
+
+def test_parse_banner_service_telnet_signatures() -> None:
+    """Telnet signatures match correctly."""
+    assert _parse_banner_service("login: ", "telnet") == "Telnet"
+    assert _parse_banner_service("Password: ", "telnet") == "Telnet"
+
+
+def test_parse_banner_service_smtp_signatures() -> None:
+    """SMTP signatures match correctly - first match wins."""
+    # First pattern matches ESMTP
+    assert _parse_banner_service("220 ESMTP Postfix", "smtp") == "SMTP"
+    # "220 Postfix" does not contain "ESMTP" so second pattern matches
+    assert _parse_banner_service("220 Postfix SMTP Server", "smtp") == "Postfix SMTP"
+    assert _parse_banner_service("220 Exim 4.96", "smtp") == "Exim SMTP"
+    assert _parse_banner_service("220 Sendmail 8.17.1", "smtp") == "Sendmail"
+
+
+def test_parse_banner_service_pop3_signatures() -> None:
+    """POP3 signatures match correctly."""
+    assert _parse_banner_service("+OK POP3 ready", "pop3") == "POP3"
+    assert _parse_banner_service("+OK Dovecot ready", "pop3") == "Dovecot POP3"
+
+
+def test_parse_banner_service_imap_signatures() -> None:
+    """IMAP signatures match correctly - first match wins."""
+    assert _parse_banner_service("* OK IMAP4 ready", "imap") == "IMAP"
+    # "* OK Dovecot IMAP" contains "IMAP" so first pattern matches
+    assert _parse_banner_service("* OK Dovecot IMAP", "imap") == "IMAP"
+
+
+def test_parse_banner_service_http_signatures() -> None:
+    """HTTP signatures match correctly."""
+    assert _parse_banner_service("HTTP/1.1 200 OK", "http") == "HTTP"
+    assert _parse_banner_service("Server: nginx/1.18.0", "http") == "nginx/1.18.0"
+    assert _parse_banner_service("Server: Apache/2.4.41", "http") == "Apache/2.4.41"
+
+
+def test_parse_banner_service_https_signatures() -> None:
+    """HTTPS signatures match correctly."""
+    assert _parse_banner_service("HTTP/1.1 200 OK", "https") == "HTTPS"
+    assert _parse_banner_service("Server: nginx/1.18.0", "https") == "nginx/1.18.0"
+
+
+def test_parse_banner_service_mysql_signatures() -> None:
+    """MySQL signatures match correctly."""
+    assert _parse_banner_service("12345678mysql", "mysql") == "MySQL"
+    assert _parse_banner_service("12345678MariaDB", "mysql") == "MariaDB"
+
+
+def test_parse_banner_service_rdp_signatures() -> None:
+    """RDP signatures match correctly."""
+    assert _parse_banner_service("\x03\x00\x00\x13\x0e\xd0", "rdp") == "RDP"
+
+
+def test_parse_banner_service_vnc_signatures() -> None:
+    """VNC signatures match correctly."""
+    assert _parse_banner_service("RFB 003.008", "vnc") == "VNC"
+
+
+def test_parse_banner_service_redis_signatures() -> None:
+    """Redis signatures match correctly."""
+    assert _parse_banner_service("+PONG", "redis") == "Redis"
+    assert _parse_banner_service("-ERR unknown command", "redis") == "Redis"
+
+
+def test_parse_banner_service_mongodb_signatures() -> None:
+    """MongoDB signatures match correctly."""
+    assert _parse_banner_service(
+        "It looks like you are trying to access MongoDB", "mongodb"
+    ) == "MongoDB"
+
+
+def test_parse_banner_service_postgresql_signatures() -> None:
+    """PostgreSQL signatures match correctly."""
+    assert _parse_banner_service("E: FATAL: database does not exist", "postgresql") == "PostgreSQL"
+    assert _parse_banner_service("S: FATAL: role does not exist", "postgresql") == "PostgreSQL"
+
+
+def test_parse_banner_version_none_inputs() -> None:
+    """None or empty inputs return None."""
+    assert _parse_banner_version(None, "ssh") is None
+    assert _parse_banner_version("", "ssh") is None
+    assert _parse_banner_version("banner", None) is None
+    assert _parse_banner_version("banner", "") is None
+
+
+def test_parse_banner_version_unknown_service() -> None:
+    """Service not in signatures returns None."""
+    assert _parse_banner_version("some banner", "dns") is None
+    assert _parse_banner_version("some banner", "smb") is None
+
+
+def test_parse_banner_version_capture_groups() -> None:
+    """Version extraction from capture groups works."""
+    # HTTP Server header capture group
+    assert _parse_banner_version("Server: nginx/1.18.0", "http") == "nginx/1.18.0"
+    assert _parse_banner_version("Server: Apache/2.4.41", "http") == "Apache/2.4.41"
+    assert _parse_banner_version("Server: Microsoft-IIS/10.0", "http") == "Microsoft-IIS/10.0"
+    assert _parse_banner_version("Server: nginx/1.18.0", "https") == "nginx/1.18.0"
+
+
+def test_parse_banner_version_no_capture_group() -> None:
+    """Signatures without capture groups return None for version."""
+    # FTP signatures have no capture groups
+    assert _parse_banner_version("220 FileZilla Server", "ftp") is None
+    assert _parse_banner_version("220 ProFTPD 1.3.5", "ftp") is None
+    # SSH signatures have no capture groups
+    assert _parse_banner_version("SSH-2.0-OpenSSH_8.9", "ssh") is None
+    # Telnet signatures have no capture groups
+    assert _parse_banner_version("login: ", "telnet") is None
+
+
+def test_parse_banner_version_case_insensitive() -> None:
+    """Matching is case-insensitive."""
+    assert _parse_banner_version("server: nginx/1.18.0", "http") == "nginx/1.18.0"
+    assert _parse_banner_version("SERVER: Apache/2.4.41", "http") == "Apache/2.4.41"
+    assert _parse_banner_version("Server: NGINX/1.18", "https") == "NGINX/1.18"
+
+
+def test_parse_banner_version_malformed_version_strings() -> None:
+    """Malformed version strings return captured group (may be space)."""
+    # "Server:" - no space after colon, \s* matches zero, then [^\r\n]+ needs at least one char -> no match
+    assert _parse_banner_version("Server:", "http") is None
+    # "Server: " - \s* matches space, [^\r\n]+ matches space (one char) -> captures " "
+    assert _parse_banner_version("Server: ", "http") == " "
+    assert _parse_banner_version("Server: nginx", "http") == "nginx"
+    assert _parse_banner_version("Server: nginx/", "http") == "nginx/"
+
+
+def test_parse_banner_version_non_ascii() -> None:
+    """Non-ASCII characters in banner handled correctly."""
+    assert _parse_banner_version("Server: nginx/1.18.0 日本語", "http") == "nginx/1.18.0 日本語"
+
+
+def test_parse_banner_version_control_chars() -> None:
+    """Control characters in banner handled correctly."""
+    assert _parse_banner_version("Server: nginx\x00/1.18", "http") == "nginx\x00/1.18"
+
+
+def test_parse_banner_version_very_long_banner() -> None:
+    """Very long banner handled correctly."""
+    long_version = "nginx/" + "1." * 1000
+    banner = f"Server: {long_version}"
+    assert _parse_banner_version(banner, "http") == long_version

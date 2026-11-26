@@ -118,6 +118,60 @@ def _port_key(x: object) -> int:
     return 0
 
 
+def _parse_banner_service(banner: str | None, service_name: str | None) -> str | None:
+    """Parse service name from banner using known signatures.
+
+    Pure function: no I/O, no side effects, deterministic.
+
+    Args:
+        banner: Raw banner string from the service.
+        service_name: Expected service name from port mapping (e.g., "ssh", "http").
+
+    Returns:
+        Detected service name (e.g., "OpenSSH", "nginx") or None if not identifiable.
+    """
+    if not banner or not service_name:
+        return None
+
+    if service_name not in SERVICE_SIGNATURES:
+        return service_name.upper()
+
+    sigs = SERVICE_SIGNATURES.get(service_name) or []
+    for pattern, name in sigs:
+        match = pattern.search(banner)
+        if match:
+            return name or (match.group(1) if match.groups() else service_name.upper())
+
+    return service_name.upper()
+
+
+def _parse_banner_version(banner: str | None, service_name: str | None) -> str | None:
+    """Extract version from banner if present.
+
+    Pure function: no I/O, no side effects, deterministic.
+
+    Args:
+        banner: Raw banner string from the service.
+        service_name: Expected service name from port mapping.
+
+    Returns:
+        Version string if extractable, None otherwise.
+    """
+    if not banner or not service_name:
+        return None
+
+    if service_name not in SERVICE_SIGNATURES:
+        return None
+
+    sigs = SERVICE_SIGNATURES.get(service_name) or []
+    for pattern, _name in sigs:
+        match = pattern.search(banner)
+        if match and match.groups():
+            return match.group(1)
+
+    return None
+
+
 def grab_banner(host: str, port: int, timeout: float) -> tuple[int, str | None, str | None]:
     """Connect to a port and attempt to grab the banner.
 
@@ -158,19 +212,7 @@ def grab_banner(host: str, port: int, timeout: float) -> tuple[int, str | None, 
     except Exception:  # noqa: BLE001, S110 - transport can raise any type
         pass
 
-    detected_service = None
-    if banner and service_name:
-        if service_name in SERVICE_SIGNATURES:
-            sigs = SERVICE_SIGNATURES.get(service_name) or []
-            for pattern, name in sigs:
-                match = pattern.search(banner)
-                if match:
-                    detected_service = name or (match.group(1) if match.groups() else service_name.upper())
-                    break
-            if not detected_service:
-                detected_service = service_name.upper()
-        else:
-            detected_service = service_name.upper()
+    detected_service = _parse_banner_service(banner, service_name)
 
     return port, banner, detected_service
 
