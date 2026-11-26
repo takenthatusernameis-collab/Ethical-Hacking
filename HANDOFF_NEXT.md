@@ -37,12 +37,13 @@ Repository fully green. No prior agent assignment with a concrete task existed; 
 - No queued assignment; all five gates green, coverage 100%, all four oracle scripts pass.
 - If future work is needed, use a fresh angle not yet covered (e.g. property-check `fileio`/`completion`/`headers`/`whois`/`dns` helpers for wrong output vs an oracle), reproduce a concrete defect first (focused failing check), apply the smallest safe fix, rerun focused then the full gate (pytest/coverage/mypy/ruff/check_readme), preserve safety.
 - Already property-checked / inspected clean (do not repeat): all pure helpers in ORACLE_VERIFICATION_TARGET.md + prior HANDOFFs; radix math; `target.py` parsers; hash/passwords/jwt/scanner/cidr; fileio/completion/whois/dns normalize; redis/mysql/snmp/cert/nmap/config/report/vuln parser inspection; `whois.extract_referral_server`; dnssec `_get_parent_zone`/`_parse_dns_name`/`_parse_dnskey_response`/`_parse_ds_response`; `fileio.sanitize_csv_cell` numeric-vs-formula; `completion.generate_completion_script` complete-var; `dns.run_dns` record-type filtering; `_assess_web_server_version` (test_web_server_version_property.py, 40 tests).
+- hash/passwords/jwt/scanner/cidr wrong-output fuzz (~22k cases, 0 defects).
 
 ## Session re-verification (2026-11-26, this session)
 - Independently re-verified the FULL gate first-hand: `pytest -q` → 49902 passed, 147 skipped, 0 failed (exit 0); `python -m mypy ethscan/ tests/` → Success: no issues in 274 source files; `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed; `python3 check_readme.py` → 54 CLI commands, 0 drift both directions; `python -m coverage run --branch --source=ethscan -m pytest -q` → TOTAL 100% (16294 stmts, 6174 branches, 0 missing).
 - All four oracle scripts re-run locally and passed: `oracle_verify_target.py`, `oracle_verify_service.py`, `oracle_verify_dnssec.py`, `oracle_verify_whois.py` (stdlib-only oracles, no network required).
 - Independent repo inspection: every `ethscan/*.py` module has a matching `tests/test_*.py`; zero TODO/FIXME/XXX/HACK markers; no coverage gaps; working tree clean.
-- No reproducible defect found; no source or test changes made (per reliability rules 6/8 — do not fabricate work or repeat verification-only sessions as progress).
+- No reproducible defect found; no source or test changes made (per reliability rules 6/8 — do not fabricate work or repeat verification-only sessions without new evidence).
 
 ## Constraints (carry forward)
 - Do NOT modify `.github/workflows/**`.
