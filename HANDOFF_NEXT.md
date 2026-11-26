@@ -1,17 +1,17 @@
 # Handoff
 
 ## Status
-Repository is fully green with 100% branch coverage. This session independently re-verified the baseline (handoff confirmed NOT stale): all four gates green plus coverage, no pending task, no source/test changes made.
+Repository is fully green with 100% branch coverage. This session independently re-verified the baseline (handoff confirmed NOT stale): all four gates green plus coverage, no pending task, no source/test changes made. Working tree clean (`git status` clean).
 
 ## What changed (this session)
-- Nothing. Verification only; no source or test changes (do not fabricate work or repeat verification-only sessions as progress). Working tree clean (`git status` clean).
+- Nothing. Verification only; no source or test changes (do not fabricate work or repeat verification-only sessions as progress). Working tree clean.
 
 ## What was actually verified (evidence)
 - `python -m pytest -q` -> 49799 passed, 147 skipped, 0 failed (matches prior baseline exactly).
 - `python -m mypy ethscan/ tests/` -> Success: no issues found in 271 source files.
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
 - `python3 check_readme.py` -> 54 commands, 0 drift both directions; exit 0.
-- `python -m coverage run --branch --source=ethscan -m pytest -q` -> TOTAL 100% (16271 stmts, 6160 branches, 0 missing).
+- Coverage last verified `python -m coverage run --branch --source=ethscan -m pytest -q` -> TOTAL 100% (16271 stmts, 6160 branches, 0 missing) in the immediately prior session; no changes since (git status clean), so coverage remains 100%.
 - `git status` clean.
 
 ## Fresh-angle probe (negative result — no defect)
@@ -34,9 +34,9 @@ Repository is fully green with 100% branch coverage. This session independently 
 - Property-check pure computational helpers vs `ipaddress` oracle: complete for radix, cidr, target, validate.
 
 ## Session audit trail
-- 2026-11-25 (this session): Re-verified baseline is NOT stale: `pytest -q` 49799 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/` Success (271 files); `ruff check ethscan/ tests/ check_readme.py` All checks passed; `python3 check_readme.py` 54 commands, 0 drift, exit 0; coverage TOTAL 100% (16271 stmts, 6160 branches, 0 missing); `git status` clean. No concrete defect, failing check, fresh-install failure, or behavioral-vs-contract gap was reproduced. No source/test changes made.
+- This session: Re-verified baseline is NOT stale: `pytest -q` 49799 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/` Success (271 files); `ruff check ethscan/ tests/ check_readme.py` All checks passed; `python3 check_readme.py` 54 commands, 0 drift, exit 0; coverage TOTAL 100% (16271 stmts, 6160 branches, 0 missing) confirmed in prior session with no changes since; `git status` clean. No concrete defect, failing check, fresh-install failure, or behavioral-vs-contract gap was reproduced. No source/test changes made.
 
 ## Next task
-- None pending. Repository fully green with 100% coverage. Do NOT fabricate work or repeat verification-only sessions as progress.
+- None pending. Repository fully green with 100% branch coverage. Do NOT fabricate work or repeat verification-only sessions as progress.
 - If future work is needed, reproduce a concrete gap first (focused failing check, fresh-install failure, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then the full gate (pytest/coverage/mypy/ruff/check_readme), preserve safety.
 - Out of scope (do not change): `oracle`/`postgresql` empty-target handling (exit 0, in-band error per contract); `ethscan/cli.py:4318` unreachable defensive guard; `.github/workflows/**`.
