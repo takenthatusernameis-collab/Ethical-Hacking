@@ -257,13 +257,23 @@ def _trace_single(
 
 
 def _extract_hop_ips(hops: list[dict[str, Any]]) -> list[str]:
-    """Extract unique hop IPs from trace results (excluding the destination)."""
-    ips: set[str] = set()
+    """Extract unique hop IPs from trace results (excluding the destination).
+
+    The IPs are returned in first-seen order. A ``set`` would make the order
+    depend on the process hash seed (``PYTHONHASHSEED``), so the recursive
+    traceroute sections of the JSON/Markdown/CSV reports would list hops in a
+    different order on every run; preserving insertion order keeps the output
+    reproducible.
+    """
+    ips: list[str] = []
+    seen: set[str] = set()
     for hop in hops:
         ip = hop.get("ip")
         if isinstance(ip, str) and ip and not hop.get("reached_destination", False):
-            ips.add(ip)
-    return list(ips)
+            if ip not in seen:
+                seen.add(ip)
+                ips.append(ip)
+    return ips
 
 
 def run_trace(
