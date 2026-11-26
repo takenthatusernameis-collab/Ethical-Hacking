@@ -87,7 +87,11 @@ def parse_whois(raw: str) -> dict[str, Any]:
 
     patterns = {
         "registrar": [
-            r"Registrar:\s*(.+)",
+            # The plain ``Registrar:`` pattern must not match the ``Registrar:``
+            # substring inside ``Sponsoring Registrar:`` (which appears first in
+            # some responses); the negative lookbehind keeps the documented
+            # priority order (Registrar > Registrar Name > Sponsoring Registrar).
+            r"(?<!Sponsoring )Registrar:\s*(.+)",
             r"Registrar Name:\s*(.+)",
             r"Sponsoring Registrar:\s*(.+)",
         ],

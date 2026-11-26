@@ -98,9 +98,29 @@ def test_parse_whois_case_insensitive() -> None:
 
 
 def test_parse_whois_multiple_patterns() -> None:
+    # Priority order is Registrar > Registrar Name > Sponsoring Registrar. With
+    # no plain ``Registrar:`` line, ``Registrar Name:`` (priority 2) wins over
+    # ``Sponsoring Registrar:`` (priority 3). The plain ``Registrar:`` pattern
+    # must not match the ``Registrar:`` substring inside ``Sponsoring Registrar:``.
     raw = "Sponsoring Registrar: Registrar A\nRegistrar Name: Registrar B\n"
     parsed = parse_whois(raw)
-    assert parsed["registrar"] == "Registrar A"
+    assert parsed["registrar"] == "Registrar B"
+
+
+def test_parse_whois_plain_registrar_beats_sponsoring() -> None:
+    # A real ``Registrar:`` line must win over an earlier ``Sponsoring
+    # Registrar:`` line; the plain pattern must not match the substring inside
+    # ``Sponsoring Registrar:`` (regression for the substring-match defect).
+    raw = "Sponsoring Registrar: Spons Registrar LLC\nRegistrar: Real Registrar Inc\n"
+    parsed = parse_whois(raw)
+    assert parsed["registrar"] == "Real Registrar Inc"
+
+
+def test_parse_whois_sponsoring_registrar_fallback() -> None:
+    # With only a ``Sponsoring Registrar:`` line, it is still used as a fallback.
+    raw = "Sponsoring Registrar: Spons Registrar LLC\n"
+    parsed = parse_whois(raw)
+    assert parsed["registrar"] == "Spons Registrar LLC"
 
 
 def test_format_whois_report_json() -> None:

@@ -1677,3 +1677,26 @@ exceptions. Remaining candidates: `_common_prefix_length`, `_nth_bit`,
 - CSV formula injection, parser/adversarial STRING fuzz, formatter/assessor hostile contracts, CLI target/option hostile sweeps, nested-field & per-key hostile sweeps, broad `except Exception`, radix math, `target.py` parsers, and this session's hash/passwords/jwt/scanner/cidr wrong-output fuzz: all clean; not repeated.
 ## Next task
 - None pending. Repository fully green with 100% coverage. Do NOT fabricate work or repeat verification-only sessions. If future work is needed, use a fresh angle not yet covered (property-check `fileio`/`completion`/`headers`/`whois`/`dns` helpers for wrong output vs an oracle), reproduce a concrete defect first, apply the smallest safe fix, rerun focused then the full gate (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain out of scope. Do not modify `.github/workflows/**`.
+
+# Session (Wed Nov 26 2026, wrong-output defect in whois.parse_whois — fixed)
+## This session
+- Executed the prior agent's precise handoff task: fresh-angle property-check of remaining pure-ish helpers for WRONG OUTPUT vs a ground-truth oracle (`whois.parse_whois`, `completion.generate_completion_script`, `web.check_security_headers`, `fileio.read_lines`).
+- Independently re-verified the baseline green at start: `pytest -q` -> 49839 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/` clean (272 files); `ruff` clean; `check_readme.py` 54/54; coverage TOTAL 100% (16284 stmts, 0 missing).
+- CLEAN candidates (no defect; do not re-run unchanged): `completion.generate_completion_script` `prog_name`->`_<NAME>_COMPLETE` derivation matches installed click 8.1.8 `_main_shell_completion` exactly; `web.check_security_headers` present/missing correct for lowercase-key dicts; `fileio.read_lines` comment/blank handling correct for both `skip_comments` modes, inline `#`, tabs, CRLF.
+- REPRODUCED a genuine wrong-output defect in `ethscan/whois.py::parse_whois` (registrar field): `parse_whois("Sponsoring Registrar: Spons Registrar LLC\nRegistrar: Real Registrar Inc\n")["registrar"]` returned `"Spons Registrar LLC"` instead of `"Real Registrar Inc"`. Root cause: plain pattern `r"Registrar:\s*(.+)"` is a substring of `Sponsoring Registrar:`; `re.search` matches the earliest occurrence (inside the Sponsoring line), defeating the documented priority order (Registrar > Registrar Name > Sponsoring Registrar).
+## Fix (smallest reversible)
+- `ethscan/whois.py`: plain registrar pattern -> `r"(?<!Sponsoring )Registrar:\s*(.+)"` (negative lookbehind so it no longer matches the `Registrar:` substring inside `Sponsoring Registrar:`). All other patterns and the Sponsoring fallback untouched.
+- `tests/test_whois.py`: corrected `test_parse_whois_multiple_patterns` expectation `Registrar A` -> `Registrar B` (it had codified the substring bug; with no plain `Registrar:` line, `Registrar Name:` (priority 2) must beat `Sponsoring Registrar:` (priority 3)); added `test_parse_whois_plain_registrar_beats_sponsoring` (the reproduced defect) and `test_parse_whois_sponsoring_registrar_fallback` (Sponsoring still used when it is the only registrar line).
+## Verification
+- Repro after fix: plain `Registrar:` line wins over an earlier `Sponsoring Registrar:` line; Sponsoring-only and Registrar-Name-only inputs unchanged.
+- `python -m pytest -q` -> 49841 passed, 147 skipped, 0 failed (baseline 49839; +2 new tests).
+- `python -m mypy ethscan/ tests/` -> Success: no issues found in 272 source files.
+- `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
+- `python3 check_readme.py` -> 54 CLI commands, 0 drift both directions, exit 0.
+- `python -m coverage run -m pytest -q` then `coverage report` -> TOTAL 100% (16284 stmts, 0 missing).
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- All prior oracle/fuzz sweeps (see earlier sessions + HANDOFF_NEXT.md). This session's completion/headers/read_lines probes were clean; parse_whois had one defect (now fixed). Do not repeat unchanged.
+## Next task
+- None pending. Repository fully green with 100% coverage. Do NOT fabricate work or repeat verification-only sessions. If future work is needed, use a fresh angle not yet covered (e.g. `whois.extract_referral_server` re-fuzz with a hostname oracle, `web._assess_web_server_version` version/major extraction, `web._parse_url` port/scheme defaults, `completion.detect_shell` edge shapes, `fileio.sanitize_csv_cell` numeric-vs-formula classification), reproduce a concrete defect first, apply the smallest safe fix, rerun focused then the full gate (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain out of scope. Do not modify `.github/workflows/**`.
