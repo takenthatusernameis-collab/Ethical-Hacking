@@ -1,13 +1,25 @@
 ## Next task
 Extend independent-oracle verification to the remaining not-yet-oracle-checked
 PURE helpers (prior oracle set: radix/cidr/target/validate; this session added
-vuln.version_in_range — 200k cases vs `packaging`, 0 mismatches):
+vuln.version_in_range — 200k cases vs `packaging`, 0 mismatches; mac — 5
+functions, 40k+ cases vs stdlib, 0 mismatches; geo — 3 functions + column
+consistency, 8M+ cases vs stdlib, 0 mismatches):
 
-1. `ethscan.mac._is_mac_address` / `_strip_mac_port` / `_normalize_target` /
-   `_normalize_mac_for_api` / `_extract_oui` — stdlib-only oracle over a matrix
-   of valid/invalid MACs, MAC:port, URL-wrapped MACs, IPv4/IPv6, bracketed IPv6,
-   garbage. Assert `_normalize_target` raises only `TargetSpecError`.
-2. `ethscan.geo._normalize_hops` / `_geo_csv_row` — totality over hostile inputs.
+1. `ethscan.hash._infer_algorithm` — stdlib-only oracle (length-based heuristic
+   matching common hash lengths: MD5=32, SHA1=40, SHA256=64, SHA512=128, etc.)
+   over a matrix of valid hex strings at each length, non-hex strings, empty
+   strings, and strings with whitespace. Verify the exact mapping logic.
+
+2. `ethscan.service._parse_banner_service` / `_parse_banner_version` — verify
+   banner parsing is total over hostile inputs (empty, control chars, very long
+   lines, non-ASCII, malformed version strings) and never raises.
+
+3. `ethscan.target` pure helpers (`normalize_host`, `parse_url`, `check_port`,
+   `check_target_host`, `check_target_path`, `strip_userinfo`,
+   `format_host_header`) — stdlib oracle using `ipaddress`, `urllib.parse`, `re`
+   over hostile matrix (URLs with userinfo, IPv6 bracketed/unbracketed, ports at
+   boundaries, control chars in host/path, percent-encoded controls, zone IDs,
+   missing schemes).
 
 ## Baseline (independently re-verified THIS session on Python 3.14.4)
 - `pytest -q` -> 49799 passed, 147 skipped, 0 failed.
