@@ -18,7 +18,8 @@ This session reproduced and fixed a genuine wrong-output defect in `ethscan/whoi
 
 ## Evidence-based lead for a future session (only if a session is needed)
 - All five quality gates are green and coverage is 100%. No pending defect.
-- If future work is needed, use a fresh angle not yet covered (e.g. property-check `fileio`/`completion`/`headers`/`whois`/`dns` helpers for wrong output vs an oracle), reproduce a concrete defect first (focused failing check), apply the smallest safe fix, add/extend a test to keep coverage 100%, and rerun the full gate. If green and no new defect reproduces, record the negative result, preserve the green baseline, and hand off again — do not fabricate work.
+- The `fileio`/`sanitize_csv_cell` property-check lead (vs the `csv` stdlib oracle) was tried this session (2026-11-26) and found clean: 0 violations across a 41-case hostile matrix (probe kept outside the repo). Do not repeat that lead unchanged.
+- If future work is needed, use a fresh angle not yet covered (e.g. property-check `completion`/`headers`/`whois`/`dns` helpers for wrong output vs an oracle), reproduce a concrete defect first (focused failing check), apply the smallest safe fix, add/extend a test to keep coverage 100%, and rerun the full gate. If green and no new defect reproduces, record the negative result, preserve the green baseline, and hand off again — do not fabricate work or repeat verification-only sessions without new evidence.
 - Already property-checked / inspected clean (do not repeat): all pure helpers in ORACLE_VERIFICATION_TARGET.md + prior HANDOFFs, radix math, `target.py` parsers, hash/passwords/jwt/scanner/cidr, fileio/completion/whois/dns normalize, redis/mysql/snmp/cert/nmap/config/report/vuln parser inspection. `whois.extract_referral_server` URL-path leak fixed in prior session; port-inclusive `whois.iana.org` exclusion fixed this session.
 
 (End of file)

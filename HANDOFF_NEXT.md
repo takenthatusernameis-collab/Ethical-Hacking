@@ -3,6 +3,12 @@
 ## Status
 Repository fully green and baseline re-confirmed this session (2026-11-26, Python 3.14.4). Fixed a concrete defect in `ethscan/whois.py::extract_referral_server`.
 
+## What was attempted this session (negative result — recorded, not fabricated)
+- Followed the evidence-based lead: property-checked `ethscan/fileio.py:sanitize_csv_cell` (CWE-1236 formula-injection defense) against an independent stdlib oracle (`csv` module round-trip: `sanitize_csv_cell` → `SanitizingCSVWriter.writerow` → `csv.reader`).
+- Security invariant: every re-parsed cell must not begin with a raw formula trigger (`= + - @ \t \r`) unless it is a pure number (intentionally exempt).
+- Ran a hostile matrix of 41 cases (triggers, numeric edges, embeddings, non-strings): **0 violations**. Probe script kept outside the repo in `/home/runner/work/_temp/kilo-tmp/kilo/probe_sanitize_csv.py`.
+- Conclusion: no defect reproduces. No source/test change made; working tree clean. Per constraint, no fabrication, no verification-only re-run of already-green gates.
+
 ## What changed (this session)
 - Fixed `ethscan/whois.py:192`: `extract_referral_server` now correctly excludes `whois.iana.org` referrals even when they include a port (e.g., `whois.iana.org:43`, `whois://whois.iana.org:43/path`). The hostname part is extracted before the exclusion check.
 - Added 6 test cases in `tests/test_whois.py::test_extract_referral_server` covering the port-inclusive exclusion.
@@ -25,7 +31,8 @@ Repository fully green and baseline re-confirmed this session (2026-11-26, Pytho
 - Fabricating a change without a reproduced failing check: ruled out.
 
 ## Next task (precise, evidence-based)
-- None pending. If future work is needed, use a fresh angle not yet covered (e.g. property-check `fileio`/`completion`/`headers`/`whois`/`dns` helpers against an oracle), reproduce a concrete defect first (focused failing check), apply the smallest safe fix, add/extend a test to keep coverage 100%, and rerun the full gate (`pytest -q`, `mypy ethscan/ tests/`, `ruff check ethscan/ tests/ check_readme.py`, `python3 check_readme.py`, coverage). If green and no new defect reproduces, record the negative result, preserve the green baseline, and hand off again — do not fabricate work.
+- None pending. The property-check lead on `sanitize_csv_cell` was tried this session and found clean (0 violations); do not repeat it unchanged.
+- If future work is needed, use a fresh angle not yet covered (e.g. property-check `completion`/`headers`/`whois`/`dns` helpers against a stdlib oracle), reproduce a concrete defect first (focused failing check), apply the smallest safe fix, add/extend a test to keep coverage 100%, and rerun the full gate (`pytest -q`, `mypy ethscan/ tests/`, `ruff check ethscan/ tests/ check_readme.py`, `python3 check_readme.py`, coverage). If green and no new defect reproduces, record the negative result, preserve the green baseline, and hand off again — do not fabricate work.
 
 ## Constraints (carry forward)
 - Do NOT modify `.github/workflows/**`.
