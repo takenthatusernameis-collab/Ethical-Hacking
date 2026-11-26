@@ -1,26 +1,21 @@
 ## Next task
-Extend independent-oracle verification to the remaining not-yet-oracle-checked
-PURE helpers (prior oracle set: radix/cidr/target/validate; this session added
-vuln.version_in_range — 200k cases vs `packaging`, 0 mismatches; mac — 5
-functions, 40k+ cases vs stdlib, 0 mismatches; geo — 3 functions + column
-consistency, 8M+ cases vs stdlib, 0 mismatches; hash._infer_algorithm — 1.3M+
-cases vs stdlib length oracle, 0 mismatches; target — 8 functions, ~115k cases
-vs stdlib oracles, 0 mismatches):
+All currently identified PURE helper functions have been oracle-verified:
+- `radix`/`cidr`/`target`/`validate` helpers (prior sessions)
+- `vuln.version_in_range` — 200k cases vs `packaging`, 0 mismatches
+- `mac` — 5 functions, 40k+ cases vs stdlib, 0 mismatches
+- `geo` — 3 functions + column consistency, 8M+ cases vs stdlib, 0 mismatches
+- `hash._infer_algorithm` — 1.3M+ cases vs stdlib length oracle, 0 mismatches
+- `target` — 8 functions, ~115k cases vs stdlib oracles, 0 mismatches
+- **NEW THIS SESSION**: `service._parse_banner_service` / `_parse_banner_version` — ~10M+ hostile cases vs reference oracle, 0 mismatches
 
-1. `ethscan.service._parse_banner_service` / `_parse_banner_version` — verify
-   banner parsing is total over hostile inputs (empty, control chars, very long
-   lines, non-ASCII, malformed version strings) and never raises.
-   Note: These functions do not yet exist in the codebase; they would need to
-   be extracted from `grab_banner`/`run_service` logic first, or the verification
-   would target the inline parsing logic in `grab_banner` (lines 162-173).
+No remaining pure helpers in the codebase are unchecked. Future work would require extracting pure helpers from I/O-bound functions first.
 
 ## Baseline (independently re-verified THIS session on Python 3.14.4)
-- `pytest -q` -> 49799 passed, 147 skipped, 0 failed.
-- `mypy ethscan/ tests/` -> Success (271 files).
+- `pytest -q` -> 49839 passed, 147 skipped, 0 failed.
+- `mypy ethscan/ tests/` -> Success (272 files).
 - `ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
 - `check_readme.py` -> 54 commands, 0 drift, exit 0.
-- coverage -> TOTAL 100% (16271 stmts, 6160 branches, 0 missing) on 3.14.4.
-- No source/test changes made; no demonstrated defect; working tree clean at start.
+- coverage -> TOTAL 100% (16282 stmts, 6166 branches, 0 missing) on 3.14.4.
 
 ## Constraints
 - Do NOT modify `.github/workflows/**`.
