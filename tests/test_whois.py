@@ -525,6 +525,33 @@ def test_extract_referral_server_empty_value_does_not_cross_lines() -> None:
     assert extract_referral_server("Refer:\nwhois.other.com\n") is None
 
 
+def test_parse_whois_empty_value_does_not_cross_lines() -> None:
+    # A field label with an empty same-line value must not capture the next
+    # line's leading label as its value. The value is confined to the label's
+    # own line, so an empty value yields no value rather than the next line.
+    raw = "Creation Date: \nRegistrar: Example Inc\n"
+    parsed = parse_whois(raw)
+    assert parsed["registrar"] == "Example Inc"
+    assert not parsed["creation_date"]
+
+    raw2 = "Registrar: \nCreation Date: 2020-01-01\n"
+    parsed2 = parse_whois(raw2)
+    assert not parsed2["registrar"]
+    assert parsed2["creation_date"] == "2020-01-01"
+
+    # Nameserver/status labels behave the same way: an empty same-line value
+    # must not capture the following line's leading token.
+    raw3 = "Name Server: \nStatus: ok\n"
+    parsed3 = parse_whois(raw3)
+    assert parsed3["nameservers"] == []
+    assert parsed3["status_codes"] == ["ok"]
+
+    raw4 = "Status: \nRegistrar: Example\n"
+    parsed4 = parse_whois(raw4)
+    assert parsed4["registrar"] == "Example"
+    assert parsed4["status_codes"] == []
+
+
 def test_run_whois_non_recursive(monkeypatch) -> None:
     def mock_query(target, server="whois.iana.org", port=43, timeout=5.0):
         return "Registrar: Test Registrar\nCreation Date: 2020-01-01\n"

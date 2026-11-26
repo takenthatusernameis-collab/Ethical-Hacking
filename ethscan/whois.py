@@ -85,31 +85,35 @@ def parse_whois(raw: str) -> dict[str, Any]:
         "raw": raw,
     }
 
+    # The value must sit on the same line as its label: ``[ \t]*`` (not
+    # ``\s*``) keeps the match from spilling across a newline and capturing the
+    # next line's leading label (e.g. ``Registrar:`` of a following line) as if
+    # it were this field's value when the same-line value is empty.
     patterns = {
         "registrar": [
             # The plain ``Registrar:`` pattern must not match the ``Registrar:``
             # substring inside ``Sponsoring Registrar:`` (which appears first in
             # some responses); the negative lookbehind keeps the documented
             # priority order (Registrar > Registrar Name > Sponsoring Registrar).
-            r"(?<!Sponsoring )Registrar:\s*(.+)",
-            r"Registrar Name:\s*(.+)",
-            r"Sponsoring Registrar:\s*(.+)",
+            r"(?<!Sponsoring )Registrar:[ \t]*(.+)",
+            r"Registrar Name:[ \t]*(.+)",
+            r"Sponsoring Registrar:[ \t]*(.+)",
         ],
         "creation_date": [
-            r"Creation Date:\s*(.+)",
-            r"Created:\s*(.+)",
-            r"Registration Date:\s*(.+)",
-            r"Domain Registration Date:\s*(.+)",
+            r"Creation Date:[ \t]*(.+)",
+            r"Created:[ \t]*(.+)",
+            r"Registration Date:[ \t]*(.+)",
+            r"Domain Registration Date:[ \t]*(.+)",
         ],
         "expiration_date": [
-            r"Expiration Date:\s*(.+)",
-            r"Expiry Date:\s*(.+)",
-            r"Registry Expiry Date:\s*(.+)",
+            r"Expiration Date:[ \t]*(.+)",
+            r"Expiry Date:[ \t]*(.+)",
+            r"Registry Expiry Date:[ \t]*(.+)",
         ],
         "registrant_org": [
-            r"Registrant Organization:\s*(.+)",
-            r"Registrant Org:\s*(.+)",
-            r"Organization:\s*(.+)",
+            r"Registrant Organization:[ \t]*(.+)",
+            r"Registrant Org:[ \t]*(.+)",
+            r"Organization:[ \t]*(.+)",
         ],
     }
 
@@ -120,14 +124,16 @@ def parse_whois(raw: str) -> dict[str, Any]:
                 result[field] = match.group(1).strip()
                 break
 
+    # ``[ \t]*`` (not ``\s*``) keeps a label with an empty same-line value from
+    # spilling across a newline and capturing the next line's leading token.
     nameserver_matches = re.findall(
-        r"Name Server:\s*(\S+)", raw, re.IGNORECASE
+        r"Name Server:[ \t]*(\S+)", raw, re.IGNORECASE
     )
     if nameserver_matches:
         result["nameservers"] = sorted({ns.strip().rstrip(".") for ns in nameserver_matches})
 
     status_matches = re.findall(
-        r"Status:\s*(\S+)", raw, re.IGNORECASE
+        r"Status:[ \t]*(\S+)", raw, re.IGNORECASE
     )
     if status_matches:
         result["status_codes"] = sorted({status.strip() for status in status_matches})
