@@ -1722,3 +1722,77 @@ exceptions. Remaining candidates: `_common_prefix_length`, `_nth_bit`,
 - Fabricating a change without a reproduced failing check: ruled out.
 ## Next task
 - None pending. Repository fully green with 100% coverage. Do NOT fabricate work or repeat verification-only sessions. If future work is needed, use a fresh angle not yet covered (e.g. property-check `completion.generate_completion_script` complete-var derivation, `headers.run_headers` URL construction, or `dns.run_dns` record-type filtering against a stdlib oracle), reproduce a concrete defect first, apply the smallest safe fix, rerun focused then the full gate (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain out of scope. Do not modify `.github/workflows/**`.
+
+# Session (Wed Nov 26 2026, s3._normalize_target hostless-authority fix)
+## This session
+- No prior concrete assignment existed (HANDOFF_NEXT.md/NEXT_TASK.md said "none pending;
+  repo fully green" and suggested fresh angles: `s3.py`/`recon.py` URL/endpoint builders vs
+  `urllib.parse`; `tls.py`/`ssl.py` cert extraction). Per the task instruction I did NOT repeat
+  a verification-only session; I re-verified the baseline, ran fresh-angle differential probes,
+  reproduced one concrete wrong-output defect at the library boundary, and fixed it.
+- Independently re-verified baseline at start: `pytest -q` -> 49902 passed, 147 skipped, 0
+  failed; mypy clean (274 files); ruff clean; check_readme 54/54, 0 drift; coverage TOTAL 100%
+  (16294 stmts, 6174 branches, 0 missing); `git status` clean.
+## Fresh-angle probes (evidence)
+- `s3._bucket_name_problem` vs a reference AWS bucket-name rule impl over 20,016 generated
+  names -> 0 mismatches (clean).
+- `whois.extract_referral_server` vs a hand oracle over 5,010 generated WHOIS snippets
+  (schemes, ports, paths, whois.iana.org exclusion, case, priority-by-position) -> 0 mismatches
+  (clean).
+- `s3._normalize_target` vs `target.normalize_host` over 16 targets -> 2 diffs, both hostless
+  authorities with a non-empty netloc (see defect).
+## The defect (reproduced)
+- `ethscan/s3.py:_normalize_target` used `host = (parsed.hostname or parsed.netloc or "").lower()`.
+  `urllib.parse` returns an EMPTY `hostname` for an authority with no host but a non-empty
+  netloc, so the netloc fallback turned a hostless target into a bogus "domain":
+  `_normalize_target("https://:8080") == ":8080"`,
+  `_normalize_target("https://user@:8080") == "user@:8080"` (leaks userinfo + port into the
+  reported domain), and `run_s3(...)` then reported `domain: ":8080"` / `"user@:8080"` with 77
+  invalid candidates and exit 0. This is inconsistent with the shared
+  `ethscan.target.normalize_host` (which raises `TargetSpecError`) and with s3's own documented
+  empty-target rejection (sessions 37/39). The CLI masks it via `_validate_enum_target`
+  (cli.py:749, uses `normalize_host`), so it is a LIBRARY-API correctness bug, not user-facing
+  via the CLI today; `run_s3`/`_normalize_target` are public library functions.
+## What changed
+- `ethscan/s3.py` (`_normalize_target`): drop the `parsed.netloc` fallback; use only
+  `parsed.hostname`, so a hostless authority raises `TargetSpecError` exactly like
+  `normalize_host`. Valid targets (DNS/IPv4/IPv6/URL/port/path/uppercase/whitespace) are
+  byte-identical. +7 lines / -1.
+- `tests/test_s3.py`: added `test_normalize_target_rejects_hostless_authority`
+  (`https://:8080`, `:8080`, `https://user@:8080`, `user@:8080` -> TargetSpecError).
+## What was actually verified
+- Repro after fix: all four hostless targets -> TargetSpecError; valid targets unchanged.
+- `python -m pytest tests/test_s3.py -q -k "normalize_target or empty"` -> 16 passed.
+- `python -m coverage run --branch --source=ethscan -m pytest -q` -> 49903 passed, 147 skipped,
+  0 failed (baseline 49902; +1 new test); TOTAL 100% (16294 stmts, 6174 branches, 0 missing).
+- `python -m mypy ethscan/ tests/` -> Success (274 files); `ruff check ethscan/ tests/
+  check_readme.py` -> All checks passed; `check_readme.py` -> 54 commands, 0 drift;
+  `git diff --check` clean; `git status` -> only ethscan/s3.py + tests/test_s3.py modified.
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- ssl cert extraction (`ssl.py`/`tls.py`): Python 3.14's `ssl._ssl._test_decode_cert` no longer
+  returns `publicKeyInfo`/`signatureAlgorithm` (verified: decoded real cert dict keys are only
+  issuer/notAfter/notBefore/serialNumber/subject/subjectAltName/version). So `ssl` key_size and
+  signature_algorithm are ALWAYS None on 3.14 for real certs; the tests model a fictional
+  `{"bits":..,"size":..}` shape the stdlib never produced. NOT fixed: a real fix needs DER
+  parsing (cryptography is not a project dep; stdlib has no public key-size API) — out of scope.
+  Documented as a known limitation; do not chase without a bounded stdlib approach.
+- `s3._bucket_name_problem`, `whois.extract_referral_server`, `geo` formatters/cache,
+  `recon` orchestration: reviewed/probed clean this session; not repeated.
+- CSV formula injection, parser/adversarial STRING fuzz, formatter/assessor hostile contracts,
+  CLI target/option hostile sweeps, nested-field & per-key hostile sweeps, radix math,
+  `target.py` parsers, hash/passwords/jwt/scanner/cidr wrong-output fuzz: clean in prior
+  sessions; not repeated.
+## Next task
+- None pending. Repository fully green with 100% coverage (49903 passed). Do NOT fabricate work
+  or repeat verification-only sessions. If future work is needed, use a fresh angle not yet
+  covered, reproduce a concrete defect first (focused failing check / behavioral evidence vs
+  documented contract), apply the smallest safe fix, rerun focused then the full gate
+  (pytest/coverage/mypy/ruff/check_readme), preserve safety.
+- Evidence-based leads NOT yet done: property-check `completion.generate_completion_script`
+  complete-var derivation and `headers.run_headers` URL construction vs a stdlib oracle;
+  `dns.run_dns` record-type filtering vs a hand oracle. (Prior sessions report these clean, so
+  only revisit with a NEW angle.)
+- `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain
+  intentionally out of scope. Do not modify `.github/workflows/**`.

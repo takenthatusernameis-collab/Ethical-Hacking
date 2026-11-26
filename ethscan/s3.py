@@ -148,7 +148,13 @@ def _normalize_target(target: str) -> str:
         normalized = "https://" + normalized
     check_target_host(normalized)
     parsed = parse_url(normalized)
-    host = (parsed.hostname or parsed.netloc or "").lower()
+    # Use only the parsed hostname, never the raw netloc: ``urlparse`` returns
+    # an empty ``hostname`` for an authority that carries no host (e.g.
+    # ``https://:8080`` or ``https://user@:8080``), and falling back to the
+    # netloc would turn such a target into a bogus "domain" that still carries
+    # the port and userinfo. A target without a usable host is a usage error,
+    # exactly as the shared :func:`ethscan.target.normalize_host` reports it.
+    host = (parsed.hostname or "").lower()
     if not host:
         raise TargetSpecError(f"Could not parse host from target {target!r}")
     return host

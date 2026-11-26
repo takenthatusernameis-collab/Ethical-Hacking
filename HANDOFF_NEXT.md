@@ -1,56 +1,84 @@
 # Handoff
 
 ## Status
-Repository fully green. No prior agent assignment with a concrete defect existed; HANDOFF_NEXT.md/NEXT_TASK.md said "no queued assignment, repo fully green". This session (2026-11-26, Python 3.14.4) re-verified the full gate first-hand and ran FOUR fresh-angle wrong-output probes not listed in prior handoffs. No reproducible defect was found. No source or test changes were made (per reliability rules 6/7/8 — do not fabricate work, do not repeat verification-only sessions without new evidence, do not add speculative machinery).
+Repository fully green. No prior concrete assignment existed (HANDOFF_NEXT/NEXT_TASK said
+"none pending; repo fully green"). This session (2026-11-26, Python 3.14.4) re-verified the full
+gate first-hand, ran fresh-angle differential probes (s3/whois/geo/ssl), reproduced ONE concrete
+wrong-output defect at the library boundary, fixed it with the smallest safe change, and added a
+focused test. All five gates green after the fix.
 
 ## What changed (this session)
-- No source or test changes. Working tree clean (`git status`: nothing to commit, up to date with origin/main).
+- `ethscan/s3.py` (`_normalize_target`): removed the `parsed.netloc` fallback; use only
+  `parsed.hostname`. A hostless authority with a non-empty netloc (`https://:8080`,
+  `https://user@:8080`, `:8080`, `user@:8080`) now raises `TargetSpecError` (matching
+  `ethscan.target.normalize_host` and s3's documented empty-target rejection) instead of
+  returning a bogus "domain" (`:8080` / `user@:8080`, the latter leaking userinfo+port).
+  Valid targets are byte-identical. +7/-1.
+- `tests/test_s3.py`: added `test_normalize_target_rejects_hostless_authority`.
+- Working tree: only `ethscan/s3.py` + `tests/test_s3.py` modified. Not committed (controller
+  commits).
 
 ## What was actually verified (first-hand this session)
-- `python -m pytest -q` → 49902 passed, 147 skipped, 0 failed (exit 0, 141.58s).
-- `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed.
-- `python3 check_readme.py` → 54 CLI commands, 0 drift both directions (In README but not CLI: set(); In CLI but not README: set()).
-- `python -m mypy ethscan/ tests/` → Success: no issues found in 274 source files.
-- (Coverage gate not re-run this session since no source/test changed; last recorded TOTAL 100%, 16294 stmts / 6174 branches, 0 missing.)
+- `python -m coverage run --branch --source=ethscan -m pytest -q` -> 49903 passed, 147 skipped,
+  0 failed (baseline 49902; +1 new test); coverage TOTAL 100% (16294 stmts, 6174 branches,
+  0 missing).
+- `python -m mypy ethscan/ tests/` -> Success: no issues found in 274 source files.
+- `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
+- `python3 check_readme.py` -> 54 CLI commands, 0 drift both directions, exit 0.
+- `git diff --check` clean; `git status` -> only the two intended files.
 
 ## Fresh-angle probes this session (NEW negative results, with evidence)
-1. `validate._validate_cidr`/`_format_network_info` vs `cidr._format_network_info` cross-oracle over v4/v6 nets (/32,/128,/31,/30,/127,/126,/24,/64). Only differences: (a) `addresses` field present in validate (MAX_EXPANDED_IPS=256 design) but absent in cidr — known/intended; (b) IPv6 /127 `usable_host_count` 2 vs 1 and `first_host` — INTENTIONAL and explicitly tested in `tests/test_validate.py:398` and the property test at `tests/test_validate.py:962` ("IPv6 /127: both addresses are usable (not just the second)"). NOT a defect; do not "fix".
-2. `validate._validate_port_spec` (validity + expanded port set) vs `scanner.parse_port_range` over 9,779 generated specs (exhaustive small combos + 20k random from a hostile token set incl. empty/whitespace/underscore/hex/plus/unicode-digit/inverted-range/3-part-range). 0 mismatches — the documented "validate accepts exactly what scanners accept" invariant holds.
-3. `osdetect._checksum` (Internet one's-complement checksum) vs an independent reference impl over 200,000 random byte strings (len 0..40): 0 mismatches. Plus packet property: `_checksum(pseudo + _build_syn_packet(...)) == 0` over 50,000 random SYN headers: 0 failures (earlier apparent failures were a test bug — omitted the pseudo-header).
-4. Source-reviewed `geo.py` (`_is_cache_valid` uses `math.isfinite`; formatters guard non-dict), `urlcheck._normalize_url`, `stale.resolve_domain_all` stale logic, `subdomains._normalize_domain`: network-bound or guarded; no wrong-output gap.
+1. `s3._bucket_name_problem` vs a reference AWS bucket-name rule impl over 20,016 generated
+   names -> 0 mismatches (clean).
+2. `whois.extract_referral_server` vs a hand oracle over 5,010 generated WHOIS snippets ->
+   0 mismatches (clean).
+3. `s3._normalize_target` vs `target.normalize_host` -> only the hostless-netloc diffs (fixed).
+4. ssl/tls cert extraction: Python 3.14 `ssl._ssl._test_decode_cert` no longer returns
+   `publicKeyInfo`/`signatureAlgorithm` (real cert dict keys: issuer/notAfter/notBefore/
+   serialNumber/subject/subjectAltName/version). So ssl `key_size`/`signature_algorithm` are
+   always None on 3.14 for real certs. NOT a bounded ethscan fix (needs DER parsing; no stdlib
+   public key-size API; cryptography not a project dep). Documented limitation.
 
 ## What remains unresolved
-- None. No new functional defect reproduced.
+- ssl `key_size` / `signature_algorithm` reporting is inert on Python 3.14 (CPython removed the
+  fields from `_test_decode_cert`). Documented; not fixed (no bounded stdlib approach).
+- No other new functional defect reproduced.
 
 ## Approaches already tried / ruled out (do not repeat)
-- All prior handoff items (CSV formula injection, parser/formatter/assessor hostile sweeps, CLI target/option sweeps, radix math, target.py parsers, hash/passwords/jwt/scanner/cidr wrong-output fuzz, fileio/completion/whois/dns normalize, dnssec helpers, web_server_version property, etc.).
-- This session: validate↔cidr network info, validate↔scanner port parsing, osdetect checksum, geo/urlcheck/stale/subdomains review — all clean; not repeated.
-- Verification-only re-runs without a reproduced defect: ruled out. Fabricating a change without a reproduced failing check: ruled out.
+- All prior handoff items (CSV formula injection, parser/formatter/assessor hostile sweeps, CLI
+  target/option sweeps, radix math, target.py parsers, hash/passwords/jwt/scanner/cidr wrong-
+  output fuzz, fileio/completion/whois/dns normalize, dnssec, geo/urlcheck/stale/subdomains,
+  validate<->cidr, validate<->scanner ports, osdetect checksum, cve version-range, mac OUI).
+- This session: s3 bucket-name rule, whois referral, geo review, ssl/tls cert extraction — all
+  clean/limited; not repeated.
+- Verification-only re-runs without a reproduced defect: ruled out. Fabricating a change without
+  a reproduced failing check: ruled out.
 
 ## Next task (precise, evidence-based)
-- No queued assignment; all five gates green (coverage 100% last recorded), all four oracle scripts pass (not re-run this session; stdlib-only, no network).
-- If future work is needed, pick a fresh angle NOT in the lists above, reproduce a concrete defect FIRST (focused failing check), apply the smallest safe fix, add/extend a test to keep coverage 100%, then rerun the full gate (pytest/coverage/mypy/ruff/check_readme). If green and nothing reproduces, record the new negative result, preserve the green baseline, and hand off again — do not fabricate work.
-- Candidate untouched angles (only if a session is needed): property-check a pure helper with a stdlib oracle not yet covered — e.g. `cve.py` version-range comparison, `s3.py`/`recon.py` endpoint/URL builders vs `urllib.parse`, `mac.py` OUI formatting edge cases, `tls.py`/`ssl.py` cert field extraction with a generated self-signed cert. Reproduce a wrong output vs the oracle before changing anything.
+- No queued assignment; all five gates green (coverage 100%), all four oracle scripts pass.
+- If future work is needed, pick a fresh angle NOT in the lists above, reproduce a concrete
+  defect FIRST (focused failing check), apply the smallest safe fix, add/extend a test to keep
+  coverage 100%, then rerun the full gate. If green and nothing reproduces, record the new
+  negative result, preserve the green baseline, and hand off again — do not fabricate work.
+- Candidate untouched angles (only if a session is needed): property-check
+  `completion.generate_completion_script` complete-var derivation, `headers.run_headers` URL
+  construction, or `dns.run_dns` record-type filtering vs a stdlib oracle (prior sessions report
+  these clean — only revisit with a NEW angle). Reproduce a wrong output vs the oracle before
+  changing anything.
 
 ## Constraints (carry forward)
 - Do NOT modify `.github/workflows/**`.
 - Keep `oracle`/`postgresql` empty-target in-band (exit 0) behavior.
 - Do not weaken the `ethscan/cli.py` unreachable guard or game coverage.
-- A code change must fix a REPRODUCED defect first (focused failing check), then rerun the full gate. If nothing reproduces, record the negative result and stop.
-- PBKDF2+pepper HMACs the hex-string digest by design; do not "fix" without a reproduced functional failure.
-- `sanitize_csv_cell` leaving `-inf`/`+inf`/`nan` unsanitised is a low-severity edge; do not change without a reproduced functional failure.
-- `headers.run_headers`/`web.run_web_checks` retain surrounding whitespace in the scheme branch of URL construction; cosmetic only (urllib strips) — do not change without a reproduced functional failure.
-- `validate._format_network_info` IPv6 /127 usable_host_count=2 / first_host=network[0] is INTENTIONAL and tested; do NOT align it to cidr's RFC-3021 anycast convention without a reproduced functional failure and an explicit design decision.
+- A code change must fix a REPRODUCED defect first (focused failing check), then rerun the full
+  gate. If nothing reproduces, record the negative result and stop.
+- PBKDF2+pepper HMACs the hex-string digest by design; do not "fix" without a reproduced failure.
+- `sanitize_csv_cell` leaving `-inf`/`+inf`/`nan` unsanitised is a low-severity edge; do not
+  change without a reproduced failure.
+- `headers.run_headers`/`web.run_web_checks` retain surrounding whitespace in the scheme branch
+  of URL construction; cosmetic only — do not change without a reproduced failure.
+- `validate._format_network_info` IPv6 /127 usable_host_count=2 / first_host=network[0] is
+  INTENTIONAL and tested; do NOT align to cidr's RFC-3021 anycast convention without a reproduced
+  failure + explicit design decision.
 
 (End of file)
-# Session (Thu Nov 26 2026, session auto)
-- No prior concrete assignment; verified baseline first-hand: ruff clean, mypy clean (274 files). Repo fully green; no defect reproduced. No source/test changes.
-- Next task: none pending. Pick a fresh, evidence-based bounded improvement only if needed; reproduce a defect first.
-
-# Session (Thu Nov 26 2026, session kilo)
-- No prior concrete assignment; baseline re-verified first-hand: `pytest -q` → 49902 passed, 147 skipped, 0 failed; `ruff check ethscan/ tests/ check_readme.py` → clean; `python -m mypy ethscan/ tests/` → clean (274 source files); `python3 check_readme.py` → 54/54, 0 drift. No source/test changes.
-- Investigated two fresh candidate angles from the untouched list (cve.py version-range comparison, mac.py OUI formatting). Both are negative results — no defect reproduced; do not repeat.
-  1. `ethscan/vuln.py:version_in_range` vs `packaging.version` (PEP 440) oracle over ~24M version×spec combinations (well-formed numeric versions): 0 mismatches. ethscan's lenient digit-extraction of non-version strings (e.g. "7.2p2", "1..2") is intentional, not a defect.
-  2. `ethscan/mac.py` OUI formatting (`_normalize_mac_for_api`, `_extract_oui`, `_strip_mac_port`, IP-vs-MAC gating): internally consistent, clean by inspection.
-- Approaches already tried / ruled out (add to the do-not-repeat list): `cve.py` version-range comparison, `mac.py` OUI formatting.
-- Next task: none pending. Repository fully green. If future work is needed, pick a fresh angle NOT in the do-not-repeat lists, reproduce a concrete defect FIRST (focused failing check), apply the smallest safe fix, rerun the full gate. If green and nothing reproduces, record the negative result and hand off again — do not fabricate work.

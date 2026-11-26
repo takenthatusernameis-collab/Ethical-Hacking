@@ -1233,6 +1233,23 @@ def test_normalize_target_rejects_empty_target() -> None:
             _normalize_target(bad)
 
 
+def test_normalize_target_rejects_hostless_authority() -> None:
+    """A target whose authority has a port/userinfo but no host is a usage error.
+
+    ``urlparse`` returns an empty ``hostname`` for ``https://:8080`` and
+    ``https://user@:8080``; the netloc is non-empty but is not a hostname. The
+    normalizer must reject these instead of returning the raw netloc (which
+    would leak the port and userinfo into the reported domain).
+    """
+    import pytest
+
+    from ethscan.target import TargetSpecError
+
+    for bad in ("https://:8080", ":8080", "https://user@:8080", "user@:8080"):
+        with pytest.raises(TargetSpecError, match="Could not parse host from target"):
+            _normalize_target(bad)
+
+
 # ---------------------------------------------------------------------------
 # Defensive-branch coverage for s3.py uncovered lines
 # ---------------------------------------------------------------------------
