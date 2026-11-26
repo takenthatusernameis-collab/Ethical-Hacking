@@ -136,8 +136,10 @@ def extract_referral_server(raw: str) -> str | None:
 
     WHOIS responses often include a line pointing to the registrar's WHOIS
     server, e.g. ``Registrar WHOIS Server: whois.example.com`` or
-    ``Refer: whois.example.com``. Returns the first match, lowercased and
-    stripped of trailing dots, or None when no referral is present.
+    ``Refer: whois.example.com``. A referral written as a URL
+    (``Refer: whois://whois.example.com``) is reduced to its bare hostname.
+    Returns the first match, lowercased and stripped of trailing dots, or None
+    when no referral is present.
 
     Args:
         raw: Raw WHOIS response text.
@@ -156,6 +158,12 @@ def extract_referral_server(raw: str) -> str | None:
         match = re.search(pattern, raw, re.IGNORECASE)
         if match:
             server = match.group(1).strip().rstrip(".")
+            # A referral may be written as a URL (``whois://host``); the caller
+            # resolves the value with getaddrinfo, which needs a bare hostname,
+            # so drop a leading scheme. The ``Registrar URL:`` pattern already
+            # consumes the scheme, so this only affects the other patterns.
+            if server.lower().startswith("whois://"):
+                server = server[len("whois://"):]
             if server and server.lower() != "whois.iana.org":
                 return server.lower()
     return None

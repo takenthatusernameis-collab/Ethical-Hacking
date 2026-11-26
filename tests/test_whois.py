@@ -482,6 +482,15 @@ def test_extract_referral_server() -> None:
     # Test with extra whitespace
     assert extract_referral_server("Registrar WHOIS Server:   whois.example.com   ") == "whois.example.com"
 
+    # A referral written as a URL is reduced to its bare hostname so the
+    # recursive lookup can resolve it (getaddrinfo rejects a scheme).
+    assert extract_referral_server("Refer: whois://whois.example.com") == "whois.example.com"
+    assert extract_referral_server("Referral Server: whois://whois.example.com.") == "whois.example.com"
+    assert extract_referral_server("WHOIS Server: WHOIS://WHOIS.EXAMPLE.COM") == "whois.example.com"
+    assert extract_referral_server("Registrar WHOIS Server:\twhois://whois.first.com.") == "whois.first.com"
+    # The whois.iana.org exclusion applies after the scheme is stripped.
+    assert extract_referral_server("Refer: whois://whois.iana.org") is None
+
 
 def test_run_whois_non_recursive(monkeypatch) -> None:
     def mock_query(target, server="whois.iana.org", port=43, timeout=5.0):
