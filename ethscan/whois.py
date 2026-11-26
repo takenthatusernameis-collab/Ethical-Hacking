@@ -162,18 +162,25 @@ def extract_referral_server(raw: str) -> str | None:
         r"Refer:[ \t]*(\S+)",
         r"Registrar URL:[ \t]*whois://(\S+)",
     ]
-    for pattern in patterns:
+    # "first match" is by position in the text, not by pattern priority, so a
+    # referral that appears earlier in the response wins even if a
+    # higher-priority pattern matches a later line.
+    candidates = []
+    for idx, pattern in enumerate(patterns):
         match = re.search(pattern, raw, re.IGNORECASE)
         if match:
-            server = match.group(1).strip().rstrip(".")
-            # A referral may be written as a URL (``whois://host``); the caller
-            # resolves the value with getaddrinfo, which needs a bare hostname,
-            # so drop a leading scheme. The ``Registrar URL:`` pattern already
-            # consumes the scheme, so this only affects the other patterns.
-            if server.lower().startswith("whois://"):
-                server = server[len("whois://"):]
-            if server and server.lower() != "whois.iana.org":
-                return server.lower()
+            candidates.append((match.start(), idx, match))
+    candidates.sort()
+    for _pos, _idx, match in candidates:
+        server = match.group(1).strip().rstrip(".")
+        # A referral may be written as a URL (``whois://host``); the caller
+        # resolves the value with getaddrinfo, which needs a bare hostname,
+        # so drop a leading scheme. The ``Registrar URL:`` pattern already
+        # consumes the scheme, so this only affects the other patterns.
+        if server.lower().startswith("whois://"):
+            server = server[len("whois://"):]
+        if server and server.lower() != "whois.iana.org":
+            return server.lower()
     return None
 
 
