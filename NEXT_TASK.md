@@ -24,4 +24,6 @@ This session fixed a genuine wrong-output defect in `ethscan/whois.py::extract_r
 ## Update 2026-11-26 (this session)
 Probed `ethscan/web.py::_parse_url` against a urllib.parse ground truth across uppercase schemes, userinfo, IPv6 (bracketed/unbracketed), non-http schemes, explicit default ports, empty port, whitespace, and malformed ports. No wrong-output defect reproduced; host/port/secure behavior matches urllib.parse (scheme normalized via `.lower()`, hostname strips userinfo/port, IPv6 bracketed, default 443/80 for missing port). Recorded as clean; do not repeat unchanged.
 
+This session: independently re-verified the green baseline (`pytest -q` 49843 passed/147 skipped/0 failed; mypy 272 files; ruff; check_readme 54/54; coverage 100%). Ran two fresh oracle probes with **no defect reproduced**: `oracle_verify_service.py` (`_parse_banner_service`/`_parse_banner_version`) — 0 mismatches; and `ethscan.scanner.parse_port_range` (independent oracle over 57 directed specs + 4000 randomized fuzz specs) — 0 mismatches, 0 crashes. No code change was made; working tree left clean. Per the constraint above, do not fabricate work or repeat verification-only sessions without a concrete new probe or reproduced defect.
+
 (End of file - total 23 lines)
