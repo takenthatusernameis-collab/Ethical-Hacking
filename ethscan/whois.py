@@ -189,7 +189,9 @@ def extract_referral_server(raw: str) -> str | None:
         # Drop any URL path/query/fragment so only the bare hostname (and
         # optional port) is returned to the caller.
         server = server.split("/", 1)[0].split("?", 1)[0].split("#", 1)[0]
-        if server and server.lower() != "whois.iana.org":
+        # Exclude whois.iana.org (with or without port) from referrals.
+        hostname = server.split(":", 1)[0].lower()
+        if server and hostname != "whois.iana.org":
             return server.lower()
     return None
 

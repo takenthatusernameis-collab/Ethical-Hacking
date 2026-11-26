@@ -1,16 +1,21 @@
 # Handoff
 
 ## Status
-Repository fully green and baseline re-confirmed this session (2026-11-26, Python 3.14.4). No pending assignment from a prior agent.
+Repository fully green and baseline re-confirmed this session (2026-11-26, Python 3.14.4). Fixed a concrete defect in `ethscan/whois.py::extract_referral_server`.
 
 ## What changed (this session)
-- None. No code changes made; `git status` clean, `git diff --stat` empty.
+- Fixed `ethscan/whois.py:192`: `extract_referral_server` now correctly excludes `whois.iana.org` referrals even when they include a port (e.g., `whois.iana.org:43`, `whois://whois.iana.org:43/path`). The hostname part is extracted before the exclusion check.
+- Added 6 test cases in `tests/test_whois.py::test_extract_referral_server` covering the port-inclusive exclusion.
 
 ## What was actually verified (evidence, first-hand this session)
-- `git status --short` / `git diff --stat` → clean working tree, no modifications.
+- Reproduction before fix: `extract_referral_server("Refer: whois://whois.iana.org:43")` returned `"whois.iana.org:43"` instead of `None`.
+- Reproduction after fix: all `whois.iana.org` variants with ports return `None`; normal servers with ports still work.
+- `python -m pytest tests/test_whois.py -q` → 55 passed, 0 failed.
+- `python -m pytest -q` → 49845 passed, 147 skipped, 0 failed.
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 272 source files.
 - `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed.
-- `python -m pytest tests/test_whois.py -q` → 55 passed, 0 failed (focused check on the file fixed in the prior session).
-- Prior full-gate evidence (same day, from HANDOFF_NEXT.md): `pytest -q` → 49845 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/` → Success, 272 source files; `python3 check_readme.py` → 54 CLI commands, 0 drift, exit 0; coverage TOTAL 100%.
+- `python3 check_readme.py` → 54 CLI commands, 0 drift both directions, exit 0.
+- `python -m coverage run --branch --source=ethscan -m pytest -q` → TOTAL 100% (16294 stmts, 6174 branches, 0 missing).
 
 ## What remains unresolved
 - None pending. Low-severity documented edge (`fileio.sanitize_csv_cell` leaves `inf`/`nan` unsanitised — spreadsheet error only, not injection) remains intentionally unfixed per prior guidance.

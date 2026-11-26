@@ -518,6 +518,15 @@ def test_extract_referral_server() -> None:
     assert extract_referral_server("Registrar URL: whois://whois.example.com/path") == "whois.example.com"
     assert extract_referral_server("WHOIS Server: whois://whois.example.com:43/") == "whois.example.com:43"
 
+    # The whois.iana.org exclusion applies to the hostname part, with or
+    # without a port. All of these must return None.
+    assert extract_referral_server("Refer: whois://whois.iana.org:43") is None
+    assert extract_referral_server("Refer: whois://whois.iana.org:43/path") is None
+    assert extract_referral_server("Registrar WHOIS Server: whois.iana.org:43") is None
+    assert extract_referral_server("WHOIS Server: whois.iana.org:43") is None
+    assert extract_referral_server("Referral Server: WHOIS.IANA.ORG:43") is None
+    assert extract_referral_server("Refer: whois.iana.org:43") is None
+
 
 def test_extract_referral_server_empty_value_does_not_cross_lines() -> None:
     # A label with an empty same-line value must not capture the next line's
