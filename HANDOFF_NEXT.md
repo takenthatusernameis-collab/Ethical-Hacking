@@ -19,6 +19,12 @@ Repository fully green. No prior agent assignment with a concrete task existed; 
 - Property fuzzer (wrong-output vs ground-truth oracles) over areas NOT previously property-checked: `hash.run_hash`/`run_check` vs hashlib/hmac/pbkdf2 (all algorithms × {plain,salt,pepper,salt+pepper,iterations,iterations+pepper}); `passwords.estimate_entropy`/`evaluate_password` invariants; `jwt.run_jwt` exp/nbf/iat status (incl. bool/NaN/Inf/string claims); `scanner.parse_port_range` vs hand oracle; `cidr._format_network_info` vs `ipaddress` (excl. intentional IPv6 anycast convention). ~22k cases total → 0 genuine defects. The only mismatches (1005) were ALL in the PBKDF2+pepper path and were the known intentional design (HMAC over hex-string digest, not raw bytes) — confirmed tested in `tests/test_hash.py`.
 - Source-reviewed `report.py`/`config.py`/`nmap.py`/`mac.py`: formatters guarded with `isinstance`/`_as_list`; parsers validate ranges; OUI is 6 hex chars matching docstring. No wrong-output gap.
 
+## Session re-verification (2026-11-26, this session)
+- `pytest -q` → 49902 passed, 147 skipped, 0 failed (exit 0).
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 274 source files.
+- `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed.
+- Working tree clean, up to date with origin/main. No source or test changes made.
+
 ## What remains unresolved
 - None. No new functional defect reproduced.
 
