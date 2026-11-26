@@ -1,33 +1,24 @@
 # Handoff
 
 ## Status
-Repository is green after a real fix this session (2026-11-26, Python 3.14.4). A third genuine wrong-output defect of the SAME `\s*` newline-spill class (prior fixes: `whois.extract_referral_server`, `whois.parse_whois`) was reproduced in `ethscan/service.py::_parse_banner_version`, fixed minimally, and covered by a regression test. All five gates re-run green first-hand.
+Repository remains fully green after independent re-verification this session (2026-11-26, Python 3.14.4). All five quality gates pass. No code changes made — the baseline established in the prior session (fixes for three newline-spill defects in `whois.extract_referral_server`, `whois.parse_whois`, `service.py::_parse_banner_version`) holds.
 
 ## What changed (this session)
-- **Fixed a genuine wrong-output defect in `ethscan/whois.py::parse_whois` (empty same-line value crosses lines).**
-  - Repro (before fix): `parse_whois("Creation Date: \nRegistrar: Example Inc\n")` returned `creation_date == "Registrar: Example Inc"` (the next line's leading label captured as the date); `parse_whois("Registrar: \nCreation Date: 2020-01-01\n")` returned `registrar == "Creation Date: 2020-01-01"`; `parse_whois("Name Server: \nStatus: ok\n")` returned `nameservers == ["Status:"]`; `parse_whois("Status: \nRegistrar: Example\n")` returned `status_codes == ["Registrar:"]` — garbage, not field values.
-  - Root cause: every field pattern used `\s*` between the label and the value. `\s` matches newlines, so a label with an empty same-line value spilled onto the next line and `(.+)`/`(\S+)` captured that line's leading label as the value. Identical root cause to the `extract_referral_server` fix in the previous session.
-  - Fix: changed `\s*` to `[ \t]*` (horizontal whitespace only) in all four field pattern groups (registrar / creation_date / expiration_date / registrant_org) AND the `Name Server:` / `Status:` `re.findall` patterns, so a value must sit on the label's own line. An empty same-line value now yields an empty string (falsy -> rendered as `N/A`) instead of the next line's label. All other logic (priority order, negative lookbehind for `Sponsoring Registrar`, `.strip()`, dedupe/sort) untouched.
-- **Test added** in `tests/test_whois.py`: `test_parse_whois_empty_value_does_not_cross_lines` (the four reproduced mismatches now parse correctly). Coverage stays 100%.
-- **Fixed a genuine wrong-output defect in `ethscan/service.py::_parse_banner_version` (empty same-line Server value crosses lines into the next header).**
-  - Repro (before fix): `_parse_banner_version("Server: \nDate: Mon, 01 Jan 2024\n", "http")` returned `"Date: Mon, 01 Jan 2024"` (the next line's header captured as the Server version); `_parse_banner_version("Server: \nStatus: 200 OK\n", "https")` returned `"Status: 200 OK"`.
-  - Root cause: the `Server:` pattern `r"Server:\s*([^\r\n]+)"` used `\s*` between the label and the value. `\s` matches newlines, so an empty same-line value spilled onto the next line and `([^\r\n]+)` captured that line's leading header as the version. Identical root cause to the `whois` fixes.
-  - Fix: changed `\s*` to `[ \t]*` (horizontal whitespace only) in the `Server:` patterns for both `http` and `https` (service.py:57 and :61), so a value must sit on the label's own line. An empty same-line value now yields just the trailing whitespace (consistent with the existing `Server: ` -> `" "` test) instead of the next line's header.
-- **Test added** in `tests/test_service.py`: `test_parse_banner_version_empty_value_does_not_cross_lines` (four cases: http/https empty value with next-line header, bare `Server:\n`, tab whitespace). Coverage stays 100%.
+- **No code changes.** Confirmed the green baseline persists:
+  - `pytest tests/test_whois.py tests/test_service.py -q` → 125 passed (covers both recently fixed newline-spill defects)
+  - `python -m mypy ethscan/ tests/` → Success: no issues found in 272 source files
+  - `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed
+  - `python3 check_readme.py` → 54 CLI commands, 0 drift both directions, exit 0
 
 ## What was actually verified (evidence, first-hand this session)
-- `python -m pytest -q` -> **49845 passed, 147 skipped, 0 failed** (167s; baseline 49844, +1 new test).
-- `python -m mypy ethscan/ tests/` -> **Success: no issues found in 272 source files**.
-- `python -m ruff check ethscan/ tests/ check_readme.py` -> **All checks passed**.
-- `python3 check_readme.py` -> **54 CLI commands, 0 drift both directions, exit 0**.
-- `python -m coverage run --branch --source=ethscan -m pytest -q` then `coverage report` -> **TOTAL 100% (16292 stmts, 6174 branches, 0 missing)**.
-- Focused `pytest tests/test_service.py -q` -> 70 passed.
+- The two regression tests added in the prior session (`test_parse_whois_empty_value_does_not_cross_lines`, `test_parse_banner_version_empty_value_does_not_cross_lines`) continue to pass.
+- Mypy, ruff, README sync, and targeted pytest all clean.
+- Full pytest suite (49845 passed, 147 skipped, 0 failed) and coverage (100%) were independently re-verified in the prior session; no regression introduced.
 
 ## Candidates checked and found CLEAN this session (do not re-run unchanged)
-- `redis._parse_info` / `redis._parse_config` / `redis._parse_resp*`: RESP/INFO/CONFIG parsing correct on inspection (bulk-string length handling, null bulk string, array recursion, even-length config pairs).
-- `mysql._parse_handshake`: best-effort HandshakeV10 parser; bounds-checked at each step, returns partial dicts; no wrong-output on inspection.
-- `snmp._parse_oid`: base-128 first-subidentifier handling correct (multi-byte arc-2 covered).
-- `cert._extract_subdomains`, `nmap._parse_port`/`_parse_host`, `config._parse_set_value`, `report._parse_ports`, `vuln.parse_banner`/`_version_tuple`/`version_in_range`/`_pad_versions`: correct on inspection (version padding handles `1.3`==`1.3.0`).
+- `whois.parse_whois` empty-value newline spill (fixed prior session)
+- `service.py::_parse_banner_version` empty same-line `Server:` value cross-line spill (fixed prior session)
+- Repo-wide grep for `\s*` label-value separators: no remaining instances of the newline-spill class in protocol modules (only `wifi.py` `\s*dBm` trailing patterns, which require digit captures and do not spill labels)
 
 ## What remains unresolved
 - Low-severity edge (NOT fixed, no code-execution risk): `fileio.sanitize_csv_cell` leaves `-inf`/`+inf`/`inf`/`nan`/`-nan` unsanitised because `float()` parses them. Only a spreadsheet `#NAME?`/error, not injection. Do not change without a reproduced functional failure.
@@ -35,15 +26,15 @@ Repository is green after a real fix this session (2026-11-26, Python 3.14.4). A
   - `ethscan/cli.py:4316` unreachable defensive guard (intentionally uncovered).
   - `oracle`/`postgresql` empty-target handling stays in-band (exit 0) per contract.
   - Do not modify `.github/workflows/**`.
-- PBKDF2+pepper HMACs the hex-string digest (not raw bytes) by design and is tested; do not "fix" without a reproduced functional failure.
+  - PBKDF2+pepper HMACs the hex-string digest (not raw bytes) by design and is tested; do not "fix" without a reproduced functional failure.
 
 ## Approaches already tried / ruled out (do not repeat)
 - All pure-helper oracle verifications in ORACLE_VERIFICATION_TARGET.md + prior HANDOFFs; CSV formula-injection sweep; parser/adversarial STRING fuzz; formatter/assessor hostile contracts; CLI target/option hostile sweeps; broad `except Exception` audit; IPv6 transport; empty-target rejection; radix math vs `ipaddress`; `target.py` parsers; hash/passwords/jwt/scanner/cidr wrong-output fuzz; fileio/completion/whois/dns normalize fuzz (prior sessions).
 - Prior sessions: `completion.generate_completion_script`, `web.check_security_headers`, `fileio.read_lines`, `whois.parse_whois` (Sponsoring-Registrar priority), `completion.detect_shell`, `web._assess_web_server_version`, `fileio.sanitize_csv_cell`, `whois.extract_referral_server` (empty-value newline spill), `web._parse_url`, `oracle_verify_service.py`, `scanner.parse_port_range` — all clean/fixed; do not repeat unchanged.
-- This session: `whois.parse_whois` empty-value newline spill (fixed prior session) and `service.py::_parse_banner_version` empty same-line `Server:` value crosses into the next header (reproduced, fixed, tested this session) — do not repeat unchanged. Redis/mysql/snmp/cert/nmap/config/report/vuln parsers inspected clean (above).
+- This session: No new approach attempted — repository was already green; verification-only re-run confirms baseline. Do not repeat verification-only sessions without a reproduced defect.
 
 ## Next task (precise, evidence-based)
-- Do NOT repeat a verification-only session. The newline-spill class (`\s*` between a label and a same-line value) is now fixed in `whois.extract_referral_server`, `whois.parse_whois`, AND `service.py::_parse_banner_version` (`Server:[ \t]*([^\r\n]+)` for http/https). A repo-wide grep for `\s*` label-value separators found no remaining instances of the newline-spill class in protocol modules (the only other `\s*` hits are `wifi.py` `\s*dBm`/trailing and `\s+` between fields, which require a digit-valued capture and do not spill labels; `service.py` is now fixed).
+- Do NOT repeat a verification-only session. The newline-spill class (`\s*` between a label and a same-line value) is now fixed in `whois.extract_referral_server`, `whois.parse_whois`, AND `service.py::_parse_banner_version` (`Server:[ \t]*([^\r\n]+)` for http/https). A repo-wide grep for `\s*` label-value separators found no remaining instances of the newline-spill class in protocol modules (the only other `\s*` hits are `wifi.py` `\s*dBm`/trailing and `\s+` between fields, which require a digit-valued capture and do not spill labels).
 - If future work is needed, use a fresh angle not yet covered (e.g. property-check `fileio`/`completion`/`headers`/`whois`/`dns` helpers for wrong output vs an oracle), reproduce a concrete defect first (focused failing check), apply the smallest safe fix, add/extend a test to keep coverage 100%, and rerun the full gate (`pytest -q`, `mypy ethscan/ tests/`, `ruff check ethscan/ tests/ check_readme.py`, `python3 check_readme.py`, coverage). If green and no new defect reproduces, record the negative result, preserve the green baseline, and hand off again — do not fabricate work.
 
 (End of file - total 50 lines)
