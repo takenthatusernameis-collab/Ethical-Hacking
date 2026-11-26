@@ -1,13 +1,13 @@
 # Handoff
 
 ## Status
-Repository is fully green, independently re-verified THIS session on **Python 3.14.4** (newer than the documented `requires-python >=3.10` floor). Working tree was clean at session start and remains clean (no changes made).
+Repository is fully green, independently re-verified THIS session on **Python 3.14.4**. Working tree was clean at session start and remains clean (no changes made).
 
 ## What changed (this session)
 - **None.** No code or test changes were made. Full gate re-verified as a negative-result check (no defect reproduced).
 
 ## What was actually verified (evidence)
-- `python -m pytest -q` -> **49839 passed, 147 skipped, 0 failed** (198s).
+- `python -m pytest -q` -> **49839 passed, 147 skipped, 0 failed** (199s).
 - `python -m mypy ethscan/ tests/` -> **Success: no issues found in 272 source files**.
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> **All checks passed**.
 - `python3 check_readme.py` -> **54 CLI commands, 0 drift both directions, exit 0**.
@@ -30,5 +30,3 @@ Prior oracle probes remain clean: `hash._infer_algorithm` (1.3M+ cases), `target
 - If green and **no new defect is reproduced**, do NOT fabricate work or repeat verification-only sessions — record the negative result, preserve the green baseline, and hand off again.
 - Only if a focused failing check or oracle mismatch reproduces: fix the smallest reversible defect, then rerun the full gate.
 - Remaining candidate work (not pure helpers in current form) would require extracting pure helpers from I/O-bound functions (e.g., `grab_banner` transport logic, `run_service` threading logic) before applying the oracle pattern.
-
-(End of file - total 49 lines)
