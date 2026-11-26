@@ -15,6 +15,9 @@ at session start.
      handoff recorded).
   2. New independent-oracle probe of `ethscan.hash._infer_algorithm` (1.3M+
      hostile cases vs stdlib-only length-based oracle) — **0 mismatches**.
+  3. New independent-oracle probe of `ethscan.target` pure helpers (115k+
+     hostile cases vs stdlib oracles: `ipaddress`, `urllib.parse`, `re`) —
+     **0 mismatches**.
 
 ## What was actually verified (evidence)
 - `python -m pytest -q` -> **49799 passed, 147 skipped, 0 failed** (151s).
@@ -30,12 +33,20 @@ at session start.
   hex/non-hex, empty/whitespace-only, surrounding whitespace, inner whitespace,
   uppercase hex, and the 32-char ambiguity (md5 preferred over ntlm/md4).
   **0 mismatches**.
+- Target module oracle probe (stdlib-only): ~115,000 cases covering
+  `normalize_host`, `parse_url`, `check_port`, `url_port`, `check_target_host`,
+  `check_target_path`, `strip_userinfo`, `format_host_header` over hostile
+  matrix (empty/whitespace, control chars, percent-encoded controls, IPv6
+  bracketed/unbracketed/zone IDs, IPv4, DNS/IDN, userinfo, ports at boundaries,
+  unparseable URLs, very long inputs, non-ASCII, mixed case).
+  **0 mismatches**.
 
 ## Fresh-angle probes (new areas, negative results — no defect)
 - `mac` module pure helpers vs stdlib oracle: 40k+ cases, 0 mismatches.
 - `geo` module pure helpers vs stdlib oracle: 8M+ cases, 0 mismatches.
 - `hash._infer_algorithm` vs stdlib-only length-based oracle: 1.3M+ cases,
   0 mismatches.
+- `target` module pure helpers vs stdlib oracles: ~115k cases, 0 mismatches.
 - Only cosmetic artifact found: `ethscan/mssql.py:591` has a duplicated inline
   `# pragma: no cover - defensive  # pragma: no cover - defensive` comment. The
   code is correct and the branch is intentionally excluded; not worth a commit.
@@ -54,21 +65,19 @@ at session start.
 - NEW this session: `mac` pure helpers vs stdlib oracle — clean.
 - NEW this session: `geo` pure helpers vs stdlib oracle — clean.
 - NEW this session: `hash._infer_algorithm` vs stdlib-only length oracle — clean.
+- NEW this session: `target` pure helpers vs stdlib oracles — clean.
 - Repeating verification-only sessions with no new evidence is explicitly
   discouraged; do not do it again without a concrete new probe or defect.
 
 ## Next task (precise, evidence-based)
 - Extend the independent-oracle verification to the remaining not-yet-oracle-
-  checked PURE helpers, in this order:
+  checked PURE helpers:
   1. `ethscan.service._parse_banner_service` / `_parse_banner_version` — verify
      banner parsing is total over hostile inputs (empty, control chars, very
      long lines, non-ASCII, malformed version strings) and never raises.
-  2. `ethscan.target` pure helpers (`normalize_host`, `parse_url`, `check_port`,
-     `check_target_host`, `check_target_path`, `strip_userinfo`,
-     `format_host_header`) — stdlib oracle using `ipaddress`, `urllib.parse`, `re`
-     over hostile matrix (URLs with userinfo, IPv6 bracketed/unbracketed, ports
-     at boundaries, control chars in host/path, percent-encoded controls, zone
-     IDs, missing schemes).
+     Note: These functions do not yet exist in the codebase; they would need to
+     be extracted from `grab_banner`/`run_service` logic first, or the verification
+     would target the inline parsing logic in `grab_banner` (lines 162-173).
 - Constraints: do NOT modify `.github/workflows/**`; keep `oracle`/`postgresql`
   empty-target in-band behavior; do not weaken the `cli.py:4316` guard or game the
   coverage metric. Any code change must fix a reproduced defect first (focused
@@ -76,4 +85,4 @@ at session start.
   (pytest/coverage/mypy/ruff/check_readme). If no defect reproduces, record the
   new negative result and stop — do not fabricate.
 
-(End of file - total 88 lines)
+(End of file - total 105 lines)

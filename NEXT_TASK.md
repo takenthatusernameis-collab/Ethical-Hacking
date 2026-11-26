@@ -4,18 +4,15 @@ PURE helpers (prior oracle set: radix/cidr/target/validate; this session added
 vuln.version_in_range — 200k cases vs `packaging`, 0 mismatches; mac — 5
 functions, 40k+ cases vs stdlib, 0 mismatches; geo — 3 functions + column
 consistency, 8M+ cases vs stdlib, 0 mismatches; hash._infer_algorithm — 1.3M+
-cases vs stdlib length oracle, 0 mismatches):
+cases vs stdlib length oracle, 0 mismatches; target — 8 functions, ~115k cases
+vs stdlib oracles, 0 mismatches):
 
 1. `ethscan.service._parse_banner_service` / `_parse_banner_version` — verify
    banner parsing is total over hostile inputs (empty, control chars, very long
    lines, non-ASCII, malformed version strings) and never raises.
-
-2. `ethscan.target` pure helpers (`normalize_host`, `parse_url`, `check_port`,
-   `check_target_host`, `check_target_path`, `strip_userinfo`,
-   `format_host_header`) — stdlib oracle using `ipaddress`, `urllib.parse`, `re`
-   over hostile matrix (URLs with userinfo, IPv6 bracketed/unbracketed, ports at
-   boundaries, control chars in host/path, percent-encoded controls, zone IDs,
-   missing schemes).
+   Note: These functions do not yet exist in the codebase; they would need to
+   be extracted from `grab_banner`/`run_service` logic first, or the verification
+   would target the inline parsing logic in `grab_banner` (lines 162-173).
 
 ## Baseline (independently re-verified THIS session on Python 3.14.4)
 - `pytest -q` -> 49799 passed, 147 skipped, 0 failed.
@@ -36,4 +33,4 @@ cases vs stdlib length oracle, 0 mismatches):
 - Note: `ethscan/mssql.py:591` has a duplicated `# pragma: no cover` comment
   (cosmetic only; code is correct). Not worth a commit on its own.
 
-(End of file - total 41 lines)
+(End of file - total 43 lines)
