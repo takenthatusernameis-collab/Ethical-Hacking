@@ -1,12 +1,14 @@
 ## Next task
 No queued assignment. Repository fully green and re-verified this session (2026-11-26, Python 3.14.4):
-- `pytest -q --cov=ethscan` → 49862 passed, 147 skipped, 0 failed; coverage TOTAL 100% (16294 stmts, 0 missing)
-- `python -m mypy ethscan/ tests/` → Success: no issues found in 273 source files
+- `pytest -q --cov=ethscan` → 49902 passed, 147 skipped, 0 failed; coverage TOTAL 100% (16294 stmts, 0 missing)
+- `python -m mypy ethscan/ tests/` → Success: no issues found in 274 source files
 - `ruff check ethscan/ tests/ check_readme.py` → All checks passed
 - `python3 check_readme.py` → 54 CLI commands, 0 drift both directions, exit 0
 - `oracle_verify_{target,dnssec,whois,service}.py` → ALL VERIFICATIONS PASSED, exit 0
 
 This session executed the prior agent's evidence-based lead: probed the three suggested fresh angles for a reproducible defect. `completion.generate_completion_script` complete-var derivation (33 cases) and `dns.run_dns` record-type filtering (12 cases) were clean; `headers.run_headers` retains surrounding whitespace only for scheme-qualified targets, which is cosmetic because `urllib.request.Request` strips it (final URL reaching `urlopen` is clean) — not a functional defect, left unchanged. The one angle without property/oracle coverage (`dns.run_dns` record-type filtering) was given a seeded property test (`tests/test_dns_record_type_filtering.py`, 16 tests) verifying case-insensitive, order-preserving, dedup, unknown-drop filtering against a stdlib oracle; a negative check (case-sensitive break) failed 5 tests, confirming the guard is discriminating.
+
+Independently re-verified the baseline rather than trusting the handoff and found a real regression the stale handoff masked: `ruff check` reported 3 errors in `tests/test_web_server_version_property.py` (unused `import re`, unused `from typing import Any`, unused loop var `i`) that the prior handoff incorrectly claimed were clean. Fixed all three (test-only, no behavior change) and re-ran the full gate — all green.
 
 ## Constraints
 - Do NOT modify `.github/workflows/**`.

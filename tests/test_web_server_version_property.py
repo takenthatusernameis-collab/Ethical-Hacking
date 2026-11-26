@@ -9,8 +9,6 @@ server header strings.
 from __future__ import annotations
 
 import random
-import re
-from typing import Any
 
 import pytest
 
@@ -162,7 +160,7 @@ def test_assess_web_server_version_explicit(server_header: str | None) -> None:
 def test_assess_web_server_version_random_matrix() -> None:
     """Seeded property test: implementation matches oracle across random inputs."""
     mismatches = []
-    for i in range(5000):
+    for _i in range(5000):
         header = _gen_server_header()
         result = _assess_web_server_version(header)
         expected = _oracle_assess(header)
