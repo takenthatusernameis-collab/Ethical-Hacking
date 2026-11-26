@@ -1,12 +1,14 @@
 ## Next task
-No queued assignment. Repository fully green and independently re-verified this session (2026-11-26, Python 3.14.4):
+No queued assignment. Repository fully green and re-verified this session (2026-11-26, Python 3.14.4):
 - `pytest -q` → 49845 passed, 147 skipped, 0 failed
 - `python -m mypy ethscan/ tests/` → Success: no issues found in 272 source files
-- `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed
+- `ruff check ethscan/ tests/ check_readme.py` → All checks passed
 - `python3 check_readme.py` → 54 CLI commands, 0 drift both directions, exit 0
 - Coverage TOTAL 100% (16294 stmts, 6174 branches, 0 missing)
+- `python oracle_verify_dnssec.py` → ALL VERIFICATIONS PASSED (4 helpers), exit 0
+- `python oracle_verify_whois.py` → ALL VERIFICATIONS PASSED (2 helpers), exit 0
 
-This session reproduced and fixed a genuine wrong-output defect in `ethscan/whois.py::extract_referral_server`: a `whois.iana.org` referral carrying a port (e.g., `Refer: whois://whois.iana.org:43`, `Registrar WHOIS Server: whois.iana.org:43`) was not excluded because the exclusion check compared the full string including port against `"whois.iana.org"`. Fixed by extracting the hostname part before the exclusion check (`server.split(":", 1)[0].lower()`). Added 6 assertions to `tests/test_whois.py::test_extract_referral_server`. `ethscan/whois.py` remains at 100% coverage.
+This session reproduced and fixed a genuine defect in the committed verification tooling `oracle_verify_dnssec.py`: two `struct.pack(">HBB", ...)` calls passed a 4th argument to a 3-field format (lines 356 and 415), raising `struct.error` and aborting the script before `_parse_dnskey_response` and `_parse_ds_response` were ever verified. Removed the stray copy-paste argument in both. The script now runs end-to-end and all four dnssec helper oracles pass, confirming the production parsers are correct. No `ethscan/` source changed; coverage remains 100%.
 
 ## Constraints
 - Do NOT modify `.github/workflows/**`.
@@ -17,9 +19,9 @@ This session reproduced and fixed a genuine wrong-output defect in `ethscan/whoi
 - `sanitize_csv_cell` leaving `-inf`/`+inf`/`nan` unsanitised is a low-severity edge (spreadsheet error, not injection); do not change without a reproduced functional failure.
 
 ## Evidence-based lead for a future session (only if a session is needed)
-- All five quality gates are green and coverage is 100%. No pending defect.
-- The `fileio`/`sanitize_csv_cell` property-check lead (vs the `csv` stdlib oracle) was tried this session (2026-11-26) and found clean: 0 violations across a 41-case hostile matrix (probe kept outside the repo). Do not repeat that lead unchanged.
-- If future work is needed, use a fresh angle not yet covered (e.g. property-check `completion`/`headers`/`whois`/`dns` helpers for wrong output vs an oracle), reproduce a concrete defect first (focused failing check), apply the smallest safe fix, add/extend a test to keep coverage 100%, and rerun the full gate. If green and no new defect reproduces, record the negative result, preserve the green baseline, and hand off again — do not fabricate work or repeat verification-only sessions without new evidence.
-- Already property-checked / inspected clean (do not repeat): all pure helpers in ORACLE_VERIFICATION_TARGET.md + prior HANDOFFs, radix math, `target.py` parsers, hash/passwords/jwt/scanner/cidr, fileio/completion/whois/dns normalize, redis/mysql/snmp/cert/nmap/config/report/vuln parser inspection. `whois.extract_referral_server` URL-path leak fixed in prior session; port-inclusive `whois.iana.org` exclusion fixed this session.
+- All five quality gates are green, coverage is 100%, and both oracle scripts pass end-to-end. No pending defect.
+- The `fileio`/`sanitize_csv_cell` property-check lead (vs the `csv` stdlib oracle) was tried and found clean (0 violations / 41 cases). Do not repeat unchanged.
+- If future work is needed, use a fresh angle not yet covered (e.g. property-check `completion.generate_completion_script` complete-var derivation, `headers.run_headers` URL construction, or `dns.run_dns` record-type filtering against a stdlib oracle), reproduce a concrete defect first (focused failing check), apply the smallest safe fix, add/extend a test to keep coverage 100%, and rerun the full gate. If green and no new defect reproduces, record the negative result, preserve the green baseline, and hand off again.
+- Already property-checked / inspected clean (do not repeat): all pure helpers in ORACLE_VERIFICATION_TARGET.md + prior HANDOFFs, radix math, `target.py` parsers, hash/passwords/jwt/scanner/cidr, fileio/completion/whois/dns normalize, redis/mysql/snmp/cert/nmap/config/report/vuln parser inspection, `whois.extract_referral_server` (URL-path leak + port-inclusive iana exclusion), and dnssec `_get_parent_zone`/`_parse_dns_name`/`_parse_dnskey_response`/`_parse_ds_response` (now actually verified this session after fixing the oracle-script crash).
 
 (End of file)

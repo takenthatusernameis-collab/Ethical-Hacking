@@ -353,7 +353,7 @@ def generate_dnskey_responses() -> list[tuple[bytes, str]]:
 
     # Multiple DNSKEY answers
     header = struct.pack(">HHHHHH", 1, 0x8180, 1, 2, 0, 0)
-    rdata2 = struct.pack(">HBB", 256, 3, 13, 8) + b"\x00" * 32  # ECDSAP256SHA256
+    rdata2 = struct.pack(">HBB", 256, 3, 13) + b"\x00" * 32  # ECDSAP256SHA256
     test_cases.append((header + question + name_ptr + answer_header + rdata + name_ptr + answer_header + rdata2, "example.com"))
 
     # Truncated RDATA
@@ -412,7 +412,7 @@ def generate_ds_responses() -> list[tuple[bytes, str]]:
 
     # Multiple DS answers
     header = struct.pack(">HHHHHH", 1, 0x8180, 1, 2, 0, 0)
-    rdata2 = struct.pack(">HBB", 54321, 13, 4, 4) + b"\x00" * 32  # algorithm=13, digest_type=4
+    rdata2 = struct.pack(">HBB", 54321, 13, 4) + b"\x00" * 32  # algorithm=13, digest_type=4
     test_cases.append((header + question + name_ptr + answer_header + rdata + name_ptr + answer_header + rdata2, "example.com"))
 
     # Truncated RDATA
