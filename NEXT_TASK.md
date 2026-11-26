@@ -4,7 +4,9 @@ No queued assignment. Repository fully green and independently re-verified this 
 - `python -m mypy ethscan/ tests/` → Success: no issues found in 272 source files
 - `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed
 - `python3 check_readme.py` → 54 CLI commands, 0 drift both directions, exit 0
-- `python -m coverage run --branch --source=ethscan -m pytest -q` → TOTAL 100% (16293 stmts, 6174 branches, 0 missing)
+- Coverage previously TOTAL 100% (16293 stmts, 6174 branches, 0 missing)
+
+No code changes made; no defect reproduced; `git status` clean. `ethscan/service.py` pure helpers confirmed oracle-verified via `tests/test_service_banner_oracle.py` and `oracle_verify_service.py`; no remaining unverified pure-helper angle identified.
 
 This session reproduced and fixed a genuine wrong-output defect in `ethscan/whois.py::extract_referral_server`: a `whois://` referral URL carrying a path/query/fragment (e.g. `Refer: whois://whois.example.com/path/to/server`) leaked the path into the returned hostname, violating the bare-hostname contract needed by `getaddrinfo`. Fixed by truncating path/query/fragment after scheme stripping (`split("/", 1)[0].split("?", 1)[0].split("#", 1)[0]`). Added 4 assertions to `tests/test_whois.py::test_extract_referral_server`. `ethscan/whois.py` remains at 100% coverage.
 

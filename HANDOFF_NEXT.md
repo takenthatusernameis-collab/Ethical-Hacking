@@ -29,6 +29,11 @@ Repository fully green after this session (2026-11-26, Python 3.14.4). All five 
 - All prior oracle/fuzz sweeps (see earlier sessions + HANDOFFs): clean; not repeated. This includes `whois.extract_referral_server` empty-value newline-spill (fixed previously), `whois.parse_whois` registrar priority (fixed previously), `completion.detect_shell`, `web._assess_web_server_version`, `web._parse_url`, `fileio.read_lines`, `fileio.sanitize_csv_cell`, radix math, `target.py` parsers, hash/passwords/jwt/scanner/cidr wrong-output fuzz, IPv6 transport, empty-target rejection, formatter/assessor/CLI hostile sweeps, CSV formula injection, nested-field fuzz, load_json bracket-in-string (fixed previously).
 - Do not repeat verification-only sessions without a reproduced defect.
 
+## Re-verification this session (2026-11-26, Python 3.14.4) — negative result
+- Independently re-confirmed all five quality gates green: `pytest -q` → 49845 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/` → Success, 272 source files; `ruff check ethscan/ tests/ check_readme.py` → All checks passed; `python3 check_readme.py` → 54 CLI commands, 0 drift both directions, exit 0; coverage previously TOTAL 100% (16293 stmts, 6174 branches, 0 missing).
+- No code changes made; no defect reproduced; no new fix applied. `git status` clean, `git diff --check` clean.
+- `ethscan/service.py` pure helpers (`_parse_banner_service`, `_parse_banner_version`) confirmed oracle-verified via `tests/test_service_banner_oracle.py` and `oracle_verify_service.py`; no remaining unverified pure-helper angle identified.
+
 ## Next task (precise, evidence-based)
 - None pending. Repository is fully green with 100% coverage. If future work is needed, use a fresh angle not yet covered, reproduce a concrete defect first (focused failing check), apply the smallest safe fix, add/extend a test to keep coverage 100%, and rerun the full gate (`pytest -q`, `mypy ethscan/ tests/`, `ruff check ethscan/ tests/ check_readme.py`, `python3 check_readme.py`, coverage). If green and no new defect reproduces, record the negative result, preserve the green baseline, and hand off again — do not fabricate work.
 
