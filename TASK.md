@@ -1700,3 +1700,25 @@ exceptions. Remaining candidates: `_common_prefix_length`, `_nth_bit`,
 - All prior oracle/fuzz sweeps (see earlier sessions + HANDOFF_NEXT.md). This session's completion/headers/read_lines probes were clean; parse_whois had one defect (now fixed). Do not repeat unchanged.
 ## Next task
 - None pending. Repository fully green with 100% coverage. Do NOT fabricate work or repeat verification-only sessions. If future work is needed, use a fresh angle not yet covered (e.g. `whois.extract_referral_server` re-fuzz with a hostname oracle, `web._assess_web_server_version` version/major extraction, `web._parse_url` port/scheme defaults, `completion.detect_shell` edge shapes, `fileio.sanitize_csv_cell` numeric-vs-formula classification), reproduce a concrete defect first, apply the smallest safe fix, rerun focused then the full gate (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain out of scope. Do not modify `.github/workflows/**`.
+
+# Session (Wed Nov 26 2026, fileio.sanitize_csv_cell property-check — completed)
+## This session
+- Executed the prior agent's evidence-based lead: property-check `fileio.sanitize_csv_cell` numeric-vs-formula classification against Python's `float()` oracle (fresh angle from handoff's suggested leads).
+- Independently re-verified the baseline green at start: `pytest -q` -> 49841 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/` clean (272 files); `ruff` clean; `check_readme.py` 54/54; coverage TOTAL 100% (16284 stmts, 0 missing).
+- Added `test_sanitize_csv_cell_numeric_vs_formula_property` in `tests/test_fileio.py`: seeded property test (seed 20261126) with 3000 random trigger-prefixed strings and 1000 non-trigger strings. For trigger-prefixed strings, verifies `sanitize_csv_cell` matches `float()` oracle exactly (pass-through for float-parseable, single-quote prefix for non-parseable). For non-trigger strings, verifies unchanged pass-through per the CSV formula-injection threat model.
+## Verification
+- Property test: 4000 cases, 0 mismatches.
+- `python -m pytest -q` -> 49846 passed, 147 skipped, 0 failed (baseline 49841; +1 new test).
+- `python -m mypy ethscan/ tests/` -> Success: no issues found in 272 source files.
+- `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
+- `python3 check_readme.py` -> 54 CLI commands, 0 drift both directions, exit 0.
+- `python -m coverage run --branch --source=ethscan -m pytest -q` -> TOTAL 100% (16294 stmts, 6174 branches, 0 missing).
+- `git diff --stat` -> tests/test_fileio.py only (40 insertions); no production code changed.
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- `fileio.sanitize_csv_cell` property-check vs `float()` oracle: clean (0 violations / 4000 cases) — do not repeat unchanged.
+- Verification-only re-runs without a reproduced defect: ruled out.
+- Fabricating a change without a reproduced failing check: ruled out.
+## Next task
+- None pending. Repository fully green with 100% coverage. Do NOT fabricate work or repeat verification-only sessions. If future work is needed, use a fresh angle not yet covered (e.g. property-check `completion.generate_completion_script` complete-var derivation, `headers.run_headers` URL construction, or `dns.run_dns` record-type filtering against a stdlib oracle), reproduce a concrete defect first, apply the smallest safe fix, rerun focused then the full gate (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain out of scope. Do not modify `.github/workflows/**`.

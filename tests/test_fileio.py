@@ -363,3 +363,63 @@ def test_sanitize_csv_cell_keeps_numeric_and_safe_values() -> None:
     assert sanitize_csv_cell(None) is None
     assert sanitize_csv_cell("") == ""
     assert sanitize_csv_cell("plain text") == "plain text"
+
+
+def test_sanitize_csv_cell_numeric_vs_formula_property() -> None:
+    """Property test: for strings starting with formula triggers, sanitize_csv_cell
+    must match Python's float() oracle. If float() parses it, it's a pure number
+    and passes through; otherwise it gets a leading quote.
+
+    Strings not starting with triggers pass through unchanged regardless of
+    float()-parseability (they are not formula-injection vectors per the spec).
+    """
+    import random
+    import string
+    from ethscan.fileio import sanitize_csv_cell
+
+    TRIGGERS = ("=", "+", "-", "@", "\t", "\r")
+
+    def is_float_parseable(s: str) -> bool:
+        try:
+            float(s)
+            return True
+        except ValueError:
+            return False
+
+    rng = random.Random(20261126)
+
+    # Test 1: Random strings starting with triggers - must match float() oracle
+    for _ in range(2000):
+        trigger = rng.choice(TRIGGERS)
+        # Generate rest of string from various character classes
+        rest_len = rng.randint(0, 50)
+        chars = string.ascii_letters + string.digits + string.punctuation + " \t\r\n"
+        rest = "".join(rng.choice(chars) for _ in range(rest_len))
+        s = trigger + rest
+
+        result = sanitize_csv_cell(s)
+        float_ok = is_float_parseable(s)
+
+        if float_ok:
+            assert result == s, f"float-parseable {s!r} should pass through, got {result!r}"
+        else:
+            assert result == "'" + s, f"non-float {s!r} should be quoted, got {result!r}"
+
+    # Test 2: Strings NOT starting with triggers pass through unchanged
+    non_triggers = tuple(c for c in (string.ascii_letters + string.digits + " ") if c not in TRIGGERS)
+    for _ in range(1000):
+        first = rng.choice(non_triggers)
+        rest_len = rng.randint(0, 50)
+        chars = string.ascii_letters + string.digits + string.punctuation + " \t\r\n"
+        rest = "".join(rng.choice(chars) for _ in range(rest_len))
+        s = first + rest
+
+        result = sanitize_csv_cell(s)
+        assert result == s, f"non-trigger {s!r} should pass through unchanged, got {result!r}"
+
+    # Test 3: Empty string and non-strings pass through unchanged
+    assert sanitize_csv_cell("") == ""
+    assert sanitize_csv_cell(None) is None
+    assert sanitize_csv_cell(42) == 42
+    assert sanitize_csv_cell([]) == []
+    assert sanitize_csv_cell({}) == {}
