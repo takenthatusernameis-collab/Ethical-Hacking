@@ -1613,6 +1613,21 @@ def test_parse_url_rejects_empty_target() -> None:
             _parse_url(bad)
 
 
+def test_parse_url_explicit_port_zero() -> None:
+    """Explicit port 0 must be preserved, not replaced by default port (regression for GH-XXX)."""
+    # HTTPS with explicit port 0
+    host, port, secure = _parse_url("https://example.com:0")
+    assert host == "example.com"
+    assert port == 0
+    assert secure is True
+
+    # HTTP with explicit port 0
+    host, port, secure = _parse_url("http://example.com:0")
+    assert host == "example.com"
+    assert port == 0
+    assert secure is False
+
+
 # ---------------------------------------------------------------------------
 # CSV formatter additional coverage
 # ---------------------------------------------------------------------------

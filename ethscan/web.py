@@ -151,10 +151,14 @@ def _parse_url(target: str) -> tuple[str, int, bool]:
     scheme = parsed.scheme.lower()
     if scheme == "https":
         is_secure = True
-        port = url_port(cast("SplitResult", parsed)) or 443
+        port = url_port(cast("SplitResult", parsed))
+        if port is None:
+            port = 443
     else:
         is_secure = False
-        port = url_port(cast("SplitResult", parsed)) or 80
+        port = url_port(cast("SplitResult", parsed))
+        if port is None:
+            port = 80
     return host, port, is_secure
 
 
