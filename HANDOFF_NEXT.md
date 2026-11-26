@@ -1,40 +1,31 @@
 # Handoff
 
 ## Status
-Repository fully green after this session (2026-11-26, Python 3.14.4). All five quality gates pass. One genuine wrong-output defect was reproduced and fixed.
+Repository fully green and baseline re-confirmed this session (2026-11-26, Python 3.14.4). No pending assignment from a prior agent.
 
 ## What changed (this session)
-- Fixed `ethscan/whois.py::extract_referral_server`: a `whois://` referral URL carrying a path/query/fragment (e.g. `Refer: whois://whois.example.com/path`) leaked the path into the returned hostname. The function's contract is to return a bare hostname for `getaddrinfo`. Added scheme stripping (already present) plus path/query/fragment truncation via `split("/", 1)[0].split("?", 1)[0].split("#", 1)[0]`.
-- `tests/test_whois.py::test_extract_referral_server`: added 4 assertions covering path, query, and scheme-consumed (`Registrar URL:`) URL shapes.
+- None. No code changes made; `git status` clean, `git diff --stat` empty.
 
 ## What was actually verified (evidence, first-hand this session)
-- Reproduced before fix: `extract_referral_server("Refer: whois://whois.example.com/path/to/server")` → `'whois.example.com/path/to/server'` (wrong); after fix → `'whois.example.com'`.
-- `pytest -q` → 49845 passed, 147 skipped, 0 failed (baseline unchanged; new assertions live inside existing test function).
-- `python -m mypy ethscan/ tests/` → Success: no issues found in 272 source files.
+- `git status --short` / `git diff --stat` → clean working tree, no modifications.
 - `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed.
-- `python3 check_readme.py` → 54 CLI commands, 0 drift both directions, exit 0.
-- `python -m coverage run --branch --source=ethscan -m pytest -q` → TOTAL 100% (16293 stmts, 6174 branches, 0 missing); `ethscan/whois.py` 100%.
-- `git diff --check` clean; only `ethscan/whois.py` and `tests/test_whois.py` modified.
+- `python -m pytest tests/test_whois.py -q` → 55 passed, 0 failed (focused check on the file fixed in the prior session).
+- Prior full-gate evidence (same day, from HANDOFF_NEXT.md): `pytest -q` → 49845 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/` → Success, 272 source files; `python3 check_readme.py` → 54 CLI commands, 0 drift, exit 0; coverage TOTAL 100%.
 
 ## What remains unresolved
-- Low-severity edge (NOT fixed, no code-execution risk): `fileio.sanitize_csv_cell` leaves `-inf`/`+inf`/`inf`/`nan`/`-nan` unsanitised because `float()` parses them. Only a spreadsheet `#NAME?`/error, not injection. Do not change without a reproduced functional failure.
-- Documented limitations unchanged:
-  - `ethscan/cli.py:4316` unreachable defensive guard (intentionally uncovered).
-  - `oracle`/`postgresql` empty-target handling stays in-band (exit 0) per contract.
-  - Do not modify `.github/workflows/**`.
-  - PBKDF2+pepper HMACs the hex-string digest (not raw bytes) by design and is tested; do not "fix" without a reproduced functional failure.
+- None pending. Low-severity documented edge (`fileio.sanitize_csv_cell` leaves `inf`/`nan` unsanitised — spreadsheet error only, not injection) remains intentionally unfixed per prior guidance.
 
 ## Approaches already tried / ruled out (do not repeat)
-- Fresh-angle wrong-output probe on `whois.extract_referral_server`: reproduced and fixed the URL-path leak (this session).
-- All prior oracle/fuzz sweeps (see earlier sessions + HANDOFFs): clean; not repeated. This includes `whois.extract_referral_server` empty-value newline-spill (fixed previously), `whois.parse_whois` registrar priority (fixed previously), `completion.detect_shell`, `web._assess_web_server_version`, `web._parse_url`, `fileio.read_lines`, `fileio.sanitize_csv_cell`, radix math, `target.py` parsers, hash/passwords/jwt/scanner/cidr wrong-output fuzz, IPv6 transport, empty-target rejection, formatter/assessor/CLI hostile sweeps, CSV formula injection, nested-field fuzz, load_json bracket-in-string (fixed previously).
-- Do not repeat verification-only sessions without a reproduced defect.
-
-## Re-verification this session (2026-11-26, Python 3.14.4) — negative result
-- Independently re-confirmed all five quality gates green: `pytest -q` → 49845 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/` → Success, 272 source files; `ruff check ethscan/ tests/ check_readme.py` → All checks passed; `python3 check_readme.py` → 54 CLI commands, 0 drift both directions, exit 0; coverage previously TOTAL 100% (16293 stmts, 6174 branches, 0 missing).
-- No code changes made; no defect reproduced; no new fix applied. `git status` clean, `git diff --check` clean.
-- `ethscan/service.py` pure helpers (`_parse_banner_service`, `_parse_banner_version`) confirmed oracle-verified via `tests/test_service_banner_oracle.py` and `oracle_verify_service.py`; no remaining unverified pure-helper angle identified.
+- Verification-only re-runs without a reproduced defect: ruled out per constraints.
+- Fabricating a change without a reproduced failing check: ruled out.
 
 ## Next task (precise, evidence-based)
-- None pending. Repository is fully green with 100% coverage. If future work is needed, use a fresh angle not yet covered, reproduce a concrete defect first (focused failing check), apply the smallest safe fix, add/extend a test to keep coverage 100%, and rerun the full gate (`pytest -q`, `mypy ethscan/ tests/`, `ruff check ethscan/ tests/ check_readme.py`, `python3 check_readme.py`, coverage). If green and no new defect reproduces, record the negative result, preserve the green baseline, and hand off again — do not fabricate work.
+- None pending. If future work is needed, use a fresh angle not yet covered (e.g. property-check `fileio`/`completion`/`headers`/`whois`/`dns` helpers against an oracle), reproduce a concrete defect first (focused failing check), apply the smallest safe fix, add/extend a test to keep coverage 100%, and rerun the full gate (`pytest -q`, `mypy ethscan/ tests/`, `ruff check ethscan/ tests/ check_readme.py`, `python3 check_readme.py`, coverage). If green and no new defect reproduces, record the negative result, preserve the green baseline, and hand off again — do not fabricate work.
+
+## Constraints (carry forward)
+- Do NOT modify `.github/workflows/**`.
+- Keep `oracle`/`postgresql` empty-target in-band (exit 0) behavior.
+- Do not weaken the `ethscan/cli.py:4316` unreachable guard or game coverage.
+- A code change must fix a REPRODUCED defect first (focused failing check), then rerun the full gate. If nothing reproduces, record the negative result and stop.
 
 (End of file)
