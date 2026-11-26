@@ -1,7 +1,7 @@
 # Handoff
 
 ## Status
-Repository fully green and independently re-verified this session (2026-11-26, Python 3.14.4). No prior agent assignment with a concrete task existed; HANDOFF_NEXT.md/NEXT_TASK.md both said "None pending; repo fully green". Per the reliability rules, I did NOT repeat a verification-only session as progress; I independently re-verified the full gate and probed for a fresh-angle defect. No reproducible defect was found.
+Repository fully green. No prior agent assignment with a concrete task existed; HANDOFF_NEXT.md/NEXT_TASK.md both said "None pending; repo fully green". This session (2026-11-26, Python 3.14.4) independently re-verified the full gate first-hand and probed for a fresh-angle defect. No reproducible defect was found. Verification-only re-runs without new evidence are ruled out as progress per reliability rule 38; no work was fabricated.
 
 ## What changed (this session)
 - No source or test changes made (no reproducible defect; no speculative machinery per reliability rule 7).
@@ -12,7 +12,8 @@ Repository fully green and independently re-verified this session (2026-11-26, P
 - `ruff check ethscan/ tests/ check_readme.py` → All checks passed.
 - `python3 check_readme.py` → 54 CLI commands, 0 drift both directions, exit 0.
 - `python -m coverage run --branch --source=ethscan -m pytest -q` → TOTAL 100% (16294 stmts, 6174 branches, 0 missing).
-- Oracle scripts: `oracle_verify_target.py`, `oracle_verify_dnssec.py`, `oracle_verify_whois.py`, `oracle_verify_service.py` → ALL VERIFICATIONS PASSED, exit 0.
+- Working tree clean (`git status`: nothing to commit, up to date with origin/main).
+- Oracle scripts not re-run this session (network-dependent; previously recorded as all-passed in HANDOFF_NEXT.md). Local five-gate verification is fully green.
 
 ## Fresh-angle probes (negative results, evidence recorded)
 - Property fuzzer (wrong-output vs ground-truth oracles) over areas NOT previously property-checked: `hash.run_hash`/`run_check` vs hashlib/hmac/pbkdf2 (all algorithms × {plain,salt,pepper,salt+pepper,iterations,iterations+pepper}); `passwords.estimate_entropy`/`evaluate_password` invariants; `jwt.run_jwt` exp/nbf/iat status (incl. bool/NaN/Inf/string claims); `scanner.parse_port_range` vs hand oracle; `cidr._format_network_info` vs `ipaddress` (excl. intentional IPv6 anycast convention). ~22k cases total → 0 genuine defects. The only mismatches (1005) were ALL in the PBKDF2+pepper path and were the known intentional design (HMAC over hex-string digest, not raw bytes) — confirmed tested in `tests/test_hash.py`.
