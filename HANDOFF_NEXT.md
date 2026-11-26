@@ -1,10 +1,10 @@
 # Handoff
 
 ## Status
-Repository is fully green with 100% branch coverage. This session independently re-verified the baseline (handoff confirmed NOT stale): all four gates green plus coverage, no pending task, no source/test changes made. Working tree clean (`git status` clean).
+Repository is fully green with 100% branch coverage. This session independently re-verified the baseline (handoff confirmed NOT stale): `pytest -q` 49799 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/` clean (271 files); `ruff check ethscan/ tests/ check_readme.py` all checks passed; `python3 check_readme.py` 54 commands, 0 drift both directions, exit 0; coverage TOTAL 100% (16271 stmts, 6160 branches, 0 missing). No pending task, no source/test changes made. Working tree clean (`git status` clean).
 
 ## What changed (this session)
-- Nothing. Verification only; no source or test changes (do not fabricate work or repeat verification-only sessions as progress). Working tree clean.
+- Nothing. Independent re-verification only; no source or test changes (do not fabricate work or repeat verification-only sessions as progress). Working tree clean.
 
 ## What was actually verified (evidence)
 - `python -m pytest -q` -> 49799 passed, 147 skipped, 0 failed (matches prior baseline exactly).

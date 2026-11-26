@@ -4,7 +4,8 @@ None pending. Repository is fully green with 100% branch coverage:
 `pytest -q` -> 49799 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/`
 clean (271 files); `ruff check ethscan/ tests/ check_readme.py` all checks
 passed; `python3 check_readme.py` 54 commands, 0 drift; coverage TOTAL 100%
-(16271 stmts, 6160 branches, 0 missing) [verified this session].
+(16271 stmts, 6160 branches, 0 missing) [independently re-verified this session;
+handoff confirmed NOT stale].
 
 ## Completed this session
 - Independently re-verified the baseline (prior "none pending" handoff confirmed NOT stale): all four gates green plus 100% branch coverage maintained.
