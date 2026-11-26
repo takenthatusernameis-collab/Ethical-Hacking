@@ -978,6 +978,14 @@ def test_parse_banner_version_malformed_version_strings() -> None:
     assert _parse_banner_version("Server: nginx/", "http") == "nginx/"
 
 
+def test_parse_banner_version_empty_value_does_not_cross_lines() -> None:
+    """An empty same-line Server value must not capture the next line's header."""
+    assert _parse_banner_version("Server: \nDate: Mon, 01 Jan 2024\n", "http") == " "
+    assert _parse_banner_version("Server: \nStatus: 200 OK\n", "https") == " "
+    assert _parse_banner_version("Server:\nContent-Type: text/html", "http") is None
+    assert _parse_banner_version("Server: \t\nX-Powered-By: PHP", "http") == "\t"
+
+
 def test_parse_banner_version_non_ascii() -> None:
     """Non-ASCII characters in banner handled correctly."""
     assert _parse_banner_version("Server: nginx/1.18.0 日本語", "http") == "nginx/1.18.0 日本語"

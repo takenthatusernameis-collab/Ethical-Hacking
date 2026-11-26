@@ -54,11 +54,11 @@ SERVICE_SIGNATURES: dict[str, list[tuple[Pattern[str], str | None]]] = {
     ],
     "http": [
         (re.compile(r"^HTTP/1\.[01] 200", re.IGNORECASE), "HTTP"),
-        (re.compile(r"Server:\s*([^\r\n]+)", re.IGNORECASE), None),
+        (re.compile(r"Server:[ \t]*([^\r\n]+)", re.IGNORECASE), None),
     ],
     "https": [
         (re.compile(r"^HTTP/1\.[01] 200", re.IGNORECASE), "HTTPS"),
-        (re.compile(r"Server:\s*([^\r\n]+)", re.IGNORECASE), None),
+        (re.compile(r"Server:[ \t]*([^\r\n]+)", re.IGNORECASE), None),
     ],
     "mysql": [
         (re.compile(r"^[0-9a-f]{8}.*mysql", re.IGNORECASE), "MySQL"),
