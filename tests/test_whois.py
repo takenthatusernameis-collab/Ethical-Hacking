@@ -511,6 +511,13 @@ def test_extract_referral_server() -> None:
     # The whois.iana.org exclusion applies after the scheme is stripped.
     assert extract_referral_server("Refer: whois://whois.iana.org") is None
 
+    # A whois:// URL carrying a path/query must be reduced to its bare
+    # hostname; getaddrinfo cannot resolve a hostname that still has a path.
+    assert extract_referral_server("Refer: whois://whois.example.com/path/to/server") == "whois.example.com"
+    assert extract_referral_server("Refer: whois://whois.example.com?query=1") == "whois.example.com"
+    assert extract_referral_server("Registrar URL: whois://whois.example.com/path") == "whois.example.com"
+    assert extract_referral_server("WHOIS Server: whois://whois.example.com:43/") == "whois.example.com:43"
+
 
 def test_extract_referral_server_empty_value_does_not_cross_lines() -> None:
     # A label with an empty same-line value must not capture the next line's

@@ -1,12 +1,12 @@
 ## Next task
 No queued assignment. Repository fully green and independently re-verified this session (2026-11-26, Python 3.14.4):
-- `pytest tests/test_whois.py tests/test_service.py -q` → 125 passed (covers the two recently fixed newline-spill defects)
+- `pytest -q` → 49845 passed, 147 skipped, 0 failed
 - `python -m mypy ethscan/ tests/` → Success: no issues found in 272 source files
 - `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed
-- `python3 check_readme.py` → 54 CLI commands, 0 drift, exit 0
-- Full suite baseline (prior session): `pytest -q` → 49845 passed, 147 skipped, 0 failed; coverage → TOTAL 100% (16292 stmts, 6174 branches, 0 missing)
+- `python3 check_readme.py` → 54 CLI commands, 0 drift both directions, exit 0
+- `python -m coverage run --branch --source=ethscan -m pytest -q` → TOTAL 100% (16293 stmts, 6174 branches, 0 missing)
 
-This session confirmed the green baseline established after fixing the third genuine wrong-output defect of the `\s*` newline-spill class: `ethscan/service.py::_parse_banner_version` used `r"Server:\s*([^\r\n]+)"` for the http/https signatures, so a label with an empty same-line value (e.g. `Server: \nDate: ...`) spilled onto the next line and `([^\r\n]+)` captured that line's leading header as the version (`version == "Date: Mon, 01 Jan 2024"`). Fixed by restricting the separator to `[ \t]*` in both the `http` and `https` `Server:` patterns (service.py:57, :61). Added `test_parse_banner_version_empty_value_does_not_cross_lines`.
+This session reproduced and fixed a genuine wrong-output defect in `ethscan/whois.py::extract_referral_server`: a `whois://` referral URL carrying a path/query/fragment (e.g. `Refer: whois://whois.example.com/path/to/server`) leaked the path into the returned hostname, violating the bare-hostname contract needed by `getaddrinfo`. Fixed by truncating path/query/fragment after scheme stripping (`split("/", 1)[0].split("?", 1)[0].split("#", 1)[0]`). Added 4 assertions to `tests/test_whois.py::test_extract_referral_server`. `ethscan/whois.py` remains at 100% coverage.
 
 ## Constraints
 - Do NOT modify `.github/workflows/**`.
@@ -17,10 +17,8 @@ This session confirmed the green baseline established after fixing the third gen
 - `sanitize_csv_cell` leaving `-inf`/`+inf`/`nan` unsanitised is a low-severity edge (spreadsheet error, not injection); do not change without a reproduced functional failure.
 
 ## Evidence-based lead for a future session (only if a session is needed)
-- The newline-spill class (`\s*` between a label and a same-line value) is now fixed in `whois.extract_referral_server`, `whois.parse_whois`, AND `service.py::_parse_banner_version` (`Server:[ \t]*([^\r\n]+)` for http/https). A repo-wide grep for `\s*` label-value separators found no remaining instances of the newline-spill class in protocol modules (the only other `\s*` hits are `wifi.py` `\s*dBm`/trailing and `\s+` between fields, which require a digit-valued capture and do not spill labels).
-- Already property-checked / inspected clean (do not repeat): all pure helpers in ORACLE_VERIFICATION_TARGET.md + prior HANDOFFs, radix math, `target.py` parsers, hash/passwords/jwt/scanner/cidr, fileio/completion/whois/dns normalize, redis/mysql/snmp/cert/nmap/config/report/vuln parser inspection.
+- All five quality gates are green and coverage is 100%. No pending defect.
+- If future work is needed, use a fresh angle not yet covered (e.g. property-check `fileio`/`completion`/`headers`/`whois`/`dns` helpers for wrong output vs an oracle), reproduce a concrete defect first (focused failing check), apply the smallest safe fix, add/extend a test to keep coverage 100%, and rerun the full gate. If green and no new defect reproduces, record the negative result, preserve the green baseline, and hand off again — do not fabricate work.
+- Already property-checked / inspected clean (do not repeat): all pure helpers in ORACLE_VERIFICATION_TARGET.md + prior HANDOFFs, radix math, `target.py` parsers, hash/passwords/jwt/scanner/cidr, fileio/completion/whois/dns normalize, redis/mysql/snmp/cert/nmap/config/report/vuln parser inspection. `whois.extract_referral_server` URL-path leak fixed this session.
 
-## Update 2026-11-26 (this session)
-Confirmed the green baseline persists after the prior session's fixes for `parse_whois` empty-value newline-spill defect and `service.py::_parse_banner_version` empty same-line `Server:` value cross-line spill. Independently re-verified the quality gates (targeted pytest, mypy 272 files, ruff, check_readme 54/54). No other code changed; no verification-only repeat of the full suite.
-
-(End of file - total 26 lines)
+(End of file)
