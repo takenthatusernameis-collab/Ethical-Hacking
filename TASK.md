@@ -1818,3 +1818,32 @@ exceptions. Remaining candidates: `_common_prefix_length`, `_nth_bit`,
 - All prior fresh-angle probes (completion complete-var, headers/web URL construction, dns record-type filtering, whois referral extraction, web server version, parse_url, detect_shell, sanitize_csv_cell): clean in prior sessions; not repeated. This session's coverage-gap probe found and fixed a genuine gap rather than fabricating work.
 ## Next task
 - None pending. Repository fully green with 100% coverage. Do NOT fabricate work or repeat verification-only sessions as progress. If future work is needed, reproduce a concrete gap first (focused failing check, fresh-install failure, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then the full gate (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`.
+
+# Session (Fri Nov 27 2026)
+## This session
+- No prior agent assignment existed; HANDOFF_NEXT.md/NEXT_TASK.md both said "None pending; repo fully green". Independently re-verified the full gate first-hand before selecting work: `python -m pytest -q` -> 49912 passed, 147 skipped, 0 failed; `python -m mypy ethscan/ tests/` -> Success: no issues in 274 source files; `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed; `python3 check_readme.py` -> 54 commands, 0 drift both directions; `git status` clean.
+- Probed fresh angles NOT in prior ruled-out lists, all with running stdlib-oracle evidence and 0 mismatches:
+  - `ethscan.web._assess_web_server_version` vs an independent hand-derived oracle over 28 server-header shapes (Apache/nginx/lighttpd/IIS/Microsoft-IIS, case variants, prefixes/suffixes, malformed versions) — correct.
+  - `ethscan.web._parse_url` vs `urllib.parse.urlparse` oracle over 16 target shapes (scheme/default-port/bare/IPv6 brackets/whitespace/uppercase) — correct.
+  - `ethscan.completion.detect_shell` vs a hand-derived SHELL-basename oracle over 17 SHELL values — correct.
+  - `ethscan.config` coercion/validation (`_normalize_format_key`, `_parse_set_value`, `validate_config`, `build_default_map`) vs hand-derived oracles — correct.
+  - `ethscan.netbios._encode_name_chars` / `_decode_name_chars` vs an independent RFC 1001 first-pair/hex-nibble oracle over 5000 randomised names: encode matches 100%; ASCII-only names round-trip perfectly (0 failures); non-ASCII `?` replacement via `encode("ascii","replace")` is intentional, not a defect.
+- Result: no reproducible defect found; no source or test changes made (per reliability rules 6/8 — do not fabricate work or repeat verification-only sessions as progress).
+- Updated HANDOFF_NEXT.md and NEXT_TASK.md with this session's evidence and the "none pending" status.
+
+## Verification
+- All gates above green; `git diff --stat` shows only handoff/doc files changed; working tree clean.
+- `python -m pytest -q` -> 49912 passed, 147 skipped, 0 failed (baseline unchanged).
+- `python -m mypy ethscan/ tests/` -> Success: no issues found in 274 source files.
+- `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
+- `python3 check_readme.py` -> 54 commands, 0 drift both directions; exit 0.
+
+## Blockers
+- None.
+
+## Approaches already tried / ruled out
+- CSV formula injection, parser/adversarial STRING fuzz, formatter/assessor hostile contracts, CLI target/option hostile sweeps, nested-field & per-key hostile sweeps, broad `except Exception`, radix math, `target.py` parsers, hash/passwords/jwt/scanner/cidr wrong-output fuzz, `_assess_web_server_version`, `_parse_url`, `detect_shell`, config coercion/validation, netbios encode/decode: all clean; not repeated.
+- No remaining un-probed deterministic lead in the handoff lists.
+
+## Next task
+- None pending. Repository fully green with 100% coverage. Do NOT fabricate work or repeat verification-only sessions as progress. If future work is needed, reproduce a concrete gap first (focused failing check, fresh-install failure, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then the full gate (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`.

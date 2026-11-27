@@ -11,10 +11,25 @@ This session performed NEW differential probes (not in prior ruled-out lists) wi
 evidence, all 0 mismatches: `mac._is_mac_address`/`_strip_mac_port` (9 tricky vectors),
 `osdetect._checksum` (independent ones-complement oracle), `hash._compute_hash` (vs hashlib),
 `vuln._version_tuple` (manual digit-run oracle), and `radix._merge_networks` vs
-`ipaddress.collapse_addresses` over 3000 RANDOMISED IPv4/IPv6 vectors. Fresh static review of recon
-formatters, dns record-type filtering, urlcheck normalize, and version_in_range found no defect
-(`record_types_queried == raw input` is intentional and asserted by tests). No source/test changes;
-working tree clean except this handoff.
+`ipaddress.collapse_addresses` over 3000 RANDOMISED IPv4/IPv6 vectors.
+
+Additional fresh-angle probes this session (all 0 mismatches):
+- `ethscan.web._assess_web_server_version` vs an independent hand-derived oracle over 28
+  server-header shapes (Apache/nginx/lighttpd/IIS/Microsoft-IIS, case variants, prefixes/suffixes,
+  malformed versions) — correct.
+- `ethscan.web._parse_url` vs `urllib.parse.urlparse` oracle over 16 target shapes
+  (scheme/default-port/bare/IPv6 brackets/whitespace/uppercase) — correct.
+- `ethscan.completion.detect_shell` vs a hand-derived SHELL-basename oracle over 17 SHELL values
+  (valid shells, unknown shells, empty, None, whitespace, case variants, Windows paths) — correct.
+- `ethscan.config` coercion/validation (`_normalize_format_key`, `_parse_set_value`,
+  `validate_config`, `build_default_map`) vs hand-derived oracles over 8 normalize cases,
+  10 parse cases, 8 validate cases — correct.
+- `ethscan.netbios._encode_name_chars` / `_decode_name_chars` vs an independent RFC 1001
+  first-pair/hex-nibble oracle over 5000 randomised names: encode matches 100%; ASCII-only names
+  round-trip perfectly (0 failures); non-ASCII names replace with `?` via `encode("ascii","replace")`
+  which is intentional, not a defect.
+
+No source/test changes; working tree clean except this handoff.
 
 Nothing else to fix — do not fabricate work or repeat verification-only sessions without new evidence.
 
@@ -53,11 +68,11 @@ Nothing else to fix — do not fabricate work or repeat verification-only sessio
   headers/web wrong-output probe; audit/hash/report/vuln exploration; version/resolve/subtake/ping/
   netbios/ntp/wifi/mongodb + ldap/memcached/mssql/smb/smtp/ssh/ftp/dnsbrute/fuzz/brute/service
   wrong-output probe; THIS SESSION: mac/osdetect/hash/version_tuple differential oracles + 3000-trial
-  randomized radix merge + recon/dns-filtering/urlcheck/version_range static review.
-- Candidate untouched angle (reproduce a wrong output vs an oracle FIRST): `netbios` RFC1001/1002 name
-  encode/decode with RANDOMISED names vs an independent first-pair/hex-nibble oracle (prior check used
-  fixed vectors only). Apply the smallest safe fix, keep coverage 100%, rerun the full gate. If green
-  and nothing reproduces, record the negative result, preserve the baseline, and hand off again — do
-  not fabricate.
+  randomized radix merge + recon/dns-filtering/urlcheck/version_range static review;
+  THIS SESSION (additional): _assess_web_server_version, _parse_url, detect_shell, config
+  coercion/validation, netbios encode/decode — all clean vs independent oracles.
+- No remaining un-probed deterministic lead in the handoff lists. If a session is needed, the agent
+  should invent a genuinely new angle (e.g. a module/helper not yet property-checked for wrong output)
+  and reproduce a defect before changing anything.
 
 (End of file)
