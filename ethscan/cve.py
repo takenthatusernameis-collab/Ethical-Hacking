@@ -497,10 +497,10 @@ def run_cve(
 
 def _lookup_cve_id(product: str, version: str) -> str | None:
     """Return a representative CVE id for a product/version, if known."""
-    product_lower = str(product).lower()
-    version_lower = str(version).lower()
+    product_lower = str(product).strip().lower()
+    version_lower = str(version).strip().lower()
     for entry in SERVICE_VULNS:
-        if str(entry["product"]).lower() != product_lower:
+        if str(entry["product"]).strip().lower() != product_lower:
             continue
         if version_in_range(version_lower, entry):
             return str(entry["id"])

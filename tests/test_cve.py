@@ -68,6 +68,38 @@ def test_lookup_cve_id_no_product() -> None:
     assert _lookup_cve_id("", "1.0") is None
 
 
+def test_lookup_cve_id_product_whitespace() -> None:
+    # Product name with leading/trailing whitespace should still match
+    assert _lookup_cve_id(" OpenSSH ", "7.2p2") == "CVE-2016-6210"
+    assert _lookup_cve_id("OpenSSH\t", "7.2p2") == "CVE-2016-6210"
+    assert _lookup_cve_id("\nOpenSSH\n", "7.2p2") == "CVE-2016-6210"
+    assert _lookup_cve_id(" ProFTPD ", "1.3.5") == "CVE-2015-3306"
+    assert _lookup_cve_id(" vsftpd ", "2.3.4") == "VSFTPD-2.3.4-BACKDOOR"
+
+
+def test_lookup_cve_id_version_whitespace() -> None:
+    # Version with leading/trailing whitespace should still match (handled by _version_tuple)
+    assert _lookup_cve_id("OpenSSH", " 7.2p2 ") == "CVE-2016-6210"
+    assert _lookup_cve_id("OpenSSH", "\t7.2p2\t") == "CVE-2016-6210"
+    assert _lookup_cve_id("OpenSSH", "\n7.2p2\n") == "CVE-2016-6210"
+    assert _lookup_cve_id("OpenSSH", " 7.3 ") == "CVE-2018-15473"
+
+
+def test_lookup_cve_id_both_whitespace() -> None:
+    # Both product and version with whitespace
+    assert _lookup_cve_id(" OpenSSH ", " 7.2p2 ") == "CVE-2016-6210"
+    assert _lookup_cve_id(" ProFTPD ", " 1.3.5 ") == "CVE-2015-3306"
+    assert _lookup_cve_id(" vsftpd ", " 2.3.4 ") == "VSFTPD-2.3.4-BACKDOOR"
+
+
+def test_lookup_cve_id_case_insensitive() -> None:
+    # Case insensitivity should work with whitespace
+    assert _lookup_cve_id("openssh", "7.2p2") == "CVE-2016-6210"
+    assert _lookup_cve_id("OPENSSH", "7.2p2") == "CVE-2016-6210"
+    assert _lookup_cve_id("OpEnSsH", "7.2p2") == "CVE-2016-6210"
+    assert _lookup_cve_id(" proftpd ", "1.3.5") == "CVE-2015-3306"
+
+
 class _GarbledHandler(socketserver.BaseRequestHandler):
     """Answers every request with a malformed HTTP status line."""
 
