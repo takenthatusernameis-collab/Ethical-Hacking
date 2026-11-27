@@ -23,7 +23,7 @@ import ipaddress
 import random
 import re
 import sys
-from urllib.parse import urlparse, urlunparse, SplitResult
+from urllib.parse import urlparse, SplitResult
 
 from ethscan.target import (
     TargetSpecError,

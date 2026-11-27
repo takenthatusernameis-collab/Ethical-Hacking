@@ -515,7 +515,7 @@ def verify_parse_dnskey_response() -> list[tuple[str, dict, dict]]:
         if len(our_keys) != len(oracle_keys):
             mismatches.append((f"data={data!r}, domain={domain!r}", dict(our_result), dict(oracle_result)))
             continue
-        for i, (our_key, oracle_key) in enumerate(zip(our_keys, oracle_keys)):
+        for i, (our_key, oracle_key) in enumerate(zip(our_keys, oracle_keys, strict=False)):
             for field in ["name", "flags", "protocol", "algorithm", "key_data"]:
                 if our_key.get(field) != oracle_key.get(field):
                     mismatches.append((f"data={data!r}, domain={domain!r}, key={i}", dict(our_result), dict(oracle_result)))
@@ -550,7 +550,7 @@ def verify_parse_ds_response() -> list[tuple[str, dict, dict]]:
         if len(our_recs) != len(oracle_recs):
             mismatches.append((f"data={data!r}, domain={domain!r}", dict(our_result), dict(oracle_result)))
             continue
-        for i, (our_rec, oracle_rec) in enumerate(zip(our_recs, oracle_recs)):
+        for i, (our_rec, oracle_rec) in enumerate(zip(our_recs, oracle_recs, strict=False)):
             for field in ["name", "key_tag", "algorithm", "digest_type", "digest"]:
                 if our_rec.get(field) != oracle_rec.get(field):
                     mismatches.append((f"data={data!r}, domain={domain!r}, rec={i}", dict(our_result), dict(oracle_result)))

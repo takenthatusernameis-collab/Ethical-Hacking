@@ -14,12 +14,10 @@ exits with non-zero code if any oracle mismatch is found.
 
 from __future__ import annotations
 
-import random
 import re
 import sys
 
 from ethscan.service import (
-    SERVICE_SIGNATURES,
     _parse_banner_service,
     _parse_banner_version,
 )
@@ -124,7 +122,7 @@ def oracle_parse_banner_version(banner: str | None, service_name: str | None) ->
         return None
 
     sigs = ORACLE_SIGNATURES.get(service_name) or []
-    for pattern, name in sigs:
+    for pattern, _name in sigs:
         match = pattern.search(banner)
         if match and match.groups():
             return match.group(1)
