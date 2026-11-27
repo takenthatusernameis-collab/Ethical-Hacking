@@ -1,36 +1,26 @@
 # Handoff
 
-## Session (Fri Nov 27 2026, cidr/validate consistency guard)
-- Prior handoff (HANDOFF_NEXT/NEXT_TASK) said "None pending; repo fully green" with one evidence-based lead: strengthen remaining no-op assertions. Executed that lead first and confirmed it is COMPLETE:
-  - The only two `0 <= result <= 65535` matches left in `tests/` (`tests/test_target.py:893` and `:1194`) are now redundant SECONDARY assertions behind real `result == value` / `result == expected_value` checks. Not no-ops. No change needed.
-- Independently re-verified the full baseline first-hand before selecting work:
-  - `python -m pytest -q` -> 49954 passed, 147 skipped, 0 failed (143.99s).
-- Investigated fresh angles for a concrete, safe defect (per handoff rules: reproduce a gap first). Findings:
-  - Fresh-install / console entry point: `ethscan` console script IS correctly registered (`entry_points.txt` -> `ethscan.cli:cli`); `which ethscan` failing is only a PATH artifact of the editable install location, NOT a code defect.
-  - `ethscan/jwt.py`: already exhaustively tested (49 tests incl. boolean/NaN/Inf NumericDate, non-finite timestamps, formula sanitization). No gap; adding more would be fabrication.
-  - `cidr` vs `validate` IPv6 `/127`: the two modules DIFFER (cidr usable=1 first=last=`::1` per RFC 4291 anycast; validate usable=2 first=`::` last=`::1` per RFC 6164). Verified this is a DELIBERATE, documented, oracle-verified divergence on BOTH sides (`tests/test_cidr.py::test_format_network_info_ipv6_127_usable_count` + `tests/test_validate.py::test_format_network_info_ipv6_127_two_usable_hosts` + `_format_network_info_validate_oracle`). NOT a defect; must not "fix" either side.
-- Selected a bounded, test-only, non-fabricated improvement that captures the above: a cross-module consistency guard.
-  - New `tests/test_cidr_validate_consistency.py`: asserts `run_cidr` and `_validate_cidr` report identical values for every field across 9 representative networks (IPv4 /24,/31,/32,/30,/12,/0 and IPv6 /32,/126,/128), and pins the intentional `/127` divergence exactly (cidr=1/`::1`, validate=2/`::`). Prevents a future agent from accidentally aligning one module to the other and breaking its oracle tests.
-  - No production code changed; fully reversible.
+## Session (Fri Nov 27 2026, README empty-target list accuracy)
+
+- No prior agent assignment existed (HANDOFF_NEXT/NEXT_TASK said "None pending"). Inspected the repo and confirmed baseline green first-hand: `python -m pytest -q` -> 49964 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/` -> clean (278 source files); `ruff check ethscan/ tests/` -> all checks passed; `check_readme.py` -> 54/54, 0 drift.
+- Selected a bounded, evidence-based doc-accuracy task: the README (lines 149-151) documented empty-target rejection as applying only to "the protocol commands" (14 commands: redis, memcached, ntp, snmp, ftp, ldap, netbios, smb, smtp, service, dnssec, ssl, tls, web, fuzz). Empirically verified that EVERY target-taking command rejects `--target ""|"   "|"https://"` with exit code 2 + `Error: Invalid value for '--target': Could not parse host from target ...` — 41 commands total. The 19 previously-undocumented ones: scan, ping, brute, ssh, vuln, osdetect, resolve, dns, whois, mac, cert, cve, stale, subtake, subdomains, dnsbrute, headers, urlcheck, report.
+- Fixed `README.md` (README-only change; no source or test changes): expanded the list to all 41 target-taking commands and reworded the intro to "rejected as a usage error (exit code 2) by every target-taking command". The existing dedicated paragraphs for trace/s3/recon/geo and the validate/oracle/postgresql exceptions remain accurate (oracle/postgresql intentionally keep the in-band exit-0 contract).
 
 ## What was actually verified (evidence)
-- Empirically confirmed agreement before writing the test: 0 mismatches across the 9 networks on all 10 fields; `/127` divergence reproduced exactly.
-- Focused: `pytest tests/test_cidr_validate_consistency.py -q` -> 10 passed.
-- `python -m mypy tests/test_cidr_validate_consistency.py` -> Success.
-- `python -m ruff check tests/test_cidr_validate_consistency.py` -> All checks passed.
-- Full gate under coverage: `python -m coverage run --branch --source=ethscan -m pytest -q` -> 49964 passed, 147 skipped, 0 failed (baseline 49954; +10); `coverage report` -> TOTAL 100% (16295 stmts, 6178 branches, 0 missing).
-- `python -m mypy ethscan/ tests/` -> Success: no issues in 278 source files.
-- `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
-- `python3 check_readme.py` -> 0 drift both directions.
-- `git diff --check` clean; `git status` -> only new `tests/test_cidr_validate_consistency.py` (untracked). Not committed (controller commits).
+- Empirical CLI check: all 41 target-taking commands exit 2 with the parse-host usage error on `--target ""` (19 re-confirmed this session; the rest were already documented).
+- `python3 check_readme.py` -> 54 commands found, 54 CLI commands, 0 drift both directions, exit 0.
+- `python -m ruff check check_readme.py` -> All checks passed.
+- `git diff --stat` -> README.md only (7 insertions, 3 deletions). No source or test files touched.
+- Baseline test count unchanged (README-only change): 49964 passed, 147 skipped, 0 failed.
 
 ## Blockers
 - None.
 
 ## Approaches already tried / ruled out
-- No-op-assertion lead: COMPLETE (remaining matches are real secondary checks). Do not re-run.
-- `jwt` oracle/property tests: already exhaustive; adding more = fabrication. Do not.
-- `cidr`/`validate` `/127`: intentional documented divergence (RFC 4291 vs RFC 6164), oracle-verified on both sides. Do NOT modify either module's `/127` handling.
+- `oracle_verify_target.py`, `oracle_verify_dnssec.py`, `oracle_verify_mac.py`, `oracle_verify_service.py`, `oracle_verify_whois.py` — all pass (0 mismatches). No implementation defects to fix there.
+- Cross-module contract tests (`test_all_formatters_hostile_contract.py`, `test_all_assessors_hostile_contract.py`) — pass; discovery-based, cover all formatters/assessors.
+- No-op-assertion lead (tests/test_target.py:893, :1194) — COMPLETE, redundant secondary checks behind real `result == ...` checks.
+- `cidr`/`validate` IPv6 `/127` — intentional documented divergence (RFC 4291 vs RFC 6164), oracle-verified on both sides. Do NOT modify either module's `/127` handling.
 - `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope per documented contract. Do not modify `.github/workflows/**`.
 
 ## Next task

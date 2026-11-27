@@ -146,9 +146,13 @@ Try 'python -m ethscan radix --help' for help.
 Error: Invalid value for '--cidrs': Cannot mix IPv4 and IPv6 networks in a single radix tree
 ```
 
-A `--target` that does not contain a usable host is rejected the same way by
-the protocol commands (`redis`, `memcached`, `ntp`, `snmp`, `ftp`, `ldap`,
-`netbios`, `smb`, `smtp`, `service`, `dnssec`, `ssl`, `tls`, `web`, `fuzz`):
+A `--target` that does not contain a usable host is rejected as a usage error
+(exit code 2) by every target-taking command: `brute`, `cert`, `cve`, `dns`,
+`dnsbrute`, `dnssec`, `fuzz`, `ftp`, `geo`, `headers`, `ldap`, `mac`,
+`memcached`, `mongodb`, `mssql`, `mysql`, `netbios`, `ntp`, `osdetect`, `ping`,
+`redis`, `recon`, `resolve`, `report`, `scan`, `s3`, `service`, `smb`, `smtp`,
+`snmp`, `ssl`, `ssh`, `stale`, `subdomains`, `subtake`, `tls`, `trace`,
+`urlcheck`, `vuln`, `web`, `whois`:
 
 ```console
 $ python -m ethscan redis --target ""
