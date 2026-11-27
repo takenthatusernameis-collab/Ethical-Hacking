@@ -206,7 +206,7 @@ def _run_iw_scan(interface: str) -> list[dict[str, Any]]:
     signal_pattern = re.compile(r"signal:\s+(-?\d+\.?\d*)\s*dBm")
     ssid_pattern = re.compile(r"SSID:\s+(.+)")
     channel_pattern = re.compile(r"DS Parameter set:\s+channel\s+(\d+)")
-    cap_pattern = re.compile(r"capability:\s+(\w+)")
+    cap_pattern = re.compile(r"capability:\s+(.+)")
     wpa1_pattern = re.compile(r"WPA:\s+.*")
     wpa2_pattern = re.compile(r"RSN:\s+.*")
 
