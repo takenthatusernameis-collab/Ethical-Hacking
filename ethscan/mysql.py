@@ -160,18 +160,18 @@ def _parse_handshake(data: bytes) -> dict[str, Any]:
         }
 
     salt1_start = pos
-    # Find next null
-    null1 = payload.find(b"\x00", salt1_start)
-    salt1_len = (null1 - salt1_start) if null1 != -1 else 8
-    if salt1_len < 0:
-        salt1_len = 8  # pragma: no cover - defensive
-    if salt1_len > 12:  # reasonable bound
-        salt1_len = 8
-    salt1 = payload[salt1_start:salt1_start + salt1_len].decode("utf-8", errors="replace") if salt1_len > 0 else ""
-    if null1 != -1:
-        pos = null1 + 1
-    else:
-        pos = salt1_start + salt1_len
+    # Auth plugin data part 1 is a FIXED 8-byte field followed by a single
+    # filler (0x00) byte. The salt bytes are random and may legitimately
+    # contain 0x00, so the terminator must NOT be searched for: doing so
+    # truncates the salt and misaligns every subsequent field
+    # (capabilities/charset/status) whenever a salt byte is zero. Read the
+    # fixed window (clamped to the available bytes for a truncated packet)
+    # and then consume the single filler byte when one is present.
+    salt1_end = min(salt1_start + 8, len(payload))
+    salt1 = payload[salt1_start:salt1_end].decode("utf-8", errors="replace")
+    pos = salt1_end
+    if pos < len(payload):
+        pos += 1  # consume the filler byte
 
     if pos + 2 > len(payload):
         return {

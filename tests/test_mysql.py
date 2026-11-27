@@ -103,7 +103,7 @@ def test_parse_handshake_full():
     # We'll use the same payload as in test_run_mysql_handshake_simple but ensure we hit the early return.
     payload = b"\x0a" + b"8.0.28\x00"
     payload += b"\x01\x02\x03\x04"  # thread id
-    payload += b"\x73\x61\x6c\x74\x31\x00"  # salt1
+    payload += b"salt1234\x00"  # salt1 (fixed 8 bytes) + filler
     payload += b"\x00\x00"  # capabilities lower
     payload += b"\x21"  # charset utf8
     payload += b"\x02\x00"  # status
@@ -117,7 +117,7 @@ def test_parse_handshake_full():
     assert parsed["protocol_version"] == 10
     assert parsed["server_version"] == "8.0.28"
     assert parsed["thread_id"] == 0x04030201
-    assert parsed["salt1"] == "salt1"
+    assert parsed["salt1"] == "salt1234"
     assert parsed["capabilities"] == 0
     assert parsed["charset"] == 0x21
     assert parsed["status"] == 2
@@ -823,25 +823,65 @@ def test_parse_handshake_salt1_no_null():
 
 
 def test_parse_handshake_capabilities_lower_missing():
-    # pos + 2 > len after salt1 (line 159-165)
+    # pos + 2 > len after salt1: full 8-byte salt + filler, then EOF
     payload = b"\x0a" + b"5.7.0\x00"
     payload += b"\x01\x02\x03\x04"  # thread id
-    payload += b"s\x00"  # salt1 with null, pos moves past
-    payload += b"\x00"  # only 1 byte left, need 2
+    payload += b"salt1234"  # salt1 (fixed 8 bytes)
+    payload += b"\x00"  # filler
+    # no capabilities lower bytes remain
     header = bytes([len(payload) & 0xFF, (len(payload) >> 8) & 0xFF, (len(payload) >> 16) & 0xFF, 0x00])
     data = header + payload
     parsed = _parse_handshake(data)
     assert parsed["protocol_version"] == 10
     assert parsed["thread_id"] == 0x04030201
-    assert "capabilities" not in parsed  # capabilities_lower not stored separately in that early return? wait - look: early return stores salt1, thread_id, server_version, protocol_version; doesn't store capabilities_lower yet
-    assert parsed["salt1"] == "s"
+    assert "capabilities" not in parsed
+    assert parsed["salt1"] == "salt1234"
+
+
+def test_parse_handshake_truncated_salt():
+    # Fewer than 8 salt bytes remain (truncated packet): the fixed window is
+    # clamped to the available bytes and no filler byte is consumed.
+    payload = b"\x0a" + b"5.7.0\x00"
+    payload += b"\x01\x02\x03\x04"  # thread id
+    payload += b"abc"  # only 3 salt bytes, no filler
+    header = bytes([len(payload) & 0xFF, (len(payload) >> 8) & 0xFF, (len(payload) >> 16) & 0xFF, 0x00])
+    data = header + payload
+    parsed = _parse_handshake(data)
+    assert parsed["protocol_version"] == 10
+    assert parsed["thread_id"] == 0x04030201
+    assert parsed["salt1"] == "abc"
+    assert "capabilities" not in parsed
+
+
+def test_parse_handshake_null_byte_in_salt():
+    # Regression: auth-plugin-data-part-1 is a fixed 8-byte field and the salt
+    # bytes may legitimately contain 0x00. A null inside the salt must NOT
+    # truncate it or misalign the following capabilities/charset/status.
+    salt1 = b"ab\x00defgh"  # 8 bytes with an embedded null
+    payload = b"\x0a" + b"8.0.28\x00"
+    payload += b"\x01\x02\x03\x04"  # thread id
+    payload += salt1
+    payload += b"\x00"  # filler
+    payload += b"\x34\x12"  # capabilities lower -> 0x1234
+    payload += b"\x21"  # charset
+    payload += b"\x02\x00"  # status
+    payload += b"\x00\x00"  # capabilities upper
+    payload += b"\x00"  # auth plugin len
+    header = bytes([len(payload) & 0xFF, (len(payload) >> 8) & 0xFF, (len(payload) >> 16) & 0xFF, 0x00])
+    data = header + payload
+    parsed = _parse_handshake(data)
+    assert parsed["salt1"] == "ab\x00defgh"
+    assert parsed["capabilities"] == 0x1234
+    assert parsed["charset"] == 0x21
+    assert parsed["status"] == 2
 
 
 def test_parse_handshake_pos_geq_after_caps_lower():
-    # pos >= len after reading caps lower (line 171-178)
+    # pos >= len after reading caps lower
     payload = b"\x0a" + b"5.7.0\x00"
     payload += b"\x01\x02\x03\x04"
-    payload += b"s\x00"
+    payload += b"salt1234"  # salt1 (fixed 8 bytes)
+    payload += b"\x00"  # filler
     payload += b"\x01\x02"  # caps lower read, pos moves to after
     header = bytes([len(payload) & 0xFF, (len(payload) >> 8) & 0xFF, (len(payload) >> 16) & 0xFF, 0x00])
     data = header + payload
@@ -854,7 +894,8 @@ def test_parse_handshake_charset_missing_space():
     # pos + 2 > len after charset (line 183-191)
     payload = b"\x0a" + b"5.7.0\x00"
     payload += b"\x01\x02\x03\x04"
-    payload += b"s\x00"
+    payload += b"salt1234"  # salt1 (fixed 8 bytes)
+    payload += b"\x00"  # filler
     payload += b"\x01\x02"  # caps lower
     payload += b"\x21"  # charset
     payload += b"\x00"  # only 1 byte for status
@@ -870,7 +911,8 @@ def test_parse_handshake_status_missing_space():
     # pos + 2 > len after status (line 196-205)
     payload = b"\x0a" + b"5.7.0\x00"
     payload += b"\x01\x02\x03\x04"
-    payload += b"s\x00"
+    payload += b"salt1234"  # salt1 (fixed 8 bytes)
+    payload += b"\x00"  # filler
     payload += b"\x01\x02"  # caps lower
     payload += b"\x21"  # charset
     payload += b"\x00\x02"  # status
@@ -886,7 +928,8 @@ def test_parse_handshake_auth_plugin_len_missing():
     # pos >= len after reading caps upper (line 212-223)
     payload = b"\x0a" + b"5.7.0\x00"
     payload += b"\x01\x02\x03\x04"
-    payload += b"s\x00"
+    payload += b"salt1234"  # salt1 (fixed 8 bytes)
+    payload += b"\x00"  # filler
     payload += b"\x01\x02"  # caps lower
     payload += b"\x21"  # charset
     payload += b"\x00\x02"  # status
@@ -902,7 +945,8 @@ def test_parse_handshake_reserved_missing_space():
     # pos >= len after skipping reserved 10 bytes (line 230-238)
     payload = b"\x0a" + b"5.7.0\x00"
     payload += b"\x01\x02\x03\x04"
-    payload += b"s\x00"
+    payload += b"salt1234"  # salt1 (fixed 8 bytes)
+    payload += b"\x00"  # filler
     payload += b"\x01\x02"  # caps lower
     payload += b"\x21"  # charset
     payload += b"\x00\x02"  # status
@@ -920,7 +964,8 @@ def test_parse_handshake_salt2_variants():
     # salt2 with null terminator inside
     payload = b"\x0a" + b"8.0.28\x00"
     payload += b"\x01\x02\x03\x04"  # thread id
-    payload += b"salt1\x00"  # salt1
+    payload += b"salt1234"  # salt1 (fixed 8 bytes)
+    payload += b"\x00"  # filler
     payload += b"\x01\x02"  # caps lower
     payload += b"\x21"  # charset
     payload += b"\x02\x00"  # status
@@ -935,9 +980,9 @@ def test_parse_handshake_salt2_variants():
     header = bytes([len(payload) & 0xFF, (len(payload) >> 8) & 0xFF, (len(payload) >> 16) & 0xFF, 0x00])
     data = header + payload
     parsed = _parse_handshake(data)
-    assert parsed["salt1"] == "salt1"
+    assert parsed["salt1"] == "salt1234"
     assert parsed["salt2"].startswith("abc")  # split on null
-    assert parsed["salt"].startswith("salt1abc")
+    assert parsed["salt"].startswith("salt1234abc")
     assert "mysql_native_password" in parsed["auth_plugin_name"] or parsed["auth_plugin_name"].endswith("mysql_native_password")
 
 
@@ -945,7 +990,8 @@ def test_parse_handshake_salt2_no_space():
     # salt2_max > 0 but pos + salt2_max >= len? remaining calculation
     payload = b"\x0a" + b"8.0.28\x00"
     payload += b"\x01\x02\x03\x04"
-    payload += b"salt1\x00"
+    payload += b"salt1234"  # salt1 (fixed 8 bytes)
+    payload += b"\x00"  # filler
     payload += b"\x01\x02"
     payload += b"\x21"
     payload += b"\x02\x00"
@@ -957,13 +1003,14 @@ def test_parse_handshake_salt2_no_space():
     data = header + payload
     parsed = _parse_handshake(data)
     assert parsed["salt2"] == "ab"
-    assert parsed["salt"] == "salt1ab"
+    assert parsed["salt"] == "salt1234ab"
 
 
 def test_parse_handshake_auth_plugin_name_no_null():
     payload = b"\x0a" + b"8.0.28\x00"
     payload += b"\x01\x02\x03\x04"
-    payload += b"salt1\x00"
+    payload += b"salt1234"  # salt1 (fixed 8 bytes)
+    payload += b"\x00"  # filler
     payload += b"\x01\x02"
     payload += b"\x21"
     payload += b"\x02\x00"
@@ -981,7 +1028,8 @@ def test_parse_handshake_auth_plugin_name_no_null():
 def test_parse_handshake_auth_plugin_name_starts_with_null():
     payload = b"\x0a" + b"8.0.28\x00"
     payload += b"\x01\x02\x03\x04"
-    payload += b"salt1\x00"
+    payload += b"salt1234"  # salt1 (fixed 8 bytes)
+    payload += b"\x00"  # filler
     payload += b"\x01\x02"
     payload += b"\x21"
     payload += b"\x02\x00"
