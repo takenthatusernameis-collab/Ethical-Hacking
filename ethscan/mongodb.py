@@ -191,8 +191,9 @@ def _parse_buildinfo_response(data: bytes) -> dict[str, Any]:
         str_start = version_pos + 8  # skip '\x02version\x00'
         if str_start + 4 <= len(doc_data):
             str_len = int.from_bytes(doc_data[str_start:str_start+4], byteorder='little')
-            if str_start + 4 + str_len < len(doc_data):  # +1 for null terminator
-                version_str = doc_data[str_start+4:str_start+4+str_len].decode('utf-8', errors='replace')
+            if str_start + 4 + str_len <= len(doc_data):  # +1 for null terminator
+                # str_len includes null terminator; exclude it from content
+                version_str = doc_data[str_start+4:str_start+4+str_len-1].decode('utf-8', errors='replace')
                 result['version'] = version_str
 
     # Look for versionArray (array type 0x04)
@@ -207,9 +208,10 @@ def _parse_buildinfo_response(data: bytes) -> dict[str, Any]:
             str_start = pos + len(field_search)
             if str_start + 4 <= len(doc_data):
                 str_len = int.from_bytes(doc_data[str_start:str_start+4], byteorder='little')
-                if str_start + 4 + str_len < len(doc_data):
+                if str_start + 4 + str_len <= len(doc_data):
                     with contextlib.suppress(Exception):  # pragma: no cover - defensive
-                        value = doc_data[str_start+4:str_start+4+str_len].decode('utf-8', errors='replace')
+                        # str_len includes null terminator; exclude it from content
+                        value = doc_data[str_start+4:str_start+4+str_len-1].decode('utf-8', errors='replace')
                         result[field.decode('utf-8')] = value
 
     return result

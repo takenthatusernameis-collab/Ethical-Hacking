@@ -95,12 +95,15 @@ def _buildinfo_payload(**fields: str) -> bytes:
     The header is the real OP_REPLY layout: a 16-byte message header, then
     responseFlags(4) + cursorID(8) + startingFrom(4) + numberReturned(4), so
     numberReturned sits at offset 32 and the document at offset 36.
+
+    The document uses real BSON format: string length includes the null terminator.
     """
     doc = b""
     for name, value in fields.items():
         encoded = value.encode("utf-8")
         doc += b"\x02" + name.encode("utf-8") + b"\x00"
-        doc += len(encoded).to_bytes(4, byteorder="little")
+        # BSON string length includes the null terminator
+        doc += (len(encoded) + 1).to_bytes(4, byteorder="little")
         doc += encoded
         doc += b"\x00"
     header = b"\x00" * 32 + (1).to_bytes(4, byteorder="little")  # numberReturned = 1
