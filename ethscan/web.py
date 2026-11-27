@@ -366,7 +366,8 @@ def run_web_checks(target: str, checks: list[str], timeout: float = 5.0) -> dict
 
     needs_headers = any(c in checks for c in ["headers", "info_disclosure", "security_headers"])
     if needs_headers:
-        url = target if "://" in target.strip() else ("https://" + target.strip() if is_secure else "http://" + target.strip())
+        stripped = target.strip()
+        url = stripped if "://" in stripped else ("https://" + stripped if is_secure else "http://" + stripped)
         fetched = fetch_headers(url, timeout=timeout)
         headers = dict(fetched)
         results["headers"] = headers

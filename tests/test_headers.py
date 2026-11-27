@@ -95,6 +95,30 @@ def test_run_headers_bare_domain(monkeypatch):
     assert results["secure"] is True
 
 
+def test_run_headers_strips_whitespace_from_schemed_url(monkeypatch):
+    """A whitespace-wrapped schemed target reaches fetch_headers stripped.
+
+    _parse_url strips internally, but the URL handed to the transport must not
+    carry surrounding whitespace into the netloc (regression for the unstripped
+    ``url = target`` branch). Valid targets without whitespace are byte-identical.
+    """
+    captured: dict[str, object] = {}
+
+    def mock_fetch_headers(url, timeout=5.0):
+        captured["url"] = url
+        return {}
+
+    monkeypatch.setattr("ethscan.headers.fetch_headers", mock_fetch_headers)
+
+    results = run_headers(" https://example.com ", timeout=1.0)
+
+    assert captured["url"] == "https://example.com"
+    assert results["target"] == " https://example.com "
+    assert results["host"] == "example.com"
+    assert results["port"] == 443
+    assert results["secure"] is True
+
+
 def test_run_headers_reports_a_transport_failure(monkeypatch):
     """A transport failure of a type the guard does not name is reported."""
     def boom(*args, **kwargs):

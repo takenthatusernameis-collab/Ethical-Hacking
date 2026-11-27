@@ -24,7 +24,8 @@ def run_headers(target: str, timeout: float = 5.0) -> dict[str, Any]:
         Structured results with security headers analysis.
     """
     host, port, is_secure = _parse_url(target)
-    url = target if "://" in target.strip() else ("https://" + target.strip() if is_secure else "http://" + target.strip())
+    stripped = target.strip()
+    url = stripped if "://" in stripped else ("https://" + stripped if is_secure else "http://" + stripped)
     fetched = fetch_headers(url, timeout=timeout)
     headers = dict(fetched)
 

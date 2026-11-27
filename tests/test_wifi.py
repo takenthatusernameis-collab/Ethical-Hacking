@@ -361,6 +361,22 @@ def test_run_iw_scan_privacy_wep_no_wpa() -> None:
         assert result[0]["encryption"] == "wep"
 
 
+def test_run_iw_scan_capability_without_privacy() -> None:
+    """A capability line without Privacy takes the non-wep branch (line 239->241)."""
+    output = """BSS 00:11:22:33:44:55(on wlan0)
+        freq: 2412
+        signal: -65.00 dBm
+        SSID: TestNetwork
+        DS Parameter set: channel 1
+        capability: ESS ShortSlotTime (0x0411)
+"""
+    mock_result = MagicMock(returncode=0, stdout=output, stderr="")
+    with patch("subprocess.run", return_value=mock_result):
+        result = _run_iw_scan("wlan0")
+        assert len(result) == 1
+        assert result[0]["encryption"] == "unknown"
+
+
 # ---------------------------------------------------------------------------
 # Output that is not valid UTF-8
 #

@@ -613,6 +613,23 @@ def test_run_web_checks_url_target(mock_fetch_headers) -> None:
 
 
 @patch("ethscan.web.fetch_headers")
+def test_run_web_checks_strips_whitespace_from_schemed_url(mock_fetch_headers) -> None:
+    """A whitespace-wrapped schemed target reaches fetch_headers stripped.
+
+    _parse_url strips internally, but the URL handed to the transport must not
+    carry surrounding whitespace into the netloc (regression for the unstripped
+    ``url = target`` branch). Valid targets without whitespace are byte-identical.
+    """
+    mock_fetch_headers.return_value = {"content-type": "text/html"}
+    results = run_web_checks(" https://example.com ", ["headers"], timeout=1.0)
+    assert results["target"] == " https://example.com "
+    assert results["host"] == "example.com"
+    assert results["port"] == 443
+    assert results["secure"] is True
+    mock_fetch_headers.assert_called_once_with("https://example.com", timeout=1.0)
+
+
+@patch("ethscan.web.fetch_headers")
 def test_run_web_checks_old_server_version_finding(mock_fetch_headers) -> None:
     mock_fetch_headers.return_value = {
         "server": "Apache/1.3.42",
