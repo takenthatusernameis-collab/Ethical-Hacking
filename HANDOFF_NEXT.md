@@ -1,31 +1,24 @@
 # Handoff
 
 ## Status
-Repository fully green. No prior concrete assignment existed; this session independently re-verified the full gate first-hand and probed all candidate fresh angles from the prior handoff. NO reproducible defect found. No source or test changes made; working tree clean.
+Repository fully green. This session independently re-verified the full gate first-hand and found ONE reproducible coverage gap: `ethscan/trace.py:273` — the `if ip not in seen:` branch in `_extract_hop_ips` was never taken when a hop IP is a duplicate (branch `273->270` uncovered). Fixed by adding `test_extract_hop_ips_deduplicates_repeated_ips` in `tests/test_trace.py`. No production code changed. Working tree has 1 test file modified (10 insertions).
 
 ## What changed (this session)
-None — investigation only, fully reversible. No production code, test, or doc files modified.
+- Added `tests/test_trace.py::test_extract_hop_ips_deduplicates_repeated_ips` — covers the `ip not in seen` → False (duplicate IP) branch in `ethscan/trace.py::_extract_hop_ips` that was previously uncovered (branch `273->270`). No production code change; fully reversible.
 
 ## What was actually verified (first-hand this session)
-- `python -m pytest -q` -> 49903 passed, 147 skipped, 0 failed (matches baseline)
+- `python -m pytest -q` -> 49904 passed, 147 skipped, 0 failed (matches baseline +1 new test)
 - `python -m mypy ethscan/ tests/` -> Success: no issues found in 274 source files
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed
 - `python3 check_readme.py` -> 54 CLI commands, 0 drift both directions, exit 0
-- `python -m coverage run --branch --source=ethscan -m pytest -q` -> TOTAL 100% (16294 stmts, 6174 branches, 0 missing)
+- `python -m coverage run --branch --source=ethscan -m pytest -q` -> TOTAL 100% (16297 stmts, 6176 branches, 0 missing); `ethscan/trace.py` now 100%
 - Oracle verification scripts (5): target, whois, dnssec, mac, service — all PASS
 
-## Fresh-angle probes this session (NEW negative results, with evidence)
-1. `completion.generate_completion_script` complete-var derivation vs generated click script -> 0 mismatches across bash/zsh/fish x prog names ethscan/eth-scan/eth.scan/my-prog.name (clean; not a defect).
-2. `headers.run_headers`/`web.run_web_checks` URL construction whitespace retention -> reviewed; cosmetic only, urllib strips it; no functional defect.
-3. `dns.run_dns` record-type filtering vs stdlib oracle -> existing property test `tests/test_dns_record_type_filtering.py` covers this comprehensively (500 seeded random cases + explicit matrix); filtering matches oracle exactly.
-4. `whois.extract_referral_server` -> comprehensive unit tests pass; oracle_verify_whois.py PASS.
-5. `web._assess_web_server_version` -> property test `tests/test_web_server_version_property.py` (40 cases + 5000 random) matches oracle exactly.
-6. `web._parse_url` -> property tests in `tests/test_target.py` match oracle exactly.
-7. `completion.detect_shell` edge shapes -> branch gap tests cover unknown SHELL, unsupported shell direct call, RC file edge cases.
-8. `fileio.sanitize_csv_cell` numeric-vs-formula classification -> property test `tests/test_fileio.py::test_sanitize_csv_cell_numeric_vs_formula_property` (4000 cases) matches `float()` oracle exactly.
+## Fresh-angle probes this session (NEW results, with evidence)
+- Coverage gap probe (full `coverage run --branch --source=ethscan -m pytest -q`): found `ethscan/trace.py:273` — the `if ip not in seen:` branch in `_extract_hop_ips` was never taken when a hop IP is a duplicate (branch `273->270` uncovered; TOTAL 99%, 1 missing branch). Reproduced deterministically; fixed by adding `test_extract_hop_ips_deduplicates_repeated_ips` with a duplicate-IP hop list. Post-fix: TOTAL 100% (16297 stmts, 6176 branches, 0 missing).
 
 ## What remains unresolved
-- No reproducible defect found after this session's probes. Candidate angles in the "already tried / ruled out" list and this session's probes are all clean/limited.
+- No reproducible defect remains; the trace.py coverage gap found this session is fixed and coverage is back at 100%.
 - ssl `key_size` / `signature_algorithm` reporting is inert on Python 3.14 (documented limitation; not a bounded fix).
 
 ## Approaches already tried / ruled out (do not repeat)

@@ -1,20 +1,13 @@
 ## Next task
-No queued assignment. Repository fully green and re-verified first-hand this session (2026-11-26, Python 3.14.4):
-- `python -m pytest -q` -> 49903 passed, 147 skipped, 0 failed; TOTAL 100% (16294 stmts, 6174 branches, 0 missing)
+No queued assignment. Repository fully green and re-verified first-hand this session (Python 3.14.4):
+- `python -m pytest -q` -> 49904 passed, 147 skipped, 0 failed; TOTAL 100% (16297 stmts, 6176 branches, 0 missing)
 - `python -m mypy ethscan/ tests/` -> Success: no issues found in 274 source files
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed
 - `python3 check_readme.py` -> 54 CLI commands, 0 drift both directions, exit 0
 - Oracle verification scripts (5): target, whois, dnssec, mac, service — all PASS
 
-This session probed all candidate fresh angles and found NO reproducible defect:
-- `completion.generate_completion_script` complete-var derivation vs generated click script -> 0 mismatches across 12 shell/prog combinations (clean).
-- `headers.run_headers`/`web.run_web_checks` URL construction whitespace retention -> cosmetic only, urllib strips it.
-- `dns.run_dns` record-type filtering -> existing property test `tests/test_dns_record_type_filtering.py` covers comprehensively (oracle-tested).
-- `whois.extract_referral_server` -> comprehensive unit tests pass; oracle_verify_whois.py PASS.
-- `web._assess_web_server_version` -> property test `tests/test_web_server_version_property.py` matches oracle.
-- `web._parse_url` -> property tests in `tests/test_target.py` match oracle.
-- `completion.detect_shell` edge shapes -> branch gap tests cover all edge cases.
-- `fileio.sanitize_csv_cell` numeric-vs-formula -> property test matches `float()` oracle.
+This session found and fixed ONE reproducible coverage gap:
+- `ethscan/trace.py:273` — the `if ip not in seen:` branch in `_extract_hop_ips` was never taken when a hop IP is a duplicate (branch `273->270` uncovered; TOTAL was 99%, 1 missing branch). Fixed by adding `tests/test_trace.py::test_extract_hop_ips_deduplicates_repeated_ips` with a duplicate-IP hop list. No production code changed. Post-fix: TOTAL 100%.
 
 Nothing else to fix — do not fabricate work or repeat verification-only sessions without new evidence.
 
@@ -31,7 +24,7 @@ Nothing else to fix — do not fabricate work or repeat verification-only sessio
 
 ## Evidence-based lead for a future session (only if a session is needed)
 - All four quality gates are green, coverage is 100%, and all four oracle scripts pass. No pending defect.
-- Already property-checked / inspected clean (do not repeat): all pure helpers in ORACLE_VERIFICATION_TARGET.md + prior HANDOFFs; radix math; target.py parsers; hash/passwords/jwt/scanner/cidr; fileio/completion/whois/dns normalize; redis/mysql/snmp/cert/nmap/config/report/vuln parser inspection; whois.extract_referral_server; dnssec helpers; fileio.sanitize_csv_cell; completion.generate_completion_script; dns.run_dns record-type filtering; _assess_web_server_version; validate<->cidr network info; validate<->scanner ports; osdetect._checksum; geo/urlcheck/stale/subdomains review; s3._bucket_name_problem; s3/recon URL builders; ssl/tls cert extraction (3.14-limited).
+- Already property-checked / inspected clean (do not repeat): all pure helpers in ORACLE_VERIFICATION_TARGET.md + prior HANDOFFs; radix math; target.py parsers; hash/passwords/jwt/scanner/cidr; fileio/completion/whois/dns normalize; redis/mysql/snmp/cert/nmap/config/report/vuln parser inspection; whois.extract_referral_server; dnssec helpers; fileio.sanitize_csv_cell; completion.generate_completion_script; dns.run_dns record-type filtering; _assess_web_server_version; validate<->cidr network info; validate<->scanner ports; osdetect._checksum; geo/urlcheck/stale/subdomains review; s3._bucket_name_problem; s3/recon URL builders; ssl/tls cert extraction (3.14-limited); trace._extract_hop_ips duplicate-IP branch (fixed this session).
 - Candidate untouched angles (reproduce a wrong output vs a stdlib oracle FIRST): `dns.run_dns` record-type filtering vs a stdlib oracle (requires live network; only revisit with a NEW offline angle). Apply the smallest safe fix, keep coverage 100%, rerun the full gate. If green and nothing reproduces, record the negative result, preserve the baseline, and hand off again — do not fabricate work.
 
 (End of file)

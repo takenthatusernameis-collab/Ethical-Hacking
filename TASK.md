@@ -1796,3 +1796,25 @@ exceptions. Remaining candidates: `_common_prefix_length`, `_nth_bit`,
   only revisit with a NEW angle.)
 - `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain
   intentionally out of scope. Do not modify `.github/workflows/**`.
+
+# Session (Fri Nov 27 2026)
+## This session
+- No prior agent assignment existed; HANDOFF_NEXT.md/NEXT_TASK.md both said "None pending; repo fully green". Independently re-verified the full gate first-hand before selecting work: `pytest -q` -> 49903 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/` clean (274 files); `ruff` clean; `check_readme.py` 54/54, 0 drift; `git status` clean.
+- Full branch coverage (`coverage run --branch --source=ethscan -m pytest -q`) revealed TOTAL 99% with 1 missing branch: `ethscan/trace.py:273` — the `if ip not in seen:` branch in `_extract_hop_ips` was never taken when a hop IP is a duplicate (branch `273->270` uncovered). The existing `test_extract_hop_ips` only used unique IPs, so the "skip duplicate, continue loop" path was unexercised.
+## What changed
+- `tests/test_trace.py`: added `test_extract_hop_ips_deduplicates_repeated_ips` — passes a hop list with a duplicate IP (`1.1.1.1` appearing in hops 1 and 2) and asserts the result is `["1.1.1.1", "2.2.2.2"]` (order preserved, no duplicates). No production code change; fully reversible (+10 lines).
+## What was actually verified (evidence)
+- Repro: pre-fix coverage `273->270` missing; post-fix the duplicate-IP test exercises that branch.
+- `python -m pytest tests/test_trace.py tests/test_trace_branch_gaps.py -q` -> 56 passed.
+- `python -m pytest -q` (full suite) -> 49904 passed, 147 skipped, 0 failed (baseline 49903; +1 new test).
+- `python -m coverage run --branch --source=ethscan -m pytest -q` -> TOTAL 100% (16297 stmts, 6176 branches, 0 missing); `ethscan/trace.py` now 100%.
+- `python -m mypy ethscan/ tests/` -> Success: no issues found in 274 source files.
+- `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
+- `python3 check_readme.py` -> 54 CLI commands, 0 drift both directions; exit 0.
+- `git diff --check` clean; `git status` -> only `tests/test_trace.py` modified (10 insertions).
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- All prior fresh-angle probes (completion complete-var, headers/web URL construction, dns record-type filtering, whois referral extraction, web server version, parse_url, detect_shell, sanitize_csv_cell): clean in prior sessions; not repeated. This session's coverage-gap probe found and fixed a genuine gap rather than fabricating work.
+## Next task
+- None pending. Repository fully green with 100% coverage. Do NOT fabricate work or repeat verification-only sessions as progress. If future work is needed, reproduce a concrete gap first (focused failing check, fresh-install failure, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then the full gate (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`.

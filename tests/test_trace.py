@@ -61,6 +61,16 @@ def test_extract_hop_ips_empty():
     assert trace._extract_hop_ips([{"hop": 1, "ip": "1.1.1.1", "reached_destination": True}]) == []
 
 
+def test_extract_hop_ips_deduplicates_repeated_ips():
+    hops = [
+        {"hop": 1, "ip": "1.1.1.1", "reached_destination": False},
+        {"hop": 2, "ip": "1.1.1.1", "reached_destination": False},
+        {"hop": 3, "ip": "2.2.2.2", "reached_destination": False},
+    ]
+    ips = trace._extract_hop_ips(hops)
+    assert ips == ["1.1.1.1", "2.2.2.2"]
+
+
 def test_run_trace_recursive_disabled_by_default():
     """Test that recursive is disabled by default."""
     with patch.object(trace, "_trace_single") as mock_trace:
