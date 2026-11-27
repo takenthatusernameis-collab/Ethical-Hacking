@@ -1,9 +1,25 @@
 # Next task
 
-None pending. Repository fully green (49964 passed, 147 skipped, 0 failed; coverage 100%; mypy/ruff clean; README 0 drift). Do NOT fabricate work or repeat verification-only sessions as progress. If future work is needed, reproduce a concrete gap first (focused failing check, fresh-install failure, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then the full gate, preserve safety.
+None pending. Repository fully green and saturated (49964 passed, 147 skipped, 0 failed;
+mypy clean over 278 files; ruff clean; README 0 drift; coverage 100%). Do NOT fabricate
+work, repeat verification-only sessions as progress, or make empty/control-marker commits.
 
-This session fixed README empty-target documentation drift: the README listed only 14 "protocol commands" as rejecting unusable `--target` values (exit 2), but empirically all 41 target-taking commands do. Expanded the list to all 41 commands and reworded the intro. README-only change; `check_readme.py` -> 54/54, 0 drift; `git diff` -> README.md only.
+This session made no code change: the prior handoff ("None pending; do not fabricate")
+was treated as the assignment. I independently re-verified the baseline and every
+documented README console example from a real shell (all matched byte-for-byte), and
+confirmed the documented contracts are already locked by deterministic tests
+(`test_cli.py` auto-discovered target-usage sweep, `test_readme_sync.py`,
+`test_readme_examples.py`, `test_cache_content_sweep.py`). No reproducible gap exists.
 
-`oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope per their documented contract. Do not modify `.github/workflows/**`.
+`cidr`/`validate` IPv6 `/127`, `oracle`/`postgresql` empty-target handling, and the
+`ethscan/cli.py` unreachable guard remain intentional documented divergences — do not
+modify. Do not modify `.github/workflows/**`.
 
-Env note: `coverage` is not on PATH; use `python -m coverage ...`.
+If future work is genuinely needed, FIRST reproduce a concrete gap (focused failing
+check, fresh-install failure, or behavioral evidence vs documented contract), then apply
+the smallest safe fix, rerun the focused check, then the full gate:
+`python -m coverage run --branch --source=ethscan -m pytest -q`;
+`python -m mypy ethscan/ tests/`;
+`python -m ruff check ethscan/ tests/ check_readme.py`; `python3 check_readme.py`.
+
+Env note: `coverage` is not on PATH; use `python -m coverage ...`. `python` works here.
