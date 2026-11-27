@@ -2,33 +2,33 @@
 
 ## Status
 Repository fully green. This session independently re-verified the full gate first-hand (Python 3.14.4):
-- `python -m pytest -q` -> 49915 passed, 147 skipped, 0 failed (EXIT 0)
+- `coverage erase && coverage run -m pytest -q` -> 49915 passed, 147 skipped, 0 failed (EXIT 0, 141s)
+- `coverage report` -> TOTAL 100% (16299 stmts, 0 missing) on a CLEAN run
 - `python -m mypy ethscan/ tests/` -> Success: no issues found in 274 source files
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed
 - `python3 check_readme.py` -> 54 CLI commands, 0 drift both directions, exit 0
-- Coverage: TOTAL 100% (16299 stmts, 6180 branches, 0 missing)
 
 ## What changed (this session)
-Fixed a genuine wrong-output defect in the web/headers URL construction (the handoff-flagged `headers.run_headers`/`web.run_web_checks` "whitespace in scheme branch" area):
-- `ethscan/headers.py:27` and `ethscan/web.py:369`: `run_headers`/`run_web_checks` built the transport `url` from the unstripped `target` (`url = target` when `://` present), leaking surrounding whitespace into the netloc passed to `fetch_headers` (e.g. `" https://example.com "` -> netloc `"example.com "`, breaking DNS). `_parse_url` correctly stripped internally, so host/port/secure were right but the URL sent to the transport was not. Reproduced first-hand: both functions passed `' https://example.com '` to `fetch_headers`. Fix: strip `target` once and use it in both branches (`stripped = target.strip(); url = stripped if "://" in stripped else ...`). Valid targets without whitespace are byte-identical.
-- `tests/test_headers.py::test_run_headers_strips_whitespace_from_schemed_url` and `tests/test_web.py::test_run_web_checks_strips_whitespace_from_schemed_url`: assert `fetch_headers` receives the stripped URL for a whitespace-wrapped schemed target.
-- `tests/test_wifi.py::test_run_iw_scan_capability_without_privacy`: covers the pre-existing uncovered `if "privacy" in caps:` false branch (`wifi.py:239->241`) that kept a clean `coverage erase` run at 99% (the baseline's "100%" was an artifact of accumulated `.coverage` data across sessions). Unrelated to the web/headers fix; added to keep the `fail_under=100` gate green on a clean run.
+NO source/test changes. This was a fresh-angle wrong-output hunt that produced a NEGATIVE result (no defect reproduced). Working tree is clean; baseline preserved. The prior session's web/headers fix (commit 9389d03) is intact.
 
 ## What was actually verified (first-hand this session)
-- Pre-fix repro: `run_web_checks(" https://example.com ", ...)` / `run_headers(" https://example.com ")` passed `' https://example.com '` to `fetch_headers` while `host=example.com, port=443, secure=True`.
-- Post-fix repro: both pass `'https://example.com'` to `fetch_headers`; valid targets unchanged.
-- Full gate green as listed above; `ethscan/headers.py` and `ethscan/web.py` at 100%; `ethscan/wifi.py` at 100%.
-- `git diff --check` clean; working tree contains only the 5 changed files above (not committed — controller commits).
+Fresh angles NOT in prior do-not-repeat lists, each checked against an independent oracle / self-consistency property (all 0 mismatches):
+- `snmp` BER codec: `_encode_oid_value`<->`_parse_oid` round-trip (incl. multi-byte first subidentifier `2.999`->1079->`0x88 0x37`, arc-2 large arcs), `_build_get_request`<->`_parse_snmp_message` full-message round-trip across all value types (TIMETICKS/OCTET_STRING/IPADDRESS/COUNTER64/OID/INTEGER/NULL, incl. UTF-8), `_encode_integer`<->`_decode_varbind_value` round-trip (0,±1,127,128,-128,-129,255,256,65535,±2^31,2^53), `_encode_base128` round-trip, `_encode_tlv`<->`_parse_tlv` length round-trip (0..2^24). Malformed-input contract: every truncation of a valid message + 20,000 random-byte inputs raise ONLY `ValueError` (no leaked IndexError/struct.error/etc.).
+- `cve._extract_cve_summary` vs an independent from-spec oracle over a hostile structured matrix (non-dict, empty vulns, non-dict cve, description lang fallback, metrics V31>V30>V2 priority, references coercion): 0 mismatches.
+- `tls._resolve_version` alias table (all 16 aliases x {lower,upper,padded}) + TLSVersion passthrough + unknown->ValueError; `tls._version_name`/`_version_sort_key`/`_cipher_sort_key`/`_truncate` read-clean.
+- `nmap._parse_port` boundary oracle (1,65535 valid; 0,65536,-1,abc,"",missing invalid) + `_parse_host`/`parse_nmap_xml` read-clean.
+- Read-clean (no logic defect found): `ssl._parse_cert`/`_rdn_to_str`/`_estimate_key_size`, `geo._geo_csv_header`<->`_geo_csv_row` 17-col alignment, `geo._normalize_hops`/`_normalize_geo`, `recon._normalize_domain`, `snmp._normalize_target` (IPv6/bracket/port branches), `cve._severity_rank` (SEVERITIES=("critical","high","medium","low") -> reversed gives low=0..critical=3, matches docstring/tests).
 
 ## What remains unresolved
 - None.
 
 ## Approaches already tried / ruled out (do not repeat)
 - Carry forward all prior handoff items (CSV formula injection; parser/formatter/assessor hostile sweeps; CLI target/option sweeps; radix math; target.py parsers; hash/passwords/jwt/scanner/cidr; fileio/completion/whois/dns normalize; dnssec; geo/urlcheck/stale/subdomains; validate<->cidr; validate<->scanner ports; osdetect checksum; cve version-range; mac OUI; empty-host normalization; findings/security_flags hardening; README drift guard; audit/hash/report/vuln; headers/web wrong-output probe; version/resolve/subtake/ping/netbios/ntp/wifi/mongodb+ldap/memcached/mssql/smb/smtp/ssh/ftp/dnsbrute/fuzz/brute/service; mac/osdetect/hash/version_tuple oracles; 3000-trial radix merge; `_assess_web_server_version`, `_parse_url`, `detect_shell`, config coercion/validation, netbios encode/decode; parser STRING fuzz; load_json bracket-in-string; version formatter hostile fields; radix `_common_prefix_of_pair`; `whois.parse_whois` registrar; `fileio.sanitize_csv_cell`; `s3._normalize_target` hostless authority; `trace._extract_hop_ips` dedup; `click` 8.2+ support; `click.__version__` migration; `_CheckedDefaultMap` coverage; `report.py` nested scalars) — all clean or already fixed.
-- This session's fresh-angle probes (`_assess_web_server_version`, `_parse_url`, `detect_shell`, config, netbios encode/decode) all clean vs independent oracles; not repeated.
+- This session's fresh-angle probes (ALL clean, 0 mismatches — do not repeat without NEW evidence): `snmp` BER encode/decode round-trip + full-message round-trip + malformed-truncation + 20k random-byte fuzz (ValueError-only contract); `cve._extract_cve_summary` vs from-spec oracle; `tls._resolve_version` alias/passthrough/unknown; `tls._version_name`/`_version_sort_key`/`_cipher_sort_key`/`_truncate`; `nmap._parse_port` boundaries + `_parse_host`/`parse_nmap_xml`; read-clean `ssl._parse_cert`/`_rdn_to_str`/`_estimate_key_size`, `geo` CSV 17-col alignment + `_normalize_hops`/`_normalize_geo`, `recon._normalize_domain`, `snmp._normalize_target`, `cve._severity_rank`.
 
 ## Next task (precise, evidence-based)
-- No queued assignment; all gates green, coverage 100%. Do NOT repeat verification-only sessions without NEW evidence or a NEW angle. If future work is needed, pick a fresh angle NOT in the lists above, reproduce a concrete defect FIRST (focused failing check with running evidence vs a stdlib oracle), apply the smallest safe fix, add/extend a test to keep coverage 100%, then rerun the full gate. If green and nothing reproduces, record the negative result, preserve the baseline, and hand off again — do not fabricate work.
+- No queued assignment; all gates green, coverage 100% on a clean run. Do NOT repeat verification-only sessions without NEW evidence or a NEW angle. If future work is needed, pick a fresh angle NOT in the lists above, reproduce a concrete defect FIRST (focused failing check with running evidence vs an independent oracle), apply the smallest safe fix, add/extend a test to keep coverage 100%, then rerun the full gate. If green and nothing reproduces, record the negative result, preserve the baseline, and hand off again — do not fabricate work.
+- Untouched fresh angles still available (not yet property-checked): `snmp._assign_varbind`/`_probe_community`/`_assess_snmp_version` (transport-coupled, harder to oracle); `tls.enumerate_tls` aggregation/`_version_sort_key` ordering under mixed known/unknown; `cve._lookup_cve_id` product/version normalization; `nmap` `_finding_detail`/`_escape` signature-matching; `ssl._get_chain` (transport). Prefer pure helpers with a stdlib oracle.
 
 ## Constraints (carry forward)
 - Do NOT modify `.github/workflows/**`.
