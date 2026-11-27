@@ -1926,3 +1926,27 @@ exceptions. Remaining candidates: `_common_prefix_length`, `_nth_bit`,
 - None pending. Repository fully green with 100% coverage (49954 passed). Do NOT fabricate work or repeat verification-only sessions. If future work is needed, reproduce a concrete gap first, apply the smallest safe fix, rerun focused then the full gate.
 - Evidence-based lead (fresh angle): grep `tests/` for other no-op assertions on security-relevant pure helpers (`isinstance(result, int)` / `0 <= result <= 0xFFFF` that never check a real value) and strengthen them the same way. Do not change production code without a reproduced defect.
 - `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`.
+
+# Session (Fri Nov 27 2026, cidr/validate consistency guard)
+## This session
+- No prior concrete assignment (HANDOFF_NEXT/NEXT_TASK said "None pending; repo fully green"). Executed the prior evidence-based lead first: the no-op-assertion lead is COMPLETE — the only two remaining `0 <= result <= 65535` matches (`tests/test_target.py:893`, `:1194`) are redundant secondary assertions behind real `result == value` / `result == expected_value` checks, not no-ops.
+- Independently re-verified baseline first-hand: `python -m pytest -q` -> 49954 passed, 147 skipped, 0 failed.
+- Investigated fresh angles for a concrete safe defect:
+  - Console entry point `ethscan` is correctly registered (`entry_points.txt` -> `ethscan.cli:cli`); `which ethscan` failing is a PATH artifact of the editable install, not a code defect.
+  - `ethscan/jwt.py` already exhaustively tested (49 tests incl. boolean/NaN/Inf NumericDate); no gap.
+  - `cidr` vs `validate` IPv6 `/127` differ (cidr usable=1 per RFC 4291 anycast; validate usable=2 per RFC 6164) but this is a DELIBERATE, documented, oracle-verified divergence on both sides — not a defect; must not change.
+- Selected a bounded, test-only, non-fabricated improvement capturing that finding.
+## What changed (test-only, fully reversible)
+- New `tests/test_cidr_validate_consistency.py`: asserts `run_cidr` and `_validate_cidr` agree on all 10 fields across 9 networks (IPv4 /24,/31,/32,/30,/12,/0; IPv6 /32,/126,/128) and pins the intentional `/127` divergence exactly. No production code changed.
+## What was actually verified (evidence)
+- Empirically confirmed 0 mismatches across the 9 networks before writing the test; `/127` divergence reproduced exactly.
+- Focused: `pytest tests/test_cidr_validate_consistency.py -q` -> 10 passed; mypy/ruff on the file clean.
+- Full gate under coverage: `python -m coverage run --branch --source=ethscan -m pytest -q` -> 49964 passed, 147 skipped, 0 failed (baseline 49954; +10); `coverage report` -> TOTAL 100% (16295 stmts, 6178 branches, 0 missing).
+- `python -m mypy ethscan/ tests/` -> Success (278 files); `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed; `python3 check_readme.py` -> 0 drift; `git diff --check` clean.
+- `git status` -> only new `tests/test_cidr_validate_consistency.py` (untracked). Not committed (controller commits).
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- No-op-assertion lead COMPLETE; `jwt` oracle tests already exhaustive (adding = fabrication); `cidr`/`validate` `/127` is intentional (RFC 4291 vs RFC 6164) — do not modify either. `oracle`/`postgresql` empty-target and `ethscan/cli.py` unreachable guard remain out of scope. Do not modify `.github/workflows/**`.
+## Next task
+- None pending. Repo fully green (49964 passed, 100% coverage). Do NOT fabricate work or repeat verification-only sessions. Reproduce a concrete gap first, apply the smallest safe fix, rerun focused then the full gate. Env note: `coverage` not on PATH; use `python -m coverage ...`.
