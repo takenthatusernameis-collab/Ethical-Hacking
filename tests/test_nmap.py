@@ -1,7 +1,9 @@
 """Unit tests for the Nmap XML parser module."""
 
 import json
+import random
 import tempfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any, cast
 
@@ -600,6 +602,86 @@ def test_format_nmap_report_markdown_newlines_in_fields():
     # Details line should not contain literal newlines
     assert "Product with newlines" in output
     assert "Product\nwith\nnewlines" not in output
+
+
+_PROPERTY_SEED = 20261127
+
+
+def _build_random_nmap_xml(rng: random.Random) -> str:
+    """Build a random but well-formed Nmap XML document."""
+    parts = ["<nmaprun>"]
+    for _ in range(rng.randint(0, 4)):
+        parts.append("<host>")
+        parts.append(f'<address addr="10.0.0.{rng.randint(1, 254)}" addrtype="ipv4"/>')
+        parts.append("<hostnames/>")
+        parts.append("<ports>")
+        for _ in range(rng.randint(0, 5)):
+            port_id = rng.choice([22, 80, 443, 0, 1, 65535, 65536, 70000, -1, "notaport"])
+            state = rng.choice(["open", "closed", "filtered"])
+            product = rng.choice(["OpenSSH", "vsftpd", ""])
+            version = rng.choice(["7.2p2", "2.3.4", ""])
+            parts.append(
+                f'<port protocol="tcp" portid="{port_id}">'
+                f'<state state="{state}"/>'
+                f'<service name="s" product="{product}" version="{version}"/>'
+                f"</port>"
+            )
+        parts.append("</ports></host>")
+    parts.append("</nmaprun>")
+    return "".join(parts)
+
+
+def _oracle_nmap_counts(xml: str) -> tuple[int, int, int]:
+    """Independently count hosts / valid ports / open ports from Nmap XML."""
+    root = ET.fromstring(xml)
+    hosts = root.findall("host")
+    total_ports = 0
+    open_ports = 0
+    for host in hosts:
+        ports_elem = host.find("ports")
+        if ports_elem is None:
+            continue
+        for port in ports_elem.findall("port"):
+            try:
+                port_id = int(port.get("portid", "0"))
+            except (TypeError, ValueError):
+                continue
+            if not 1 <= port_id <= 65535:
+                continue
+            total_ports += 1
+            state_elem = port.find("state")
+            state = (
+                state_elem.get("state", "unknown")
+                if state_elem is not None
+                else "unknown"
+            )
+            if state == "open":
+                open_ports += 1
+    return len(hosts), total_ports, open_ports
+
+
+def test_run_nmap_aggregation_counts_match_xml_oracle(tmp_path):
+    """Property test: report counts must match an independent XML oracle.
+
+    Locks the user-visible aggregation invariants (hosts_scanned,
+    total_ports_scanned, total_open_ports, services_detected) against a
+    from-scratch ElementTree count over randomly generated Nmap documents.
+    No production defect was found; this is durable regression hardening.
+    """
+    rng = random.Random(_PROPERTY_SEED)
+    xml_path = tmp_path / "scan.xml"
+    for _ in range(400):
+        xml = _build_random_nmap_xml(rng)
+        xml_path.write_text(xml)
+        results = run_nmap(str(xml_path))
+        exp_hosts, exp_total, exp_open = _oracle_nmap_counts(xml)
+        assert results["hosts_scanned"] == exp_hosts
+        assert results["total_ports_scanned"] == exp_total
+        assert results["total_open_ports"] == exp_open
+        # One service entry is recorded per open port.
+        assert results["services_detected"] == exp_open
+        # Every finding carries a known severity, so the severity tally is exact.
+        assert sum(results["severity_counts"].values()) == results["finding_count"]
 
 
 from unittest.mock import patch

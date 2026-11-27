@@ -1847,3 +1847,29 @@ exceptions. Remaining candidates: `_common_prefix_length`, `_nth_bit`,
 
 ## Next task
 - None pending. Repository fully green with 100% coverage. Do NOT fabricate work or repeat verification-only sessions as progress. If future work is needed, reproduce a concrete gap first (focused failing check, fresh-install failure, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then the full gate (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`.
+
+# Session (Fri Nov 27 2026, nmap fresh-angle probes + aggregation property test)
+## This session
+- No queued assignment (HANDOFF_NEXT/NEXT_TASK said "none pending; repo fully green" and suggested `nmap._finding_detail` as a fresh angle). Independently re-verified the full gate first-hand at HEAD `6accf9c`: `pytest -q` -> 49917 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/` clean (274 files); `ruff` clean; `check_readme.py` 54/54, 0 drift; coverage TOTAL 100% (16299 stmts, 0 missing).
+- Ran fresh-angle probes (all clean, 0 mismatches — no defect reproduced):
+  - `nmap._finding_detail` vs a hand-derived oracle over kind x field x value matrix (882 calls): 0 mismatches, 0 crashes.
+  - `nmap` markdown/csv/json formatters over hostile finding lists (non-dict entries, wrong types, newline/pipe fields): 0 crashes; table integrity preserved.
+  - `vuln.parse_banner` curated expectations + 20,000-iteration consistency fuzz (version substring of banner, product in known set): 0 violations.
+  - `nmap.run_nmap` aggregation vs an INDEPENDENT `xml.etree.ElementTree` count over 3,000 random documents: 0 mismatches.
+- Per the reliability rules (no reproducible defect -> do not fabricate work), added durable TEST HARDENING only (matching the radix-session "test hardening, not a known defect" precedent); no production code changed.
+## What changed
+- `tests/test_nmap.py`: added `test_run_nmap_aggregation_counts_match_xml_oracle` (+ `_build_random_nmap_xml`, `_oracle_nmap_counts`, `_PROPERTY_SEED = 20261127`, and `import random` / `import xml.etree.ElementTree as ET`). 400 seeded random Nmap XML docs; asserts `run_nmap` counts (`hosts_scanned`, `total_ports_scanned`, `total_open_ports`, `services_detected`) match the independent XML oracle and `sum(severity_counts.values()) == finding_count`. Locks user-visible report-count invariants previously checked only on one fixed sample.
+## What was actually verified (evidence)
+- New property test: 400 cases, 0 mismatches. Mutation-checked: temporarily changing `total_open_ports += 1` -> `+= 2` in `ethscan/nmap.py` made the new test FAIL (`assert 2 == 1`); source reverted, only `tests/test_nmap.py` modified.
+- `python -m pytest tests/test_nmap.py -q` -> 34 passed.
+- `python -m pytest -q` (full suite) -> 49918 passed, 147 skipped, 0 failed (baseline 49917; +1 new test).
+- `python -m coverage run -m pytest -q` then `coverage report` -> TOTAL 100% (16299 stmts, 0 missing).
+- `python -m mypy ethscan/ tests/` -> Success (274 files); `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed; `python3 check_readme.py` -> 54 commands, 0 drift; `git diff --check` clean.
+- `git status` -> only `tests/test_nmap.py` modified (plus handoff docs). Not committed (controller commits).
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- This session's nmap probes (`_finding_detail`, formatters, parse_banner, run_nmap aggregation): clean; do not repeat unchanged.
+- All prior fresh-angle sweeps (see HANDOFF_NEXT.md do-not-repeat list): clean; not repeated.
+## Next task
+- None pending. Repository fully green with 100% coverage (49918 passed). Do NOT fabricate work or repeat verification-only sessions. If future work is needed, use a fresh angle not yet covered (`cve._lookup_cve_id` product/version normalization, `tls.enumerate_tls` aggregation/`_version_sort_key` ordering, or `snmp._assign_varbind`), reproduce a concrete defect first (focused failing check vs an independent oracle), apply the smallest safe fix, rerun focused then the full gate (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`.
