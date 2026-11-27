@@ -80,15 +80,12 @@ def test_checksum_empty() -> None:
 
 
 def test_checksum_known() -> None:
-    result = _checksum(b"hello")
-    assert isinstance(result, int)
-    assert 0 <= result <= 0xFFFF
+    assert _checksum(b"hello") == 0xBC2D
 
 
 def test_checksum_odd_length_pads() -> None:
-    result = _checksum(b"abc")
-    assert isinstance(result, int)
-    assert 0 <= result <= 0xFFFF
+    # Odd-length input is zero-padded before summing (RFC 1071).
+    assert _checksum(b"abc") == 0x3B9D
 
 
 # ---------------------------------------------------------------------------

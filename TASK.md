@@ -1901,3 +1901,28 @@ exceptions. Remaining candidates: `_common_prefix_length`, `_nth_bit`,
 
 ## Next task
 - None pending. Repository fully green with 100% coverage. Do NOT fabricate work or repeat verification-only sessions as progress. If future work is needed, reproduce a concrete gap first (focused failing check, fresh-install failure, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then the full gate (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`.
+
+# Session (Fri Nov 27 2026, checksum property-test hardening)
+## This session
+- No prior concrete assignment (HANDOFF_NEXT/NEXT_TASK said "None pending; repo fully green"). Independently re-verified the full gate first-hand: `pytest -q` -> 49948 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/` clean (276 files); `ruff` clean; `check_readme.py` 54/54, 0 drift; `coverage run --branch --source=ethscan -m pytest -q` -> TOTAL 100% (16295 stmts, 6178 branches, 0 missing); `git status` clean.
+- Selected a bounded, evidence-based test-hardening task (no production code change). Found a real gap: the security-critical raw-packet checksum functions `ping._checksum` and `osdetect._checksum` (build ICMP echo / TCP-SYN packets) had a `test_checksum_known` that only asserted `isinstance(result, int)` and `0 <= result <= 0xFFFF` — correctness was never verified. The two functions are byte-for-byte identical.
+- Verified `_checksum` is CORRECT (not a defect) BEFORE writing tests, against an independent stdlib-only RFC 1071 oracle: 0 mismatches over 20k random buffers (len 0..2048), 0 mismatches at sizes up to 1 MiB, 0 mismatches for the worst-case all-0xFF payload at every size up to 1 MiB. The 2-fold carry (`total += total >> 16`) + final `& 0xFFFF` is sufficient.
+## What changed (test-only, fully reversible)
+- `tests/test_ping.py`: `test_checksum_known` asserts `_checksum(b"hello") == 0xBC2D`; `test_checksum_odd_length_pads` asserts `_checksum(b"abc") == 0x3B9D`.
+- `tests/test_osdetect.py`: `test_checksum_known` asserts `== 0xBC2D`; `test_checksum_odd_length`/`test_checksum_even_length` assert `0x3B9D`/`0x3B39`.
+- `tests/test_checksum_property.py` (new): parametrizes BOTH impls over (a) independent RFC 1071 oracle on 2000 seeded random buffers, (b) round-trip defining property (append checksum -> sums to 0) on 2000 seeded even-length buffers, (c) known vectors (empty->0xFFFF, hello->0xBC2D, abc->0x3B9D, abcd->0x3B39, \xff*4->0x0). Seed 20261127.
+## What was actually verified (evidence)
+- Focused: `pytest tests/test_checksum_property.py tests/test_ping.py tests/test_osdetect.py -q` -> 187 passed.
+- Mutation check: replacing `return (~total) & 0xFFFF` -> `return total & 0xFFFF` in `ethscan/ping.py` made 3 property tests FAIL (oracle/round-trip/known); source restored (`git diff ethscan/ping.py` empty), all 6 pass. The test genuinely guards correctness.
+- `coverage run --branch --source=ethscan -m pytest -q` -> 49954 passed, 147 skipped, 0 failed (baseline 49948; +6); TOTAL 100% (16295 stmts, 6178 branches, 0 missing).
+- `mypy ethscan/ tests/` -> Success (277 files); `ruff check ethscan/ tests/ check_readme.py` -> All checks passed; `check_readme.py` -> 54 commands, 0 drift; `git diff --check` clean.
+- `git status` -> only `tests/test_ping.py`, `tests/test_osdetect.py` modified + `tests/test_checksum_property.py` new. No production code changed. Not committed (controller commits).
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- Verified `_checksum` correctness (oracle + worst-case + large payloads): correct, not a defect; do not "fix" it.
+- All prior fresh-angle sweeps (CSV injection, parser/formatter/assessor/CLI hostile sweeps, nested-field fuzz, radix/target/hash/passwords/jwt/scanner/cidr wrong-output, whois/s3/mac/nmap/tls/version/netbios/config/service probes): clean; not repeated.
+## Next task
+- None pending. Repository fully green with 100% coverage (49954 passed). Do NOT fabricate work or repeat verification-only sessions. If future work is needed, reproduce a concrete gap first, apply the smallest safe fix, rerun focused then the full gate.
+- Evidence-based lead (fresh angle): grep `tests/` for other no-op assertions on security-relevant pure helpers (`isinstance(result, int)` / `0 <= result <= 0xFFFF` that never check a real value) and strengthen them the same way. Do not change production code without a reproduced defect.
+- `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`.

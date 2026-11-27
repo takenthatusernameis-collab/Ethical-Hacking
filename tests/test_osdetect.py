@@ -92,10 +92,7 @@ def test_checksum_empty() -> None:
 
 
 def test_checksum_known() -> None:
-    # "hello" -> known checksum value
-    result = _checksum(b"hello")
-    assert isinstance(result, int)
-    assert 0 <= result <= 0xFFFF
+    assert _checksum(b"hello") == 0xBC2D
 
 
 # ---------------------------------------------------------------------------
@@ -449,12 +446,12 @@ def test_build_syn_packet_custom() -> None:
 
 def test_checksum_odd_length() -> None:
     from ethscan import osdetect
-    assert isinstance(osdetect._checksum(b"abc"), int)
+    assert osdetect._checksum(b"abc") == 0x3B9D
 
 
 def test_checksum_even_length() -> None:
     from ethscan import osdetect
-    assert isinstance(osdetect._checksum(b"abcd"), int)
+    assert osdetect._checksum(b"abcd") == 0x3B39
 
 
 def test_connect_tcp_success() -> None:
