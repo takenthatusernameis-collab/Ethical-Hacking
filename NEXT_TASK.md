@@ -28,10 +28,29 @@ Nothing else to fix — do not fabricate work or repeat verification-only sessio
 - mongodb `_parse_buildinfo_response` line 191 off-by-one is masked (output correct); do not change without a reproduced functional failure.
 - `dns.run_dns` `record_types_queried` reports the RAW requested types by design (asserted by tests/test_dns_record_type_filtering.py:94); do not change without a reproduced failure.
 
-## Evidence-based lead for a future session (only if a session is needed)
-- All four quality gates are green, coverage is 100% on a clean run, and no pending defect. Already property-checked / inspected clean (do not repeat): all pure helpers in ORACLE_VERIFICATION_TARGET.md + prior HANDOFFs; radix math; target.py parsers; hash/passwords/jwt/scanner/cidr; fileio/completion/whois/dns normalize; redis/mysql/snmp/cert/nmap/config/report/vuln parser inspection; whois.extract_referral_server; dnssec helpers; fileio.sanitize_csv_cell; completion.generate_completion_script; dns.run_dns record-type filtering; _assess_web_server_version; validate<->cidr network info; validate<->scanner ports; osdetect._checksum; geo/urlcheck/stale/subdomains review; s3._bucket_name_problem; s3/recon URL builders; ssl/tls cert extraction (3.14-limited); trace._extract_hop_ips duplicate-IP branch; headers/web wrong-output probe; audit/hash/report/vuln exploration; version/resolve/subtake/ping/netbios/ntp/wifi/mongodb + ldap/memcached/mssql/smb/smtp/ssh/ftp/dnsbrute/fuzz/brute/service wrong-output probe; mac/osdetect/hash/version_tuple differential oracles; 3000-trial randomized radix merge; `_assess_web_server_version`, `_parse_url`, `detect_shell`, config coercion/validation, netbios encode/decode; parser STRING fuzz; load_json bracket-in-string; version formatter hostile fields; radix `_common_prefix_of_pair`; `whois.parse_whois` registrar; `fileio.sanitize_csv_cell`; `s3._normalize_target` hostless authority; `trace._extract_hop_ips` dedup; **NEW this session (clean):** snmp BER encode/decode round-trip + malformed/random fuzz, cve._extract_cve_summary oracle, tls._resolve_version alias, nmap._parse_port boundaries.
-- Untouched fresh angles still available: `snmp._assign_varbind`/`_probe_community`/`_assess_snmp_version` (transport-coupled); `tls.enumerate_tls` aggregation/ordering; `cve._lookup_cve_id` product/version normalization; `nmap._finding_detail`/`_escape`; `ssl._get_chain`. Prefer pure helpers with a stdlib oracle.
-- If a session is needed, the agent should invent a genuinely new angle (a module/helper not yet property-checked for wrong output) and reproduce a defect before changing anything.
-- `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`.
+## This session (negative result — no changes made)
+Baseline preserved; working tree clean. Property-checked one NEW untouched angle against the documented contract:
+- `cve._lookup_cve_id` / `ethscan/vuln.py:version_in_range` (vuln.py:582): inclusive/exclusive min/max, zero-padding (`1.3`==`1.3.0`), numeric-not-lexicographic (`1.10`>`1.2`), invalid/empty version -> False. 0 mismatches across all boundary cases. No defect reproduced; no fix applied.
+
+## Next task (precise, evidence-based)
+No queued assignment. All gates green (49915 passed / 147 skipped / 0 failed, 100% coverage clean, mypy/ruff/check_readme clean). Do NOT repeat verification-only sessions without NEW evidence or a NEW angle.
+- Pick ONE remaining untouched pure helper with a stdlib/simple oracle (do NOT repeat angles already in the do-not-repeat lists): `nmap._finding_detail`/`_escape` signature-matching (ethscan/nmap.py), `snmp._assign_varbind` (ethscan/snmp.py), or `ssl._get_chain` (transport-coupled, harder to oracle).
+- Reproduce a concrete defect FIRST (focused failing check with running evidence vs an independent oracle). If nothing reproduces, record the negative result, preserve the baseline, and hand off again — do not fabricate work.
+- If a defect is fixed: add/extend a test to keep coverage 100%, then rerun the full gate (`coverage erase && coverage run -m pytest -q`, `coverage report`, `python -m mypy ethscan/ tests/`, `python -m ruff check ethscan/ tests/ check_readme.py`, `python3 check_readme.py`).
+
+## Constraints (carry forward)
+- Do NOT modify `.github/workflows/**`.
+- Keep `oracle`/`postgresql` empty-target in-band (exit 0) behavior.
+- Do not weaken the `ethscan/cli.py` unreachable guard or game coverage.
+- A code change must fix a REPRODUCED defect first (focused failing check with running evidence). If nothing reproduces, record the negative result and stop.
+- PBKDF2+pepper HMACs the hex-string digest by design; do not "fix" without a reproduced failure.
+- `sanitize_csv_cell` leaving `-inf`/`+inf`/`nan` unsanitised is a low-severity edge; do not change without a reproduced functional failure.
+- `headers.run_headers`/`web.run_web_checks` strip the target before building the transport URL (commit 9389d03); keep this behavior.
+- `validate._format_network_info` IPv6 /127 is INTENTIONAL and tested; do NOT align to cidr's anycast convention without a reproduced failure + explicit design.
+- ssl `key_size`/`signature_algorithm` are inert on Python 3.14; do not chase without a bounded stdlib approach.
+- mongodb `_parse_buildinfo_response` line 191 off-by-one is masked (output correct); do not change without a reproduced functional failure.
+- `dns.run_dns` `record_types_queried` reports the RAW requested types by design (asserted by tests/test_dns_record_type_filtering.py:94); do not change without a reproduced failure.
+
+(End of file)
 
 (End of file)
