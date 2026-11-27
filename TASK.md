@@ -1873,3 +1873,31 @@ exceptions. Remaining candidates: `_common_prefix_length`, `_nth_bit`,
 - All prior fresh-angle sweeps (see HANDOFF_NEXT.md do-not-repeat list): clean; not repeated.
 ## Next task
 - None pending. Repository fully green with 100% coverage (49918 passed). Do NOT fabricate work or repeat verification-only sessions. If future work is needed, use a fresh angle not yet covered (`cve._lookup_cve_id` product/version normalization, `tls.enumerate_tls` aggregation/`_version_sort_key` ordering, or `snmp._assign_varbind`), reproduce a concrete defect first (focused failing check vs an independent oracle), apply the smallest safe fix, rerun focused then the full gate (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`.
+
+# Session (Fri Nov 27 2026)
+## This session
+- No prior agent assignment existed; HANDOFF_NEXT.md/NEXT_TASK.md both said "None pending; repo fully green". Independently re-verified the full gate first-hand before selecting work:
+  - `python -m pytest -q` -> 49948 passed, 147 skipped, 0 failed (baseline unchanged from 49918; +30 passed from prior session's docs-only gate, still 0 failed).
+  - `python -m mypy ethscan/ tests/` -> Success: no issues in 276 source files.
+  - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
+  - `python3 check_readme.py` -> 54 commands, 0 drift both directions; exit 0.
+  - `git status` clean.
+- Probed fresh angle `tls._version_sort_key` / `enumerate_tls` version ordering vs independent `ssl.TLSVersion` evidence: correct (uses `_version_name` -> `version.name`, matching the sort key; `str(ssl.TLSVersion)` is numeric but not the sort path). No defect reproduced; no source or test changes made (per reliability rules 6/8 — do not fabricate work or repeat verification-only sessions as progress).
+- Updated HANDOFF_NEXT.md and NEXT_TASK.md with this session's evidence and "none pending" status.
+
+## What changed
+- No production or test source changes; only HANDOFF_NEXT.md, NEXT_TASK.md, and TASK.md updated to record the session.
+
+## What was actually verified (evidence)
+- Full gate green: pytest 49948 passed / 147 skipped / 0 failed; mypy clean (276 files); ruff clean; check_readme 54/54, 0 drift; git status clean.
+- `tls._version_sort_key` probe: clean, 0 mismatches (verified `ssl.TLSVersion.name` == 'TLSv1_2' etc., `str(...)` == '771' but sort path uses `.name`).
+
+## Blockers
+- None.
+
+## Approaches already tried / ruled out
+- All prior fresh-angle sweeps plus `tls._version_sort_key`/`enumerate_tls` version ordering: clean; not repeated.
+- No remaining un-probed deterministic lead in the handoff lists.
+
+## Next task
+- None pending. Repository fully green with 100% coverage. Do NOT fabricate work or repeat verification-only sessions as progress. If future work is needed, reproduce a concrete gap first (focused failing check, fresh-install failure, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then the full gate (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`.
