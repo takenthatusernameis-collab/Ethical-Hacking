@@ -1,31 +1,36 @@
 # Next task
 
-None pending. Repository green (README gate now robust; full gate was green at 49964
-passed / 147 skipped / 0 failed, mypy clean over 278 files, ruff clean, README 0 drift,
-coverage 100% as of the prior session). Do NOT fabricate work, repeat verification-only
-sessions as progress, or make empty/control-marker commits.
+None pending. Repository fully green with 100% coverage (49966 passed, 147 skipped, 0
+failed; mypy/ruff clean; README 54/54, 0 drift). Do NOT fabricate work, repeat
+verification-only sessions as progress, or make empty/control-marker commits.
 
 ## Last change (this session)
-- Fixed a concrete, reproduced portability defect in `check_readme.py`: it shelled out to
-  bare `python` (line 14) instead of `sys.executable`. On systems where only `python3`
-  exists (common on modern Linux/macOS) the documented `python3 check_readme.py` gate
-  crashed with `FileNotFoundError: 'python'`.
-- Fix: import `sys`; run `[sys.executable, '-m', 'ethscan', '--help']`.
+- Added durable property-test hardening for the NetBIOS first-level name encoding
+  (`ethscan/netbios.py::_encode_name_chars` / `_decode_name_chars`), a security-relevant
+  pure helper that previously had only 3 fixed-input round-trip tests.
+- `tests/test_netbios.py` (+44 lines, test-only, no production change):
+  - `_rfc1001_first_level_oracle` — independent RFC 1001 first-level encoder.
+  - `test_encode_name_chars_matches_rfc1001_oracle` — 4000 seeded cases vs the oracle.
+  - `test_encode_decode_roundtrip_random_names` — 4000 seeded round-trip cases.
+  - Seed `20261127`; added `import random`.
 
 ## Verified this session (evidence)
-- Reproduced the failure first: `env PATH=/tmp/nopybin python3 check_readme.py` (no bare
-  `python` on PATH) -> `FileNotFoundError: 'python'`, exit 1.
-- After fix, same no-`python` env -> `54 commands found`, `0 drift` both directions, exit 0.
-- Normal env `python3 check_readme.py` -> exit 0, 0 drift.
-- `python -m ruff check check_readme.py` -> All checks passed.
-- `python -m mypy check_readme.py` -> Success: no issues found.
-- `python -m pytest tests/test_readme_sync.py tests/test_readme_examples.py -q` -> 45 passed.
+- Oracle probe before writing tests: 20,000 cases, 0 encode mismatches; round-trip
+  failures only for trailing-space names (lossy by design) -> helper correct, not a defect.
+- Mutation check: swapping nibble order in `_encode_name_chars` fails BOTH new tests;
+  source restored clean; tests pass.
+- Full gate under coverage: 49966 passed, 147 skipped, 0 failed (baseline 49964; +2);
+  TOTAL 100% (16295 stmts, 6178 branches, 0 missing).
+- `python -m mypy ethscan/ tests/` -> Success (278 files).
+- `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
+- `python3 check_readme.py` -> 54 commands, 0 drift both directions.
 
 ## Constraints / do-not-touch
-- `cidr`/`validate` IPv6 `/127`, `oracle`/`postgresql` empty-target handling, and the
-  `ethscan/cli.py` unreachable guard remain intentional documented divergences — do not modify.
+- `oracle`/`postgresql` empty-target handling (exit 0, in-band error) is intentional.
+- `ethscan/cli.py` unreachable defensive guard is a documented known limitation.
 - Do not modify `.github/workflows/**`.
-- `oracle_verify_*.py` scripts are standalone (not wired into the suite by design); not a defect.
+- `snmp._parse_oid`, `service._parse_banner_*`, `headers.*`, netbios encode/decode are now
+  verified clean / property-tested — do not re-probe unchanged.
 
 ## If future work is genuinely needed
 FIRST reproduce a concrete gap (focused failing check, fresh-install failure, or behavioral
@@ -34,5 +39,9 @@ then the full gate:
 `python -m coverage run --branch --source=ethscan -m pytest -q`;
 `python -m mypy ethscan/ tests/`;
 `python -m ruff check ethscan/ tests/ check_readme.py`; `python3 check_readme.py`.
+Fresh-angle lead not yet done: property-check `geo` cache/format helpers or `urlcheck` URL
+classification vs a stdlib `urllib.parse` oracle, or strengthen another security-relevant
+pure helper that only has `isinstance`/range assertions (checksum/netbios precedent).
 
 Env note: `coverage` is not on PATH; use `python -m coverage ...`. `python` works here.
+Do not commit manually; the workflow controller stages and commits.

@@ -1950,3 +1950,24 @@ exceptions. Remaining candidates: `_common_prefix_length`, `_nth_bit`,
 - No-op-assertion lead COMPLETE; `jwt` oracle tests already exhaustive (adding = fabrication); `cidr`/`validate` `/127` is intentional (RFC 4291 vs RFC 6164) — do not modify either. `oracle`/`postgresql` empty-target and `ethscan/cli.py` unreachable guard remain out of scope. Do not modify `.github/workflows/**`.
 ## Next task
 - None pending. Repo fully green (49964 passed, 100% coverage). Do NOT fabricate work or repeat verification-only sessions. Reproduce a concrete gap first, apply the smallest safe fix, rerun focused then the full gate. Env note: `coverage` not on PATH; use `python -m coverage ...`.
+
+# Session (Fri Nov 27 2026, netbios first-level encoding property hardening)
+## This session
+- No prior concrete assignment (HANDOFF_NEXT/NEXT_TASK said "None pending; repo fully green"). Per the task instruction I did NOT repeat a verification-only session; I re-verified the baseline, ran a fresh-angle oracle probe, and added durable test hardening (no production change) for a security-relevant pure helper lacking a property-level correctness test.
+- Independently re-verified baseline first-hand at HEAD `1fa418f`: `coverage run --branch --source=ethscan -m pytest -q` -> 49964 passed, 147 skipped, 0 failed; TOTAL 100% (16295 stmts, 6178 branches, 0 missing); mypy clean (278 files); ruff clean; check_readme 54/54, 0 drift; `git status` clean.
+- Fresh-angle probes (all clean, no defect): `snmp._parse_oid`/`_split_first_subidentifier` round-trip vs an independent BER encoder (50,000 cases, 0 mismatches; already has durable round-trip tests); `service._parse_banner_service`/`_parse_banner_version` (heuristic regex, 70 tests, no crisp oracle); `headers.py` (small, I/O + hostile-contract formatters). Netbios encode verified correct vs an independent RFC 1001 oracle (20,000 cases, 0 encode mismatches; round-trip failures only for trailing-space names, lossy by design).
+## What changed (test-only, fully reversible)
+- `tests/test_netbios.py` (+44 lines): added `import random`, `_PROPERTY_SEED = 20261127`, `_NAME_ALPHABET`, `_rfc1001_first_level_oracle(name, suffix)` (independent RFC 1001 first-level encoder), `test_encode_name_chars_matches_rfc1001_oracle` (4000 seeded cases vs oracle), and `test_encode_decode_roundtrip_random_names` (4000 seeded round-trip cases, names without surrounding spaces). No production code changed.
+## What was actually verified (evidence)
+- Oracle probe before tests: 0 encode mismatches / 20,000; round-trip only trailing-space (by design).
+- Mutation check: swapping high/low nibble order in `ethscan/netbios.py` fails BOTH new tests; source restored (`git diff` empty), both pass.
+- `python -m pytest tests/test_netbios.py -q` -> 93 passed (was 91).
+- `python -m coverage run --branch --source=ethscan -m pytest -q` -> 49966 passed, 147 skipped, 0 failed (baseline 49964; +2); TOTAL 100% (16295 stmts, 6178 branches, 0 missing).
+- `python -m mypy ethscan/ tests/` -> Success (278 files); `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed; `python3 check_readme.py` -> 54 commands, 0 drift.
+- `git status` -> only `tests/test_netbios.py` modified (44 insertions). Not committed (controller commits).
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- Verification-only sessions: not repeated as progress. `snmp._parse_oid` (clean, already property-tested), `service._parse_banner_*` (heuristic, no oracle), `headers.*` (no pure gap): clean; do not re-probe unchanged. netbios encode/decode: now property-tested — do not repeat unchanged. All prior fresh-angle sweeps (see HANDOFF_NEXT.md) clean; not repeated.
+## Next task
+- None pending. Repo fully green with 100% coverage (49966 passed). Do NOT fabricate work or repeat verification-only sessions. Reproduce a concrete gap first, apply the smallest safe fix, rerun focused then the full gate (pytest/coverage/mypy/ruff/check_readme), preserve safety. Fresh-angle lead not yet done: property-check `geo` cache/format helpers or `urlcheck` URL classification vs a stdlib `urllib.parse` oracle, or strengthen another security-relevant pure helper with only `isinstance`/range assertions (checksum/netbios precedent). `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain out of scope. Do not modify `.github/workflows/**`.

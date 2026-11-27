@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import random
 import socket
 import struct
 
@@ -190,6 +191,49 @@ def test_encode_name_chars_padding() -> None:
     name, suffix = _decode_name_chars(chars)
     assert name == "AB"
     assert suffix == 0x00
+
+
+_PROPERTY_SEED = 20261127
+_NAME_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.@#$%^&()[]{}!~`' "
+
+
+def _rfc1001_first_level_oracle(name: str, suffix: int) -> bytes:
+    """Independent RFC 1001 first-level encoding (each nibble -> ASCII A-P)."""
+    padded = name.upper().encode("ascii", "replace").ljust(15, b" ")[:15]
+    raw = padded + bytes([suffix & 0xFF])
+    out = bytearray()
+    for byte in raw:
+        out.append(0x41 + (byte >> 4))
+        out.append(0x41 + (byte & 0x0F))
+    return bytes(out)
+
+
+def test_encode_name_chars_matches_rfc1001_oracle() -> None:
+    """First-level encoding matches an independent RFC 1001 oracle."""
+    rng = random.Random(_PROPERTY_SEED)
+    for _ in range(4000):
+        length = rng.randint(0, 15)
+        name = "".join(rng.choice(_NAME_ALPHABET) for _ in range(length))
+        suffix = rng.randint(0, 255)
+        assert _encode_name_chars(name, suffix) == _rfc1001_first_level_oracle(
+            name, suffix
+        )
+
+
+def test_encode_decode_roundtrip_random_names() -> None:
+    """Names without surrounding spaces round-trip through encode/decode."""
+    rng = random.Random(_PROPERTY_SEED + 1)
+    for _ in range(4000):
+        length = rng.randint(1, 15)
+        name = "".join(rng.choice(_NAME_ALPHABET) for _ in range(length))
+        # The fixed-width field strips surrounding spaces by design.
+        name = (name.strip() or "X")[:15]
+        suffix = rng.randint(0, 255)
+        decoded, decoded_suffix = _decode_name_chars(
+            _encode_name_chars(name, suffix)
+        )
+        assert decoded == name.upper()
+        assert decoded_suffix == suffix
 
 
 def test_decode_name_chars_invalid_char_raises() -> None:
