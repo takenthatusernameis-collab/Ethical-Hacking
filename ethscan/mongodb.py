@@ -165,29 +165,21 @@ def _parse_buildinfo_response(data: bytes) -> dict[str, Any]:
 
     Parses the OP_REPLY message and extracts the buildInfo document.
     """
-    if not data or len(data) < 16:
+    # A full OP_REPLY is the 16-byte message header followed by the reply body:
+    # responseFlags(4) + cursorID(8) + startingFrom(4) + numberReturned(4).
+    # numberReturned therefore sits at offset 32 and the first document at
+    # offset 36 (reading it from offset 16 would read responseFlags, which is
+    # 0 on a normal reply, and silently drop every real buildInfo document).
+    if not data or len(data) < 36:
         return {}
 
-    # Parse OP_REPLY message header (first 16 bytes)
-    # 4 bytes responseFlags
-    # 4 bytes cursorID[0] (lower 32 bits)
-    # 4 bytes cursorID[1] (upper 32 bits)
-    # 4 bytes startingFrom
-    # 4 bytes numberReturned
-
-    int.from_bytes(data[0:4], byteorder='little')
-    int.from_bytes(data[4:8], byteorder='little')
-    int.from_bytes(data[8:12], byteorder='little')
-    int.from_bytes(data[12:16], byteorder='little')
-    number_returned = int.from_bytes(data[16:20], byteorder='little')
-
-    # The actual documents start after the header (20 bytes)
-    if len(data) < 20 or number_returned == 0:
+    number_returned = int.from_bytes(data[32:36], byteorder='little')
+    if number_returned == 0:
         return {}
 
     # For simplicity, we'll parse the first document as BSON
     # This is a simplified parser that extracts key fields we care about
-    doc_data = data[20:]
+    doc_data = data[36:]
 
     # Extract version and versionArray from the buildInfo response
     result = {}

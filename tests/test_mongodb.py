@@ -90,7 +90,12 @@ def test_parse_buildinfo_response_empty():
 
 
 def _buildinfo_payload(**fields: str) -> bytes:
-    """Build a fake OP_REPLY payload whose document holds the given string fields."""
+    """Build a fake OP_REPLY payload whose document holds the given string fields.
+
+    The header is the real OP_REPLY layout: a 16-byte message header, then
+    responseFlags(4) + cursorID(8) + startingFrom(4) + numberReturned(4), so
+    numberReturned sits at offset 32 and the document at offset 36.
+    """
     doc = b""
     for name, value in fields.items():
         encoded = value.encode("utf-8")
@@ -98,7 +103,7 @@ def _buildinfo_payload(**fields: str) -> bytes:
         doc += len(encoded).to_bytes(4, byteorder="little")
         doc += encoded
         doc += b"\x00"
-    header = b"\x00" * 16 + (1).to_bytes(4, byteorder="little")  # numberReturned = 1
+    header = b"\x00" * 32 + (1).to_bytes(4, byteorder="little")  # numberReturned = 1
     return header + doc
 
 
@@ -120,7 +125,7 @@ def test_parse_buildinfo_response_truncated_length():
     # Document declares a string length that runs past the end of the payload:
     # the version must be skipped, not crash.
     doc = b"\x02version\x00" + (100).to_bytes(4, byteorder="little") + b"short\x00"
-    result = _parse_buildinfo_response(b"\x00" * 20 + doc)
+    result = _parse_buildinfo_response(b"\x00" * 32 + (1).to_bytes(4, byteorder="little") + doc)
     assert result == {}
 
 
@@ -129,9 +134,31 @@ def test_parse_buildinfo_response_version_zero_length():
     # into the field's null terminator). A zero length there passes the size
     # check and stores an empty version string.
     doc = b"\x02version\x00" + (0).to_bytes(4, byteorder="little") + b"\x00"
-    header = b"\x00" * 16 + (1).to_bytes(4, byteorder="little")  # numberReturned = 1
+    header = b"\x00" * 32 + (1).to_bytes(4, byteorder="little")  # numberReturned = 1
     result = _parse_buildinfo_response(header + doc)
     assert result["version"] == ""
+
+
+def test_parse_buildinfo_response_real_op_reply_layout():
+    # Regression: a real OP_REPLY (16-byte message header + responseFlags(4) +
+    # cursorID(8) + startingFrom(4) + numberReturned(4)) must yield the
+    # buildInfo version. numberReturned sits at offset 32 and the document at
+    # offset 36; reading numberReturned from offset 16 (responseFlags, 0 on a
+    # normal reply) previously dropped every real document.
+    import struct
+
+    doc = b"\x02version\x00" + (6).to_bytes(4, byteorder="little") + b"5.0.0\x00"
+    msg_header = struct.pack("<iiii", 36 + len(doc), 7, 3, 1)  # len, reqID, respTo, opCode=OP_REPLY
+    reply = (
+        msg_header
+        + struct.pack("<I", 0)  # responseFlags
+        + struct.pack("<q", 0)  # cursorID
+        + struct.pack("<I", 0)  # startingFrom
+        + struct.pack("<I", 1)  # numberReturned
+        + doc
+    )
+    result = _parse_buildinfo_response(reply)
+    assert result["version"] == "5.0.0"
 
 
 def test_send_recv_socket_timeout():
