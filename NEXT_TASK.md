@@ -34,10 +34,11 @@ Added two property tests to `tests/test_tls.py` (no production change). Full gat
 
 ## Next task (precise, evidence-based)
 No queued assignment. All gates green (49944 passed / 147 skipped / 0 failed, 100% coverage clean, mypy/ruff/check_readme clean). Do NOT repeat verification-only sessions without NEW evidence or a NEW angle.
-- Pick ONE remaining untouched pure helper with a stdlib/simple oracle (do NOT repeat angles in the do-not-repeat lists in HANDOFF_NEXT.md). Untouched candidates:
-  - `tls.enumerate_tls` aggregation invariants (`versions_tested`/`supported_version_count` vs list lengths; `supported_versions` subset/order) under randomized monkeypatched probes (unit-tested, no property test).
-  - `snmp._normalize_communities` / `_normalize_valid_communities` coercion vs a hand oracle.
-- Reproduce a concrete defect FIRST (focused failing check with running evidence vs an independent oracle). If nothing reproduces, record the negative result, preserve the baseline, optionally add ONE tight property test that locks a genuinely-new invariant, and hand off again — do not fabricate work.
+- The two "untouched candidates" previously listed (`tls.enumerate_tls` aggregation invariants; `snmp._normalize_communities`/`_normalize_valid_communities`) have already been addressed with property tests in prior sessions:
+  - `tests/test_tls.py::test_enumerate_tls_aggregation_invariants` (500 trials, locks: `versions_tested`/`supported_version_count` vs list lengths; `supported_versions` subset/order; canonical sorting)
+  - `tests/test_snmp.py::test_normalize_communities_property_vs_oracle` (500 trials vs hand oracle)
+  - `tests/test_snmp.py::test_normalize_valid_communities_property_vs_oracle` (500 trials vs hand oracle)
+- No remaining pure helpers with stdlib/simple oracles are known to be untouched. If future work is needed, reproduce a concrete gap first (focused failing check or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then broader gates (pytest/mypy/ruff/check_readme/coverage), preserve safety.
 - If a defect is fixed: add/extend a test to keep coverage 100%, then rerun the full gate (`python -m coverage erase && python -m coverage run -m pytest -q`, `python -m coverage report`, `python -m mypy ethscan/ tests/`, `python -m ruff check ethscan/ tests/ check_readme.py`, `python3 check_readme.py`).
 
 (End of file)
