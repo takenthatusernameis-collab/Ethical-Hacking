@@ -226,8 +226,15 @@ def _assess_ssh_banner(banner: str) -> list[dict[str, Any]]:
         return findings
     try:
         # OpenSSH versions are ``major.minor`` (e.g. ``8.9`` or ``9.3p1``);
-        # strip any non-numeric suffix before comparing.
-        numeric = "".join(ch for ch in version if ch.isdigit() or ch == ".")
+        # strip any non-numeric suffix before comparing. Only the leading
+        # ``major.minor`` run is significant: a ``pN`` patch suffix must not
+        # be absorbed into the minor (``8.3p1`` -> ``8.3``, not ``8.31``).
+        numeric = ""
+        for ch in version:
+            if ch.isdigit() or ch == ".":
+                numeric += ch
+            else:
+                break
         major, minor = (int(x) for x in numeric.split(".")[:2])
         if (major, minor) < (8, 4):
             findings.append(
