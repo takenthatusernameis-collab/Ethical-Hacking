@@ -33,7 +33,9 @@ from ethscan.snmp import (
     _encode_oid_value,
     _encode_tlv,
     _assess_snmp_version,
+    _normalize_communities,
     _normalize_target,
+    _normalize_valid_communities,
     _parse_oid,
     _parse_snmp_message,
     _parse_tlv,
@@ -1758,3 +1760,114 @@ def test_parse_snmp_message_varbind_round_trip() -> None:
     assert message["varbinds"][1]["value"] == "1.3.6.1.2.1.1.2.0"
     assert message["varbinds"][2]["value"] == 12345678
     assert message["varbinds"][3]["value"] == "router-01"
+
+
+# ---------------------------------------------------------------------------
+# _normalize_communities / _normalize_valid_communities property tests vs independent oracle
+# ---------------------------------------------------------------------------
+
+
+def _oracle_normalize_communities(communities: Any) -> list[dict[str, Any]]:
+    """Independent oracle for _normalize_communities behavior."""
+    if not isinstance(communities, (list, tuple)):
+        return []
+    return [item for item in communities if isinstance(item, dict)]
+
+
+def _oracle_normalize_valid_communities(communities: Any) -> list[str]:
+    """Independent oracle for _normalize_valid_communities behavior."""
+    if not isinstance(communities, (list, tuple)):
+        return []
+    return [str(item) for item in communities]
+
+
+def test_normalize_communities_property_vs_oracle() -> None:
+    """Property test for _normalize_communities against hand oracle.
+
+    For every randomized hostile input, the output must match the independent oracle:
+    - Non-list/tuple input (None, scalars, dicts, strings) normalizes to []
+    - List/tuple input: only dict elements are kept, non-dict elements dropped
+    """
+    import random
+
+    random.seed(20261127)
+
+    # Generate hostile inputs covering the input space
+    def gen_hostile() -> Any:
+        choice = random.choice([
+            "none", "scalar", "string", "dict", "list", "tuple",
+            "mixed_list", "empty_list", "nested"
+        ])
+        if choice == "none":
+            return None
+        elif choice == "scalar":
+            return random.choice([0, 1, -1, 3.14, True, False])
+        elif choice == "string":
+            return random.choice(["public", "private", "", "not-a-community"])
+        elif choice == "dict":
+            return {"community": "public", "valid": True}
+        elif choice == "list":
+            return [random.choice(["public", "private", "", 123, {"a": 1}, None]) for _ in range(random.randint(0, 5))]
+        elif choice == "tuple":
+            return tuple(random.choice(["public", "private", "", 123, {"a": 1}, None]) for _ in range(random.randint(0, 5)))
+        elif choice == "mixed_list":
+            return [
+                {"community": "public", "valid": True},
+                "private",
+                123,
+                None,
+                {"community": "secret", "valid": False, "version": "v2c", "error": "timeout"},
+                [],
+                {"a": 1},
+            ]
+        elif choice == "empty_list":
+            return []
+        else:  # nested
+            return [{"community": "nested", "valid": True}, [{"inner": "dict"}]]
+
+    for trial in range(500):
+        hostile = gen_hostile()
+        expected = _oracle_normalize_communities(hostile)
+        actual = _normalize_communities(hostile)
+        assert actual == expected, f"trial {trial}: input={hostile!r} expected={expected!r} actual={actual!r}"
+
+
+def test_normalize_valid_communities_property_vs_oracle() -> None:
+    """Property test for _normalize_valid_communities against hand oracle.
+
+    For every randomized hostile input, the output must match the independent oracle:
+    - Non-list/tuple input (None, scalars, dicts, strings) normalizes to []
+    - List/tuple input: all elements are stringified
+    """
+    import random
+
+    random.seed(20261128)
+
+    # Generate hostile inputs covering the input space
+    def gen_hostile() -> Any:
+        choice = random.choice([
+            "none", "scalar", "string", "dict", "list", "tuple",
+            "mixed_list", "empty_list"
+        ])
+        if choice == "none":
+            return None
+        elif choice == "scalar":
+            return random.choice([0, 1, -1, 3.14, True, False])
+        elif choice == "string":
+            return random.choice(["public", "private", "", "not-a-community"])
+        elif choice == "dict":
+            return {"community": "public", "valid": True}
+        elif choice == "list":
+            return [random.choice(["public", "private", "", 123, {"a": 1}, None, True, 3.14]) for _ in range(random.randint(0, 5))]
+        elif choice == "tuple":
+            return tuple(random.choice(["public", "private", "", 123, {"a": 1}, None, True, 3.14]) for _ in range(random.randint(0, 5)))
+        elif choice == "mixed_list":
+            return ["public", 123, None, True, 3.14, {"a": 1}, "", "private"]
+        else:  # empty_list
+            return []
+
+    for trial in range(500):
+        hostile = gen_hostile()
+        expected = _oracle_normalize_valid_communities(hostile)
+        actual = _normalize_valid_communities(hostile)
+        assert actual == expected, f"trial {trial}: input={hostile!r} expected={expected!r} actual={actual!r}"
