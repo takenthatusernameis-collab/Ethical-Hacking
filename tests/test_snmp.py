@@ -15,6 +15,7 @@ from ethscan.snmp import (
     STANDARD_OIDS,
     TAG_GET_RESPONSE,
     TAG_INTEGER,
+    TAG_IPADDRESS,
     TAG_NULL,
     TAG_OCTET_STRING,
     TAG_OID,
@@ -1655,3 +1656,105 @@ def test_format_snmp_report_csv_non_dict_input() -> None:
     rows = list(csv.reader(io.StringIO(format_snmp_report_csv(cast(Any, None)))))
     assert rows[0][0] == "target"
     assert rows[1][9] == "summary"
+
+
+# ---------------------------------------------------------------------------
+# BER encode/decode round-trip vs an independent oracle
+#
+# These tests lock the byte-level contract between the BER encoder and
+# decoder using hand-computed expected values (the independent oracle), plus
+# round-trip invariants. No production code changed; a failure here would be
+# a reproduced defect in the encoder/decoder pair.
+# ---------------------------------------------------------------------------
+
+_OID_ORACLE: list[tuple[str, bytes]] = [
+    # (oid, hand-computed BER value payload)
+    ("1.3.6.1.2.1.1.1.0", bytes([43, 6, 1, 2, 1, 1, 1, 0])),
+    ("1.3.6.1.4.1.311", bytes([43, 6, 1, 4, 1, 0x82, 0x37])),  # multi-byte first sub-id
+    ("1.3", bytes([43])),
+    ("2.1", bytes([0x51])),  # 2*40+1 = 81 -> 0x51
+    ("0.1", bytes([0x01])),  # 0*40+1 = 1 -> 0x01
+    ("1.0", bytes([0x28])),  # 1*40+0 = 40 -> 0x28
+    ("2.999", bytes([0x88, 0x37])),  # arc-2 first sub-id spans two bytes (1079)
+    ("1.3.6.1.2.1.1.2.0", bytes([43, 6, 1, 2, 1, 1, 2, 0])),
+]
+
+
+def test_encode_oid_value_independent_oracle() -> None:
+    for oid, expected in _OID_ORACLE:
+        assert _encode_oid_value(oid) == expected, oid
+
+
+def test_oid_value_round_trip_multi_component() -> None:
+    # Every OID with two or more arcs round-trips exactly through the
+    # encoder/decoder pair. A lone component is normalized to "x.0" by design.
+    for oid, _expected in _OID_ORACLE:
+        if len(oid.split(".")) >= 2:
+            assert _parse_oid(_encode_oid_value(oid)) == oid, oid
+    assert _parse_oid(_encode_oid_value("1")) == "1.0"
+
+
+def test_parse_oid_then_encode_is_idempotent() -> None:
+    # Decoding a well-formed value payload then re-encoding yields the same
+    # bytes (parser is the left inverse of the encoder).
+    for _oid, payload in _OID_ORACLE:
+        assert _encode_oid_value(_parse_oid(payload)) == payload, payload
+
+
+def test_tlv_round_trip_short_and_long_length() -> None:
+    cases = [
+        (TAG_OCTET_STRING, b"public"),
+        (TAG_OID, bytes([43, 6, 1])),
+        (TAG_INTEGER, b"\xff"),
+        (TAG_NULL, b""),
+        (TAG_IPADDRESS, bytes([192, 168, 1, 1])),
+        # Long-form length: 300 bytes -> 2-byte length (0x82 0x01 0x2c).
+        (TAG_OCTET_STRING, b"\x00" * 300),
+        # Longer long-form: 1000 bytes -> 2-byte length (0x82 0x03 0xe8).
+        (TAG_OCTET_STRING, b"\x00" * 1000),
+    ]
+    for tag, value in cases:
+        encoded = _encode_tlv(tag, value)
+        tag_out, value_out, offset = _parse_tlv(encoded, 0)
+        assert tag_out == tag, (hex(tag), value)
+        assert value_out == value, (hex(tag), value)
+        assert offset == len(encoded), (hex(tag), value)
+
+
+def test_decode_varbind_value_independent_oracle() -> None:
+    cases = [
+        (TAG_OCTET_STRING, b"Linux router 5.4.0", "Linux router 5.4.0"),
+        (TAG_OID, bytes([43, 6, 1, 2, 1, 1, 2, 0]), "1.3.6.1.2.1.1.2.0"),
+        (TAG_INTEGER, b"\xff", -1),
+        (0x41, (255).to_bytes(4, "big"), 255),  # counter32
+        (0x42, (7).to_bytes(4, "big"), 7),  # gauge32
+        (TAG_TIMETICKS, (12345678).to_bytes(4, "big"), 12345678),
+        (TAG_IPADDRESS, bytes([192, 168, 1, 1]), "192.168.1.1"),
+        (0x46, (2**40).to_bytes(8, "big"), 2**40),  # counter64
+        (0x80, b"", None),  # endOfMibView
+        (0x81, b"", None),  # noSuchObject
+        (0x82, b"", None),  # noSuchInstance
+        (0x99, b"\xab\xcd", "abcd"),  # unknown type -> hex
+    ]
+    for tag, value, expected in cases:
+        assert _decode_varbind_value(tag, value) == expected, (hex(tag), value)
+
+
+def test_parse_snmp_message_varbind_round_trip() -> None:
+    varbinds = [
+        (SYSDESC, TAG_OCTET_STRING, b"Linux router 5.4.0"),
+        (SYSOBJECTID, TAG_OID, bytes([43, 6, 1, 2, 1, 1, 2, 0])),
+        (SYSUPTIME, TAG_TIMETICKS, (12345678).to_bytes(4, "big")),
+        (SYSNAME, TAG_OCTET_STRING, b"router-01"),
+    ]
+    message = _parse_snmp_message(_build_get_response(varbinds=varbinds))
+    assert message["version"] == 1
+    assert message["community"] == "public"
+    assert message["pdu_type"] == "get-response"
+    assert [vb["oid"] for vb in message["varbinds"]] == [
+        SYSDESC, SYSOBJECTID, SYSUPTIME, SYSNAME
+    ]
+    assert message["varbinds"][0]["value"] == "Linux router 5.4.0"
+    assert message["varbinds"][1]["value"] == "1.3.6.1.2.1.1.2.0"
+    assert message["varbinds"][2]["value"] == 12345678
+    assert message["varbinds"][3]["value"] == "router-01"
