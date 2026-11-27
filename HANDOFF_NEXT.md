@@ -12,13 +12,8 @@ Repository fully green. This session independently re-verified the full gate fir
 Nothing. No source or test changes were made. Working tree clean (git status: nothing to commit, clean).
 
 ## What was actually verified (first-hand this session)
-- Full gate green (pytest/mypy/ruff/check_readme) — see Status.
-- Honest exploration for a reproducible defect across:
-  - `ethscan/cli.py` `audit` command (file/stdin reading, salt/pepper/algorithm, format selection)
-  - `ethscan/passwords.py` (`audit_passwords`, `evaluate_password`, `format_audit_report_{json,markdown,csv}`)
-  - `ethscan/hash.py` (`run_hash`, `run_check`, PBKDF2, `--check` algorithm inference)
-  - `ethscan/report.py` (`run_report`, `format_report_{json,markdown,csv}`)
-  - `ethscan/vuln.py` (`version_in_range`, `match_service/protocol/cipher/certificate_vulns`, `run_vuln` recursive, `format_vuln_report_{json,markdown,csv}`)
+- Full gate green (pytest/mypy/ruff/check_readme) — see Status. Independent re-run reproduced the exact prior numbers (49912 passed / 147 skipped / 0 failed; 274 mypy files; 54 commands / 0 drift; coverage TOTAL 100%), confirming the handoff was not stale.
+- Fresh-angle probe for a wrong-output defect in `ethscan/headers.py` (`run_headers`, `format_headers_report_{json,markdown,csv}`) and `ethscan/web.py` (`run_web_checks`, `_parse_url`, `_assess_web_server_version`, `check_security_headers`, `format_web_report_{json,markdown,csv}`): all formatters guarded with `isinstance`/`_as_list`; `_parse_url` delegates to the shared `target.parse_url`/`normalize_host`; version assessment is a simple, correct regex + major-version compare. No defect reproduces.
 - Result: no user-facing defect reproduces. All functions are defensively guarded and fully covered by hostile-sweep + branch-gap tests. Only a cosmetic observation: `format_vuln_report_json`/`format_vuln_report_csv` place `data = cast(...)` before the docstring (docstring becomes a no-op expression); not a user-facing defect, not a change target without a reproduced failure.
 
 ## What remains unresolved
@@ -31,6 +26,7 @@ Nothing. No source or test changes were made. Working tree clean (git status: no
 - Findings/security_flags CSV/Markdown formatter hardening across all modules (complete).
 - README command-presence drift guard (`tests/test_readme_sync.py` added; check_readme.py 54/54).
 - This session: audit/hash/report/vuln exploration above (all green, no defect).
+- This session: headers/web fresh-angle wrong-output probe (all green, no defect).
 
 ## Next task (precise, evidence-based)
 - No queued assignment; all gates green, coverage 100%.
