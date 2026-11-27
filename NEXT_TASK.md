@@ -1,13 +1,14 @@
 ## Next task
-No queued assignment. Repository fully green and re-verified first-hand this session (Python 3.14.4, CLEAN coverage run) at HEAD `ac582cd`:
-- `python -m coverage erase && python -m coverage run -m pytest -q` -> 49925 passed, 147 skipped, 0 failed
+No queued assignment. Repository fully green and re-verified first-hand this session (Python 3.14.4, CLEAN coverage run):
+- `python -m coverage erase && python -m coverage run -m pytest -q` -> 49944 passed, 147 skipped, 0 failed
 - `python -m coverage report` -> TOTAL 100% (16299 stmts, 0 missing)
-- `python -m mypy ethscan/ tests/` -> Success: no issues found in 274 source files
+- `python -m mypy ethscan/ tests/` -> Success: no issues found in 276 source files
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed
 - `python3 check_readme.py` -> 54 CLI commands, 0 drift both directions, exit 0
 
-This session reproduced NO defect (fresh-angle probe of `snmp._assess_snmp_version` clean, 0 mismatches) and added durable test hardening (no production change):
-- `tests/test_snmp.py`: imported `_SNMP_MIN_MAJOR`; added `test_assess_snmp_version_threshold_matrix` (15-case product/version matrix vs independent oracle), `test_assess_snmp_version_requires_dotted_version` (bare versions -> no match), `test_assess_snmp_version_threshold_boundaries` (major==threshold supported, major==threshold-1 old). Fills a real gap (prior tests only covered Linux/Cisco/FreeBSD).
+This session reproduced NO defect (fresh-angle property probes of `tls._resolve_versions`/`_validate_ciphers` clean, 0 mismatches across 1000 seeded trials) and added durable test hardening (no production change):
+- `tests/test_tls.py`: added `test_resolve_versions_property_vs_oracle` (500 randomized trials vs VERSION_ALIASES oracle), `test_validate_ciphers_property_vs_oracle` (500 randomized trials vs COMMON_CIPHERS oracle). Locks normalization invariants for string aliases, TLSVersion members, whitespace stripping, empty-string skipping, and error collection.
+- `tests/test_snmp.py`: removed unused imports `_normalize_communities`, `_normalize_valid_communities` (ruff F401 fix).
 
 ## Constraints
 - Do NOT modify `.github/workflows/**`.
@@ -26,15 +27,15 @@ This session reproduced NO defect (fresh-angle probe of `snmp._assess_snmp_versi
 - Tooling note: invoke as `python -m coverage|mypy|ruff` (bare `coverage` not on PATH).
 
 ## This session (negative result + test hardening)
-Fresh-angle probe (clean, 0 mismatches — do not repeat without NEW evidence):
-- snmp BER encode/decode round-trip vs an independent (hand-computed) oracle: `_encode_oid_value`/`_parse_oid` (incl. multi-byte first sub-identifier + arc-2 OIDs), `_encode_tlv`/`_parse_tlv` short + long-form lengths, `_decode_varbind_value` all types, `_parse_snmp_message` full message round-trip. No defect reproduced.
-Added six round-trip/independent-oracle tests to `tests/test_snmp.py` (no production change). Full gate green after the change: 49931 passed, 147 skipped, 0 failed; 100% coverage clean; mypy/ruff/check_readme clean.
+Fresh-angle probes (clean, 0 mismatches — do not repeat without NEW evidence):
+- tls `_resolve_versions`/`_validate_ciphers` property vs independent oracle: `_resolve_versions` (string aliases from VERSION_ALIASES, TLSVersion members, invalid specs collected); `_validate_ciphers` (valid ciphers from COMMON_CIPHERS, whitespace stripping, empty-string skipping, invalid ciphers collected). 1000 seeded trials, 0 mismatches.
+- Prior session's snmp BER encode/decode round-trip vs independent oracle: also clean (do not repeat).
+Added two property tests to `tests/test_tls.py` (no production change). Full gate green after the change: 49944 passed, 147 skipped, 0 failed; 100% coverage clean; mypy/ruff/check_readme clean.
 
 ## Next task (precise, evidence-based)
-No queued assignment. All gates green (49925 passed / 147 skipped / 0 failed, 100% coverage clean, mypy/ruff/check_readme clean). Do NOT repeat verification-only sessions without NEW evidence or a NEW angle.
+No queued assignment. All gates green (49944 passed / 147 skipped / 0 failed, 100% coverage clean, mypy/ruff/check_readme clean). Do NOT repeat verification-only sessions without NEW evidence or a NEW angle.
 - Pick ONE remaining untouched pure helper with a stdlib/simple oracle (do NOT repeat angles in the do-not-repeat lists in HANDOFF_NEXT.md). Untouched candidates:
   - `tls.enumerate_tls` aggregation invariants (`versions_tested`/`supported_version_count` vs list lengths; `supported_versions` subset/order) under randomized monkeypatched probes (unit-tested, no property test).
-  - `tls._resolve_versions` / `_validate_ciphers` normalization over randomized alias/cipher inputs vs an independent oracle.
   - `snmp._normalize_communities` / `_normalize_valid_communities` coercion vs a hand oracle.
 - Reproduce a concrete defect FIRST (focused failing check with running evidence vs an independent oracle). If nothing reproduces, record the negative result, preserve the baseline, optionally add ONE tight property test that locks a genuinely-new invariant, and hand off again — do not fabricate work.
 - If a defect is fixed: add/extend a test to keep coverage 100%, then rerun the full gate (`python -m coverage erase && python -m coverage run -m pytest -q`, `python -m coverage report`, `python -m mypy ethscan/ tests/`, `python -m ruff check ethscan/ tests/ check_readme.py`, `python3 check_readme.py`).

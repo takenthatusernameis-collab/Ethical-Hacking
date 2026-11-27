@@ -39,8 +39,6 @@ from ethscan.snmp import (
     _parse_tlv,
     _probe_community,
     _send_recv,
-    _normalize_communities,
-    _normalize_valid_communities,
     format_snmp_report_csv,
     format_snmp_report_json,
     format_snmp_report_markdown,

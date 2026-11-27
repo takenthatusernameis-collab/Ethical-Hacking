@@ -1384,3 +1384,145 @@ def test_enumerate_tls_aggregation_invariants(monkeypatch) -> None:
             assert _cipher_sort_key(c1) <= _cipher_sort_key(
                 c2
             ), f"trial {trial}: ciphers not sorted: {ciphers_list}"
+
+
+# ---------------------------------------------------------------------------
+# _resolve_versions / _validate_ciphers property tests vs independent oracle
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_versions_property_vs_oracle() -> None:
+    """Property test for _resolve_versions against VERSION_ALIASES oracle.
+
+    For every randomized combination of input specs (string aliases and/or
+    ssl.TLSVersion members), the output must match the independent oracle:
+    - Valid string aliases resolve to their VERSION_ALIASES mapping
+    - ssl.TLSVersion members pass through unchanged
+    - Invalid specs raise ValueError with all unknown names collected
+    """
+    import random
+    from ethscan.tls import VERSION_ALIASES, TLS_VERSIONS, _resolve_versions
+    import ssl
+
+    random.seed(20261127)
+    all_aliases = list(VERSION_ALIASES.keys())
+    all_members = TLS_VERSIONS
+
+    # Generate some invalid specs for testing error collection
+    invalid_specs = ["TLSv9", "SSLv4", "BOGUS", "tls5", "dtls1.2", ""]
+
+    for trial in range(500):
+        # Random mix of valid aliases, valid members, and invalid specs
+        num_items = random.randint(1, 10)
+        specs: list[str | ssl.TLSVersion] = []
+        expected: list[ssl.TLSVersion] = []
+        expected_unknown: list[str] = []
+
+        for _ in range(num_items):
+            choice = random.choice(["alias", "member", "invalid"])
+            if choice == "alias":
+                alias = random.choice(all_aliases)
+                specs.append(alias)
+                expected.append(VERSION_ALIASES[alias])
+            elif choice == "member":
+                member = random.choice(all_members)
+                specs.append(member)
+                expected.append(member)
+            else:
+                invalid = random.choice(invalid_specs)
+                specs.append(invalid)
+                expected_unknown.append(invalid)
+
+        if expected_unknown:
+            # Should raise ValueError with all unknown specs
+            try:
+                _resolve_versions(specs)
+            except ValueError as e:
+                msg = str(e)
+                for unknown in expected_unknown:
+                    assert unknown in msg, (
+                        f"trial {trial}: unknown spec {unknown!r} not in error message: {msg}"
+                    )
+                assert "Unknown TLS versions" in msg
+            else:
+                raise AssertionError(
+                    f"trial {trial}: expected ValueError for {expected_unknown}, got no exception"
+                )
+        else:
+            # All valid - should resolve correctly
+            result = _resolve_versions(specs)
+            assert result == expected, (
+                f"trial {trial}: expected {expected}, got {result} for specs {specs}"
+            )
+
+
+def test_validate_ciphers_property_vs_oracle() -> None:
+    """Property test for _validate_ciphers against COMMON_CIPHERS oracle.
+
+    For every randomized combination of input cipher names:
+    - Valid cipher names (exact match in COMMON_CIPHERS) are returned stripped
+    - Whitespace around valid names is stripped
+    - Empty/whitespace-only strings are skipped
+    - Invalid cipher names raise ValueError with all unknown names collected
+    """
+    import random
+    from ethscan.tls import COMMON_CIPHERS, _validate_ciphers
+
+    random.seed(20261128)
+
+    # Generate some invalid ciphers for testing error collection
+    invalid_ciphers = [
+        "BOGUS",
+        "AES128",
+        "SHA256",
+        "ECDHE-UNKNOWN",
+        "TLS_AES_128_GCM_SHA256",  # TLS 1.3 ciphers not in COMMON_CIPHERS
+        "RC4-SHA",
+        "DES-CBC3-SHA",
+    ]
+
+    for trial in range(500):
+        num_items = random.randint(1, 20)
+        ciphers: list[str] = []
+        expected: list[str] = []
+        expected_unknown: list[str] = []
+
+        for _ in range(num_items):
+            choice = random.choice(["valid", "valid_ws", "empty", "invalid"])
+            if choice == "valid":
+                cipher = random.choice(COMMON_CIPHERS)
+                ciphers.append(cipher)
+                expected.append(cipher)
+            elif choice == "valid_ws":
+                cipher = random.choice(COMMON_CIPHERS)
+                ws_cipher = "  " + cipher + "\t"
+                ciphers.append(ws_cipher)
+                expected.append(cipher)
+            elif choice == "empty":
+                ciphers.append(random.choice(["", "  ", "\t", "\n"]))
+            else:
+                invalid = random.choice(invalid_ciphers)
+                ciphers.append(invalid)
+                expected_unknown.append(invalid)
+
+        if expected_unknown:
+            # Should raise ValueError with all unknown ciphers (deduplicated, sorted)
+            try:
+                _validate_ciphers(ciphers)
+            except ValueError as e:
+                msg = str(e)
+                for unknown in set(expected_unknown):
+                    assert unknown in msg, (
+                        f"trial {trial}: unknown cipher {unknown!r} not in error message: {msg}"
+                    )
+                assert "Unknown ciphers" in msg
+            else:
+                raise AssertionError(
+                    f"trial {trial}: expected ValueError for {expected_unknown}, got no exception"
+                )
+        else:
+            # All valid/empty - should validate correctly
+            result = _validate_ciphers(ciphers)
+            assert result == expected, (
+                f"trial {trial}: expected {expected}, got {result} for ciphers {ciphers}"
+            )

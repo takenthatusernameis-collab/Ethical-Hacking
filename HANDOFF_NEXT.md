@@ -1,39 +1,41 @@
 # Handoff
 
 ## Status
-Repository fully green. Full gate re-verified first-hand this session at HEAD `ac582cd` (Python 3.14.4, CLEAN coverage run):
-- `python -m coverage erase && python -m coverage run -m pytest -q` -> 49925 passed, 147 skipped, 0 failed (EXIT 0, 144s)
+Repository fully green. Full gate re-verified first-hand this session (Python 3.14.4, CLEAN coverage run):
+- `python -m coverage erase && python -m coverage run -m pytest -q` -> 49944 passed, 147 skipped, 0 failed (EXIT 0, 143s)
 - `python -m coverage report` -> TOTAL 100% (16299 stmts, 0 missing)
-- `python -m mypy ethscan/ tests/` -> Success: no issues found in 274 source files
+- `python -m mypy ethscan/ tests/` -> Success: no issues found in 276 source files
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed
 - `python3 check_readme.py` -> 54 CLI commands, 0 drift both directions, exit 0
 
 ## What changed (this session)
-No production (`ethscan/`) code changed and NO defect was reproduced. Added durable, deterministic BER encode/decode round-trip hardening vs an independent (hand-computed) oracle — a genuinely new angle (no prior property/round-trip test for these helpers):
-- `tests/test_snmp.py`: added `test_encode_oid_value_independent_oracle` (8 hand-computed OID payloads incl. multi-byte first sub-identifier and arc-2 OIDs), `test_oid_value_round_trip_multi_component` (>=2-arc OIDs round-trip exactly; lone "1" normalizes to "1.0" by design), `test_parse_oid_then_encode_is_idempotent`, `test_tlv_round_trip_short_and_long_length` (short + 2-byte long-form lengths 300/1000), `test_decode_varbind_value_independent_oracle` (12 type/value cases incl. exception tags + unknown-hex), `test_parse_snmp_message_varbind_round_trip` (full GET-response message encode -> parse back).
+No production (`ethscan/`) code changed. Added two seeded property tests vs independent oracles for previously-untouched pure helpers:
+- `tests/test_tls.py::test_resolve_versions_property_vs_oracle` (500 randomized trials): `_resolve_versions` normalization of string aliases (from `VERSION_ALIASES`), `ssl.TLSVersion` members, and invalid specs; verifies correct resolution and error collection vs hand oracle.
+- `tests/test_tls.py::test_validate_ciphers_property_vs_oracle` (500 randomized trials): `_validate_ciphers` normalization of valid cipher names (exact `COMMON_CIPHERS` matches), whitespace stripping, empty-string skipping, and invalid-cipher error collection vs hand oracle.
+- `tests/test_snmp.py`: removed unused imports `_normalize_communities`, `_normalize_valid_communities` (ruff F401 fix).
 
 ## What was actually verified (first-hand this session)
-- New tests: 6 passed in focused run; full `tests/test_snmp.py` 139 passed.
-- Full gate re-verified first-hand this session at HEAD `ac582cd` + test addition (Python 3.14.4, CLEAN coverage run):
-  - `python -m coverage erase && python -m coverage run -m pytest -q` -> 49931 passed, 147 skipped, 0 failed (EXIT 0, 143s)
+- New tests: 2 passed in focused run; full `tests/test_tls.py` 78 passed.
+- Full gate re-verified first-hand this session (Python 3.14.4, CLEAN coverage run):
+  - `python -m coverage erase && python -m coverage run -m pytest -q` -> 49944 passed, 147 skipped, 0 failed (EXIT 0, 143s)
   - `python -m coverage report` -> TOTAL 100% (16299 stmts, 0 missing)
-  - `python -m mypy ethscan/ tests/` -> Success: no issues found in 274 source files
+  - `python -m mypy ethscan/ tests/` -> Success: no issues found in 276 source files
   - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed
   - `python3 check_readme.py` -> 54 CLI commands, 0 drift both directions, exit 0
-- Fresh-angle probe of snmp BER encode/decode vs independent oracle: 0 mismatches, no defect reproduced.
+- Fresh-angle property probes of `_resolve_versions`/`_validate_ciphers` vs independent oracles: 0 mismatches across 1000 seeded trials, no defect reproduced.
 
 ## What remains unresolved
 - None blocking.
 
 ## Approaches already tried / ruled out (do not repeat)
 - Carry forward all prior handoff items (CSV formula injection; parser/formatter/assessor hostile sweeps; CLI target/option sweeps; radix math + property tests; target.py parsers; hash/passwords/jwt/scanner/cidr wrong-output fuzz; fileio/completion/whois/dns normalize; dnssec; geo/urlcheck/stale/subdomains; validate<->cidr; validate<->scanner ports; osdetect checksum; cve version-range; mac OUI; empty-host normalization; findings/security_flags hardening; README drift guards; audit/hash/report/vuln; headers/web wrong-output probe; version/resolve/subtake/ping/netbios/ntp/wifi/mongodb+ldap/memcached/mssql/smb/smtp/ssh/ftp/dnsbrute/fuzz/brute/service; mac/osdetect/hash/version_tuple oracles; 3000-trial radix merge; `_assess_web_server_version`, `_parse_url`, `detect_shell`, config coercion/validation, netbios encode/decode; parser STRING fuzz; load_json bracket-in-string; version formatter hostile fields; radix `_common_prefix_of_pair`; `whois.parse_whois` registrar; `fileio.sanitize_csv_cell`; `s3._normalize_target` hostless authority; `trace._extract_hop_ips` dedup; click 8.2+ support; `_CheckedDefaultMap` coverage; `report.py` nested scalars; `nmap._escape` newline handling; `nmap._finding_detail`; `nmap` formatters hostile; `vuln.parse_banner`; `nmap.run_nmap` aggregation; `cve._lookup_cve_id` whitespace/case normalization — all clean or already fixed.)
-- This session's fresh-angle probe (clean, 0 mismatches — do not repeat without NEW evidence): snmp `_encode_oid_value`/`_parse_oid`/`_encode_tlv`/`_parse_tlv`/`_decode_varbind_value`/`_parse_snmp_message` round-trip vs independent oracle (6 new tests).
+- Prior session's fresh-angle probe (clean, 0 mismatches — do not repeat without NEW evidence): snmp `_encode_oid_value`/`_parse_oid`/`_encode_tlv`/`_parse_tlv`/`_decode_varbind_value`/`_parse_snmp_message` round-trip vs independent oracle (6 new tests).
+- This session's fresh-angle probes (clean, 0 mismatches — do not repeat without NEW evidence): tls `_resolve_versions`/`_validate_ciphers` property vs independent oracle (1000 seeded trials).
 
 ## Next task (precise, evidence-based)
 - No queued assignment; all gates green, coverage 100% on a clean run. Do NOT repeat verification-only sessions without NEW evidence or a NEW angle.
 - Pick ONE remaining untouched pure helper with a stdlib/simple oracle (do NOT repeat angles in the do-not-repeat lists). Untouched candidates still available:
   - `tls.enumerate_tls` aggregation invariants (`versions_tested`/`supported_version_count` vs list lengths; `supported_versions` subset/order) under randomized monkeypatched probes — has unit tests but no property test.
-  - `tls._resolve_versions` / `_validate_ciphers` normalization over randomized alias/cipher inputs vs an independent oracle.
   - `snmp._normalize_communities` / `_normalize_valid_communities` coercion vs a hand oracle.
 - Reproduce a concrete defect FIRST (focused failing check with running evidence vs an independent oracle). If nothing reproduces, record the negative result, preserve the baseline, optionally add ONE tight property test that locks a genuinely-new invariant, and hand off again — do not fabricate work.
 - If a defect is fixed: add/extend a test to keep coverage 100%, then rerun the full gate (`python -m coverage erase && python -m coverage run -m pytest -q`, `python -m coverage report`, `python -m mypy ethscan/ tests/`, `python -m ruff check ethscan/ tests/ check_readme.py`, `python3 check_readme.py`). NOTE: `coverage`/`mypy`/`ruff` are invoked via `python -m` (bare `coverage` is not on PATH).
