@@ -2,40 +2,39 @@
 
 ## Status
 Repository fully green. This session independently re-verified the full gate first-hand (Python 3.14.4):
-- `python -m pytest -q` -> 49912 passed, 147 skipped, 0 failed (EXIT 0)
+- `python -m pytest -q` -> 49912 passed, 147 skipped, 0 failed (EXIT 0, 187s)
 - `python -m mypy ethscan/ tests/` -> Success: no issues found in 274 source files
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed
 - `python3 check_readme.py` -> 54 CLI commands, 0 drift both directions, exit 0
 - Coverage: TOTAL 100% (unchanged; enforced by pyproject fail_under=100)
+- Oracle scripts (5): target, whois, dnssec, mac, service — all "ALL VERIFICATIONS PASSED", exit 0
 
 ## What changed (this session)
 No source or test changes. Working tree clean (git status: nothing to commit, clean).
 Only this handoff file and NEXT_TASK.md were updated to record the new negative result.
 
-## What was actually verified (first-hand this session)
-- Full gate green (pytest/mypy/ruff/check_readme) — exact prior numbers reproduced.
-- Fresh-angle wrong-output probe (NOT in prior ruled-out lists) of the pure/deterministic
-  helpers in: version, resolve, subtake, ping, netbios, ntp, wifi, mongodb (personal read),
-  plus a static audit of ldap, memcached, mongodb, mssql, smb, smtp, ssh, ftp, dnsbrute,
-  fuzz, brute, service (via explore subagent).
-- Running oracle evidence (script compared outputs to stdlib oracles; 0 mismatches):
-  - ssh `_parse_ssh_banner`/`_assess_ssh_banner`: `8.3p1`->8.3 flagged, `8.4`/`9.3p1`/`10.0`
-    NOT flagged (numeric tuple compare, not string compare) — correct.
-  - service `_parse_banner_service`/`_parse_banner_version`: first-signature-wins + version
-    extraction — correct.
-  - netbios `_encode_name_chars`/`_decode_name_chars`: RFC 1001 roundtrip (TEST/WORKSTATION/A)
-    + known first-pair vector — correct.
-  - ntp `_parse_time_response`: `ntp_to_unix` (epoch 2208988800) + stratum-1 ref_id IPv4 — correct.
-  - dnsbrute `build_axfr_query`: 2-byte TCP length prefix + header (id/qd=1/an=0) + qname — correct.
-  - ldap `_ber_length`/`_read_length`: roundtrip 0/1/127/128/256/65535/65536 — correct.
-- mongodb `_parse_buildinfo_response` off-by-one at line 191 (`version_pos + 8` for a 9-byte
-  `\x02version\x00`) is REAL but MASKED: the later loop (lines 204-215) uses the correct
-  `len(field_search)` and always overwrites `result['version']` with the correct value whenever
-  the first block could set it. Net output is always correct -> NOT a reproducible wrong-output
-  defect. Do not "fix" without a reproduced functional failure (repo constraint).
+## What was actually verified (first-hand this session — NEW evidence)
+- Full gate green (pytest/mypy/ruff/check_readme) reproduced this session — exact prior numbers.
+- All five oracle verification scripts re-run and PASS.
+- Fresh differential probes NOT in prior ruled-out lists, with running stdlib-oracle evidence (0 mismatches):
+  - `mac._is_mac_address` / `_strip_mac_port` over 9 tricky vectors (Cisco `0011.2233.4455`,
+    dash form, bare 12-hex, `host:port`, bracketed IPv6 `[::1]:8080`, 7-group, empty) — correct.
+  - `osdetect._checksum` vs an independent ones-complement oracle over 5 payloads (incl. odd
+    length and 0..255) — correct.
+  - `hash._compute_hash` vs `hashlib` for md5/sha1/sha256/sha512 — correct.
+  - `vuln._version_tuple` vs a manual digit-run oracle for `7.2p2`, `1.2.3rc1`, `2021.04`,
+    `v1.2.3`, `1.2.3.4.5`, `abc`, `` — correct.
+  - `radix._merge_networks` vs `ipaddress.collapse_addresses` over 3000 RANDOMIZED IPv4/IPv6
+    vectors (1-6 nets each) — 0 mismatches. Strong evidence the merge/supernet logic is correct.
+- Fresh static reviews (no defect): `recon` formatters (json/markdown/csv) and `_normalize_domain`;
+  `dns.run_dns` record-type filtering (`record_types_queried == raw input` is INTENTIONAL and
+  asserted by tests/test_dns_record_type_filtering.py:94); `urlcheck._normalize_url`;
+  `vuln.version_in_range` (padding/garbage/huge-number/pre-release all covered by tests).
+- The `8.3p1`->`8.3` ssh fix and `capability:\s+(\w+)`->`(.+)` wifi fix (prior commits) remain the
+  only recent real defects; no remaining `(\w+)` truncation captures exist in ethscan/*.py.
 
 ## What remains unresolved
-- No reproducible wrong-output defect remains in the explored modules; repository complete and green.
+- No reproducible wrong-output defect found in any explored module; repository complete and green.
 - ssl `key_size`/`signature_algorithm` reporting is inert on Python 3.14 (documented limitation).
 
 ## Approaches already tried / ruled out (do not repeat)
@@ -44,17 +43,23 @@ Only this handoff file and NEXT_TASK.md were updated to record the new negative 
   fileio/completion/whois/dns normalize; dnssec; geo/urlcheck/stale/subdomains; validate<->cidr;
   validate<->scanner ports; osdetect checksum; cve version-range; mac OUI; empty-host normalization;
   findings/security_flags CSV/Markdown hardening; README command-presence drift guard; audit/hash/
-  report/vuln exploration; headers/web wrong-output probe).
-- This session: version/resolve/subtake/ping/netbios/ntp/wifi/mongodb + ldap/memcached/mssql/smb/
-  smtp/ssh/ftp/dnsbrute/fuzz/brute/service wrong-output probe (all green, running evidence above).
+  report/vuln exploration; headers/web wrong-output probe; version/resolve/subtake/ping/netbios/ntp/
+  wifi/mongodb + ldap/memcached/mssql/smb/smtp/ssh/ftp/dnsbrute/fuzz/brute/service wrong-output probe).
+- THIS SESSION: mac helpers / osdetect checksum / hash / version_tuple differential oracles;
+  3000-trial randomized radix merge vs collapse_addresses; recon/dns-filtering/urlcheck/version_range
+  static review — all clean.
 
 ## Next task (precise, evidence-based)
 - No queued assignment; all gates green, coverage 100%.
-- If future work is needed, pick a fresh angle NOT in the lists above, reproduce a concrete defect
-  FIRST (focused failing check with running evidence vs a stdlib oracle), apply the smallest safe
-  fix, add/extend a test to keep coverage 100%, then rerun the full gate. If green and nothing
-  reproduces, record the negative result, preserve the baseline, and hand off again — do not
-  fabricate work or repeat verification-only sessions without NEW evidence.
+- Do NOT repeat verification-only sessions without NEW evidence or a NEW angle. If future work is
+  needed, pick a fresh angle NOT in the lists above, reproduce a concrete defect FIRST (focused
+  failing check with running evidence vs a stdlib oracle), apply the smallest safe fix, add/extend a
+  test to keep coverage 100%, then rerun the full gate. If green and nothing reproduces, record the
+  negative result, preserve the baseline, and hand off again — do not fabricate work.
+- Concrete un-probed deterministic lead (only if a session is needed): `netbios` RFC1001/1002 name
+  encode/decode with RANDOMISED names (prior check used fixed vectors only), compared to an
+  independent RFC 1001 first-pair/hex-nibble oracle. Reproduce a wrong output FIRST; otherwise record
+  the negative result.
 
 ## Constraints (carry forward)
 - Do NOT modify `.github/workflows/**`.
@@ -73,5 +78,7 @@ Only this handoff file and NEXT_TASK.md were updated to record the new negative 
   stdlib approach.
 - mongodb `_parse_buildinfo_response` line 191 off-by-one is masked (output correct); do not change
   without a reproduced functional failure.
+- `dns.run_dns` `record_types_queried` reports the RAW requested types (incl. invalid/lowercase) by
+  design and is asserted by tests; do not "fix" without a reproduced failure.
 
 (End of file)
