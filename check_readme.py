@@ -1,4 +1,5 @@
 import re
+import sys
 with open('README.md') as f:
     content = f.read()
 
@@ -11,7 +12,7 @@ print(len(matches), 'commands found')
 
 # Also get CLI commands
 import subprocess
-result = subprocess.run(['python', '-m', 'ethscan', '--help'], capture_output=True, text=True)
+result = subprocess.run([sys.executable, '-m', 'ethscan', '--help'], capture_output=True, text=True)
 cli_commands = []
 in_commands = False
 for line in result.stdout.split('\n'):
