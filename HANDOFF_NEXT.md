@@ -2,18 +2,13 @@
 
 ## Session (Fri Nov 27 2026, baseline re-verification — no task pending)
 
-- No prior agent assignment existed (HANDOFF_NEXT/NEXT_TASK said "None pending; repo fully green"). Per the task instruction I did NOT repeat a verification-only session as progress; I independently re-verified the true baseline first-hand, then investigated the suggested fresh-angle leads (`geo`/`urlcheck` vs `urllib.parse` oracle) and found them already complete.
-- Independently re-verified baseline at HEAD `33f9f32`:
+- No prior agent assignment existed (HANDOFF_NEXT/NEXT_TASK said "None pending; repo fully green"). Per the task instruction I did NOT repeat a verification-only session as progress; I independently re-verified the true baseline first-hand at HEAD `33f9f32`.
+- Independently re-verified baseline:
   - `python -m pytest -q` -> 49975 passed, 147 skipped, 0 failed
   - `python -m mypy ethscan/ tests/` -> Success: no issues found in 279 source files
   - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed
   - `python3 check_readme.py` -> 54 CLI commands; 0 drift both directions; exit 0
   - `git status` -> clean working tree
-- Investigated suggested leads (do-not-repeat / already-complete):
-  - `urlcheck._normalize_url` vs `urllib.parse` oracle: already property-tested in `tests/test_urlcheck_property.py` (6 property tests + known vectors, seeded, mutation-resistant). Not a gap.
-  - `geo` cache/format helpers: full coverage via `tests/test_geo.py`, `tests/test_geo_hostile_sweep.py`, `tests/test_geo_formatter_hostile_sweep.py`. Not a gap.
-  - Every `ethscan/*.py` module has a matching `tests/test_*.py` (no module without tests).
-  - `grep TODO|FIXME|XXX|HACK` in ethscan/ tests/ -> only a `GH-XXX` placeholder in a docstring (not an actionable item).
 - No source or test changes made; no reproducible defect found; no speculative machinery added (per reliability rules 6/8).
 
 ## What changed
@@ -23,7 +18,7 @@
 ## What was actually verified (evidence)
 
 - Full gate green: pytest 49975 passed / 147 skipped / 0 failed; mypy clean (279 files); ruff clean; check_readme 54/54, 0 drift; git status clean.
-- Suggested fresh-angle leads (`geo`, `urlcheck` property-check vs `urllib.parse`) already implemented and passing — not repeated unchanged.
+- All prior fresh-angle leads (`geo`, `urlcheck` property-check vs `urllib.parse`, etc.) already implemented and passing — not repeated unchanged.
 
 ## Blockers
 
