@@ -20,6 +20,7 @@ from ethscan.snmp import (
     TAG_OID,
     TAG_SEQUENCE,
     TAG_TIMETICKS,
+    _SNMP_MIN_MAJOR,
     _build_get_request,
     _decode_varbind_value,
     _encode_base128,
@@ -1541,6 +1542,74 @@ def test_assess_snmp_version_freebsd_old() -> None:
     findings = _assess_snmp_version("FreeBSD 11.3-RELEASE")
     assert any("SNMP system version: 11.3" in f for f in findings)
     assert any("Old SNMP system version" in f for f in findings)
+
+
+def test_assess_snmp_version_threshold_matrix() -> None:
+    """Lock the full product/threshold table against an independent oracle.
+
+    The version finding must always carry the exact dotted version, and the
+    "Old ..." finding must appear if and only if the major version is below
+    the product's minimum supported major (per ``_SNMP_MIN_MAJOR``).
+    """
+    # (sys_descr, expected dotted version, threshold-table key or None)
+    matrix = [
+        ("Linux kernel 5.15.0", "5.15.0", "linux"),
+        ("Linux 4.19.0", "4.19.0", "linux"),
+        ("Cisco IOS Software, Version 15.2(4)", "15.2", "cisco ios"),
+        ("Cisco IOS XE Software, Version 3.6.0", "3.6.0", "cisco ios xe"),
+        ("Cisco IOS XR Software, Version 6.1.2", "6.1.2", "cisco ios xr"),
+        ("IOS XE 2.5.1", "2.5.1", "ios xe"),
+        ("Windows 10.0.1", "10.0.1", "windows"),
+        ("FreeBSD 12.1-RELEASE", "12.1", "freebsd"),
+        ("JunOS 17.3R1", "17.3", "junos"),
+        ("Net-SNMP 5.7.2", "5.7.2", "net-snmp"),
+        ("OpenBSD 6.8", "6.8", "openbsd"),
+        ("HP-UX 11.31", "11.31", "hp-ux"),
+        ("VMware ESXi 6.7.0", "6.7.0", "vmware esxi"),
+        ("LINUX 4.4.0", "4.4.0", "linux"),
+        ("cisco ios xe 2.1.0", "2.1.0", "cisco ios xe"),
+    ]
+    for descr, expected_version, threshold_key in matrix:
+        findings = _assess_snmp_version(descr)
+        version_findings = [
+            f for f in findings if f.startswith("SNMP system version:")
+        ]
+        assert version_findings == [f"SNMP system version: {expected_version}"], (
+            descr,
+            findings,
+        )
+        major = int(expected_version.split(".")[0])
+        threshold = _SNMP_MIN_MAJOR.get(threshold_key) if threshold_key else None
+        has_old = any("Old SNMP system version" in f for f in findings)
+        assert has_old == (threshold is not None and major < threshold), (
+            descr,
+            findings,
+        )
+
+
+def test_assess_snmp_version_requires_dotted_version() -> None:
+    """A bare (non-dotted) version does not match the version regex."""
+    assert _assess_snmp_version("Windows Server 2016 Standard") == []
+    assert _assess_snmp_version("Android 9") == []
+    assert _assess_snmp_version("Linux 5") == []
+
+
+def test_assess_snmp_version_threshold_boundaries() -> None:
+    """major == threshold is supported; major == threshold-1 is flagged old."""
+    for product, threshold_key in (
+        ("Linux", "linux"),
+        ("FreeBSD", "freebsd"),
+        ("OpenBSD", "openbsd"),
+    ):
+        threshold = _SNMP_MIN_MAJOR[threshold_key]
+        at_or_above = _assess_snmp_version(f"{product} {threshold}.0.0")
+        below = _assess_snmp_version(f"{product} {threshold - 1}.0.0")
+        assert any(f"SNMP system version: {threshold}.0.0" in f for f in at_or_above)
+        assert not any("Old SNMP system version" in f for f in at_or_above)
+        assert any(
+            f"SNMP system version: {threshold - 1}.0.0" in f for f in below
+        )
+        assert any("Old SNMP system version" in f for f in below)
 
 
 def test_format_snmp_report_csv_with_findings() -> None:
