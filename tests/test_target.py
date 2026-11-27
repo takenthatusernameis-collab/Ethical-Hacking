@@ -1186,11 +1186,11 @@ def test_check_port_property_matches_expected_behavior() -> None:
 
     # Unicode digits (fullwidth, etc.) ARE accepted by Python's int() - this is correct
     unicode_digits = ("１２３", "٠١٢", "०१२")  # Fullwidth, Arabic-Indic, Devanagari
-    for s in unicode_digits:
+    expected_values = (123, 12, 12)
+    for s, expected_value in zip(unicode_digits, expected_values, strict=False):
         try:
             result = check_port(s)
-            # Should succeed and return the numeric value
-            assert isinstance(result, int)
+            assert result == expected_value
             assert 0 <= result <= 65535
         except TargetSpecError as e:
             raise AssertionError(f"Unicode digits {s!r} should be accepted by int()") from e

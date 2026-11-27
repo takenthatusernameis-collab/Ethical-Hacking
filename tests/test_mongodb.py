@@ -65,8 +65,7 @@ def test_normalize_target_edge_cases():
     assert _normalize_target("localhost:0") == ("localhost", DEFAULT_PORT)
     assert _normalize_target("[::1]:0") == ("::1", DEFAULT_PORT)
     result = _normalize_target("2001:db8::1")
-    assert isinstance(result[0], str)
-    assert isinstance(result[1], int)
+    assert result == ("2001:db8::1", DEFAULT_PORT)
 
 
 def test_build_buildinfo_request():
