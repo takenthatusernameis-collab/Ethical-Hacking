@@ -1233,3 +1233,154 @@ def test_format_tls_report_csv_non_dict_entries() -> None:
     assert len(reader) == 3
     assert reader[1][4] == "TLSv1_2"
     assert reader[2][4] == "AES"
+
+
+# ---------------------------------------------------------------------------
+# enumerate_tls aggregation invariants (property test vs independent oracle)
+# ---------------------------------------------------------------------------
+
+
+def test_enumerate_tls_aggregation_invariants(monkeypatch) -> None:
+    """Lock the enumeration invariants against a hand-computed oracle.
+
+    For every randomized combination of requested versions/ciphers and
+    randomized supported/unsupported outcomes, the following must hold:
+    - versions_tested == len(versions)
+    - ciphers_tested == len(ciphers)
+    - supported_version_count == len(supported_versions)
+    - supported_cipher_count == len(supported_ciphers)
+    - supported_versions is a subset of versions tested (by name)
+    - supported_ciphers is a subset of ciphers tested (by name)
+    - supported_versions order follows _version_sort_key (canonical TLS order)
+    - supported_ciphers order follows _cipher_sort_key (default cipher list order)
+    - versions list is sorted by _version_sort_key
+    - ciphers list is sorted by _cipher_sort_key
+    """
+    import random
+    from typing import cast
+    from ethscan.tls import (
+        TLS_VERSIONS,
+        COMMON_CIPHERS,
+        _version_sort_key,
+        _cipher_sort_key,
+        enumerate_tls,
+    )
+    import ssl
+
+    random.seed(20261127)
+
+    def _make_mocks(version_supported: dict[str, bool], cipher_supported: dict[str, bool]):
+        def mock_probe_version(host, port, version, timeout=5.0):
+            name = version.name if isinstance(version, ssl.TLSVersion) else str(version)
+            supported = version_supported.get(name, False)
+            return {
+                "version": name,
+                "supported": supported,
+                "error": None if supported else "handshake failure",
+                "negotiated_cipher": "AES128-GCM-SHA256" if supported else None,
+                "negotiated_protocol": "TLSv1.2" if supported else None,
+            }
+
+        def mock_probe_cipher(host, port, cipher, timeout=5.0):
+            supported = cipher_supported.get(cipher, False)
+            return {
+                "cipher": cipher,
+                "supported": supported,
+                "error": None if supported else "handshake failure",
+                "negotiated_version": "TLSv1.2" if supported else None,
+            }
+
+        return mock_probe_version, mock_probe_cipher
+
+    # Seeded property test: 500 randomized trials
+    for trial in range(500):
+        # Random subset of versions to test (1-4)
+        version_names = [v.name for v in TLS_VERSIONS]
+        test_versions = random.sample(version_names, k=random.randint(1, len(version_names)))
+        # Random subset of ciphers to test (1-16)
+        test_ciphers = random.sample(COMMON_CIPHERS, k=random.randint(1, len(COMMON_CIPHERS)))
+
+        # Random supported/unsupported outcomes
+        version_supported = {v: random.choice([True, False]) for v in test_versions}
+        cipher_supported = {c: random.choice([True, False]) for c in test_ciphers}
+
+        mock_probe_version, mock_probe_cipher = _make_mocks(version_supported, cipher_supported)
+        monkeypatch.setattr("ethscan.tls.probe_version", mock_probe_version)
+        monkeypatch.setattr("ethscan.tls.probe_cipher", mock_probe_cipher)
+
+        result = enumerate_tls(
+            "example.com",
+            versions=cast(list[str | ssl.TLSVersion], test_versions),
+            ciphers=test_ciphers,
+            max_workers=2,
+        )
+
+        # Cast the object-typed fields to their expected types for mypy
+        versions_list = cast(list[dict[str, object]], result["versions"])
+        ciphers_list = cast(list[dict[str, object]], result["ciphers"])
+        supported_versions = cast(list[str], result["supported_versions"])
+        supported_ciphers = cast(list[str], result["supported_ciphers"])
+
+        # Invariant 1: versions_tested == len(versions)
+        assert result["versions_tested"] == len(versions_list), (
+            f"trial {trial}: versions_tested={result['versions_tested']} != len(versions)={len(versions_list)}"
+        )
+
+        # Invariant 2: ciphers_tested == len(ciphers)
+        assert result["ciphers_tested"] == len(ciphers_list), (
+            f"trial {trial}: ciphers_tested={result['ciphers_tested']} != len(ciphers)={len(ciphers_list)}"
+        )
+
+        # Invariant 3: supported_version_count == len(supported_versions)
+        assert result["supported_version_count"] == len(supported_versions), (
+            f"trial {trial}: supported_version_count={result['supported_version_count']} != "
+            f"len(supported_versions)={len(supported_versions)}"
+        )
+
+        # Invariant 4: supported_cipher_count == len(supported_ciphers)
+        assert result["supported_cipher_count"] == len(supported_ciphers), (
+            f"trial {trial}: supported_cipher_count={result['supported_cipher_count']} != "
+            f"len(supported_ciphers)={len(supported_ciphers)}"
+        )
+
+        # Invariant 5: supported_versions is a subset of versions tested (by name)
+        versions_tested_names = {v["version"] for v in versions_list}
+        for sv in supported_versions:
+            assert sv in versions_tested_names, (
+                f"trial {trial}: supported version {sv} not in tested versions {versions_tested_names}"
+            )
+
+        # Invariant 6: supported_ciphers is a subset of ciphers tested (by name)
+        ciphers_tested_names = {c["cipher"] for c in ciphers_list}
+        for sc in supported_ciphers:
+            assert sc in ciphers_tested_names, (
+                f"trial {trial}: supported cipher {sc} not in tested ciphers {ciphers_tested_names}"
+            )
+
+        # Invariant 7: supported_versions order follows _version_sort_key
+        for i in range(len(supported_versions) - 1):
+            assert _version_sort_key(supported_versions[i]) <= _version_sort_key(
+                supported_versions[i + 1]
+            ), f"trial {trial}: supported_versions not sorted: {supported_versions}"
+
+        # Invariant 8: supported_ciphers order follows _cipher_sort_key
+        for i in range(len(supported_ciphers) - 1):
+            assert _cipher_sort_key(supported_ciphers[i]) <= _cipher_sort_key(
+                supported_ciphers[i + 1]
+            ), f"trial {trial}: supported_ciphers not sorted: {supported_ciphers}"
+
+        # Invariant 9: versions list is sorted by _version_sort_key
+        for i in range(len(versions_list) - 1):
+            v1 = cast(str, versions_list[i]["version"])
+            v2 = cast(str, versions_list[i + 1]["version"])
+            assert _version_sort_key(v1) <= _version_sort_key(
+                v2
+            ), f"trial {trial}: versions not sorted: {versions_list}"
+
+        # Invariant 10: ciphers list is sorted by _cipher_sort_key
+        for i in range(len(ciphers_list) - 1):
+            c1 = cast(str, ciphers_list[i]["cipher"])
+            c2 = cast(str, ciphers_list[i + 1]["cipher"])
+            assert _cipher_sort_key(c1) <= _cipher_sort_key(
+                c2
+            ), f"trial {trial}: ciphers not sorted: {ciphers_list}"
