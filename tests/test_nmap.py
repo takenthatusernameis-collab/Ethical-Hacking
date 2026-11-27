@@ -545,6 +545,63 @@ def test_escape_pipe_characters():
     assert _escape("|||") == "\\|\\|\\|"
     assert _escape("") == ""
 
+
+def test_escape_newlines():
+    """Test _escape function for newline escaping in Markdown."""
+    assert _escape("a\nb") == "a b"
+    assert _escape("line1\nline2\nline3") == "line1 line2 line3"
+    assert _escape("no newlines") == "no newlines"
+    assert _escape("\nleading") == " leading"
+    assert _escape("trailing\n") == "trailing "
+
+
+def test_format_nmap_report_markdown_newlines_in_fields():
+    """Test Markdown output remains valid when fields contain newlines."""
+    data = {
+        "input_file": "test.xml",
+        "hosts_scanned": 1,
+        "total_ports_scanned": 1,
+        "total_open_ports": 1,
+        "services_detected": 1,
+        "finding_count": 1,
+        "severity_counts": {"critical": 0, "high": 1, "medium": 0, "low": 0},
+        "services": [{
+            "host": "10.0.0.1",
+            "hostnames": ["test.local"],
+            "port": 22,
+            "protocol": "tcp",
+            "service_name": "ssh",
+            "product": "Product\nwith\nnewlines",
+            "version": "1.0",
+            "extrainfo": "",
+            "ostype": "",
+            "banner": "",
+        }],
+        "findings": [{
+            "id": "TEST-CVE",
+            "kind": "service",
+            "title": "Test",
+            "severity": "high",
+            "description": "Test",
+            "product": "Product\nwith\nnewlines",
+            "version": "1.0",
+            "port": 22,
+            "host": "10.0.0.1",
+            "hostnames": [],
+            "state": "open",
+            "service_name": "ssh",
+        }],
+        "notes": []
+    }
+    output = format_nmap_report_markdown(data)
+    # Table should have exactly 3 lines (header, separator, data)
+    table_lines = [line for line in output.split("\n") if line.startswith("|")]
+    assert len(table_lines) == 3, f"Table broken: {table_lines}"
+    # Details line should not contain literal newlines
+    assert "Product with newlines" in output
+    assert "Product\nwith\nnewlines" not in output
+
+
 from unittest.mock import patch
 
 from click.testing import CliRunner

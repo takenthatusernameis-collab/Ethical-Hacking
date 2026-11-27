@@ -343,8 +343,8 @@ def format_nmap_report_json(data: NmapResult) -> str:
 
 
 def _escape(value: str) -> str:
-    """Escape pipe characters for Markdown output."""
-    return value.replace("|", "\\|")
+    """Escape pipe characters and newlines for Markdown output."""
+    return value.replace("|", "\\|").replace("\n", " ")
 
 
 def _finding_detail(finding: NmapFinding) -> str:
