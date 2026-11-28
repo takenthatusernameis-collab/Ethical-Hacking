@@ -29,6 +29,8 @@ CACHE_DIR = Path.home() / ".cache" / "ethscan"
 CACHE_FILE = CACHE_DIR / "mac_cache.json"
 CACHE_TTL = 86400  # 24 hours
 
+_HEX_DIGITS = frozenset("0123456789abcdefABCDEF")
+
 
 def _normalize_target(target: str) -> str:
     """Extract a bare MAC address from a target that may be a URL or MAC string."""
@@ -298,15 +300,19 @@ def run_mac(
 
 
 def _is_mac_address(value: str) -> bool:
-    """Return True if the value looks like a MAC address."""
+    """Return True if the value looks like a MAC address.
+
+    A MAC address is exactly twelve hexadecimal digits once the ``:``, ``-``
+    and ``.`` separators are removed. The check is deliberately strict: only
+    ASCII hex digits are accepted, so a string that ``int(value, 16)`` would
+    tolerate but that is not a MAC address (an embedded ``_`` separator, a
+    leading ``+``/``-`` sign, surrounding whitespace, or non-ASCII digits) is
+    rejected rather than being sent to the vendor API as a made-up MAC.
+    """
     cleaned = value.replace(":", "").replace("-", "").replace(".", "")
     if len(cleaned) != 12:
         return False
-    try:
-        int(cleaned, 16)
-    except ValueError:
-        return False
-    return True
+    return set(cleaned) <= _HEX_DIGITS
 
 
 def _strip_mac_port(value: str) -> str:
