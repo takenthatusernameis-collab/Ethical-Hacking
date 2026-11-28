@@ -2,7 +2,7 @@
 import random
 from typing import Any, cast
 
-from ethscan.redis import _build_resp_array, _parse_config, _parse_info, _parse_resp
+from ethscan.redis import _build_resp_array, _parse_config, _parse_info
 
 
 _PROPERTY_SEED = 20261128
@@ -30,7 +30,6 @@ def test_parse_info_roundtrip_random_dicts():
     for _ in range(3000):
         n = rng.randint(0, 8)
         lines = []
-        expected: dict[str, str] = {}
         for _ in range(n):
             k = rng.choice(["redis_version", "os", "role", "port", "bind"])
             v = rng.choice(["6.2.0", "Linux", "master", "6379", "0.0.0.0", ""])
@@ -59,11 +58,11 @@ def test_parse_config_roundtrip_random_pairs():
         keys = [rng.choice(["bind", "requirepass", "dir", "dbfilename"]) for _ in range(n)]
         vals = [rng.choice(["0.0.0.0", "", "/data", "dump.rdb", "secret"]) for _ in range(n)]
         # dedup keys to avoid last-write ambiguity in oracle (parser keeps last)
-        data = _build_resp_array(*[x for pair in zip(keys, vals) for x in pair])
+        data = _build_resp_array(*[x for pair in zip(keys, vals, strict=False) for x in pair])
         parsed = _parse_config(data)
         # oracle: last value wins per key, matching parser semantics
         oracle: dict[str, str] = {}
-        for k, v in zip(keys, vals):
+        for k, v in zip(keys, vals, strict=False):
             oracle[k] = v
         assert parsed == oracle
 

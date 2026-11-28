@@ -331,6 +331,72 @@ def test_parse_dns_name_empty_name_returns_empty() -> None:
     assert offset == 1
 
 
+_DNSNAME_SEED = 20261128
+_DNSNAME_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.@#$%^&()[]{}!~`' "
+
+
+def _oracle_first_level(name: str, suffix: int) -> bytes:
+    """Independent RFC 1001 first-level encoder (does not reuse ethscan code)."""
+    padded = name.upper().encode("ascii", "replace").ljust(15, b" ")[:15]
+    raw = padded + bytes([suffix & 0xFF])
+    out = bytearray()
+    for byte in raw:
+        out.append(0x41 + (byte >> 4))
+        out.append(0x41 + (byte & 0x0F))
+    return bytes(out)
+
+
+def _oracle_qname(name: str, suffix: int) -> bytes:
+    chars = _oracle_first_level(name, suffix)
+    return bytes([len(chars)]) + chars + b"\x00"
+
+
+def _oracle_decoded(name: str) -> str:
+    # _decode_name_chars uppercases then strips trailing spaces and NULs.
+    return name.upper().rstrip(" ").rstrip("\x00")
+
+
+def test_parse_dns_name_matches_independent_oracle_random() -> None:
+    """Decompression + next_offset match an independent encoder oracle.
+
+    Covers uncompressed qnames and DNS compression pointers (0xC0) that jump
+    back to an earlier name, over random names/suffixes.
+    """
+    rng = random.Random(_DNSNAME_SEED)
+    for _ in range(3000):
+        length = rng.randint(0, 15)
+        name = "".join(rng.choice(_DNSNAME_ALPHABET) for _ in range(length))
+        suffix = rng.randint(0, 255)
+        exp_name = _oracle_decoded(name)
+
+        q = _oracle_qname(name, suffix)
+        got_name, got_off = _parse_dns_name(q, 0)
+        assert got_name == exp_name
+        assert got_off == len(q)
+
+        pad = bytes(rng.randint(0, 255) for _ in range(rng.randint(0, 4)))
+        data = q + pad + b"\xc0\x00" + b"\x00" * 4
+        ptr_off = len(q) + len(pad)
+        got_name, got_off = _parse_dns_name(data, ptr_off)
+        assert got_name == exp_name
+        assert got_off == ptr_off + 2
+
+
+def test_parse_dns_name_hostile_bytes_never_crash() -> None:
+    """Arbitrary bytes never raise anything but ValueError (no hang/crash)."""
+    rng = random.Random(_DNSNAME_SEED + 1)
+    for _ in range(3000):
+        n = rng.randint(0, 40)
+        data = bytes(rng.randint(0, 255) for _ in range(n))
+        off = rng.randint(0, n) if n else 0
+        try:
+            result = _parse_dns_name(data, off)
+        except ValueError:
+            continue
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+
+
 # ---------------------------------------------------------------------------
 # _parse_name_flags
 # ---------------------------------------------------------------------------
