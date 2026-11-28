@@ -112,7 +112,7 @@ def _decode_resp(data: bytes):
     try:
         idx = data.index(b"\r\n")
     except ValueError:
-        raise ValueError("no CRLF terminator")
+        raise ValueError("no CRLF terminator") from None
     if prefix == b"+":
         return data[1:idx].decode("utf-8", errors="replace"), idx + 2
     if prefix == b"-":
