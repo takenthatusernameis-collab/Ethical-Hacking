@@ -694,6 +694,219 @@ def test_parse_nbns_response_unknown_rr_type() -> None:
 
 
 # ---------------------------------------------------------------------------
+# _parse_nbns_response independent-oracle differential tests
+# ---------------------------------------------------------------------------
+
+_NBNS_SEED = 20261130
+
+# Independent NBNS RCODE -> name map (RFC 1002); does not reuse ethscan.
+_NBNS_RCODE_ORACLE = {
+    0: "No error",
+    1: "Format error",
+    2: "Server failure",
+    3: "Name error",
+    4: "Unsupported option",
+    5: "Refused",
+    6: "Name in conflict",
+    7: "DNS server (name in use)",
+    8: "DNIND (duplicate name)",
+    15: "Transaction rejected",
+}
+
+# RR types that are neither NB (0x0020) nor NBSTAT (0x0021).
+_NBNS_UNKNOWN_TYPES = [0x0001, 0x0002, 0x000F, 0x0010, 0x0022, 0x00FF]
+
+
+def _oracle_nbstat_name_dict(name: str, suffix: int, flags: int) -> dict:
+    """Independent expected name-entry dict (mirrors the RFC 1002 decode)."""
+    return {
+        "name": name.upper().rstrip(" ").rstrip("\x00"),
+        "suffix": suffix,
+        "suffix_hex": f"0x{suffix:02x}",
+        "service_type": _NBSTAT_SUFFIX_ORACLE.get(
+            suffix, f"unknown (0x{suffix:02x})"
+        ),
+        "flags": _oracle_nbtstat_flags(flags),
+    }
+
+
+def _oracle_build_nbns_message(rng: random.Random) -> tuple[bytes, dict]:
+    """Build a random NBNS message from scratch and its expected parse.
+
+    Uses only independent oracles (no ethscan helpers, no test ``_entry`` /
+    ``_build_nbstat_response``). Returns the packet bytes and the dict that
+    ``_parse_nbns_response`` must produce for it.
+    """
+    transaction_id = rng.randint(0, 0xFFFF)
+    opcode = rng.randint(0, 0xF)
+    rcode = rng.randint(0, 0xF)
+    is_response = bool(rng.getrandbits(1))
+    flags_raw = (0x8000 if is_response else 0x0000) | (opcode << 11) | rcode
+
+    qdcount = rng.randint(0, 1)
+    body = b""
+    if qdcount:
+        qname = "".join(
+            rng.choice(_NBSTAT_NAME_ALPHABET) for _ in range(rng.randint(0, 15))
+        )
+        qsuf = rng.randint(0, 255)
+        body += _oracle_qname(qname, qsuf)
+        body += struct.pack("!HH", RR_TYPE_NBSTAT, RR_CLASS_IN)
+
+    ancount = rng.randint(0, 4)
+    header = struct.pack(
+        "!HHHHHH", transaction_id, flags_raw, qdcount, ancount, 0, 0
+    )
+
+    answers: list[dict] = []
+    top_mac = None
+    top_names: list[dict] = []
+    for _ in range(ancount):
+        # Answer name: a compression pointer to the question (offset 12) when a
+        # question exists, otherwise a fresh uncompressed encoded name.
+        if qdcount:
+            body += b"\xc0\x0c"
+        else:
+            aname = "".join(
+                rng.choice(_NBSTAT_NAME_ALPHABET)
+                for _ in range(rng.randint(0, 15))
+            )
+            body += _oracle_qname(aname, rng.randint(0, 255))
+
+        kind = rng.choice(["nbstat", "nb", "unknown"])
+        ttl = rng.randint(0, 0xFFFFFFFF)
+        if kind == "nbstat":
+            rr_type = RR_TYPE_NBSTAT
+            num_names = rng.randint(0, 4)
+            entries = []
+            exp_names = []
+            for _ in range(num_names):
+                length = rng.randint(0, 15)
+                nm = "".join(
+                    rng.choice(_NBSTAT_NAME_ALPHABET) for _ in range(length)
+                )
+                sf = rng.randint(0, 255)
+                fl = rng.randint(0, 0xFFFF)
+                entries.append(_oracle_nbtstat_entry(nm, sf, fl))
+                exp_names.append(_oracle_nbstat_name_dict(nm, sf, fl))
+            mac = bytes(rng.randint(0, 255) for _ in range(6))
+            rdata = bytes([num_names]) + b"".join(entries) + mac
+            rdata += bytes(rng.randint(0, 255) for _ in range(rng.randint(0, 3)))
+            mac_str = ":".join(f"{b:02x}" for b in mac)
+            answers.append({
+                "type": rr_type,
+                "class": RR_CLASS_IN,
+                "ttl": ttl,
+                "rdata_length": len(rdata),
+                "type_name": "nbstat",
+                "mac": mac_str,
+                "names": exp_names,
+                "num_names": num_names,
+            })
+            if mac_str:
+                top_mac = mac_str
+            if exp_names:
+                top_names = exp_names
+        elif kind == "nb":
+            rr_type = RR_TYPE_NB
+            if rng.random() < 0.8:
+                rdata = bytes(rng.randint(0, 255) for _ in range(4))
+                addr = ".".join(str(b) for b in rdata)
+            else:
+                rdata = bytes(rng.randint(0, 255) for _ in range(rng.randint(0, 3)))
+                addr = None
+            answers.append({
+                "type": rr_type,
+                "class": RR_CLASS_IN,
+                "ttl": ttl,
+                "rdata_length": len(rdata),
+                "type_name": "nb",
+                "address": addr,
+            })
+        else:
+            rr_type = rng.choice(_NBNS_UNKNOWN_TYPES)
+            rdata = bytes(rng.randint(0, 255) for _ in range(rng.randint(0, 6)))
+            answers.append({
+                "type": rr_type,
+                "class": RR_CLASS_IN,
+                "ttl": ttl,
+                "rdata_length": len(rdata),
+                "type_name": f"0x{rr_type:04x}",
+            })
+
+        body += struct.pack("!HHIH", rr_type, RR_CLASS_IN, ttl, len(rdata))
+        body += rdata
+
+    packet = header + body
+    expected = {
+        "transaction_id": transaction_id,
+        "flags": {
+            "raw": flags_raw,
+            "is_response": is_response,
+            "opcode": opcode,
+            "rcode": rcode,
+            "rcode_name": _NBNS_RCODE_ORACLE.get(rcode, f"unknown ({rcode})"),
+        },
+        "question_count": qdcount,
+        "answer_count": ancount,
+        "authority_count": 0,
+        "additional_count": 0,
+        "answers": answers,
+        "mac": top_mac,
+        "names": top_names,
+        "num_names": len(top_names),
+    }
+    return packet, expected
+
+
+def test_parse_nbns_response_matches_independent_oracle_random() -> None:
+    """Full-message assembly matches an independent from-scratch builder.
+
+    Builds random NBNS responses (random transaction id / flags / opcode /
+    rcode, optional question, and a mix of NBSTAT / NB / unknown answers with
+    DNS compression pointers) and asserts every parsed field matches the
+    oracle: header counts, flags, per-answer records, names, suffixes, flags,
+    MAC and NB addresses.
+    """
+    rng = random.Random(_NBNS_SEED)
+    for _ in range(2000):
+        packet, expected = _oracle_build_nbns_message(rng)
+        result = _parse_nbns_response(packet)
+        assert result == expected
+
+
+def test_parse_nbns_response_hostile_bytes_never_crash() -> None:
+    """Arbitrary byte buffers raise only ValueError or return a dict; no
+    hang, crash, or other exception type.
+    """
+    rng = random.Random(_NBNS_SEED + 1)
+    for _ in range(3000):
+        n = rng.randint(0, 80)
+        data = bytes(rng.randint(0, 255) for _ in range(n))
+        try:
+            result = _parse_nbns_response(data)
+        except ValueError:
+            continue
+        assert isinstance(result, dict)
+        assert set(result) == {
+            "transaction_id",
+            "flags",
+            "question_count",
+            "answer_count",
+            "authority_count",
+            "additional_count",
+            "answers",
+            "mac",
+            "names",
+            "num_names",
+        }
+        assert isinstance(result["answers"], list)
+        assert result["mac"] is None or isinstance(result["mac"], str)
+        assert isinstance(result["names"], list)
+        assert result["num_names"] == len(result["names"])
+
+
+# ---------------------------------------------------------------------------
 # _send_recv
 # ---------------------------------------------------------------------------
 
