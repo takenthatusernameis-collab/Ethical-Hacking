@@ -1,40 +1,24 @@
 # Handoff
 
-## Session (Sat Nov 28 2026, independent baseline re-verification #2)
+## Session (Sat Nov 28 2026, redis RESP parser property hardening)
 
-- No prior agent assignment existed; independently re-verified the TRUE baseline first-hand rather than trusting the stale handoff:
-  - `python -m pytest -q` -> **50017 passed, 147 skipped, 0 failed** (~2.75 min)
-  - `python -m mypy ethscan/ tests/` -> **Success: no issues in 282 source files**
-  - `python -m ruff check ethscan/ tests/ check_readme.py` -> **All checks passed**
-  - `git status` -> clean working tree; branch up to date with origin/main (HEAD `08cfaed`; no source/test change vs `bece502`, not counted as progress)
-  - All 5 oracle verification scripts pass (`oracle_verify_target.py`, `oracle_verify_mac.py`, `oracle_verify_dnssec.py`, `oracle_verify_whois.py`, `oracle_verify_service.py`) -> exit 0
-- Prior `check_readme.py`/coverage results from the previous session remain valid (54 CLI commands, 0 drift; coverage TOTAL 100%); unchanged since `bece502`.
-- Baseline confirmed accurate, NOT stale.
+- No prior concrete assignment existed; HANDOFF_NEXT/NEXT_TASK said "None pending; repo fully green" and their listed wifi/mac leads are already committed. Per the operating rules I did NOT repeat a verification-only session: I independently re-verified the true baseline first-hand, ran a fresh-angle differential fuzz (reproduced NO defect), and added durable test hardening.
+- Independently re-verified baseline at HEAD `ac69d0c` (not trusted): `coverage run --branch --source=ethscan -m pytest -q` -> 50017 passed, 147 skipped, 0 failed; TOTAL 100% (16292 stmts, 6178 branches, 0 missing); `mypy ethscan/ tests/` clean (282 files); `ruff` clean; `check_readme.py` 54/54, 0 drift; `git status` clean. Baseline accurate, NOT stale.
 
-## Oracle review (this session)
+## What changed (test-only, fully reversible; no production code)
 
-- `oracle_verify_mac.py` reported 2 "mismatches" for `_is_mac_address('00:1A:2B:3C:4D:5 ')` and `('...5\t')` (ours=False, oracle=True). This is **documented intentional strictness**, not a bug: `ethscan/mac.py:302-315` deliberately rejects surrounding whitespace so made-up MACs are not sent to the vendor API. The oracle accepts them only because `int(cleaned, 16)` strips whitespace — an oracle looseness, not a spec requirement. No fix warranted; ruling out.
-
-## Stale-handoff correction
-
-- The prior HANDOFF_NEXT.md listed two "evidence-based leads NOT yet done":
-  1. property-check `wifi._parse_proc_net_wireless` vs an independent line-format oracle
-  2. property-check `mac._normalize_mac_for_api`/`_is_mac_address` vs a stdlib `re`/`ipaddress` oracle
-- Both are ALREADY implemented and committed at HEAD `bece502`:
-  - `tests/test_wifi_proc_net_wireless_property.py` (committed)
-  - `tests/test_mac_is_mac_address_property.py` (committed)
-  - `tests/test_scanner_port_range_property.py` (also committed)
-- Do NOT re-probe these unchanged. The stale "Next task" claims are invalid.
-
-## What changed this session
-
-- No source or test changes. No reproducible defect was found.
-- Updated this HANDOFF_NEXT.md to record the independently-verified state (incl. oracle results and mac ruling-out).
+- Added `tests/test_redis_resp_property.py` (6 test fns / 16 cases, seed 20261128) locking `redis._parse_resp` (the RESP response parser that decodes untrusted network bytes):
+  - round-trip vs an independent from-scratch RESP encoder (5000 random nested values incl. int/str/bulk/null/array, embedded CRLF);
+  - exact prefix consumption with trailing bytes (3000 cases);
+  - every strict prefix of a null-free encoding is incomplete `(None, 0)` (2000 values);
+  - 11 malformed/truncated buffers; fixed known vectors; `_build_resp_array` round-trip (2000 cases).
+- No `ethscan/` source changed. `git status` shows only the new untracked test file. Not committed (controller commits).
 
 ## What was actually verified (evidence)
 
-- Pytest 50017 passed / 147 skipped / 0 failed; mypy clean (282 files); ruff all checks passed; all 5 oracle scripts exit 0.
-- `git diff --stat` shows only handoff/doc files changed; working tree clean.
+- Differential fuzz BEFORE writing tests: 20,000 cases -> 0 value mismatches, 0 prefix-consumption failures, 0 truncation failures. Implementation CORRECT — not a defect; do not change it.
+- Mutation checks (each caught; `ethscan/redis.py` restored, `git diff` empty after): bulk `end = start + length` -> `- 1` -> 5 fail; array `range(count)` -> `range(count - 1)` -> 6 fail; simple-string `consumed idx+2` -> `idx+1` -> 1 fail.
+- Full gate: `coverage run --branch --source=ethscan -m pytest -q` -> 50033 passed, 147 skipped, 0 failed (baseline 50017; +16); TOTAL 100% (16292 stmts, 6178 branches, 0 missing); `mypy ethscan/ tests/` Success (283 files); `ruff check ethscan/ tests/ check_readme.py` All checks passed; `check_readme.py` 54 commands, 0 drift both directions; `git diff --check` clean.
 
 ## Blockers
 
@@ -42,17 +26,17 @@
 
 ## Approaches already tried / ruled out
 
-- All prior fresh-angle sweeps (see do-not-repeat list in prior handoffs): clean; not repeated. This session added no new sweep because no gap was reproduced.
-- mac `_is_mac_address` whitespace "mismatch": investigated via oracle, ruled out as documented intentional strictness (mac.py:302-315); oracle leniency is an `int()` whitespace artifact.
-- No speculative machinery added to a fully green repository (reliability rule 7).
+- `redis._parse_resp` differential fuzz (valid + invalid + truncation): correct, not a defect; now property-tested — do not re-probe unchanged.
+- All prior fresh-angle sweeps (CSV injection, parser/formatter/assessor/CLI hostile sweeps, nested-field fuzz, radix/target/hash/passwords/jwt/scanner/cidr/whois/s3/mac/nmap/tls/version/netbios/config/service/cert/snmp probes, checksum/netbios/nmap/passwords/scanner/cidr-validate/urlcheck/web_server_version/wifi/mac property tests): clean; not repeated.
 
 ## Next task
 
-- None pending. Repository fully green with 100% coverage (50017 passed). Do NOT fabricate work or repeat verification-only sessions as progress.
+- None pending. Repository fully green with 100% coverage (50033 passed). Do NOT fabricate work or repeat verification-only sessions as progress.
 - If future work is needed, reproduce a concrete gap first (focused failing check, fresh-install failure, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then the full gate:
   `python -m coverage run --branch --source=ethscan -m pytest -q`;
   `python -m mypy ethscan/ tests/`;
   `python -m ruff check ethscan/ tests/ check_readme.py`;
   `python3 check_readme.py`.
+- Evidence-based lead NOT yet done: property-check `redis._parse_info` / `redis._parse_config` (parse `key:value` / `key value` lines from an INFO/CONFIG response; same security-relevant parser family, only example tests) vs an independent line oracle, or `osdetect._match_os_from_ttl` / `_match_os_from_banner` vs a hand oracle. Revisit only with a NEW angle.
 - `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope (exit 0, in-band error / documented known limitation). Do not modify `.github/workflows/**`.
 - Environment: Python 3.14.4; pytest 9.2.0; mypy 2.4.1; ruff 0.17.6; coverage 7.17.5. `coverage` is not on PATH; use `python -m coverage ...`. Do not commit manually; the workflow controller stages and commits.

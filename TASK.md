@@ -2050,3 +2050,33 @@ exceptions. Remaining candidates: `_common_prefix_length`, `_nth_bit`,
 - None pending. Repo fully green with 100% coverage (49999 passed). Do NOT fabricate work or repeat verification-only sessions. Reproduce a concrete gap first, apply the smallest safe fix, rerun focused then the full gate.
 - Evidence-based lead NOT yet done: property-check `wifi._parse_proc_net_wireless` (pure `/proc/net/wireless` parser, only example tests) vs an independent line-format oracle, or `mac._normalize_mac_for_api`/`_is_mac_address` vs a stdlib `re`/`ipaddress` oracle. (Fresh angle; prior sessions report wifi/mac clean, so only revisit with a NEW angle.)
 - `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`.
+
+# Session (Sat Nov 28 2026, redis RESP parser property hardening)
+## This session
+- No prior concrete assignment (HANDOFF_NEXT/NEXT_TASK said "None pending; repo fully green"; the listed wifi/mac leads are already committed). Per the task rules I did NOT repeat a verification-only session; I independently re-verified the true baseline first-hand, ran a fresh-angle differential fuzz (reproduced NO defect), and added durable test hardening (checksum/netbios/nmap/passwords/scanner/cidr-validate/urlcheck/web_server_version precedent).
+- Independently re-verified baseline at HEAD `ac69d0c`: `coverage run --branch --source=ethscan -m pytest -q` -> 50017 passed, 147 skipped, 0 failed; TOTAL 100% (16292 stmts, 6178 branches, 0 missing); mypy clean (282 files); ruff clean; check_readme 54/54, 0 drift; `git status` clean. Handoff accurate, not stale.
+- Selected a fresh angle NOT in any prior ruled-out list: the security-critical `redis._parse_resp` RESP response parser (decodes untrusted bytes from a possibly-hostile Redis-protocol service). It had only fixed example tests (124 test fns in test_redis.py, none property-based), so an off-by-one in `consumed_bytes`, a broken nested-array walk, a missed de-dup, or a wrongly-accepted truncated buffer would pass the examples.
+- Differential fuzz FIRST (independent from-scratch RESP encoder; random nested values incl. int/str/bulk/null/array, embedded CRLF, 20,000 cases): 0 value mismatches, 0 prefix-consumption failures, 0 truncation failures. Implementation CORRECT — not a defect; do not change it.
+## What changed (test-only, fully reversible; no production code)
+- `tests/test_redis_resp_property.py` (new): 6 test fns / 16 cases, seed 20261128:
+  - `test_parse_resp_roundtrip_matches_encoder_oracle` — 5000 random values vs the independent encoder (value + consumed==len).
+  - `test_parse_resp_consumes_exact_prefix` — trailing bytes after a complete value are left unconsumed (3000 cases).
+  - `test_parse_resp_truncated_is_incomplete` — every strict prefix of a null-free encoding is `(None, 0)` (2000 values).
+  - `test_parse_resp_invalid_or_incomplete_inputs` — 11 parametrized malformed/truncated buffers (empty, unknown prefix, missing CRLF, short bulk, over-declared array, non-numeric integer fallback).
+  - `test_parse_resp_known_vectors` — fixed vectors for + - : $ $-1 *0 and `_build_resp_array`.
+  - `test_build_resp_array_roundtrips_through_parser` — 2000 random arg lists.
+## What was actually verified (evidence)
+- Mutation checks (each caught; source restored, `git diff ethscan/redis.py` empty after): (1) bulk `end = start + length` -> `- 1` -> 5 fail; (2) array `range(count)` -> `range(count - 1)` -> 6 fail; (3) simple-string `consumed idx+2` -> `idx+1` -> 1 fail. The tests genuinely guard correctness.
+- `python -m pytest tests/test_redis_resp_property.py -q` -> 16 passed.
+- `python -m coverage run --branch --source=ethscan -m pytest -q` -> 50033 passed, 147 skipped, 0 failed (baseline 50017; +16); TOTAL 100% (16292 stmts, 6178 branches, 0 missing).
+- `python -m mypy ethscan/ tests/` -> Success (283 files); `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed; `python3 check_readme.py` -> 54 commands, 0 drift both directions; `git diff --check` clean.
+- `git status` -> only new `tests/test_redis_resp_property.py` (untracked). No production code changed. Not committed (controller commits).
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- `redis._parse_resp` differential fuzz (valid + invalid + truncation): correct, not a defect; now property-tested — do not re-probe unchanged.
+- All prior fresh-angle sweeps (see HANDOFF_NEXT.md) clean; not repeated.
+## Next task
+- None pending. Repo fully green with 100% coverage (50033 passed). Do NOT fabricate work or repeat verification-only sessions. Reproduce a concrete gap first, apply the smallest safe fix, rerun focused then the full gate.
+- Evidence-based lead NOT yet done: property-check `redis._parse_info` / `redis._parse_config` (parse `key:value` / `key value` lines from an INFO/CONFIG response; same security-relevant parser family, only example tests) vs an independent line oracle, or `osdetect._match_os_from_ttl` / `_match_os_from_banner` vs a hand oracle. (Fresh angle; revisit only with a NEW angle.)
+- `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`.
