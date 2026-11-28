@@ -42,8 +42,8 @@ def oracle_is_mac_address(value: str) -> bool:
     """Oracle for _is_mac_address using stdlib only.
 
     A MAC address is 6 octets (12 hex digits) optionally separated by
-    colons, dashes, or dots. All separators must be consistent in a real
-    MAC but we accept any mix here for robustness.
+    colons, dashes, or dots. Only ASCII hex digits are accepted.
+    Whitespace, signs, and other characters are rejected.
     """
     if not isinstance(value, str):
         return False
@@ -51,11 +51,9 @@ def oracle_is_mac_address(value: str) -> bool:
     cleaned = value.replace(":", "").replace("-", "").replace(".", "")
     if len(cleaned) != 12:
         return False
-    try:
-        int(cleaned, 16)
-    except ValueError:
-        return False
-    return True
+    # Only accept ASCII hex digits (strict, like the implementation)
+    hex_digits = frozenset("0123456789abcdefABCDEF")
+    return set(cleaned) <= hex_digits
 
 
 def oracle_strip_mac_port(value: str) -> str:
