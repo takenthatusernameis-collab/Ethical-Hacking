@@ -3,6 +3,8 @@
 import csv
 import io
 import json
+import math
+import random
 from typing import cast
 
 import pytest
@@ -519,3 +521,144 @@ def test_evaluate_password_fair_range() -> None:
     # digits only 8 chars: pool=10, entropy=8*log2(10)=~26.58, score=~66.44 -> fair
     result = evaluate_password("13579246")
     assert result["verdict"] == "fair"
+
+
+# ---------------------------------------------------------------------------
+# Property tests locking the security-relevant password-strength helpers.
+#
+# ``has_repeated_patterns``, ``_character_pool``/``estimate_entropy`` and the
+# score/verdict mapping in ``evaluate_password`` drive the password audit
+# verdict. The existing tests only check a handful of fixed examples, so a
+# regression in the pattern-detection loop bounds or the entropy pool would
+# pass them. These tests compare the helpers against independent oracles
+# (a brute-force repeated-substring search and a from-scratch pool/entropy
+# computation) over seeded random inputs, and pin the score/verdict contract.
+# The oracles are defined locally (not imported from the module) so they are
+# independent of the implementation constants.
+# ---------------------------------------------------------------------------
+
+_PROPERTY_SEED = 20261128
+
+# Character classes re-declared independently of ethscan.passwords so the
+# oracle does not inherit a bug from the module's own constants.
+_ORACLE_LOWER = "abcdefghijklmnopqrstuvwxyz"
+_ORACLE_UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+_ORACLE_DIGITS = "0123456789"
+_ORACLE_SYMBOL = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
+_ORACLE_ALPHABET = (
+    _ORACLE_LOWER + _ORACLE_UPPER + _ORACLE_DIGITS + _ORACLE_SYMBOL + "éüñ漢字"
+)
+
+
+def _oracle_has_repeated_patterns(password: str) -> bool:
+    """Brute-force oracle: True if a substring of length >= 2 is repeated."""
+    lowered = password.lower()
+    length_total = len(lowered)
+    for pattern_len in range(2, length_total // 2 + 1):
+        for start in range(0, length_total - pattern_len * 2 + 1):
+            if (
+                lowered[start : start + pattern_len]
+                == lowered[start + pattern_len : start + pattern_len * 2]
+            ):
+                return True
+    return False
+
+
+def _oracle_character_pool(password: str) -> int:
+    pool = 0
+    if any(c in _ORACLE_LOWER for c in password):
+        pool += 26
+    if any(c in _ORACLE_UPPER for c in password):
+        pool += 26
+    if any(c in _ORACLE_DIGITS for c in password):
+        pool += 10
+    if any(c in _ORACLE_SYMBOL for c in password):
+        pool += 33
+    return pool or 1
+
+
+def _oracle_estimate_entropy(password: str) -> float:
+    if not password:
+        return 0.0
+    return len(password) * math.log2(_oracle_character_pool(password))
+
+
+def _random_password(rng: random.Random, max_len: int) -> str:
+    length = rng.randint(0, max_len)
+    return "".join(rng.choice(_ORACLE_ALPHABET) for _ in range(length))
+
+
+def test_has_repeated_patterns_matches_bruteforce_oracle() -> None:
+    rng = random.Random(_PROPERTY_SEED)
+    for _ in range(3000):
+        password = _random_password(rng, 12)
+        assert has_repeated_patterns(password) == _oracle_has_repeated_patterns(
+            password
+        ), password
+    # Constructed boundary cases: a string that is exactly two equal halves
+    # exercises the maximum pattern length (len // 2), where an off-by-one in
+    # the loop bound would be invisible to random data.
+    for half_len in range(1, 7):
+        for _ in range(50):
+            half = "".join(rng.choice(_ORACLE_ALPHABET) for _ in range(half_len))
+            repeated = half + half
+            assert has_repeated_patterns(repeated) == _oracle_has_repeated_patterns(
+                repeated
+            ), repeated
+            # A different second half must not be flagged by construction.
+            other = "".join(rng.choice(_ORACLE_ALPHABET) for _ in range(half_len))
+            if other != half:
+                candidate = half + other
+                assert has_repeated_patterns(
+                    candidate
+                ) == _oracle_has_repeated_patterns(candidate), candidate
+
+
+def test_estimate_entropy_matches_pool_oracle() -> None:
+    rng = random.Random(_PROPERTY_SEED + 1)
+    for _ in range(3000):
+        password = _random_password(rng, 16)
+        assert estimate_entropy(password) == pytest.approx(
+            _oracle_estimate_entropy(password)
+        ), password
+
+
+def test_evaluate_password_score_and_verdict_invariants() -> None:
+    rng = random.Random(_PROPERTY_SEED + 2)
+    for _ in range(3000):
+        password = _random_password(rng, 20)
+        result = evaluate_password(password)
+        score = result["score"]
+        assert isinstance(score, (int, float))
+        assert 0.0 <= score <= 100.0
+        expected_verdict = (
+            "strong"
+            if score >= 80
+            else "fair"
+            if score >= 50
+            else "weak"
+            if score >= 20
+            else "very weak"
+        )
+        assert result["verdict"] == expected_verdict, password
+    # Constructed numeric strings of increasing length sweep the score across
+    # every verdict boundary (a length-10 digit string scores ~83, inside the
+    # [80, 85) band), so an off-by-one in a threshold is caught deterministically.
+    for length in range(1, 30):
+        numeric = "1357924680"[:length] if length <= 10 else (
+            "1357924680" + "0" * (length - 10)
+        )
+        result = evaluate_password(numeric)
+        score = result["score"]
+        assert isinstance(score, (int, float))
+        assert 0.0 <= score <= 100.0
+        expected_verdict = (
+            "strong"
+            if score >= 80
+            else "fair"
+            if score >= 50
+            else "weak"
+            if score >= 20
+            else "very weak"
+        )
+        assert result["verdict"] == expected_verdict, numeric

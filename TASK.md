@@ -1971,3 +1971,36 @@ exceptions. Remaining candidates: `_common_prefix_length`, `_nth_bit`,
 - Verification-only sessions: not repeated as progress. `snmp._parse_oid` (clean, already property-tested), `service._parse_banner_*` (heuristic, no oracle), `headers.*` (no pure gap): clean; do not re-probe unchanged. netbios encode/decode: now property-tested — do not repeat unchanged. All prior fresh-angle sweeps (see HANDOFF_NEXT.md) clean; not repeated.
 ## Next task
 - None pending. Repo fully green with 100% coverage (49966 passed). Do NOT fabricate work or repeat verification-only sessions. Reproduce a concrete gap first, apply the smallest safe fix, rerun focused then the full gate (pytest/coverage/mypy/ruff/check_readme), preserve safety. Fresh-angle lead not yet done: property-check `geo` cache/format helpers or `urlcheck` URL classification vs a stdlib `urllib.parse` oracle, or strengthen another security-relevant pure helper with only `isinstance`/range assertions (checksum/netbios precedent). `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain out of scope. Do not modify `.github/workflows/**`.
+
+# Session (Sat Nov 28 2026, password-strength property-test hardening)
+## This session
+- No prior concrete assignment (HANDOFF_NEXT/NEXT_TASK said "None pending; repo fully green"). Per the task rules I did NOT repeat a verification-only session; I independently re-verified the true baseline first-hand at HEAD `60f353e`, ran fresh-angle oracle probes (reproduced NO defect), and added durable test hardening (checksum/netbios/nmap precedent).
+- Independently re-verified baseline: `pytest -q` -> 49975 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/` clean (279 files); `ruff` clean; `check_readme.py` 54/54, 0 drift; `coverage run --branch --source=ethscan` TOTAL 100%; `git status` clean.
+- Fresh-angle oracle probes (all clean, 0 mismatches — ruled out, NOT defects, do not repeat unchanged):
+  - Version matching: `vuln.version_in_range` / `cve._lookup_cve_id` / `vuln.match_service_vulns` vs an independent oracle (different comparison algorithm) over 60k random specs + 20k lookup/match consistency cases -> 0 mismatches.
+  - Password helpers: `has_repeated_patterns` vs a brute-force repeated-substring oracle, `_character_pool`/`estimate_entropy` vs a from-scratch pool/entropy oracle, `evaluate_password` score/verdict invariants -> 0 mismatches / 100k cases. Implementation correct.
+## What changed (test-only, fully reversible; no production code)
+- `tests/test_passwords.py` (+143): 3 seeded property tests with independent LOCAL oracles (do not import the module constants):
+  - `test_has_repeated_patterns_matches_bruteforce_oracle` — 3000 random + constructed exact `half+half` repeats at every max pattern length (catches loop-bound off-by-one).
+  - `test_estimate_entropy_matches_pool_oracle` — 3000 random vs from-scratch pool/entropy.
+  - `test_evaluate_password_score_and_verdict_invariants` — 3000 random + constructed length-swept numeric strings (len-10 digits ~score 83, inside [80,85)) pinning score in [0,100] and verdict-vs-threshold mapping.
+- Why: these security-relevant helpers had only example-based tests; a regression in the pattern loop bounds, entropy pool, or verdict thresholds would pass the examples. Now locked by property tests.
+## What was actually verified (evidence)
+- Mutation checks (each caught; source restored, `git diff ethscan/passwords.py` empty after):
+  1. `range(2, max_pattern + 1)` -> `range(2, max_pattern)` -> `test_has_repeated_patterns_matches_bruteforce_oracle` FAILS (`f-f-`).
+  2. UPPER pool `pool += 26` -> `pool += 25` -> `test_estimate_entropy_matches_pool_oracle` FAILS.
+  3. verdict `score >= 80` -> `score >= 85` -> `test_evaluate_password_score_and_verdict_invariants` FAILS.
+- `python -m pytest -q` -> 49978 passed, 147 skipped, 0 failed (baseline 49975; +3 new tests).
+- `python -m mypy ethscan/ tests/` -> Success: no issues in 279 source files.
+- `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed.
+- `python3 check_readme.py` -> 54 commands, 0 drift both directions; exit 0.
+- `python -m coverage run --branch --source=ethscan -m pytest -q` -> TOTAL 100% (16295 stmts, 6178 branches, 0 missing).
+- `git status` -> only `tests/test_passwords.py` modified (143 insertions); `git diff --check` clean. Not committed (controller commits).
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- Version matching and password helpers: property-probed correct this session; not defects; do not re-probe unchanged. All prior fresh-angle sweeps (see HANDOFF_NEXT.md) clean; not repeated.
+## Next task
+- None pending. Repo fully green with 100% coverage (49978 passed). Do NOT fabricate work or repeat verification-only sessions. Reproduce a concrete gap first, apply the smallest safe fix, rerun focused then the full gate.
+- Evidence-based leads NOT yet done: property-check `cert._extract_subdomains` (CT `name_value` newline-split/dedup/sort) or `snmp._assign_varbind`/`_decode_varbind_value` vs an independent BER oracle.
+- `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`.
