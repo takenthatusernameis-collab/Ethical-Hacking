@@ -2020,3 +2020,33 @@ exceptions. Remaining candidates: `_common_prefix_length`, `_nth_bit`,
 - cert._extract_subdomains oracle probe (clean); snmp._decode_varbind_value/_assign_varbind review (clean); all prior fresh-angle sweeps (CSV injection, parser/formatter/assessor/CLI hostile sweeps, nested-field fuzz, radix/target/hash/passwords/jwt/scanner/cidr wrong-output, whois/s3/mac/nmap/tls/version/netbios/config/service probes): clean; not repeated.
 ## Next task
 - None pending. Repository fully green with 100% coverage (49978 passed). Do NOT fabricate work or repeat verification-only sessions as progress. If future work is needed, reproduce a concrete gap first (focused failing check, fresh-install failure, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then the full gate (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`.
+
+# Session (Sat Nov 28 2026, scanner.parse_port_range property hardening)
+## This session
+- No prior concrete assignment (HANDOFF_NEXT/NEXT_TASK said "None pending; repo fully green"). Per the task rules I did NOT repeat a verification-only session; I independently re-verified the true baseline first-hand, ran a fresh-angle differential fuzz (reproduced NO defect), and added durable test hardening (checksum/netbios/nmap/passwords/cidr-validate precedent).
+- Independently re-verified baseline at HEAD `f6629f4`: `pytest -q` -> 49978 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/` clean (279 files); `ruff` clean; `check_readme.py` 54/54, 0 drift; `coverage run --branch --source=ethscan` TOTAL 100% (16295 stmts, 6178 branches, 0 missing); `git status` clean. Handoff accurate, not stale.
+- Selected a fresh angle NOT in any prior ruled-out list: the security-critical `scanner.parse_port_range` (decides exactly which TCP/UDP ports a scan touches). It had only fixed example tests (single/list/range/mixed/whitespace/dupes/out-of-range/inverted/non-numeric/missing-end) and NO property-level test, so an off-by-one in range expansion, a missed dedup, a broken sort, or a silently-accepted invalid token would pass the examples.
+- Differential fuzz FIRST (independent "construct-from-known-set" oracle: build a random port set, serialize to a random still-valid spec, assert `parse_port_range` reproduces `sorted(set)`): 0 mismatches over 20,000 valid specs; all 19 invalid specs raised `PortSpecError`. Implementation CORRECT — not a defect; do not change it.
+## What changed (test-only, fully reversible; no production code)
+- `tests/test_scanner_port_range_property.py` (new): 5 tests / 21 cases, seed 20261128:
+  - `test_parse_port_range_matches_constructed_oracle` — 5000 random sets vs the by-construction oracle (strongest form: expected answer known without re-running the parser).
+  - `test_parse_port_range_full_closed_range_endpoints` — 0/65535 boundaries and the full `0-65535` expansion.
+  - `test_parse_port_range_rejects_invalid_specs` — 17 parametrized invalid specs (negative, >65535, inverted, empty token, non-numeric, multi-dash, missing endpoint) must raise `PortSpecError`.
+  - `test_parse_port_range_rejection_is_valueerror` — `PortSpecError` stays a `ValueError` subclass (callers catch `ValueError`).
+  - `test_parse_port_range_known_vectors` — fixed regression vectors.
+## What was actually verified (evidence)
+- Mutation check: `range(start, end + 1)` -> `range(start, end)` in `ethscan/scanner.py` made 2 tests FAIL (constructed-oracle + known-vectors); source restored (`git diff ethscan/scanner.py` empty), all 21 pass. The test genuinely guards correctness.
+- `python -m pytest tests/test_scanner.py tests/test_scanner_branch_gaps.py tests/test_scanner_port_range_property.py tests/test_validate.py -q` -> 190 passed, 1 skipped.
+- `python -m coverage run --branch --source=ethscan -m pytest -q` -> 49999 passed, 147 skipped, 0 failed (baseline 49978; +21); TOTAL 100% (16295 stmts, 6178 branches, 0 missing).
+- `python -m mypy ethscan/ tests/` -> Success (280 files); `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed; `python3 check_readme.py` -> 54 commands, 0 drift both directions; `git diff --check` clean.
+- `git status` -> only new `tests/test_scanner_port_range_property.py` (untracked). No production code changed. Not committed (controller commits).
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- `scanner.parse_port_range` differential fuzz (valid + invalid): correct, not a defect; now property-tested — do not re-probe unchanged.
+- Considered `wifi._parse_proc_net_wireless` (pure parser, never probed) and `geo`/`urlcheck` helpers as alternative targets; `geo` formatters already guarded (`_normalize_geo`/`_normalize_hops`/`_markdown_escape`), `mac._extract_oui` now matches its 6-hex-char docstring (session 906 concern already resolved). `parse_port_range` chosen as the highest-value security-relevant gap.
+- All prior fresh-angle sweeps (see HANDOFF_NEXT.md) clean; not repeated.
+## Next task
+- None pending. Repo fully green with 100% coverage (49999 passed). Do NOT fabricate work or repeat verification-only sessions. Reproduce a concrete gap first, apply the smallest safe fix, rerun focused then the full gate.
+- Evidence-based lead NOT yet done: property-check `wifi._parse_proc_net_wireless` (pure `/proc/net/wireless` parser, only example tests) vs an independent line-format oracle, or `mac._normalize_mac_for_api`/`_is_mac_address` vs a stdlib `re`/`ipaddress` oracle. (Fresh angle; prior sessions report wifi/mac clean, so only revisit with a NEW angle.)
+- `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`.
