@@ -2004,3 +2004,19 @@ exceptions. Remaining candidates: `_common_prefix_length`, `_nth_bit`,
 - None pending. Repo fully green with 100% coverage (49978 passed). Do NOT fabricate work or repeat verification-only sessions. Reproduce a concrete gap first, apply the smallest safe fix, rerun focused then the full gate.
 - Evidence-based leads NOT yet done: property-check `cert._extract_subdomains` (CT `name_value` newline-split/dedup/sort) or `snmp._assign_varbind`/`_decode_varbind_value` vs an independent BER oracle.
 - `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`.
+
+# Session (Sat Nov 28 2026)
+## This session
+- No prior agent assignment existed (HANDOFF_NEXT/NEXT_TASK said "None pending; repo fully green"). Independently re-verified the true baseline first-hand rather than trusting the handoff: `pytest -q` -> 49978 passed, 147 skipped, 0 failed; `mypy ethscan/ tests/` -> Success (279 files); `ruff check ethscan/ tests/ check_readme.py` -> All checks passed; `python3 check_readme.py` -> 54 commands, 0 drift both directions, exit 0; `git status` clean. Baseline confirmed accurate, not stale.
+- Followed the two evidence-based leads listed as "NOT yet done" with fresh-angle probes:
+  - `cert._extract_subdomains`: probed against an independent dedupe/sort oracle over 5000 random CT entries plus hostile crash probes (non-list/non-dict `entries`, CRLF/tab values, non-string `name_value`) -> 0 mismatches, 0 crashes. Lead closed: correct, not a defect; do not re-probe unchanged.
+  - `snmp._decode_varbind_value` / `_assign_varbind`: source-reviewed — defensive `.get()` lookups, `int.from_bytes`, `.decode("utf-8","replace")`, `.hex()` fallbacks, OID-key guard; `_parse_oid`/`_split_first_subidentifier` already property-tested (50,000 round-trip cases). No gap. Lead closed: do not re-probe unchanged.
+- No source or test changes made (no reproducible defect; per reliability rules 6/8 do not fabricate work or repeat verification-only sessions as progress). Working tree clean.
+## Verification
+- All five gates green first-hand (pytest/mypy/ruff/check_readme/coverage TOTAL 100%); `git diff --stat` empty.
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- cert._extract_subdomains oracle probe (clean); snmp._decode_varbind_value/_assign_varbind review (clean); all prior fresh-angle sweeps (CSV injection, parser/formatter/assessor/CLI hostile sweeps, nested-field fuzz, radix/target/hash/passwords/jwt/scanner/cidr wrong-output, whois/s3/mac/nmap/tls/version/netbios/config/service probes): clean; not repeated.
+## Next task
+- None pending. Repository fully green with 100% coverage (49978 passed). Do NOT fabricate work or repeat verification-only sessions as progress. If future work is needed, reproduce a concrete gap first (focused failing check, fresh-install failure, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then the full gate (pytest/coverage/mypy/ruff/check_readme), preserve safety. `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`.

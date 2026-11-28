@@ -20,7 +20,7 @@ None pending. Repository fully green with 100% coverage (49978 passed, 147 skipp
 - `oracle`/`postgresql` empty-target handling (exit 0, in-band error) is intentional.
 - `ethscan/cli.py` unreachable defensive guard is a documented known limitation.
 - Do not modify `.github/workflows/**`.
-- Version matching (`version_in_range`/`_lookup_cve_id`/`match_service_vulns`) and password helpers property-probed correct this session — do not re-probe unchanged.
+- Version matching (`version_in_range`/`_lookup_cve_id`/`match_service_vulns`), password helpers, `cert._extract_subdomains`, and `snmp._decode_varbind_value`/`_assign_varbind` property-probed/reviewed correct this session — do not re-probe unchanged.
 
 ## If future work is genuinely needed
 
@@ -29,7 +29,7 @@ FIRST reproduce a concrete gap (focused failing check, fresh-install failure, or
 `python -m mypy ethscan/ tests/`;
 `python -m ruff check ethscan/ tests/ check_readme.py`; `python3 check_readme.py`.
 
-Evidence-based leads NOT yet done: property-check `cert._extract_subdomains` (CT `name_value` newline-split/dedup/sort) or `snmp._assign_varbind`/`_decode_varbind_value` vs an independent BER oracle.
+Evidence-based leads NOT yet done: none remaining — `cert._extract_subdomains` and `snmp._decode_varbind_value`/`_assign_varbind` were probed clean this session (see HANDOFF_NEXT.md); do not re-probe unchanged.
 
 ## Environment/notes
 

@@ -7,6 +7,8 @@
 - Fresh-angle oracle probes (all clean, 0 mismatches — ruled out, NOT defects, do not repeat unchanged):
   - Version matching: `vuln.version_in_range` / `cve._lookup_cve_id` / `vuln.match_service_vulns` vs an independent oracle (different comparison algorithm) over 60k random specs + 20k lookup/match consistency cases -> 0 mismatches.
   - Password helpers: `has_repeated_patterns` vs a brute-force repeated-substring oracle, `_character_pool`/`estimate_entropy` vs a from-scratch pool/entropy oracle, `evaluate_password` score/verdict invariants -> 0 mismatches / 100k cases. Implementation is correct.
+  - `cert._extract_subdomains` (CT `name_value` newline-split/dedup/sort) vs an independent dedupe/sort oracle over 5000 random entries + hostile crash probes (`entries` non-list/non-dict, CRLF/tab values, non-string `name_value`) -> 0 mismatches, 0 crashes. Lead closed: do not re-probe unchanged.
+  - `snmp._decode_varbind_value` / `_assign_varbind` reviewed: defensive `.get()` lookups, `int.from_bytes`, `.decode("utf-8","replace")`, `.hex()` fallbacks, OID-key guard — no gap; `_parse_oid`/`_split_first_subidentifier` already property-tested (50,000 round-trip cases). Lead closed: do not re-probe unchanged.
 
 ## What changed
 
@@ -41,7 +43,7 @@
 ## Next task
 
 - None pending. Repository fully green with 100% coverage (49978 passed). Do NOT fabricate work or repeat verification-only sessions. If future work is needed, reproduce a concrete gap first (focused failing check, fresh-install failure, or behavioral evidence vs documented contract), apply the smallest safe fix, rerun focused then the full gate (pytest/coverage/mypy/ruff/check_readme), preserve safety.
-- Evidence-based leads NOT yet done: property-check `cert._extract_subdomains` (CT `name_value` newline-split/dedup/sort) or `snmp._assign_varbind`/`_decode_varbind_value` vs an independent BER oracle.
+- Evidence-based leads NOT yet done: none remaining — both previously listed leads (`cert._extract_subdomains`, `snmp._decode_varbind_value`/`_assign_varbind`) were probed clean this session; do not re-probe unchanged.
 - `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`.
 
 ## Environment/notes
