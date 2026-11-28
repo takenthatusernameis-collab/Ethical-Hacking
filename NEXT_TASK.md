@@ -4,21 +4,25 @@ None pending. Repository is fully green.
 
 ## Last completed session (Sat Nov 28 2026)
 
-Added a durable property test for `ethscan.validate._ports_to_ranges`
-(validate.py:357): new file `tests/test_validate_ports_to_ranges_property.py`
-with a local stdlib-only oracle, a 30,000-case random property test, and
-deterministic edge-case tests. Verified correctness first via a 200,000-case
-differential fuzz vs an independent oracle (0 mismatches, so no source change
-was warranted) and mutation-checked the test (both source mutations caught).
+Extended independent-oracle verification to the `ethscan.cidr` pure helpers:
+- New file `oracle_verify_cidr.py`: stdlib-only (`ipaddress`) oracles for
+  `normalize_cidr`, `_contains_ip`, `_subtract_networks`, and `run_cidr` over a
+  hostile input matrix (valid/invalid IPv4/IPv6 CIDRs, bare IPs, empty/control/
+  non-ASCII inputs, host-bit / prefix-boundary cases, ~3700+ run_cidr cases
+  including randomized).
+- New file `tests/test_oracle_verify_cidr.py`: 4 pytest regression tests
+  wrapping the oracle verification.
+- No `ethscan/` source changed; test-only addition.
 
 ## Full gate (all green)
 
-- `python -m pytest -q` → 50097 passed, 147 skipped, 0 failed
-- `python -m coverage run --branch --source=ethscan -m pytest -q` → 50097
-  passed; `ethscan/validate.py` 100% (268 stmts, 118 branches, 0 missing)
-- `python -m mypy ethscan/ tests/` → Success: no issues in 289 source files
-- `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed
-- `python check_readme.py` → 54 CLI commands, 0 drift both directions
+- `python -m pytest -q` → 50101 passed, 147 skipped, 0 failed (baseline 50097;
+  +4 new oracle tests).
+- `python -m mypy ethscan/ tests/` → Success: no issues in 290 source files.
+- `python -m ruff check ethscan/ tests/ check_readme.py` → All checks passed.
+- `python check_readme.py` → 54 CLI commands, 0 drift both directions.
+- `python oracle_verify_cidr.py` → ALL VERIFICATIONS PASSED, 0 mismatches,
+  exit 0.
 
 ## Constraints / do-not-touch
 
@@ -38,7 +42,17 @@ was warranted) and mutation-checked the test (both source mutations caught).
   preinstalled; `dnspython` is not.
 - Python 3.14.4; pytest 9.2.0; mypy 2.4.1; ruff 0.17.6; coverage 7.17.5.
   `coverage` is not on PATH; use `python -m coverage ...`. `python` works here.
-- Full coverage gate takes ~2.9 min (50097 tests). Do not commit manually; the
-  workflow controller stages and commits.
+- Full pytest gate takes ~3.2 min (50101 tests). Full coverage gate ~2.9 min.
+- Do not commit manually; the workflow controller stages and commits.
 - ALWAYS re-verify HEAD first-hand (install deps, run the gate) rather than
   trusting the "green" claim — prior handoffs were repeatedly stale.
+
+## Next task
+
+None pending. If future work is needed, pick a single bounded, high-value,
+verifiable improvement and reproduce it first — do not speculate or weaken
+safety controls. A natural candidate following the established convention would
+be extending independent-oracle verification to another pure-helper module
+(e.g. `ethscan.urlcheck` or `ethscan.validate`) via a new
+`oracle_verify_<mod>.py` + `tests/test_oracle_verify_<mod>.py`, but only if a
+genuine defect-hunting gap is identified first.
