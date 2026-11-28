@@ -2080,3 +2080,26 @@ exceptions. Remaining candidates: `_common_prefix_length`, `_nth_bit`,
 - None pending. Repo fully green with 100% coverage (50033 passed). Do NOT fabricate work or repeat verification-only sessions. Reproduce a concrete gap first, apply the smallest safe fix, rerun focused then the full gate.
 - Evidence-based lead NOT yet done: property-check `redis._parse_info` / `redis._parse_config` (parse `key:value` / `key value` lines from an INFO/CONFIG response; same security-relevant parser family, only example tests) vs an independent line oracle, or `osdetect._match_os_from_ttl` / `_match_os_from_banner` vs a hand oracle. (Fresh angle; revisit only with a NEW angle.)
 - `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`.
+
+# Session (Sat Nov 28 2026, cert._extract_subdomains property hardening)
+## This session
+- No prior concrete assignment (HANDOFF_NEXT/NEXT_TASK said "None pending; repo fully green"). Per the task rules I did NOT repeat a verification-only session; I independently re-verified the true baseline first-hand, ran fresh-angle differential fuzzes, and added durable test hardening (checksum/netbios/nmap/passwords/scanner/redis/cidr-validate precedent).
+- Independently re-verified baseline at HEAD `3d89327`: `coverage run --branch --source=ethscan -m pytest -q` -> 50071 passed, 147 skipped, 0 failed; TOTAL 100% (16292 stmts, 6178 branches, 0 missing); mypy clean (286 files); ruff clean; check_readme 54/54, 0 drift; `git status` clean. Handoff accurate.
+- Executed the prior handoff's two "NOT yet done" leads and found BOTH already implemented (stale handoff): `redis._parse_info`/`_parse_config` already covered by `tests/test_redis_info_config_property.py` (commits 3da3eaa/4387f70); `osdetect._match_os_from_ttl`/`_match_os_from_banner` already covered by `tests/test_osdetect_match_property.py`. Differential-fuzzed both first (0 mismatches / 20k-30k cases) to confirm correct; did NOT re-add duplicates (removed a redundant osdetect file I had started).
+## What changed (test-only, fully reversible; no production code)
+- `tests/test_cert_extract_subdomains_property.py` (new, 6 tests): independent from-scratch `_oracle` (no ethscan helper) + `test_extract_subdomains_matches_oracle_random` (3000 seeded random cert_data: dict/non-dict entries, name_value/common_name/empty/int, multiline, non-list `entries`) + 5 deterministic edge tests (case-insensitive dedupe+sort, multiline `\r\n`/`\n` split, common_name fallback vs name_value precedence, non-dict/non-list ignored, empty/missing -> `[]`). Locks the security-relevant CT `name_value` parser that had only 4 example tests.
+## What was actually verified (evidence)
+- Differential fuzz before tests: 30,000 cases, 0 mismatches (correct, not a defect).
+- Mutation checks (each caught; source restored, `git diff ethscan/cert.py` empty): (1) `token.strip().lower()` -> `token.strip()` -> 3 fail; (2) `return sorted(names)` -> `return names` -> 3 fail.
+- `python -m pytest tests/test_cert_extract_subdomains_property.py -q` -> 6 passed.
+- `python -m coverage run --branch --source=ethscan -m pytest -q` -> 50077 passed, 147 skipped, 0 failed (baseline 50071; +6); TOTAL 100% (16292 stmts, 6178 branches, 0 missing).
+- `python -m mypy ethscan/ tests/` -> Success (287 files); `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed; `python check_readme.py` -> 54 commands, 0 drift; `git diff --check` clean.
+- `git status` -> only new `tests/test_cert_extract_subdomains_property.py` (untracked). No production code changed. Not committed (controller commits).
+## Blockers
+- None.
+## Approaches already tried / ruled out
+- redis `_parse_info`/`_parse_config` and osdetect matchers: already property-tested (stale leads); now confirmed correct — do not re-probe unchanged. `cert._extract_subdomains`: now property-tested — do not repeat unchanged. All prior fresh-angle sweeps (see HANDOFF_NEXT.md) clean; not repeated.
+## Next task
+- None pending. Repo fully green with 100% coverage (50077 passed). Do NOT fabricate work or repeat verification-only sessions. Reproduce a concrete gap first, apply the smallest safe fix, rerun focused then the full gate.
+- Evidence-based lead NOT yet done: property-check `whois.extract_referral_server` (whois.py:144; only example tests at test_whois.py:469+, no property test; prior session probed clean over ~5,010 hand-oracle cases) vs an independent hand oracle; add `tests/test_whois_referral_property.py` with a LOCAL oracle, mutation-check, rerun the full gate. Re-confirm correct with a fresh differential fuzz first; do not change source without a reproduced defect.
+- `oracle`/`postgresql` empty-target handling and `ethscan/cli.py` unreachable guard remain intentionally out of scope. Do not modify `.github/workflows/**`.
