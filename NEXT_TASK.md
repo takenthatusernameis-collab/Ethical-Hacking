@@ -1,16 +1,18 @@
 # Next task
 
-None pending. Repository fully green with 100% coverage (50017 passed, 147 skipped, 0 failed; mypy/ruff clean). Do NOT fabricate work, repeat verification-only sessions as progress, or make empty/control-marker commits.
+None pending. Repository fully green with 100% coverage (50017 passed, 147 skipped, 0 failed; mypy/ruff clean; all 5 oracle verification scripts exit 0). Do NOT fabricate work, repeat verification-only sessions as progress, or make empty/control-marker commits.
 
 ## Last change (this session)
 
 - None. Independently re-verified the true baseline first-hand (prior HANDOFF_NEXT.md was accurate, not stale). No source or test changes made; no reproducible defect found.
+- Oracle review: `mac._is_mac_address` trailing-whitespace "mismatch" is documented intentional strictness (ethscan/mac.py:302-315), not a bug — oracle leniency is an `int()` whitespace artifact. Ruled out; no fix warranted.
 
 ## Verified this session (evidence)
 
 - `python -m pytest -q` -> 50017 passed, 147 skipped, 0 failed (verified at HEAD `08cfaed`, unchanged since HEAD `bece502`)
 - `python -m mypy ethscan/ tests/` -> Success: no issues in 282 source files
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed
+- `python oracle_verify_{target,mac,dnssec,whois,service}.py` -> all exit 0
 - `git status` -> clean working tree; HEAD `08cfaed` (no source/test change vs `bece502`, not counted as progress)
 
 ## Constraints / do-not-touch
@@ -19,6 +21,7 @@ None pending. Repository fully green with 100% coverage (50017 passed, 147 skipp
 - `ethscan/cli.py` unreachable defensive guard is a documented known limitation — do not change to game coverage.
 - Do not modify `.github/workflows/**`.
 - All documented leads are done or probed clean; do not re-probe unchanged.
+- `mac._is_mac_address` strict whitespace rejection is documented intent — do not relax to match the loose oracle.
 
 ## If future work is genuinely needed
 

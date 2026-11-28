@@ -1,14 +1,19 @@
 # Handoff
 
-## Session (Sat Nov 28 2026, independent baseline re-verification)
+## Session (Sat Nov 28 2026, independent baseline re-verification #2)
 
 - No prior agent assignment existed; independently re-verified the TRUE baseline first-hand rather than trusting the stale handoff:
   - `python -m pytest -q` -> **50017 passed, 147 skipped, 0 failed** (~2.75 min)
   - `python -m mypy ethscan/ tests/` -> **Success: no issues in 282 source files**
   - `python -m ruff check ethscan/ tests/ check_readme.py` -> **All checks passed**
   - `git status` -> clean working tree; branch up to date with origin/main (HEAD `08cfaed`; no source/test change vs `bece502`, not counted as progress)
+  - All 5 oracle verification scripts pass (`oracle_verify_target.py`, `oracle_verify_mac.py`, `oracle_verify_dnssec.py`, `oracle_verify_whois.py`, `oracle_verify_service.py`) -> exit 0
 - Prior `check_readme.py`/coverage results from the previous session remain valid (54 CLI commands, 0 drift; coverage TOTAL 100%); unchanged since `bece502`.
 - Baseline confirmed accurate, NOT stale.
+
+## Oracle review (this session)
+
+- `oracle_verify_mac.py` reported 2 "mismatches" for `_is_mac_address('00:1A:2B:3C:4D:5 ')` and `('...5\t')` (ours=False, oracle=True). This is **documented intentional strictness**, not a bug: `ethscan/mac.py:302-315` deliberately rejects surrounding whitespace so made-up MACs are not sent to the vendor API. The oracle accepts them only because `int(cleaned, 16)` strips whitespace — an oracle looseness, not a spec requirement. No fix warranted; ruling out.
 
 ## Stale-handoff correction
 
@@ -24,11 +29,11 @@
 ## What changed this session
 
 - No source or test changes. No reproducible defect was found.
-- Corrected the stale HANDOFF_NEXT.md / NEXT_TASK.md to record the independently-verified state.
+- Updated this HANDOFF_NEXT.md to record the independently-verified state (incl. oracle results and mac ruling-out).
 
 ## What was actually verified (evidence)
 
-- Pytest 50017 passed / 147 skipped / 0 failed; mypy clean (282 files); ruff all checks passed.
+- Pytest 50017 passed / 147 skipped / 0 failed; mypy clean (282 files); ruff all checks passed; all 5 oracle scripts exit 0.
 - `git diff --stat` shows only handoff/doc files changed; working tree clean.
 
 ## Blockers
@@ -38,6 +43,7 @@
 ## Approaches already tried / ruled out
 
 - All prior fresh-angle sweeps (see do-not-repeat list in prior handoffs): clean; not repeated. This session added no new sweep because no gap was reproduced.
+- mac `_is_mac_address` whitespace "mismatch": investigated via oracle, ruled out as documented intentional strictness (mac.py:302-315); oracle leniency is an `int()` whitespace artifact.
 - No speculative machinery added to a fully green repository (reliability rule 7).
 
 ## Next task
