@@ -8,7 +8,8 @@
   - `python -m mypy ethscan/ tests/` -> **Success: no issues in 282 source files**
   - `python -m ruff check ethscan/ tests/ check_readme.py` -> **All checks passed**
   - `python3 check_readme.py` -> **54 CLI commands, 0 drift both directions; exit 0**
-  - `git status` -> clean working tree; branch up to date with origin/main (HEAD `bece502`)
+  - `git status` -> clean working tree; branch up to date with origin/main (HEAD `2d3ad9f`, docs-only vs `bece502`; no source/test change, not counted as progress)
+- This session confirmed the baseline is still green at HEAD `2d3ad9f` (import OK, ruff all checks passed, fast pytest subset 61/61 passed); HEAD `2d3ad9f` vs `bece502` touched only HANDOFF_NEXT.md/NEXT_TASK.md, so the verified state is unchanged.
 - Baseline confirmed accurate, NOT stale.
 
 ## Stale-handoff correction

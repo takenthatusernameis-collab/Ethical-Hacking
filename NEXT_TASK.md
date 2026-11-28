@@ -8,12 +8,12 @@ None pending. Repository fully green with 100% coverage (50017 passed, 147 skipp
 
 ## Verified this session (evidence)
 
-- `python -m pytest -q` -> 50017 passed, 147 skipped, 0 failed
+- `python -m pytest -q` -> 50017 passed, 147 skipped, 0 failed (verified at HEAD `bece502`, unchanged since HEAD `2d3ad9f`, docs-only vs `bece502`)
 - `python -m coverage run --branch --source=ethscan -m pytest -q` -> TOTAL 100% (16292 stmts, 6178 branches, 0 missing)
 - `python -m mypy ethscan/ tests/` -> Success: no issues in 282 source files
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed
 - `python3 check_readme.py` -> 54 CLI commands, 0 drift both directions; exit 0
-- `git status` -> clean working tree
+- `git status` -> clean working tree; HEAD `2d3ad9f` (docs-only vs `bece502`, no source/test change, not counted as progress)
 
 ## Constraints / do-not-touch
 
