@@ -4,7 +4,7 @@ None pending. Repository fully green with 100% coverage (49978 passed, 147 skipp
 
 ## Last change (this session)
 
-- Independent re-verification of the true baseline confirmed all gates green. No source or test changes made.
+- Independent re-verification confirmed all gates green, PLUS a new clean-room packaging/install smoke test (fresh venv, `pip install .`, console entry point, `py.typed`, isolated import, offline subcommands) — all sound. No source or test changes made.
 
 ## Verified this session (evidence)
 
@@ -13,6 +13,7 @@ None pending. Repository fully green with 100% coverage (49978 passed, 147 skipp
 - `python -m ruff check ethscan/ tests/ check_readme.py` -> All checks passed
 - `python3 check_readme.py` -> 54 CLI commands, 0 drift both directions; exit 0
 - `python -m coverage run --branch --source=ethscan -m pytest -q` -> TOTAL 100% (16295 stmts, 6178 branches, 0 missing)
+- Clean-room: fresh venv `pip install .` exit 0; `ethscan --help` works; `py.typed` shipped; import from `/tmp` resolves to site-packages; `hash`/`cidr` offline subcommands correct JSON
 - `git status` -> clean working tree
 
 ## Constraints / do-not-touch
