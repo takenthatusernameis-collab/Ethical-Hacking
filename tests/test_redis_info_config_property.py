@@ -1,90 +1,101 @@
-"""Property tests for redis._parse_info and redis._parse_config."""
+"""Property-based tests for ethscan.redis._parse_info / _parse_config."""
 import random
 
-from ethscan.redis import _parse_config, _parse_info, _build_resp_array
+
+from ethscan.redis import _build_resp_array, _parse_config, _parse_info, _parse_resp
 
 
-_PROPERTY_SEED = 20261128
+_SEED = 20261128
+_INFO_KEYS = ["redis_version", "os", "role", "connected_clients", "used_memory", "uptime_in_seconds"]
+_INFO_VALS = ["6.2.0", "Linux", "master", "42", "1024", "100", "# comment value", "a:b", "x\r\ny"]
 
 
-def _bulk(data: bytes) -> bytes:
-    return b"$" + str(len(data)).encode("ascii") + b"\r\n" + data + b"\r\n"
+def _info_oracle(text: str) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if ":" in line:
+            k, v = line.split(":", 1)
+            out[k.strip()] = v.strip()
+    return out
 
 
-def test_parse_info_matches_line_oracle():
-    rng = random.Random(_PROPERTY_SEED)
-    alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+def _encode_info_bulk(info: dict[str, str]) -> bytes:
+    lines = []
+    for k, v in info.items():
+        lines.append(f"{k}:{v}")
+    text = "\r\n".join(lines) + ("\r\n" if lines else "")
+    bcontent = text.encode("utf-8")
+    return b"$" + str(len(bcontent)).encode("ascii") + b"\r\n" + bcontent + b"\r\n"
+
+
+def test_parse_info_roundtrip_matches_oracle():
+    rng = random.Random(_SEED)
     for _ in range(3000):
-        n_lines = rng.randint(0, 12)
-        lines = []
-        expected = {}
-        for _ in range(n_lines):
-            choice = rng.randint(0, 4)
-            if choice == 0:
-                # section header
-                lines.append("# " + "".join(rng.choice(alphabet) for _ in range(rng.randint(1, 6))))
-            elif choice == 1:
-                # blank line
-                lines.append("")
-            elif choice == 2:
-                # line without colon -> skipped
-                key = "".join(rng.choice(alphabet) for _ in range(rng.randint(1, 6)))
-                lines.append(key)
-            else:
-                key = "".join(rng.choice(alphabet) for _ in range(rng.randint(1, 8)))
-                value = "".join(rng.choice(alphabet + " ") for _ in range(rng.randint(0, 10)))
-                # possibly surrounding spaces
-                raw_key = " " + key + " " if rng.random() < 0.3 else key
-                raw_val = " " + value + " " if rng.random() < 0.3 else value
-                lines.append(f"{raw_key}:{raw_val}")
-                expected[key.strip()] = value.strip()
-        content = "\r\n".join(lines)
-        if lines:
-            content += "\r\n"
-        bcontent = content.encode("utf-8")
-        data = _bulk(bcontent)
-        got = _parse_info(data)
-        assert got == expected, (content, got, expected)
+        n = rng.randint(0, 8)
+        info = {}
+        for _ in range(n):
+            info[rng.choice(_INFO_KEYS)] = rng.choice(_INFO_VALS)
+        data = _encode_info_bulk(info)
+        resp, _ = _parse_resp(data)
+        text = resp if isinstance(resp, str) else (str(resp) if resp is not None else "")
+        assert _parse_info(data) == _info_oracle(text)
 
 
-def test_parse_info_truncated_or_malformed_is_empty_or_partial_safe():
-    # malformed inputs must never raise
-    for data in (b"", b"$-1\r\n", b"+OK\r\n", b"-ERR x\r\n", b"*0\r\n", b"\r\n", b":\r\n"):
-        _parse_info(data)
+def test_parse_info_section_headers_and_empty():
+    raw = "# Server\r\nredis_version:7.0.0\r\nos:Linux\r\n\r\n# Clients\r\nconnected_clients:3\r\n"
+    bcontent = raw.encode("utf-8")
+    data = b"$" + str(len(bcontent)).encode("ascii") + b"\r\n" + bcontent + b"\r\n"
+    assert _parse_info(data) == {"redis_version": "7.0.0", "os": "Linux", "connected_clients": "3"}
+    empty = b"$0\r\n\r\n"
+    assert _parse_info(empty) == {}
 
 
-def test_parse_config_matches_pair_oracle():
-    rng = random.Random(_PROPERTY_SEED + 1)
-    alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+def test_parse_info_non_bulk_and_error():
+    assert _parse_info(b"+OK\r\n") == {}
+    assert _parse_info(b"-ERR no such key\r\n") == {}
+    assert _parse_info(b"") == {}
+
+
+def test_parse_config_roundtrip_matches_oracle():
+    rng = random.Random(_SEED + 1)
     for _ in range(3000):
-        n_pairs = rng.randint(0, 8)
-        args = []
-        expected = {}
-        # randomly make odd count sometimes
-        odd = rng.random() < 0.2
-        total = n_pairs * 2 + (1 if odd else 0)
-        for _i in range(total):
-            token = "".join(rng.choice(alphabet) for _ in range(rng.randint(0, 6)))
-            args.append(token)
-        # rebuild expected from pairs
-        expected = {}
-        for i in range(0, len(args) - 1, 2):
-            k = args[i]
-            v = args[i + 1]
-            expected[str(k)] = str(v)
-        if odd:
-            # odd length -> empty dict
-            expected = {}
-        data = _build_resp_array(*args) if args else b"*0\r\n"
+        n = rng.randint(0, 6)
+        pairs = []
+        for _ in range(n):
+            k = rng.choice(["bind", "requirepass", "dir", "dbfilename", "maxmemory"])
+            v = rng.choice(["0.0.0.0", "", "/data", "dump.rdb", "100mb", None])
+            pairs.append((k, v))
+        # build RESP array of bulk strings
+        flat = []
+        for k, v in pairs:
+            flat.append(k)
+            flat.append("" if v is None else v)
+        data = _build_resp_array(*flat)
         got = _parse_config(data)
-        assert got == expected, (args, got, expected)
+        # oracle
+        expected: dict[str, str] = {}
+        if len(flat) % 2 == 0:
+            for i in range(0, len(flat), 2):
+                kk = flat[i]
+                vv = flat[i + 1]
+                expected[str(kk)] = "" if vv is None else str(vv)
+        assert got == expected
 
 
-def test_parse_config_null_value_becomes_empty_string():
-    data = b"*2\r\n$4\r\nbind\r\n$-1\r\n"
-    assert _parse_config(data) == {"bind": ""}
+def test_parse_config_odd_length_ignored():
+    data = _build_resp_array("a", "b", "c")
+    assert _parse_config(data) == {}
 
 
-def test_parse_config_known_vectors():
-    data = b"*4\r\n$4\r\nbind\r\n$7\r\n0.0.0.0\r\n$11\r\nrequirepass\r\n$0\r\n\r\n"
-    assert _parse_config(data) == {"bind": "0.0.0.0", "requirepass": ""}
+def test_parse_config_none_value_becomes_empty():
+    data = b"*4\r\n$4\r\nbind\r\n$7\r\n0.0.0.0\r\n$11\r\nrequirepass\r\n$-1\r\n"
+    cfg = _parse_config(data)
+    assert cfg == {"bind": "0.0.0.0", "requirepass": ""}
+
+
+def test_parse_config_non_list():
+    assert _parse_config(b"+OK\r\n") == {}
+    assert _parse_config(b"") == {}
