@@ -491,6 +491,131 @@ def test_parse_nbtstat_rdata_missing_mac() -> None:
 
 
 # ---------------------------------------------------------------------------
+# _parse_nbtstat_rdata independent-oracle differential tests
+# ---------------------------------------------------------------------------
+
+_NBSTAT_SEED = 20261129
+_NBSTAT_NAME_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-.*@"
+
+# Independent suffix -> service type mapping (RFC 1002 well-known suffixes;
+# does not reuse the SUFFIX_SERVICE_TYPES table from ethscan).
+_NBSTAT_SUFFIX_ORACLE = {
+    0x00: "Workstation service",
+    0x01: "Messenger service",
+    0x02: "Reserved",
+    0x03: "Messenger service (alias)",
+    0x04: "Reserved",
+    0x05: "Reserved",
+    0x06: "Reserved",
+    0x07: "Remote Access Service",
+    0x08: "Reservoir",
+    0x09: "Reservoir",
+    0x0A: "Reservoir",
+    0x0B: "RAS service",
+    0x17: "RAS service",
+    0x1B: "Domain master browser",
+    0x1C: "Domain controllers",
+    0x1D: "Master browser",
+    0x1E: "Browser service elections",
+    0x20: "File server service",
+    0x2B: "Remote Access Service",
+    0x2C: "Remote Access Service",
+    0x2D: "Remote Access Service",
+    0x2E: "Remote Access Service",
+    0x2F: "Remote Access Service",
+    0x33: "Default name",
+    0x34: "SMB server",
+}
+
+
+def _oracle_nbtstat_entry(name: str, suffix: int, flags: int) -> bytes:
+    """Independent builder of one 18-byte NBSTAT NODE_NAME entry.
+
+    Encodes the 15-byte space-padded name, one suffix byte, and two big-endian
+    flag bytes from scratch; does not reuse the ethscan/_entry test helper.
+    """
+    raw = name.upper().encode("ascii", "replace")[:15].ljust(15, b" ")
+    return raw + bytes([suffix & 0xFF]) + struct.pack("!H", flags & 0xFFFF)
+
+
+def _oracle_nbtstat_flags(flags: int) -> dict:
+    """Independent decode of the 16-bit NODE_NAME_FLAGS field (RFC 1002)."""
+    ont = (flags >> 13) & 0x03
+    return {
+        "group": bool(flags & 0x8000),
+        "unique": not bool(flags & 0x8000),
+        "owner_node_type": ["B-node", "P-node", "M-node", "reserved"][ont],
+        "permanent": bool(flags & 0x0200),
+        "transient": not bool(flags & 0x0200),
+        "active": bool(flags & 0x0400),
+        "conflict": bool(flags & 0x0800),
+        "deregister": bool(flags & 0x1000),
+        "raw": flags & 0xFFFF,
+    }
+
+
+def test_parse_nbtstat_rdata_matches_independent_oracle_random() -> None:
+    """Random NBSTAT RDATA parsed by the implementation matches an
+    independent from-scratch builder oracle (names, suffixes, flags, MAC).
+    """
+    rng = random.Random(_NBSTAT_SEED)
+    for _ in range(3000):
+        num_names = rng.randint(0, 6)
+        entries = []
+        expected_names = []
+        for _ in range(num_names):
+            length = rng.randint(0, 15)
+            name = "".join(
+                rng.choice(_NBSTAT_NAME_ALPHABET) for _ in range(length)
+            )
+            suffix = rng.randint(0, 255)
+            flags = rng.randint(0, 0xFFFF)
+            entries.append(_oracle_nbtstat_entry(name, suffix, flags))
+            expected_names.append((name, suffix, flags))
+
+        rdata = bytearray([num_names])
+        rdata.extend(b"".join(entries))
+        mac = bytes(rng.randint(0, 255) for _ in range(6))
+        rdata.extend(mac)
+        rdata.extend(bytes(rng.randint(0, 255) for _ in range(rng.randint(0, 3))))
+
+        result = _parse_nbtstat_rdata(bytes(rdata))
+        assert result["num_names"] == num_names
+        assert len(result["names"]) == num_names
+        for i, (name, suffix, flags) in enumerate(expected_names):
+            entry = result["names"][i]
+            exp_name = name.upper().rstrip(" ").rstrip("\x00")
+            assert entry["name"] == exp_name, (i, entry["name"], exp_name)
+            assert entry["suffix"] == suffix
+            assert entry["suffix_hex"] == f"0x{suffix:02x}"
+            want_service = _NBSTAT_SUFFIX_ORACLE.get(
+                suffix, f"unknown (0x{suffix:02x})"
+            )
+            assert entry["service_type"] == want_service
+            assert entry["flags"] == _oracle_nbtstat_flags(flags)
+        assert result["mac"] == ":".join(f"{b:02x}" for b in mac)
+
+
+def test_parse_nbtstat_rdata_hostile_bytes_never_crash() -> None:
+    """Arbitrary byte buffers raise only ValueError or return a dict; no
+    hang, crash, or other exception type.
+    """
+    rng = random.Random(_NBSTAT_SEED + 1)
+    for _ in range(3000):
+        n = rng.randint(0, 60)
+        data = bytes(rng.randint(0, 255) for _ in range(n))
+        try:
+            result = _parse_nbtstat_rdata(data)
+        except ValueError:
+            continue
+        assert isinstance(result, dict)
+        assert set(result) == {"num_names", "names", "mac"}
+        assert isinstance(result["num_names"], int)
+        assert isinstance(result["names"], list)
+        assert result["mac"] is None or isinstance(result["mac"], str)
+
+
+# ---------------------------------------------------------------------------
 # _parse_nbns_response
 # ---------------------------------------------------------------------------
 
