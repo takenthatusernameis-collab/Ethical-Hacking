@@ -7,6 +7,7 @@ import io
 import json
 import random
 import socket
+import string
 import struct
 
 import pytest
@@ -21,6 +22,7 @@ from ethscan.netbios import (
     RR_TYPE_NBSTAT,
     _build_nbns_query,
     _decode_name_chars,
+    _derive_assessment,
     _encode_name_chars,
     _encode_qname,
     _normalize_target,
@@ -29,6 +31,8 @@ from ethscan.netbios import (
     _parse_nbns_response,
     _parse_nbtstat_rdata,
     _send_recv,
+    _SUFFIX_FILE_SERVER,
+    _SUFFIX_WORKSTATION,
     format_netbios_report_csv,
     format_netbios_report_json,
     format_netbios_report_markdown,
@@ -1685,3 +1689,132 @@ def test_format_netbios_report_csv_non_dict() -> None:
     for hostile in hostiles:
         out = format_netbios_report_csv(hostile)  # type: ignore[arg-type]
         assert isinstance(out, str)
+
+
+# ---------------------------------------------------------------------------
+# Differential tests: _derive_assessment vs an independent spec
+# ---------------------------------------------------------------------------
+#
+# ethscan/netbios.py:516 (_derive_assessment) was previously covered only by
+# example-based tests via run_netbios. These tests lock the assessment
+# heuristics against an independent from-scratch spec over randomized name
+# tables (random suffix/flags/name), mirroring the approach used for
+# _parse_nbns_response.
+#
+# Independent spec (netbios.py:516-536):
+#   is_server        = any entry with suffix == 0x20 (_SUFFIX_FILE_SERVER)
+#   hostname         = first entry with suffix == 0x00 (_SUFFIX_WORKSTATION)
+#                      that is not a group name
+#   is_domain_member = any entry with suffix == 0x00 that is a group name
+
+
+def _oracle_assessment(names: list[dict[str, object]]) -> dict[str, object]:
+    """Independent recomputation of _derive_assessment's three signals."""
+    is_server = False
+    hostname: object = None
+    is_domain_member = False
+    for entry in names:
+        flags = entry.get("flags")
+        suffix = entry.get("suffix")
+        if not isinstance(flags, dict):
+            flags = {}
+        if suffix == _SUFFIX_FILE_SERVER:
+            is_server = True
+        if suffix == _SUFFIX_WORKSTATION and not flags.get("group") and hostname is None:
+            hostname = entry.get("name")
+        if suffix == _SUFFIX_WORKSTATION and flags.get("group"):
+            is_domain_member = True
+    return {
+        "is_server": is_server,
+        "hostname": hostname,
+        "is_domain_member": is_domain_member,
+    }
+
+
+def _random_name_table(rng: random.Random) -> list[dict[str, object]]:
+    """Build a random NBSTAT name table (independent of ethscan helpers)."""
+    names: list[dict[str, object]] = []
+    for _ in range(rng.randint(0, 10)):
+        name = "".join(
+            rng.choice(string.ascii_uppercase + string.digits + " ")
+            for _ in range(rng.randint(0, 15))
+        )
+        suffix: int = rng.choice([0x00, 0x20, 0x01, 0x1E, 0x0B, rng.randint(0, 0xFF)])
+        group = rng.random() < 0.3
+        raw_flags = rng.randint(0, 0xFFFF)
+        if group:
+            raw_flags |= 0x8000
+        names.append(
+            {
+                "name": name,
+                "suffix": suffix,
+                "flags": {
+                    "group": group,
+                    "unique": not group,
+                    "owner_node_type": rng.choice(["unique", "group", "reserved"]),
+                    "permanent": rng.random() < 0.5,
+                    "transient": rng.random() < 0.5,
+                    "active": rng.random() < 0.5,
+                    "conflict": rng.random() < 0.1,
+                    "deregister": rng.random() < 0.1,
+                    "raw": raw_flags,
+                },
+            }
+        )
+    return names
+
+
+def test_derive_assessment_matches_independent_spec_random() -> None:
+    """Randomized differential: _derive_assessment == independent spec."""
+    rng = random.Random(20261128)
+    for _ in range(2000):
+        names = _random_name_table(rng)
+        assert _derive_assessment(names) == _oracle_assessment(names)
+
+
+def test_derive_assessment_empty_table() -> None:
+    assert _derive_assessment([]) == {
+        "is_server": False,
+        "hostname": None,
+        "is_domain_member": False,
+    }
+
+
+def test_derive_assessment_hostname_is_first_unique_workstation() -> None:
+    names = [
+        {"name": "SECOND", "suffix": 0x00, "flags": {"group": False}},
+        {"name": "FIRST", "suffix": 0x00, "flags": {"group": False}},
+        {"name": "SERVER", "suffix": 0x20, "flags": {"group": False}},
+    ]
+    assert _derive_assessment(names) == {
+        "is_server": True,
+        "hostname": "SECOND",
+        "is_domain_member": False,
+    }
+
+
+def test_derive_assessment_group_workstation_marks_domain_member() -> None:
+    names = [
+        {"name": "MYHOST", "suffix": 0x00, "flags": {"group": False}},
+        {"name": "WORKGROUP", "suffix": 0x00, "flags": {"group": True}},
+        {"name": "OTHER", "suffix": 0x20, "flags": {"group": False}},
+    ]
+    assert _derive_assessment(names) == {
+        "is_server": True,
+        "hostname": "MYHOST",
+        "is_domain_member": True,
+    }
+
+
+def test_derive_assessment_other_suffixes_set_no_signal() -> None:
+    """Non-workstation / non-file-server suffixes set no signal on their own."""
+    names = [
+        {"name": "MESSENGER", "suffix": 0x01, "flags": {"group": False}},
+        {"name": "BROWSER", "suffix": 0x1E, "flags": {"group": True}},
+        {"name": "OTHER", "suffix": 0x0B, "flags": {"group": False}},
+    ]
+    assert _derive_assessment(names) == {
+        "is_server": False,
+        "hostname": None,
+        "is_domain_member": False,
+    }
